@@ -40,6 +40,11 @@ pub(crate) fn render_status_text(session_id: &str, a: &Assessment) {
                 crate::text::collapse_and_truncate(&t.subject, 200)
             );
         }
+        // Which directory answered, and which candidate named it: a store found
+        // through anything but the session's own id was found by inference.
+        for st in &a.tasks.stores {
+            println!("  tasks     store: {} (via {})", st.dir, st.via);
+        }
         println!(
             "  tasks     {} open ; {} completed",
             a.tasks.open.len(),
@@ -184,6 +189,15 @@ pub(crate) fn background_json(b: &BackgroundReport) -> serde_json::Value {
     })
 }
 
+/// The tail checkpoint as a machine row: the physical line and the line type, which is
+/// all the line carries (it has no uuid, no timestamp and no message).
+pub(crate) fn checkpoint_json(cp: Option<&CheckpointTail>) -> serde_json::Value {
+    match cp {
+        Some(c) => json!({ "line": c.line, "kind": c.kind }),
+        None => serde_json::Value::Null,
+    }
+}
+
 pub(crate) fn last_json(last: &LastMessages) -> serde_json::Value {
     let one = |m: &Option<LastMsg>| match m {
         Some(m) => json!({
@@ -237,6 +251,11 @@ pub(crate) fn render_status_json(
             serde_json::Value::Null
         },
         "tasks_completed": if a.tasks.found { json!(a.tasks.completed) } else { serde_json::Value::Null },
+        "tasks_stores": a.tasks.stores.iter().map(|s| json!({
+            "dir": s.dir,
+            "via": s.via,
+        })).collect::<Vec<_>>(),
+        "last_checkpoint": checkpoint_json(a.last_checkpoint.as_ref()),
         "pending": a.pending,
         "background": background_json(&a.background),
         "last": last_json(&a.last),

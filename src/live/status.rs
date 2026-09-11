@@ -114,10 +114,21 @@ pub(crate) fn assess_path(
         &background,
     );
     assessment.last = last_messages(main)?;
+    // C-44: a checkpoint at the very end is EVIDENCE the harness stopped appending
+    // after writing it - never a verdict, and the verdict set stays closed.
+    assessment.attach_checkpoint(last_checkpoint(main)?);
     // The task list is keyed by the top-level session (like the sidecar); a subagent
-    // target gets no section instead of its parent's list under its own id.
+    // target gets no section instead of its parent's list under its own id. Its
+    // DIRECTORY, though, is named after the id the process started with, which a clear
+    // and a resume both leave behind - so the owner's own id is the first candidate,
+    // not the only one.
     if !is_subagent_target {
-        assessment.tasks = tasks_report(&owner_id);
+        let cleared_root = crate::session::cleared_from_root(main);
+        assessment.tasks = tasks_report_with(
+            &owner_id,
+            cleared_root.as_deref(),
+            registry.as_ref().and_then(|r| r.started_at_ms),
+        );
     }
     Ok(assessment)
 }

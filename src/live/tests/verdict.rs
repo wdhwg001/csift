@@ -251,6 +251,7 @@ fn registry_age_evidence_is_seconds_since_transition() {
         status_updated_at_ms: Some(now_ms - 60_000),
         proc_start: None,
         pid_domain: None,
+        started_at_ms: None,
     };
     let a = assess(
         Some(&r),

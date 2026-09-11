@@ -122,6 +122,78 @@ pub(crate) fn tail_shape(path: &Path) -> Result<TailShape> {
     Ok(shape)
 }
 
+/// The line type the cost ledger writes as its checkpoint. It carries no `uuid`, no
+/// `timestamp` and no `message`, so it is not a conversation record and the only
+/// address it answers to is its physical line.
+pub(crate) const CHECKPOINT_KIND: &str = "cost-state";
+
+/// A cost-ledger checkpoint sitting at a transcript's very end.
+#[derive(Debug, Clone)]
+pub(crate) struct CheckpointTail {
+    /// The checkpoint's 1-based physical line.
+    pub(crate) line: usize,
+    pub(crate) kind: &'static str,
+}
+
+/// The checkpoint at `path`'s tail, if its LAST non-blank line is one.
+///
+/// A checkpoint is written at a clear, a background handover, an in-app resume and at
+/// exit, and it is repeatable - most of them sit mid-file - so finding one at the tail
+/// says the harness stopped appending after writing it, and nothing more. It is
+/// deliberately NOT a verdict: the seven-verdict set stays closed and the registry row
+/// keeps deciding liveness.
+pub(crate) fn last_checkpoint(path: &Path) -> Result<Option<CheckpointTail>> {
+    static COST: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"\"cost-state\""));
+    let (buf, start) = read_tail(path, TAIL_WINDOW_BYTES as u64)?;
+    let mut end = buf.len();
+    while end > 0 && buf[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    if end == 0 {
+        return Ok(None);
+    }
+    let line_start = memchr::memrchr(b'\n', &buf[..end]).map_or(0, |i| i + 1);
+    // The window is bounded, so a last line that reaches its head may be cut: read
+    // nothing rather than half a line.
+    if line_start == 0 && start > 0 {
+        return Ok(None);
+    }
+    let line = &buf[line_start..end];
+    if COST.find(line).is_none() {
+        return Ok(None);
+    }
+    let Ok(Some(rec)) = crate::parse::parse_line(line) else {
+        return Ok(None);
+    };
+    if rec.r#type.as_deref() != Some(CHECKPOINT_KIND) {
+        return Ok(None);
+    }
+    let at = start + line_start as u64;
+    Ok(Some(CheckpointTail {
+        line: count_newlines_before(path, at)? + 1,
+        kind: CHECKPOINT_KIND,
+    }))
+}
+
+/// Newlines in `path[..offset)`, read positionally in chunks - never a map, because
+/// `wait` re-reads a live transcript (v0.10.4). Paid only when the tail IS a
+/// checkpoint, which is the rare shape.
+fn count_newlines_before(path: &Path, offset: u64) -> Result<usize> {
+    const CHUNK: u64 = 4 * 1024 * 1024;
+    let mut n = 0usize;
+    let mut at = 0u64;
+    while at < offset {
+        let buf = read_range(path, at, (at + CHUNK).min(offset))?;
+        if buf.is_empty() {
+            break; // the file shrank under us: count what is there, never spin
+        }
+        n += memchr::memchr_iter(b'\n', &buf).count();
+        at += buf.len() as u64;
+    }
+    Ok(n)
+}
+
 /// Seconds between an ISO instant and now; `None` when absent/unparseable.
 pub(crate) fn age_secs(ts_utc: Option<&str>) -> Option<i64> {
     let t: jiff::Timestamp = ts_utc?.parse().ok()?;

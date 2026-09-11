@@ -58,6 +58,50 @@ pub(crate) struct Assessment {
     /// 34s` / `generating (last record 12s ago)` / `idle (last stop_reason end_turn, 5m
     /// 2s ago)`).
     pub(crate) tail_state: String,
+    /// The cost-ledger checkpoint when it is the transcript's LAST line (attached by
+    /// `assess_path`). Evidence, never a verdict.
+    pub(crate) last_checkpoint: Option<CheckpointTail>,
+}
+
+/// The note `collect_evidence` leaves when the registry has no row for this session.
+/// Hoisted so the checkpoint clause can find it verbatim rather than by a fragment.
+const NO_REGISTRY_NOTE: &str = "no registry row for this session (not currently \
+     registered, or an older Claude Code) - verdict from tail + children evidence";
+
+/// What the checkpoint clause adds to that note: a session whose registry row is gone
+/// AND whose last line is a checkpoint did not merely stop being registered.
+const NO_REGISTRY_CHECKPOINT_CLAUSE: &str =
+    ", and the harness wrote its checkpoint, so the session closed or was handed over";
+
+impl Assessment {
+    /// Fold a tail checkpoint into an already-joined assessment: one evidence row
+    /// directly under the `tail` row it qualifies, and the extra clause on the
+    /// no-registry-row note when both hold. The verdict never moves - the seven-verdict
+    /// set is closed, and a consumer matching on it must keep matching.
+    pub(crate) fn attach_checkpoint(&mut self, cp: Option<CheckpointTail>) {
+        let Some(cp) = cp else {
+            return;
+        };
+        let row = Evidence {
+            surface: "checkpoint",
+            value: format!(
+                "{} at L{} (written by the harness at a clear, a background handover, an \
+                 in-app resume or an exit; nothing appended since)",
+                cp.kind, cp.line
+            ),
+            age_secs: None,
+        };
+        match self.evidence.iter().position(|e| e.surface == "tail") {
+            Some(i) => self.evidence.insert(i + 1, row),
+            None => self.evidence.push(row),
+        }
+        for n in &mut self.notes {
+            if n == NO_REGISTRY_NOTE {
+                n.push_str(NO_REGISTRY_CHECKPOINT_CLAUSE);
+            }
+        }
+        self.last_checkpoint = Some(cp);
+    }
 }
 
 /// The six-surface join without a background report (test-only convenience; production
@@ -144,6 +188,7 @@ pub(crate) fn assess_full(
         background: background.clone(),
         last: LastMessages::default(),
         tail_state: tail_state_words(main_tail),
+        last_checkpoint: None,
     }
 }
 
@@ -179,11 +224,7 @@ fn collect_evidence(
                 .to_string(),
         );
     } else {
-        notes.push(
-            "no registry row for this session (not currently registered, or an older \
-             Claude Code) - verdict from tail + children evidence"
-                .to_string(),
-        );
+        notes.push(NO_REGISTRY_NOTE.to_string());
     }
     if let Some(l) = liveness {
         let (v, note): (String, Option<String>) = match l {

@@ -29,17 +29,13 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
             // lands in the NEW transcript (the isMeta `<local-command-caveat>` record
             // may precede it), and any other opener means this file was not minted by a
             // clear. Decided once, never revisited.
-            if !saw_first_user_record
-                && rec.r#type.as_deref() == Some("user")
-                && rec.is_meta != Some(true)
-            {
-                saw_first_user_record = true;
-                if rec
-                    .slash_command_name()
-                    .is_some_and(|n| n.trim_start_matches('/') == "clear")
-                {
-                    minted_by_clear = true;
-                    clear_wrapper_ts = rec.timestamp.clone();
+            if !saw_first_user_record {
+                if let Some(is_mint) = clear_mint_verdict(rec) {
+                    saw_first_user_record = true;
+                    if is_mint {
+                        minted_by_clear = true;
+                        clear_wrapper_ts = rec.timestamp.clone();
+                    }
                 }
             }
             // First user message = a genuine human turn, an answered AskUserQuestion, or a
@@ -182,6 +178,78 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         cleared_from_after: clear_join.after,
         cleared_from_candidates: clear_join.candidates,
     })
+}
+
+/// The `/clear` mint decision for ONE record: `Some(true)` when this record is the
+/// deciding one AND it is the `/clear` wrapper, `Some(false)` when it is the deciding
+/// one and it is not, `None` while the scan should keep looking. The deciding record
+/// is the first `type:"user"` record whose `isMeta` is not set - the isMeta
+/// `<local-command-caveat>` record a clear writes above the wrapper is skipped, and a
+/// `/clear` wrapper anywhere below the first user record belongs to the clear that
+/// LEFT this file, never to the one that minted it. The ONE copy of the rule: the
+/// `list` head scan and [`clear_mint_wrapper`] both read it.
+pub(crate) fn clear_mint_verdict(rec: &Record) -> Option<bool> {
+    (rec.r#type.as_deref() == Some("user") && rec.is_meta != Some(true)).then(|| {
+        rec.slash_command_name()
+            .is_some_and(|n| n.trim_start_matches('/') == "clear")
+    })
+}
+
+/// The `/clear` wrapper's timestamp when `path` was minted by a clear, via its own
+/// head read. `summarize_session` folds the same verdict into the head scan it already
+/// runs; this entry exists for a caller that holds only a path (the `cleared_from`
+/// chain walk), and it stops at the deciding record rather than the first genuine user.
+pub(crate) fn clear_mint_wrapper(path: &Path) -> Result<Option<String>> {
+    let mut ts: Option<String> = None;
+    head_records_prefiltered(
+        path,
+        line_is_list_candidate,
+        |rec| match clear_mint_verdict(rec) {
+            Some(true) => {
+                ts = rec.timestamp.clone();
+                false
+            }
+            Some(false) => false,
+            None => true,
+        },
+    )?;
+    Ok(ts)
+}
+
+/// How many clears deep the chain walk follows before giving up. A session cleared
+/// more often than this in one project directory is not a shape worth a longer walk,
+/// and the bound plus the visited set make a cycle impossible.
+const CLEAR_CHAIN_MAX: usize = 32;
+
+/// The ROOT of the `cleared_from` chain: follow the join back from `path` until a
+/// transcript that was not itself minted by a clear, and name it. `None` when `path`
+/// is not clear-minted, or when the first hop finds no predecessor - the chain is only
+/// as long as the checkpoints that back it.
+pub(crate) fn cleared_from_root(path: &Path) -> Option<String> {
+    let mut at = path.to_path_buf();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut root: Option<String> = None;
+    for _ in 0..CLEAR_CHAIN_MAX {
+        // A hop that finds no wrapper or no predecessor ENDS the walk and keeps what
+        // the walk already reached - the root is the last file that answered, not a
+        // condition every hop has to satisfy.
+        let Some(ts) = clear_mint_wrapper(&at).ok().flatten() else {
+            break;
+        };
+        let Some(prev) = cleared_from_origin(&at, &ts).cleared_from else {
+            break;
+        };
+        if !seen.insert(prev.clone()) {
+            break;
+        }
+        let next = at.with_file_name(format!("{prev}.jsonl"));
+        if !next.is_file() {
+            break;
+        }
+        root = Some(prev);
+        at = next;
+    }
+    root
 }
 
 /// The window a clear's checkpoint may sit in, either side of the wrapper instant.

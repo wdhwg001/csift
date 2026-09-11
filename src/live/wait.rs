@@ -260,6 +260,7 @@ fn emit_wait(
                 })).collect::<Vec<_>>(),
                 "background": background_json(&a.background),
                 "last": last_json(&a.last),
+                "last_checkpoint": checkpoint_json(a.last_checkpoint.as_ref()),
                 "notes": a.notes.iter().chain(a.background.notes.iter()).collect::<Vec<_>>(),
             });
             println!("{}", serde_json::to_string(&obj)?);

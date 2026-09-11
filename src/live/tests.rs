@@ -4,6 +4,7 @@ use super::*;
 
 mod background;
 mod background_scan;
+mod checkpoint;
 mod conditions;
 mod surfaces;
 mod verdict;
@@ -26,6 +27,7 @@ fn row(status: &str, pid: Option<u32>) -> RegistryRow {
         status_updated_at_ms: Some(1_767_000_000_000),
         proc_start: None,
         pid_domain: None,
+        started_at_ms: None,
     }
 }
 

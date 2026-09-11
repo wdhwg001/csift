@@ -291,7 +291,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "362-371",
+          "lines": "403-412",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         }
       ],
@@ -3513,7 +3513,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "362-371",
+          "lines": "403-412",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         },
         {
@@ -3608,7 +3608,7 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "362-371",
+          "lines": "403-412",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         }
       ],
@@ -4143,7 +4143,7 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "358-371",
+          "lines": "399-412",
           "snippet": "    } else if running_shape {\n        Verdict::Running\n    } else if children.live_count > 0 {\n        Verdict::WaitingChildren\n    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         },
         {
@@ -4153,7 +4153,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "312-317",
+          "lines": "353-358",
           "snippet": "    let eot_shape = main_tail.unreturned_use.is_none()\n        && (main_tail\n            .last_stop_reason\n            .as_deref()\n            .is_some_and(|s| s == \"end_turn\")\n            || registry_shell);"
         }
       ],
@@ -4554,8 +4554,8 @@
         },
         {
           "path": "src/live/tasks.rs",
-          "lines": "37-41",
-          "snippet": "    let tasks_root = home.join(\"tasks\");\n    let mut dirs = vec![tasks_root.join(owner_id)];\n    if let Some(prefix) = owner_id.get(..8) {\n        dirs.push(tasks_root.join(format!(\"session-{prefix}\")));\n    }"
+          "lines": "100-104",
+          "snippet": "fn id_forms(id: &str, via: &'static str) -> Vec<(String, &'static str)> {\n    let mut out = vec![(id.to_string(), via)];\n    if let Some(prefix) = id.get(..8) {\n        out.push((format!(\"session-{prefix}\"), via));\n    }"
         }
       ],
       "instrument": "`ls ~/.claude/tasks | sed 's/^session-.*/session-form/' | sort | uniq -c` shows both forms; `jq -r .status ~/.claude/tasks/*/*.json | sort | uniq -c` gives the status census; `csift status @<session> --format json | jq '{tasks, tasks_completed}'` prints the rows (null = no dir, [] = a dir with nothing). Counting rule: one row per non-completed task file across both directory forms.",
@@ -15897,12 +15897,12 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "308-315",
+          "lines": "376-383",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "321-332",
+          "lines": "389-400",
           "snippet": "    for line in mmap.split(|&b| b == b'\\n') {\n        if TS.find(line).is_none() {\n            continue;\n        }\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if rec.timestamp.is_some() {\n                let hit = rec.is_compact_boundary();\n                return Ok(hit\n                    .then(|| rec.uuid.clone().unwrap_or_default())\n                    .filter(|u| !u.is_empty()));\n            }\n        }"
         }
       ],
@@ -16008,7 +16008,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "311-314",
+          "lines": "379-382",
           "snippet": "/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -16186,7 +16186,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "337-345",
+          "lines": "405-413",
           "snippet": "/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary\n/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own\n/// uuid differs; a co-clone's head probe returns the same boundary uuid and is\n/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY\n/// when a clone was detected.\npub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -16416,7 +16416,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "308-314",
+          "lines": "376-382",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -18344,12 +18344,12 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "216-227",
+          "lines": "257-268",
           "snippet": "            ),\n        };\n        evidence.push(Evidence {\n            surface: \"pid\",\n            value: v,\n            age_secs: None,\n        });\n        if let Some(n) = note {\n            notes.push(n);\n        }\n    }\n    match &main_tail.unreturned_use {"
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "255-262",
+          "lines": "296-303",
           "snippet": "                    String::new()\n                }\n            ),\n            age_secs: None,\n        });\n    }\n    for p in pending_elicitations {\n        evidence.push(Evidence {"
         }
       ],
@@ -19257,7 +19257,7 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "308-311",
+          "lines": "349-352",
           "snippet": "    // never a running shape. `busy` is the only registry running signal.\n    let registry_status = registry.and_then(|r| r.status.as_deref());\n    let registry_shell = registry_status == Some(\"shell\");\n    let running_shape = main_tail.unreturned_use.is_some() || registry_status == Some(\"busy\");"
         }
       ],
@@ -30079,12 +30079,12 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "42-46",
+          "lines": "46-50",
           "snippet": "pub(crate) fn registry_row_for(session_id: &str) -> Result<Option<RegistryRow>> {\n    let dir = crate::path::claude_home()?.join(\"sessions\");\n    if !dir.is_dir() {\n        return Ok(None);\n    }"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "59-61",
+          "lines": "63-65",
           "snippet": "        if v.get(\"sessionId\").and_then(serde_json::Value::as_str) != Some(session_id) {\n            continue;\n        }"
         }
       ],
@@ -30208,7 +30208,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "291-301",
+          "lines": "332-342",
           "snippet": "    // Two HITL legs beside the sidecar: the registry's `waiting` status (the binary sets\n    // it whenever a dialog blocks the session: a question, a permission prompt, a plan\n    // approval, a sandbox/worker request), and an unreturned AskUserQuestion/ExitPlanMode\n    // at the tail. Whether a pending dialog's record reaches disk is a TIMING outcome of\n    // the persistence frontier (the binary has no question-count branch and the frontier\n    // is unchanged across builds): measured live, a multi-question ask was on disk while\n    // its dialog was open and a single-question ask was not, so the sidecar stays the\n    // instrument for the shape that stays buffered (ledger ELI-009).\n    let registry_waiting = registry\n        .and_then(|r| r.status.as_deref())\n        .is_some_and(|s| s == \"waiting\");"
         }
       ],
@@ -30328,12 +30328,12 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "306-311",
+          "lines": "347-352",
           "snippet": "    // The registry's `shell` status is IDLE WITH A BACKGROUND SHELL RUNNING (the binary\n    // computes `idle` and then relabels it `shell` while a local_bash task is open) -\n    // never a running shape. `busy` is the only registry running signal.\n    let registry_status = registry.and_then(|r| r.status.as_deref());\n    let registry_shell = registry_status == Some(\"shell\");\n    let running_shape = main_tail.unreturned_use.is_some() || registry_status == Some(\"busy\");"
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "312-317",
+          "lines": "353-358",
           "snippet": "    let eot_shape = main_tail.unreturned_use.is_none()\n        && (main_tail\n            .last_stop_reason\n            .as_deref()\n            .is_some_and(|s| s == \"end_turn\")\n            || registry_shell);"
         }
       ],
@@ -30450,7 +30450,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "171-173",
+          "lines": "216-218",
           "snippet": "            age_secs: r\n                .status_updated_at_ms\n                .map(|ms| (jiff::Timestamp::now().as_millisecond() - ms).max(0) / 1000),"
         }
       ],
@@ -30603,7 +30603,7 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "73",
+          "lines": "77",
           "snippet": "            status_updated_at_ms: v.get(\"statusUpdatedAt\").and_then(serde_json::Value::as_i64),"
         }
       ],
@@ -30706,7 +30706,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "175-180",
+          "lines": "220-225",
           "snippet": "    } else if is_subagent_target {\n        notes.push(\n            \"the registry covers top-level interactive sessions only - a subagent has no \\\n             row; verdict from tail + children evidence\"\n                .to_string(),\n        );"
         }
       ],
@@ -30943,8 +30943,8 @@
         },
         {
           "path": "src/live/tasks.rs",
-          "lines": "37-41",
-          "snippet": "    let tasks_root = home.join(\"tasks\");\n    let mut dirs = vec![tasks_root.join(owner_id)];\n    if let Some(prefix) = owner_id.get(..8) {\n        dirs.push(tasks_root.join(format!(\"session-{prefix}\")));\n    }"
+          "lines": "100-104",
+          "snippet": "fn id_forms(id: &str, via: &'static str) -> Vec<(String, &'static str)> {\n    let mut out = vec![(id.to_string(), via)];\n    if let Some(prefix) = id.get(..8) {\n        out.push((format!(\"session-{prefix}\"), via));\n    }"
         }
       ],
       "instrument": "`ls ~/.claude/tasks/ | sed 's/^session-.*/session-form/;s/^[0-9a-f-]\\{36\\}$/uuid-form/' | sort | uniq -c` - both shapes appear; then `csift status @<session> --format json | jq '{tasks, tasks_completed}'` for a session under each shape (a null `tasks` means no directory, `[]` means a directory with nothing open). Counting rule: one observation per owner directory, classified by name shape. The e2e tests `p13_settled_children_fold_and_tasks_section` and `p14_no_tasks_dir_means_null_not_empty` in tests/cli/live/status.rs pin both forms and the absent-directory case.",
@@ -31041,12 +31041,12 @@
         },
         {
           "path": "src/live/tasks.rs",
-          "lines": "63-66",
+          "lines": "167-170",
           "snippet": "            if status == \"completed\" {\n                report.completed += 1;\n                continue;\n            }"
         },
         {
           "path": "src/live/tasks.rs",
-          "lines": "91-97",
+          "lines": "188-194",
           "snippet": "/// Ids are strings on disk (\"13\") but tolerate a bare number.\nfn json_id(v: Option<&serde_json::Value>) -> String {\n    match v {\n        Some(serde_json::Value::String(s)) => s.clone(),\n        Some(serde_json::Value::Number(n)) => n.to_string(),\n        _ => \"?\".to_string(),\n    }"
         }
       ],
@@ -31450,12 +31450,12 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "178-191",
+          "lines": "183-196",
           "snippet": "/// Parse the registry's `procStart`: an asctime-like UTC string (`Sun Aug 16 09:04:23\n/// 2026`, unix) or a FILETIME integer (`134328101803820142`, Windows: 100ns ticks since\n/// 1601). `None` on any mismatch - the caller degrades to pid-only + a note.\npub(crate) fn parse_registry_proc_start(s: &str) -> Option<jiff::Timestamp> {\n    let s = s.trim();\n    if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {\n        return filetime_to_timestamp(s.parse::<u64>().ok()?);\n    }\n    let bd = jiff::fmt::strtime::parse(\"%a %b %e %H:%M:%S %Y\", s).ok()?;\n    let dt = bd.to_datetime().ok()?;\n    dt.to_zoned(jiff::tz::TimeZone::UTC)\n        .ok()\n        .map(|z| z.timestamp())\n}"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "146-155",
+          "lines": "151-160",
           "snippet": "        PsProbe::Alive(actual) => match (proc_start.and_then(parse_registry_proc_start), actual) {\n            (Some(reg), Some(act)) => {\n                if (reg.as_second() - act.as_second()).abs() <= 2 {\n                    PidLiveness::Alive {\n                        reuse_guard: ReuseGuard::Checked,\n                    }\n                } else {\n                    PidLiveness::Reused\n                }\n            }"
         }
       ],
@@ -31683,12 +31683,12 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "204-215",
+          "lines": "209-220",
           "snippet": "/// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success\n/// yields the start instant when the rendering parses, else `Alive(None)` - the caller\n/// then skips the reuse guard AND says so. The call PINS `LC_ALL=C` and `TZ=UTC`,\n/// exactly as the harness pins its own `procStart` acquisition: `lstart` is the\n/// platform utility's `%c` under the caller's `LC_TIME`, so an inherited locale\n/// renders a different field order and non-English names (de_DE gives `Fr  4 Sep`,\n/// fr_FR `Ven  4 sep`), and the guard was silently skipped on every such host\n/// (v0.10.5, ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in\n/// UTC, the same clock the registry's `procStart` is written in; the second field\n/// order is kept as a belt for a `C` locale that still renders day-first.\n#[cfg(unix)]\npub(crate) fn ps_probe(pid: u32) -> PsProbe {"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "225-234",
+          "lines": "230-239",
           "snippet": "    if !out.status.success() || text.is_empty() {\n        // busybox ps (Alpine and friends) rejects `-p`/`lstart` outright, so the probe\n        // fails for a LIVE pid too. On Linux `/proc/<pid>` answers liveness directly:\n        // present = alive with the start time unknown (the reuse-guard skip is\n        // disclosed); absent (or no /proc at all, as on macOS where the ps form is\n        // reliable) = the no-such-process verdict stands.\n        if std::path::Path::new(&format!(\"/proc/{pid}\")).is_dir() {\n            return PsProbe::Alive(None);\n        }\n        return PsProbe::NoProcess;"
         }
       ],
@@ -31774,7 +31774,7 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "236-245",
+          "lines": "241-250",
           "snippet": "    for fmt in [\"%a %b %e %H:%M:%S %Y\", \"%a %e %b %H:%M:%S %Y\"] {\n        if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {\n            if let Ok(dt) = bd.to_datetime() {\n                if let Ok(z) = dt.to_zoned(jiff::tz::TimeZone::UTC) {\n                    return PsProbe::Alive(Some(z.timestamp()));\n                }\n            }\n        }\n    }\n    PsProbe::Alive(None)"
         }
       ],
@@ -31861,12 +31861,12 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "127-131",
+          "lines": "132-136",
           "snippet": "/// Probe pid liveness WITHOUT signaling (and without a second `unsafe` site - the\n/// crate's single-allow law outranks the raw-syscall form): one process query answers\n/// both questions - a failing/empty query = no such process; a start time within\n/// tolerance of the registry's `procStart` = the same process (reuse guarded). A row\n/// from another pid domain is never probed (its pid belongs to another machine or OS)."
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "290",
+          "lines": "331",
           "snippet": "    let dead = matches!(liveness, Some(PidLiveness::Dead | PidLiveness::Reused));"
         }
       ],
@@ -32100,7 +32100,7 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "73",
+          "lines": "77",
           "snippet": "status_updated_at_ms: v.get(\"statusUpdatedAt\").and_then(serde_json::Value::as_i64),"
         }
       ],
@@ -32338,12 +32338,12 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "47-52",
+          "lines": "51-56",
           "snippet": "    for entry in std::fs::read_dir(&dir)? {\n        let entry = entry?;\n        let p = entry.path();\n        if p.extension().and_then(|e| e.to_str()) != Some(\"json\") {\n            continue;\n        }"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "40-46",
+          "lines": "44-50",
           "snippet": "/// Scan the registry dir for the row whose `sessionId` matches. `Ok(None)` when the dir\n/// is absent or no row matches (a subagent target, a non-interactive session, an old CC).\npub(crate) fn registry_row_for(session_id: &str) -> Result<Option<RegistryRow>> {\n    let dir = crate::path::claude_home()?.join(\"sessions\");\n    if !dir.is_dir() {\n        return Ok(None);\n    }"
         }
       ],
@@ -32458,7 +32458,7 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "53-58",
+          "lines": "57-62",
           "snippet": "        let Ok(raw) = std::fs::read_to_string(&p) else {\n            continue; // a mid-write or unreadable row is not this session's problem\n        };\n        let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {\n            continue;\n        };"
         },
         {
@@ -34061,7 +34061,7 @@
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "362-371",
+          "lines": "403-412",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         }
       ],
@@ -37756,12 +37756,12 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "85-89",
+          "lines": "129-133",
           "snippet": "/// Join the surfaces into one verdict. Precedence (each step names its evidence):\n/// dead process > blocked-on-human > tool-in-flight > live children > open background\n/// task under the lens > clean EoT > unknown. Never guesses: a shape the rules cannot\n/// rank is `unknown` with the disagreement in the evidence rows.\npub(crate) fn assess_full("
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "374-384",
+          "lines": "415-425",
           "snippet": "    } else if main_tail.records_seen == 0 {\n        notes.push(\"no records readable at the tail\".to_string());\n        Verdict::Unknown\n    } else {\n        notes.push(format!(\n            \"tail shape unranked: no pending call, last stop_reason {} - not an end_turn, \\\n             not provably running\",\n            main_tail.last_stop_reason.as_deref().unwrap_or(\"(none)\")\n        ));\n        Verdict::Unknown\n    }"
         }
       ],
@@ -37878,7 +37878,7 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "225-235",
+          "lines": "230-240",
           "snippet": "    if !out.status.success() || text.is_empty() {\n        // busybox ps (Alpine and friends) rejects `-p`/`lstart` outright, so the probe\n        // fails for a LIVE pid too. On Linux `/proc/<pid>` answers liveness directly:\n        // present = alive with the start time unknown (the reuse-guard skip is\n        // disclosed); absent (or no /proc at all, as on macOS where the ps form is\n        // reliable) = the no-such-process verdict stands.\n        if std::path::Path::new(&format!(\"/proc/{pid}\")).is_dir() {\n            return PsProbe::Alive(None);\n        }\n        return PsProbe::NoProcess;\n    }"
         }
       ],
@@ -38067,7 +38067,7 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "236-245",
+          "lines": "241-250",
           "snippet": "    for fmt in [\"%a %b %e %H:%M:%S %Y\", \"%a %e %b %H:%M:%S %Y\"] {\n        if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {\n            if let Ok(dt) = bd.to_datetime() {\n                if let Ok(z) = dt.to_zoned(jiff::tz::TimeZone::UTC) {\n                    return PsProbe::Alive(Some(z.timestamp()));\n                }\n            }\n        }\n    }\n    PsProbe::Alive(None)"
         }
       ],
@@ -38325,12 +38325,12 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "105-110",
+          "lines": "101-106",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "59-61",
+          "lines": "63-65",
           "snippet": "        if v.get(\"sessionId\").and_then(serde_json::Value::as_str) != Some(session_id) {\n            continue;\n        }"
         }
       ],
@@ -38531,7 +38531,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "342-345",
+          "lines": "410-413",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -42600,7 +42600,7 @@
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "51-56",
+          "lines": "47-52",
           "snippet": "            if let Some(text) = preview_text(rec) {\n                // Capture identity off the first user record (it carries cwd / version /\n                // gitBranch / sessionId in real data).\n                cwd = rec.cwd.clone();\n                version = rec.version.clone();\n                git_branch = rec.git_branch.clone();"
         }
       ],
@@ -43093,12 +43093,12 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "105-110",
+          "lines": "101-106",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "59-61",
+          "lines": "63-65",
           "snippet": "        if v.get(\"sessionId\").and_then(serde_json::Value::as_str) != Some(session_id) {\n            continue;\n        }"
         }
       ],
@@ -47497,7 +47497,7 @@
       "code": [
         {
           "path": "src/live/verdict.rs",
-          "lines": "312-317",
+          "lines": "353-358",
           "snippet": "    let eot_shape = main_tail.unreturned_use.is_none()\n        && (main_tail\n            .last_stop_reason\n            .as_deref()\n            .is_some_and(|s| s == \"end_turn\")\n            || registry_shell);"
         }
       ],
@@ -52654,7 +52654,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "164-170",
+          "lines": "160-166",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),\n        git_branch: git_branch_last.clone().or_else(|| git_branch.clone()),\n        git_branch_first: git_branch.or(git_branch_last),"
         }
       ],
@@ -56359,7 +56359,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "164-168",
+          "lines": "160-164",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),"
         }
       ],
@@ -64172,7 +64172,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "342-344",
+          "lines": "410-412",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());"
         }
       ],
@@ -65986,12 +65986,12 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "105-110",
+          "lines": "101-106",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "59-61",
+          "lines": "63-65",
           "snippet": "        if v.get(\"sessionId\").and_then(serde_json::Value::as_str) != Some(session_id) {\n            continue;\n        }"
         }
       ],
@@ -75631,17 +75631,17 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "178-191",
+          "lines": "183-196",
           "snippet": "/// Parse the registry's `procStart`: an asctime-like UTC string (`Sun Aug 16 09:04:23\n/// 2026`, unix) or a FILETIME integer (`134328101803820142`, Windows: 100ns ticks since\n/// 1601). `None` on any mismatch - the caller degrades to pid-only + a note.\npub(crate) fn parse_registry_proc_start(s: &str) -> Option<jiff::Timestamp> {\n    let s = s.trim();\n    if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {\n        return filetime_to_timestamp(s.parse::<u64>().ok()?);\n    }\n    let bd = jiff::fmt::strtime::parse(\"%a %b %e %H:%M:%S %Y\", s).ok()?;\n    let dt = bd.to_datetime().ok()?;\n    dt.to_zoned(jiff::tz::TimeZone::UTC)\n        .ok()\n        .map(|z| z.timestamp())\n}"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "193-202",
+          "lines": "198-207",
           "snippet": "/// A Windows FILETIME (100ns ticks since 1601-01-01 UTC) as an instant; `None` when the\n/// value cannot be a real creation time (before the unix epoch or absurdly far out).\npub(crate) fn filetime_to_timestamp(ticks: u64) -> Option<jiff::Timestamp> {\n    let secs = i64::try_from(ticks / 10_000_000).ok()? - FILETIME_UNIX_OFFSET_SECS;\n    if secs < 0 {\n        return None;\n    }\n    let nanos = i32::try_from((ticks % 10_000_000) * 100).ok()?;\n    jiff::Timestamp::new(secs, nanos).ok()\n}"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "74-80",
+          "lines": "78-84",
           "snippet": "            // The ROW writer stamps `procStart` unconditionally on every platform (the\n            // Windows session measured live carried the FILETIME under that key); the\n            // two-key `procStartFt` schema belongs to the `<pid>.<hash>.key` companion,\n            // not to the row. Reading `procStartFt` first is a harmless superset of\n            // what the row writer emits, and both renderings parse (ledger WIN-007).\n            proc_start: str_field(\"procStartFt\").or_else(|| str_field(\"procStart\")),\n            pid_domain: str_field(\"pidDomain\"),"
         }
       ],
@@ -76467,17 +76467,17 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "112-125",
+          "lines": "117-130",
           "snippet": "/// The pid domain this csift runs in, in the registry's own vocabulary (the prefix\n/// before any `:<hostname>` suffix).\n#[must_use]\npub(crate) fn local_pid_domain() -> &'static str {\n    if cfg!(target_os = \"macos\") {\n        \"darwin\"\n    } else if cfg!(target_os = \"linux\") {\n        \"linux\"\n    } else if cfg!(windows) {\n        \"win32\"\n    } else {\n        \"unknown\"\n    }\n}"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "137-142",
+          "lines": "142-147",
           "snippet": "    if let Some(d) = pid_domain {\n        let head = d.split(':').next().unwrap_or(d);\n        if head != local_pid_domain() {\n            return PidLiveness::ForeignDomain(d.to_string());\n        }\n    }"
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "205-212",
+          "lines": "246-253",
           "snippet": "            PidLiveness::ForeignDomain(d) => (\n                format!(\"row from another pid domain ({d})\"),\n                Some(\n                    \"the registry row was written in another pid domain (another machine \\\n                     or OS): its pid means nothing here - stale-dead is undecidable\"\n                        .to_string(),\n                ),\n            ),"
         }
       ],
@@ -76841,32 +76841,32 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "100-102",
+          "lines": "105-107",
           "snippet": "    /// No process probe exists on this host (neither `ps`, `/proc`, PowerShell nor\n    /// `tasklist` answered): the verdict must say so.\n    Unavailable,"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "225-234",
+          "lines": "230-239",
           "snippet": "    if !out.status.success() || text.is_empty() {\n        // busybox ps (Alpine and friends) rejects `-p`/`lstart` outright, so the probe\n        // fails for a LIVE pid too. On Linux `/proc/<pid>` answers liveness directly:\n        // present = alive with the start time unknown (the reuse-guard skip is\n        // disclosed); absent (or no /proc at all, as on macOS where the ps form is\n        // reliable) = the no-such-process verdict stands.\n        if std::path::Path::new(&format!(\"/proc/{pid}\")).is_dir() {\n            return PsProbe::Alive(None);\n        }\n        return PsProbe::NoProcess;"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "248-255",
+          "lines": "253-260",
           "snippet": "/// Windows: one PowerShell call answers both questions - `Get-Process -Id` fails (exit\n/// 3 by our script) for a missing pid, and `StartTime.ToFileTimeUtc()` yields the\n/// creation FILETIME (the registry's own rendering) when the process is ours to inspect;\n/// `NOSTART` when the start time is not readable (another user's process) = alive, guard\n/// skipped. When PowerShell cannot be spawned, `tasklist` answers liveness alone; when\n/// neither tool exists the probe is unavailable and the verdict says so.\n#[cfg(windows)]\npub(crate) fn ps_probe(pid: u32) -> PsProbe {"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "275-281",
+          "lines": "280-286",
           "snippet": "    // PowerShell missing or broken: tasklist answers liveness (no start time).\n    let Ok(out) = std::process::Command::new(\"tasklist\")\n        .args([\"/FI\", &format!(\"PID eq {pid}\"), \"/NH\", \"/FO\", \"CSV\"])\n        .output()\n    else {\n        return PsProbe::Unavailable;\n    };"
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "290-293",
+          "lines": "295-298",
           "snippet": "#[cfg(not(any(unix, windows)))]\npub(crate) fn ps_probe(_pid: u32) -> PsProbe {\n    PsProbe::Unavailable\n}"
         },
         {
           "path": "src/live/verdict.rs",
-          "lines": "213-216",
+          "lines": "254-257",
           "snippet": "            PidLiveness::Unavailable => (\n                \"probe unavailable on this host\".to_string(),\n                Some(\"pid liveness cannot be checked here - stale-dead is undecidable\".to_string()),\n            ),"
         }
       ],
@@ -87646,7 +87646,7 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "pub(crate) fn cleared_from_origin(path: &Path, wrapper_ts: &str) -> ClearJoin {",
-          "lines": "220-220"
+          "lines": "288-288"
         },
         {
           "path": "src/session/rows.rs",
@@ -87823,7 +87823,7 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "                saw_first_user_record = true;",
-          "lines": "36-36"
+          "lines": "34-34"
         },
         {
           "path": "tests/cli/list/clear.rs",
@@ -87866,7 +87866,7 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {",
-          "lines": "298-298"
+          "lines": "366-366"
         },
         {
           "path": "src/session/tests.rs",
@@ -87944,12 +87944,12 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "pub(crate) const CLEAR_JOIN_WINDOW_MS: i64 = 2000;",
-          "lines": "191-191"
+          "lines": "259-259"
         },
         {
           "path": "src/session/summarize.rs",
           "snippet": "fn nearest_checkpoint_close(sib: &Path, t_wrapper: i64) -> Option<(i64, i64)> {",
-          "lines": "269-269"
+          "lines": "337-337"
         }
       ],
       "instrument": "Find every top-level transcript whose first non-isMeta user record is a `clear` slash wrapper. For each, read the wrapper's timestamp as epoch milliseconds and, over every sibling `.jsonl` in the same directory, every `cost-state` line's `startTime + totalDuration`; print the signed difference for each candidate line. The counting rule is one row per candidate LINE, not per file, so a file with several checkpoints contributes several rows.",
@@ -87995,6 +87995,236 @@
           "instrument": "Join probe over every top-level transcript under the projects root: for each clear-minted file, the signed difference between the wrapper timestamp and every sibling cost-state line's startTime + totalDuration.",
           "observed": "One clear-minted transcript, written at Claude Code 2.1.268. Its project directory holds one sibling carrying checkpoints, contributing three candidate lines at -164 ms, -43,968 ms and -43,993 ms; the nearest is 164 ms and the next is 268 times further away. Negative here means the checkpoint closes after the wrapper instant. The three producer hops were read in the 2.1.258 build.",
           "rule": "One row per candidate cost-state LINE in the same directory; the difference is the wrapper's epoch milliseconds minus startTime + totalDuration.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "QT-043",
+      "area": "queue-and-telemetry",
+      "behavior": "A `cost-state` line is a repeatable CHECKPOINT, not a close marker. The literal occurs seven times in the 2.1.258 executable and every one is read: an interned name-table entry, the zod schema, the single builder, two per-type policy tables (the dedup policy `last-wins` and the append policy `always`) and two readers that validate against the schema before trusting a line. There is exactly ONE writer, and it is reached from five entry points: the registered session-cost saver (which `/clear` runs, and which a background handover and an in-app resume run too), a background spawn, a resume or in-app fork, the shutdown-gated teardown effect, and the exit re-stamp provider, which registers the builder itself so a drain at exit appends whatever it returns. Three of those are MID-FILE and repeatable, and an exit writes TWO lines with the session-metadata re-append between them. On disk the population matches: most checkpoints are not the last line of their file, and where two are adjacent the lines between them are the metadata block the exit path re-appends.",
+      "depends": "This is why csift reports a tail checkpoint as EVIDENCE and refuses to make it a verdict: finding one at the end says the harness stopped appending after writing it, and nothing about whether the process is alive - that stays the registry row's answer, and the seven-verdict set stays closed so a consumer matching on it keeps matching. It is also why a mid-file checkpoint is reported as nothing at all, and why the `/clear` join reads EVERY checkpoint line of a sibling rather than only its last.",
+      "code": [
+        {
+          "path": "src/live/tail.rs",
+          "snippet": "pub(crate) fn last_checkpoint(path: &Path) -> Result<Option<CheckpointTail>> {",
+          "lines": "145-145"
+        },
+        {
+          "path": "src/live/verdict.rs",
+          "snippet": "    pub(crate) fn attach_checkpoint(&mut self, cp: Option<CheckpointTail>) {",
+          "lines": "81-81"
+        }
+      ],
+      "instrument": "Byte-search the shipped binary for the bare literal `cost-state`, read every occurrence and classify it; then word-boundary grep the builder and the recorder entry and read every call site. On disk, census every transcript under the projects root for lines whose parsed top-level `type` is `cost-state`, counting the transcripts, the lines, and how many are NOT the file's last non-blank line; for every ADJACENT pair of checkpoints in one file, report the top-level `type` of each line between them. The counting rule is one row per checkpoint LINE.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.217",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the saver registration",
+          "offset": 162359768,
+          "excerpt": "UPn(_3r);function _3r(e){TDe(void 0,e)}",
+          "note": "registers the callback every transition runs; the clear reaches the writer through it"
+        },
+        {
+          "role": "gate",
+          "name": "the ownership gate",
+          "offset": 156800373,
+          "excerpt": "function GPn(){let e=n();return e.costLedger.belongsTo(e.id)}",
+          "note": "the builder returns nothing unless the ledger still belongs to the current session"
+        },
+        {
+          "role": "writer",
+          "name": "the cost-state recorder",
+          "offset": 162360855,
+          "excerpt": "function TDe(e,n){let r=ddn();if(r)WPn(r,n);eu(nQe(e),n)}",
+          "note": "builds the object and hands it to the transcript recorder, then persists the session-state twin"
+        },
+        {
+          "role": "writer",
+          "name": "the exit re-stamp drain",
+          "offset": 166079182,
+          "excerpt": "for(let o of e.exitReStampProviders)try{let d=o();if(d!==void 0)e.project?.appendOwedEntryAtExit(d)}catch{}",
+          "note": "drains every registered provider at exit and appends what it returns - the second of the two lines an exit writes"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "occurrence 1 of 7: the interned name-table entry",
+          "offset": 74526852,
+          "excerpt": "cost-state",
+          "verdict": "a name in the binary's interned-string table; no behavior"
+        },
+        {
+          "site": "occurrence 2 of 7: the zod schema",
+          "offset": 161465663,
+          "excerpt": "cost-state\"),sessionId:w.string(),totalCostUSD:e,totalAPIDur",
+          "verdict": "declares the twelve fields the two readers validate against"
+        },
+        {
+          "site": "occurrence 3 of 7: the builder",
+          "offset": 162359852,
+          "excerpt": "cost-state\",sessionId:Q(),totalCostUSD:su(),totalAPIDuration",
+          "verdict": "the ONE writer: the object literal itself"
+        },
+        {
+          "site": "occurrence 4 of 7: the dedup policy table",
+          "offset": 166051527,
+          "excerpt": "cost-state\":\"last-wins\",\"queue-operation\":\"last-wins\",\"obser",
+          "verdict": "keys the type to `last-wins`, so a later checkpoint supersedes an earlier one at load"
+        },
+        {
+          "site": "occurrence 5 of 7: the dedup reader",
+          "offset": 166055055,
+          "excerpt": "cost-state\"&&!qge().safeParse(me).success)C.add(n);else{let ke=B(me),w",
+          "verdict": "reads a line and drops it from the dedup map when it fails the schema"
+        },
+        {
+          "site": "occurrence 6 of 7: the append policy table",
+          "offset": 166067259,
+          "excerpt": "cost-state\":\"always\",\"queue-operation\":\"always\",\"marble-orig",
+          "verdict": "keys the type to `always`, which is why a checkpoint can be written repeatedly"
+        },
+        {
+          "site": "occurrence 7 of 7: the session-index reader",
+          "offset": 166186623,
+          "excerpt": "cost-state\"&&Dn.sessionId){let nr=qge().safeParse(Dn);if(nr.success)ot",
+          "verdict": "keys the validated ledger by session id for the resume picker"
+        },
+        {
+          "site": "writer entry 1 of 5: the registered saver",
+          "offset": 162359768,
+          "excerpt": "UPn(_3r);function _3r(e){TDe(void 0,e)}",
+          "verdict": "runSaver reaches this; the clear, a background handover and an in-app resume all go through it"
+        },
+        {
+          "site": "writer entry 2 of 5: the background spawn",
+          "offset": 180371281,
+          "excerpt": "let ho=Vjt(),Mo=Q();TDe(void 0,Pe?.storageV5);",
+          "verdict": "writes a checkpoint before handing the session to a background process - mid-file and repeatable"
+        },
+        {
+          "site": "writer entry 3 of 5: the resume or in-app fork",
+          "offset": 180761225,
+          "excerpt": "this._resetTurnEventTail(),TDe(void 0,Ie);",
+          "verdict": "writes into the OUTGOING file as the picker switches away"
+        },
+        {
+          "site": "writer entry 4 of 5: the shutdown-gated teardown",
+          "offset": 181690924,
+          "excerpt": "return process.on(\"exit\",Ce),()=>{if(Se?.(),Vi())TDe(T?.(),O);process.off(\"exit\",Ce)}",
+          "verdict": "runs on unmount when the graceful-shutdown flag is set - the first of an exit's two lines"
+        },
+        {
+          "site": "writer entry 5 of 5: the exit re-stamp provider",
+          "offset": 181690809,
+          "excerpt": "qPn(),Vne(ddn);",
+          "verdict": "registers the builder as an exit provider, so the drain appends a second line after the metadata block"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read all seven `cost-state` occurrences and all five writer entry points in the 2.1.258 build; censused every checkpoint line and every adjacent checkpoint pair over every transcript under the projects root.",
+          "observed": "Seven occurrences, classified 1 name-table, 1 schema, 1 builder, 2 policy tables, 2 readers. Five entry points reach the one writer. On disk: 9,519 transcripts scanned, 14 carry a checkpoint, 44 lines, and 35 of the 44 are NOT their file's last non-blank line. 30 adjacent pairs; the commonest gap is a single `last-prompt` line (10 pairs), then 1 to 6 session-metadata lines (`last-prompt`, `ai-title`, `mode`, `permission-mode`, `atis-latch`, `bridge-session`), with 2 pairs adjacent and 5 separated by whole turns.",
+          "rule": "Binary occurrences are byte substrings of the bare literal over the whole executable. A checkpoint line counts when its parsed top-level `type` is `cost-state`; `not last` compares its index against the file's last non-blank line; a pair is two checkpoints with no third between them.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REG-018",
+      "area": "live-registry",
+      "behavior": "The harness task store is keyed by the id the PROCESS started with, never by the session id a transcript carries now. The list id is resolved by one chain - the `CLAUDE_CODE_TASK_LIST_ID` environment variable, else the current team context's `teamName`, else an inherited team name, else the leader team name, else the session id - and the directory is `<claude-home>/tasks/<that id, non-alphanumerics replaced by dashes>`. With the agent-teams path active, the session's own implicit team is minted ONCE at startup: its name is `session-` plus the first eight characters of the session id at that moment, its config records `createdAt` from the same startup instant, and the initializer then RENAMES `tasks/<session uuid>` onto `tasks/<team name>` whenever the two differ. Nothing in the clear path, the resume path or the fork path revisits any of it, so a `/clear` leaves the store under the name the process started with and a resumed launch leaves it under a startup id no transcript carries at all. The config's `leadSessionId` is that startup id, written once and never updated.",
+      "depends": "csift's `status` reads the store through candidates in that order: the session's own id, then the root of the `cleared_from` chain (the id a process that started fresh named its store after), then the team file whose `createdAt` sits within five seconds of the registry row's `startedAt` - taking its `name`, because `leadSessionId` can be a throwaway id. Every store it reads is disclosed with the candidate that found it, so a list recovered by inference never reads as the session's own. A directory matching none of the candidates is never read, which is what keeps the recovery from becoming a guess.",
+      "code": [
+        {
+          "path": "src/live/tasks.rs",
+          "snippet": "pub(crate) fn tasks_report_with(",
+          "lines": "63-63"
+        },
+        {
+          "path": "src/live/tasks.rs",
+          "snippet": "const TEAM_START_WINDOW_MS: i64 = 5000;",
+          "lines": "49-49"
+        }
+      ],
+      "instrument": "Byte-search the shipped binary for the list-id resolver `function lA(){if(a.CLAUDE_CODE_TASK_LIST_ID)` and the team initializer `let i=t?.existingTeamName||p(),e=i??c(Q())`, and read the rename that follows the config write. On disk, read every `<claude-home>/sessions/*.json` row and every `<claude-home>/teams/*/config.json`, and for each row count the team configs whose `createdAt` is within five seconds of the row's `startedAt`; separately count how many team names equal `session-` plus the first eight characters of their own `leadSessionId`, and how many team names have a directory under `<claude-home>/tasks/`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.258",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the session team initializer",
+          "offset": 183052647,
+          "excerpt": "async function C(t,n){let i=t?.existingTeamName||p(),e=i??c(Q()),a=yx(Ai,e),m=Vre(e);",
+          "note": "runs once at startup and decides the team name before anything reads the store"
+        },
+        {
+          "role": "gate",
+          "name": "the implicit team name",
+          "offset": 183052390,
+          "excerpt": "var l=\"session\";function c(t){return`${l}-${t.slice(0,8)}`}",
+          "note": "`session-` plus the first eight characters of the session id at that instant"
+        },
+        {
+          "role": "writer",
+          "name": "the team config",
+          "offset": 183052760,
+          "excerpt": "let r={name:e,createdAt:Date.now(),leadAgentId:a,leadSessionId:Q(),members:[{agentId:a,name:Ai,agentType:Ai,joinedAt:Date.now(),tmuxPaneId:\"leader\"",
+          "note": "createdAt is stamped at the same startup instant the registry row's startedAt is, which is what makes the two joinable"
+        },
+        {
+          "role": "writer",
+          "name": "the task-store rename",
+          "offset": 183053000,
+          "excerpt": "YJn(e);let o=Q();if(e!==o)await d(Xk(o),Xk(e)).catch(()=>{});",
+          "note": "moves tasks/<session uuid> onto tasks/<team name> when they differ - the store follows the team, not the session"
+        },
+        {
+          "role": "writer",
+          "name": "the list-id chain",
+          "offset": 160149333,
+          "excerpt": "function lA(){if(a.CLAUDE_CODE_TASK_LIST_ID)return a.CLAUDE_CODE_TASK_LIST_ID;let e=gS();if(e)return e.teamName;return ps()||Si().taskList.leaderTeamName||Q()}",
+          "note": "the five-step resolution, environment variable first and the session id last"
+        },
+        {
+          "role": "writer",
+          "name": "the store directory",
+          "offset": 160149547,
+          "excerpt": "function Xk(e){return H(Se(),\"tasks\",cA(e))}",
+          "note": "tasks/<list id> under the config home, with non-alphanumerics replaced by dashes"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the list-id resolver, the team initializer, the config literal and the rename in the 2.1.258 build; then joined every current registry row against every team config by `startedAt` versus `createdAt`.",
+          "observed": "6 registry rows, 26 team configs. Every row matched EXACTLY ONE config within five seconds, at deltas of -716, -1043, -1100, -1124, -1187 and -3496 ms (the config is written first). On 4 of the 6, the team name does not begin with the row's own session id prefix, which is the resumed-launch shape. All 26 team names equal `session-` plus the first eight characters of their own `leadSessionId`, and all 26 have a directory under the tasks root.",
+          "rule": "One row per registry file; a config matches when the absolute difference between `createdAt` and `startedAt` is at most 5000 ms. Name comparisons are exact string equality on the first eight characters.",
           "note": ""
         }
       ]

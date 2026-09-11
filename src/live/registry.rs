@@ -35,6 +35,10 @@ pub(crate) struct RegistryRow {
     pub(crate) proc_start: Option<String>,
     /// The raw `pidDomain` (`darwin` | `linux` | `win32:<host>`); absent on older rows.
     pub(crate) pid_domain: Option<String>,
+    /// Millisecond epoch of the PROCESS start, written once when the row is minted. The
+    /// task store's name is chosen at that same startup, which is what makes this the
+    /// key to the team file a cleared session's store is named after.
+    pub(crate) started_at_ms: Option<i64>,
 }
 
 /// Scan the registry dir for the row whose `sessionId` matches. `Ok(None)` when the dir
@@ -78,6 +82,7 @@ pub(crate) fn registry_row_for(session_id: &str) -> Result<Option<RegistryRow>> 
             // what the row writer emits, and both renderings parse (ledger WIN-007).
             proc_start: str_field("procStartFt").or_else(|| str_field("procStart")),
             pid_domain: str_field("pidDomain"),
+            started_at_ms: v.get("startedAt").and_then(serde_json::Value::as_i64),
         }));
     }
     Ok(None)
