@@ -71,6 +71,11 @@ pub(crate) fn render_text(
                 ),
             }
         }
+        // C-44: the clear left no lineage on disk, so this row is labelled an inference
+        // and names the instrument (the checkpoint the old session's ledger wrote).
+        if s.minted_by_clear {
+            println!("  cleared  {}", cleared_line(s));
+        }
         print_preview("first ◂", s.first_user.as_ref());
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
@@ -104,6 +109,43 @@ pub(crate) fn render_text(
              narrow with a target or --since, or raise --max-count)"
         );
     }
+}
+
+/// The `cleared` row's body: the join when it resolved, the tie when two siblings
+/// shared the smallest distance, the bare mint when no checkpoint qualified.
+pub(crate) fn cleared_line(s: &SessionSummary) -> String {
+    let when = |d: i64| {
+        format!(
+            "the checkpoint the clear wrote closes {d} ms {} this file opens",
+            if s.cleared_from_after {
+                "after"
+            } else {
+                "before"
+            }
+        )
+    };
+    match (&s.cleared_from, s.cleared_from_distance_ms) {
+        (Some(origin), Some(d)) => format!("from {} (an inference: {})", first8(origin), when(d)),
+        _ if !s.cleared_from_candidates.is_empty() => format!(
+            "minted by /clear; {} siblings tie at {} ms ({}) - joined to neither",
+            s.cleared_from_candidates.len(),
+            s.cleared_from_distance_ms.unwrap_or_default(),
+            s.cleared_from_candidates
+                .iter()
+                .map(|c| first8(c))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        _ => format!(
+            "minted by /clear; no cost-ledger checkpoint within {} ms in this project dir",
+            crate::session::CLEAR_JOIN_WINDOW_MS
+        ),
+    }
+}
+
+/// The stable first-8 id token every csift surface prints (a valid `@` target).
+fn first8(id: &str) -> &str {
+    id.get(..8).unwrap_or(id)
 }
 
 pub(crate) fn print_preview(label: &str, preview: Option<&MessagePreview>) {
@@ -183,6 +225,14 @@ pub(crate) fn render_json(
             "is_clone": s.clone_boundary_uuid.is_some(),
             "clone_of": s.clone_of,
             "clone_boundary_uuid": s.clone_boundary_uuid,
+            // C-44 `/clear` lineage. `minted_by` is "clear" when this transcript opens
+            // with the `/clear` wrapper, null otherwise; `cleared_from` is the INFERRED
+            // predecessor (the checkpoint join, never a file mtime) and stays null on a
+            // tie, whose members ride `cleared_from_candidates`.
+            "minted_by": if s.minted_by_clear { json!("clear") } else { serde_json::Value::Null },
+            "cleared_from": s.cleared_from,
+            "cleared_from_distance_ms": s.cleared_from_distance_ms,
+            "cleared_from_candidates": s.cleared_from_candidates,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

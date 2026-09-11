@@ -402,3 +402,80 @@ fn clone_origin_decoys_stay_outside_the_join() {
     std::fs::remove_file(&refr).unwrap();
     std::fs::remove_file(&clone).ok();
 }
+
+// -- C-44: the /clear checkpoint join --
+
+#[test]
+fn checkpoint_close_reads_the_sum_and_refuses_other_types() {
+    let line = br#"{"type":"cost-state","sessionId":"s","totalCostUSD":0.5,"totalDuration":60000,"startTime":1780808940000,"modelUsage":{},"hasUnknownModelCost":false}"#;
+    assert_eq!(
+        checkpoint_close_ms(line),
+        Some(1_780_809_000_000),
+        "the close instant is startTime + totalDuration"
+    );
+    // A line of any other type is never a checkpoint, however many numbers it carries.
+    assert_eq!(
+        checkpoint_close_ms(
+            br#"{"type":"user","totalDuration":60000,"startTime":1780808940000,"message":{"role":"user","content":"x"}}"#
+        ),
+        None
+    );
+    // A checkpoint missing either half yields nothing rather than half an instant.
+    assert_eq!(
+        checkpoint_close_ms(br#"{"type":"cost-state","startTime":1780808940000}"#),
+        None
+    );
+    assert_eq!(checkpoint_close_ms(b"not json"), None);
+}
+
+#[test]
+fn cleared_from_origin_takes_the_nearest_checkpoint_in_window() {
+    let dir = std::env::temp_dir().join(format!(
+        "csift-clear-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let wrapper = "2026-06-07T05:10:00.000Z";
+    let w = crate::timez::epoch_ms(wrapper).unwrap();
+    let checkpoint = |close: i64| {
+        format!(
+            r#"{{"type":"cost-state","sessionId":"s","totalCostUSD":0.1,"totalDuration":1000,"startTime":{},"modelUsage":{{}},"hasUnknownModelCost":false}}"#,
+            close - 1000
+        )
+    };
+    // Two checkpoints in ONE sibling: the nearer line is the one that decides.
+    let near = dir.join("11111111-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(
+        &near,
+        format!("{}\n{}\n", checkpoint(w - 1500), checkpoint(w - 7)),
+    )
+    .unwrap();
+    // A sibling well outside the window never competes.
+    let far = dir.join("22222222-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(&far, format!("{}\n", checkpoint(w - 90_000))).unwrap();
+    let cleared = dir.join("33333333-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(&cleared, "{}\n").unwrap();
+
+    let join = cleared_from_origin(&cleared, wrapper);
+    assert_eq!(
+        join.cleared_from.as_deref(),
+        Some("11111111-2222-4333-8444-555566667777")
+    );
+    assert_eq!(
+        join.distance_ms,
+        Some(7),
+        "the nearest LINE wins, not the first"
+    );
+    assert!(!join.after, "this checkpoint closes before the wrapper");
+    assert!(join.candidates.is_empty());
+
+    // A checkpoint on the far side of the wrapper is joined and its direction recorded.
+    std::fs::write(&near, format!("{}\n", checkpoint(w + 164))).unwrap();
+    std::fs::remove_file(&far).unwrap();
+    let after = cleared_from_origin(&cleared, wrapper);
+    assert_eq!(after.distance_ms, Some(164));
+    assert!(after.after, "the checkpoint closes after the wrapper");
+
+    std::fs::remove_dir_all(&dir).ok();
+}

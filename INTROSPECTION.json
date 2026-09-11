@@ -15897,12 +15897,12 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "152-159",
+          "lines": "308-315",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "165-176",
+          "lines": "321-332",
           "snippet": "    for line in mmap.split(|&b| b == b'\\n') {\n        if TS.find(line).is_none() {\n            continue;\n        }\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if rec.timestamp.is_some() {\n                let hit = rec.is_compact_boundary();\n                return Ok(hit\n                    .then(|| rec.uuid.clone().unwrap_or_default())\n                    .filter(|u| !u.is_empty()));\n            }\n        }"
         }
       ],
@@ -16008,7 +16008,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "155-158",
+          "lines": "311-314",
           "snippet": "/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -16186,7 +16186,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "181-189",
+          "lines": "337-345",
           "snippet": "/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary\n/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own\n/// uuid differs; a co-clone's head probe returns the same boundary uuid and is\n/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY\n/// when a clone was detected.\npub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -16416,7 +16416,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "152-158",
+          "lines": "308-314",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -38325,7 +38325,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "82-87",
+          "lines": "105-110",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -38531,7 +38531,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "186-189",
+          "lines": "342-345",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -42600,7 +42600,7 @@
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "28-33",
+          "lines": "51-56",
           "snippet": "            if let Some(text) = preview_text(rec) {\n                // Capture identity off the first user record (it carries cwd / version /\n                // gitBranch / sessionId in real data).\n                cwd = rec.cwd.clone();\n                version = rec.version.clone();\n                git_branch = rec.git_branch.clone();"
         }
       ],
@@ -43093,7 +43093,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "82-87",
+          "lines": "105-110",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -52654,7 +52654,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "134-140",
+          "lines": "164-170",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),\n        git_branch: git_branch_last.clone().or_else(|| git_branch.clone()),\n        git_branch_first: git_branch.or(git_branch_last),"
         }
       ],
@@ -56359,7 +56359,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "134-138",
+          "lines": "164-168",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),"
         }
       ],
@@ -64172,7 +64172,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "186-188",
+          "lines": "342-344",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());"
         }
       ],
@@ -64456,7 +64456,7 @@
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "20-21",
+          "lines": "26-27",
           "snippet": "    let (head_skipped, head_consumed) =\n        head_records_prefiltered(path, line_is_list_candidate, |rec| {"
         }
       ],
@@ -65986,7 +65986,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "82-87",
+          "lines": "105-110",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -87634,6 +87634,368 @@
           "observed": "Seven sites, each unique in the build: two entry points that both end in `??t`, the sentinel test they gate on, the two resolvers that return null for a non-sentinel, and the two enqueue call sites. No other site produces a fired prompt's value. Corpus: 170 of 171 fire-shaped records carry text byte-identical to the rider above them, and 3 of 171 open with a loop marker - the sentinel fires the resolver rewrote.",
           "rule": "One count per distinct byte occurrence in the build for the enumeration; one count per raw record for the corpus figures, text compared after joining text blocks with newlines.",
           "note": "The one record whose text differs from its rider is the same outlier CLS-031 records: it has no rider line of its own within the file."
+        }
+      ]
+    },
+    {
+      "id": "MISC-044",
+      "area": "misc",
+      "behavior": "`/clear` (aliases `reset` and `new`, optional `[name]` argument) runs one generator that ends the old session and mints a new one INSIDE the same process. The order inside that generator is fixed: the SessionEnd hook runs first with reason `clear`; the conversation state is emptied; the cost-ledger saver runs; and only then is the session id regenerated. The saver call `BPn` (runSaver) precedes the id regeneration `BIn` (regenerateSessionId), so the cost-state line the saver writes is stamped with the OLD session id and lands in the OLD transcript - `ddn` reads the id through `Q()` and is gated by `GPn()`, which tests that the ledger still belongs to the current session, and `BIn` is what re-scopes the ledger (`t.costLedger.scopeTo(s)`). `BIn` mints the new id with `z5()`, the module's `randomUUID` import from node crypto, sets it with `t.update({id:s,...})` and, under the option `setCurrentAsParent`, records the old id as an in-memory `parentId`. The SessionStart hook runs LAST with source `clear`. The generator also yields a `conversation_reset` frame whose `newConversationId` is a SEPARATE uuid minted by the same `z5()` a few statements earlier, not the new session id.",
+      "depends": "csift joins a cleared session to its predecessor through the checkpoint the saver wrote, and that join is only sound because the saver runs BEFORE the id swap: the checkpoint carries the old id, sits in the old file, and its close instant is the last instant of the old session. If a build moved the saver after the regeneration the checkpoint would carry the new id and land in the new file, and the join would silently point the wrong way. The SessionEnd/SessionStart pair with their `clear` reason and source is what a hook-based instrument would key on, and the separately minted `conversation_reset` uuid is why csift never treats an SDK frame's id as a session id.",
+      "code": [
+        {
+          "path": "src/session/summarize.rs",
+          "snippet": "pub(crate) fn cleared_from_origin(path: &Path, wrapper_ts: &str) -> ClearJoin {",
+          "lines": "220-220"
+        },
+        {
+          "path": "src/session/rows.rs",
+          "snippet": "    pub minted_by_clear: bool,",
+          "lines": "78-78"
+        }
+      ],
+      "instrument": "Byte-search the shipped Claude Code binary for the command registration literal `name:\"clear\",description:\"Start a new session with empty context`, the generator head `async function*wtn({session:o,setMessages:m`, and the regeneration tail `let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,`; read the generator body between them and confirm the call order `SEe(o,\"clear\",...)` then `BPn(s)` then `BIn({setCurrentAsParent:!0})` then `_V(o,\"clear\",...)`. Confirm on disk by clearing a live session and reading the two transcripts: the old file's last cost-state line carries the old session id, the new file opens in the same project directory under a fresh uuid.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.258",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the /clear command registration",
+          "offset": 165579800,
+          "excerpt": "name:\"clear\",description:\"Start a new session with empty context; previous session stays on disk (resumable with /resume)\",argumentHint:\"[name]\",aliases:[\"reset\",\"new\"]",
+          "note": "the local command whose load() pulls in the generator chunk; the aliases and the optional [name] argument are declared here"
+        },
+        {
+          "role": "gate",
+          "name": "the clearConversation generator head",
+          "offset": 173271378,
+          "excerpt": "async function*wtn({session:o,setMessages:m,readFileState:L",
+          "note": "the one entry the command dispatches into; every step below runs inside it"
+        },
+        {
+          "role": "gate",
+          "name": "the SessionEnd hook call",
+          "offset": 173271688,
+          "excerpt": "let H=ope();await SEe(o,\"clear\",{sessionHooks:U,getAppState:r,signal:AbortSignal.timeout(H),storageV5:s,credentials:I}),Ypt(\"conversation_clear\")",
+          "note": "runs first, with the literal reason `clear`"
+        },
+        {
+          "role": "writer",
+          "name": "the saver call before the id swap",
+          "offset": 173273779,
+          "excerpt": "yield{type:\"conversation_reset\",newConversationId:w},BPn(s),Ihe();",
+          "note": "BPn is runSaver: the cost-state line is written here, while Q() still returns the old id"
+        },
+        {
+          "role": "writer",
+          "name": "the session id regeneration",
+          "offset": 156788404,
+          "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,...e.setCurrentAsParent&&{parentId:o}}),cn(t,\"clear\",i),t.id}",
+          "note": "z5() mints the new id, the ledger is re-scoped to it, and parentId is set in memory only under setCurrentAsParent"
+        },
+        {
+          "role": "writer",
+          "name": "the crypto import behind z5",
+          "offset": 156729541,
+          "excerpt": "import{randomUUID as z5}from\"crypto\";",
+          "note": "the id mint is node's randomUUID, not a derived or sequential id"
+        },
+        {
+          "role": "writer",
+          "name": "the SessionStart hook call",
+          "offset": 173274519,
+          "excerpt": "let D=await _V(o,\"clear\",{storageV5:s,credentials:I});if(D.length>0)m(()=>D)",
+          "note": "runs last, with the literal source `clear`"
+        },
+        {
+          "role": "writer",
+          "name": "the separately minted conversation_reset uuid",
+          "offset": 173273674,
+          "excerpt": "if(Oe()||Ql()&&DK())_u({type:\"conversation_reset\",new_conversation_id:w}),y(\"bridge_conversation_reset\");",
+          "note": "w is minted by the same z5() before BIn runs, so the frame's id is not the new session id"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Byte-searched the 2.1.258 build for the eight hop literals above (each unique) and read the generator body between the handler head and the SessionStart call; cleared one live session and read both transcripts plus the cost-state line the saver wrote.",
+          "observed": "All eight literals occur exactly once. Call order in the generator body: SEe(o,\"clear\") at the head, BPn(s) at the conversation_reset yield, BIn({setCurrentAsParent:!0}) fourteen statements later, _V(o,\"clear\") last. On disk the old transcript's cost-state line carried the old session id and the new transcript opened under a fresh uuid in the same project directory.",
+          "rule": "Occurrence counts are byte substrings of the whole executable; the call order is the textual order inside the single generator body.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "MISC-045",
+      "area": "misc",
+      "behavior": "A clear persists NO lineage. The old session id survives only as the in-memory `parentId` field of the session object, and every site that touches it is in that object's own lifecycle: the root constructor and the withProject fork getters copy it, the subscribe diff watches it, the update setter assigns it, the regeneration writes it under `setCurrentAsParent`, and two readers consume it (`Che`, and the re-identification path `Xp`). `parentId` occurs 32 times in the 2.1.258 executable, of which 17 are those session sites and 15 belong to unrelated subsystems - four runtime strings, five UI tree nodes and six MCP configuration rows. No site serializes it into a transcript. The harness DOES persist lineage for a different transition: a fork writes a `fork-context-ref` line carrying `parentSessionId`. A clear writes nothing of the kind, so a cleared transcript and its predecessor are linked by no field on either side.",
+      "depends": "This is why csift's `cleared_from` is an INFERENCE and says so on the row: there is no field to read. It also bounds what any future consumer may do - a join must come from an instrument (the cost-ledger checkpoint), never from a lineage key that does not exist - and it explains why the fork case is joined differently: `fork-context-ref.parentSessionId` is a stated fact, the clear's predecessor is not.",
+      "code": [
+        {
+          "path": "src/session/render.rs",
+          "snippet": "pub(crate) fn cleared_line(s: &SessionSummary) -> String {",
+          "lines": "116-116"
+        },
+        {
+          "path": "src/session/rows.rs",
+          "snippet": "    pub cleared_from: Option<String>,",
+          "lines": "84-84"
+        }
+      ],
+      "instrument": "Word-boundary grep the shipped binary for `parentId` and read every occurrence, classifying each as a session-object site or an unrelated subsystem. Then census every transcript under the projects root for the byte keys `\"parentId\"`, `\"clearedFrom\"`, `\"previousSessionId\"` and `\"parentSessionId\"`, counting files and occurrences; the counting rule is a raw byte substring over the whole file, so a key nested anywhere would count.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.258",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the regeneration's parentId write",
+          "offset": 156788404,
+          "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,...e.setCurrentAsParent&&{parentId:o}}),cn(t,\"clear\",i),t.id}",
+          "note": "the only site that sets parentId at a clear, and it writes to the in-memory session object"
+        },
+        {
+          "role": "gate",
+          "name": "the update setter",
+          "offset": 156787897,
+          "excerpt": "function BIn(e={}){let t=n(),o=t.id;t.sessionScratch.forgetPlanSlug(o),t.identity.replaceProjectDir(null);",
+          "note": "the same function's head; the session object is updated in place and nothing in it reaches a file"
+        },
+        {
+          "role": "writer",
+          "name": "the parentId reader",
+          "offset": 156788659,
+          "excerpt": "function Che(){let e=g();return e?e.parentSessionId:n().parentId}",
+          "note": "one of the two consumers; it answers from memory, with no file behind it"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the parentId write at the clear",
+          "offset": 156788404,
+          "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,...e.setCurrentAsParent&&{parentId:o}}),cn(t,\"clear\",i),t.id}",
+          "verdict": "sets the in-memory field under the setCurrentAsParent option; no append"
+        },
+        {
+          "site": "the parentId reader Che",
+          "offset": 156788659,
+          "excerpt": "function Che(){let e=g();return e?e.parentSessionId:n().parentId}",
+          "verdict": "reads the in-memory field; no file"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Word-boundary grep of `parentId` over the 2.1.258 executable with every occurrence read, plus a byte census of the four lineage keys over every transcript under the projects root.",
+          "observed": "32 `parentId` occurrences: 17 session-object sites (root constructor 2, fork getters 3, subscribe diff 3, update setter 6, the clear's write 1, readers 2) and 15 unrelated (4 runtime strings, 5 UI tree, 6 MCP config). Census over 9,521 transcripts: `\"parentId\"` 0 files 0 occurrences, `\"clearedFrom\"` 0/0, `\"previousSessionId\"` 0/0, `\"parentSessionId\"` 33 occurrences across 33 files, every one a top-level key of a `fork-context-ref` line and none on any other line type.",
+          "rule": "Binary occurrences are word-boundary matches over the whole executable. Transcript counts are raw byte substrings per file; the parentSessionId classification parses each carrying line and reads its top-level `type`.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-105",
+      "area": "record-model",
+      "behavior": "The transcript a `/clear` mints opens with a fixed shape. Session-state bookkeeping lines come first (mode, bridge-session, file-history-snapshot), then an `isMeta` user record whose content opens `<local-command-caveat>`, then the `/clear` slash wrapper itself as a NON-isMeta user record carrying `<command-name>/clear</command-name>` with the caveat record as its `parentUuid`, then a `system` record of subtype `local_command` with empty stdout, and only then the first real prompt. The wrapper for the command that ENDED the previous session is therefore written into the transcript the command CREATED, which is what makes the new file self-identifying: its first non-isMeta user record is the wrapper.",
+      "depends": "csift reads exactly that: the first non-isMeta user record of a top-level transcript, tested for the slash wrapper with name `clear`, is the whole mint signature (`minted_by`). If the wrapper moved to the old file the signature would vanish and every cleared session would read as an ordinary one; if a build emitted the wrapper without the caveat the signature would still hold, because the probe skips isMeta records rather than requiring one.",
+      "code": [
+        {
+          "path": "src/session/summarize.rs",
+          "snippet": "                saw_first_user_record = true;",
+          "lines": "36-36"
+        },
+        {
+          "path": "tests/cli/list/clear.rs",
+          "snippet": "fn list_needs_the_wrapper_first_not_merely_present() {",
+          "lines": "201-201"
+        }
+      ],
+      "instrument": "For every top-level transcript under the projects root, read lines until the first `type:\"user\"` record whose `isMeta` is not true and test whether its message content opens with `<command-name>` or `<command-message>` naming `clear`; report how many transcripts qualify and, for each, the wrapper's line number and the types of the lines above it. Confirm live by clearing a session and reading the first ten lines of the new transcript.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.258",
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The writer that appends the slash wrapper after the id swap is not read: byte-search the shipped binary for the local-command wrapper template and the caveat literal, then confirm the append happens on the post-regeneration transcript path."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Head census over every top-level transcript under the projects root for a first non-isMeta user record that is a `clear` slash wrapper, plus a live clear whose new transcript's first ten lines were read by type.",
+          "observed": "1 of 101 top-level transcripts qualifies; its wrapper sits at line 5 with mode, bridge-session and file-history-snapshot above it and the isMeta `<local-command-caveat>` record at line 4. A live clear reproduced that order exactly, with a `system` / `local_command` record at line 6 and the first prompt at line 8; the qualifying transcript carries version 2.1.268 on its records, so the shape is the same at that build.",
+          "rule": "One transcript counts once, decided by its first `type:\"user\"` record whose `isMeta` is not true; string and block content are both read, and the wrapper name is compared with a leading slash stripped.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "QT-042",
+      "area": "queue-and-telemetry",
+      "behavior": "A `cost-state` line is the cost ledger's checkpoint and carries exactly twelve keys: `type`, `sessionId`, `totalCostUSD`, `totalAPIDuration`, `totalAPIDurationWithoutRetries`, `totalToolDuration`, `totalLinesAdded`, `totalLinesRemoved`, `totalDuration`, `startTime`, `modelUsage` and `hasUnknownModelCost`. There is no `uuid`, no `timestamp`, no `parentUuid` and no `message`, so the line is not a conversation record and carries no instant of its own beyond the two numbers: `startTime` is the session's start in epoch milliseconds and `totalDuration` its wall duration, so their SUM is the instant the ledger closed. One builder mints the object (`ddn`), gated on the ledger still belonging to the current session, and hands it to the transcript recorder; a zod schema declares the same twelve fields, with `hasUnknownModelCost` the only optional one, and two readers validate against that schema before trusting a line.",
+      "depends": "csift reads `startTime + totalDuration` off such a line and nothing else: it is the only instant the line carries, and it is what the `/clear` join compares against the wrapper's timestamp. The missing `uuid` and `timestamp` are why a checkpoint is addressed by LINE and never by uuid, and why the line is not a chain node. If the schema gained an instant field or renamed either number, the join would go silent rather than wrong, because csift requires both numbers and rejects a line of any other type.",
+      "code": [
+        {
+          "path": "src/session/summarize.rs",
+          "snippet": "pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {",
+          "lines": "298-298"
+        },
+        {
+          "path": "src/session/tests.rs",
+          "snippet": "fn checkpoint_close_reads_the_sum_and_refuses_other_types() {",
+          "lines": "409-409"
+        }
+      ],
+      "instrument": "Census every transcript under the projects root for lines whose top-level `type` is `cost-state`, collecting the sorted key tuple of each; report the number of transcripts carrying one, the number of lines, and every distinct key set. Cross-read the shipped binary at the schema literal `w.literal(\"cost-state\")` and at the builder head `function ddn(){if(!GPn())return;return{type:\"cost-state\"` and compare the field lists.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.217",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the saver registration",
+          "offset": 162359768,
+          "excerpt": "UPn(_3r);function _3r(e){TDe(void 0,e)}",
+          "note": "the registered saver is what every transition calls into"
+        },
+        {
+          "role": "gate",
+          "name": "the ownership gate",
+          "offset": 156800373,
+          "excerpt": "function GPn(){let e=n();return e.costLedger.belongsTo(e.id)}",
+          "note": "the builder returns nothing unless the ledger still belongs to the current session"
+        },
+        {
+          "role": "writer",
+          "name": "the cost-state builder",
+          "offset": 162359807,
+          "excerpt": "function ddn(){if(!GPn())return;return{type:\"cost-state\",sessionId:Q(),totalCostUSD:su(),totalAPIDuration:_E()",
+          "note": "the twelve-key object literal, with sessionId read through Q()"
+        },
+        {
+          "role": "writer",
+          "name": "the transcript recorder",
+          "offset": 162360855,
+          "excerpt": "function TDe(e,n){let r=ddn();if(r)WPn(r,n);eu(nQe(e),n)}",
+          "note": "hands the built object to the recorder that appends it"
+        },
+        {
+          "role": "writer",
+          "name": "the zod schema",
+          "offset": 161465630,
+          "excerpt": "return w.object({type:w.literal(\"cost-state\"),sessionId:w.string(),totalCostUSD:e,totalAPIDuration:e,totalAPIDurationWithoutRetries:e,totalToolDuration:e,totalLinesAdded:e,totalLinesRemoved:e,totalDuration:e,startTime:e",
+          "note": "declares the same twelve fields; hasUnknownModelCost is the only optional one"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Key-set census of every `cost-state` line over every transcript under the projects root, compared against the schema and builder literals read in the 2.1.258 build.",
+          "observed": "9,519 transcripts scanned, 14 carry a cost-state line, 44 lines in total, and all 44 share ONE key tuple of twelve: hasUnknownModelCost, modelUsage, sessionId, startTime, totalAPIDuration, totalAPIDurationWithoutRetries, totalCostUSD, totalDuration, totalLinesAdded, totalLinesRemoved, totalToolDuration, type. The builder literal names the same twelve in the same roles and the schema declares them with hasUnknownModelCost optional.",
+          "rule": "A line counts when its parsed top-level `type` equals `cost-state`; the key tuple is the sorted list of its top-level keys, so an absent optional field would form a second tuple.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "QT-044",
+      "area": "queue-and-telemetry",
+      "behavior": "At a clear, the checkpoint the old session writes closes at the instant the new session begins: `startTime + totalDuration` of that line lands within a fifth of a second of the new transcript's first records. Measured on a live clear, the new file's `/clear` wrapper sits 164 ms before that sum, the isMeta caveat record 3 ms after it and the `local_command` record 2 ms after it. `startTime` is per SESSION and is reset at the clear, so equality of `startTime` across two files is NOT a link; the SUM is. The window is one-sided in neither direction by rule - the wrapper can fall on either side of the close - and the nearest competing checkpoint in the same project directory was 43,968 ms away, two orders of magnitude outside it.",
+      "depends": "This is the whole `cleared_from` join: csift compares the wrapper record's timestamp against `startTime + totalDuration` of every cost-state line of every sibling transcript in the same project directory, keeps the smallest distance inside a 2,000 ms window, and reports a tie between two different files instead of picking one. The 2,000 ms window is an order of magnitude above the measured 164 ms and two orders below the nearest competitor, so it separates the real predecessor from its neighbours. A file mtime or the time adjacency of ordinary records would not: two busy sessions share those.",
+      "code": [
+        {
+          "path": "src/session/summarize.rs",
+          "snippet": "pub(crate) const CLEAR_JOIN_WINDOW_MS: i64 = 2000;",
+          "lines": "191-191"
+        },
+        {
+          "path": "src/session/summarize.rs",
+          "snippet": "fn nearest_checkpoint_close(sib: &Path, t_wrapper: i64) -> Option<(i64, i64)> {",
+          "lines": "269-269"
+        }
+      ],
+      "instrument": "Find every top-level transcript whose first non-isMeta user record is a `clear` slash wrapper. For each, read the wrapper's timestamp as epoch milliseconds and, over every sibling `.jsonl` in the same directory, every `cost-state` line's `startTime + totalDuration`; print the signed difference for each candidate line. The counting rule is one row per candidate LINE, not per file, so a file with several checkpoints contributes several rows.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": "2.1.217",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the saver call inside the clear",
+          "offset": 173273779,
+          "excerpt": "yield{type:\"conversation_reset\",newConversationId:w},BPn(s),Ihe();",
+          "note": "runs while the old id is still current, so the checkpoint belongs to the old session"
+        },
+        {
+          "role": "gate",
+          "name": "the id regeneration that follows it",
+          "offset": 156788404,
+          "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,...e.setCurrentAsParent&&{parentId:o}}),cn(t,\"clear\",i),t.id}",
+          "note": "re-scopes the ledger and mints the new id, which is why the sum is the boundary between the two sessions"
+        },
+        {
+          "role": "writer",
+          "name": "the cost-state builder",
+          "offset": 162359807,
+          "excerpt": "function ddn(){if(!GPn())return;return{type:\"cost-state\",sessionId:Q(),totalCostUSD:su(),totalAPIDuration:_E()",
+          "note": "writes startTime and totalDuration, whose sum is the close instant"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Join probe over every top-level transcript under the projects root: for each clear-minted file, the signed difference between the wrapper timestamp and every sibling cost-state line's startTime + totalDuration.",
+          "observed": "One clear-minted transcript, written at Claude Code 2.1.268. Its project directory holds one sibling carrying checkpoints, contributing three candidate lines at -164 ms, -43,968 ms and -43,993 ms; the nearest is 164 ms and the next is 268 times further away. Negative here means the checkpoint closes after the wrapper instant. The three producer hops were read in the 2.1.258 build.",
+          "rule": "One row per candidate cost-state LINE in the same directory; the difference is the wrapper's epoch milliseconds minus startTime + totalDuration.",
+          "note": ""
         }
       ]
     }

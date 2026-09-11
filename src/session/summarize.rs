@@ -17,8 +17,31 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let mut git_branch: Option<String> = None;
     let mut data_session_id: Option<String> = None;
 
+    // C-44: the `/clear` mint probe rides the SAME head scan (no second read) - the
+    // wrapper is a role-bearing user record, so the list prefilter already keeps it.
+    let mut minted_by_clear = false;
+    let mut clear_wrapper_ts: Option<String> = None;
+    let mut saw_first_user_record = false;
+
     let (head_skipped, head_consumed) =
         head_records_prefiltered(path, line_is_list_candidate, |rec| {
+            // The FIRST non-isMeta user record decides the mint: the `/clear` wrapper
+            // lands in the NEW transcript (the isMeta `<local-command-caveat>` record
+            // may precede it), and any other opener means this file was not minted by a
+            // clear. Decided once, never revisited.
+            if !saw_first_user_record
+                && rec.r#type.as_deref() == Some("user")
+                && rec.is_meta != Some(true)
+            {
+                saw_first_user_record = true;
+                if rec
+                    .slash_command_name()
+                    .is_some_and(|n| n.trim_start_matches('/') == "clear")
+                {
+                    minted_by_clear = true;
+                    clear_wrapper_ts = rec.timestamp.clone();
+                }
+            }
             // First user message = a genuine human turn, an answered AskUserQuestion, or a
             // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
             // single-record head scan, so a rejection surfaces its typed instruction without
@@ -125,6 +148,13 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         .as_deref()
         .and_then(|u| clone_origin(path, u));
 
+    // ── C-44 `/clear` lineage (top-level rows only; a subagent is never cleared) ──
+    let minted_by_clear = minted_by_clear && !is_subagent;
+    let clear_join = match clear_wrapper_ts.as_deref() {
+        Some(ts) if minted_by_clear => cleared_from_origin(path, ts),
+        _ => ClearJoin::default(),
+    };
+
     Ok(SessionSummary {
         session_id,
         is_subagent,
@@ -146,7 +176,133 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         sidecar_present,
         clone_boundary_uuid,
         clone_of,
+        minted_by_clear,
+        cleared_from: clear_join.cleared_from,
+        cleared_from_distance_ms: clear_join.distance_ms,
+        cleared_from_after: clear_join.after,
+        cleared_from_candidates: clear_join.candidates,
     })
+}
+
+/// The window a clear's checkpoint may sit in, either side of the wrapper instant.
+/// Measured distance on a live clear: 164 ms; the widest of the three opening records
+/// is 200 ms. 2 s leaves an order of magnitude of headroom without admitting the next
+/// session's own checkpoint (sessions are minutes apart).
+pub(crate) const CLEAR_JOIN_WINDOW_MS: i64 = 2000;
+
+/// What the `/clear` join concluded for one transcript.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ClearJoin {
+    /// The predecessor transcript's id - `None` when nothing qualified OR when two
+    /// files tied (the tie is reported through `candidates` and joined to neither).
+    pub(crate) cleared_from: Option<String>,
+    /// Absolute distance in ms between the checkpoint's close instant and the wrapper.
+    pub(crate) distance_ms: Option<i64>,
+    /// True when the checkpoint closes AFTER the wrapper instant (the measured order).
+    pub(crate) after: bool,
+    /// The tied ids when two different files share the smallest distance.
+    pub(crate) candidates: Vec<String>,
+}
+
+/// Join a `/clear`-minted transcript to the one it was cleared FROM.
+///
+/// Claude Code writes NO lineage at a clear: the old id survives only in process
+/// memory, and the new transcript carries no `parentSessionId` / `clearedFrom` field.
+/// The one on-disk bridge is the cost ledger's CHECKPOINT, written on the OLD session
+/// (so it carries the OLD `sessionId`) just before the id swap: `startTime +
+/// totalDuration` is the instant the old session closed, and the new file's opening
+/// records sit within 200 ms of it. So the rule is that SUM against the `/clear`
+/// wrapper's own timestamp, inside [`CLEAR_JOIN_WINDOW_MS`] - never file mtimes, and
+/// never the time adjacency of ordinary records, which any two busy sessions share.
+/// A tie between two DIFFERENT files is reported and joined to neither (the same
+/// fail-loud posture [`clone_origin`] takes). Cost is paid only for a transcript that
+/// opens with the wrapper, and only over its siblings' `cost-state` lines.
+pub(crate) fn cleared_from_origin(path: &Path, wrapper_ts: &str) -> ClearJoin {
+    let mut join = ClearJoin::default();
+    let Some(t_wrapper) = crate::timez::epoch_ms(wrapper_ts) else {
+        return join;
+    };
+    let Some(dir) = path.parent() else {
+        return join;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return join;
+    };
+    // (distance, signed delta, id) - the best line of each sibling that qualifies.
+    let mut best: Vec<(i64, i64, String)> = Vec::new();
+    for entry in entries.flatten() {
+        let sib = entry.path();
+        if sib == *path
+            || sib.extension().and_then(|e| e.to_str()) != Some("jsonl")
+            || !sib.is_file()
+        {
+            continue;
+        }
+        if let Some((dist, delta)) = nearest_checkpoint_close(&sib, t_wrapper) {
+            if dist <= CLEAR_JOIN_WINDOW_MS {
+                best.push((dist, delta, crate::subagent::session_id_from_path(&sib)));
+            }
+        }
+    }
+    best.sort_by(|a, b| (a.0, &a.2).cmp(&(b.0, &b.2)));
+    let Some((dist, delta, id)) = best.first().cloned() else {
+        return join;
+    };
+    let tied: Vec<String> = best
+        .iter()
+        .filter(|(d, _, _)| *d == dist)
+        .map(|(_, _, i)| i.clone())
+        .collect();
+    join.distance_ms = Some(dist);
+    join.after = delta < 0;
+    if tied.len() > 1 {
+        join.candidates = tied;
+    } else {
+        join.cleared_from = Some(id);
+    }
+    join
+}
+
+/// The smallest `|wrapper - (startTime + totalDuration)|` over one transcript's
+/// `cost-state` lines, with the signed delta of that line. `None` when the file carries
+/// no readable checkpoint. Only the rare lines carrying the literal are parsed.
+fn nearest_checkpoint_close(sib: &Path, t_wrapper: i64) -> Option<(i64, i64)> {
+    static COST: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"\"cost-state\""));
+    let mmap = crate::parse::mmap_bytes(sib).ok().flatten()?;
+    let bytes: &[u8] = &mmap;
+    let mut at = 0usize;
+    let mut best: Option<(i64, i64)> = None;
+    while let Some(pos) = COST.find(&bytes[at..]) {
+        let abs = at + pos;
+        let start = memchr::memrchr(b'\n', &bytes[..abs]).map_or(0, |i| i + 1);
+        let end = memchr::memchr(b'\n', &bytes[abs..]).map_or(bytes.len(), |i| abs + i);
+        if let Some(close) = checkpoint_close_ms(&bytes[start..end]) {
+            let delta = t_wrapper - close;
+            let dist = delta.abs();
+            if best.is_none_or(|(b, _)| dist < b) {
+                best = Some((dist, delta));
+            }
+        }
+        at = end.min(bytes.len());
+        if at >= bytes.len() {
+            break;
+        }
+    }
+    best
+}
+
+/// `startTime + totalDuration` of one `cost-state` line, in epoch ms. The schema is
+/// twelve keys with no `uuid`, no `timestamp` and no `message{}`, so the two numbers
+/// ARE the line's only instants; a line of any other type yields `None`.
+pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {
+    let v: serde_json::Value = serde_json::from_slice(line).ok()?;
+    if v.get("type").and_then(serde_json::Value::as_str) != Some("cost-state") {
+        return None;
+    }
+    let num = |k: &str| v.get(k).and_then(serde_json::Value::as_f64);
+    #[allow(clippy::cast_possible_truncation)]
+    Some((num("startTime")? + num("totalDuration")?) as i64)
 }
 
 /// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a

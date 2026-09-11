@@ -71,6 +71,25 @@ pub struct SessionSummary {
     /// an elicitation") / absent (hook unknown - CANNOT conclude anything). Always false
     /// for a subagent row (the sidecar is keyed by the top-level session).
     pub sidecar_present: bool,
+    /// C-44 `/clear` lineage: true when this transcript's FIRST non-`isMeta` user record
+    /// is the `/clear` slash wrapper. Claude Code drops the old transcript's file handle
+    /// at a clear and opens a NEW uuid in the same project dir, so the wrapper that
+    /// triggered it lands in the new file. Always false for a subagent row.
+    pub minted_by_clear: bool,
+    /// The transcript this one was cleared FROM: the sibling carrying a cost-ledger
+    /// checkpoint whose `startTime + totalDuration` sits within the join window of the
+    /// wrapper instant. None when nothing qualified, when two files tied (see
+    /// `cleared_from_candidates`), or when this row was not minted by a clear. Nothing
+    /// on disk states the lineage - this is an inference, and the row says so.
+    pub cleared_from: Option<String>,
+    /// Absolute distance in ms between that checkpoint's close instant and the wrapper.
+    pub cleared_from_distance_ms: Option<i64>,
+    /// True when the checkpoint closes AFTER the wrapper instant (the measured order:
+    /// the wrapper is written into the new file before the old session's ledger closes).
+    pub cleared_from_after: bool,
+    /// The tied ids when two different siblings share the smallest distance: reported,
+    /// joined to neither.
+    pub cleared_from_candidates: Vec<String>,
 }
 
 /// A short, timestamped preview of one message for the `list` view.
