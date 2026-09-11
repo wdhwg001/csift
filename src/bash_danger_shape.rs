@@ -81,6 +81,135 @@ static FUNCTION_DEF: LazyLock<Regex> = LazyLock::new(|| {
         .expect("function_definition")
 });
 
+/// The quote state `af` carries across one command string.
+#[derive(Debug, Default)]
+struct BraceMask {
+    single: bool,
+    double: bool,
+    backtick: bool,
+    /// Whether the next character opens a word, which is the only thing that
+    /// makes a `#` a comment.
+    word_start: bool,
+}
+
+/// A brace inside a quote is blanked; every other character is kept.
+fn push_masked(out: &mut String, w: char) {
+    out.push(if w == '{' { ' ' } else { w });
+}
+
+impl BraceMask {
+    fn step_backtick(&mut self, e: &[char], i: usize, out: &mut String) -> usize {
+        let w = e[i];
+        if w == '\\' && matches!(e.get(i + 1), Some('`' | '\\' | '$')) {
+            out.push(w);
+            out.push(e[i + 1]);
+            return i + 2;
+        }
+        if w == '`' {
+            self.backtick = false;
+        }
+        push_masked(out, w);
+        i + 1
+    }
+
+    fn step_single(&mut self, e: &[char], i: usize, out: &mut String) -> usize {
+        let w = e[i];
+        if w == '\'' {
+            self.single = false;
+        }
+        push_masked(out, w);
+        i + 1
+    }
+
+    fn step_double(&mut self, e: &[char], i: usize, out: &mut String) -> usize {
+        let w = e[i];
+        if w == '\\' && matches!(e.get(i + 1), Some('"' | '\\' | '`')) {
+            out.push(w);
+            out.push(e[i + 1]);
+            return i + 2;
+        }
+        // A backtick inside double quotes opens a substitution, not a word.
+        if w == '`' {
+            self.backtick = true;
+            out.push(w);
+            return i + 1;
+        }
+        if w == '"' {
+            self.double = false;
+        }
+        push_masked(out, w);
+        i + 1
+    }
+
+    fn step_plain(&mut self, e: &[char], i: usize, out: &mut String) -> usize {
+        let w = e[i];
+        if w == '\\' && i + 1 < e.len() {
+            out.push(w);
+            out.push(e[i + 1]);
+            if e[i + 1] != '\n' {
+                self.word_start = false;
+            }
+            return i + 2;
+        }
+        if w == '#' && self.word_start {
+            let mut j = i;
+            while j < e.len() && e[j] != '\n' {
+                out.push(e[j]);
+                j += 1;
+            }
+            self.word_start = true;
+            return j;
+        }
+        if w == '`' {
+            self.backtick = true;
+            self.word_start = false;
+            out.push(w);
+            return i + 1;
+        }
+        if w == '\'' {
+            self.single = true;
+        } else if w == '"' {
+            self.double = true;
+        }
+        self.word_start = matches!(
+            w,
+            ' ' | '\t' | '\n' | ';' | '|' | '&' | '(' | ')' | '<' | '>'
+        );
+        // Outside a quote a brace is kept: that is the shape `sf` looks for.
+        out.push(w);
+        i + 1
+    }
+}
+
+/// `af` @159476428 - the transform the brace-quote precheck is tested against.
+/// A command with no brace is returned unchanged; otherwise every brace inside a
+/// single-quoted, double-quoted or backtick span becomes a space, and a `#`
+/// comment is copied verbatim to the end of its line.
+pub(crate) fn mask_quoted_braces(command: &str) -> String {
+    if !command.contains('{') {
+        return command.to_string();
+    }
+    let e: Vec<char> = command.chars().collect();
+    let mut out = String::with_capacity(command.len());
+    let mut st = BraceMask {
+        word_start: true,
+        ..BraceMask::default()
+    };
+    let mut i = 0usize;
+    while i < e.len() {
+        i = if st.backtick {
+            st.step_backtick(&e, i, &mut out)
+        } else if st.single {
+            st.step_single(&e, i, &mut out)
+        } else if st.double {
+            st.step_double(&e, i, &mut out)
+        } else {
+            st.step_plain(&e, i, &mut out)
+        };
+    }
+    out
+}
+
 /// The tree-sitter statement keywords whose node type `xe` reports verbatim.
 const KEYWORD_STATEMENTS: &[(&str, &str)] = &[
     ("for", "for_statement"),
@@ -108,14 +237,18 @@ pub(crate) fn branch_of(command: &str) -> Branch {
         ),
         (&*ZSH_EQUALS, "Contains zsh =cmd equals expansion"),
         (&*ZSH_RANGE, "Contains zsh <N-M> numeric-range glob"),
-        (
-            &*BRACE_QUOTE,
-            "Contains brace with quote character (expansion obfuscation)",
-        ),
     ] {
         if re.is_match(command) {
             return Branch::Lexical(reason);
         }
+    }
+    // The seventh precheck is the only one that does NOT read the raw command:
+    // the harness tests `sf` against `af(e)` (@159478267), and `af` blanks every
+    // brace INSIDE a quote. So the arm fires on an UNQUOTED brace group carrying
+    // a quote character - the obfuscation shape - and not on a brace that merely
+    // sits inside a quoted word.
+    if BRACE_QUOTE.is_match(&mask_quoted_braces(command)) {
+        return Branch::Lexical("Contains brace with quote character (expansion obfuscation)");
     }
     if command.trim().is_empty() {
         return Branch::Structured;
@@ -235,4 +368,44 @@ pub(crate) fn split_statements(command: &str) -> Option<Vec<&str>> {
     }
     out.push(&command[start.min(command.len())..]);
     Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_brace_mask_blanks_a_brace_only_inside_a_quote() {
+        // No brace at all is the fast path, returned unchanged.
+        assert_eq!(mask_quoted_braces("echo plain"), "echo plain");
+        // Inside each of the three quote spans the brace becomes a space; the
+        // closing brace is not a brace and stays.
+        assert_eq!(mask_quoted_braces("echo \"a{b}\""), "echo \"a b}\"");
+        assert_eq!(mask_quoted_braces("echo 'a{b}'"), "echo 'a b}'");
+        assert_eq!(mask_quoted_braces("echo `a{b}`"), "echo `a b}`");
+        // Outside a quote it is kept, because that is the shape the precheck
+        // is looking for.
+        assert_eq!(mask_quoted_braces("rm -rf /{a,b}"), "rm -rf /{a,b}");
+        // An escaped quote does not open a span, so the brace after it is still
+        // outside one.
+        assert_eq!(mask_quoted_braces("echo \\\"{a}"), "echo \\\"{a}");
+        // A comment is copied verbatim, brace and all.
+        assert_eq!(mask_quoted_braces("ls # {a}"), "ls # {a}");
+    }
+
+    #[test]
+    fn the_brace_quote_precheck_reads_the_masked_command() {
+        // An UNQUOTED brace group carrying a quote character is the obfuscation
+        // the arm exists for.
+        assert!(matches!(
+            branch_of("rm -rf /{'',}tmp"),
+            Branch::Lexical("Contains brace with quote character (expansion obfuscation)")
+        ));
+        // A brace that merely sits inside a quoted word is NOT: testing the raw
+        // command here would send an ordinary echo to the lexical classifier.
+        assert!(matches!(
+            branch_of("echo \"set {a: 'b'}\""),
+            Branch::Structured
+        ));
+    }
 }

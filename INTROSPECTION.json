@@ -90411,8 +90411,8 @@
     {
       "id": "BASH-031",
       "area": "bash-shell",
-      "behavior": "Which dangerous-removal checker runs is decided by the tree-sitter DECOMPOSITION, not by the command's content. `Dfe` (@159477546) answers `{kind:\"simple\"}` or `{kind:\"too-complex\"}`, and `Hno` (@162867544) reaches the lexical classifier ONLY on the too-complex answer. A parse aborts over 10,000 bytes (`ls` @159382823). The node dispatcher handles `command`, `redirected_statement`, `comment`, the set `{program,list,pipeline,redirected_statement}`, `negated_command`, `declaration_command` and `variable_assignment`; everything else falls to the too-complex builder `xe` (@159523867), whose reason is `Parse error` for an ERROR node and `Contains <nodeType>` for a name in the set `Aa` (@159474800) - which holds `subshell`, `compound_statement`, `for_statement`, `while_statement`, `until_statement`, `if_statement`, `case_statement`, `function_definition`, `test_command`, the heredoc and herestring redirects and the two exotic string types. A command SUBSTITUTION does not force too-complex: its inner commands are decomposed and appended and the outer argument becomes a sentinel (@159513731).",
-      "depends": "csift has no tree-sitter, so it decides the branch with a conservative shape test over a quote-aware statement split and DISCLOSES which path it took and why (`path: structured` / `path: lexical (too-complex: for_statement)` / `path: lexical (shape unknown)`). Getting the branch wrong is not cosmetic: the two checkers disagree on real shapes, so a frozen lane would be predicted from the wrong grammar in both directions.",
+      "behavior": "Which dangerous-removal checker runs is decided by the tree-sitter DECOMPOSITION, not by the command's content. `Dfe` (@159477546) answers `{kind:\"simple\"}` or `{kind:\"too-complex\"}`, and `Hno` (@162867544) reaches the lexical classifier ONLY on the too-complex answer. A parse aborts over 10,000 bytes (`ls` @159382823). The node dispatcher handles `command`, `redirected_statement`, `comment`, the set `{program,list,pipeline,redirected_statement}`, `negated_command`, `declaration_command` and `variable_assignment`; everything else falls to the too-complex builder `xe` (@159523867), whose reason is `Parse error` for an ERROR node and `Contains <nodeType>` for a name in the set `Aa` (@159474800) - which holds `subshell`, `compound_statement`, `for_statement`, `while_statement`, `until_statement`, `if_statement`, `case_statement`, `function_definition`, `test_command`, the heredoc and herestring redirects and the two exotic string types. A command SUBSTITUTION does not force too-complex: its inner commands are decomposed and appended and the outer argument becomes a sentinel (@159513731). BEFORE any node walk `Dfe` runs seven TEXT prechecks in order, each answering too-complex on its own: control characters, Unicode whitespace, backslash-escaped whitespace, zsh `~[`, zsh `=cmd`, zsh `<N-M>`, and a brace carrying a quote character. Six of the seven read the raw command; the seventh does not. `sf` (@159475762, `/\\{[^}]*['\"]/`) is tested against `af(e)` (@159478264), and `af` (@159476428) walks the command tracking single-quote, double-quote and backtick state and replaces every brace INSIDE a quote with a space, returning the command unchanged when it holds no brace. So the arm fires on an UNQUOTED brace group carrying a quote character - the expansion-obfuscation shape - and not on a brace that merely sits inside a quoted word.",
+      "depends": "csift has no tree-sitter, so it decides the branch with a conservative shape test over a quote-aware statement split and DISCLOSES which path it took and why (`path: structured` / `path: lexical (too-complex: for_statement)` / `path: lexical (shape unknown)`). Getting the branch wrong is not cosmetic: the two checkers disagree on real shapes, so a frozen lane would be predicted from the wrong grammar in both directions. The seventh precheck is ported with its transform: testing `sf` against the raw command instead sends an ordinary quoted brace - a JSON fragment in an `echo`, a brace inside a single-quoted script - to the lexical classifier, which is the wrong grammar and, where that string also carries a removal word, the wrong decision.",
       "code": [
         {
           "path": "src/bash_danger_shape.rs",
@@ -90421,8 +90421,13 @@
         },
         {
           "path": "src/bash_danger_shape.rs",
-          "lines": "95",
+          "lines": "224",
           "snippet": "pub(crate) fn branch_of(command: &str) -> Branch {"
+        },
+        {
+          "path": "src/bash_danger_shape.rs",
+          "lines": "188-189",
+          "snippet": "pub(crate) fn mask_quoted_braces(command: &str) -> String {\n    if !command.contains('{') {"
         }
       ],
       "instrument": "Read `Dfe` at @159477546 in the verified build down to its node walk, the branch at @162867544, the builder `xe` at @159523867 and the name set `Aa` at @159474800; then classify each of the tracer's twenty-two example commands by the shape test and compare with the node type those offsets predict. Counting rule: one branch verdict per command, compared for equality.",
@@ -90485,6 +90490,34 @@
           "offset": 159513731,
           "excerpt": "case\"command_substitution\":{let I=wf(v);if(I===\"DANGEROUS\")r",
           "note": "a substitution is decomposed rather than refused"
+        },
+        {
+          "role": "gate",
+          "name": "the brace-quote precheck: the only one of the seven tested against a transform",
+          "offset": 159478264,
+          "excerpt": "if(sf.test(af(e)))return{kind:\"too-complex\",reason:\"Contains brace with quote character (expansion obfuscation)\"",
+          "note": "reads af(e), not e; the six prechecks above it each read e directly"
+        },
+        {
+          "role": "gate",
+          "name": "sf: a brace followed by a quote character before any closing brace",
+          "offset": 159475762,
+          "excerpt": "sf=/\\{[^}]*['\"]/;",
+          "note": "the pattern itself, unchanged by the transform"
+        },
+        {
+          "role": "writer",
+          "name": "af: the quote-aware brace mask, with its no-brace fast path and quote state",
+          "offset": 159476428,
+          "excerpt": "function af(e){if(!e.includes(\"{\"))return e;let n=[],r=!1,o=!1,d=!1,f=!0,_=0;",
+          "note": "r single quote, o double quote, d backtick, f word start for a # comment"
+        },
+        {
+          "role": "writer",
+          "name": "af's mask expression, reached from each of the three quote states",
+          "offset": 159476639,
+          "excerpt": "n.push(w===\"{\"?\" \":w),_++}else if(r){",
+          "note": "a brace inside a quote becomes a space; outside one it is pushed unchanged"
         }
       ],
       "checks": [
@@ -90497,6 +90530,16 @@
           "observed": "The branch is one `if` on `kind`; the too-complex name set holds eighteen entries and a command substitution is not one of them. Over the corpus sweep the shape test sent every command to a branch and the twenty-two examples matched the node type the offsets predict, including the subshell, the for-statement and the over-length abort.",
           "rule": "one branch verdict per command; the example table compares verdict and node type for equality",
           "note": "Lands with the generational port that first needed the branch at all."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Read the seven text prechecks at the head of Dfe in the verified build and note which argument each regex is tested against; resolve the transform the seventh names by taking the nearest enclosing binding of that identifier (one function declaration between the call site and the preceding one, no var or let binding of the name in that span) and read its body. Then census the corpus: for every DISTINCT (command, version) pair on a Bash tool_use, evaluate the pattern against the raw command and against the transform's output, and separately run the 0.12.1 binary and this build over one synthetic frozen lane per pair, comparing pending_classification.",
+          "observed": "Six prechecks read the raw command and the seventh reads af(e). af at @159476428 masks a brace inside a single-quoted, double-quoted or backtick span to a space and returns the command unchanged when it holds no brace; its binding is unique in the 1,836 bytes between @159476428 and the call at @159478264. Corpus of 164,022 distinct (command, version) pairs: the pattern matches 17,090 raw commands and 6,996 transformed ones, 10,094 stop matching and 0 start. Over the 164,025 synthetic lanes the transform changes the disclosed checker on 10,001, the reason on 11 and the classification on exactly 1 - a command whose quoted echo carries a brace and a removal word, previously escalated by the wrong grammar.",
+          "rule": "One row per distinct (command, version) pair for the pattern census; one row per synthetic frozen lane for the binary differential; a field present only on the new side is additive and not a change.",
+          "note": "The precheck was ported against the raw command, so the transform was missing; it is now ported beside it. The claim text gains the seven prechecks and the transform."
         }
       ]
     },
