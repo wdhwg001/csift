@@ -29,7 +29,7 @@
 //! (`trigger`, `preTokens`, `postTokens`, `durationMs`).
 
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod automation;
 mod chain;

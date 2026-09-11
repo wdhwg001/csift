@@ -103,6 +103,13 @@ pub(crate) fn search_one_file(
     // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by
     // the two attachment gates above.
     let needs_channel = args.label_filter().selected(Class::CommChannel.path());
+    // v0.12.2 `harness.schedule.fire`: the fired PROMPT is an ordinary role-bearing line the
+    // scan already keeps, but the instant it fired lives on the `system`/`scheduled_task_fire`
+    // sibling, which has no role marker. Same LABEL-only gate as the channel keep (a bare scan
+    // is on, `-t user` / `-t agent.*` short-circuits) and, per C-40, a CONJUNCTION rather than
+    // the bare literal - a payload can quote the word. The admitted lines are read for the
+    // instant and then DEMOTED below, so a default scan gains no `harness.meta.system` hit.
+    let needs_schedule_fire = args.label_filter().selected(Class::ScheduleFire.path());
     let gates = CandidateGates {
         compact_boundary: needs_compact_boundary,
         hook_context: needs_hook_context,
@@ -122,6 +129,7 @@ pub(crate) fn search_one_file(
         // override (`Record::delivery_override`) then drops every non-delivered system
         // record this admission parsed. Every other gated leaf is unchanged.
         system: reach(Class::MetaSystem),
+        schedule_fire: needs_schedule_fire,
     };
 
     // ── §7f whole-file gate ──
@@ -293,6 +301,33 @@ pub(crate) fn search_one_file(
         }
     }
 
+    // v0.12.2: read the fired-prompt instants off the `system`/`scheduled_task_fire` lines the
+    // gate above admitted, THEN put those lines back where a default scan had them. The join is
+    // built first because the demote is what makes it unreachable afterwards.
+    let schedule_fires = if gates.schedule_fire {
+        crate::model::ScheduleFireIndex::from_records(records.iter().map(|k| &k.rec))
+    } else {
+        crate::model::ScheduleFireIndex::default()
+    };
+    // The fire line's own leaf is the GATED `harness.meta.system`, so a scan that cannot reach
+    // that leaf must not start emitting it just because this keep parsed the line. Demote, never
+    // delete, for the same reason the attachment keep does: the chain walks `parentUuid` THROUGH
+    // these records - a fired prompt's parent IS one - so removing a node would break the walk
+    // at it. An address (`show`) turns `gates.system` on and keeps them whole, as before.
+    if gates.schedule_fire && !gates.system {
+        let mut demoted: Vec<crate::parse::SpineRow> = Vec::new();
+        records.retain(|k| {
+            if k.rec.is_scheduled_task_fire() {
+                demoted.push(crate::parse::spine_from_record(k.line_no, &k.rec));
+                return false;
+            }
+            true
+        });
+        if !demoted.is_empty() {
+            spine = merge_spine(std::mem::take(&mut spine), demoted);
+        }
+    }
+
     // ── Transparent elicitation-sidecar merge (§3.10) ──
     // A TOP-LEVEL session may have a hook-written `elicitations.jsonl` carrying the
     // unresolved-pending AskUserQuestion/ExitPlanMode/MCP records that are MISSING from the
@@ -333,6 +368,7 @@ pub(crate) fn search_one_file(
         spawn_map,
         inner_parallel,
         head_is_fork,
+        &schedule_fires,
     );
 
     // `--raw`: backfill each hit's VERBATIM source line from this file's mmap - one pass
@@ -398,6 +434,10 @@ pub(crate) struct CandidateGates {
     pub(crate) snapshot: bool,
     /// v0.10.1: every OTHER `type:"system"` subtype (`harness.meta.system`).
     pub(crate) system: bool,
+    /// v0.12.2 (a selector reaching `harness.schedule.fire`, which a bare scan does): the
+    /// `system`/`scheduled_task_fire` line that names WHEN a fired prompt fired. DEFAULT-ON
+    /// like the channel keep, and demoted to a chain row again once its instant is read.
+    pub(crate) schedule_fire: bool,
 }
 
 /// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
@@ -453,6 +493,13 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     // the one subtype it models.
     static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"subtype\""));
+    // v0.12.2: the fired-prompt sibling. Bare VALUE substring (R13-safe) shared with the
+    // classifier through one constant, and the RARE half of the conjunction below, so it is
+    // tested first and the key needle runs on the handful of lines that carry it.
+    static SCHEDULE_FIRE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| {
+            memmem::Finder::new(crate::model::SCHEDULED_TASK_FIRE_SUBTYPE.as_bytes())
+        });
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
@@ -492,4 +539,14 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())
         || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
         || (gates.system && SUBTYPE_FINDER.find(line).is_some())
+        // v0.12.2: the `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a
+        // DEFAULT scan (the label gate is on whenever a selector can reach the leaf). A
+        // CONJUNCTION for the C-40 reason - measured over every transcript under one projects
+        // root, all 465 true fire records carry the key-only bytes `"subtype"` while all 196
+        // lines that carry the literal only in a payload (user, assistant, attachment and
+        // `queue-operation` lines) carry it in none - and the rare literal is tested first, so
+        // the key memmem runs on those few hundred lines rather than on every non-role line.
+        || (gates.schedule_fire
+            && SCHEDULE_FIRE_FINDER.find(line).is_some()
+            && SUBTYPE_FINDER.find(line).is_some())
 }

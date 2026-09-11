@@ -18,6 +18,113 @@ pub(crate) fn notification_class(kind: AutomationKind) -> Class {
 /// (edge-fixtures G1): a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
 pub(crate) const NOTIFICATION_RESULT_TAG: &str = "<result>";
 
+/// The `type:"system"` subtype Claude Code writes at the instant a scheduled task fires -
+/// the sibling record a [`Class::ScheduleFire`] prompt is parented to. Also the candidate
+/// needle the `search` prefilter uses for the same lines (a bare VALUE substring, R13-safe).
+pub const SCHEDULED_TASK_FIRE_SUBTYPE: &str = "scheduled_task_fire";
+
+/// The `promptSource` value Claude Code stamps on every submission it makes itself, as
+/// opposed to `typed` / `queued` / `suggestion_accepted` (the operator's box) or `sdk`.
+pub(crate) const PROMPT_SOURCE_SYSTEM: &str = "system";
+
+impl Record {
+    /// Is this the `system`/`scheduled_task_fire` record the scheduler writes when a cron
+    /// entry or a wakeup timer comes due? It carries the fired instant in its `content` and
+    /// nothing else csift needs; the PROMPT is the separate record parented to it.
+    #[must_use]
+    pub fn is_scheduled_task_fire(&self) -> bool {
+        self.is_type("system") && self.subtype.as_deref() == Some(SCHEDULED_TASK_FIRE_SUBTYPE)
+    }
+
+    /// The instant a `scheduled_task_fire` record names, verbatim - the text inside the
+    /// TRAILING parentheses of its `content`. Two wordings ship that one line (`Claude
+    /// resuming /loop wakeup (<when>)` for a wakeup, `Running scheduled task (<when>)` for a
+    /// cron task), both built by the same call, so the parenthesised tail is read rather than
+    /// either sentence: a third wording changes the prose, not the shape. `None` when the
+    /// content is not a string, carries no parenthesised tail, or leaves it empty - an
+    /// unreadable instant is reported as absent, never as a guessed one.
+    #[must_use]
+    pub fn scheduled_fire_instant(&self) -> Option<&str> {
+        let content = self.content_str()?.trim_end();
+        let inner = content.strip_suffix(')')?;
+        let open = inner.rfind('(')?;
+        let when = inner[open + 1..].trim();
+        (!when.is_empty()).then_some(when)
+    }
+
+    /// Is this the PROMPT a scheduled task fired (`harness.schedule.fire`)? The shape is the
+    /// harness's own "system-injected turn prompt" test: a `type:"user"` record that is
+    /// `isMeta` (the authorship flag, which is what keeps a human's message out of this leaf)
+    /// and carries `promptSource:"system"` (the stamp the submit path puts on every isMeta
+    /// submission).
+    ///
+    /// An inbound message from elsewhere shares that stamp exactly, so TWO guards refuse one:
+    /// the relay FRAMING, through the same [`is_peer_message`] predicate `user.queued` uses
+    /// (one detector, no second rule to drift), and the `origin` OBJECT, which the harness
+    /// stamps on everything it did not submit itself and reads back as the first test of its
+    /// own "foreign user input" veto. The framing guard alone misses a tagless delivery, whose
+    /// preamble carries no tag to detect; the origin guard alone would miss a framing that
+    /// arrived without one. A fired prompt carries neither.
+    ///
+    /// The marker-carrying tick prompts are refused by ARM ORDER in
+    /// [`Record::classify_user_string`] instead: they reach their own leaves first.
+    #[must_use]
+    pub fn is_scheduled_fire_prompt(&self) -> bool {
+        if !self.is_type("user") || !self.is_meta.unwrap_or(false) {
+            return false;
+        }
+        if self.prompt_source.as_deref() != Some(PROMPT_SOURCE_SYSTEM) {
+            return false;
+        }
+        if self.origin.is_some() {
+            return false;
+        }
+        !self
+            .raw_message_text()
+            .is_some_and(|raw| is_peer_message(&raw))
+    }
+}
+
+/// Per-file join from a fired PROMPT to the instant its `system`/`scheduled_task_fire`
+/// sibling names: the prompt's `parentUuid` IS that record's `uuid` (the scheduler appends
+/// the fire record and then submits the prompt, so the submission's parent is the record it
+/// just wrote). A uuid join, never a positional "line before" guess - a queue rider can sit
+/// between the two lines.
+///
+/// Empty on every transcript that never ran a scheduled task, which is nearly all of them,
+/// and empty as well on a scan whose `-t` cannot reach [`Class::ScheduleFire`] (the caller
+/// skips building it, so the extra `system` lines are never even admitted).
+#[derive(Debug, Clone, Default)]
+pub struct ScheduleFireIndex {
+    by_parent: HashMap<String, String>,
+}
+
+impl ScheduleFireIndex {
+    /// Index every `scheduled_task_fire` record that names a readable instant, keyed by its
+    /// own uuid (= the fired prompt's `parentUuid`).
+    #[must_use]
+    pub fn from_records<'a>(records: impl Iterator<Item = &'a Record>) -> Self {
+        let mut by_parent = HashMap::new();
+        for rec in records {
+            if !rec.is_scheduled_task_fire() {
+                continue;
+            }
+            if let (Some(uuid), Some(when)) = (rec.uuid.as_deref(), rec.scheduled_fire_instant()) {
+                by_parent.insert(uuid.to_string(), when.to_string());
+            }
+        }
+        Self { by_parent }
+    }
+
+    /// The instant this record's fire sibling names, or `None` when the transcript holds no
+    /// such sibling - which is the honest answer on the builds that write no fire record at
+    /// all, and on a windowed read that never reached it.
+    #[must_use]
+    pub fn instant_for(&self, parent_uuid: Option<&str>) -> Option<&str> {
+        self.by_parent.get(parent_uuid?).map(String::as_str)
+    }
+}
+
 /// Build the `[<kind> <id>[, <id>…] <status>] <summary>` attribution label for ONE
 /// `<task-notification>…</task-notification>` section string. Shared by
 /// [`Record::automation_label`] (whole-record = the single section) and the batched per-section
@@ -216,6 +323,12 @@ pub struct ClassifyCtx<'a> {
     /// readable through the compaction SUMMARY that follows it. `None` ⇒ a boundary's mode
     /// stays unknown (an honest null, never a guessed `compact`).
     pub summarize: Option<&'a SummarizeIndex>,
+    /// Fired-prompt -> fire INSTANT join for this transcript ([`ScheduleFireIndex`]): a
+    /// [`Class::ScheduleFire`] record carries the armed text and nothing about WHEN it
+    /// fired, which lives on the `system`/`scheduled_task_fire` sibling it is parented to.
+    /// `None` ⇒ the instant stays unknown (an honest null; the builds that write no fire
+    /// record give the same answer).
+    pub schedule_fires: Option<&'a ScheduleFireIndex>,
 }
 
 #[allow(dead_code)]
@@ -233,6 +346,7 @@ impl<'a> ClassifyCtx<'a> {
             spawn: None,
             resume_prompt_uuids: None,
             summarize: None,
+            schedule_fires: None,
         }
     }
 }

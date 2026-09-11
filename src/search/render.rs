@@ -90,6 +90,17 @@ pub(crate) fn render_label(h: &Hit) -> String {
             return format!("{} [{state}]{nd}", class.path());
         }
     }
+    // v0.12.2: a fired prompt names the instant it fired, read off its
+    // `system`/`scheduled_task_fire` sibling. Label zone, display-only, like [summarize <dir>]
+    // and for the same reason: the text comes from ANOTHER record, so putting it in the
+    // matchable excerpt would need a synthesized-marker registration it does not earn. The
+    // prompt body stays the verbatim armed text; a fire with no readable sibling prints the
+    // bare leaf rather than a guessed instant.
+    if class == Class::ScheduleFire {
+        if let Some(when) = h.scheduled_at.as_deref() {
+            return format!("{} [scheduled fire {when}]{nd}", class.path());
+        }
+    }
     // C-33: a compaction summary written by a `/rewind` summarize names its direction in the
     // label zone - display-only, like [narration summary] and [not delivered]: it is not
     // matchable text, so it needs no synthesized-marker registration, and the summary body

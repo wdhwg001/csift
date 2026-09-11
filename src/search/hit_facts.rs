@@ -46,6 +46,8 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         rewound_branch: false,
         replay_copy_of: None,
         compaction: None,
+        // An unlabeled unit carries no leaf, so it is never the fired prompt.
+        scheduled_at: None,
         truncated,
     })
 }

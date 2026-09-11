@@ -133,6 +133,10 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // verbatim, uuid lists included.
         "mode": compaction_mode_json(h),
         "compact_metadata": compact_metadata_json(h),
+        // v0.12.2: the instant a `harness.schedule.fire` prompt fired, verbatim from its
+        // `system`/`scheduled_task_fire` sibling. Null on every other hit, and on a fired
+        // prompt whose sibling this transcript does not hold.
+        "scheduled_at": h.scheduled_at,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.

@@ -549,3 +549,5 @@ fn a_freeform_askuserquestion_response_is_a_user_answer() {
     let head = h.run(&["search", "AskUserQuestion · 1 question", &at(sess), "-c"]);
     assert_eq!(head.stdout.trim(), "1", "{}", head.stdout);
 }
+
+mod schedule_fire;

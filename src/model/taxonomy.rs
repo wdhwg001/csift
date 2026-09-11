@@ -122,6 +122,24 @@ pub enum Class {
     /// [`SCHEDULE_WAKEUP_MARKER`] prompt). Distinct from [`Class::MetaLoop`] (the
     /// autonomous-loop driver prose); the timer is the harness scheduler firing.
     ScheduleWakeup,
+    /// `harness.schedule.fire` - the PROMPT a scheduled task fires: the `isMeta`
+    /// `type:"user"` record Claude Code's scheduler submits on its own when a cron entry or
+    /// a `ScheduleWakeup` timer comes due, carrying `promptSource:"system"` (the stamp the
+    /// submit path puts on every isMeta submission) and, on the builds that write one, a
+    /// sibling `system`/`scheduled_task_fire` record naming the instant it fired.
+    ///
+    /// The armed text reaches the record VERBATIM - the fire path applies exactly one
+    /// rewrite, the autonomous-loop sentinel resolution, and every other prompt falls
+    /// through it unchanged - so a fired prompt carries no marker of its own and looked,
+    /// until this leaf, exactly like an unmodeled isMeta pseudo-turn: excluded, unsearchable,
+    /// absent from every census. The tick prompts that DO carry a marker keep their own
+    /// leaves ([`Class::ScheduleWakeup`] / [`Class::MetaLoop`]), which is why this arm sits
+    /// after them; an inbound peer message, which shares the isMeta + `promptSource` stamp,
+    /// is refused through the same `is_peer_message` predicate `user.queued` uses.
+    ///
+    /// DELIVERED: the model receives the prompt and answers it as an ordinary turn. It does
+    /// not OPEN one, for the same reason no isMeta record does - the operator did not type it.
+    ScheduleFire,
     /// `harness.resume.prompt` - the repair PROMPT Claude Code's loader appends when a
     /// resumed transcript ends on a dangling user record (an esc-recalled draft never
     /// resent, any unanswered prompt): an `isMeta` `type:"user"` record carrying
@@ -270,6 +288,7 @@ impl Class {
         Class::InterruptUser,
         Class::InterruptTool,
         Class::ScheduleWakeup,
+        Class::ScheduleFire,
         Class::ResumePrompt,
         Class::ResumePlaceholder,
         Class::MetaHook,
@@ -313,6 +332,7 @@ impl Class {
             Class::InterruptUser => "harness.interrupt.user",
             Class::InterruptTool => "harness.interrupt.tool",
             Class::ScheduleWakeup => "harness.schedule.wakeup",
+            Class::ScheduleFire => "harness.schedule.fire",
             Class::ResumePrompt => "harness.resume.prompt",
             Class::ResumePlaceholder => "harness.resume.placeholder",
             Class::MetaHook => "harness.meta.hook",
@@ -358,6 +378,7 @@ impl Class {
             | Class::InterruptUser
             | Class::InterruptTool
             | Class::ScheduleWakeup
+            | Class::ScheduleFire
             | Class::ResumePrompt
             | Class::ResumePlaceholder
             | Class::MetaHook

@@ -18,6 +18,7 @@ pub(crate) fn reconstruct_and_match(
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
     head_is_fork: bool,
+    schedule_fires: &crate::model::ScheduleFireIndex,
 ) -> (Vec<Exchange>, usize, ChainCounts) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -97,6 +98,7 @@ pub(crate) fn reconstruct_and_match(
         spawn: spawn_lookup.map(|s| s as &(dyn SpawnLookup + Sync)),
         resume_prompts: &resume_prompts,
         summarize: &summarize_index,
+        schedule_fires,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -456,6 +458,10 @@ pub(crate) struct ClassifyEnv<'a> {
     /// `/rewind` summarize gestures from an ordinary compaction sits on the SUMMARY record,
     /// so a boundary reads its own mode through this per-file pairing.
     pub(crate) summarize: &'a crate::model::SummarizeIndex,
+    /// Fired-prompt -> fire-instant join (v0.12.2): the `[scheduled fire <when>]` a
+    /// `harness.schedule.fire` hit names lives on the `system`/`scheduled_task_fire`
+    /// sibling, so the leaf reads its own instant through this per-file join.
+    pub(crate) schedule_fires: &'a crate::model::ScheduleFireIndex,
 }
 
 impl ClassifyEnv<'_> {
@@ -472,6 +478,7 @@ impl ClassifyEnv<'_> {
             spawn: self.spawn.map(|s| s as &dyn SpawnLookup),
             resume_prompt_uuids: Some(self.resume_prompts),
             summarize: Some(self.summarize),
+            schedule_fires: Some(self.schedule_fires),
         }
     }
 }

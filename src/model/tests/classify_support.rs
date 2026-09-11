@@ -37,6 +37,7 @@ fn class_path_for_every_variant() {
         (Class::InterruptUser, "harness.interrupt.user"),
         (Class::InterruptTool, "harness.interrupt.tool"),
         (Class::ScheduleWakeup, "harness.schedule.wakeup"),
+        (Class::ScheduleFire, "harness.schedule.fire"),
         (Class::ResumePrompt, "harness.resume.prompt"),
         (Class::ResumePlaceholder, "harness.resume.placeholder"),
         (Class::MetaHook, "harness.meta.hook"),
@@ -78,13 +79,13 @@ fn all_classes_cover_the_enum() {
         let head = c.path().split('.').next().unwrap();
         assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
     }
-    // ALL has no duplicates and matches the verified table size (37 leaves).
+    // ALL has no duplicates and matches the verified table size (38 leaves).
     let mut seen: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
     seen.sort_unstable();
     let n = seen.len();
     seen.dedup();
     assert_eq!(seen.len(), n, "duplicate in Class::ALL");
-    assert_eq!(n, 37, "Class::ALL leaf count drifted");
+    assert_eq!(n, 38, "Class::ALL leaf count drifted");
 }
 
 #[test]

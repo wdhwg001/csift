@@ -359,11 +359,20 @@ impl Record {
             push_unique(out, Class::CommInbox);
             return;
         }
+        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms
+        // by construction - the fired text is whatever the operator armed, so every marker
+        // above must get first refusal, and the two tick prompts that DO carry a marker keep
+        // their own leaves. Before this arm such a record matched nothing and fell straight
+        // into the isMeta exclusion below: unsearchable, and absent from every census.
+        if self.is_scheduled_fire_prompt() {
+            push_unique(out, Class::ScheduleFire);
+            return;
+        }
         // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched
-        // no marker above is a harness-injected pseudo-turn (a generic cron/monitor tick, a
-        // novel hook wrapper), NOT the operator - emit NOTHING rather than mislabel it
-        // `user.message` (the role-level isMeta gate `is_genuine_user` already applies). Only
-        // genuine, non-isMeta unmarked prose is `user.message`.
+        // no marker above is a harness-injected pseudo-turn (a novel hook wrapper), NOT the
+        // operator - emit NOTHING rather than mislabel it `user.message` (the role-level isMeta
+        // gate `is_genuine_user` already applies). Only genuine, non-isMeta unmarked prose is
+        // `user.message`.
         if !self.is_meta.unwrap_or(false) {
             push_unique(out, Class::UserMessage);
         }

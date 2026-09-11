@@ -237,6 +237,17 @@ pub(crate) fn collect_record_hits(
     } else {
         None
     };
+    // v0.12.2: the instant a fired prompt fired lives on its `system`/`scheduled_task_fire`
+    // sibling, joined by `parentUuid` through the per-file index on `ctx`. Gated on the label
+    // set `classify` just produced, like the compaction facts above, so every other hit pays
+    // one enum compare and carries a null.
+    let scheduled_at = if labels.contains(&Class::ScheduleFire) {
+        ctx.schedule_fires
+            .and_then(|ix| ix.instant_for(rec.parent_uuid.as_deref()))
+            .map(str::to_string)
+    } else {
+        None
+    };
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);
     // Direction is per-record (the first comm direction); computed only when a comm label is
@@ -289,6 +300,7 @@ pub(crate) fn collect_record_hits(
                 rewound_branch: false,
                 replay_copy_of: None,
                 compaction: compaction.clone(),
+                scheduled_at: scheduled_at.clone(),
                 truncated,
             });
         }

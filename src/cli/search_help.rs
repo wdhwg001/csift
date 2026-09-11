@@ -228,6 +228,15 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
            \
         .command.{invocation,stdout}\n           \
         .interrupt.{user,tool} · .schedule.wakeup · .meta.{hook,loop,attachment}\n           \
+        .schedule.fire          the PROMPT a scheduled task fires: the isMeta record\n                                   \
+        Claude Code submits on its own when a cron entry or a\n                                   \
+        ScheduleWakeup timer comes due, carrying promptSource\n                                   \
+        \"system\". The body is the armed text VERBATIM, so there\n                                   \
+        is no marker to match and a tick that DOES carry one\n                                   \
+        keeps its own leaf. The label zone names the instant\n                                   \
+        ([scheduled fire <when>], JSON scheduled_at) when the\n                                   \
+        transcript holds the scheduled_task_fire record it is\n                                   \
+        parented to; null when it does not\n           \
         .resume.prompt          the repair PROMPT the resume LOADER appends when a\n                                   \
         transcript ends on a dangling user record - an isMeta\n                                   \
         record reading \"Continue from where you left off.\"\n                                   \

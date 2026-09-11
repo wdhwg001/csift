@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "454-457",
+          "lines": "463-466",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -2862,7 +2862,7 @@
         },
         {
           "path": "src/model/classify_support.rs",
-          "lines": "53-56",
+          "lines": "160-163",
           "snippet": "    let mut head = format!(\"[{} {id} {status}]\", kind.slug());\n    if let Some(k) = orphan_kind {\n        head.push_str(&format!(\" (orphan reconciliation: {k})\"));\n    }"
         }
       ],
@@ -4291,12 +4291,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "239-246",
+          "lines": "249-256",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "211-223",
+          "lines": "212-224",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {\n                if let Some(n) = Record::u64_field(v) {\n                    fields.push(format!(\"{key}={n}\"));\n                }\n            }\n            (!fields.is_empty()).then(|| format!(\"[turn duration: {}]\", fields.join(\" \")))"
         }
       ],
@@ -7192,12 +7192,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "185-186",
+          "lines": "195-196",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "368-370",
+          "lines": "378-380",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9936,7 +9936,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "355-361",
+          "lines": "365-371",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -10573,7 +10573,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "245-251",
+          "lines": "263-269",
           "snippet": "    pub const ALL: &'static [Class] = &[\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserRewound,\n        Class::UserQueued,"
         }
       ],
@@ -10856,12 +10856,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "203-206",
+          "lines": "221-224",
           "snippet": "    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "208-210",
+          "lines": "226-228",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record"
         }
       ],
@@ -12085,7 +12085,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "257-259",
+          "lines": "275-277",
           "snippet": "        Class::CommInbox,\n        Class::CommSent,\n        Class::CommSignal,"
         }
       ],
@@ -12562,7 +12562,7 @@
       "id": "CLS-014",
       "area": "classification",
       "behavior": "The harness distinguishes a FIRED autonomous-loop / `ScheduleWakeup` timer tick - an `isMeta` `type:\"user\"` record opening `# Autonomous loop check`, whose next line opens `You're being invoked on a timer while the user is away or occupied.` (straight ASCII apostrophe) - from the loop DRIVER ticks `# Autonomous loop tick (dynamic pacing)` and `Run the autonomous check using the loop instructions established earlier in this conversation.`. TWO loop sentinels exist, not one: `<<autonomous-loop-dynamic>>` (always used by `ScheduleWakeup`) and `<<autonomous-loop>>` (CronCreate-based autonomous loops); the binary explicitly warns not to confuse them. The split is really first-fire vs later-fire of one resolver: it builds the WHOLE delivered prompt, prepending the preamble to the driver text on the first delivery only. So a real tick carries its marker at OFFSET 0 of the record's content, and a marker found deeper in a body belongs to a record quoting the prompt rather than to a tick.",
-      "depends": "csift routes the fired-timer forms to `harness.schedule.wakeup` and the driver forms to `harness.meta.loop`, matching the wakeup arm FIRST so `check` never falls through to `tick`; conflating them merges the scheduler with the driver in every census and makes a monitoring transcript unreadable. Both arms anchor at content start, because the resolver writes the marker there: matching anywhere read a skill's instruction text that embeds the preamble, and a peer message relaying a tick, as ticks - and stripped the leaf each of those had earned. A generic cron tick's injected prompt is operator-authored free text with no universal marker and is deliberately left unlabeled rather than mislabeled.",
+      "depends": "csift routes the fired-timer forms to `harness.schedule.wakeup` and the driver forms to `harness.meta.loop`, matching the wakeup arm FIRST so `check` never falls through to `tick`; conflating them merges the scheduler with the driver in every census and makes a monitoring transcript unreadable. Both arms anchor at content start, because the resolver writes the marker there: matching anywhere read a skill's instruction text that embeds the preamble, and a peer message relaying a tick, as ticks - and stripped the leaf each of those had earned. A fired prompt with NO marker is `harness.schedule.fire` (claim CLS-031), which is why this pair is matched before that arm.",
       "code": [
         {
           "path": "src/model/markers.rs",
@@ -12624,7 +12624,7 @@
           "date": "2026-09-11",
           "verdict": "refined",
           "instrument": "A live autonomous loop, armed with no prompt so the runtime resolves the CronCreate sentinel, left to fire three times; then `csift search '' <that transcript> --count-by label` for the two leaves, and a whole-corpus census of every `type:\"user\"` record carrying one of the four loop markers, split by whether the marker sits at offset 0 of the record's content after a leading-whitespace trim.",
-          "observed": "The three fires landed as three `isMeta` `promptSource:\"system\"` user records: the FIRST carrying `# Autonomous loop check` + the timer sentence at offset 0, the two later ones `# Autonomous loop tick` + `Run the autonomous check ...` at offset 0. csift reads them 1 `harness.schedule.wakeup` and 2 `harness.meta.loop`, which is the first specimen of either leaf. Corpus: of the records carrying a loop marker anywhere, 11 carry it only mid-body - 9 are `<teammate-message>` relays, 1 a compaction summary, 1 a skill's instruction text - and the last of those was the one record either leaf of this pair claimed wrongly.",
+          "observed": "The three fires landed as three `isMeta` `promptSource:\"system\"` user records: the FIRST carrying `# Autonomous loop check` + the timer sentence at offset 0, the two later ones `# Autonomous loop tick` + `Run the autonomous check ...` at offset 0. csift reads them 1 `harness.schedule.wakeup` and 2 `harness.meta.loop`, which is the first specimen of either leaf. Corpus: of the records carrying a loop marker anywhere, 11 carry it only mid-body - 9 are `<teammate-message>` relays, 1 a compaction summary, 1 a skill's instruction text - and the last of those was the one record any leaf of this pair claimed wrongly.",
           "rule": "One count per classified record from each leaf's `--count-by label` row; one count per raw record for the corpus split, marker position measured after `trim_start` on the record's joined text.",
           "note": "Closes the specimen leg: the emission half no longer rests on the binary alone. The same trial refuted the matching rule - the instruction record that explains the loop was read as a fired tick - so both arms now anchor at content start."
         }
@@ -12674,7 +12674,7 @@
       "id": "CLS-015",
       "area": "classification",
       "behavior": "Arming a `ScheduleWakeup` is an ordinary tool CALL, while the FIRED tick is a separate harness-injected prompt; a custom-prompt tick lands as an `isMeta` record.",
-      "depends": "csift classifies the arming call `agent.tool.use` and only the fired tick `harness.schedule.wakeup`, so a search for scheduled work must look at both surfaces; expecting the arming call under `harness.schedule.*` returns a definitive empty.",
+      "depends": "csift classifies the arming call `agent.tool.use` and the marker-carrying fired tick `harness.schedule.wakeup`, so a search for scheduled work must look at both surfaces; expecting the arming call under `harness.schedule.*` returns a definitive empty. A custom-prompt tick carries no marker and lands under `harness.schedule.fire` instead (claim CLS-031).",
       "code": [
         {
           "path": "src/model/classify.rs",
@@ -12709,6 +12709,16 @@
           "observed": "complete producer trace: trigger the wakeup tool's `prompt` parameter - the arming call @164195986; trigger the scheduler that fires it later @187388991; gate ae(e,t) = L(e,t) ?? q(e,t) ?? t - sentinel or verbatim @176705652; writer the fired-tick enqueue shape @187388263. writer excerpt: n;let m=(r,l,u)=>({value:r,mode:\"prompt\",agentId:Ze(),priority:\"later\",isMeta:!0,skipSlashCommands:!0,modelScheduledOrigin:!0,skipAttachments:!0,wakeupSource:l,scheduledTaskId:u?.taskId,scheduledFireId:u?.fireId,workload:Aj}),M=Promise.resolve(),O=(r,l,u)=>{if(L()&&p!==void 0){M=M.then(async()=>{try specimen: Records matching the tool name key under agent.tool.use 794 / agent.tool.result 595 / agent.thinking 173 / agent.message 133 and ZERO under any harness.schedule.* leaf; both `-t harness.schedule -c` and `-t harness.schedule.wakeup -c` print 0 for that pattern. In one session file of 123,044 records:",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); Arming side: one count per tool_use block named for the wakeup tool. Fired side: exact string equality between an armed input.prompt and a later user record's message.content, counted once per matching record, with isMeta read off that record. promptSource census: one count per user record over all 67 top-level transcripts.",
           "note": "isMeta is stamped by the fire-time enqueue and by nothing on the arming path, the resolver leaves a non-sentinel prompt verbatim, and on disk 456 of 456 prompt-matched fired ticks are isMeta true."
+        },
+        {
+          "claude_code": "2.1.268",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "`csift search 'ScheduleWakeup' --count-by label` over the projects root, then the same census restricted to the three schedule-family leaves.",
+          "observed": "The arming calls still key under `agent.tool.use` only. The custom-prompt ticks this claim described as landing 'as an isMeta record' now key under `harness.schedule.fire`: 168 records across 10 top-level transcripts, against 0 before the leaf existed.",
+          "rule": "One count per classified record per label key.",
+          "note": "The behavior is unchanged; the claim's last sentence pointed at a shape csift did not name, and it now names it."
         }
       ],
       "attribution": "end-to-end",
@@ -12925,8 +12935,8 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "362-369",
-          "snippet": "        // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched\n        // no marker above is a harness-injected pseudo-turn (a generic cron/monitor tick, a\n        // novel hook wrapper), NOT the operator - emit NOTHING rather than mislabel it\n        // `user.message` (the role-level isMeta gate `is_genuine_user` already applies). Only\n        // genuine, non-isMeta unmarked prose is `user.message`.\n        if !self.is_meta.unwrap_or(false) {\n            push_unique(out, Class::UserMessage);\n        }"
+          "lines": "371-378",
+          "snippet": "        // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched\n        // no marker above is a harness-injected pseudo-turn (a novel hook wrapper), NOT the\n        // operator - emit NOTHING rather than mislabel it `user.message` (the role-level isMeta\n        // gate `is_genuine_user` already applies). Only genuine, non-isMeta unmarked prose is\n        // `user.message`.\n        if !self.is_meta.unwrap_or(false) {\n            push_unique(out, Class::UserMessage);\n        }"
         },
         {
           "path": "src/model/markers.rs",
@@ -13058,7 +13068,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "413",
+          "lines": "423",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -13152,7 +13162,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "420-421",
+          "lines": "460-461",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13239,7 +13249,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "426-427",
+          "lines": "466-467",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13366,7 +13376,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "482",
+          "lines": "529",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13498,7 +13508,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "422-425",
+          "lines": "462-465",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13567,12 +13577,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "106-112",
+          "lines": "113-119",
           "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,\n        queued: reach(Class::UserQueued),\n        turn_duration: reach(Class::MetaTurnDuration),"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "489-493",
+          "lines": "536-540",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14349,7 +14359,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "397",
+          "lines": "433",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14710,7 +14720,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "130-136",
+          "lines": "140-146",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14720,12 +14730,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "330-331",
+          "lines": "331-332",
           "snippet": "/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a\n/// legacy boundary carrying just the four scalars renders byte-for-byte as before:"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "473-475",
+          "lines": "520-522",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -14856,12 +14866,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "166-171",
+          "lines": "176-181",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "178-184",
+          "lines": "179-185",
           "snippet": "    // A boundary's `parentUuid` is null; `logicalParentUuid` names the record the\n    // compaction re-links to (harness ground truth) - surface it on the same line.\n    if rec.is_compact_boundary() {\n        if let Some(lp) = rec.logical_parent_uuid.as_deref() {\n            parts.push(format!(\"[logicalParent={lp}]\"));\n        }\n    }"
         }
       ],
@@ -14944,12 +14954,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "201-206",
+          "lines": "219-224",
           "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "160-163",
+          "lines": "161-164",
           "snippet": "/// Combines the top-level `content` string (`\"Conversation compacted \u2026\"`) with a readable\n/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE\n/// what each compaction clipped. `None` when neither is present (no fabricated text).\npub(crate) fn system_record_text(rec: &Record) -> Option<String> {"
         },
         {
@@ -15150,7 +15160,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "208-214",
+          "lines": "226-232",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
         }
       ],
@@ -15247,7 +15257,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "196-200",
+          "lines": "214-218",
           "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts"
         }
       ],
@@ -15436,7 +15446,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "201-206",
+          "lines": "219-224",
           "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         }
       ],
@@ -18876,7 +18886,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "283-286",
+          "lines": "293-296",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20018,7 +20028,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "272-276",
+          "lines": "282-286",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -20321,7 +20331,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "177-188",
+          "lines": "195-206",
           "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),\n    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,\n    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a\n    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so\n    /// invisible by the same instrument as the rest of this family; gated like them.\n    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible.\n    MetaSystem,"
         }
       ],
@@ -21846,12 +21856,12 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "279-282",
+          "lines": "280-283",
           "snippet": "/// The `harness.meta.snapshot` excerpt for a `file-history-snapshot` (every tracked\n/// path with its version, sorted) or a `file-history-delta` (the one path). The\n/// snapshot line has no top-level timestamp; the nested one rides the excerpt.\nfn snapshot_record_text(rec: &Record) -> Option<String> {"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "299-304",
+          "lines": "300-305",
           "snippet": "    }\n    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
         }
       ],
@@ -21936,7 +21946,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "197-205",
+          "lines": "207-215",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22056,7 +22066,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "200-203",
+          "lines": "210-213",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22151,7 +22161,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "207-215",
+          "lines": "217-225",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -22161,12 +22171,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "286-290",
+          "lines": "287-291",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "434-438",
+          "lines": "474-478",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -35136,7 +35146,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "321",
+          "lines": "323",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -35225,7 +35235,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "368-369",
+          "lines": "378-379",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -35695,7 +35705,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "208-214",
+          "lines": "226-232",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
         }
       ],
@@ -36249,7 +36259,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "211-218",
+          "lines": "212-219",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {"
         }
       ],
@@ -36571,7 +36581,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "200-203",
+          "lines": "210-213",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -41080,7 +41090,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "453-455",
+          "lines": "465-467",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
@@ -41186,7 +41196,7 @@
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "338-340",
+          "lines": "340-342",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -45807,7 +45817,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "217-221",
+          "lines": "227-231",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46059,7 +46069,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "223-227",
+          "lines": "233-237",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -46868,7 +46878,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "205-210",
+          "lines": "206-211",
           "snippet": "        Class::MetaTurnDuration => {\n            let mut fields: Vec<String> = Vec::new();\n            let ms = Record::u64_field(rec.duration_ms.as_ref());\n            if let Some(ms) = ms {\n                fields.push(format!(\"{} \u00b7 durationMs={ms}\", fmt_ms(ms)));\n            }"
         },
         {
@@ -46977,12 +46987,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "239-242",
+          "lines": "249-252",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "210-217",
+          "lines": "211-218",
           "snippet": "            }\n            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),"
         }
       ],
@@ -47326,7 +47336,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "210-217",
+          "lines": "211-218",
           "snippet": "            }\n            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),"
         }
       ],
@@ -47569,7 +47579,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "192-198",
+          "lines": "193-199",
           "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration: `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908\n///   pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, \u2026]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
         }
       ],
@@ -47654,7 +47664,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "211-218",
+          "lines": "212-219",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {"
         }
       ],
@@ -47759,7 +47769,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "204",
+          "lines": "205",
           "snippet": "        Class::UserQueued | Class::MetaAwaySummary => rec.content_str().map(str::to_string),"
         }
       ],
@@ -48135,12 +48145,12 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "388-390",
+          "lines": "390-392",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "160-164",
+          "lines": "178-182",
           "snippet": "    /// `harness.meta.away-summary` - the `system`/`away_summary` recap the harness\n    /// generates (a side model call, config-gated) when the operator returns after 5+\n    /// minutes away. Model-generated prose, yet no `message{}`: shown in the UI, not in\n    /// the surviving conversation (measured 1,196/1,198 never re-appear downstream).\n    MetaAwaySummary,"
         }
       ],
@@ -48401,12 +48411,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "232-246",
+          "lines": "233-247",
           "snippet": "            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];\n            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "488-494",
+          "lines": "535-541",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48526,12 +48536,12 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "225-235",
+          "lines": "226-236",
           "snippet": "        Class::MetaStopHooks => {\n            let count = Record::u64_field(rec.hook_count.as_ref()).unwrap_or(0);\n            let errors = rec\n                .hook_errors\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n                .map_or(0, Vec::len);\n            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "257-263",
+          "lines": "267-273",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -48613,12 +48623,12 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "236-250",
+          "lines": "237-251",
           "snippet": "            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),\n                        None => lines.push(cmd.to_string()),\n                    }\n                }\n            }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "165-170",
+          "lines": "183-188",
           "snippet": "    /// `harness.meta.stop-hooks` - the `system`/`stop_hook_summary` execution ledger\n    /// of the Stop hooks that ran at turn end (`hookInfos[].command` + durations,\n    /// `hookErrors`, `preventedContinuation`). Distinct from [`Class::MetaHook`], which\n    /// is the text a hook INJECTED into the model; this record is the run itself and\n    /// its `hookAdditionalContext` is empty on every measured instance.\n    MetaStopHooks,"
         },
         {
@@ -48739,7 +48749,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "488-494",
+          "lines": "535-541",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -48953,7 +48963,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "286-298",
+          "lines": "287-299",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let name = backup\n            .and_then(|b| b.get(\"backupFileName\"))\n            .and_then(serde_json::Value::as_str)\n            .map(|n| format!(\" backup={n}\"))\n            .unwrap_or_default();\n        return Some(format!(\n            \"[file-history delta at {at}: {path}@v{version}{name}]\"\n        ));"
         },
         {
@@ -49469,7 +49479,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "225-238",
+          "lines": "243-256",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
@@ -49479,7 +49489,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "208-223",
+          "lines": "226-241",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -49711,17 +49721,17 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "208-223",
+          "lines": "226-241",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "225-238",
+          "lines": "243-256",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "340-342",
+          "lines": "341-343",
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();"
         },
         {
@@ -50509,7 +50519,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "217-223",
+          "lines": "235-241",
           "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -50661,7 +50671,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "217-223",
+          "lines": "235-241",
           "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -50863,12 +50873,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "378-384",
+          "lines": "414-420",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "408-411",
+          "lines": "448-451",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -50957,12 +50967,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "332-337",
+          "lines": "342-347",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "343-346",
+          "lines": "353-356",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51089,12 +51099,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "343-346",
+          "lines": "353-356",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "332-337",
+          "lines": "342-347",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52168,7 +52178,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "403-408",
+          "lines": "443-448",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -52302,12 +52312,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "225-238",
+          "lines": "243-256",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "173-175",
+          "lines": "183-185",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -52458,7 +52468,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "126-133",
+          "lines": "136-143",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52795,7 +52805,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "323-325",
+          "lines": "333-335",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53046,12 +53056,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "407",
+          "lines": "417",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "429-434",
+          "lines": "439-444",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53158,7 +53168,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "429-434",
+          "lines": "439-444",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53247,7 +53257,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "413-415",
+          "lines": "423-425",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53348,7 +53358,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "184-186",
+          "lines": "194-196",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53430,7 +53440,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "177-181",
+          "lines": "187-191",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -53532,7 +53542,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "368-369",
+          "lines": "378-379",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53634,7 +53644,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "188-191",
+          "lines": "198-201",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -53724,12 +53734,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "403-408",
+          "lines": "443-448",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "426-427",
+          "lines": "466-467",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53829,12 +53839,12 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "420-421",
+          "lines": "460-461",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "321",
+          "lines": "323",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -53926,7 +53936,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "309-314",
+          "lines": "319-324",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54024,7 +54034,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "316-320",
+          "lines": "326-330",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -54275,7 +54285,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "250-252",
+          "lines": "252-254",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -54894,7 +54904,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "166-171",
+          "lines": "176-181",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -55259,12 +55269,12 @@
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "83-90",
+          "lines": "84-91",
           "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "319-320",
+          "lines": "354-355",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55368,17 +55378,17 @@
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "271-281",
+          "lines": "273-283",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "217-237",
+          "lines": "235-255",
           "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )"
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "307-311",
+          "lines": "319-323",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -55973,7 +55983,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "448-459",
+          "lines": "449-460",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],
@@ -56079,8 +56089,8 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "449-456",
-          "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
+          "lines": "489-495",
+          "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
       "instrument": "Write a fixture transcript whose lines carry `\"role\": \"user\"` (a default `json.dumps`) into a `--claude-home` tree and confirm `csift search` finds its content and `--count-by label` counts the record. Counting rule: matched records for one known needle, expected 1. The regression is pinned in the `search` e2e modules under `tests/cli/`.",
@@ -60077,7 +60087,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "362-367",
+          "lines": "372-377",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -64621,7 +64631,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "171",
+          "lines": "181",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -65219,7 +65229,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "332-337",
+          "lines": "342-347",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65384,7 +65394,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "343-346",
+          "lines": "353-356",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -70541,12 +70551,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "259",
+          "lines": "260",
           "snippet": "let subtype = rec.subtype.as_deref().unwrap_or(\"system\");"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "455",
+          "lines": "495",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -74440,7 +74450,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "196-201",
+          "lines": "214-219",
           "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts\n    ///   drew real replies before the retraction.)"
         }
       ],
@@ -79221,7 +79231,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "483-487",
+          "lines": "530-534",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -79302,7 +79312,7 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "96-100",
+          "lines": "97-101",
           "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.meta.hook` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
         }
       ],
@@ -82183,7 +82193,7 @@
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "44-50",
+          "lines": "45-51",
           "snippet": "    let chain = crate::model::Chain::build_by(rows, |r| r.node(), None);\n    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();\n    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.node(), &chain);"
         }
       ],
@@ -82574,7 +82584,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "404-413",
+          "lines": "406-415",
           "snippet": "    /// True when the scan parses `type:\"system\"` candidate lines at all: an explicit\n    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE\n    /// one predicate for that admission - the candidate gate and the \u00a77f whole-file\n    /// gate's synthesized-marker set must agree, or a pattern that can only match the\n    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds\n    /// it (a silent drop, the \u00a77 landmine).\n    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()\n    }"
         }
       ],
@@ -82787,7 +82797,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "184-187",
+          "lines": "202-205",
           "snippet": "    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible."
         },
         {
@@ -82968,7 +82978,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "454-455",
+          "lines": "494-495",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
@@ -83050,7 +83060,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "177-179",
+          "lines": "195-197",
           "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),"
         }
       ],
@@ -83120,7 +83130,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "125-129",
+          "lines": "127-131",
           "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE\n    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation no\n    /// longer reaches, `harness.compaction.boundary`, which carries no message at all, and"
         }
       ],
@@ -83418,7 +83428,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "225-228",
+          "lines": "243-246",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent"
         }
       ],
@@ -83841,7 +83851,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "138-143",
+          "lines": "148-153",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         },
         {
@@ -84071,7 +84081,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "138-143",
+          "lines": "148-153",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         }
       ],
@@ -84394,7 +84404,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "343-350",
+          "lines": "344-351",
           "snippet": "    for key in [\n        \"trigger\",\n        \"preTokens\",\n        \"postTokens\",\n        \"durationMs\",\n        \"messagesSummarized\",\n        \"cumulativeDroppedTokens\",\n    ] {"
         },
         {
@@ -84490,12 +84500,12 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "156-159",
+          "lines": "166-169",
           "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
         },
         {
           "path": "src/search/hit_facts.rs",
-          "lines": "53-56",
+          "lines": "55-58",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -85158,6 +85168,224 @@
           "observed": "(a) keybinding table at 164324970 `context:\"Task\",bindings:{\"ctrl+x ctrl+b\":\"task:background\",\"ctrl+b\":\"task:background\"}`; schema line at 165014427 `backgroundedByUser:M().optional().describe(\"True if the user manually backgrounded the command with Ctrl+B\")`; the formatter `function mBt(` at 164082185 carrying all four arms and both tails, and `mBt(` occurring exactly three times - that definition plus the Bash mapper at 165023456 and the PowerShell mapper at 176589229, both called with `outputPath:pl(<task id>)` so no arm can omit the path; the background-all handler `function ZM(` at 164971794 over the eligibility predicate `function Ndt(` at 164971623; the gate `function Ll(){return $K().backgroundTasksDisabled||a.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS}` at 159794254, which also guards the chord hint at 180310622 whose label `action:\"run in background\"` sits at 180310798; the 2000 ms hint constants at 163904321 (the Agent driver's setTimeout delay) and 165011157 (the shell drivers' arming threshold); the toolUseResult assembly at 165030366 and the ack telemetry at 165030911 enumerating exactly five triggers user / turn_abort / deliver_message / timeout / explicit. (b) 8664 transcripts, 1558075 records: manual 1 (main lane 1, subagent 0), deliver-message 0, timeout 106 (main 31, subagent 75), ordinary 3603 (main 2640, subagent 963). The launching tool_use carried run_in_background on 0 of the 107 harness-side receipts and on 3455 of the 3603 ordinary ones. Under the looser rule that asks only for the opening clause plus any non-empty id token, the same corpus returns one extra deliver-message hit, and it is a tool_result holding a grep of the harness binary rather than a receipt - which is why the gate carries the closing clause and the id grammar. (c) the trial's launch is an ordinary assistant record whose Bash input is {command, description, timeout: 200000} with no run_in_background; six seconds later the receipt is a single string `Command was manually backgrounded by user with ID: <9-char b-id>. Output is being written to: <abs path>/tasks/<id>.output.` with neither tail, and toolUseResult {stdout, stderr, interrupted, isImage, noOutputExpected, backgroundTaskId, backgroundedByUser:true}; 151 seconds after the launch an ordinary user record carries `<task-notification>` with that task id, the launch's tool-use id, the output file, `<status>completed</status>` and a summary opening `Background command \"<the launch's description>\"`.",
           "rule": "One observation per tool_result block satisfying that arm's full predicate - opening clause, a `b`-plus-8-base36 task id in the id slot, the arm's own closing clause, and for the manual and ordinary arms a path whose file stem equals the id; transcripts are every *.jsonl under the projects root except journal.jsonl, subagent transcripts included, one record per newline. The census predicate is the scanner's predicate, so the two agree by construction rather than by comparison. The single manual observation IS the live trial's own receipt - the trial wrote into the corpus the census reads, so (b) and (c) are one specimen counted once and read in detail, not two. Binary hits are byte offsets in the shipped 2.1.258 build, each excerpt re-read at its offset; the live trial is one call, one gesture, three records read verbatim.",
           "note": "Both legs close. The entrance set, the eligibility rule, the disable gate and the whole formatter are read in the binary, and the two arms that have specimens reproduce them exactly - including the negative the fix rests on, that the launching tool_use carries no run_in_background on any of the 107. Two facts are worth stating explicitly because a truncated reading of the formatter gets them backwards: outputPath is a plain parameter passed by both callers, so all four arms carry the path and 106 of 106 timeout receipts on disk do; and the id slot is a real `local_bash` id, so a rendering of the template with `${e}` or `<id>` in that slot is not a receipt and mints nothing."
+        }
+      ]
+    },
+    {
+      "id": "CLS-031",
+      "area": "classification",
+      "behavior": "A scheduled task coming due lands THREE lines, in this order. (1) A `type:\"queue-operation\"` line whose `content` is the armed text. (2) A `type:\"system\"` record with `subtype:\"scheduled_task_fire\"` whose `content` names the instant in a trailing parenthesis - `Running scheduled task (<when>)` for a cron task, `Claude resuming /loop wakeup (<when>)` for a wakeup - both built by one formatter, `toLocaleString(\"en-US\", {month:\"short\", day:\"numeric\", hour:\"numeric\", minute:\"2-digit\"})` with the comma and the space before the meridiem removed and the meridiem lowercased. (3) A `type:\"user\"` record with `isMeta:true`, `promptSource:\"system\"`, `userType:\"external\"` and `parentUuid` equal to the fire record's `uuid`, whose message content is the armed text. A cron task's fire also carries `cron`, `prompt` and `taskId` on the system record and `scheduledTaskId` / `scheduledFireId` on the prompt record; a wakeup's carries neither set. `promptSource:\"system\"` is not specific to the scheduler: the submit path stamps it on EVERY `isMeta` submission through one ternary, and Claude Code's own reader calls the `isMeta` + `promptSource` pair a system-injected turn prompt while testing `isMeta` + NO `promptSource` for a human entry. Measured over every transcript under one projects root: 171 records carry the pair without an `origin` object, 170 of them are parented to a `scheduled_task_fire` record and all 170 of those name a readable instant; 465 fire records exist over 7 files, 459 with the wakeup wording and 6 with the cron wording.",
+      "depends": "csift classifies the PROMPT `harness.schedule.fire` and joins its instant to the fire record by `parentUuid`, so a cron-fired prompt is searchable, censusable and dated; before the leaf it matched no marker and fell into the isMeta exclusion, invisible on every surface. The `queue-operation` line stays unlabeled (a harness rider, the same content-shape law `user.queued` applies) and the fire record stays under the gated `harness.meta.system`, so a default scan gains no hit from the keep that reads the instant. An `origin` object refuses the leaf, because the harness stamps one on everything it did not submit itself and reads it back as the first test of its own foreign-input veto - without that guard a tagless cross-session delivery, which carries the identical pair, would read as a fire. If a build stops stamping `promptSource`, the leaf empties; if it stops writing the fire record, the instant goes null and the leaf holds.",
+      "code": [
+        {
+          "path": "src/model/classify_support.rs",
+          "lines": "72-85",
+          "snippet": "    pub fn is_scheduled_fire_prompt(&self) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.prompt_source.as_deref() != Some(PROMPT_SOURCE_SYSTEM) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }\n        !self\n            .raw_message_text()\n            .is_some_and(|raw| is_peer_message(&raw))\n    }"
+        },
+        {
+          "path": "src/model/classify_support.rs",
+          "lines": "47-53",
+          "snippet": "    pub fn scheduled_fire_instant(&self) -> Option<&str> {\n        let content = self.content_str()?.trim_end();\n        let inner = content.strip_suffix(')')?;\n        let open = inner.rfind('(')?;\n        let when = inner[open + 1..].trim();\n        (!when.is_empty()).then_some(when)\n    }"
+        },
+        {
+          "path": "src/model/classify.rs",
+          "lines": "367-370",
+          "snippet": "        if self.is_scheduled_fire_prompt() {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
+        },
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "335",
+          "snippet": "            Class::ScheduleFire => \"harness.schedule.fire\","
+        },
+        {
+          "path": "src/model/record.rs",
+          "lines": "113-114",
+          "snippet": "    #[serde(default, rename = \"promptSource\")]\n    pub prompt_source: Option<String>,"
+        }
+      ],
+      "instrument": "Over the projects root, count `type:\"user\"` records with `isMeta` true and `promptSource == \"system\"` and no `origin` key; for each, resolve `parentUuid` against the file's uuid map and check the parent is `type:\"system\"` with `subtype:\"scheduled_task_fire\"` and a `content` ending in `)`. Then `csift search '' --count-by label` and read the `harness.schedule.fire` row, and `csift search '' <a transcript with fires> -t harness.schedule.fire` for the `[scheduled fire <when>]` marker. Counting rule: one per raw record for the census, one per classified record for the csift rows.",
+      "located": {
+        "claude_code": "2.1.268",
+        "csift": "0.12.2",
+        "source": "a live cron trial plus a whole-corpus census"
+      },
+      "first_seen_claude_code": "2.1.159",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The corpus holds ONE record of the fire shape whose parent is a `turn_duration` record rather than a fire record; whether that build wrote no fire record or wrote one the chain no longer reaches is open, and it reads as a fire with a null instant either way."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the scheduler's fire dispatcher",
+          "offset": 187388989,
+          "excerpt": "h=kYt({onFire:(r)=>O(r,\"schedule_wakeup\"),onFireTask:(r)=>{if(r.agentId){let u=tY(r.agentId,d.getState().tasks);if(u&&!Fs(u.status)){LGe(u.id,r.prompt,_,{kind:\"task-notification\"});return}t(`[ScheduledTasks] teammate ${r.agentId} gone, removing orphaned cron ${r.id}`),sK([r.id]);return}let l=N();if(",
+          "note": "The one dispatcher both kinds enter: `onFire` for a wakeup, `onFireTask` for a cron task. Everything below hangs off these two callbacks."
+        },
+        {
+          "role": "gate",
+          "name": "the kind branch inside onFireTask",
+          "offset": 187389372,
+          "excerpt": "let u=U_t(`Running scheduled task (${S(new Date)})`,{task:F(r),uuid:l});s.replace((f)=>[...f,u])}O(r.prompt,Omt(r),{taskId:r.id,fireId:l})},isLoading:()=>a(),as",
+          "note": "The branch that decides WHICH system record is written: a `loop` task goes through the wakeup path's own writer, every other task gets the `Running scheduled task` line, and both then reach the same prompt enqueue."
+        },
+        {
+          "role": "writer",
+          "name": "the instant formatter and the wakeup wording",
+          "offset": 187387146,
+          "excerpt": "function S(o){return o.toLocaleString(\"en-US\",{month:\"short\",day:\"numeric\",hour:\"numeric\",minute:\"2-digit\"}).replace(/,? at |, /,\" \").replace(/[ \\u202f]([AP]M)/i,(n,s)=>s.toLowerCase())}function P(o,n,s,p){let a=`Claude resuming /loop wakeup (${S(new Date)})`,",
+          "note": "One formatter builds the parenthesised instant for BOTH wordings, which is why csift reads the parenthesised tail rather than either sentence."
+        },
+        {
+          "role": "writer",
+          "name": "the fired prompt's own shape",
+          "offset": 187388265,
+          "excerpt": "let m=(r,l,u)=>({value:r,mode:\"prompt\",agentId:Ze(),priority:\"later\",isMeta:!0,skipSlashCommands:!0,modelScheduledOrigin:!0,skipAttachments:!0,wakeupSource:l,scheduledTaskId:u?.taskId,scheduledFireId:u?.fireId,workload:Aj}),M=Prom",
+          "note": "The submission object: `isMeta` is set here unconditionally, and a cron fire is where `scheduledTaskId` / `scheduledFireId` come from."
+        },
+        {
+          "role": "gate",
+          "name": "the promptSource ternary on the submit path",
+          "offset": 181584452,
+          "excerpt": "Fo=po.isMeta||!Vw(kn)?\"system\":po.inputSource??De,jn=Qrt(po.uuid,po.verifiedSlackHumanTurn),Ko=await Nxe({input:po.value",
+          "note": "The stamp is not the scheduler's: ANY isMeta submission gets `promptSource:\"system\"` here, which is why the leaf needs the origin guard and the arm order rather than this field alone."
+        },
+        {
+          "role": "writer",
+          "name": "the scheduled-id stamp on the prompt record",
+          "offset": 169781478,
+          "excerpt": "let hn=pt.messages.filter((Ne)=>Ne.type===\"user\"),ot=hn.find((Ne)=>Ne.promptSource!==void 0)??hn[0];if(ot){if(ot.scheduledTaskId=lt,Ot!==void 0)ot.scheduledFireId=Ot}}if(Ec(\"query_process_user_input_base_end\"),dn===!0&&pt.messages",
+          "note": "The pass that finds the just-built user record BY its promptSource and writes the task and fire ids onto it - the harness using the same field csift keys on."
+        },
+        {
+          "role": "gate",
+          "name": "Claude Code's own reader of the pair",
+          "offset": 179047868,
+          "excerpt": "if(M.isMeta===!0&&M.promptSource!==void 0)return{ok:!1,reason:`range contains a system-injected turn prompt; ${go(M,_)}`",
+          "note": "The harness names this exact shape a system-injected turn prompt, and the sibling test two functions away treats `isMeta` with NO promptSource as a human entry."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "The census above over every transcript under one projects root, plus the seven producer hops read in the 2.1.258 build at the offsets recorded here, plus `csift search '' --count-by label` before and after the leaf.",
+          "observed": "171 records of the pair without an `origin`; 170 parented to a `scheduled_task_fire` record, all 170 naming a readable instant; 465 fire records over 7 of 80 files, 459 `Claude resuming /loop wakeup (<when>)` and 6 `Running scheduled task (<when>)`. Three of the 171 carry a loop marker at offset 0 and keep `harness.schedule.wakeup` / `harness.meta.loop` by arm order, leaving 168 under the new leaf. The seven hops read verbatim at their offsets, including the ternary that proves the stamp is not the scheduler's.",
+          "rule": "One count per raw record for every census figure; one count per classified record for the csift rows; a parent resolved through the file's own uuid map, last occurrence winning.",
+          "note": "The shape was measured on a 2.1.268 transcript and the producer read in the 2.1.258 build; the cron wording and the `taskId` key set are present in both, and the wakeup wording carries the corpus back to the floor recorded here."
+        }
+      ]
+    },
+    {
+      "id": "CLS-032",
+      "area": "classification",
+      "behavior": "The text a fire delivers is the ARMED text, verbatim. Exactly one rewrite sits on the path: the loop-sentinel resolution, whose two entry points each read `resolve(e,t) ?? resolveFile(e,t) ?? t` - the autonomous resolver returns null for a non-sentinel, the loop-file resolver returns null for a non-sentinel, and the final fallthrough is the prompt itself. The enqueue has exactly two call sites, one per entry point, and both pass that result straight in as the submission's value. So no prefix, header, wrapper or sentinel is added to an ordinary armed prompt, and a fired prompt is textually indistinguishable from what the operator typed when arming it. Measured over every transcript under one projects root: of 171 records of the fire shape, 170 carry text byte-identical to the `queue-operation` rider one line above them, and only 3 open with any loop marker - the sentinel fires, which are exactly the ones the resolver DID rewrite.",
+      "depends": "This is why `harness.schedule.fire` keys on the record's fields and never on its text, and why the arm sits LAST among the harness marker arms: there is no marker to match, and the armed text may legitimately open with any of them. It is also why the leaf is worth having at all - a fired prompt matched nothing, so it was excluded as an unmodeled isMeta pseudo-turn and absent from every census. If a later build started prefixing fired prompts, the marker arms above would claim them and this arm would quietly empty, which the corpus count in the instrument would show.",
+      "code": [
+        {
+          "path": "src/model/classify.rs",
+          "lines": "362-366",
+          "snippet": "        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms\n        // by construction - the fired text is whatever the operator armed, so every marker\n        // above must get first refusal, and the two tick prompts that DO carry a marker keep\n        // their own leaves. Before this arm such a record matched nothing and fell straight\n        // into the isMeta exclusion below: unsearchable, and absent from every census."
+        },
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "131-136",
+          "snippet": "    /// The armed text reaches the record VERBATIM - the fire path applies exactly one\n    /// rewrite, the autonomous-loop sentinel resolution, and every other prompt falls\n    /// through it unchanged - so a fired prompt carries no marker of its own and looked,\n    /// until this leaf, exactly like an unmodeled isMeta pseudo-turn: excluded, unsearchable,\n    /// absent from every census. The tick prompts that DO carry a marker keep their own\n    /// leaves ([`Class::ScheduleWakeup`] / [`Class::MetaLoop`]), which is why this arm sits"
+        }
+      ],
+      "instrument": "Over the projects root, take every `type:\"user\"` record with `isMeta` true, `promptSource == \"system\"` and no `origin`, and compare its joined message text with the `content` of the nearest preceding `type:\"queue-operation\"` line carrying one; separately count how many of those records open (after a leading-whitespace trim) with `# Autonomous loop check`, `# Autonomous loop tick`, `You're being invoked on a timer`, `Run the autonomous check` or `<<autonomous-loop-dynamic>>`. Counting rule: one per raw record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "the fire path read end to end in the shipped binary"
+      },
+      "first_seen_claude_code": "2.1.159",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the two enqueue call sites",
+          "offset": 187388564,
+          "excerpt": "c.enqueuePendingNotification(m(await T.resolveLoopDefaultFireAsync(i.autonomousLoopPreamble,r,p),l,u))}catch(f){t(`[ScheduledTasks] fire enqueue (v5 arm) failed; fire skipped: ${f}`)}});return}c.enqueuePendingNotification(m(T.resolveLoopDef",
+          "note": "Both arms of the enqueue - one awaiting the file-reading resolver, one not - pass the resolver's return straight into the submission builder as `value`. There is no third producer of a fired prompt's text."
+        },
+        {
+          "role": "gate",
+          "name": "the resolver's null-coalescing fallthrough",
+          "offset": 176705652,
+          "excerpt": "function ae(e,t){return L(e,t)??q(e,t)??t}async function he(e,t,o){return L(e,t)??await W(e,t,o)??t}export{re ",
+          "note": "THE decisive hop. Two resolvers, each returning null unless the prompt IS a sentinel, then `??t`: a non-sentinel prompt is returned unchanged."
+        },
+        {
+          "role": "writer",
+          "name": "the submission object that carries the value",
+          "offset": 187388265,
+          "excerpt": "let m=(r,l,u)=>({value:r,mode:\"prompt\",agentId:Ze(),priority:\"later\",isMeta:!0,skipSlashCommands:!0,modelScheduledOrigin:!0,skipAttachments:",
+          "note": "`value:r` is the resolver's result with nothing prepended - the record's content is that string."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "resolveLoopDefaultFire",
+          "offset": 176705652,
+          "excerpt": "function ae(e,t){return L(e,t)??q(e,t)??t",
+          "verdict": "The synchronous entry point: returns the prompt unchanged when neither resolver claims it."
+        },
+        {
+          "site": "resolveLoopDefaultFireAsync",
+          "offset": 176705700,
+          "excerpt": "function he(e,t,o){return L(e,t)??await W(e,t,o)??t",
+          "verdict": "The asynchronous entry point: the same shape, the same fallthrough. These two are the whole rewrite surface."
+        },
+        {
+          "site": "isLoopDefaultSentinel",
+          "offset": 176705619,
+          "excerpt": "function se(e){return I(e)||p(e)",
+          "verdict": "The sentinel test the resolvers gate on, exported beside them; a prompt it refuses reaches the fallthrough."
+        },
+        {
+          "site": "the autonomous-loop resolver",
+          "offset": 176702380,
+          "excerpt": "function L(e,t){if(!I(t))return null;",
+          "verdict": "Returns null for a non-sentinel before touching the prompt."
+        },
+        {
+          "site": "the loop-file resolver",
+          "offset": 176704899,
+          "excerpt": "function q(e,t){if(!p(t))return null;",
+          "verdict": "The same refusal for the file-sentinel form."
+        },
+        {
+          "site": "the async enqueue call site",
+          "offset": 187388564,
+          "excerpt": "c.enqueuePendingNotification(m(await T.resolveLoopDefaultFireAsync",
+          "verdict": "One of the two producers; passes the resolver result in as `value`."
+        },
+        {
+          "site": "the synchronous enqueue call site",
+          "offset": 187388757,
+          "excerpt": "c.enqueuePendingNotification(m(T.resolveLoopDefaultFire(",
+          "verdict": "The other producer; same shape. No further caller of the submission builder exists."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Every occurrence of the resolver names and of the enqueue builder read in the 2.1.258 build (seven sites, listed), plus the corpus comparison of each fire-shaped record's text against the `queue-operation` rider above it.",
+          "observed": "Seven sites, each unique in the build: two entry points that both end in `??t`, the sentinel test they gate on, the two resolvers that return null for a non-sentinel, and the two enqueue call sites. No other site produces a fired prompt's value. Corpus: 170 of 171 fire-shaped records carry text byte-identical to the rider above them, and 3 of 171 open with a loop marker - the sentinel fires the resolver rewrote.",
+          "rule": "One count per distinct byte occurrence in the build for the enumeration; one count per raw record for the corpus figures, text compared after joining text blocks with newlines.",
+          "note": "The one record whose text differs from its rider is the same outlier CLS-031 records: it has no rider line of its own within the file."
         }
       ]
     }

@@ -203,6 +203,13 @@ pub struct Hit {
     /// C-33: the compaction facts of a `harness.compaction.*` hit ([`CompactionHit`]);
     /// `None` on every other hit.
     pub compaction: Option<Box<CompactionHit>>,
+    /// v0.12.2: on a `harness.schedule.fire` hit ONLY, the instant its
+    /// `system`/`scheduled_task_fire` sibling names, verbatim (the text inside that
+    /// record's trailing parentheses). `None` on every other hit, and on a fired prompt
+    /// whose sibling this transcript does not hold - the builds that write no fire record
+    /// give the same honest null. Drives the `[scheduled fire <when>]` label-zone marker
+    /// and JSON `scheduled_at`.
+    pub scheduled_at: Option<String>,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) - i.e. the reader is seeing a fragment, not the
     /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch

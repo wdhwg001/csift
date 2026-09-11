@@ -27,6 +27,7 @@ mod classify_harness;
 mod classify_promoted;
 mod classify_resume;
 mod classify_roles;
+mod classify_schedule;
 mod classify_support;
 mod compaction;
 mod delivery;

@@ -38,6 +38,8 @@ fn rec(line: &str) -> Record {
 fn test_env() -> ClassifyEnv<'static> {
     // A leaked empty pairing keeps the helper's `'static` signature (test-only, one alloc).
     static EMPTY: std::sync::OnceLock<crate::model::SummarizeIndex> = std::sync::OnceLock::new();
+    static NO_FIRES: std::sync::OnceLock<crate::model::ScheduleFireIndex> =
+        std::sync::OnceLock::new();
     ClassifyEnv {
         owner_id: "0a1b2c3d-0000-0000-0000-000000000000",
         is_subagent: false,
@@ -46,6 +48,7 @@ fn test_env() -> ClassifyEnv<'static> {
         spawn: None,
         resume_prompts: &NO_RESUME_PROMPTS,
         summarize: EMPTY.get_or_init(crate::model::SummarizeIndex::default),
+        schedule_fires: NO_FIRES.get_or_init(crate::model::ScheduleFireIndex::default),
     }
 }
 
@@ -98,6 +101,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         &spawn_map,
         false,
         false,
+        &crate::model::ScheduleFireIndex::default(),
     );
     exchanges
 }

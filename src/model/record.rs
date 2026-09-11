@@ -103,6 +103,16 @@ pub struct Record {
     #[serde(default, rename = "isApiErrorMessage")]
     pub is_api_error_message: Option<bool>,
 
+    /// Where a `type:"user"` record's prompt entered the submit path: `typed` / `queued` /
+    /// `suggestion_accepted` for the operator's own box, `sdk` for a non-interactive run, and
+    /// `system` for anything the harness itself submitted. Claude Code stamps `system` on
+    /// EVERY `isMeta` submission (one ternary on the submit path), and its own reader calls the
+    /// pair "a system-injected turn prompt" - which is exactly what
+    /// [`Class::ScheduleFire`] names. Absent on a record the operator typed, so the field is
+    /// also Claude Code's own human-entry test. Additive + tolerant.
+    #[serde(default, rename = "promptSource")]
+    pub prompt_source: Option<String>,
+
     /// Provenance of a message Claude Code did not receive from the operator's own prompt box
     /// (C-30). An inbound cross-session PEER message carries `{kind:"peer", from,
     /// verifiedPeerPid, msg_id?, name?, fromMode?, body?, …}`; other kinds (`human`,

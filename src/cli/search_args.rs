@@ -26,7 +26,7 @@ use super::*;
         agent.communication.{inbox,sent,signal,channel} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
-        harness.interrupt.{user,tool} | harness.schedule.wakeup | \
+        harness.interrupt.{user,tool} | harness.schedule.{wakeup,fire} | \
         harness.resume.{prompt,placeholder} | \
         harness.meta.{hook,loop,attachment,turn-duration,away-summary,stop-hooks,snapshot,system}. \
         With none given, EVERY label is eligible. `-T`/`--label-not` \
@@ -39,8 +39,10 @@ use super::*;
         `<task-notification>` automation pulse is `harness.notification.*` (NOT `user`). A \
         tool named after harness machinery still classifies by ROLE: a `ScheduleWakeup` CALL \
         (arming a timer) is `agent.tool.use` like any other tool: `harness.schedule.wakeup` \
-        is only the FIRED tick, the harness-injected marker-carrying wakeup prompt (a \
-        custom-prompt tick lands as an isMeta record, excluded like all isMeta).\n\n\
+        is only the FIRED tick, the harness-injected marker-carrying wakeup prompt. A \
+        custom-prompt tick carries no marker at all: it lands under \
+        `harness.schedule.fire`, the prompt a scheduled task fires, keyed on the \
+        record's own isMeta + promptSource system stamp rather than on its text.\n\n\
         AUTOMATION TRIGGERS: a `<task-notification>` (a background-command / workflow / \
         spawned-agent / monitor COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
         OPENS a turn like a human message but classifies under `harness.notification.<kind>` \

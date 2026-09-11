@@ -7,6 +7,23 @@ surface change bumps the PATCH.
 
 ## [0.12.2] - unreleased
 
+### Added
+
+- **`harness.schedule.fire`, the prompt a scheduled task fires.** When a cron entry or a
+  `ScheduleWakeup` timer comes due, Claude Code submits the armed text as its own `isMeta`
+  record stamped `promptSource:"system"`. The text reaches that record verbatim - the fire path
+  applies exactly one rewrite, the autonomous-loop sentinel resolution, and every other prompt
+  falls through it unchanged - so there was no marker to match and the record fell into the
+  isMeta exclusion: unsearchable on a flagless scan, absent from every census. The leaf keys on
+  the record's own fields instead, and a `-t harness.schedule.fire` now enumerates a session's
+  scheduled work. The label zone names the instant the fire happened, read off the
+  `system`/`scheduled_task_fire` record the prompt is parented to (`[scheduled fire <when>]`,
+  JSON `scheduled_at`); a transcript that holds no such record reports null rather than a
+  guessed time. A tick that DOES carry a loop marker keeps `harness.schedule.wakeup` or
+  `harness.meta.loop` by arm order, and an inbound peer message, which carries the identical
+  stamp, is refused by its relay framing and its `origin` object. `Class::ALL` grows to 38
+  leaves; every search hit's JSON gains a `scheduled_at` field.
+
 ### Fixed
 
 - **The autonomous-loop markers now anchor at the start of a record's content.**
