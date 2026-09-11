@@ -437,3 +437,123 @@ fn the_over_length_command_takes_the_parse_abort_branch() {
     assert_eq!(v.branch, Branch::Lexical("PARSE_ABORT"));
     assert_eq!(v.decision, Decision::Ask);
 }
+
+// ---------------------------------------------------------------------------
+// Boundary pins. Each case below was derived to DIFFERENTIATE one surviving
+// operator flip from the shipped behavior - a boundary the example table never
+// reaches, because the examples are whole commands and these are the byte-level
+// transforms underneath them.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_lone_ampersand_rule_holds_at_both_string_edges() {
+    use crate::bash_danger_lexical::amp_to_semicolon;
+    // A lone `&` converts at EVERY position, the two edges included: at index 0
+    // there is no previous byte to consult and at the end no next one.
+    assert_eq!(amp_to_semicolon("a & b"), "a ; b");
+    assert_eq!(amp_to_semicolon("a&"), "a;");
+    assert_eq!(amp_to_semicolon("&b"), ";b");
+    assert_eq!(amp_to_semicolon("&"), ";");
+    // The two-byte operators survive whole.
+    assert_eq!(amp_to_semicolon("a&&b"), "a&&b");
+    assert_eq!(amp_to_semicolon("x 2>&1"), "x 2>&1");
+    assert_eq!(amp_to_semicolon("<&0"), "<&0");
+    assert_eq!(amp_to_semicolon("a&>x"), "a&>x");
+    assert_eq!(amp_to_semicolon("a&<x"), "a&<x");
+}
+
+#[test]
+fn a_group_at_the_string_start_is_a_plain_group() {
+    use crate::bash_danger_lexical::{remove_plain_groups, strip_paren_groups};
+    // There is no byte before index 0, so the `$`-lookbehind cannot hold there.
+    assert_eq!(remove_plain_groups("(a b) x"), "  x");
+    // A `$`-preceded group is KEPT here; the other pass of the fixpoint owns it.
+    assert_eq!(remove_plain_groups("a$(b) (c) d"), "a$(b)   d");
+    // And the fixpoint, running both passes to a stable point, removes both.
+    assert_eq!(strip_paren_groups("a$(b) (c) d"), "a    d");
+    // Nesting needs more than one iteration, which is why it is a fixpoint.
+    assert_eq!(strip_paren_groups("x $(a $(b) c) y"), "x   y");
+}
+
+#[test]
+fn the_operand_walk_skips_a_redirect_and_its_separated_target() {
+    use crate::bash_danger_lexical::{hnt, scan_operands};
+    // A BARE redirect operator consumes the next token, so a target-shaped word
+    // belonging to the redirect is never read as the removal's operand.
+    assert!(scan_operands(&[">", "$TMP/", "-f"]).is_none());
+    assert!(hnt("rm -r $X > $TMP/").is_none());
+    // A FUSED redirect consumes only itself, and the operand after it is read.
+    assert!(hnt("rm -r $X 2>$TMP/").is_none());
+    assert_eq!(
+        hnt("rm -f 2>/dev/null $TMP/*").map(|h| h.target),
+        Some("$TMP/*".to_string())
+    );
+    // The skip list: an empty token, a flag, and a single-quoted word.
+    assert_eq!(
+        scan_operands(&["", "-rf", "'lit'", "$D/*"]),
+        Some("$D/*".to_string())
+    );
+    // The walk advances past a non-matching operand rather than stopping.
+    assert_eq!(scan_operands(&["first", "$D/*"]), Some("$D/*".to_string()));
+}
+
+#[test]
+fn the_lexical_guard_needs_both_a_dollar_and_a_removal_word() {
+    use crate::bash_danger_lexical::hnt;
+    assert!(hnt("rm -rf /tmp/build").is_none(), "no dollar");
+    assert!(hnt("echo $HOME/x").is_none(), "no removal word");
+    assert!(hnt("rm -rf $T/*").is_some(), "both present");
+    // The verb capture selects rmdir only for rmdir.
+    assert_eq!(hnt("rmdir $D/").map(|h| h.command), Some("rmdir"));
+    assert_eq!(hnt("rm $D/").map(|h| h.command), Some("rm"));
+}
+
+#[test]
+fn the_census_group_peel_takes_exactly_one_wrapper() {
+    use crate::bash_danger_census::{statements_of, unwrap_group};
+    assert_eq!(unwrap_group("{ rm -rf $D/*; }"), "rm -rf $D/*");
+    assert_eq!(unwrap_group("(rm -rf $D/*)"), "rm -rf $D/*");
+    // A wrapper that does not close is not a wrapper.
+    assert_eq!(unwrap_group("{ rm -rf $D/*"), "{ rm -rf $D/*");
+    assert_eq!(unwrap_group("(rm -rf $D/*"), "(rm -rf $D/*");
+    // An unwrapped statement is returned unchanged.
+    assert_eq!(unwrap_group("rm -rf $D/*"), "rm -rf $D/*");
+    // The split yields each statement, not the whole string.
+    let parts = statements_of("a; b; c");
+    assert_eq!(parts.len(), 3, "{parts:?}");
+    assert_eq!(parts[1].trim(), "b");
+}
+
+#[test]
+fn the_bounded_cmdsub_fixpoint_stops_at_sixteen_iterations() {
+    use crate::bash_danger_census::cmdsub_fixpoint;
+    // Backticks go first and unconditionally.
+    assert_eq!(cmdsub_fixpoint("a `b` c"), "a __CMDSUB__ c");
+    // Each iteration removes ONE nesting level, innermost first.
+    assert_eq!(cmdsub_fixpoint("$(a $(b))"), "__CMDSUB__");
+    assert_eq!(cmdsub_fixpoint("x $(a) y"), "x __CMDSUB__ y");
+    // Sixteen levels resolve; seventeen do not, which is the cap being real.
+    let deep = |n: usize| "$(".repeat(n) + "x" + &")".repeat(n);
+    assert_eq!(cmdsub_fixpoint(&deep(15)), "__CMDSUB__");
+    assert!(
+        cmdsub_fixpoint(&deep(40)).contains("$("),
+        "the cap must leave the deepest nesting untouched"
+    );
+    // A command with no substitution is returned unchanged.
+    assert_eq!(cmdsub_fixpoint("rm -rf $D/*"), "rm -rf $D/*");
+}
+
+#[test]
+fn the_census_counts_nested_substitutions_and_the_brace_command_form() {
+    use crate::bash_danger_census::{brace_command_body, collect_substitutions};
+    // A nested pair counts twice: the walk pushes every node it passes.
+    assert_eq!(collect_substitutions("echo $(a $(b))").len(), 2);
+    assert_eq!(collect_substitutions("echo `x` $(y)").len(), 2);
+    assert!(collect_substitutions("echo plain").is_empty());
+    // The `${ cmd}` form is a substitution too, with its pipe and semicolon trimmed.
+    assert_eq!(
+        brace_command_body("x ${ |rm -rf $D/*;}", 2).as_deref(),
+        Some("rm -rf $D/*")
+    );
+    assert_eq!(collect_substitutions("x ${ |echo hi;}").len(), 1);
+}

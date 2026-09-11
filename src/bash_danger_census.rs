@@ -98,7 +98,7 @@ pub(crate) fn census(command: &str, gen3: bool) -> CensusVerdict {
 /// Every substitution node's own text, nested ones included: the harness walks the
 /// whole AST and pushes each `command_substitution` / `process_substitution` node
 /// plus each `${ |cmd}` expansion, so a nested pair counts twice.
-fn collect_substitutions(text: &str) -> Vec<String> {
+pub(crate) fn collect_substitutions(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut queue = vec![text.to_string()];
     let mut guard = 0usize;
@@ -122,7 +122,7 @@ fn collect_substitutions(text: &str) -> Vec<String> {
 
 /// The inside of a `${ cmd}` / `${|cmd}` expansion, leading `|` and trailing `;`
 /// trimmed the way `u7e` trims them.
-fn brace_command_body(text: &str, at: usize) -> Option<String> {
+pub(crate) fn brace_command_body(text: &str, at: usize) -> Option<String> {
     let rest = &text[at..];
     let close = rest.find('}')?;
     let inner = &rest[2..close];
@@ -138,7 +138,7 @@ fn brace_command_body(text: &str, at: usize) -> Option<String> {
 
 /// `ep(text)` with csift's documented whole-string fallback, then the same clause
 /// split the classifier uses, so a `;`-separated body still yields its parts.
-fn statements_of(text: &str) -> Vec<String> {
+pub(crate) fn statements_of(text: &str) -> Vec<String> {
     match crate::bash_danger_shape::split_statements(text) {
         Some(parts) => parts.iter().map(|s| (*s).to_string()).collect(),
         None => vec![text.to_string()],
@@ -147,7 +147,7 @@ fn statements_of(text: &str) -> Vec<String> {
 
 /// `if(I.startsWith("{")&&/;?\s*\}$/.test(I)||I.startsWith("(")&&I.endsWith(")"))`
 /// - peel one group wrapper before the classifier runs on the body.
-fn unwrap_group(s: &str) -> String {
+pub(crate) fn unwrap_group(s: &str) -> String {
     let brace = s.starts_with('{') && s.trim_end().ends_with('}');
     let paren = s.starts_with('(') && s.ends_with(')');
     if brace || paren {
@@ -165,7 +165,7 @@ fn unwrap_group(s: &str) -> String {
 
 /// The SECOND fixpoint @162864328: backticks first, unconditionally, then
 /// `$(...)` at most sixteen times.
-fn cmdsub_fixpoint(s: &str) -> String {
+pub(crate) fn cmdsub_fixpoint(s: &str) -> String {
     let mut b = bash_danger_lexical::BACKTICKS
         .replace_all(s, CMDSUB_TOKEN)
         .into_owned();

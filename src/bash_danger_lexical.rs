@@ -106,7 +106,7 @@ pub(crate) fn hnt(command: &str) -> Option<LexicalHit> {
 
 /// The operand walk: trailing-bracket trim, the empty / `-` / `'` skip, the
 /// redirect skip (a bare operator also consumes its target), then the target test.
-fn scan_operands(args: &[&str]) -> Option<String> {
+pub(crate) fn scan_operands(args: &[&str]) -> Option<String> {
     let mut l = 0usize;
     while l < args.len() {
         let c = args[l].trim_end_matches([')', ']', '}']);
@@ -147,7 +147,7 @@ pub(crate) fn strip_paren_groups(s: &str) -> String {
 
 /// `replace(/(?<!\$)\([^()]*\)/g," ")` - the lookbehind applied by checking the
 /// byte before each match; a `$`-preceded group is kept for the other pass.
-fn remove_plain_groups(s: &str) -> String {
+pub(crate) fn remove_plain_groups(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
     let mut last = 0;
