@@ -187,3 +187,97 @@ fn the_decomposition_queue_stops_at_its_own_bound() {
         assert!(ten.iter().any(|s| s == &format!("y{i}")), "{ten:?}");
     }
 }
+
+#[test]
+fn the_substitution_splice_replaces_each_body_with_the_sentinel() {
+    // The twin of the walk above: one lifts the body OUT, this one puts the
+    // decomposer's stand-in IN, and what the operand tests read is this string.
+    assert_eq!(strip_substitutions("echo $(a b)"), "echo __CMDSUB_OUTPUT__");
+    assert_eq!(strip_substitutions("x `a` y"), "x __CMDSUB_OUTPUT__ y");
+    assert_eq!(
+        strip_substitutions("diff <(a) >(b)"),
+        "diff __CMDSUB_OUTPUT__ __CMDSUB_OUTPUT__"
+    );
+    // A nested pair collapses to ONE sentinel: the outer group is the unit.
+    assert_eq!(strip_substitutions("$(a $(b) c)"), "__CMDSUB_OUTPUT__");
+    // Two in a row produce two, with nothing between them.
+    assert_eq!(
+        strip_substitutions("$(a)$(b)"),
+        "__CMDSUB_OUTPUT____CMDSUB_OUTPUT__"
+    );
+    // What is NOT a substitution survives byte for byte: an escaped opener, an
+    // opener with no closer, a bare trailing delimiter, an ordinary redirection.
+    for unchanged in [
+        "\\$(a)",
+        "echo $(a",
+        "echo `a",
+        "echo $",
+        "a < b",
+        "rm -rf /tmp",
+    ] {
+        assert_eq!(strip_substitutions(unchanged), unchanged, "{unchanged:?}");
+    }
+}
+
+#[test]
+fn a_trailing_delimiter_is_not_an_opener() {
+    // A command ending in `$`, `<` or `>` has no character after it to test, and
+    // reading one would index past the end.
+    for tail in ["echo $", "a <", "a >", "$", "<", ">"] {
+        assert!(substitution_bodies(tail).is_empty(), "{tail:?}");
+        assert_eq!(strip_substitutions(tail), tail, "{tail:?}");
+    }
+    // An unterminated opener at the very START consumes its own two characters
+    // rather than standing still.
+    assert!(substitution_bodies("$(a").is_empty());
+    assert_eq!(strip_substitutions("$(a"), "$(a");
+}
+
+#[test]
+fn argv_words_strips_quotes_and_sentinels_every_expansion() {
+    assert_eq!(argv_words("rm -rf x"), v(&["rm", "-rf", "x"]));
+    // Quotes are removed, and what they contain stays one word.
+    assert_eq!(argv_words("rm \"a b\""), v(&["rm", "a b"]));
+    assert_eq!(argv_words("rm 'a b'"), v(&["rm", "a b"]));
+    assert_eq!(argv_words("rm \"\""), v(&["rm", ""]));
+    // A DOUBLE-quoted expansion is expanded; a SINGLE-quoted one is literal,
+    // which is the shell's own rule and the reason the two arms differ.
+    assert_eq!(argv_words("rm \"$D/x\""), v(&["rm", "__TRACKED_VAR__/x"]));
+    assert_eq!(argv_words("rm '$D/x'"), v(&["rm", "$D/x"]));
+    // The braced form, two expansions with no separator, and a bare dollar.
+    assert_eq!(argv_words("rm ${D}/x"), v(&["rm", "__TRACKED_VAR__/x"]));
+    assert_eq!(
+        argv_words("rm $A$B"),
+        v(&["rm", "__TRACKED_VAR____TRACKED_VAR__"])
+    );
+    assert_eq!(argv_words("rm $"), v(&["rm", "$"]));
+    // A name the decomposer resolves from the environment gets csift's own
+    // marker instead, which is what makes that operand answer NeedsFs.
+    assert_eq!(
+        argv_words("rm $HOME/x"),
+        v(&["rm", "__CSIFT_ENV_VALUE__/x"])
+    );
+    // A backslash outside quotes joins the next character into the word.
+    assert_eq!(argv_words("rm a\\ b"), v(&["rm", "a b"]));
+    // Runs of whitespace separate words and never produce an empty one.
+    assert_eq!(argv_words("rm   x  "), v(&["rm", "x"]));
+    assert!(argv_words("   ").is_empty());
+    assert!(argv_words("").is_empty());
+}
+
+#[test]
+fn an_expansion_reports_the_characters_it_consumed() {
+    // The second return value is what the caller advances by, so an off-by-one
+    // here silently re-reads or skips a character of the operand.
+    let at = |s: &str| {
+        let chars: Vec<char> = s.chars().collect();
+        expansion_at(&chars, 0)
+    };
+    assert_eq!(at("$D/x"), ("__TRACKED_VAR__".to_string(), 2));
+    assert_eq!(at("${D}/x"), ("__TRACKED_VAR__".to_string(), 4));
+    assert_eq!(at("$HOME/x"), ("__CSIFT_ENV_VALUE__".to_string(), 5));
+    assert_eq!(at("$"), ("$".to_string(), 1));
+    assert_eq!(at("$/x"), ("$".to_string(), 1));
+    // An unterminated brace consumes the rest of the operand.
+    assert_eq!(at("${D"), ("__TRACKED_VAR__".to_string(), 3));
+}

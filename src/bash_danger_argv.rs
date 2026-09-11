@@ -239,7 +239,7 @@ pub(crate) fn substitution_bodies(text: &str) -> Vec<String> {
 
 /// Replace every substitution with its sentinel so the outer statement split and
 /// the operand tests see what `_9` sees.
-fn strip_substitutions(text: &str) -> String {
+pub(crate) fn strip_substitutions(text: &str) -> String {
     let b: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
     let mut i = 0usize;
@@ -369,7 +369,7 @@ pub(crate) fn argv_words(stmt: &str) -> Vec<String> {
 }
 
 /// One `$`-led expansion, as the sentinel the decomposer would leave behind.
-fn expansion_at(chars: &[char], i: usize) -> (String, usize) {
+pub(crate) fn expansion_at(chars: &[char], i: usize) -> (String, usize) {
     let rest = &chars[i + 1..];
     if rest.first() == Some(&'{') {
         let mut j = 1usize;
