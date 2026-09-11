@@ -234,6 +234,31 @@ fn a_trailing_delimiter_is_not_an_opener() {
 }
 
 #[test]
+fn a_dollar_is_an_opener_only_when_a_paren_follows_it() {
+    // `$x` beside an unrelated group: reading the paren pair as this dollar's
+    // body would swallow the whole span into one sentinel.
+    assert_eq!(strip_substitutions("$x (y)"), "$x (y)");
+    assert!(substitution_bodies("$x (y)").is_empty());
+}
+
+#[test]
+fn a_backslash_with_nothing_after_it_escapes_nothing() {
+    // A command whose last character is a backslash (a line continuation typed
+    // without its line) - the escape arms must not read the character after it.
+    assert_eq!(strip_substitutions("a\\"), "a\\");
+    assert_eq!(argv_words("rm a\\"), v(&["rm", "a\\"]));
+    assert_eq!(argv_words("rm \"a\\"), v(&["rm", "a\\"]));
+}
+
+#[test]
+fn the_substitution_walk_resumes_past_the_closing_paren() {
+    // Resuming anywhere but one character past the `)` re-reads the end of the
+    // body: here the backtick before the paren would pair with the one after it
+    // and report a second, fabricated body.
+    assert_eq!(substitution_bodies("$(a`)`"), v(&["a`"]));
+}
+
+#[test]
 fn argv_words_strips_quotes_and_sentinels_every_expansion() {
     assert_eq!(argv_words("rm -rf x"), v(&["rm", "-rf", "x"]));
     // Quotes are removed, and what they contain stays one word.
@@ -259,6 +284,12 @@ fn argv_words_strips_quotes_and_sentinels_every_expansion() {
     );
     // A backslash outside quotes joins the next character into the word.
     assert_eq!(argv_words("rm a\\ b"), v(&["rm", "a b"]));
+    // And INSIDE double quotes it does the same, which is what keeps an escaped
+    // quote from closing the word early. A word AFTER the quoted one is what
+    // makes the closing quote observable: at end of input a quote that reopens
+    // instead of closing returns the same argv.
+    assert_eq!(argv_words("rm \"a\\\"b\" c"), v(&["rm", "a\"b", "c"]));
+    assert_eq!(argv_words("rm \"a b\" c"), v(&["rm", "a b", "c"]));
     // Runs of whitespace separate words and never produce an empty one.
     assert_eq!(argv_words("rm   x  "), v(&["rm", "x"]));
     assert!(argv_words("   ").is_empty());
@@ -280,4 +311,13 @@ fn an_expansion_reports_the_characters_it_consumed() {
     assert_eq!(at("$/x"), ("$".to_string(), 1));
     // An unterminated brace consumes the rest of the operand.
     assert_eq!(at("${D"), ("__TRACKED_VAR__".to_string(), 3));
+    // A BRACED name is read the same way as a bare one, so a resolved-environment
+    // name still answers NeedsFs, and the width covers both braces.
+    assert_eq!(at("${HOME}/x"), ("__CSIFT_ENV_VALUE__".to_string(), 7));
+    // An underscore is part of the name, not its end - stopping at the `_` would
+    // read BASH_VERSION as the unresolved BASH.
+    assert_eq!(
+        at("${BASH_VERSION}"),
+        ("__CSIFT_ENV_VALUE__".to_string(), 15)
+    );
 }
