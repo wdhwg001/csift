@@ -122,15 +122,23 @@ fn p13_settled_children_fold_and_tasks_section() {
 
 #[test]
 fn p14_no_tasks_dir_means_null_not_empty() {
-    // A tasks dir that EXISTS but holds nothing: the text section stays silent
-    // (an all-zero line is noise), while JSON below keeps the found distinction.
+    // A tasks dir that EXISTS but holds nothing: it ANSWERED, so the store line prints
+    // with the candidate that found it and says it is empty (v0.12.2), while no task row
+    // and no counts line appear. JSON below keeps the found distinction.
     let h_empty = Home::new();
     live_eot_main(&h_empty);
     std::fs::create_dir_all(h_empty.root.join(".claude/tasks").join(LIVE_SESS)).unwrap();
     let out_empty = h_empty.run(&["status", &at(LIVE_SESS)]);
     assert!(
-        !out_empty.stdout.contains("tasks "),
-        "an empty dir prints no tasks section:\n{}",
+        out_empty.stdout.contains(&format!(
+            "tasks     store: {LIVE_SESS} (via own id)  - empty"
+        )),
+        "an existing but empty dir names itself:\n{}",
+        out_empty.stdout
+    );
+    assert!(
+        !out_empty.stdout.contains("tasks     0 open") && !out_empty.stdout.contains("  task  "),
+        "an empty dir adds no counts line and no rows:\n{}",
         out_empty.stdout
     );
 

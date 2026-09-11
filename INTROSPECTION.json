@@ -87828,7 +87828,7 @@
         {
           "path": "tests/cli/list/clear.rs",
           "snippet": "fn list_needs_the_wrapper_first_not_merely_present() {",
-          "lines": "201-201"
+          "lines": "204-204"
         }
       ],
       "instrument": "For every top-level transcript under the projects root, read lines until the first `type:\"user\"` record whose `isMeta` is not true and test whether its message content opens with `<command-name>` or `<command-message>` naming `clear`; report how many transcripts qualify and, for each, the wrapper's line number and the types of the lines above it. Confirm live by clearing a session and reading the first ten lines of the new transcript.",

@@ -46,7 +46,11 @@ surface change bumps the PATCH.
   the only one: then the root of the `cleared_from` chain, then the team file written
   within five seconds of the registry row's `startedAt`. A directory matching no candidate
   is never read, and every store that answered prints as `tasks store: <dir> (via
-  <candidate>)`, with the same pairs in JSON `tasks_stores`.
+  <candidate>)`, with the same pairs in JSON `tasks_stores`; an empty store prints too,
+  marked `- empty`. This is the one place this release changes a pre-existing JSON key
+  rather than adding one: a session whose store is found through the `cleared_from` root
+  or the team file now reports its tasks where it reported none, so `tasks` moves from
+  null to an array and `tasks_completed` from null to a count.
 
 ### Fixed
 

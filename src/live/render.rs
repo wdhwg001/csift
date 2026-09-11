@@ -24,9 +24,12 @@ pub(crate) fn render_status_text(session_id: &str, a: &Assessment) {
             settled.len()
         );
     }
-    // Text shows the section only when there is at least one task (an existing but
-    // empty dir stays JSON-visible as tasks:[] versus null).
-    if a.tasks.found && (!a.tasks.open.is_empty() || a.tasks.completed > 0) {
+    // Task ROWS need a task; the STORE line does not. A directory that answered is a
+    // fact about where this list came from, and an empty one answers that question
+    // exactly as an occupied one does - so it prints either way and says it is empty,
+    // rather than leaving the text surface silent about a store the JSON reports.
+    let has_tasks = !a.tasks.open.is_empty() || a.tasks.completed > 0;
+    if has_tasks {
         for t in &a.tasks.open {
             let blocked = if t.blocked_by.is_empty() {
                 String::new()
@@ -40,11 +43,14 @@ pub(crate) fn render_status_text(session_id: &str, a: &Assessment) {
                 crate::text::collapse_and_truncate(&t.subject, 200)
             );
         }
-        // Which directory answered, and which candidate named it: a store found
-        // through anything but the session's own id was found by inference.
-        for st in &a.tasks.stores {
-            println!("  tasks     store: {} (via {})", st.dir, st.via);
-        }
+    }
+    // Which directory answered, and which candidate named it: a store found through
+    // anything but the session's own id was found by inference.
+    for st in &a.tasks.stores {
+        let empty = if has_tasks { "" } else { "  - empty" };
+        println!("  tasks     store: {} (via {}){empty}", st.dir, st.via);
+    }
+    if has_tasks {
         println!(
             "  tasks     {} open ; {} completed",
             a.tasks.open.len(),

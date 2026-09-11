@@ -148,7 +148,12 @@ pub struct BackgroundLensArgs {
         started with and a `/clear` never renames it: when the session's own id finds \
         nothing, csift tries the root of the `cleared_from` chain (see `csift list`), \
         then the team file written within 5s of the registry row's startedAt. Each store \
-        that answered prints as `tasks store: <dir> (via <candidate>)`.\n\n\
+        that answered prints as `tasks store: <dir> (via <candidate>)`, an EMPTY one \
+        marked `- empty` - the directory existing is the answer to where the list came \
+        from, whether or not it holds anything. One pre-existing JSON key moves with \
+        this: a session whose store is found through the root or the team file reports \
+        its tasks where an older csift reported none, so `tasks` goes from null to an \
+        array and `tasks_completed` from null to a count.\n\n\
         SEE ALSO\n  \
           csift whoami --peers        every live lane at once, as `id kind state` only\n  \
           csift whoami --to @<lane>   liveness turned into a reach prediction for one lane\n  \

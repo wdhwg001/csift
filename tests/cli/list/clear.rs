@@ -50,7 +50,10 @@ fn list_joins_a_cleared_session_to_its_predecessor() {
     let h = Home::new();
     let old = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
     let new = "bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee";
-    // The checkpoint closes 3 ms BEFORE the wrapper: the measured shape of a clear.
+    // The checkpoint closes 3 ms BEFORE the wrapper. The measured WRAPPER distance on a
+    // live clear is 164 ms (3 ms was the caveat record's own offset, not this one); the
+    // fixture keeps a small number because what it pins is the rendered distance and its
+    // direction, and both sit far inside the 2000 ms window either way.
     h.write(
         &format!("{ENC}/{old}.jsonl"),
         &origin_jsonl(old, WRAPPER_MS - 3, ""),

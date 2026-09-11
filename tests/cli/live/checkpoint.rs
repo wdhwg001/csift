@@ -158,6 +158,59 @@ fn the_tasks_store_is_found_through_the_cleared_from_root() {
 }
 
 #[test]
+fn an_empty_store_still_prints_with_the_candidate_that_found_it() {
+    let h = Home::new();
+    // The store the clear left behind is EMPTY (every task completed and the harness
+    // auto-reset the list, the shape 63 of 80 corpus sessions are in). The text surface
+    // still has to answer where the list came from, exactly as the JSON does.
+    let root = "aaaaaaaa-cccc-4ddd-8eee-ffffffffff02";
+    let wrapper_ms: i64 = 1_780_809_000_000;
+    h.write(
+        &format!("{LIVE_ENC}/{root}.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work before the clear"}}"#,
+            checkpoint(root, wrapper_ms - 3)
+        ),
+    );
+    h.write(
+        &format!("{LIVE_ENC}/{LIVE_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"c1","isMeta":true,"timestamp":"2026-06-07T05:09:59.900Z","message":{"role":"user","content":"<local-command-caveat>Caveat</local-command-caveat>"}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-args></command-args>"}}"#, "\n",
+            r#"{"type":"user","uuid":"c3","parentUuid":"c2","timestamp":"2026-06-07T05:10:30.000Z","message":{"role":"user","content":"after the clear"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"c4","parentUuid":"c3","timestamp":"2026-06-07T05:10:35.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    // The directory exists and holds nothing a task reader counts (the auto-reset keeps
+    // the lock file and deletes every task json).
+    h.write_claude(&format!("tasks/session-{}/.lock", &root[..8]), "");
+
+    let out = h.run(&["status", &at(LIVE_SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(&format!(
+            "tasks     store: session-{} (via cleared_from root)  - empty",
+            &root[..8]
+        )),
+        "an empty store prints, with its candidate and the empty marker:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("tasks     0 open"),
+        "an empty store adds no counts line:\n{}",
+        out.stdout
+    );
+    let row = verdict_row(&h.run(&["status", &at(LIVE_SESS), "--format", "json"]));
+    assert_eq!(row["tasks_stores"][0]["via"], "cleared_from root", "{row}");
+    assert_eq!(
+        row["tasks"].as_array().map(Vec::len),
+        Some(0),
+        "the JSON is unchanged: an existing but empty dir is [] not null: {row}"
+    );
+}
+
+#[test]
 fn the_tasks_store_is_found_through_the_team_file() {
     let h = Home::new();
     live_eot_main(&h);

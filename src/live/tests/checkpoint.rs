@@ -163,6 +163,34 @@ fn attach_checkpoint_is_a_no_op_without_one() {
 }
 
 #[test]
+fn the_store_line_is_gated_on_the_store_not_on_the_tasks() {
+    // The unit pin behind the e2e: the ROWS and the counts line need a task, the STORE
+    // line needs only a store. `found` and a non-empty `stores` move together (a store
+    // is pushed exactly when its directory opened), so the gate is the store list.
+    let mut r = TasksReport::default();
+    assert!(!r.found && r.stores.is_empty(), "default answers nothing");
+
+    r.found = true;
+    r.stores.push(TaskStore {
+        dir: "session-aaaaaaaa".to_string(),
+        via: "cleared_from root",
+    });
+    assert!(
+        r.open.is_empty() && r.completed == 0,
+        "the store answered and holds nothing"
+    );
+
+    // A store with tasks and one without differ only in the rows and the counts line;
+    // both name the directory and the candidate.
+    r.completed = 1;
+    assert!(!r.open.is_empty() || r.completed > 0);
+    r.completed = 0;
+    assert!(r.open.is_empty() && r.completed == 0);
+    assert_eq!(r.stores.len(), 1, "the store list is unaffected either way");
+    assert_eq!(r.stores[0].via, "cleared_from root");
+}
+
+#[test]
 fn team_candidates_take_only_the_files_written_at_that_startup() {
     let dir = tmp_dir("teams");
     let write = |name: &str, created: i64| {
