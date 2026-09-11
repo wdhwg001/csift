@@ -6,7 +6,17 @@
 //! work lives in the modules.
 
 mod agents;
+// The dangerous-removal port is one concern in seven focused files. It is NOT a
+// path-named directory module like every other family here: `src/` sits AT the
+// sixteen-subfolder structure limit, and a seventeenth would fail the gate, so the
+// children are siblings of the root that declares them.
 mod bash_danger;
+mod bash_danger_argv;
+mod bash_danger_census;
+mod bash_danger_lexical;
+mod bash_danger_out;
+mod bash_danger_removal;
+mod bash_danger_shape;
 mod bash_mutations;
 mod chardiff;
 mod cli;

@@ -55,6 +55,13 @@ pub struct SubagentNode {
     pub pending_tool_use_id: Option<String>,
     pub pending_tool_name: Option<String>,
     pub pending_classification: Option<PendingClassification>,
+    /// The harness's own reason tail for a predicted ask, or csift's note when the
+    /// deciding arm reads state the transcript does not carry. `None` for a pending
+    /// call that is not a shell command at all.
+    pub pending_reason: Option<String>,
+    /// Which of the harness's two checkers would have decided, and under which
+    /// generation - the disclosure line from [`crate::bash_danger::Verdict`].
+    pub pending_checker: Option<String>,
     pub pending_since_utc: Option<String>,
     /// Files this subagent mutated (reuses the `files`/`bash_mutations` extractors over the
     /// node's own transcript). Each is `(path, op_label, is_create)`.
@@ -70,6 +77,54 @@ pub struct SubagentNode {
     /// Nested sub-subagents (empty on all current data).
     pub children: Vec<SubagentNode>,
     pub skipped_lines: usize,
+}
+
+/// The frozen-lane fields a node carries, all absent on a lane that is not frozen.
+#[derive(Debug, Default)]
+pub(crate) struct PendingFacts {
+    pub tool_use_id: Option<String>,
+    pub tool_name: Option<String>,
+    pub classification: Option<PendingClassification>,
+    pub reason: Option<String>,
+    pub checker: Option<String>,
+    pub since_utc: Option<String>,
+}
+
+/// Predict what the harness would do with a frozen lane's pending call.
+///
+/// Only a SHELL call can carry a dangerous removal, and only the `Bash` tool runs
+/// POSIX syntax: Windows ships a separate `PowerShell` tool whose commands these
+/// lexical layers do not model, so such a lane is awaiting-execution with no
+/// predicted reason rather than a verdict drawn from the wrong grammar.
+pub(crate) fn pending_facts(pending: Option<&PendingToolUse>) -> PendingFacts {
+    let Some(p) = pending else {
+        return PendingFacts::default();
+    };
+    let mut facts = PendingFacts {
+        tool_use_id: Some(p.tool_use_id.clone()),
+        tool_name: Some(p.tool_name.clone()),
+        classification: Some(PendingClassification::AwaitingExecution),
+        reason: None,
+        checker: None,
+        since_utc: p.since_utc.clone(),
+    };
+    if p.tool_name != "Bash" {
+        return facts;
+    }
+    let Some(command) = p.command.as_deref() else {
+        return facts;
+    };
+    let verdict = crate::bash_danger::classify(command, p.version.as_deref());
+    facts.checker = Some(verdict.disclosure());
+    facts.classification = Some(if verdict.blocks() {
+        PendingClassification::EscalationBlocked
+    } else {
+        PendingClassification::AwaitingExecution
+    });
+    if !verdict.reason.is_empty() {
+        facts.reason = Some(verdict.reason);
+    }
+    facts
 }
 
 /// Resolve a subagent's returned message 3 ways (§3):
@@ -315,29 +370,11 @@ pub(crate) fn node_for(
     let spawn_tool = spawn.and_then(|s| s.name.clone());
     let (returned_message, returned_message_source) =
         resolve_returned_message(subagent, index, journals);
-    // Classify a frozen lane (if any): a pending Bash whose command CC would hoist (dangerous rm)
-    // is escalation-blocked (waiting for a human); anything else pending is awaiting-execution.
-    let (pending_tool_use_id, pending_tool_name, pending_classification, pending_since_utc) =
-        match &lc.pending {
-            Some(p) => {
-                let class = if p.tool_name == "Bash"
-                    && p.command
-                        .as_deref()
-                        .is_some_and(crate::bash_danger::is_dangerous_rm)
-                {
-                    PendingClassification::EscalationBlocked
-                } else {
-                    PendingClassification::AwaitingExecution
-                };
-                (
-                    Some(p.tool_use_id.clone()),
-                    Some(p.tool_name.clone()),
-                    Some(class),
-                    p.since_utc.clone(),
-                )
-            }
-            None => (None, None, None, None),
-        };
+    // Classify a frozen lane (if any). The prediction runs the checker chain of the
+    // generation that would have seen the command, and an immune ask is the ONE
+    // state the jsonl can positively confirm; everything else is awaiting-execution,
+    // including a verdict the transcript cannot decide.
+    let pending = pending_facts(lc.pending.as_ref());
     let files_changed = if with_files {
         node_files_changed(&subagent.path)?
     } else {
@@ -384,10 +421,12 @@ pub(crate) fn node_for(
         status: lc.status,
         fork_parent_last_uuid: lc.fork_parent_last_uuid.clone(),
         fork_context_length: lc.fork_context_length,
-        pending_tool_use_id,
-        pending_tool_name,
-        pending_classification,
-        pending_since_utc,
+        pending_tool_use_id: pending.tool_use_id,
+        pending_tool_name: pending.tool_name,
+        pending_classification: pending.classification,
+        pending_reason: pending.reason,
+        pending_checker: pending.checker,
+        pending_since_utc: pending.since_utc,
         files_changed,
         depth: 0,
         children: Vec::new(),

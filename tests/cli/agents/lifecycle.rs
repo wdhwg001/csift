@@ -358,3 +358,146 @@ fn agents_returned_message_omitted_by_default() {
         "returned_message must be omitted by default: {rows:?}"
     );
 }
+
+/// One frozen lane fixture: a seed record plus an unreturned Bash `tool_use`.
+fn removal_lane(hex: &str, version: &str, command: &str) -> String {
+    let ver = if version.is_empty() {
+        String::new()
+    } else {
+        format!("\"version\":\"{version}\",")
+    };
+    format!(
+        concat!(
+            r#"{{"type":"user","isSidechain":true,"agentId":"{hex}","timestamp":"2026-06-26T10:40:00.000Z","message":{{"role":"user","content":"work"}}}}"#,
+            "\n",
+            r#"{{"type":"assistant",{ver}"timestamp":"2026-06-26T10:43:00.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"toolu_{hex}","name":"Bash","input":{{"command":"{command}"}}}}]}}}}"#,
+            "\n"
+        ),
+        hex = hex,
+        ver = ver,
+        command = command
+    )
+}
+
+#[test]
+fn agents_pending_reason_names_the_checker_and_the_generation() {
+    // Five frozen lanes, one per shape the ported decision has to separate. A lane is
+    // `escalation-blocked` only where the harness of THAT lane's own Claude Code version
+    // would hold the call for a human even under bypass permissions.
+    let enc = "-Users-testuser-Projects-removals";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-26T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+    );
+    // A too-complex parse whose `&&` clause the lexical classifier reaches.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-aaa1111111111111.jsonl"),
+        &removal_lane(
+            "aaa1111111111111",
+            "2.1.258",
+            "for f in a; do [ -f \\\"$S/$f\\\" ] && rm -f \\\"$S/$f\\\"; done",
+        ),
+    );
+    // A clean parse whose target's dirname is the filesystem root.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-bbb2222222222222.jsonl"),
+        &removal_lane("bbb2222222222222", "2.1.258", "rm -rf /tmp"),
+    );
+    // A clean parse with no dangerous shape at all.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-ccc3333333333333.jsonl"),
+        &removal_lane("ccc3333333333333", "2.1.258", "rm file.txt"),
+    );
+    // A prefix command inside a too-complex body: only the rewritten classifier of
+    // 2.1.261 and later walks past `then` and `sudo` to the target.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-ddd4444444444444.jsonl"),
+        &removal_lane(
+            "ddd4444444444444",
+            "2.1.268",
+            "if true; then sudo rm -rf $D/*; fi",
+        ),
+    );
+    // The same command on a record carrying NO version: the port falls to the generation
+    // of the build the introspection ledger is verified against, and discloses it.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-eee5555555555555.jsonl"),
+        &removal_lane("eee5555555555555", "", "if true; then sudo rm -rf $D/*; fi"),
+    );
+
+    let out = h.run(&["agents", &format!("@{sess}"), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows = json_rows(&out.stdout, "agent");
+    let node = |hex: &str| -> serde_json::Value {
+        rows.iter()
+            .find(|n| n["agent_id"] == hex)
+            .unwrap_or_else(|| panic!("row {hex} in {rows:?}"))
+            .clone()
+    };
+
+    let lexical = node("aaa1111111111111");
+    assert_eq!(lexical["pending_classification"], "escalation-blocked");
+    assert_eq!(
+        lexical["pending_reason"], "on possibly-empty variable path: \"$S/$f\"",
+        "{lexical}"
+    );
+    assert!(
+        lexical["pending_checker"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("checker: lexical"),
+        "{lexical}"
+    );
+
+    let critical = node("bbb2222222222222");
+    assert_eq!(critical["pending_classification"], "escalation-blocked");
+    assert_eq!(critical["pending_reason"], "on critical path: /tmp");
+    assert_eq!(
+        critical["pending_checker"],
+        "path: structured · checker: structured · gen2"
+    );
+
+    let plain = node("ccc3333333333333");
+    assert_eq!(plain["pending_classification"], "awaiting-execution");
+    assert_eq!(
+        plain["pending_reason"], "removal target needs the filesystem state at the time",
+        "the workspace arm reads the filesystem, so csift declines to decide: {plain}"
+    );
+
+    let gen3 = node("ddd4444444444444");
+    assert_eq!(
+        gen3["pending_classification"], "escalation-blocked",
+        "the 2.1.261 token walk reaches a prefixed removal: {gen3}"
+    );
+    assert!(
+        gen3["pending_checker"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("gen3"),
+        "{gen3}"
+    );
+
+    let assumed = node("eee5555555555555");
+    assert_eq!(
+        assumed["pending_classification"], "awaiting-execution",
+        "with no version the assumed generation cannot reach it: {assumed}"
+    );
+    assert!(
+        assumed["pending_checker"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("gen2 assumed"),
+        "an assumed generation says so: {assumed}"
+    );
+
+    // The text tree carries the same two facts under the PENDING line.
+    let txt = h.run(&["agents", &format!("@{sess}")]);
+    assert!(
+        txt.stdout.contains("reason: on critical path: /tmp"),
+        "{}",
+        txt.stdout
+    );
+    assert!(txt.stdout.contains("checker: structured"), "{}", txt.stdout);
+}

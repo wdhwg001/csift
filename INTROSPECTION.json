@@ -8447,18 +8447,18 @@
     {
       "id": "BASH-015",
       "area": "bash-shell",
-      "behavior": "Claude Code hoists exactly one deterministic bash-danger class - `dangerous-rm`, an `rm`/`rmdir` whose target is a bare `$VAR/...` or `${VAR}/...` - to a human approval prompt EVEN under bypass permissions, as a `classifierApprovable:false` safety check. The classifier is a purely static regex path with no LLM and no filesystem access, and it is PURELY LEXICAL: it never checks whether the variable is actually empty.",
-      "depends": "csift ports the classifier 1:1 so `agents` can split a frozen lane's `pending_classification` into `escalation-blocked` - the one state the jsonl can positively confirm - versus `awaiting-execution`; \"improving\" the port to resolve variables would diverge from the real hoist decision and mispredict whether Claude Code actually blocks.",
+      "behavior": "Claude Code holds exactly one class of Bash command for a human EVEN under bypass permissions: a dangerous REMOVAL. Two different checkers decide it and both write the same object through the one factory `sF` (@162770607) - `behavior:\"ask\"`, `decisionReason:{type:\"safetyCheck\", reason:`Dangerous <verb> operation <tail>`, classifierApprovable:false, circuitBreaker:\"dangerousRemoval\"}` - and that breaker is one of the three bypass-immune entries of `_lr` (@157113966), read by `TUe` (@157114319). The LEXICAL classifier `hnt` (@162773520) takes the raw command string only, with no permission mode, no cwd and no filesystem, and is purely lexical: it never checks whether the variable is empty. The STRUCTURED checker `_9` (@162770807) DOES read the filesystem - it resolves the operand against the shell cwd, realpaths both, and compares against the working-directory set. Which one runs is decided upstream by the decomposition, so \"the hoist decision is a static regex path with no filesystem access\" describes one of the two paths, not the class.",
+      "depends": "csift predicts the decision so `agents` can split a frozen lane's `pending_classification` into `escalation-blocked` - the one state the jsonl can positively confirm - versus `awaiting-execution`. Because both checkers produce the same immune ask, the prediction has to run the one the harness would have run: attributing a structured removal's verdict to the lexical classifier mispredicts both ways. Where the deciding arm reads the filesystem csift answers `Unresolved` and says so, rather than guessing in either direction.",
       "code": [
         {
           "path": "src/bash_danger.rs",
-          "lines": "1-6",
-          "snippet": "//! Faithful port of Claude Code's `dangerous-rm` bash classifier - the ONE deterministic\n//! bash-danger class CC hoists to a human approval prompt EVEN under bypass-permissions (a\n//! `classifierApprovable:false` safetyCheck). Used by `agents` to tell a frozen lane that is\n//! **escalation-blocked** (a pending Bash tool_use CC would hoist \u2192 waiting for a human \"Yes\")\n//! apart from one merely **awaiting-execution** (a slow tool) - a distinction the jsonl alone\n//! otherwise can't make (the escalation lives only in CC process memory; see `subagent.rs`)."
+          "lines": "12-17",
+          "snippet": "//! TWO CHECKERS, ONE GATE (offsets into the 2.1.258 build). The Bash tool's\n//! permission path parses the command with tree-sitter and DECOMPOSES it. Only a\n//! `too-complex` parse reaches the LEXICAL classifier (`Hno` @162867544 calls\n//! `$no` @162861871, which calls `hnt` @162773520); a cleanly parsed removal is\n//! decided by the STRUCTURED checker `_9` @162770807, reached through `EPe`\n//! @162794175 and `Jon` @162790629."
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "8-14",
-          "snippet": "//! **Extracted 1:1 from the CC 2.1.193 Mach-O** (function `Ywa` + the `egp`/`Zhp` regexes),\n//! re-grepped at port time (`Dangerous rm operation` / `possibly-empty variable path` strings +\n//! the two regexes verbatim). CC flags `rm`/`rmdir` whose target is a bare `$VAR/\u2026` / `${VAR}/\u2026`.\n//! It is PURELY LEXICAL: it does NOT check whether the variable is actually empty - CC knowingly\n//! accepts that false-positive rate (it would rather over-prompt on `rm $VAR/\u2026`). We MIRROR that\n//! faithfully; do NOT \"improve\" it to resolve variables, or csift's verdict diverges from CC's\n//! real hoist decision and we'd mispredict whether CC actually blocks."
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "69-73",
+          "snippet": "/// `hnt(command)` - the first dangerous `rm`/`rmdir` removal, or `None`.\n///\n/// csift's one standing deviation: the harness splits statements with tree-sitter\n/// (`ep` @162265300); csift processes the whole string as ONE statement, which is\n/// `ep`'s own documented fallback for unparseable or over-long input."
         }
       ],
       "instrument": "Grepping the literal 'Dangerous rm operation' no longer finds anything -- the reason string is assembled from a template. Grep `possibly-empty variable path` (still literal, two forms) or the template `Dangerous ${` instead.",
@@ -8488,12 +8488,21 @@
           "observed": "complete producer trace: trigger the shell tool's permission check @165021819; trigger the bash permission core reaching the removal scan @162867584; gate the classifier: purely lexical, no filesystem, no emptiness resolution @162773520; gate the bypass-immune breaker table @157113938; gate the immunity predicate @157114319; gate the decision gate that lets the ask survive bypass @162916088; writer the safety-check factory @162770607. writer excerpt: function sF(e,n,r){return{behavior:\"ask\",message:n,decisionReason:{type:\"safetyCheck\",reason:`Dangerous ${e} operation ${r}`,classifierApprovable:!1,circuitBreaker:\"dangerousRemoval\"},suggestions:[]}}function _9(e,n,r,o,",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One observation per shell tool_use block whose command matches the ported clause-head and target regexes under the matcher's own preprocessing (the outer command splitter approximated by the whole string); outcome read from the result block joined by tool_use id, bucketed as errored, ok, or unreturned.",
           "note": "The decisive hops are all verbatim - the factory that stamps the not-approvable flag and the removal breaker, the table that marks that breaker alone immune among the shell-reachable ones, and the gate where an ask survives bypass only when its breaker is immune - while no on-disk instance attributes an actual hoist to this classifier."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Read the permission path of the 2.1.258 build from the tool entry down: `checkPermissions` @165021819 -> `Mht` @162866097 -> `Hno` @162867544 (the `kind===\"too-complex\"` branch) -> `$no` @162861871 -> `hnt` @162773520, beside `EPe` @162794175 -> `Jon` @162790629 -> `_9` @162770807, and the single writer `sF` @162770607 with the immunity table `_lr` @157113966 / `TUe` @157114319.",
+          "observed": "Both checkers call the same factory and carry the same breaker; `hnt`'s signature takes one argument and reads no cwd, while `_9` takes five and opens with a realpath of the cwd. The branch that chooses between them is one `if` on the decomposition's `kind`.",
+          "rule": "one decision object per ask, counted by its factory; one branch per checker, read at the offsets named above",
+          "note": "The claim previously described the lexical path as the whole class and carried that gap as an open scope leg. Rewritten to the two-checker truth and the leg consumed; the new claims BASH-031 and BASH-035 carry the branch and the structured arms."
         }
       ],
       "attribution": "producer-only",
       "open_legs": [
         "SPECIMEN: with bypass permissions active, issue a removal whose target is a bare variable followed by a slash inside a command whose parse is too complex to decompose, and capture the frozen lane on disk (an unreturned call with no following result) - the only observable the escalation-blocked classification predicts, and the only way to witness bypass immunity.",
-        "SCOPE: the census shows the two regexes alone over-select against the real dispatch, because the regex path is reached only when the command's parse is too complex; the structured removal checker (which does call realpath) handles the rest, so the claim's 'purely static regex path with no filesystem access' describes one of two hoist paths.",
         "Not attempted (a live action would be required): Producing the specimen requires running a genuinely dangerous removal shape under bypass permissions in a live session; not attempted."
       ],
       "producer_trace": "complete",
@@ -8559,18 +8568,18 @@
     {
       "id": "BASH-016",
       "area": "bash-shell",
-      "behavior": "The hoist decision is two regexes: a clause head accepting optional `VAR=val` assignments, an optional backslash and an optional `path/` prefix before `rm` or `rmdir` at a word boundary, and a removal TARGET matching a bare `$VAR` or `${VAR}` (optionally double-quoted) immediately followed by `/` and then one of `*`, `$`, `/`, a quote, or end of string.",
-      "depends": "csift's `EGP` and `ZHP` are verbatim ports of those two regexes, with the two lookaround-using preprocessing transforms hand-ported because the Rust regex crate has no lookaround; drift here changes which frozen lanes csift calls escalation-blocked.",
+      "behavior": "The LEXICAL classifier's decision is two regexes, defined together immediately above it at @162773345: a clause head `_to` accepting optional `VAR=val` assignments, an optional backslash and an optional `path/` prefix before `rm` or `rmdir` at a word boundary, and a removal TARGET `yto` matching a bare `$VAR` or `${VAR}` (optionally double-quoted) immediately followed by `/` and then one of `*`, `$`, `/`, a quote, or end of string. The head skips NO shell keyword and no prefix command, so `do rm`, `then rm`, `sudo rm` and `xargs rm` do not match it. The function body holds eleven further regexes and nothing else, thirteen in total, and the whole body is unchanged from 2.1.142 through 2.1.260.",
+      "depends": "csift's `CLAUSE_HEAD` and `TARGET` are verbatim ports of those two, with the two lookaround-using preprocessing transforms hand-ported because the Rust regex crate has no lookaround. Drift here changes which frozen lanes csift calls escalation-blocked - and so does ADDING to them: a keyword skip the head does not have turns a loop body that the harness lets through into a predicted hoist.",
       "code": [
         {
-          "path": "src/bash_danger.rs",
-          "lines": "28-33",
-          "snippet": "/// `egp` (verbatim): a clause head - optional `VAR=val ` assignments, optional backslash, optional\n/// `path/` prefix, then `rm`/`rmdir` at a word boundary. Capture group 1 = `rm` | `rmdir`.\nstatic EGP: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r\"^(?:[A-Za-z_][A-Za-z0-9_]*\\+?=[^\\s]*\\s+)*\\\\?(?:[^\\s=]*/)?(rm|rmdir)(?:\\s|$)\")\n        .expect(\"egp\")\n});"
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "23-26",
+          "snippet": "static CLAUSE_HEAD: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r\"^(?:[A-Za-z_][A-Za-z0-9_]*\\+?=[^\\s]*\\s+)*\\\\?(?:[^\\s=]*/)?(rm|rmdir)(?:\\s|$)\")\n        .expect(\"_to\")\n});"
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "35-41",
-          "snippet": "/// `Zhp` (verbatim): a removal TARGET that is a bare `$VAR`/`${VAR}` (optional surrounding `\"`)\n/// immediately followed by `/` then one of `* $ / \" ' <end>` - i.e. `$VAR/\u2026`. This is what makes\n/// `\"$SCRATCH/$f\"` dangerous. Lexical only (no emptiness check).\nstatic ZHP: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r#\"^\"?\\$(?:\\{[A-Za-z_][A-Za-z0-9_]*\\}|[A-Za-z_][A-Za-z0-9_]*)\"?/(?:\\*|\\$|/|[\"']|$)\"#)\n        .expect(\"Zhp\")\n});"
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "30-33",
+          "snippet": "static TARGET: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r#\"^\"?\\$(?:\\{[A-Za-z_][A-Za-z0-9_]*\\}|[A-Za-z_][A-Za-z0-9_]*)\"?/(?:\\*|\\$|/|[\"']|$)\"#)\n        .expect(\"yto\")\n});"
         }
       ],
       "instrument": "`strings` over the installed Claude Code binary for 2.1.258 grepping `rm|rmdir` surfaces the same two regex bodies; the port is pinned by the unit tests in `src/bash_danger.rs`. Counting rule: a command is dangerous when the head regex matches a clause and the target regex matches one of that clause's operands.",
@@ -8600,6 +8609,16 @@
           "observed": "complete producer trace: trigger the removal scan calling the matcher @162862255; gate the two regex literals @162773340; gate the matcher: how the two are applied @162773520; writer the safety-check factory @162770607. writer excerpt: function sF(e,n,r){return{behavior:\"ask\",message:n,decisionReason:{type:\"safetyCheck\",reason:`Dangerous ${e} operation ${r}`,classifierApprovable:!1,circuitBreaker:\"dangerousRemoval\"},suggestions:[]}}function _9(e,n,r,o, specimen: 124,840 shell tool_use commands scanned. 7 select as dangerous; 1,903 carry both a removal verb and a variable yet do not select, so the target regex does the discriminating work the claim describes. The selected targets are all of the claimed shape (bare or braced variable, some double-quoted, foll",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One observation per shell tool_use command; selected means the ported clause-head regex matched a clause and the ported target regex matched one of that clause's surviving operands; the outer command splitter is approximated by passing the whole command string as one clause.",
           "note": "Both regex bodies and the loop that applies them are verbatim at adjacent offsets, their output feeds the ask factory directly, and running the ported pair over 124,840 real commands selects 7 while rejecting 1,903 near misses of the same family."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Read both regex literals at @162773345 in the 2.1.258 build and compare them byte for byte with the two Rust statics; then extract the whole classifier body from the guard to its final `return null` in seven builds (2.1.142, .145, .193, .207, .228, .258, .260), erase every identifier outside a regex literal and hash what is left.",
+          "observed": "Both regexes are byte-identical to the port. The body is 790 bytes in all seven builds and the identifier-erased skeleton hashes the same in all seven, so no regex in it changed across that range.",
+          "rule": "one hash per build over the classifier body with identifiers erased and regex literals kept verbatim; equality across builds is the test",
+          "note": "Restated as the LEXICAL arm's decision rather than the whole hoist decision, with the keyword and prefix absence stated because that absence is what the port had wrong."
         }
       ],
       "attribution": "end-to-end",
@@ -8650,13 +8669,18 @@
     {
       "id": "BASH-017",
       "area": "bash-shell",
-      "behavior": "By 2.1.228 the dangerous-rm classifier had evolved past the generation csift ported: it strips `$(...)` and `(...)` groups to a FIXPOINT (the port is single-pass), and a tree-sitter pass bails to explicit approval when a command carries more than 64 command substitutions.",
-      "depends": "csift's escalation-blocked prediction can therefore diverge from current Claude Code on those command shapes; the divergence is recorded in-code as a staleness note and a port-refresh follow-up rather than silent drift. The same lexical bash classifier deliberately does not run on Windows `PowerShell` records, where a pending lane classifies `awaiting-execution`.",
+      "behavior": "The lexical classifier's `$(...)`/`(...)` group strip is a FIXPOINT from the first build that carries the classifier at all: the loop `for(let o=\"\";o!==r;)o=r,r=r.replace(...)` is present at 2.1.142 and unchanged through 2.1.260. What 2.1.208 added is a different thing - the AST substitution census with its bail above 64 substitutions (BASH-032). The classifier itself first appears at 2.1.142 (its head regex literal is absent at 2.1.139) and is GONE from 2.1.261, where a rewritten classifier replaces it (BASH-038).",
+      "depends": "csift's port always looped, so the divergence this claim recorded never existed and the in-code staleness note that carried it is removed. What the port really lacked was the census, the structured checker and the decomposition branch, and those are now claims of their own; the same lexical layers still deliberately do not run on Windows `PowerShell` records, where a pending lane classifies `awaiting-execution`.",
       "code": [
         {
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "135-146",
+          "snippet": "pub(crate) fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
+        },
+        {
           "path": "src/bash_danger.rs",
-          "lines": "84-91",
-          "snippet": "/// STALENESS NOTE (binary evidence, 2026-08-12): CC 2.1.228's classifier (`aLa`) has\n/// EVOLVED past the 2.1.x generation this port mirrors - it strips `$(\u2026)` groups to a\n/// FIXPOINT (this port is single-pass), and a tree-sitter pass bails to explicit approval\n/// when a command carries >64 command substitutions. csift's escalation-blocked prediction\n/// can therefore diverge from current CC on those shapes; a port refresh is a recorded\n/// follow-up, not silent drift. (CC also ships a separate Windows `PowerShell` tool; this\n/// lexical-bash classifier deliberately does NOT run on PowerShell commands - a pending\n/// PowerShell lane classifies awaiting-execution.)"
+          "lines": "54-61",
+          "snippet": "pub enum Generation {\n    /// Before 2.1.208: decomposition branch plus the lexical classifier.\n    Gen1,\n    /// 2.1.208 through 2.1.260: adds the substitution census.\n    Gen2,\n    /// 2.1.261 and later: the rewritten lexical classifier.\n    Gen3,\n}"
         }
       ],
       "instrument": "`strings` over the installed Claude Code binary for 2.1.258, reading the decompiled logic around `Dangerous rm operation` for the fixpoint strip loop and the substitution-count bail, then comparing against `src/bash_danger.rs`. Counting rule: command substitutions per command string versus the 64 threshold; presence or absence of the fixpoint loop on each side.",
@@ -8686,11 +8710,20 @@
           "observed": "complete producer trace: trigger shell tool checkPermissions -> Mht @165021826; gate hnt, the variable-expansion rm detector with the unbounded fixpoint strip @162773500; gate Bno, the AST substitution census and its >64 bail @162863430; writer sF, the ask-decision factory @162770607. writer excerpt: function sF(e,n,r){return{behavior:\"ask\",message:n,decisionReason:{type:\"safetyCheck\",reason:`Dangerous ${e} operation ${r}`,classifierApprovable:!1,circuitBreaker:\"dangerousRemoval\"},suggestions:",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One exchange per matching record, then each hit classified by its label and carrier: a hit counts as a specimen only if the literal appears in a harness-produced permission or rejection payload, not in tool output that read the binary.",
           "note": "All three hops are verbatim in the 2.1.258 binary - the permission entry, the unbounded fixpoint strip inside hnt, the >64 substitution bail inside Bno, and the ask-decision factory they both return - while no corpus record and no permitted live action shows either bail actually firing."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Byte-search the head regex literal `(rm|rmdir)(?:\\s|$)` across 67 cached builds, then extract the classifier body from the guard to its final `return null` in 2.1.142, .145, .193, .207, .228, .258 and .260 and compare the identifier-erased skeletons.",
+          "observed": "The literal occurs twice in every build from 2.1.142 through 2.1.260, zero times at 2.1.139 and below, and zero times from 2.1.261 on. The body is 790 bytes in all seven builds with one shared skeleton hash, and the fixpoint loop is inside it at 2.1.142.",
+          "rule": "raw byte occurrences of the literal per build file; one skeleton hash per build over the classifier body",
+          "note": "The previous text said 2.1.228 introduced the fixpoint and that the port was single-pass. Both halves are refuted: the fixpoint is there at 2.1.142 and the port has looped since it was written. The floor that 2.1.228 sits above belongs to the census, which is now BASH-032. The in-code staleness note is deleted rather than re-worded."
         }
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: issue, in a throwaway directory, a non-destructive command carrying more than 64 command substitutions and a bare rm token (and a second with nested ( ) groups around a variable rm target) and record whether the harness demands explicit approval; that is the only instrument that observes the bail, and it was not run because it requires driving a live interactive session and typing an rm-shaped command.",
         "Not attempted (a live action would be required): The only true specimen needs a live session to run an rm-shaped command through the approval path; issuing rm-shaped commands and driving an interactive session are both outside this task's permitted actions, so it was skipped."
       ],
       "producer_trace": "complete",
@@ -8726,10 +8759,10 @@
         }
       ],
       "writer_literal_floor": {
-        "literal": "decisionReason:{type:\"safetyCheck\",reason:`Dangerous",
-        "lowest_present": "2.1.124",
-        "highest_absent": "2.1.100",
-        "ladder": "every eighth build 2.1.150..2.1.259 plus 46 cached builds; a literal dates itself, not the behavior"
+        "literal": "(rm|rmdir)(?:\\s|$)",
+        "lowest_present": "2.1.142",
+        "highest_absent": "2.1.139",
+        "ladder": "67 cached builds from 1.0.60 through 2.1.268; the literal occurs twice in every build from 2.1.142 through 2.1.260 and zero times below 2.1.142 and from 2.1.261 on"
       }
     },
     {
@@ -33808,8 +33841,8 @@
       "code": [
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "133-137",
-          "snippet": "        // Prefer a tool_use CC would hoist (dangerous rm) so classification is escalation-blocked.\n        if command\n            .as_deref()\n            .is_some_and(crate::bash_danger::is_dangerous_rm)\n        {"
+          "lines": "136-139",
+          "snippet": "        if command\n            .as_deref()\n            .is_some_and(|c| crate::bash_danger::classify(c, version.as_deref()).blocks())\n        {"
         },
         {
           "path": "src/live/tail.rs",
@@ -66394,7 +66427,7 @@
         },
         {
           "path": "src/subagent/topology.rs",
-          "lines": "346-355",
+          "lines": "383-392",
           "snippet": "    // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the\n    // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its\n    // parent's transcript, so the spawning tool_use sits in the child's own file and the\n    // graph join names the child as its own parent (measured: every depth-65 node was\n    // such a self-cycle before v0.10.1).\n    let not_self = |p: String| (p != subagent.agent_id).then_some(p);\n    let parent_agent_id = subagent\n        .meta_parent_agent_id\n        .clone()\n        .and_then(not_self)"
         },
         {
@@ -67228,7 +67261,7 @@
       "code": [
         {
           "path": "src/subagent/topology.rs",
-          "lines": "157-160",
+          "lines": "212-215",
           "snippet": "/// Read every top-level `<session>/workflows/wf_*.json` manifest (\u00a75) as a [`WorkflowRun`].\n/// Returns an empty vec when the session has no sidecar / no `workflows/` dir (never an\n/// error for the common no-workflow case). The `workflows/scripts/` subdir and any\n/// non-`wf_*.json` entry are ignored."
         },
         {
@@ -75434,9 +75467,9 @@
       "depends": "csift's bash-lexical layers stay valid on Windows `Bash` records but deliberately do NOT run on `PowerShell` records: the dangerous-rm escalation classifier and the bash mutation attribution both skip them, so a pending PowerShell lane classifies `awaiting-execution` rather than escalation-blocked, and PowerShell shell-side file mutations surface as opaque rows instead of attributed ones. Structured Read/Write/Edit attribution is unaffected.",
       "code": [
         {
-          "path": "src/bash_danger.rs",
-          "lines": "84-91",
-          "snippet": "/// STALENESS NOTE (binary evidence, 2026-08-12): CC 2.1.228's classifier (`aLa`) has\n/// EVOLVED past the 2.1.x generation this port mirrors - it strips `$(\u2026)` groups to a\n/// FIXPOINT (this port is single-pass), and a tree-sitter pass bails to explicit approval\n/// when a command carries >64 command substitutions. csift's escalation-blocked prediction\n/// can therefore diverge from current CC on those shapes; a port refresh is a recorded\n/// follow-up, not silent drift. (CC also ships a separate Windows `PowerShell` tool; this\n/// lexical-bash classifier deliberately does NOT run on PowerShell commands - a pending\n/// PowerShell lane classifies awaiting-execution.)"
+          "path": "src/subagent/topology.rs",
+          "lines": "95-98",
+          "snippet": "/// Only a SHELL call can carry a dangerous removal, and only the `Bash` tool runs\n/// POSIX syntax: Windows ships a separate `PowerShell` tool whose commands these\n/// lexical layers do not model, so such a lane is awaiting-execution with no\n/// predicted reason rather than a verdict drawn from the wrong grammar."
         },
         {
           "path": "src/recover/scan.rs",
@@ -77350,14 +77383,14 @@
       "depends": "Only the >64 bail is a real port divergence: csift's `dangerous_rm` has no substitution-count gate, so on a command with more than 64 substitutions and an `rm`/`rmdir` word but no bare `$VAR/...` target, Claude Code hoists to explicit approval while csift predicts `awaiting-execution` rather than `escalation-blocked`. The fixpoint strip is NOT a divergence -- the port implements the same fixpoint loop. Both facts are disjoint from the PowerShell lane, on which this lexical-bash classifier never runs.",
       "code": [
         {
-          "path": "src/bash_danger.rs",
-          "lines": "84-91",
-          "snippet": "/// STALENESS NOTE (binary evidence, 2026-08-12): CC 2.1.228's classifier (`aLa`) has\n/// EVOLVED past the 2.1.x generation this port mirrors - it strips `$(\u2026)` groups to a\n/// FIXPOINT (this port is single-pass), and a tree-sitter pass bails to explicit approval\n/// when a command carries >64 command substitutions. csift's escalation-blocked prediction\n/// can therefore diverge from current CC on those shapes; a port refresh is a recorded\n/// follow-up, not silent drift. (CC also ships a separate Windows `PowerShell` tool; this\n/// lexical-bash classifier deliberately does NOT run on PowerShell commands - a pending\n/// PowerShell lane classifies awaiting-execution.)"
+          "path": "src/subagent/topology.rs",
+          "lines": "95-98",
+          "snippet": "/// Only a SHELL call can carry a dangerous removal, and only the `Bash` tool runs\n/// POSIX syntax: Windows ships a separate `PowerShell` tool whose commands these\n/// lexical layers do not model, so such a lane is awaiting-execution with no\n/// predicted reason rather than a verdict drawn from the wrong grammar."
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "155-166",
-          "snippet": "fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "135-146",
+          "snippet": "pub(crate) fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
         }
       ],
       "instrument": "Run `strings` over the installed Claude Code binary, locate the classifier's command-substitution handling, and compare it against `src/bash_danger.rs`: the fixpoint strip loop and the 64-substitution bail are present in the binary and absent from the port. Counting rule: one comparison per classifier generation.",
@@ -90372,6 +90405,798 @@
           "observed": "`forgetPlanSlug(o)` is the first statement of the regeneration, with `o` bound to the pre-swap id on the line above; the new id is minted eight statements later. The clear-minted transcript carries 0 `plan_mode` attachments and 0 slug-carrying records over its 103 lines, and `csift plan` on it reports no plan. Its predecessor carries 0 and 0 over 88 lines and reports none either, so this specimen shows the absence, not a contrast - a clear-minted transcript with a bound predecessor is the stronger specimen and is not in this corpus.",
           "rule": "An attachment counts when its parsed `attachment.type` is `plan_mode` and a record is slug-carrying when its top-level `slug` is non-empty; the transcript is the one whose first non-isMeta user record is the `/clear` wrapper.",
           "note": ""
+        }
+      ]
+    },
+    {
+      "id": "BASH-031",
+      "area": "bash-shell",
+      "behavior": "Which dangerous-removal checker runs is decided by the tree-sitter DECOMPOSITION, not by the command's content. `Dfe` (@159477546) answers `{kind:\"simple\"}` or `{kind:\"too-complex\"}`, and `Hno` (@162867544) reaches the lexical classifier ONLY on the too-complex answer. A parse aborts over 10,000 bytes (`ls` @159382823). The node dispatcher handles `command`, `redirected_statement`, `comment`, the set `{program,list,pipeline,redirected_statement}`, `negated_command`, `declaration_command` and `variable_assignment`; everything else falls to the too-complex builder `xe` (@159523867), whose reason is `Parse error` for an ERROR node and `Contains <nodeType>` for a name in the set `Aa` (@159474800) - which holds `subshell`, `compound_statement`, `for_statement`, `while_statement`, `until_statement`, `if_statement`, `case_statement`, `function_definition`, `test_command`, the heredoc and herestring redirects and the two exotic string types. A command SUBSTITUTION does not force too-complex: its inner commands are decomposed and appended and the outer argument becomes a sentinel (@159513731).",
+      "depends": "csift has no tree-sitter, so it decides the branch with a conservative shape test over a quote-aware statement split and DISCLOSES which path it took and why (`path: structured` / `path: lexical (too-complex: for_statement)` / `path: lexical (shape unknown)`). Getting the branch wrong is not cosmetic: the two checkers disagree on real shapes, so a frozen lane would be predicted from the wrong grammar in both directions.",
+      "code": [
+        {
+          "path": "src/bash_danger_shape.rs",
+          "lines": "22",
+          "snippet": "pub(crate) const PARSE_LIMIT: usize = 10_000;"
+        },
+        {
+          "path": "src/bash_danger_shape.rs",
+          "lines": "95",
+          "snippet": "pub(crate) fn branch_of(command: &str) -> Branch {"
+        }
+      ],
+      "instrument": "Read `Dfe` at @159477546 in the verified build down to its node walk, the branch at @162867544, the builder `xe` at @159523867 and the name set `Aa` at @159474800; then classify each of the tracer's twenty-two example commands by the shape test and compare with the node type those offsets predict. Counting rule: one branch verdict per command, compared for equality.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.142",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "Bash.checkPermissions",
+          "offset": 165021819,
+          "excerpt": "async checkPermissions(e,n){let r=Dne(e.command);if(r){let d=ct(r.filePath);n.session.writePermissionSta",
+          "note": "every Bash call enters the permission path here"
+        },
+        {
+          "role": "gate",
+          "name": "Hno too-complex branch",
+          "offset": 162867544,
+          "excerpt": "if(f.kind===\"too-complex\"){let yn=await $no(e,o,d)",
+          "note": "the one branch that chooses the lexical checker"
+        },
+        {
+          "role": "gate",
+          "name": "Dfe",
+          "offset": 159477546,
+          "excerpt": "function Dfe(e,n){if(Qbn.test(e))return{kind:\"too-complex\",reason:\"Contains lone surrogate\",differential:!0};i",
+          "note": "the decomposer, opening with its text prechecks"
+        },
+        {
+          "role": "gate",
+          "name": "ls parse ceiling",
+          "offset": 159382823,
+          "excerpt": "var ls=1e4,nu=",
+          "note": "the 10,000 byte ceiling above which the parse aborts"
+        },
+        {
+          "role": "gate",
+          "name": "Aa too-complex name set",
+          "offset": 159474800,
+          "excerpt": "Aa=new Set([\"command_substitution\",\"process_substitution\",\"expansion\",\"simple_expansion\",\"brace_expression\",\"subshell\",\"compound_statement\",\"for_statement\",\"while_statement\",\"until_statement\",\"if_statement\",\"case_statement\",\"function_definition\",\"test_command\",\"ansi_c_string\",\"translated_string\",\"herestring_redirect\",\"heredoc_re",
+          "note": "the node types whose reason is reported verbatim"
+        },
+        {
+          "role": "writer",
+          "name": "xe",
+          "offset": 159523867,
+          "excerpt": "function xe(e){return{kind:\"too-complex\",reason:e.type===\"ERROR\"?\"Parse error\":Aa.has(e.type)?`Contains ${e.type}`:`Contains shell syntax (${e.type}) that cannot be statically analyzed`,node",
+          "note": "the too-complex object and its reason string"
+        },
+        {
+          "role": "gate",
+          "name": "command_substitution arm",
+          "offset": 159513731,
+          "excerpt": "case\"command_substitution\":{let I=wf(v);if(I===\"DANGEROUS\")r",
+          "note": "a substitution is decomposed rather than refused"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the five offsets above in the verified build, then run the port's shape test over the tracer's twenty-two example commands and over every distinct Bash command in the local corpus (162,118 command-and-version pairs), recording the branch each takes.",
+          "observed": "The branch is one `if` on `kind`; the too-complex name set holds eighteen entries and a command substitution is not one of them. Over the corpus sweep the shape test sent every command to a branch and the twenty-two examples matched the node type the offsets predict, including the subshell, the for-statement and the over-length abort.",
+          "rule": "one branch verdict per command; the example table compares verdict and node type for equality",
+          "note": "Lands with the generational port that first needed the branch at all."
+        }
+      ]
+    },
+    {
+      "id": "BASH-032",
+      "area": "bash-shell",
+      "behavior": "On the too-complex arm, after the lexical classifier returns nothing, `Bno` (@162863005) walks the AST and collects every `command_substitution` and `process_substitution` node plus every `${ |cmd}`-shaped expansion (`u7e` @162266075), unwrapping the `$(`, `<(`, `>(` or backtick delimiters. MORE THAN 64 collected nodes - strictly greater, so 65 bails and exactly 64 does not - is itself an ask when the command text carries an `rm`/`rmdir` word, written through the same factory with the same bypass-immune breaker and the reason tail `- too many command substitutions to analyze (<n>)`. Without the rm word the scan returns nothing and no ask comes from this path. The census is absent at 2.1.207 and present from 2.1.208 through 2.1.268.",
+      "depends": "csift counts the same nodes with a hand scanner and reproduces the strictly-greater threshold and the rm-word conjunct, so a heavily substituted command predicts the same immune ask. Without it a frozen lane carrying such a command reads awaiting-execution while the harness is in fact holding it for a human.",
+      "code": [
+        {
+          "path": "src/bash_danger_census.rs",
+          "lines": "25",
+          "snippet": "const SUBSTITUTION_BAIL: usize = 64;"
+        },
+        {
+          "path": "src/bash_danger_census.rs",
+          "lines": "59-60",
+          "snippet": "    let subs = collect_substitutions(command);\n    if subs.len() > SUBSTITUTION_BAIL {"
+        }
+      ],
+      "instrument": "Read `Bno` at @162863005 and its bail at @162863359 in the verified build; byte-search the literal `too many to analyze for catastrophic removals` across 67 cached builds; then drive the port with a too-complex command carrying exactly 64 and exactly 65 substitutions, with and without an rm word. Counting rule: raw byte occurrences of the literal per build file, and one verdict per synthetic command.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.208",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "Bno call site",
+          "offset": 162862740,
+          "excerpt": "if(r&&r!==sj){let _=await Bno(r,ne(),n);",
+          "note": "the census runs after the lexical classifier returns nothing"
+        },
+        {
+          "role": "gate",
+          "name": "Bno collector",
+          "offset": 162863005,
+          "excerpt": "async function Bno(e,n,r){let o=[],d=(_)=>{let v=_.text,C=u7e(_);if(_.type===\"command_substitution\"||_.type===",
+          "note": "the AST walk that collects substitution nodes"
+        },
+        {
+          "role": "gate",
+          "name": "node type test",
+          "offset": 162863070,
+          "excerpt": "if(_.type===\"command_substitution\"||_.type===\"process_substitution",
+          "note": "which node kinds count toward the threshold"
+        },
+        {
+          "role": "writer",
+          "name": "the bail",
+          "offset": 162863359,
+          "excerpt": "if(d(e),o.length>64){if(/\\brm(?:dir)?\\b/.test(e.text))return sF(\"rm\",`This command contains ${o.",
+          "note": "strictly greater than 64, conjoined with an rm word"
+        },
+        {
+          "role": "gate",
+          "name": "u7e",
+          "offset": 162266075,
+          "excerpt": "function u7e(e){if(e.type!==\"expansion\"&&e.type!==\"ERROR\")return null;let n=e.text;if(!/^\\$\\{[ \\t\\n|]/.test(n))return nu",
+          "note": "the brace-command expansion form that also counts"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "too many to analyze for catastrophic removals",
+        "lowest_present": "2.1.208",
+        "highest_absent": "2.1.207",
+        "ladder": "67 cached builds from 1.0.60 through 2.1.268; the literal occurs once in every build from 2.1.208 on and zero times below it"
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Byte-search the bail literal across 67 cached builds, read the bail at @162863359, and run the port over synthetic commands carrying 64 and 65 substitutions inside a too-complex body, with and without an rm word.",
+          "observed": "The literal is absent at 2.1.207 and below and present once in each of the 37 builds from 2.1.208 through 2.1.268. Sixty-five substitutions with an rm word ask and name the count; sixty-four do not; sixty-five without an rm word do not.",
+          "rule": "raw byte occurrences of the literal per build file; one verdict per synthetic command, with the substitution count as the independent variable",
+          "note": "Lands with the census port. The threshold's direction is the whole point: an off-by-one here silently drops or invents an immune ask."
+        }
+      ]
+    },
+    {
+      "id": "BASH-033",
+      "area": "bash-shell",
+      "behavior": "Below the bail, the census re-runs the LEXICAL classifier on each substitution's own text as well as on the whole command (@162863688 iterates `[e.text, ...o]`), after peeling one `{...}` or `(...)` group wrapper, and a hit there is an ask with its own reason tail `on possibly-empty variable path inside command substitution: <target>` (@162864253), distinct from the top-level tail. The cd flag `_9` is later given is computed over the same set (`S9(e.text)` or any substitution, @162863651).",
+      "depends": "csift replays the same two loops, so a removal that only appears inside a substitution of a too-complex command reaches a verdict instead of being read as a plain passthrough. The distinct tail is carried verbatim, because the two tails answer different questions about where the removal was found.",
+      "code": [
+        {
+          "path": "src/bash_danger_census.rs",
+          "lines": "35-36",
+          "snippet": "pub(crate) const TAIL_IN_SUBSTITUTION: &str =\n    \"on possibly-empty variable path inside command substitution\";"
+        },
+        {
+          "path": "src/bash_danger_census.rs",
+          "lines": "67-69",
+          "snippet": "    let mut texts: Vec<String> = Vec::with_capacity(subs.len() + 1);\n    texts.push(command.to_string());\n    texts.extend(subs);"
+        }
+      ],
+      "instrument": "Read @162863688 and the tail at @162864253 in the verified build; then feed the port a too-complex command whose only removal sits inside a `$(...)` and confirm the reason tail it reports. Counting rule: one verdict and one tail per command.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.208",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the cd flag over the same set",
+          "offset": 162863651,
+          "excerpt": "let f=S9(e.text)||o.some((_)=>S9(_))",
+          "note": "the flag `_9` receives is computed over the command and its substitutions"
+        },
+        {
+          "role": "gate",
+          "name": "the re-run loop",
+          "offset": 162863688,
+          "excerpt": "for(let _ of[e.text,...o]){let v;try{v=ep(_)}catch{v=[_]}for(let C of v){let I=C.trim();if(I.startsWith(\"{\")&&/;?\\s*\\}$/",
+          "note": "each substitution's own text is split and unwrapped"
+        },
+        {
+          "role": "writer",
+          "name": "the per-substitution ask",
+          "offset": 162863898,
+          "excerpt": "let F=hnt(I);if(F!==null)return sF(F.command",
+          "note": "a lexical hit inside a substitution writes its own ask"
+        },
+        {
+          "role": "writer",
+          "name": "the distinct tail",
+          "offset": 162864253,
+          "excerpt": "on possibly-empty variable path inside command substitution: $",
+          "note": "the reason tail names the substitution"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the loop at @162863688 and the tail at @162864253, then run the port over a too-complex command whose removal appears only inside a command substitution.",
+          "observed": "The loop runs over the command text and every collected substitution; the tail is a separate string from the top-level one, and the port reports it verbatim for that shape.",
+          "rule": "one verdict and one reason tail per command",
+          "note": "Lands with the census port."
+        }
+      ]
+    },
+    {
+      "id": "BASH-034",
+      "area": "bash-shell",
+      "behavior": "After the lexical pass, the census tokenises: backticks become the literal token `__CMDSUB__` unconditionally and `$(...)` becomes the same token under a BOUNDED fixpoint capped at sixteen iterations (@162864328) - a second fixpoint, unrelated to the classifier's own unbounded one. The tokenised remainder is decomposed again (@162864448) and every rm/rmdir among the resulting simple commands is handed to the structured checker, followed by a second pass with the `__CMDSUB__` suffix shaved off each operand (@162864587).",
+      "depends": "csift reproduces the token, the cap and the re-decomposition, so a removal that only becomes visible once its substitutions are tokenised still reaches the structured checker. The cap is part of the behavior: an unbounded loop here would answer differently on a pathological command.",
+      "code": [
+        {
+          "path": "src/bash_danger_census.rs",
+          "lines": "27",
+          "snippet": "const CMDSUB_FIXPOINT_ITERATIONS: usize = 16;"
+        },
+        {
+          "path": "src/bash_danger_census.rs",
+          "lines": "168",
+          "snippet": "fn cmdsub_fixpoint(s: &str) -> String {"
+        }
+      ],
+      "instrument": "Read @162864328 and @162864587 in the verified build and compare the loop bound and the token with the port's constants. Counting rule: the iteration cap as an integer and the token as a literal string.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.208",
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "SPECIMEN: a command whose removal is reachable only after the tokenising fixpoint runs, frozen at an unreturned call on disk; the corpus sweep of 162,118 distinct Bash commands produced no such shape, so the specimen needs a live session driving one."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the bounded fixpoint",
+          "offset": 162864328,
+          "excerpt": "let B=I.replace(/`[^`]*`/g,\"__CMDSUB__\");for(let W=\"\",z=0;W!==B&&z<16;z++)W=B,B=B.replace(/\\$\\([^()]*\\)/g,\"__CMDSUB__\");let U=B!==I,j=await ",
+          "note": "backticks first, then `$(...)` at most sixteen times"
+        },
+        {
+          "role": "gate",
+          "name": "re-decomposition",
+          "offset": 162864448,
+          "excerpt": "let U=B!==I,j=await Ofe(B);if(j.kind===\"simple\")for(let W of j.commands){let z=K",
+          "note": "the tokenised remainder is decomposed again"
+        },
+        {
+          "role": "writer",
+          "name": "the structured hand-off",
+          "offset": 162864587,
+          "excerpt": "let me=z.slice(1),_e=_9(fe,me,n,r,f);if(_e.behavior=",
+          "note": "each rm among the simple commands goes to the structured checker"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "__CMDSUB__",
+        "lowest_present": "2.1.208",
+        "highest_absent": "2.1.207",
+        "ladder": "67 cached builds; the token appears seven times per build from 2.1.208 on and zero times below it, moving with the census"
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the fixpoint at @162864328 and the hand-off at @162864587, and byte-search the token `__CMDSUB__` across 67 cached builds.",
+          "observed": "The cap is the literal 16 and the token is `__CMDSUB__`; the token is absent below 2.1.208 and present from it on, so the second fixpoint arrived with the census.",
+          "rule": "raw byte occurrences of the token per build file; the cap read as an integer literal",
+          "note": "Lands with the census port. No corpus specimen exists for the shape, and the open leg names what would produce one."
+        }
+      ]
+    },
+    {
+      "id": "BASH-035",
+      "area": "bash-shell",
+      "behavior": "The structured checker `_9` (@162770807) is called per rm/rmdir with the argv rest, the shell cwd, the permission context and a flag saying whether ANY statement of the command is a `cd` (`S9` @162874750); the verb is basename-normalised only when the basename is `rm` or `rmdir` (`wPe` @162791990) and only seven prefix commands are peeled (`Kx` @162800225: time, nohup, timeout, nice, stdbuf, env, command), which is why `xargs rm` and `find -exec rm` are not removals on this path. It has FIVE ask arms, in order: cd with a relative glob (@162770807), a target that cannot be statically resolved (@162771609), a critical path (@162771910), a workspace directory or an ancestor of one (@162772295), and a glob that traverses directories it cannot enumerate (@162772546). Three of the five are decidable from the command text alone; the workspace arm compares against the working-directory set and its realpaths, and the enumeration arm counts against a realpath-resolved target. The operand is resolved with node's own `path` functions (@162762089 imports isAbsolute, normalize, resolve and sep), a trailing glob run is stripped to a fixpoint before any arm runs, and the sentinel test `Is` (@159474310) fires on the stand-ins the decomposer leaves in place of an expansion or a substitution, not on a literal `$`.",
+      "depends": "csift ports the three decidable arms with their reason tails verbatim and answers `Unresolved` for the other two, which keeps a frozen lane at `awaiting-execution` with the reason named instead of a guess. The prefix set matters as much as the arms: widening it would invent removals the harness does not see.",
+      "code": [
+        {
+          "path": "src/bash_danger_removal.rs",
+          "lines": "56",
+          "snippet": "pub(crate) const TAIL_UNRESOLVABLE: &str = \"on statically-unresolvable target\";"
+        },
+        {
+          "path": "src/bash_danger_removal.rs",
+          "lines": "93",
+          "snippet": "fn removal_check(verb: &str, b: &str, argv_rest: &[String], cd_seen: bool) -> OperandVerdict {"
+        },
+        {
+          "path": "src/bash_danger_removal.rs",
+          "lines": "188",
+          "snippet": "fn trailing_glob_fixpoint(u: &str) -> String {"
+        }
+      ],
+      "instrument": "Read `_9` from @162770807 through its passthrough at @162773256 in the verified build, with `eDe` at @162427324, the sentinel test at @159474310 and the path import at @162762089; then run the port over the tracer's twenty-two example commands and compare the arm each one reaches. Counting rule: one arm per operand, in the order the offsets give.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.142",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "EPe fan-out",
+          "offset": 162794175,
+          "excerpt": "let U=f?f.map((Fe)=>xto(Fe,n,r,o)):ep(e.command).map((Fe)=>Cto(Fe,n,r,o)),j=U.find((Fe)=>F",
+          "note": "one decomposed command at a time"
+        },
+        {
+          "role": "gate",
+          "name": "Jon",
+          "offset": 162790629,
+          "excerpt": "if(e===\"rm\"||e===\"rmdir\"){let v=_9(e,r,o,d,f);if(v.behavior!==\"passthrough",
+          "note": "rm and rmdir are the only verbs that reach the checker"
+        },
+        {
+          "role": "gate",
+          "name": "wPe",
+          "offset": 162791990,
+          "excerpt": "function wPe(e){if(!e)return e;let n=e.replace(/^.*[\\\\/]/,\"\");return n===\"rm\"||n===\"rmdir\"?n:e}function At",
+          "note": "the verb is basename-normalised only for those two"
+        },
+        {
+          "role": "gate",
+          "name": "Kx prefix peel",
+          "offset": 162800225,
+          "excerpt": "function Kx(e){let n=e;for(;;){let r=n[0]?.replace(/^.*[\\\\/]/,\"\"),o=r===\"time\"||r===\"nohup\"||r===\"timeout\"||r===\"nice\"||r===\"stdbuf\"||r===\"env\"||r===\"",
+          "note": "the seven prefix commands, which do not include xargs"
+        },
+        {
+          "role": "gate",
+          "name": "S9 cd flag",
+          "offset": 162874750,
+          "excerpt": "function S9(e){return ep(e).some((n)=>_O(n.trim(",
+          "note": "the flag is true when any statement is a cd"
+        },
+        {
+          "role": "writer",
+          "name": "_9 and the cd arm",
+          "offset": 162770807,
+          "excerpt": "function _9(e,n,r,o,d){let f=ZH[e],_=f(n),{resolvedPath:v}=Po(ce(),r),C=v===r?[r]:[r,v],I=te([...C,...o?fb(o):[]].flatMap((F)=>{let{resolvedPath:B}=Po(ce(),F);return B===F?[F]:[F,B]}));for(let F of _){let B=Tp(F),U=hO(B)?B:Yon(r,B),j=U;for(",
+          "note": "the signature, the trailing-glob fixpoint and the first ask"
+        },
+        {
+          "role": "writer",
+          "name": "the unresolvable arm",
+          "offset": 162771609,
+          "excerpt": "if(W&&(Hft(B)||Is(U)||B.startsWith(\"~\")||Hn(B)||!hO(B)&&/(^|[\\\\/])\\.\\.([\\\\/]|$)/.test(B)&&/[\\\\/]\\*$/.test(U)||e===\"rmdir",
+          "note": "the disjunction that decides an unresolvable target"
+        },
+        {
+          "role": "writer",
+          "name": "the critical-path arm",
+          "offset": 162771910,
+          "excerpt": "This command's removal target cannot be statically resolved to a directory. This requires explicit approval and cannot be auto-allowed by permission r",
+          "note": "the arm csift can decide from the text"
+        },
+        {
+          "role": "writer",
+          "name": "the workspace arm",
+          "offset": 162772295,
+          "excerpt": "This command would remove a critical system directory. This requires explicit approval and cannot be auto-allowed by permission ru",
+          "note": "the arm that compares against the working-directory set"
+        },
+        {
+          "role": "writer",
+          "name": "the enumeration arm",
+          "offset": 162772546,
+          "excerpt": "This command would remove a workspace directory (the working directory, an additional working directory, or one of their parent directories)",
+          "note": "the arm that counts glob segments against a resolved target"
+        },
+        {
+          "role": "gate",
+          "name": "eDe",
+          "offset": 162427324,
+          "excerpt": "function eDe(e){let n=e.replace(/[\\\\/]+/g,\"/\");if(n===\"*\"||n.endsWith(\"/*\"))return!0;let r=D()===\"macos\",o=(I)=>r?I.replace(/^\\/private\\/(etc|var|tmp|home)(\\/|$)/i,\"/$1$2\"):I,d=o(n",
+          "note": "what counts as a critical path"
+        },
+        {
+          "role": "gate",
+          "name": "Is sentinel test",
+          "offset": 159474310,
+          "excerpt": "function Is(e){return e.includes(st)||e.includes(Le)}functio",
+          "note": "the test fires on the decomposer's stand-ins, not on a literal dollar"
+        },
+        {
+          "role": "gate",
+          "name": "path helpers",
+          "offset": 162762089,
+          "excerpt": "import{homedir as mto}from\"os\";import{isAbsolute as hO,normalize as gto,resolve as Yon,sep as hto}from\"p",
+          "note": "the node path functions the operand resolution uses"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read every offset above in the verified build, then run the port over the tracer's twenty-two example commands and over 162,118 distinct Bash commands from the local corpus, recording the arm reached.",
+          "observed": "Five ask arms, one passthrough, and the two that read the filesystem are the workspace comparison and the glob enumeration. The example table reaches the predicted arm in every row; over the corpus sweep the structured checker changed five commands from awaiting-execution to escalation-blocked, all through the unresolvable-target arm, and every one of them was a shape the lexical classifier cannot see because the character after the slash is a letter.",
+          "rule": "one arm per operand; the sweep counts one classification per distinct command-and-version pair",
+          "note": "Lands with the structured-arm port."
+        }
+      ]
+    },
+    {
+      "id": "BASH-036",
+      "area": "bash-shell",
+      "behavior": "Every dangerous-removal ask, from either checker, is built by one factory `sF` (@162770607) into one shape: `behavior:\"ask\"`, a message, and `decisionReason:{type:\"safetyCheck\", reason, classifierApprovable:false, circuitBreaker:\"dangerousRemoval\"}`. Under bypassPermissions an ask is replaced by an allow UNLESS its reason carries a bypass-immune breaker (@162916103), and the table `_lr` (@157113966) read by `TUe` (@157114319) marks `dangerousRemoval` immune. The generic too-complex ask and the no-rule-match ask carry no such breaker and are not immune.",
+      "depends": "csift's `escalation-blocked` means exactly \"an immune ask\", so the immunity table is the line between the one state the jsonl can positively confirm and a lane that is merely slow. A passthrough from the removal checker is NOT the same as \"the harness will run it\": the command may still meet the generic ask, which bypass removes.",
+      "code": [
+        {
+          "path": "src/bash_danger.rs",
+          "lines": "111-112",
+          "snippet": "    /// True exactly for an ask: `dangerousRemoval` is bypass-immune.\n    pub immune: bool,"
+        },
+        {
+          "path": "src/bash_danger.rs",
+          "lines": "127-129",
+          "snippet": "    pub fn blocks(&self) -> bool {\n        self.decision == Decision::Ask && self.immune\n    }"
+        }
+      ],
+      "instrument": "Read the factory at @162770607, the bypass fold at @162916103 and the table at @157113966 with its predicate at @157114319 in the verified build. Counting rule: one factory per ask shape; the table's entries counted by their `bypassImmune` value.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.142",
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "SPECIMEN: with bypass permissions active, drive a removal whose shape one of the checkers asks on and capture the frozen lane on disk; bypass immunity has no other observable, and the corpus holds no frozen lane of that shape."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "sF",
+          "offset": 162770607,
+          "excerpt": "function sF(e,n,r){return{behavior:\"ask\",message:n,decisionReason:{type:\"safetyCheck\",reason:`Dangerous ${e} operation ${r}`,classifierApprovable:!1,circuitBreaker:\"dangerousRemoval\"},suggestions:[]}}",
+          "note": "the one factory every dangerous-removal ask goes through"
+        },
+        {
+          "role": "gate",
+          "name": "_lr immunity table",
+          "offset": 157113966,
+          "excerpt": "_lr={dangerousRemoval:{bypassImmune:!0,classifierRouted:!0},",
+          "note": "dangerousRemoval is marked bypass-immune"
+        },
+        {
+          "role": "gate",
+          "name": "TUe",
+          "offset": 157114319,
+          "excerpt": "function TUe(e){return e.circuitBreaker!==void 0&&_lr[e.circuitBreaker]?.bypassImmune===!0}function bkn(",
+          "note": "the predicate that reads the table"
+        },
+        {
+          "role": "trigger",
+          "name": "the bypass fold",
+          "offset": 162916103,
+          "excerpt": "let F=pe(r),B=g0(e,F),U=B===\"bypassPermissions\"||B===\"plan\"&&F.isBypassPermissionsModeAvailable&&r.forRemoteExecution!==!0,j=U&&C?.behavior===\"ask\"?ob(C.decisionReason,TUe):void 0,",
+          "note": "where an ask is replaced by an allow unless the breaker is immune"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "circuitBreaker:\"dangerousRemoval\"",
+        "lowest_present": "2.1.142",
+        "highest_absent": "2.1.139",
+        "ladder": "67 cached builds; the literal appears from 2.1.142 on, moving with the classifier itself"
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the factory, the fold and the immunity table at the offsets above, and byte-search the breaker literal across 67 cached builds.",
+          "observed": "One factory, one object shape, one breaker string; the table marks that breaker immune and the fold consults the table before replacing an ask with an allow. The breaker literal tracks the classifier's own floor.",
+          "rule": "one factory per ask shape; raw byte occurrences of the breaker literal per build file",
+          "note": "Lands with the verdict type, whose `immune` field is this table. No specimen: witnessing bypass immunity needs a live dangerous removal."
+        }
+      ]
+    },
+    {
+      "id": "BASH-037",
+      "area": "bash-shell",
+      "behavior": "The removal checkers sit between the two rule kinds. `$no` (@162861871) runs rule matching FIRST through `Isn` (@162861433) and returns immediately on a deny; the lexical classifier then runs (@162862261); the allow-rule short-circuit is the LAST statement of the function (@162862845). So a deny rule pre-empts the classifier and an allow rule does NOT: a permission rule allowing the exact command still loses to a dangerous-removal ask.",
+      "depends": "csift predicts the removal decision without reading the receiver's permission rules, which is only sound because an allow cannot pre-empt it. A deny rule CAN pre-empt it, so a predicted ask is an upper bound on what the human sees, and csift says the prediction is of the removal decision rather than of the whole permission outcome.",
+      "code": [
+        {
+          "path": "src/bash_danger.rs",
+          "lines": "22-23",
+          "snippet": "//! and the no-rule-match ask are NOT immune, which is why a passthrough here is\n//! not the same thing as \"the harness will run it\"."
+        },
+        {
+          "path": "src/bash_danger.rs",
+          "lines": "153",
+          "snippet": "pub fn classify(command: &str, version: Option<&str>) -> Verdict {"
+        }
+      ],
+      "instrument": "Read `$no` from @162861871 to its final statement at @162862845 in the verified build, noting the order of the deny match, the classifier call and the allow short-circuit. Counting rule: statement order within the one function.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.142",
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "SPECIMEN: a session carrying an allow rule for the exact command text of a dangerous removal, driven to the prompt, would show the ask surviving the allow; nothing on disk records a rule match, so only a live trial observes it."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "$no opens with rule matching",
+          "offset": 162861871,
+          "excerpt": "async function $no(e,n,r){let o=Isn(e,n);if(o?.b",
+          "note": "deny rules are consulted before anything else"
+        },
+        {
+          "role": "gate",
+          "name": "Isn",
+          "offset": 162861433,
+          "excerpt": "function Isn(e,n){let{matchingDenyRules:r,matchingAskRules:o}=aF(e,n,\"prefix\");i",
+          "note": "the rule matcher itself"
+        },
+        {
+          "role": "trigger",
+          "name": "the classifier call",
+          "offset": 162862261,
+          "excerpt": "let d=hnt(e.command);if(d!==null){s(\"tengu_bash_dangerous_rm",
+          "note": "the lexical classifier runs after the deny match"
+        },
+        {
+          "role": "writer",
+          "name": "the allow short-circuit",
+          "offset": 162862845,
+          "excerpt": "if(o===null||o.behavior!==\"allow\")return o;return(o.decisionReason?.type===\"rule\"?o.decisionReason.rule.ruleValue.ruleContent:void 0)===e.command.trim()?o:null}async function Bno(e",
+          "note": "the last statement of the function, so an allow cannot pre-empt the ask"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read `$no` end to end at the offsets above in the verified build.",
+          "observed": "Rule matching is the first statement, the classifier call is in the middle, and the allow short-circuit is the last; an allow rule therefore cannot pre-empt a removal ask, while a deny returns before the classifier runs.",
+          "rule": "statement order within the one function, read once",
+          "note": "Lands with the port, which deliberately reads no permission rules of its own."
+        }
+      ]
+    },
+    {
+      "id": "BASH-038",
+      "area": "bash-shell",
+      "behavior": "At 2.1.261 the LEXICAL classifier is replaced. The new one folds case on the rm guard, strips private-use sentinels from the input, and drops the clause-head regex for a TOKEN WALK that skips shell keywords (do, then, else, elif, if, while, until, !, {, coproc), assignments, `$`-led words, redirections and a seventeen-name prefix set (sudo, doas, exec, command, env, nice, nohup, busybox, time, timeout, stdbuf, setsid, ionice, pkexec, runuser, eval, xargs) - so `do rm`, `then rm`, `sudo rm` and `xargs rm` all reach the target test. It scans `find -exec`/`-ok`/`-execdir`/`-okdir` at most eight times per clause, widens the target regex (the post-slash set gains `?`, `[` and `{`, a `${VAR:-default}` form is accepted and a backslash may precede the slash), adds a positional/special-parameter target form gated on the clause carrying no function definition and no `set --`, replaces the paren fixpoint's space with a sentinel, and recurses into a nested `sh -c` script to depth 2. The census, the factory and the >64 threshold are unchanged. The structured checker's prefix peel is NOT widened: it is the same seven names at 2.1.268, so `xargs rm` on a cleanly parsed pipeline is still not a removal.",
+      "depends": "csift keys the classifier on the `version` stamped on the record, so a lane recorded by a 2.1.261-or-later build is predicted by the rewritten classifier and an older lane by the old one. Running one generation's classifier over the other's transcript mispredicts in both directions, and the false positives the old port hand-patched are exactly what the token walk made real.",
+      "code": [
+        {
+          "path": "src/bash_danger_out.rs",
+          "lines": "114",
+          "snippet": "pub(crate) fn out(command: &str) -> Option<OutHit> {"
+        },
+        {
+          "path": "src/bash_danger_out.rs",
+          "lines": "226",
+          "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
+        },
+        {
+          "path": "src/bash_danger.rs",
+          "lines": "241",
+          "snippet": "const REWRITE_FLOOR: (u32, u32, u32) = (2, 1, 261);"
+        }
+      ],
+      "instrument": "Byte-search the new target regex literal across 67 cached builds, then read the rewritten classifier and its sets in the newest build held here (2.1.268) and compare the seven-name prefix peel of the structured path in both builds. Counting rule: raw byte occurrences of the literal per build file; the two prefix sets compared by membership.",
+      "located": {
+        "claude_code": "2.1.261",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.261",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "PRODUCER: the rewritten classifier's hops are quoted from the 2.1.268 build and carry no byte offset, because the build the ledger is verified at does not contain them; re-reading them at offsets becomes possible when the verified version moves to 2.1.261 or later.",
+        "SPECIMEN: a frozen lane recorded by a 2.1.261-or-later build whose command is a prefixed or keyword-attached removal; the corpus sweep of 162,118 distinct commands found the shape only under older versions, so a live session on a current build is what produces it."
+      ],
+      "residue": [
+        "Rule 12 cannot check this claim's anchors: they belong to a different build. When `verified_claude_code` moves past 2.1.261 the hops gain offsets and the residue goes."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "out",
+          "excerpt": "function out(e){if(!e.includes(\"$\")||!/\\brm(?:dir)?\\b/i.test(e))return null;e=e.replace(/[\\uE000-\\uF8FF]/g,\"\");",
+          "note": "the case-insensitive guard and the sentinel strip, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "gate",
+          "name": "EIn token walk",
+          "excerpt": "function EIn(e){let n=e.split(/\\s+/).filter((p)=>p!==\"\");let r=0;",
+          "note": "the walk that replaced the clause-head regex, quoted from the 2.1.268 build; the let-binding is rendered as two statements here"
+        },
+        {
+          "role": "gate",
+          "name": "the keyword and prefix sets",
+          "excerpt": "eLo=new Set([\"do\",\"then\",\"else\",\"elif\",\"if\",\"while\",\"until\",\"!\",\"{\",\"coproc\"]),tLo=new Set([\"sudo\",\"doas\",\"exec\",\"command\",\"env\",\"nice\",\"nohup\",\"busybox\",\"time\",\"timeout\",\"stdbuf\",\"setsid\",\"ionice\",\"pkexec\",\"runuser\",\"eval\",\"xargs\"])",
+          "note": "the two sets the walk skips, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "gate",
+          "name": "the find predicate set",
+          "excerpt": "nLo=/^-(?:exec|execdir|ok|okdir|name|iname|path|ipath|regex|prune|type|maxdepth|mindepth|newer|mtime|mmin|size|print0?|delete|o|a|not|and|or)$/",
+          "note": "what terminates a scanned -exec argument run, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "writer",
+          "name": "the widened target regexes",
+          "excerpt": "var KNo=/^[\\uE020\"']*\\$(?:\\{[A-Za-z_][A-Za-z0-9_]*(?::?-(?:[\"']{2}|\"?\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?\"?)?)?\\}|[A-Za-z_][A-Za-z0-9_]*)[\\uE020\"']*\\\\?\\/(?:[*?[{]|\\$|\\/|[\"']|\\uE020|$)/",
+          "note": "the named-variable target, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "gate",
+          "name": "the nested-shell recursion cap",
+          "excerpt": "JNo=2",
+          "note": "the depth cap on recursion into a nested shell script, quoted from the 2.1.268 build"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "[\\uE020\"']*\\$(?:\\{[A-Za-z_][A-Za-z0-9_]*",
+        "lowest_present": "2.1.261",
+        "highest_absent": "2.1.260",
+        "ladder": "67 cached builds from 1.0.60 through 2.1.268; the literal occurs twice in each of the five builds from 2.1.261 on and zero times below"
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Byte-search the new target regex literal across 67 cached builds; read the rewritten classifier, its two skip sets, its find-predicate set and its recursion cap in the 2.1.268 build; and read the structured path's prefix peel in both 2.1.258 and 2.1.268.",
+          "observed": "The literal is absent through 2.1.260 and present twice in each of 2.1.261, .263, .266, .267 and .268. The old head regex's literal stops at exactly the same boundary. The structured prefix peel names the same seven commands in both builds, so the seventeen-name set belongs to the lexical walk alone.",
+          "rule": "raw byte occurrences per build file; set membership compared name by name",
+          "note": "Lands with the generational port. The tracer's summary said the rewrite fixes `xargs rm` and `find -exec rm` outright; re-reading the structured path in 2.1.268 shows it fixes them only where the command's parse is too complex, which is what the claim now says."
+        }
+      ]
+    },
+    {
+      "id": "BASH-039",
+      "area": "bash-shell",
+      "behavior": "No companion removal shape is on the Bash permission path at 2.1.258. The ten-pattern array that names `find -delete`, `shred`, `git clean -f` and an `xargs`-or-`-exec` form (@165780620) lives behind a predicate with its own over-length bail and recursion cap (@165781610), and that predicate has exactly ONE caller (@165788096): a hook-agent wrapper that returns `deny`, not an ask, and that `Bash.checkPermissions` never reaches. `rsync --delete` has no pattern anywhere: the flag occurs thirteen times in the whole binary and every in-bundle occurrence belongs to git branch deletion warnings or to `tr --delete` argument parsing.",
+      "depends": "csift predicts a dangerous-removal ask for `rm`/`rmdir` and for nothing else, which is only correct because these shapes are unreachable from the shell tool. Adding them would invent escalation-blocked lanes the harness would have run.",
+      "code": [
+        {
+          "path": "src/bash_danger_removal.rs",
+          "lines": "70-72",
+          "snippet": "        if verb != \"rm\" && verb != \"rmdir\" {\n            continue;\n        }"
+        },
+        {
+          "path": "src/bash_danger_argv.rs",
+          "lines": "61",
+          "snippet": "pub(crate) fn normalise_verb(head: &str) -> &str {"
+        }
+      ],
+      "instrument": "Byte-search the verified build for each companion literal, then enumerate every occurrence of the predicate that reads the array and read each caller. Counting rule: one verdict per occurrence, with the closure being that every occurrence is read.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "SPECIMEN: an absence has no specimen by construction; what would refute it is a transcript in which a `find -delete` or `xargs rm` call was held for approval with a dangerous-removal reason, which the corpus does not hold."
+      ],
+      "enumeration": [
+        {
+          "site": "the ten-pattern array",
+          "offset": 165780620,
+          "excerpt": "XQo=[/(^|[;&|\\n(`][ \\t]*)(?:rm|git\\s+(?:reset|clean|checkout|restore|stash))\\b[^;&|\\n]*(?:",
+          "verdict": "the array itself, defined once and read by one predicate"
+        },
+        {
+          "site": "the predicate",
+          "offset": 165781610,
+          "excerpt": "function Dwt(e,n=0){if(e.length>YQo||n>JQo)return!0;let r=oJ",
+          "verdict": "its over-length bail and recursion cap; the only reader of the array"
+        },
+        {
+          "site": "the only caller",
+          "offset": 165788096,
+          "excerpt": "if(n.name===Qe&&typeof d===\"string\"&&Dwt(d))return{behavior:",
+          "verdict": "a hook-agent wrapper returning deny, unreachable from the shell tool"
+        }
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "the companion pattern array",
+          "offset": 165780620,
+          "excerpt": "XQo=[/(^|[;&|\\n(`][ \\t]*)(?:rm|git\\s+(?:reset|clean|checkout|restore|stash))\\b[^;&|\\n]*(?:",
+          "note": "where the companion shapes are named"
+        },
+        {
+          "role": "gate",
+          "name": "the predicate",
+          "offset": 165781610,
+          "excerpt": "function Dwt(e,n=0){if(e.length>YQo||n>JQo)return!0;let r=oJ",
+          "note": "the one reader of that array"
+        },
+        {
+          "role": "trigger",
+          "name": "the hook-agent wrapper",
+          "offset": 165788096,
+          "excerpt": "if(n.name===Qe&&typeof d===\"string\"&&Dwt(d))return{behavior:",
+          "note": "the only caller, and it denies rather than asks"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Byte-search the verified build for the companion literals and for `--delete`, then enumerate every occurrence of the predicate and read each one.",
+          "observed": "The array has one reader and that reader has one caller, a hook-agent wrapper whose return is a deny; `Bash.checkPermissions` does not reach it. `--delete` occurs thirteen times and no occurrence is a removal pattern.",
+          "rule": "one verdict per occurrence of the predicate; raw byte occurrences for the flag",
+          "note": "Lands with the port, which is why it models rm and rmdir only."
         }
       ]
     }

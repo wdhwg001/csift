@@ -1,368 +1,275 @@
-//! Faithful port of Claude Code's `dangerous-rm` bash classifier - the ONE deterministic
-//! bash-danger class CC hoists to a human approval prompt EVEN under bypass-permissions (a
-//! `classifierApprovable:false` safetyCheck). Used by `agents` to tell a frozen lane that is
-//! **escalation-blocked** (a pending Bash tool_use CC would hoist → waiting for a human "Yes")
-//! apart from one merely **awaiting-execution** (a slow tool) - a distinction the jsonl alone
-//! otherwise can't make (the escalation lives only in CC process memory; see `subagent.rs`).
+//! The dangerous-removal decision for a Bash command, ported from Claude Code and
+//! keyed on the Claude Code GENERATION that would have run it.
 //!
-//! **Extracted 1:1 from the CC 2.1.193 Mach-O** (function `Ywa` + the `egp`/`Zhp` regexes),
-//! re-grepped at port time (`Dangerous rm operation` / `possibly-empty variable path` strings +
-//! the two regexes verbatim). CC flags `rm`/`rmdir` whose target is a bare `$VAR/…` / `${VAR}/…`.
-//! It is PURELY LEXICAL: it does NOT check whether the variable is actually empty - CC knowingly
-//! accepts that false-positive rate (it would rather over-prompt on `rm $VAR/…`). We MIRROR that
-//! faithfully; do NOT "improve" it to resolve variables, or csift's verdict diverges from CC's
-//! real hoist decision and we'd mispredict whether CC actually blocks.
+//! Why csift carries it: `agents` and `status` see a lane whose transcript ends
+//! with an unreturned Bash `tool_use`. The disk cannot tell "waiting for a human
+//! to approve" from "slow" from "dead" - a pending approval lives only in the
+//! harness's process memory. A removal the harness would hold for approval EVEN
+//! under bypass-permissions is the one state the jsonl can positively confirm, so
+//! such a lane is `escalation-blocked` and every other pending lane is
+//! `awaiting-execution`.
 //!
-//! **One faithful deviation:** CC's statement splitter `E_` uses a bash tree-sitter parser; rather
-//! than pull in tree-sitter, we process the whole command as a single statement (`E_`'s own
-//! documented fallback for unparseable/over-long input) and recover compound bodies by splitting
-//! on statement separators plus stripping leading shell keywords (`do`/`then`/…). The regex core
-//! (egp/Zhp + the preprocessing) is exact; the divergence is limited to exotic compound nesting a
-//! full bash AST would isolate differently. Common teardown `rm` - the case that triggered this -
-//! is covered. The two preprocessing transforms that use lookbehind/lookahead in the JS
-//! (`(?<!\$)\(…\)` and the `&`→`;` rule) are hand-ported, since the `regex` crate has no lookaround.
+//! TWO CHECKERS, ONE GATE (offsets into the 2.1.258 build). The Bash tool's
+//! permission path parses the command with tree-sitter and DECOMPOSES it. Only a
+//! `too-complex` parse reaches the LEXICAL classifier (`Hno` @162867544 calls
+//! `$no` @162861871, which calls `hnt` @162773520); a cleanly parsed removal is
+//! decided by the STRUCTURED checker `_9` @162770807, reached through `EPe`
+//! @162794175 and `Jon` @162790629. Both write the SAME decision object through
+//! the one factory `sF` @162770607 - `behavior:"ask"`, `circuitBreaker:
+//! "dangerousRemoval"`, `classifierApprovable:false` - and that breaker is one of
+//! the three bypass-immune entries in `_lr` @157113966, so the ask survives
+//! bypassPermissions. The generic too-complex ask (`bashMissKind:"too-complex"`)
+//! and the no-rule-match ask are NOT immune, which is why a passthrough here is
+//! not the same thing as "the harness will run it".
+//!
+//! THREE GENERATIONS, selected by the `version` stamped on the record:
+//! - Gen1, before 2.1.208: the decomposition branch plus `hnt`.
+//! - Gen2, 2.1.208 through 2.1.260: adds `Bno` @162863005 - the substitution
+//!   census with its bail above 64, the per-substitution re-run of `hnt`, and a
+//!   bounded sixteen-iteration `__CMDSUB__` fixpoint feeding `_9`.
+//! - Gen3, 2.1.261 and later: `hnt` is replaced by the rewritten `out`, which
+//!   walks tokens instead of matching a clause head, scans `find -exec`, widens
+//!   the target forms and recurses into a nested `sh -c`.
+//!
+//! `hnt` itself is byte-identical from 2.1.142 through 2.1.260, fixpoint included.
+//!
+//! THE PORT PREDICTS THE HARNESS AND NEVER IMPROVES ON IT. Where a decision needs
+//! the filesystem state at the time - `_9` resolves the operand against the shell
+//! cwd, realpaths both, and compares against the working-directory set - the
+//! verdict is `Unresolved`, never a guess in either direction.
 
-use regex::Regex;
-use std::sync::LazyLock;
+use crate::bash_danger_census::CensusVerdict;
+use crate::bash_danger_removal::OperandVerdict;
 
-/// `egp` (verbatim): a clause head - optional `VAR=val ` assignments, optional backslash, optional
-/// `path/` prefix, then `rm`/`rmdir` at a word boundary. Capture group 1 = `rm` | `rmdir`.
-static EGP: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(?:[A-Za-z_][A-Za-z0-9_]*\+?=[^\s]*\s+)*\\?(?:[^\s=]*/)?(rm|rmdir)(?:\s|$)")
-        .expect("egp")
-});
+pub use crate::bash_danger_shape::Branch;
 
-/// `Zhp` (verbatim): a removal TARGET that is a bare `$VAR`/`${VAR}` (optional surrounding `"`)
-/// immediately followed by `/` then one of `* $ / " ' <end>` - i.e. `$VAR/…`. This is what makes
-/// `"$SCRATCH/$f"` dangerous. Lexical only (no emptiness check).
-static ZHP: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^"?\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"?/(?:\*|\$|/|["']|$)"#)
-        .expect("Zhp")
-});
+/// The lexical classifier's reason tail @162862700, verbatim.
+pub const TAIL_POSSIBLY_EMPTY: &str = "on possibly-empty variable path";
+/// csift's own note for a verdict the transcript cannot decide. It is NOT a
+/// harness tail and is never presented as one.
+pub const NOTE_NEEDS_FS: &str = "removal target needs the filesystem state at the time";
 
-/// The cheap initial guard `/\brm(?:dir)?\b/` - no `rm`/`rmdir` word ⇒ safe.
-static RM_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\brm(?:dir)?\b").expect("rm_word"));
+/// Which Claude Code generation's checker chain applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Generation {
+    /// Before 2.1.208: decomposition branch plus the lexical classifier.
+    Gen1,
+    /// 2.1.208 through 2.1.260: adds the substitution census.
+    Gen2,
+    /// 2.1.261 and later: the rewritten lexical classifier.
+    Gen3,
+}
 
-/// `/^[\d&]*[<>]/` - a token that STARTS like a redirection.
-static REDIR_START: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[\d&]*[<>]").expect("redir"));
+impl Generation {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Generation::Gen1 => "gen1",
+            Generation::Gen2 => "gen2",
+            Generation::Gen3 => "gen3",
+        }
+    }
+}
 
-/// `/^(?:[0-9]+|&)?(?:>>?[|&]?|<<?<?|<>)$/` - a token that is JUST a redirect operator (no
-/// attached target), so the NEXT token is its target and must be skipped.
-static REDIR_OP: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(?:[0-9]+|&)?(?:>>?[|&]?|<<?<?|<>)$").expect("redir_op"));
+/// What the harness would do with the command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    /// A dangerous-removal ask. Always bypass-immune.
+    Ask,
+    /// No dangerous removal was found by the checker that ran.
+    Passthrough,
+    /// The deciding arm reads state the transcript does not carry.
+    Unresolved,
+}
 
-/// `/\\\r?\n/` - a line continuation (backslash-newline).
-static LINE_CONT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\\\r?\n").expect("line_cont"));
-/// `` /`[^`]*`/ `` - a backtick command substitution.
-static BACKTICKS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`[^`]*`").expect("backticks"));
-/// `/\$\([^()]*\)/` - an innermost `$(…)` command substitution (no lookaround).
-static DOLLAR_PAREN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\([^()]*\)").expect("dpar"));
-/// `/\([^()]*\)/` - an innermost `(…)` group (the `(?<!\$)` guard is applied in code).
-static PLAIN_PAREN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\([^()]*\)").expect("ppar"));
-/// `/[;|\n\r]|&&/` - the clause separator set.
-static CLAUSE_SPLIT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[;|\n\r]|&&").expect("clause"));
+/// Which checker produced the decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Checker {
+    /// The lexical classifier on the too-complex arm.
+    Lexical,
+    /// The structured removal checker on the cleanly parsed arm.
+    Structured,
+    /// The substitution census and the work that hangs off it.
+    Census,
+}
 
-/// A removal CC's classifier would flag as dangerous (the `Ywa` return shape `{command,target}`).
+impl Checker {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Checker::Lexical => "lexical",
+            Checker::Structured => "structured",
+            Checker::Census => "census",
+        }
+    }
+}
+
+/// One command's predicted decision, with every fact the prediction rests on.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DangerousRm {
-    /// `"rm"` or `"rmdir"`.
-    pub command: &'static str,
-    /// The matched target token (e.g. `"$SCRATCH/$f"`).
-    pub target: String,
+pub struct Verdict {
+    pub decision: Decision,
+    /// True exactly for an ask: `dangerousRemoval` is bypass-immune.
+    pub immune: bool,
+    pub checker: Checker,
+    /// For an ask, the harness's own reason tail with its value interpolated. For
+    /// an unresolved verdict, csift's note. Empty for a passthrough.
+    pub reason: String,
+    pub generation: Generation,
+    /// True when the record carried no usable `version` and the generation of the
+    /// build the ledger is verified against was assumed.
+    pub generation_assumed: bool,
+    pub branch: Branch,
 }
 
-/// Convenience: would CC flag this command as a dangerous removal?
-#[must_use]
-pub fn is_dangerous_rm(command: &str) -> bool {
-    dangerous_rm(command).is_some()
-}
+impl Verdict {
+    /// Would the harness hold this command for a human even under bypass?
+    #[must_use]
+    pub fn blocks(&self) -> bool {
+        self.decision == Decision::Ask && self.immune
+    }
 
-/// Mirror of CC's `Ywa(command)`: the first dangerous `rm`/`rmdir` removal in `command`, or
-/// `None`. See the module docs for the fidelity contract + the one deviation.
-///
-/// STALENESS NOTE (binary evidence, 2026-08-12): CC 2.1.228's classifier (`aLa`) has
-/// EVOLVED past the 2.1.x generation this port mirrors - it strips `$(…)` groups to a
-/// FIXPOINT (this port is single-pass), and a tree-sitter pass bails to explicit approval
-/// when a command carries >64 command substitutions. csift's escalation-blocked prediction
-/// can therefore diverge from current CC on those shapes; a port refresh is a recorded
-/// follow-up, not silent drift. (CC also ships a separate Windows `PowerShell` tool; this
-/// lexical-bash classifier deliberately does NOT run on PowerShell commands - a pending
-/// PowerShell lane classifies awaiting-execution.)
-#[must_use]
-pub fn dangerous_rm(command: &str) -> Option<DangerousRm> {
-    // `if(!e.includes("$")||!/\brm(?:dir)?\b/.test(e))return null`
-    if !command.contains('$') || !RM_WORD.is_match(command) {
-        return None;
-    }
-    // `let n=t.replace(/\\\r?\n/g," ").replace(/`[^`]*`/g," ").trimStart()`
-    let n = LINE_CONT.replace_all(command, " ");
-    let n = BACKTICKS.replace_all(&n, " ");
-    let mut n = n.trim_start().to_string();
-    // `while(n.startsWith("(")||n.startsWith("{"))n=n.slice(1).trimStart()`
-    while n.starts_with('(') || n.starts_with('{') {
-        n = n[1..].trim_start().to_string();
-    }
-    // The `$(…)`/`(…)` strip loop, then `&`→`;`.
-    n = strip_paren_groups(&n);
-    n = amp_to_semicolon(&n);
-    // `for(let r of n.split(/[;|\n\r]|&&/))`
-    for clause in CLAUSE_SPLIT.split(&n) {
-        // `o=r.trimStart()`, plus our leading-keyword strip (the E_ approximation).
-        let o = strip_leading_keywords(clause.trim_start());
-        let Some(caps) = EGP.captures(o) else {
-            continue;
-        };
-        let command_word: &'static str = if &caps[1] == "rmdir" { "rmdir" } else { "rm" };
-        let rest = &o[caps.get(0).map_or(0, |m| m.end())..];
-        // `a=o.slice(s[0].length).split(/\s+/)` (empties are skipped below, so split_whitespace
-        // is equivalent for the danger logic; the index-based redirect skip is preserved).
-        let args: Vec<&str> = rest.split_whitespace().collect();
-        let mut l = 0usize;
-        while l < args.len() {
-            // `c=a[l].replace(/[)\]}]+$/,"")`
-            let c = args[l].trim_end_matches([')', ']', '}']);
-            // `if(c===""||c.startsWith("-")||c.startsWith("'"))continue`
-            if c.is_empty() || c.starts_with('-') || c.starts_with('\'') {
-                l += 1;
-                continue;
-            }
-            // `if(/^[\d&]*[<>]/.test(c)){if(/…op…/.test(c))l++;continue}`
-            if REDIR_START.is_match(c) {
-                if REDIR_OP.is_match(c) {
-                    l += 1; // skip the redirect's target token
-                }
-                l += 1;
-                continue;
-            }
-            // `if(Zhp.test(c))return{command:i,target:c}`
-            if ZHP.is_match(c) {
-                return Some(DangerousRm {
-                    command: command_word,
-                    target: c.to_string(),
-                });
-            }
-            l += 1;
-        }
-    }
-    None
-}
-
-/// The `$(…)`/`(…)` strip loop:
-/// `for(let r="";r!==n;)r=n,n=n.replace(/\$\([^()]*\)/g," ").replace(/(?<!\$)\([^()]*\)/g," ")`.
-/// Removes command substitutions and subshell/group parens innermost-first until stable. The
-/// `$(…)` pass is a plain regex; the `(?<!\$)(…)` pass needs the lookbehind, hand-applied.
-fn strip_paren_groups(s: &str) -> String {
-    let mut n = s.to_string();
-    loop {
-        let prev = n.clone();
-        n = DOLLAR_PAREN.replace_all(&n, " ").into_owned();
-        n = remove_plain_groups(&n);
-        if n == prev {
-            break;
-        }
-    }
-    n
-}
-
-/// `replace(/(?<!\$)\([^()]*\)/g," ")` - replace each innermost `(…)` whose `(` is NOT preceded by
-/// `$` with a space; keep a `$(…)` that the prior pass left (handled there). The `(?<!\$)`
-/// lookbehind is applied by checking the byte before the match.
-fn remove_plain_groups(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut last = 0;
-    for m in PLAIN_PAREN.find_iter(s) {
-        let start = m.start();
-        let preceded_by_dollar = start > 0 && bytes[start - 1] == b'$';
-        out.push_str(&s[last..start]);
-        if preceded_by_dollar {
-            out.push_str(m.as_str()); // keep (it was/will be handled by the `$(…)` pass)
+    /// The one spelling of the disclosure line: which checker, which generation,
+    /// and which branch the command took.
+    #[must_use]
+    pub fn disclosure(&self) -> String {
+        let assumed = if self.generation_assumed {
+            " assumed"
         } else {
-            out.push(' ');
-        }
-        last = m.end();
+            ""
+        };
+        format!(
+            "path: {} · checker: {} · {}{}",
+            self.branch.label(),
+            self.checker.label(),
+            self.generation.label(),
+            assumed
+        )
     }
-    out.push_str(&s[last..]);
-    out
 }
 
-/// `replace(/(?<![<>&])&(?![<>&])/g,";")` - a lone `&` (backgrounding/`&`-list) becomes `;`, but
-/// `&&`, `<&`, `>&`, `&>`, `&<` are preserved. Hand-ported (the JS uses lookbehind+lookahead). The
-/// special bytes are all ASCII and never occur inside a UTF-8 multibyte sequence, so a byte scan
-/// that copies non-`&` bytes verbatim preserves any multibyte content untouched.
-fn amp_to_semicolon(s: &str) -> String {
-    let b = s.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(b.len());
-    for i in 0..b.len() {
-        if b[i] == b'&' {
-            let prev_bad = i > 0 && matches!(b[i - 1], b'<' | b'>' | b'&');
-            let next_bad = i + 1 < b.len() && matches!(b[i + 1], b'<' | b'>' | b'&');
-            if !prev_bad && !next_bad {
-                out.push(b';');
-                continue;
+/// Decide what the harness would do with `command`, for the Claude Code `version`
+/// stamped on the record that carries it.
+#[must_use]
+pub fn classify(command: &str, version: Option<&str>) -> Verdict {
+    let (generation, generation_assumed) = generation_of(version);
+    let branch = crate::bash_danger_shape::branch_of(command);
+    let build = |decision, checker, reason: String| Verdict {
+        decision,
+        immune: decision == Decision::Ask,
+        checker,
+        reason,
+        generation,
+        generation_assumed,
+        branch,
+    };
+    match branch {
+        Branch::Structured => match crate::bash_danger_removal::structured(command) {
+            OperandVerdict::Ask { tail, target } => build(
+                Decision::Ask,
+                Checker::Structured,
+                format!("{tail}: {target}"),
+            ),
+            OperandVerdict::NeedsFs => build(
+                Decision::Unresolved,
+                Checker::Structured,
+                NOTE_NEEDS_FS.to_string(),
+            ),
+            OperandVerdict::Clear => {
+                build(Decision::Passthrough, Checker::Structured, String::new())
             }
-        }
-        out.push(b[i]);
-    }
-    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
-}
-
-/// Strip a leading run of shell reserved words that introduce/precede a command, so a clause like
-/// `do rm $x/` (a for-loop body) or `then rm $x/` (an if-branch) is recognised - approximating the
-/// statement isolation CC's tree-sitter `E_` would do. Conservative: only well-known leading words.
-fn strip_leading_keywords(mut s: &str) -> &str {
-    const KW: &[&str] = &["do", "then", "else", "elif", "if", "while", "until", "time"];
-    s = s.trim_start();
-    loop {
-        // `!` (negation) can attach with or without a space - strip it directly.
-        if let Some(rest) = s.strip_prefix('!') {
-            s = rest.trim_start();
-            continue;
-        }
-        let mut stripped = false;
-        for kw in KW {
-            if let Some(rest) = s.strip_prefix(kw) {
-                // A keyword only when followed by whitespace or end (not a prefix of an identifier).
-                if rest.is_empty() || rest.starts_with(|c: char| c.is_whitespace()) {
-                    s = rest.trim_start();
-                    stripped = true;
-                    break;
+        },
+        Branch::Lexical(_) => {
+            if let Some((verb, target)) = lexical_hit(command, generation) {
+                let _ = verb;
+                return build(
+                    Decision::Ask,
+                    Checker::Lexical,
+                    format!("{TAIL_POSSIBLY_EMPTY}: {target}"),
+                );
+            }
+            if generation == Generation::Gen1 {
+                return build(Decision::Passthrough, Checker::Lexical, String::new());
+            }
+            match crate::bash_danger_census::census(command, generation == Generation::Gen3) {
+                CensusVerdict::Bail { count } => build(
+                    Decision::Ask,
+                    Checker::Census,
+                    format!("{} ({count})", crate::bash_danger_census::TAIL_TOO_MANY),
+                ),
+                CensusVerdict::Lexical { verb, target } => {
+                    let _ = verb;
+                    build(
+                        Decision::Ask,
+                        Checker::Census,
+                        format!(
+                            "{}: {target}",
+                            crate::bash_danger_census::TAIL_IN_SUBSTITUTION
+                        ),
+                    )
+                }
+                CensusVerdict::Structured { tail, target } => {
+                    build(Decision::Ask, Checker::Census, format!("{tail}: {target}"))
+                }
+                CensusVerdict::NeedsFs => build(
+                    Decision::Unresolved,
+                    Checker::Census,
+                    NOTE_NEEDS_FS.to_string(),
+                ),
+                CensusVerdict::Clear => {
+                    build(Decision::Passthrough, Checker::Census, String::new())
                 }
             }
         }
-        if !stripped {
-            return s;
-        }
     }
+}
+
+/// The lexical classifier of one generation.
+fn lexical_hit(command: &str, generation: Generation) -> Option<(&'static str, String)> {
+    if generation == Generation::Gen3 {
+        crate::bash_danger_out::out(command).map(|h| (h.command, h.target))
+    } else {
+        crate::bash_danger_lexical::hnt(command).map(|h| (h.command, h.target))
+    }
+}
+
+/// The first Claude Code version carrying the substitution census: the literal
+/// `too many to analyze for catastrophic removals` is present at 2.1.208 and
+/// absent at 2.1.207.
+const CENSUS_FLOOR: (u32, u32, u32) = (2, 1, 208);
+/// The first Claude Code version carrying the rewritten lexical classifier: the
+/// new target regex's literal is present at 2.1.261 and absent at 2.1.260.
+const REWRITE_FLOOR: (u32, u32, u32) = (2, 1, 261);
+
+/// The generation a version belongs to, and whether it had to be assumed. A
+/// missing or unparseable version falls to the generation of the build the
+/// introspection ledger is verified against (2.1.258, which is Gen2).
+#[must_use]
+pub fn generation_of(version: Option<&str>) -> (Generation, bool) {
+    let Some(triple) = version.and_then(parse_triple) else {
+        return (Generation::Gen2, true);
+    };
+    if triple >= REWRITE_FLOOR {
+        (Generation::Gen3, false)
+    } else if triple >= CENSUS_FLOOR {
+        (Generation::Gen2, false)
+    } else {
+        (Generation::Gen1, false)
+    }
+}
+
+fn parse_triple(v: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = v.split('.');
+    let major = leading_number(parts.next()?)?;
+    let minor = leading_number(parts.next()?)?;
+    let patch = leading_number(parts.next()?)?;
+    Some((major, minor, patch))
+}
+
+fn leading_number(s: &str) -> Option<u32> {
+    let digits: String = s.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── Mutation-kill pins (cargo-mutants survivors): each case was derived to
-    //    DIFFERENTIATE a surviving operator flip from the shipped behavior - a
-    //    boundary the ordinary fixtures never reached. ──
-
-    #[test]
-    fn redirect_target_token_is_skipped_not_flagged() {
-        // `rm -r $X > $TMP/`: the SEPARATED redirect target (`$TMP/`) is Zhp-shaped but
-        // belongs to the redirect, not to rm - CC's walker skips it (the extra advance
-        // after a bare redirect operator). A broken skip would flag it as the rm target.
-        assert!(dangerous_rm("rm -r $X > $TMP/").is_none());
-        // The FUSED form (`2>$TMP/`, operator + target in one token) is also a redirect.
-        assert!(dangerous_rm("rm -r $X 2>$TMP/").is_none());
-    }
-
-    #[test]
-    fn amp_to_semicolon_boundary_forms() {
-        // Lone `&` converts at EVERY position including the string edges; the two-byte
-        // operators (`&&` / `>&` / `<&` / `&>`) are preserved.
-        assert_eq!(amp_to_semicolon("a & b"), "a ; b");
-        assert_eq!(amp_to_semicolon("a&"), "a;"); // trailing: no next byte to consult
-        assert_eq!(amp_to_semicolon("&b"), ";b"); // leading: no previous byte to consult
-        assert_eq!(amp_to_semicolon("a&&b"), "a&&b");
-        assert_eq!(amp_to_semicolon("2>&1"), "2>&1");
-        assert_eq!(amp_to_semicolon("<&0"), "<&0");
-        assert_eq!(amp_to_semicolon("a&>x"), "a&>x");
-    }
-
-    #[test]
-    fn plain_group_removal_edges() {
-        // A group at string START is a plain group (there is no preceding byte).
-        assert_eq!(remove_plain_groups("(a b) x"), "  x");
-        // A `$`-preceded group is KEPT (the `$(…)` pass owns it); a plain one is spaced.
-        assert_eq!(remove_plain_groups("a$(b) (c) d"), "a$(b)   d");
-    }
-
-    #[test]
-    fn flags_the_real_escalation_command() {
-        // The exact teardown clause that triggered the 36.7-min hoist (agent-ab8a4c…, L630):
-        // `[ -f "$SCRATCH/$f" ] && rm -f "$SCRATCH/$f" && echo …` - the `rm -f "$SCRATCH/$f"`
-        // clause is dangerous (bare $VAR/… target).
-        let cmd = r#"SCRATCH="/tmp/x"
-for f in a.txt b.txt; do
-  [ -f "$SCRATCH/$f" ] && rm -f "$SCRATCH/$f" && echo "  shredded $f"
-done"#;
-        let d = dangerous_rm(cmd).expect("must flag the teardown rm");
-        assert_eq!(d.command, "rm");
-        assert!(d.target.contains("$SCRATCH/$f"), "target: {}", d.target);
-    }
-
-    #[test]
-    fn zhp_target_forms_match_cc() {
-        // Zhp fires on `$VAR/` followed by one of `* $ / " ' <end>` (a possibly-empty var whose
-        // expansion-then-slash is catastrophic, e.g. `rm /*`). Each below is such a target.
-        for t in [
-            r#"rm -rf "$SCRATCH/$f""#, // $VAR/ then $ (another var)
-            r"rm $DIR/*",              // $VAR/ then *
-            r"rm ${DIR}/$x",           // ${VAR}/ then $
-            r#"rm "$X"/"#,             // "$VAR"/ then end
-            r"rmdir $D/",              // $VAR/ then end
-        ] {
-            assert!(is_dangerous_rm(t), "should flag: {t}");
-        }
-    }
-
-    #[test]
-    fn lexical_boundary_var_slash_literal_is_not_dangerous() {
-        // CC requires the post-slash char to be glob/var/slash/quote/end. `$VAR/literal` is NOT
-        // flagged - locking the EXACT Zhp boundary (do not broaden it).
-        assert!(!is_dangerous_rm("rm $TMP/build"));
-        assert!(!is_dangerous_rm("rm ${DIR}/sub"));
-        assert!(is_dangerous_rm("rm $TMP/*")); // …but the glob form IS.
-    }
-
-    #[test]
-    fn keyword_attached_rm_is_recovered() {
-        // `do rm $x/…` and `then rm $x/…` (no separator before rm) - caught via keyword stripping
-        // (what CC's tree-sitter isolates).
-        assert!(is_dangerous_rm("for f in a; do rm -rf $TMP/$f; done"));
-        assert!(is_dangerous_rm("if true; then rm $TMP/*; fi"));
-    }
-
-    #[test]
-    fn safe_commands_are_not_flagged() {
-        // No `$` → safe; no rm → safe; rm of a non-$VAR/glob path → safe (mirrors CC).
-        assert!(!is_dangerous_rm("rm -rf /tmp/build"));
-        assert!(!is_dangerous_rm("echo $HOME/x")); // no rm
-        assert!(!is_dangerous_rm("rm -rf ./dist")); // not a bare $VAR/
-        assert!(!is_dangerous_rm("rm $FILE")); // $VAR with no trailing slash → not Zhp
-                                               // `docker … images rm docker.io/…` - rm is a SUBCOMMAND, clause does not start with rm.
-        assert!(!is_dangerous_rm(
-            r#"docker exec "$node" ctr -n k8s.io images rm docker.io/library/img 2>&1"#
-        ));
-    }
-
-    #[test]
-    fn empty_var_is_flagged_lexically_like_cc() {
-        // Even though $SCRATCH is assigned a non-empty path on the prior line, CC flags `$SCRATCH/*`
-        // (it does NOT resolve the variable). We mirror that - do not "fix" it.
-        let cmd = "SCRATCH=/tmp/real\nrm -rf $SCRATCH/*";
-        assert!(is_dangerous_rm(cmd));
-    }
-
-    #[test]
-    fn redirects_and_flags_are_skipped_then_target_found() {
-        // A redirect operator + target before the dangerous arg must not derail the scan.
-        assert!(is_dangerous_rm("rm -f 2>/dev/null $TMP/*"));
-        assert!(is_dangerous_rm("rm -f > log $TMP/*"));
-    }
-
-    #[test]
-    fn amp_to_semicolon_preserves_operators() {
-        assert_eq!(amp_to_semicolon("a & b"), "a ; b");
-        assert_eq!(amp_to_semicolon("a && b"), "a && b");
-        assert_eq!(amp_to_semicolon("x 2>&1"), "x 2>&1");
-        assert_eq!(amp_to_semicolon("x >&2"), "x >&2");
-    }
-
-    #[test]
-    fn paren_groups_stripped() {
-        // `(rm $x/)` subshell and `$(...)` cmd-sub are removed before clause matching, but the
-        // bare `rm $x/` inside a subshell is still reached (leading `(` stripped at stmt start).
-        assert!(is_dangerous_rm("(rm -rf $TMP/*)"));
-        assert!(!is_dangerous_rm("echo $(rm $TMP/*)")); // rm only inside $(...) → stripped → safe
-    }
-}
+#[path = "bash_danger_tests.rs"]
+mod tests;

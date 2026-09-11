@@ -111,6 +111,7 @@ pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
         return None;
     }
     let blocks = rec.blocks()?;
+    let version = rec.version.clone();
     let mut chosen: Option<(String, String, Option<String>)> = None;
     for b in blocks {
         let Block::ToolUse {
@@ -130,15 +131,17 @@ pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
         } else {
             None
         };
-        // Prefer a tool_use CC would hoist (dangerous rm) so classification is escalation-blocked.
+        // Prefer a tool_use the harness would hoist for a human even under bypass,
+        // so the lane's classification names the state the jsonl can confirm.
         if command
             .as_deref()
-            .is_some_and(crate::bash_danger::is_dangerous_rm)
+            .is_some_and(|c| crate::bash_danger::classify(c, version.as_deref()).blocks())
         {
             return Some(PendingToolUse {
                 tool_use_id: id.clone(),
                 tool_name: name.clone(),
                 command,
+                version,
                 since_utc: rec.timestamp.clone(),
             });
         }
@@ -150,6 +153,7 @@ pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
         tool_use_id,
         tool_name,
         command,
+        version,
         since_utc: rec.timestamp.clone(),
     })
 }

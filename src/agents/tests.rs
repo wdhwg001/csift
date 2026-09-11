@@ -29,6 +29,8 @@ fn node(
         pending_tool_use_id: None,
         pending_tool_name: None,
         pending_classification: None,
+        pending_reason: None,
+        pending_checker: None,
         pending_since_utc: None,
         files_changed: Vec::new(),
         fork_parent_last_uuid: None,

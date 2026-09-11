@@ -168,6 +168,13 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "pending_tool_use_id": n.pending_tool_use_id,
         "pending_tool_name": n.pending_tool_name,
         "pending_classification": n.pending_classification.map(PendingClassification::label),
+        // WHY the classification reads as it does: the harness's own reason tail
+        // for a predicted ask, csift's note when the deciding arm needs the
+        // filesystem state at the time, and which checker of which Claude Code
+        // generation would have decided. Null on a lane that is not frozen and on a
+        // pending call these lexical layers do not model.
+        "pending_reason": n.pending_reason,
+        "pending_checker": n.pending_checker,
         "pending_since_utc": n.pending_since_utc,
         "pending_since_local": n.pending_since_utc.as_deref().and_then(local_iso),
         "depth": n.depth,

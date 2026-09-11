@@ -166,6 +166,10 @@ pub struct PendingToolUse {
     pub tool_name: String,
     /// The Bash `input.command`, when `tool_name == "Bash"` (the danger-heuristic input).
     pub command: Option<String>,
+    /// The Claude Code `version` stamped on the frozen record. The dangerous-removal
+    /// checker chain is generational, so the prediction is only as good as knowing
+    /// which build would have run it; absent, the port says it assumed one.
+    pub version: Option<String>,
     /// The pending tool_use record's timestamp - when the lane froze.
     pub since_utc: Option<String>,
 }

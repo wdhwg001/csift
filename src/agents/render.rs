@@ -218,6 +218,15 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
                  bypass — almost certainly waiting for a Yes (approve/deny in the main UI), NOT dead."
             );
         }
+        // The prediction's own evidence: the harness's reason tail (or csift's note
+        // where the deciding arm reads the filesystem) and which checker of which
+        // Claude Code generation would have decided it.
+        if let Some(reason) = &n.pending_reason {
+            println!("{ind2}           reason: {reason}");
+        }
+        if let Some(checker) = &n.pending_checker {
+            println!("{ind2}           {checker}");
+        }
     }
 
     // A teammate's team + handle (the team-lead addresses it by `@<name>`); shown only when set.
