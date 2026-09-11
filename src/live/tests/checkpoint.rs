@@ -66,13 +66,32 @@ fn attach_checkpoint_adds_evidence_under_the_tail_row_and_never_a_verdict() {
         last_ts_utc: Some("2026-06-07T05:00:05.000Z".to_string()),
         records_seen: 3,
     };
-    let mut a = assess(None, None, &tail, &ChildrenReport::default(), &[], false);
+    // A registry row FIRST, so the tail row is not the head of the list: the checkpoint
+    // row has to land under the tail row specifically, not merely somewhere after the
+    // first row.
+    let reg = RegistryRow {
+        pid: Some(7),
+        status: Some("idle".to_string()),
+        status_updated_at_ms: Some(jiff::Timestamp::now().as_millisecond()),
+        proc_start: None,
+        pid_domain: None,
+        started_at_ms: None,
+    };
+    let mut a = assess(
+        Some(&reg),
+        None,
+        &tail,
+        &ChildrenReport::default(),
+        &[],
+        false,
+    );
     let before = a.verdict;
     let tail_at = a
         .evidence
         .iter()
         .position(|e| e.surface == "tail")
         .expect("a tail row");
+    assert!(tail_at > 0, "the registry row leads: {:?}", a.evidence);
     a.attach_checkpoint(Some(CheckpointTail {
         line: 42,
         kind: "cost-state",
@@ -87,13 +106,43 @@ fn attach_checkpoint_adds_evidence_under_the_tail_row_and_never_a_verdict() {
         .value
         .starts_with("cost-state at L42"));
     assert_eq!(a.last_checkpoint.map(|c| c.line), Some(42));
-    // The no-registry note gains its clause exactly once.
-    let with_clause = a
+    // The clause belongs to the no-registry-row note, and this session HAS a row.
+    assert_eq!(
+        a.notes
+            .iter()
+            .filter(|n| n.contains("the harness wrote its checkpoint"))
+            .count(),
+        0,
+        "notes: {:?}",
+        a.notes
+    );
+}
+
+#[test]
+fn attach_checkpoint_extends_the_no_registry_note_exactly_once() {
+    let tail = TailShape {
+        unreturned_use: None,
+        last_stop_reason: Some("end_turn".to_string()),
+        last_ts_utc: Some("2026-06-07T05:00:05.000Z".to_string()),
+        records_seen: 3,
+    };
+    let mut a = assess(None, None, &tail, &ChildrenReport::default(), &[], false);
+    a.attach_checkpoint(Some(CheckpointTail {
+        line: 9,
+        kind: "cost-state",
+    }));
+    let extended: Vec<&String> = a
         .notes
         .iter()
         .filter(|n| n.contains("the harness wrote its checkpoint"))
-        .count();
-    assert_eq!(with_clause, 1, "notes: {:?}", a.notes);
+        .collect();
+    assert_eq!(extended.len(), 1, "notes: {:?}", a.notes);
+    assert!(
+        extended[0].starts_with("no registry row for this session")
+            && extended[0].ends_with("so the session closed or was handed over"),
+        "the clause extends that note rather than standing alone: {}",
+        extended[0]
+    );
 }
 
 #[test]

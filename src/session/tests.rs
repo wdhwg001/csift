@@ -479,3 +479,95 @@ fn cleared_from_origin_takes_the_nearest_checkpoint_in_window() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn cleared_from_origin_never_joins_a_file_to_itself() {
+    let dir = std::env::temp_dir().join(format!(
+        "csift-clear-self-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let wrapper = "2026-06-07T05:10:00.000Z";
+    let w = crate::timez::epoch_ms(wrapper).unwrap();
+    let checkpoint = |close: i64| {
+        format!(
+            r#"{{"type":"cost-state","sessionId":"s","totalCostUSD":0.1,"totalDuration":1000,"startTime":{},"modelUsage":{{}},"hasUnknownModelCost":false}}"#,
+            close - 1000
+        )
+    };
+    // The cleared transcript carries its OWN checkpoint inside the window - the live
+    // shape, since a cleared session writes one of its own when it in turn ends. It is
+    // never its own predecessor.
+    let cleared = dir.join("44444444-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(&cleared, format!("{}\n", checkpoint(w - 5))).unwrap();
+    let join = cleared_from_origin(&cleared, wrapper);
+    assert!(
+        join.cleared_from.is_none() && join.candidates.is_empty(),
+        "a transcript is never joined to itself: {join:?}"
+    );
+    assert!(join.distance_ms.is_none(), "{join:?}");
+
+    // A NON-jsonl neighbour carrying a nearer checkpoint is not a transcript and never
+    // competes, however close it sits.
+    std::fs::write(dir.join("notes.txt"), format!("{}\n", checkpoint(w - 1))).unwrap();
+    assert!(
+        cleared_from_origin(&cleared, wrapper).distance_ms.is_none(),
+        "only a .jsonl sibling is a candidate"
+    );
+
+    // A real sibling still wins from beside it.
+    let sib = dir.join("55555555-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(&sib, format!("{}\n", checkpoint(w - 9))).unwrap();
+    let joined = cleared_from_origin(&cleared, wrapper);
+    assert_eq!(
+        joined.cleared_from.as_deref(),
+        Some("55555555-2222-4333-8444-555566667777"),
+        "the self file and the decoy are excluded, not the whole directory"
+    );
+    assert_eq!(joined.distance_ms, Some(9), "the .txt decoy never wins");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn cleared_from_origin_keeps_the_first_line_of_an_equal_distance_pair() {
+    let dir = std::env::temp_dir().join(format!(
+        "csift-clear-tie-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let wrapper = "2026-06-07T05:10:00.000Z";
+    let w = crate::timez::epoch_ms(wrapper).unwrap();
+    let checkpoint = |close: i64| {
+        format!(
+            r#"{{"type":"cost-state","sessionId":"s","totalCostUSD":0.1,"totalDuration":1000,"startTime":{},"modelUsage":{{}},"hasUnknownModelCost":false}}"#,
+            close - 1000
+        )
+    };
+    let cleared = dir.join("66666666-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(&cleared, "{}\n").unwrap();
+
+    // ONE sibling, two checkpoints equidistant on OPPOSITE sides of the wrapper. The
+    // earlier LINE decides, so the direction is stable rather than last-write-wins.
+    let sib = dir.join("77777777-2222-4333-8444-555566667777.jsonl");
+    std::fs::write(
+        &sib,
+        format!("{}\n{}\n", checkpoint(w - 40), checkpoint(w + 40)),
+    )
+    .unwrap();
+    let join = cleared_from_origin(&cleared, wrapper);
+    assert_eq!(join.distance_ms, Some(40));
+    assert!(
+        !join.after,
+        "the first equidistant line decides the direction: {join:?}"
+    );
+
+    // A checkpoint closing EXACTLY at the wrapper instant reads `before`, not `after`.
+    std::fs::write(&sib, format!("{}\n", checkpoint(w))).unwrap();
+    let exact = cleared_from_origin(&cleared, wrapper);
+    assert_eq!(exact.distance_ms, Some(0));
+    assert!(!exact.after, "a zero distance is not `after`: {exact:?}");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
