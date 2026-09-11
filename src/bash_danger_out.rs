@@ -19,13 +19,27 @@
 //!   clause carries no function definition and no `set --`;
 //! - the paren fixpoint replaces with a sentinel instead of a space;
 //! - a nested `sh -c '...'` / `eval` / backtick script is recursed into, depth 2.
+//!
+//! The nested recursion reads the script `iLo` @166795515 REBUILDS, never a slice
+//! of the clause: the shield has already replaced the script's separators, so the
+//! runs are reassembled and unmasked (@166795979) first, and the allowance the
+//! positional target form runs under is derived from the script's own tail
+//! (@166796336). One divergence in this neighbourhood is DECLINED, because it is
+//! nothing the nested port needs and nothing the contract asked for: `MIn`
+//! @166793250, the blanking mask the top-level function scan reads, decides a
+//! backslash with `RNe` and emits two blanks where it blanks an escape pair, while
+//! `mask` below treats every backslash outside a single quote as an escape and
+//! emits one character per character. It is recorded here so the next pass over
+//! this file starts from a known list rather than a rediscovery.
 
+use crate::bash_danger_lexical::{
+    amp_to_semicolon, escapes_next, mask, mask_specials, open_quote, paren_fixpoint,
+    resolve_dquote_escapes, strip_backticks, unmask, CLAUSE_SPLIT, ESCAPED_SPACE, KCT, REDIR_OP,
+    REDIR_START, VCT,
+};
 use regex::Regex;
 use std::sync::LazyLock;
 
-/// `Vct` @166791013 - the sentinel the paren fixpoint and the backtick strip
-/// substitute in.
-const VCT: char = '\u{E020}';
 /// `JNo` @166791437 - the nested-shell recursion cap.
 const NESTED_DEPTH: usize = 2;
 /// The per-clause cap on scanned `find -exec` occurrences.
@@ -101,6 +115,14 @@ const PREFIXES: &[&str] = &[
 /// `/^[A-Za-z_][A-Za-z0-9_]*\+?=/` - an assignment prefix.
 static ASSIGNMENT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*\+?=").expect("assignment"));
+/// @166796336 - a redirection and its operand, taken out of the nested script's
+/// tail before its remaining words are counted.
+static TAIL_REDIRECTION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|\s)[\d&]*(?:>>?[|&]?|<<?<?|<>|&>)(?:\S+|\s+\S+)").expect("tail_redirection")
+});
+/// @166796336 - the find terminator dropped from the end of that same tail.
+static TAIL_TERMINATOR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s*(?:\\;|\\|\+)\s*$").expect("tail_terminator"));
 
 /// What `out` returns.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,8 +188,8 @@ fn clause_pass(
         s = s[1..].trim_start().to_string();
     }
     s = paren_fixpoint(&s);
-    s = crate::bash_danger_lexical::amp_to_semicolon(&s);
-    for clause in crate::bash_danger_lexical::CLAUSE_SPLIT.split(&s) {
+    s = amp_to_semicolon(&s);
+    for clause in CLAUSE_SPLIT.split(&s) {
         let c = clause.trim_start_matches(|ch: char| ch.is_whitespace() || ch == VCT);
         let mut candidates: Vec<Invocation> = Vec::new();
         if let Some(inv) = token_walk(c) {
@@ -243,9 +265,9 @@ fn token_walk(clause: &str) -> Option<Invocation> {
             || p.starts_with(VCT)
         {
             r += 1;
-        } else if crate::bash_danger_lexical::REDIR_START.is_match(p) {
+        } else if REDIR_START.is_match(p) {
             r += 1;
-            if crate::bash_danger_lexical::REDIR_OP.is_match(p) {
+            if REDIR_OP.is_match(p) {
                 r += 1;
             }
         } else {
@@ -259,9 +281,9 @@ fn token_walk(clause: &str) -> Option<Invocation> {
             if verb_of(p).is_some() || is_prefix_command(p) {
                 break;
             }
-            if crate::bash_danger_lexical::REDIR_START.is_match(p) {
+            if REDIR_START.is_match(p) {
                 r += 1;
-                if crate::bash_danger_lexical::REDIR_OP.is_match(p) {
+                if REDIR_OP.is_match(p) {
                     r += 1;
                 }
                 continue;
@@ -343,8 +365,8 @@ fn operand_walk(inv: &Invocation, positional_ok: bool, in_dquote: bool) -> Optio
             p += 1;
             continue;
         }
-        if crate::bash_danger_lexical::REDIR_START.is_match(t) {
-            if crate::bash_danger_lexical::REDIR_OP.is_match(t) {
+        if REDIR_START.is_match(t) {
+            if REDIR_OP.is_match(t) {
                 p += 1;
             }
             p += 1;
@@ -361,207 +383,156 @@ fn operand_walk(inv: &Invocation, positional_ok: bool, in_dquote: bool) -> Optio
     None
 }
 
-/// `iLo` @166794... - recurse into a nested `sh -c '<script>'`.
-fn nested_shell(clause: &str, depth: usize, positional_ok: bool) -> Option<OutHit> {
+/// `iLo` @166795515 - recurse into a nested `sh -c '<script>'`.
+///
+/// The script is NOT a slice of the clause. `sLo` shielded every separator inside
+/// the quotes, so the clause carries stand-ins where the script's spaces were, and
+/// a slice handed to the walk arrives as one token. `iLo` rebuilds the script from
+/// its quoted and unquoted runs, resolves the double-quoted escapes, and UNMASKS
+/// the result (@166795979) before recursing.
+///
+/// The recursion's positional allowance is DERIVED (@166796336), not inherited:
+/// arguments after the script, or an `xargs` ahead of it, supply `$1`, so the
+/// positional form is not dangerous there. Only the double-quoted arm consults the
+/// caller's allowance at all.
+fn nested_shell(clause: &str, depth: usize, inherited_positional: bool) -> Option<OutHit> {
+    let chars: Vec<char> = clause.chars().collect();
+    let balanced = open_quote(&chars, chars.len()).is_none();
     for m in NESTED_SHELL.find_iter(clause) {
-        let quote = clause[m.start()..m.end()].chars().last()?;
-        let body_start = m.end();
-        let rest = &clause[body_start..];
-        let end = rest.find(quote).unwrap_or(rest.len());
-        let script = &rest[..end];
-        if script.is_empty() {
+        // A head that starts inside a quoted run of a balanced clause is text, not
+        // an invocation.
+        if balanced && open_quote(&chars, clause[..m.start()].chars().count()).is_some() {
             continue;
         }
-        if let Some(hit) = clause_pass(script, positional_ok, depth, true, quote == '"') {
-            return Some(hit);
+        let quote = clause[m.start()..m.end()].chars().last()?;
+        let (runs, end) = quoted_runs(&chars, clause[..m.end()].chars().count() - 1);
+        let script = unmask(&reassemble(&runs));
+        let tail: String = chars[end..].iter().collect();
+        let supplied = arguments_supplied(&tail, &clause[..m.start()]);
+        let (text, positional_ok) = if quote == '"' {
+            let t = if supplied {
+                script
+            } else {
+                script.replace(KCT, "$")
+            };
+            (t, inherited_positional || !supplied)
+        } else {
+            (strip_wrapping_quotes(&script), !supplied)
+        };
+        if let Some(hit) = clause_pass(&text, positional_ok, depth, true, quote == '"') {
+            return Some(OutHit {
+                command: hit.command,
+                target: hit.target.replace(KCT, "\\$"),
+            });
         }
     }
     None
 }
 
-/// `ANe` @166794... - the characters `sLo` shields inside quotes, in its order.
-const SPECIALS: &[char] = &[';', '|', '&', '\n', '\r', '(', ')', '`', ' ', '\t'];
-/// `Wfe` @166794... - the first private-use code point the shield maps onto.
-const SHIELD_BASE: u32 = 57345;
-
-/// `sLo` - replace each special character INSIDE a quoted run with a private-use
-/// stand-in, so the clause split cannot cut a quoted string apart.
-fn mask_specials(s: &str) -> String {
-    if !s.contains('"') && !s.contains('\'') {
-        return s.to_string();
-    }
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len());
+/// The run split `iLo` reads the script token as: unquoted and quoted runs in
+/// order, starting ON the opening quote and ending at the first unquoted
+/// whitespace. Returns the runs and the index the walk stopped at.
+fn quoted_runs(chars: &[char], start: usize) -> (Vec<(Option<char>, String)>, usize) {
+    let mut runs: Vec<(Option<char>, String)> = Vec::new();
+    let mut cur = String::new();
     let mut quote: Option<char> = None;
-    let mut i = 0usize;
+    let mut i = start;
     while i < chars.len() {
         let c = chars[i];
-        if c == '\\' && quote != Some('\'') && i + 1 < chars.len() {
-            out.push(c);
-            out.push(chars[i + 1]);
+        if c == '\\' && escapes_next(chars, i, quote) {
+            cur.push(c);
+            if let Some(n) = chars.get(i + 1) {
+                cur.push(*n);
+            }
             i += 2;
             continue;
         }
-        match quote {
-            None => {
-                if c == '"' || c == '\'' {
-                    quote = Some(c);
+        if quote.is_none() {
+            if c.is_whitespace() {
+                break;
+            }
+            if c == '"' || c == '\'' {
+                if !cur.is_empty() {
+                    runs.push((None, std::mem::take(&mut cur)));
                 }
-                out.push(c);
+                quote = Some(c);
+                i += 1;
+                continue;
             }
-            Some(q) if c == q => {
-                quote = None;
-                out.push(c);
-            }
-            Some(_) => match SPECIALS.iter().position(|s| *s == c) {
-                Some(k) => out.push(shield(k)),
-                None => out.push(c),
-            },
+        } else if Some(c) == quote {
+            runs.push((quote, std::mem::take(&mut cur)));
+            quote = None;
+            i += 1;
+            continue;
         }
+        cur.push(c);
         i += 1;
     }
-    out
+    if !cur.is_empty() {
+        runs.push((quote, cur));
+    }
+    (runs, i)
 }
 
-fn shield(k: usize) -> char {
-    char::from_u32(SHIELD_BASE + k as u32).unwrap_or('\u{E001}')
-}
-
-/// `sut` - undo the shield.
-fn unmask(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            let v = c as u32;
-            if v >= SHIELD_BASE && v < SHIELD_BASE + SPECIALS.len() as u32 {
-                SPECIALS[(v - SHIELD_BASE) as usize]
-            } else {
-                c
-            }
+/// The runs joined back into one script @166795979: a double-quoted run resolves
+/// its escapes, a single-quoted run keeps its quotes, an unquoted run is verbatim.
+fn reassemble(runs: &[(Option<char>, String)]) -> String {
+    runs.iter()
+        .map(|(q, text)| match q {
+            Some('"') => resolve_dquote_escapes(text),
+            Some('\'') => format!("'{text}'"),
+            _ => text.clone(),
         })
         .collect()
 }
 
-/// `MIn` - blank out quoted runs (and comments) so a scan cannot read inside them.
-fn mask(s: &str, blank: bool) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len());
-    let mut quote: Option<char> = None;
-    let mut comment = false;
-    let mut i = 0usize;
-    while i < chars.len() {
-        let c = chars[i];
-        if comment {
-            if c == '\n' {
-                comment = false;
-                out.push(c);
-            } else {
-                out.push(' ');
-            }
-            i += 1;
-            continue;
-        }
-        if quote.is_none() {
-            if c == '\\' {
-                out.push(c);
-                if let Some(n) = chars.get(i + 1) {
-                    out.push(*n);
-                }
-                i += 2;
-                continue;
-            }
-            if c == '#'
-                && (i == 0
-                    || matches!(
-                        chars[i - 1],
-                        ' ' | '\t' | '\n' | '\r' | ';' | '&' | '|' | '(' | ')'
-                    ))
-            {
-                comment = true;
-                out.push(' ');
-                i += 1;
-                continue;
-            }
-            if c == '"' || c == '\'' {
-                quote = Some(c);
-            }
-            out.push(c);
-            i += 1;
-            continue;
-        }
-        if Some(c) == quote {
-            quote = None;
-            out.push(c);
-            i += 1;
-            continue;
-        }
-        out.push(if blank { ' ' } else { c });
-        i += 1;
+/// `replace(/^'([\s\S]*)'$/,"$1")` - the single-quoted arm undoes the quotes the
+/// reassembly put back.
+fn strip_wrapping_quotes(s: &str) -> String {
+    let b = s.as_bytes();
+    if b.len() >= 2 && b[0] == b'\'' && b[b.len() - 1] == b'\'' {
+        return s[1..s.len() - 1].to_string();
     }
-    out
+    s.to_string()
 }
 
-/// The backtick strip, which at this generation substitutes the sentinel rather
-/// than a space: `` replace(/(?<!\\)`[^`]*`/g,Vct) ``.
-fn strip_backticks(s: &str) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] == '\\' && i + 1 < chars.len() {
-            out.push(chars[i]);
-            out.push(chars[i + 1]);
-            i += 2;
+/// @166796336 - does anything supply the nested script's positional parameters?
+/// Either the words after it, once a redirection and a find terminator are taken
+/// out, come to two or more; or an `xargs` ahead of it will append them.
+fn arguments_supplied(tail: &str, before: &str) -> bool {
+    let t = tail.replace("\\ ", ESCAPED_SPACE);
+    let t = TAIL_REDIRECTION.replace_all(&t, " ");
+    let t = TAIL_TERMINATOR.replace(&t, "");
+    t.split_whitespace().count() >= 2 || xargs_appends(before)
+}
+
+/// `/(?:^|\s)xargs(?:\s+(?!-[In]\b)\S+)*\s*$/` - the text before the nested shell
+/// ends with an `xargs` whose remaining words are neither `-I` nor `-n`.
+fn xargs_appends(before: &str) -> bool {
+    for (i, _) in before.match_indices("xargs") {
+        if i > 0 && !before[..i].ends_with(char::is_whitespace) {
             continue;
         }
-        if chars[i] == '`' {
-            if let Some(end) = chars[i + 1..].iter().position(|c| *c == '`') {
-                out.push(VCT);
-                i += end + 2;
-                continue;
-            }
+        let rest = &before[i + "xargs".len()..];
+        if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+            continue;
         }
-        out.push(chars[i]);
-        i += 1;
+        if !rest.split_whitespace().any(holds_xargs_arguments) {
+            return true;
+        }
     }
-    out
+    false
 }
 
-/// The paren fixpoint with the tightened lookbehinds:
-/// `_.replace(/\$\([^()]*\)/g,Vct).replace(/(?<![$\\])\([^()]*(?<!\\)\)/g,Vct)`.
-fn paren_fixpoint(s: &str) -> String {
-    let mut cur = s.to_string();
-    loop {
-        let prev = cur.clone();
-        cur = crate::bash_danger_lexical::DOLLAR_PAREN
-            .replace_all(&cur, VCT.to_string().as_str())
-            .into_owned();
-        cur = replace_plain_parens(&cur);
-        if cur == prev {
-            return cur;
-        }
-    }
-}
-
-fn replace_plain_parens(s: &str) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] == '(' && !(i > 0 && (chars[i - 1] == '$' || chars[i - 1] == '\\')) {
-            let mut j = i + 1;
-            while j < chars.len() && chars[j] != '(' && chars[j] != ')' {
-                j += 1;
-            }
-            if j < chars.len() && chars[j] == ')' && chars[j - 1] != '\\' {
-                out.push(VCT);
-                i = j + 1;
-                continue;
-            }
-        }
-        out.push(chars[i]);
-        i += 1;
-    }
-    out
+/// `-I` or `-n` at a word boundary: the two options that stop xargs appending.
+fn holds_xargs_arguments(token: &str) -> bool {
+    let Some(rest) = token
+        .strip_prefix("-I")
+        .or_else(|| token.strip_prefix("-n"))
+    else {
+        return false;
+    };
+    !rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
 }
 
 #[cfg(test)]

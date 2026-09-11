@@ -1,7 +1,9 @@
-//! The LEXICAL classifier of Claude Code generations 1 and 2 - `hnt` at 2.1.258
-//! @162773520, byte-identical at 2.1.142 @192802095, 2.1.193 @205414799 (where it
-//! is named `Ywa`) and 2.1.207 @219697578, and GONE from 2.1.261 on (the rewrite
-//! lives in `bash_danger_out`).
+//! The LEXICAL classifier of Claude Code generations 1 and 2, and the TEXT LAYER
+//! every generation's classifier runs its input through.
+//!
+//! The classifier is `hnt` at 2.1.258 @162773520, byte-identical at 2.1.142
+//! @192802095, 2.1.193 @205414799 (where it is named `Ywa`) and 2.1.207
+//! @219697578, and GONE from 2.1.261 on (the rewrite lives in `bash_danger_out`).
 //!
 //! It runs on the TOO-COMPLEX arm only (`Hno` @162867544 calls `$no` @162861871,
 //! which calls this). It is purely lexical: it never checks whether the variable is
@@ -11,6 +13,13 @@
 //! module-level named ones defined immediately above it at @162773345. Two of the
 //! eleven need lookaround the `regex` crate has not got (`(?<!\$)\(...\)` and the
 //! lone-`&` rule), so those two are hand-ported byte scans.
+//!
+//! Below the classifier sit the transforms it and the generation-3 walk share:
+//! the substitution strips, the two masks and the private-use stand-in alphabet
+//! the masks map onto. Each generation has its own spelling of several of them -
+//! generation 1 and 2 blank a paren group to a space, generation 3 to a sentinel -
+//! so the pairs live side by side here rather than one calling the other. Offsets
+//! on the generation-3 half are into the 2.1.268 build; the rest are into 2.1.258.
 
 use regex::Regex;
 use std::sync::LazyLock;
@@ -163,6 +172,323 @@ pub(crate) fn remove_plain_groups(s: &str) -> String {
         last = m.end();
     }
     out.push_str(&s[last..]);
+    out
+}
+
+// ---------------------------------------------------------------------------
+// The generation-3 text layer: the stand-in alphabet, the quote-state primitives
+// the harness reads a backslash with, and the transforms `out` runs before its
+// token walk sees a clause.
+// ---------------------------------------------------------------------------
+
+/// `Vct` @166791013 - the sentinel the paren fixpoint and the backtick strip
+/// substitute in.
+pub(crate) const VCT: char = '\u{E020}';
+/// `Kct` @166795502 - the stand-in a double-quoted nested script's escaped `$`
+/// leaves behind, so a literal `$1` cannot read as a positional parameter.
+pub(crate) const KCT: char = '\u{E010}';
+/// @166796336 - the stand-in for a backslash-escaped space, so the tail that
+/// decides a nested script's positional allowance does not count one operand as
+/// two.
+pub(crate) const ESCAPED_SPACE: &str = "\u{E022}";
+/// `ANe` @166794789 - the characters `sLo` shields inside quotes, in its order.
+const SPECIALS: &[char] = &[';', '|', '&', '\n', '\r', '(', ')', '`', ' ', '\t'];
+/// `Wfe` @166794789 - the first private-use code point the shield maps onto.
+const SHIELD_BASE: u32 = 57345;
+
+/// `RNe` @166796663 - does the backslash at `i` escape the next character? Never
+/// inside a single quote, always outside quotes, and inside a double quote only
+/// before one of the four characters bash lets it escape there.
+pub(crate) fn escapes_next(chars: &[char], i: usize, quote: Option<char>) -> bool {
+    match quote {
+        Some('\'') => false,
+        None => true,
+        Some(_) => matches!(chars.get(i + 1), Some('"' | '\\' | '$' | '`')),
+    }
+}
+
+/// `Qct` @166796780 - the quote still open after the first `n` characters, or
+/// `None` when every quote in that prefix is closed.
+pub(crate) fn open_quote(chars: &[char], n: usize) -> Option<char> {
+    let mut quote: Option<char> = None;
+    let mut i = 0usize;
+    while i < n {
+        let c = chars[i];
+        if c == '\\' && escapes_next(chars, i, quote) {
+            i += 2;
+            continue;
+        }
+        match quote {
+            None if c == '"' || c == '\'' => quote = Some(c),
+            Some(q) if c == q => quote = None,
+            _ => {}
+        }
+        i += 1;
+    }
+    quote
+}
+
+/// `/\\[ \t]/` - a backslash-escaped space or tab, which the `sLo` guard admits
+/// even in a command carrying no quote at all. Both bytes are ASCII and neither
+/// occurs inside a UTF-8 multibyte sequence, so a byte scan cannot misread one.
+fn has_escaped_blank(s: &str) -> bool {
+    s.as_bytes()
+        .windows(2)
+        .any(|w| w[0] == b'\\' && (w[1] == b' ' || w[1] == b'\t'))
+}
+
+/// `sLo` @166794908 - replace each special character INSIDE a quoted run with a
+/// private-use stand-in, so the clause split cannot cut a quoted string apart. An
+/// escaped space or tab OUTSIDE quotes is shielded too, which is why the guard
+/// admits a quoteless command carrying one; an UNBALANCED quote bails the whole
+/// pass, because the shield cannot know where the run ends.
+pub(crate) fn mask_specials(s: &str) -> String {
+    if !s.contains('"') && !s.contains('\'') && !has_escaped_blank(s) {
+        return s.to_string();
+    }
+    let chars: Vec<char> = s.chars().collect();
+    if open_quote(&chars, chars.len()).is_some() {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut quote: Option<char> = None;
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\\' && escapes_next(&chars, i, quote) {
+            out.push(c);
+            if let Some(n) = chars.get(i + 1).copied() {
+                match SPECIALS.iter().position(|s| *s == n) {
+                    Some(k) if quote.is_none() && (n == ' ' || n == '\t') => out.push(shield(k)),
+                    _ => out.push(n),
+                }
+            }
+            i += 2;
+            continue;
+        }
+        match quote {
+            None => {
+                if c == '"' || c == '\'' {
+                    quote = Some(c);
+                }
+                out.push(c);
+            }
+            Some(q) if c == q => {
+                quote = None;
+                out.push(c);
+            }
+            Some(_) => match SPECIALS.iter().position(|s| *s == c) {
+                Some(k) => out.push(shield(k)),
+                None => out.push(c),
+            },
+        }
+        i += 1;
+    }
+    out
+}
+
+pub(crate) fn shield(k: usize) -> char {
+    char::from_u32(SHIELD_BASE + k as u32).unwrap_or('\u{E001}')
+}
+
+/// `sut` @166795380 - undo the shield.
+pub(crate) fn unmask(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            let v = c as u32;
+            if v >= SHIELD_BASE && v < SHIELD_BASE + SPECIALS.len() as u32 {
+                SPECIALS[(v - SHIELD_BASE) as usize]
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+/// The three replaces a double-quoted nested script's run goes through
+/// @166795979. `\"`, `\\` and `` \` `` lose their backslash; `\$` becomes `KCT`,
+/// except that a `KCT` naming a variable is restored to `$`. Those two fuse into
+/// one walk: nothing the first replace emits is a letter, `_` or `{`, so the
+/// character after a `\$` decides the same way before and after it. The third
+/// replace then drops a backslash run standing directly before a `$`.
+pub(crate) fn resolve_dquote_escapes(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '\\' {
+            match chars.get(i + 1) {
+                Some('$') => {
+                    let named = names_a_variable(&chars, i + 2);
+                    out.push(if named { '$' } else { KCT });
+                    i += 2;
+                    continue;
+                }
+                Some(c @ ('"' | '\\' | '`')) => {
+                    out.push(*c);
+                    i += 2;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    drop_backslashes_before_dollar(&out)
+}
+
+/// `(?=[A-Za-z_]|\{[A-Za-z_])` - what must follow a `$` for it to name a variable.
+fn names_a_variable(chars: &[char], i: usize) -> bool {
+    let ident = |c: Option<&char>| matches!(c, Some(c) if c.is_ascii_alphabetic() || *c == '_');
+    ident(chars.get(i)) || (chars.get(i) == Some(&'{') && ident(chars.get(i + 1)))
+}
+
+/// `replace(/\\+(?=\$)/g,"")`. The run is maximal and every character in it is a
+/// backslash, so a shorter match could never be followed by the `$` either.
+fn drop_backslashes_before_dollar(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '\\' {
+            let mut j = i;
+            while chars.get(j) == Some(&'\\') {
+                j += 1;
+            }
+            if chars.get(j) != Some(&'$') {
+                out.extend(chars[i..j].iter());
+            }
+            i = j;
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// `MIn` @166793250 - blank out quoted runs (and comments) so a scan cannot read
+/// inside them.
+pub(crate) fn mask(s: &str, blank: bool) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut quote: Option<char> = None;
+    let mut comment = false;
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if comment {
+            if c == '\n' {
+                comment = false;
+                out.push(c);
+            } else {
+                out.push(' ');
+            }
+            i += 1;
+            continue;
+        }
+        if quote.is_none() {
+            if c == '\\' {
+                out.push(c);
+                if let Some(n) = chars.get(i + 1) {
+                    out.push(*n);
+                }
+                i += 2;
+                continue;
+            }
+            if c == '#'
+                && (i == 0
+                    || matches!(
+                        chars[i - 1],
+                        ' ' | '\t' | '\n' | '\r' | ';' | '&' | '|' | '(' | ')'
+                    ))
+            {
+                comment = true;
+                out.push(' ');
+                i += 1;
+                continue;
+            }
+            if c == '"' || c == '\'' {
+                quote = Some(c);
+            }
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        if Some(c) == quote {
+            quote = None;
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        out.push(if blank { ' ' } else { c });
+        i += 1;
+    }
+    out
+}
+
+/// The generation-3 backtick strip, which substitutes the sentinel rather than a
+/// space: `` replace(/(?<!\\)`[^`]*`/g,Vct) ``.
+pub(crate) fn strip_backticks(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '\\' && i + 1 < chars.len() {
+            out.push(chars[i]);
+            out.push(chars[i + 1]);
+            i += 2;
+            continue;
+        }
+        if chars[i] == '`' {
+            if let Some(end) = chars[i + 1..].iter().position(|c| *c == '`') {
+                out.push(VCT);
+                i += end + 2;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// The generation-3 paren fixpoint, with the tightened lookbehinds:
+/// `_.replace(/\$\([^()]*\)/g,Vct).replace(/(?<![$\\])\([^()]*(?<!\\)\)/g,Vct)`.
+pub(crate) fn paren_fixpoint(s: &str) -> String {
+    let mut cur = s.to_string();
+    loop {
+        let prev = cur.clone();
+        cur = DOLLAR_PAREN
+            .replace_all(&cur, VCT.to_string().as_str())
+            .into_owned();
+        cur = replace_plain_parens(&cur);
+        if cur == prev {
+            return cur;
+        }
+    }
+}
+
+pub(crate) fn replace_plain_parens(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '(' && !(i > 0 && (chars[i - 1] == '$' || chars[i - 1] == '\\')) {
+            let mut j = i + 1;
+            while j < chars.len() && chars[j] != '(' && chars[j] != ')' {
+                j += 1;
+            }
+            if j < chars.len() && chars[j] == ')' && chars[j - 1] != '\\' {
+                out.push(VCT);
+                i = j + 1;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
     out
 }
 

@@ -77,7 +77,15 @@ surface change bumps the PATCH.
   the generation's chain (`< 2.1.208`, `2.1.208..=2.1.260`, `>= 2.1.261`), and reports every
   arm's reason tail verbatim. Over 162,118 distinct Bash commands in a local corpus, 12 lanes
   flip: 8 up to `escalation-blocked`, 4 down to `awaiting-execution` (all four the removed
-  keyword false positive). No other command's output changes.
+  keyword false positive). No other command's output changes. The newest generation's walk
+  also recurses into a nested `sh -c` script, and it reads that script REBUILT rather than
+  sliced out of the clause: the quote shield has already replaced the script's own spaces, so
+  a slice arrives at the walk as one word and the removal verb is never reached. The script is
+  reassembled from its quoted and unquoted runs and unmasked first, an escaped `$` inside a
+  double-quoted run is kept out of the target test unless it names a variable, and whether the
+  positional form applies is derived from what follows the script or from an `xargs` ahead of
+  it. A too-complex head carrying a nested removal - `if true; then sh -c 'rm -rf $D/*'; fi` -
+  now reads as the ask the harness makes.
 - **An arm csift cannot decide now says so instead of guessing.** The structured checker
   resolves the operand against the shell cwd, realpaths both, and compares against the
   working-directory set; a transcript carries none of that. Those two arms answer

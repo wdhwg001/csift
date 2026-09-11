@@ -8457,7 +8457,7 @@
         },
         {
           "path": "src/bash_danger_lexical.rs",
-          "lines": "69-73",
+          "lines": "78-82",
           "snippet": "/// `hnt(command)` - the first dangerous `rm`/`rmdir` removal, or `None`.\n///\n/// csift's one standing deviation: the harness splits statements with tree-sitter\n/// (`ep` @162265300); csift processes the whole string as ONE statement, which is\n/// `ep`'s own documented fallback for unparseable or over-long input."
         }
       ],
@@ -8573,12 +8573,12 @@
       "code": [
         {
           "path": "src/bash_danger_lexical.rs",
-          "lines": "23-26",
+          "lines": "32-35",
           "snippet": "static CLAUSE_HEAD: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r\"^(?:[A-Za-z_][A-Za-z0-9_]*\\+?=[^\\s]*\\s+)*\\\\?(?:[^\\s=]*/)?(rm|rmdir)(?:\\s|$)\")\n        .expect(\"_to\")\n});"
         },
         {
           "path": "src/bash_danger_lexical.rs",
-          "lines": "30-33",
+          "lines": "39-42",
           "snippet": "static TARGET: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r#\"^\"?\\$(?:\\{[A-Za-z_][A-Za-z0-9_]*\\}|[A-Za-z_][A-Za-z0-9_]*)\"?/(?:\\*|\\$|/|[\"']|$)\"#)\n        .expect(\"yto\")\n});"
         }
       ],
@@ -8674,7 +8674,7 @@
       "code": [
         {
           "path": "src/bash_danger_lexical.rs",
-          "lines": "135-146",
+          "lines": "144-155",
           "snippet": "pub(crate) fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
         },
         {
@@ -77389,7 +77389,7 @@
         },
         {
           "path": "src/bash_danger_lexical.rs",
-          "lines": "135-146",
+          "lines": "144-155",
           "snippet": "pub(crate) fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
         }
       ],
@@ -91064,18 +91064,23 @@
     {
       "id": "BASH-038",
       "area": "bash-shell",
-      "behavior": "At 2.1.261 the LEXICAL classifier is replaced. The new one folds case on the rm guard, strips private-use sentinels from the input, and drops the clause-head regex for a TOKEN WALK that skips shell keywords (do, then, else, elif, if, while, until, !, {, coproc), assignments, `$`-led words, redirections and a seventeen-name prefix set (sudo, doas, exec, command, env, nice, nohup, busybox, time, timeout, stdbuf, setsid, ionice, pkexec, runuser, eval, xargs) - so `do rm`, `then rm`, `sudo rm` and `xargs rm` all reach the target test. It scans `find -exec`/`-ok`/`-execdir`/`-okdir` at most eight times per clause, widens the target regex (the post-slash set gains `?`, `[` and `{`, a `${VAR:-default}` form is accepted and a backslash may precede the slash), adds a positional/special-parameter target form gated on the clause carrying no function definition and no `set --`, replaces the paren fixpoint's space with a sentinel, and recurses into a nested `sh -c` script to depth 2. The census, the factory and the >64 threshold are unchanged. The structured checker's prefix peel is NOT widened: it is the same seven names at 2.1.268, so `xargs rm` on a cleanly parsed pipeline is still not a removal.",
-      "depends": "csift keys the classifier on the `version` stamped on the record, so a lane recorded by a 2.1.261-or-later build is predicted by the rewritten classifier and an older lane by the old one. Running one generation's classifier over the other's transcript mispredicts in both directions, and the false positives the old port hand-patched are exactly what the token walk made real.",
+      "behavior": "At 2.1.261 the LEXICAL classifier is replaced. The new one folds case on the rm guard, strips private-use sentinels from the input, and drops the clause-head regex for a TOKEN WALK that skips shell keywords (do, then, else, elif, if, while, until, !, {, coproc), assignments, `$`-led words, redirections and a seventeen-name prefix set (sudo, doas, exec, command, env, nice, nohup, busybox, time, timeout, stdbuf, setsid, ionice, pkexec, runuser, eval, xargs) - so `do rm`, `then rm`, `sudo rm` and `xargs rm` all reach the target test. It scans `find -exec`/`-ok`/`-execdir`/`-okdir` at most eight times per clause, widens the target regex (the post-slash set gains `?`, `[` and `{`, a `${VAR:-default}` form is accepted and a backslash may precede the slash), adds a positional/special-parameter target form gated on the clause carrying no function definition and no `set --`, replaces the paren fixpoint's space with a sentinel, and recurses into a nested `sh -c` script to depth 2. The census, the factory and the >64 threshold are unchanged. The structured checker's prefix peel is NOT widened: it is the same seven names at 2.1.268, so `xargs rm` on a cleanly parsed pipeline is still not a removal. The nested recursion does not read a SLICE of the clause. The shield `sLo` has already replaced every separator inside a quoted run with a private-use stand-in, so `iLo` rebuilds the script from its quoted and unquoted runs, ending at the first UNQUOTED whitespace rather than at the first closing quote, and passes it through `sut`, the inverse of the shield, before recursing. A double-quoted run first resolves its escapes: `\\\"`, `\\\\` and an escaped backtick lose their backslash, `\\$` becomes the stand-in `\\uE010` unless it names a variable, in which case it is restored to `$`, and a backslash run standing before a live `$` is dropped. The allowance the positional target form runs under is DERIVED there, not inherited: it is off when two or more words follow the script once a redirection with its operand and a trailing find terminator are taken out, or when an `xargs` carrying neither `-I` nor `-n` at a word boundary stands ahead of it, and only the double-quoted arm consults the caller's allowance at all. A reported target writes the stand-in back as `\\$`. The shield itself guards on three tests, not two: neither quote AND no backslash-escaped space or tab takes the fast path. It BAILS, returning its input untouched, when the quotes are unbalanced, decides a backslash with `RNe` (never an escape inside a single quote, always one outside quotes, and inside a double quote only before `\"`, `\\`, `$` or a backtick), and shields a backslash-escaped space or tab OUTSIDE quotes so the operand it joins stays one word.",
+      "depends": "csift keys the classifier on the `version` stamped on the record, so a lane recorded by a 2.1.261-or-later build is predicted by the rewritten classifier and an older lane by the old one. Running one generation's classifier over the other's transcript mispredicts in both directions, and the false positives the old port hand-patched are exactly what the token walk made real. The nested arm is where a slice would be wrong rather than merely coarse: handed the masked clause, the token walk sees one word carrying no whitespace, never reaches the removal verb, and a too-complex head carrying a nested removal reads as a passthrough where the harness asks. csift therefore rebuilds and unmasks the script exactly as `iLo` does, derives the positional allowance from the same tail, and ports the shield's guard, bail and outside-quote escape.",
       "code": [
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "114",
+          "lines": "136",
           "snippet": "pub(crate) fn out(command: &str) -> Option<OutHit> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "232",
+          "lines": "254",
           "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
+        },
+        {
+          "path": "src/bash_danger_out.rs",
+          "lines": "398",
+          "snippet": "fn nested_shell(clause: &str, depth: usize, inherited_positional: bool) -> Option<OutHit> {"
         },
         {
           "path": "src/bash_danger.rs",
@@ -91136,6 +91141,36 @@
           "name": "the nested-shell recursion cap",
           "excerpt": "JNo=2",
           "note": "the depth cap on recursion into a nested shell script, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "gate",
+          "name": "sLo",
+          "excerpt": "function sLo(e){if(!e.includes('\"')&&!e.includes(\"'\")&&!/\\\\[ \\t]/.test(e))return e;if(Qct(e,e.length)!==null)return e;",
+          "note": "the shield's three-test guard and its unbalanced-quote bail, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "writer",
+          "name": "sut",
+          "excerpt": "function sut(e){return e.replace(oLo,(n)=>ANe[n.charCodeAt(0)-Wfe])}",
+          "note": "the inverse of the shield, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "writer",
+          "name": "iLo reassembly",
+          "excerpt": "let L=sut(P.map((me)=>me.q==='\"'?me.text.replace(/\\\\([\"\\\\$`])/g,(_e,be)=>be===\"$\"?Kct:be)",
+          "note": "the nested script rebuilt from its runs and unmasked before the walk reads it, with the escaped-dollar stand-in, quoted from the 2.1.268 build; the map continues past the excerpt"
+        },
+        {
+          "role": "gate",
+          "name": "iLo positional allowance",
+          "excerpt": "U=F!==\"\"&&F.split(/\\s+/).length>=2||/(?:^|\\s)xargs(?:\\s+(?!-[In]\\b)\\S+)*\\s*$/.test(e.slice(0,d.index))",
+          "note": "what decides whether the nested script's positional parameters are supplied, quoted from the 2.1.268 build"
+        },
+        {
+          "role": "writer",
+          "name": "the recursion call",
+          "excerpt": "let pe=Xct(V,oe,r,!0,p==='\"');if(pe!==null)return{command:pe.command,target:pe.target.replaceAll(Kct,\"\\\\$\")}",
+          "note": "the rebuilt script handed back to the clause pass, and the stand-in written back into the reported target, quoted from the 2.1.268 build"
         }
       ],
       "writer_literal_floor": {
@@ -91154,6 +91189,16 @@
           "observed": "The literal is absent through 2.1.260 and present twice in each of 2.1.261, .263, .266, .267 and .268. The old head regex's literal stops at exactly the same boundary. The structured prefix peel names the same seven commands in both builds, so the seventeen-name set belongs to the lexical walk alone.",
           "rule": "raw byte occurrences per build file; set membership compared name by name",
           "note": "Lands with the generational port. The tracer's summary said the rewrite fixes `xargs rm` and `find -exec rm` outright; re-reading the structured path in 2.1.268 shows it fixes them only where the command's parse is too complex, which is what the claim now says."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Read `sLo`, `sut`, `iLo` and the `Xct` call that reaches `iLo` in the 2.1.268 build at their byte offsets, and re-read `RNe` and `Qct`, the two helpers both of them decide a backslash and a quote state with. Counting rule: occurrences of each function name in the whole build file, each read; the offsets are 166794908, 166795380, 166795515, 166794394, 166796663 and 166796780.",
+          "observed": "`iLo` occurs three times: its definition, the single call from `Xct`, and one unrelated accessor of the same minified name elsewhere in the build. `Xct` reaches it as `iLo(C,r===0||n,r+1)`, and `iLo` recurses as `Xct(V,oe,r,!0,p==='\"')` with `oe` computed from the script's own tail rather than from the incoming allowance on the single-quoted arm. The script handed to that call is rebuilt from the runs `iLo` splits the token into and passed through `sut`; it is never a slice of the clause. `sLo` guards on `!e.includes('\"')&&!e.includes(\"'\")&&!/\\\\[ \\t]/.test(e)`, bails on `Qct(e,e.length)!==null`, and shields a backslash-escaped space or tab only when the quote state is null.",
+          "rule": "one occurrence per byte offset of the function name in the build file, each read whole",
+          "note": "The claim said the rewrite recurses into a nested script and stopped there. It now states what the recursion reads, which is a rebuilt and unmasked script, and the shield and allowance rules the rebuild rests on. csift's port matched the depth cap and the recursion's second argument and nothing else of this: it sliced the masked clause, so the walk received one token and the two nested return paths were unreachable."
         }
       ]
     },

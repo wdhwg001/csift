@@ -11,6 +11,15 @@
 //! files rather than a directory (see the note in `main.rs`).
 
 use super::*;
+use crate::bash_danger::{classify, Checker, Decision, Generation};
+use crate::bash_danger_lexical::{replace_plain_parens, shield};
+
+/// The generation-3 decision for one command, with the checker that made it.
+fn gen3(command: &str) -> (Decision, Checker) {
+    let v = classify(command, Some("2.1.268"));
+    assert_eq!(v.generation, Generation::Gen3, "{command:?}");
+    (v.decision, v.checker)
+}
 
 /// The verb `token_walk` reached, if it reached one.
 fn walk_verb(clause: &str) -> Option<&'static str> {
@@ -153,10 +162,32 @@ fn the_special_mask_shields_a_special_only_inside_a_quote() {
     // Outside the quotes the same characters are untouched.
     assert_eq!(mask_specials("a;b 'x'"), "a;b 'x'");
     // A backslash escape is copied whole, so an escaped quote opens no span.
-    assert_eq!(mask_specials("echo \\' a;b '"), "echo \\' a;b '");
+    assert_eq!(mask_specials("echo \\' a;b"), "echo \\' a;b");
     // Only the shield range is mapped back; another private-use character is not.
     assert_eq!(shield(0), '\u{e001}');
     assert_eq!(unmask("x\u{e020}"), "x\u{e020}");
+}
+
+#[test]
+fn the_special_mask_shields_an_escaped_blank_and_bails_on_an_open_quote() {
+    // The guard admits a command carrying no quote at all when it carries a
+    // backslash-escaped blank, which is shielded OUTSIDE the quotes so the operand
+    // stays one word. The backslash itself is kept.
+    assert_eq!(mask_specials("rm -rf a\\ b"), "rm -rf a\\\u{e009}b");
+    assert_eq!(mask_specials("rm -rf a\\\tb"), "rm -rf a\\\u{e00a}b");
+    // Inside a double quote the same escape is not an escape at all: a backslash
+    // there only escapes `"`, `\`, `$` and a backtick, so the blank is shielded as
+    // an ordinary quoted special and the backslash stands on its own.
+    assert_eq!(mask_specials("echo \"a\\ b\""), "echo \"a\\\u{e009}b\"");
+    // Inside a SINGLE quote a backslash escapes nothing at all, so it is copied as
+    // an ordinary character and the special beside it is still shielded.
+    assert_eq!(mask_specials("echo 'a\\;b'"), "echo 'a\\\u{e001}b'");
+    // A trailing backslash has nothing to carry and is copied alone.
+    assert_eq!(mask_specials("echo 'x' \\"), "echo 'x' \\");
+    // An UNBALANCED quote bails the whole pass: the shield cannot know where the
+    // run ends, so nothing is shielded and the clause split reads the raw text.
+    assert_eq!(mask_specials("echo 'a;b"), "echo 'a;b");
+    assert_eq!(mask_specials("echo \\' a;b '"), "echo \\' a;b '");
 }
 
 #[test]
@@ -266,9 +297,13 @@ fn the_operand_walk_skips_flags_a_quote_opener_and_redirections() {
 #[test]
 fn the_raw_second_pass_reads_what_the_masked_first_pass_hid() {
     // `out` runs a quote-aware pass and then a raw one. Here the first pass
-    // shields the space inside the unclosed quote, so `rm` gets one unmatched
-    // word; the raw pass splits them, and the operand walk then skips the word
-    // that opens a single quote and ends on `$`.
+    // shields the space after the slash, so the target token ends on a stand-in
+    // the target regex does not accept there; the raw pass splits the word at the
+    // space and the shorter token matches on end-of-string.
+    assert_eq!(out("rm \"$D/ x\"").map(|h| h.target), tgt("\"$D/"));
+    // An unclosed quote bails the shield, so the first pass already reads the raw
+    // text; the operand walk then skips the word that opens a single quote and
+    // ends on `$`.
     assert_eq!(out("rm '$ $D/*").map(|h| h.target), tgt("$D/*"));
     // A command neither pass can resolve returns nothing from both.
     assert!(out("rm $X").is_none());
@@ -300,14 +335,180 @@ fn the_find_scan_stops_after_eight_exec_occurrences_in_one_clause() {
 }
 
 #[test]
-fn a_nested_shell_script_is_read_off_the_masked_clause() {
-    // `ZNo` matches the `sh -c '` head and the script is what follows up to the
-    // matching quote. An EMPTY script is skipped rather than walked.
+fn a_nested_shell_script_is_rebuilt_and_unmasked_before_the_walk() {
+    // The clause the recursion reads has been through the special mask, which
+    // turned every space inside the quotes into a stand-in. The script is
+    // REASSEMBLED from its runs and unmasked, so the token walk sees words again.
+    assert_eq!(out("sh -c 'rm -rf $D/*'").map(|h| h.target), tgt("$D/*"));
+    // Adjacent runs are ONE script: the walk ends at the first unquoted space, not
+    // at the first closing quote, so the quotes the reassembly keeps ride along.
+    assert_eq!(
+        out("sh -c 'rm -rf '\"$D\"'/*'").map(|h| h.target),
+        tgt("'$D'/*")
+    );
+    // An UNQUOTED run between two quoted ones is a run of its own.
+    assert_eq!(
+        out("sh -c 'rm -rf '$D'/*'").map(|h| h.target),
+        tgt("'$D'/*")
+    );
+    // An empty leading run leaves a word the walk cannot read as a verb.
     assert!(out("sh -c ''rm -rf $D/*'").is_none());
-    // The clause the recursion reads has already been through the special mask,
-    // which turns every space inside the quotes into a stand-in - so a
-    // space-separated script arrives at the token walk as ONE word and no target
-    // is found in it, though the same command outside a nested shell is a hit.
-    assert!(out("sh -c 'rm -rf $D/*'").is_none());
-    assert!(out("rm -rf $D/*").is_some());
+    // A head sitting INSIDE a quoted run of a balanced clause is text, not an
+    // invocation. A no-break space is whitespace to the head regex and to the
+    // token split, but it is not one of the ten characters the shield maps, so it
+    // is what lets such a head survive the mask at all.
+    assert!(out("echo 'a\u{a0}sh\u{a0}-c\u{a0}\"rm -rf $D/*\"'").is_none());
+}
+
+#[test]
+fn a_clause_is_trimmed_of_leading_whitespace_and_sentinels_before_the_walk() {
+    // The paren fixpoint leaves a sentinel where the substitution was. Trimming it
+    // off the clause head is what lets the verb fused to it be read: the token walk
+    // skips a sentinel-led WORD, but `\u{e020}rm` is not the verb `rm`.
+    assert_eq!(out("$(x)rm -rf $D/*").map(|h| h.target), tgt("$D/*"));
+}
+
+#[test]
+fn the_nested_allowance_reads_the_depth_it_is_at_and_the_quote_it_came_from() {
+    // At the TOP level the caller's allowance is granted whatever the command
+    // says, so a `set --` that retires the positional form outside does not retire
+    // it inside a double-quoted nested script whose own arguments are supplied.
+    assert_eq!(
+        out("set -- a; sh -c \"rm -rf $1/*\" _ /tmp").map(|h| h.target),
+        tgt("$1/*")
+    );
+    // Below the top level it is NOT granted: the single-quoted arm here refuses it
+    // (its own arguments are supplied), so the script one level down has only its
+    // own empty tail to go on - which is enough.
+    assert_eq!(
+        out("sh -c 'sh -c \"rm -rf $1/*\"' _ /tmp").map(|h| h.target),
+        tgt("$1/*")
+    );
+    // The operand walk's single-quote-opener skip is off inside a DOUBLE-quoted
+    // script, where such a word is an ordinary operand and can be the target.
+    assert_eq!(
+        out("sh -c \"rm -rf '$D/*$\"").map(|h| h.target),
+        tgt("'$D/*$")
+    );
+}
+
+#[test]
+fn the_nested_recursion_reaches_depth_two_and_stops() {
+    // Generation 3 recurses into a nested script, and a script that is itself a
+    // nested shell is recursed into once more.
+    assert_eq!(
+        out("sh -c \"sh -c 'rm -rf $D/*'\"").map(|h| h.target),
+        tgt("$D/*")
+    );
+    // `JNo` is 2, so the third level is never entered.
+    assert!(out("sh -c \"sh -c \\\"sh -c 'rm -rf $D/*'\\\"\"").is_none());
+}
+
+#[test]
+fn a_double_quoted_nested_script_keeps_an_escaped_dollar_out_of_the_target_test() {
+    // `\$NAME` is resolved by the INNER shell, so it reads as a variable and the
+    // named target form applies to it exactly as an unescaped one would.
+    assert_eq!(
+        out("sh -c \"rm -rf \\$D/*\"").map(|h| h.target),
+        tgt("$D/*")
+    );
+    // `\$1` names no variable, so it becomes the stand-in. With nothing supplying
+    // the positional parameters the stand-in is put back and the positional form
+    // applies; with an argument after the script it stays hidden and nothing
+    // matches. Either way the reported target spells the escape as it was written.
+    assert_eq!(
+        out("sh -c \"rm -rf \\$1/*\"").map(|h| h.target),
+        tgt("$1/*")
+    );
+    assert!(out("sh -c \"rm -rf \\$1/*\" _ /tmp").is_none());
+    // A backslash run standing before a live `$` is dropped with the same rule.
+    assert_eq!(
+        out("sh -c \"rm -rf \\\\$D/*\"").map(|h| h.target),
+        tgt("$D/*")
+    );
+    // A backslash before anything else escapes nothing there, so it and its
+    // neighbour are both kept and the run is left where it stands.
+    assert_eq!(
+        out("sh -c \"rm -rf $D/* \\q\"").map(|h| h.target),
+        tgt("$D/*")
+    );
+}
+
+#[test]
+fn the_nested_positional_allowance_is_derived_from_what_supplies_the_arguments() {
+    // Nothing follows the script, so `$1` is unset and the positional form applies.
+    assert_eq!(out("sh -c 'rm -rf $1/*'").map(|h| h.target), tgt("$1/*"));
+    // Two words after it are `$0` and `$1`, so the form does not apply. One word
+    // is only `$0` and the script is still dangerous.
+    assert!(out("sh -c 'rm -rf $1/*' _ /tmp").is_none());
+    assert_eq!(out("sh -c 'rm -rf $1/*' _").map(|h| h.target), tgt("$1/*"));
+    // A redirection and its operand are not arguments, and neither is a trailing
+    // find terminator, so both are taken out before the words are counted.
+    assert_eq!(
+        out("sh -c 'rm -rf $1/*' > log").map(|h| h.target),
+        tgt("$1/*")
+    );
+    assert_eq!(
+        out("find . -exec sh -c 'rm -rf $1/*' \\;").map(|h| h.target),
+        tgt("$1/*")
+    );
+    // A backslash-escaped space joins two words into one operand.
+    assert_eq!(
+        out("sh -c 'rm -rf $1/*' a\\ b").map(|h| h.target),
+        tgt("$1/*")
+    );
+    // An `xargs` ahead of the script appends the arguments instead.
+    assert!(out("find . | xargs sh -c 'rm -rf $1/*'").is_none());
+    // Unless it is told where to put them, in which case it appends nothing.
+    assert_eq!(
+        out("find . | xargs -I{} sh -c 'rm -rf $1/*'").map(|h| h.target),
+        tgt("$1/*")
+    );
+    assert_eq!(
+        out("find . | xargs -n 1 sh -c 'rm -rf $1/*'").map(|h| h.target),
+        tgt("$1/*")
+    );
+    // `-n5` is one word, so the boundary the option needs is not there.
+    assert!(out("find . | xargs -n5 sh -c 'rm -rf $1/*'").is_none());
+    // Any other option leaves xargs appending, so the allowance is still off.
+    assert!(out("find . | xargs -r sh -c 'rm -rf $1/*'").is_none());
+    // The word has to BE `xargs`: neither a word ending in it nor one beginning
+    // with it supplies anything.
+    assert_eq!(
+        out("find . | myxargs sh -c 'rm -rf $1/*'").map(|h| h.target),
+        tgt("$1/*")
+    );
+    assert_eq!(
+        out("find . | xargsfoo sh -c 'rm -rf $1/*'").map(|h| h.target),
+        tgt("$1/*")
+    );
+}
+
+#[test]
+fn a_too_complex_head_carrying_a_nested_removal_asks_at_generation_three() {
+    // The nested script is only reachable on the lexical arm, so the same removal
+    // routes two ways: under a too-complex head the lexical classifier reads it
+    // and asks, and alone it parses cleanly and the structured checker passes it.
+    assert_eq!(
+        gen3("if true; then sh -c 'rm -rf $D/*'; fi"),
+        (Decision::Ask, Checker::Lexical)
+    );
+    assert_eq!(
+        gen3("[[ -f x ]] && sh -c 'rm -rf $D/*'"),
+        (Decision::Ask, Checker::Lexical)
+    );
+    assert_eq!(
+        gen3("sh -c 'rm -rf $D/*'"),
+        (Decision::Passthrough, Checker::Structured)
+    );
+    // Depth two under the same head.
+    assert_eq!(
+        gen3("if true; then sh -c \"sh -c 'rm -rf $D/*'\"; fi"),
+        (Decision::Ask, Checker::Lexical)
+    );
+    // Generation 2's classifier has no recursion, so the same command passes the
+    // lexical arm there and falls through to the census.
+    let v2 = classify("if true; then sh -c 'rm -rf $D/*'; fi", Some("2.1.258"));
+    assert_eq!(v2.generation, Generation::Gen2);
+    assert_ne!(v2.checker, Checker::Lexical);
 }
