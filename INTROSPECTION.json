@@ -78747,7 +78747,7 @@
           "snippet": "    let m = merged_in(&home, None, &managed);\n    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\"),\n        Some((\"1\", SCOPE_USER))\n    );\n    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_HARBOR_KITE\"),\n        Some((\"0\", SCOPE_POLICY_MANAGED))\n    );"
         }
       ],
-      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. The entry paths are enumerated by the import literal `from\"/$bunfs/root/chunk-2cs7aavv.js\"`, the chunk whose module body declares the gate: 11 occurrences over the whole binary, one per importing module, and each importing module calls the gate directly rather than passing it on.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -78816,7 +78816,7 @@
           "verdict": "refined",
           "instrument": "An enumeration of every module that imports the agent-teams gate in the Claude Code 2.1.258 executable, scoped by the imported chunk name, plus byte reads of the allowlist entry and the per-key test that admits it.",
           "observed": "Exactly 11 modules import the gate, all from one chunk, and each calls it directly with no parameter, so the entry paths are those 11 and nothing else. The variable the gate reads is a member of the pre-trust allowlist, and the per-key test admits an allowlisted key whatever scope named it. The allowlist hop had been recorded with a prose description in place of an excerpt; the bytes at its offset are the allowlist entry itself, and they replace the description.",
-          "rule": "occurrences of the fixed import byte string over the whole binary for the enumeration; verbatim byte reads otherwise",
+          "rule": "the enumeration counts occurrences of the fixed import literal `from\"/$bunfs/root/chunk-2cs7aavv.js\"` over the whole binary, one entry per importing module; verbatim byte reads otherwise",
           "note": "The trigger hop is closed by enumerating the 11 entry paths, and the allowlist hop now carries the bytes at its own offset, so its absent mark and residue line are dropped. The ordering question between the environment apply and the first gate call stays open."
         }
       ],
@@ -78918,7 +78918,7 @@
           "snippet": "fn settings_env_value_names_the_scope_that_set_the_key() {\n    let t = Tree::new();\n    let home = t.dir(\"home\");\n    let managed = t.dir(\"managed\");\n    t.write(\n        \"home/settings.json\",\n        r#\"{\"env\":{\"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\":\"1\"}}\"#,\n    );\n    t.write(\n        \"managed/managed-settings.json\",\n        r#\"{\"env\":{\"CLAUDE_CODE_HARBOR_KITE\":\"0\"}}\"#,\n    );"
         }
       ],
-      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. The importing modules are the 11 occurrences of the literal `from\"/$bunfs/root/chunk-2cs7aavv.js\"`, the chunk whose module body declares the gate. A module's BOUNDS run from its own import occurrence forward to the first `// @bun @bytecode` marker at or after it. A CALL is the byte string `Zr()` whose preceding byte lies outside [A-Za-z0-9_$]: that form returns 61 over the whole binary and 46 inside the 11 windows, while the bare form returns 62 and 47 because it also matches the tail of the unrelated identifier `EZr()`. The name collides - the binary declares it locally 22 times as a function and 47 more times as a binding - but no local declaration of it lies inside any of the 11 windows, so a nearest-preceding-binder rule over the same 61 calls partitions them identically: 46 to the gate import and 15 to a local declaration.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -78972,7 +78972,7 @@
           "verdict": "holds",
           "instrument": "An enumeration of the 11 modules that import the agent-teams gate in the Claude Code 2.1.258 executable, each module's calls located within its own bounds and read, with a verdict on what it does with the value.",
           "observed": "46 calls across the 11 modules, every one of them consuming the value in memory: tool descriptions and task ownership, in-memory team context, an initial permission mode, view installation, message schema selection and protocol refusal, rendering colour and grouping, transcript rendering arms, prompt hints, sandbox forwarding and startup team restoration. One module gates whether a configuration row is OFFERED at all; the row writes the user's own chosen mode, never the gate value. No importer writes the outcome anywhere.",
-          "rule": "one entry per importing module, its calls located within that module's own bounds and each read; the import count is occurrences of the fixed import byte string over the whole binary",
+          "rule": "one entry per importing module, located by the fixed import literal `from\"/$bunfs/root/chunk-2cs7aavv.js\"`; a module's bounds run from its import occurrence to the first `// @bun @bytecode` marker at or after it, and a call is the byte string `Zr()` whose preceding byte lies outside [A-Za-z0-9_$]",
           "note": "The negative is closed by exhausting the importers: the gate outcome reaches no file through any of them. The configuration row is the one site that looks like a persist and is not, so it is enumerated with that verdict rather than left unmentioned."
         }
       ],
@@ -83037,7 +83037,7 @@
           "snippet": "    fn unaddressable() -> Self {\n        OfficialCall {\n            tool: OFFICIAL_TOOL,\n            to: None,\n            call: format!(\n                \"{OFFICIAL_TOOL}(to: <the peer as your harness names it>, message: <this \\\n                 message>) - the official `to` grammar has no bare-uuid arm, so the receiver's \\\n                 session uuid is not a legal value and csift will not invent one\"\n            ),\n        }\n    }"
         }
       ],
-      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. The enumeration counts the CALL FORM, not the name: occurrences of the byte string `Bb(` whose preceding byte lies outside [A-Za-z0-9_$], which returns 22 over the whole binary and covers the definition, every call of it, and every same-named function declared locally in another chunk. The bare NAME under the same word-boundary rule returns 181 and is a different set, so a count of the name does not reproduce this enumeration.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -83068,7 +83068,7 @@
           "verdict": "refined",
           "instrument": "Byte reads in the Claude Code 2.1.258 executable of the resolver at 175705114, the kind mapper at 175714681, the id regex at 156729969, the bracket grammar at 158802502 and the candidate index at 158802666, plus an enumeration of every word-boundary occurrence of the id-regex helper name, each read and scoped by whether its own module imports the helper or defines a function of that name itself.",
           "observed": "22 word-boundary occurrences: 1 definition, 13 callers in modules importing it from one chunk, 7 unrelated same-named functions with local definitions, and 1 inside a non-source byte region. None of the 13 callers admits a dashed uuid, because the pattern is an optional name segment followed by exactly sixteen hex characters. The candidate index is keyed by NAME throughout, so a uuid can only match a row literally named that uuid. Three offsets the claim named were off: the resolver by 6 bytes, the bracket grammar by 63 and the candidate index by 34.",
-          "rule": "occurrences under the word-boundary regex over the whole binary for the enumeration; verbatim byte reads otherwise",
+          "rule": "the enumeration counts occurrences of the call form `Bb(` whose preceding byte lies outside [A-Za-z0-9_$], which is 22 over the whole binary; the bare name under the same word-boundary rule is 181 and is a different set; verbatim byte reads otherwise",
           "note": "The negative is closed by enumeration: no arm of the resolver accepts a bare session uuid. Three offsets are corrected to the constructs they name."
         }
       ],
