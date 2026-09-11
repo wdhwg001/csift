@@ -5,11 +5,13 @@ use super::*;
 
 use std::time::{Duration, Instant};
 
-/// A unique parent-pid stand-in per test, so parallel tests never share a chain.
+/// A unique parent-pid stand-in per test AND per test process: parallel tests in one
+/// binary never share a chain, and two `cargo test` processes on one machine (every
+/// chain lives under the same temp dir) never wipe each other's.
 fn ppid() -> u32 {
     static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    900_000 + seq
+    900_000 + (std::process::id() % 100_000) * 64 + seq
 }
 
 struct ChainGuard(std::path::PathBuf);
