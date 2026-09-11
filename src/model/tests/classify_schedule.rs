@@ -7,8 +7,8 @@ use super::*;
 
 #[test]
 fn classify_meta_loop_variants() {
-    // NB: `r##"…"##` delimiter - the JSON content has `:"# ` whose `"#` would close a
-    // plain `r#"…"#` raw string early.
+    // NB: `r##"..."##` delimiter - the JSON content has `:"# ` whose `"#` would close a
+    // plain `r#"..."#` raw string early.
     let tick = parse(
         r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop tick\nproceed with the next step."}}"##,
     );
@@ -33,12 +33,12 @@ fn classify_meta_loop_variants() {
     );
 }
 
-// ── P1c M2a: fired autonomous-loop / ScheduleWakeup timer tick → harness.schedule.wakeup ──
+// -- P1c M2a: fired autonomous-loop / ScheduleWakeup timer tick -> harness.schedule.wakeup --
 
 #[test]
 fn classify_schedule_wakeup_fired_timer_markers() {
     // The real oracle-D12 record: isMeta, header "# Autonomous loop check", body "You're
-    // being invoked on a timer …". Used to fall through to user.message (the M2 mislabel).
+    // being invoked on a timer ...". Used to fall through to user.message (the M2 mislabel).
     let loop_check = parse(
         r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop check\n\nYou're being invoked on a timer while the user is away."}}"##,
     );
@@ -56,7 +56,7 @@ fn classify_schedule_wakeup_fired_timer_markers() {
     );
 }
 
-// ── v0.12.2: the loop markers anchor at CONTENT START, never mid-body ──
+// -- v0.12.2: the loop markers anchor at CONTENT START, never mid-body --
 
 #[test]
 fn loop_markers_anchor_at_content_start() {
@@ -91,7 +91,7 @@ fn loop_markers_anchor_at_content_start() {
     );
 }
 
-// ── v0.12.2: harness.schedule.fire, the prompt a scheduled task fires ──
+// -- v0.12.2: harness.schedule.fire, the prompt a scheduled task fires --
 
 #[test]
 fn classify_scheduled_fire_prompt() {
@@ -255,7 +255,7 @@ fn loop_markers_tolerate_leading_whitespace() {
 
 #[test]
 fn classify_wakeup_check_vs_loop_tick_no_collision() {
-    // "# Autonomous loop check" → schedule.wakeup; "# Autonomous loop tick" → meta.loop. The
+    // "# Autonomous loop check" -> schedule.wakeup; "# Autonomous loop tick" -> meta.loop. The
     // two share the "# Autonomous loop " prefix but diverge at check/tick - must NOT collide.
     let check = parse(
         r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop check\nproceed."}}"##,

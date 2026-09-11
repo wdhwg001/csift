@@ -250,7 +250,8 @@ pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 /// `check` != `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the
 /// meta.loop arm in [`Record::classify`], so the fired tick routes to `schedule.wakeup`.
 ///
-/// THE ANCHORING LAW (v0.12.2, shared by all four markers of this family). Each one is matched
+/// THE ANCHORING LAW (v0.12.2, shared by all FIVE markers of this family - the two headers,
+/// the two body sentences and the sentinel). Each one is matched
 /// only at CONTENT START, after the same `trim_start` the FINDING-1 section discipline uses. The
 /// resolver builds the whole delivered prompt and the fire writes it as its OWN record, so the
 /// marker sits at offset 0 of a real tick; an occurrence deeper in a body is therefore a record

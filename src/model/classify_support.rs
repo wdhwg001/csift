@@ -326,7 +326,7 @@ pub struct ClassifyCtx<'a> {
     /// Fired-prompt -> fire INSTANT join for this transcript ([`ScheduleFireIndex`]): a
     /// [`Class::ScheduleFire`] record carries the armed text and nothing about WHEN it
     /// fired, which lives on the `system`/`scheduled_task_fire` sibling it is parented to.
-    /// `None` ⇒ the instant stays unknown (an honest null; the builds that write no fire
+    /// `None` => the instant stays unknown (an honest null; the builds that write no fire
     /// record give the same answer).
     pub schedule_fires: Option<&'a ScheduleFireIndex>,
 }

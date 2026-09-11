@@ -12566,12 +12566,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "260",
+          "lines": "261",
           "snippet": "pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = \"# Autonomous loop check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "282-285",
+          "lines": "283-286",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
@@ -12716,8 +12716,8 @@
           "date": "2026-09-11",
           "verdict": "refined",
           "instrument": "`csift search 'ScheduleWakeup' --count-by label` over the projects root, then the same census restricted to the three schedule-family leaves.",
-          "observed": "The arming calls still key under `agent.tool.use` only. The custom-prompt ticks this claim described as landing 'as an isMeta record' now key under `harness.schedule.fire`: 168 records across 10 top-level transcripts, against 0 before the leaf existed.",
-          "rule": "One count per classified record per label key.",
+          "observed": "The arming calls still key under `agent.tool.use` only. The custom-prompt ticks this claim described as landing 'as an isMeta record' now key under `harness.schedule.fire`: 168 records over 5 top-level transcripts, against 0 before the leaf existed. The census behind that: 171 records carry the fire shape over those same 5 files, 3 of them open with a loop marker and keep a tick leaf by arm order, leaving 168.",
+          "rule": "One count per classified record per label key. The fire-shape census counts one per raw record with top-level `type` \"user\", `isMeta` true, `promptSource` \"system\" and no `origin` key, over every top-level transcript under one projects root; marker position is read after `trim_start` on the record's joined message text.",
           "note": "The behavior is unchanged; the claim's last sentence pointed at a shape csift did not name, and it now names it."
         }
       ],
@@ -12773,12 +12773,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "268-274",
+          "lines": "269-275",
           "snippet": "/// `harness.meta.hook` markers (GOLD \u00a72, edge-fixtures G2) - hook-injected feedback, NOT the\n/// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the\n/// edit-failed-retry notice CC injects when an Edit's target changed under it. (These are\n/// `isMeta` user records that would otherwise fall through to `user.message`.)\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` hook wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "277",
+          "lines": "278",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         }
       ],
@@ -12940,7 +12940,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "287-289",
+          "lines": "288-290",
           "snippet": "/// An `isMeta` `[Image: source:\u2026]` pseudo-record (GOLD \u00a72, edge-fixtures G2) - EXCLUDED from\n/// the taxonomy entirely (classify yields no label), so it is never mislabeled `user.message`.\npub const IMAGE_SOURCE_PREFIX: &str = \"[Image: source:\";"
         }
       ],
@@ -85174,7 +85174,7 @@
     {
       "id": "CLS-031",
       "area": "classification",
-      "behavior": "A scheduled task coming due lands THREE lines, in this order. (1) A `type:\"queue-operation\"` line whose `content` is the armed text. (2) A `type:\"system\"` record with `subtype:\"scheduled_task_fire\"` whose `content` names the instant in a trailing parenthesis - `Running scheduled task (<when>)` for a cron task, `Claude resuming /loop wakeup (<when>)` for a wakeup - both built by one formatter, `toLocaleString(\"en-US\", {month:\"short\", day:\"numeric\", hour:\"numeric\", minute:\"2-digit\"})` with the comma and the space before the meridiem removed and the meridiem lowercased. (3) A `type:\"user\"` record with `isMeta:true`, `promptSource:\"system\"`, `userType:\"external\"` and `parentUuid` equal to the fire record's `uuid`, whose message content is the armed text. A cron task's fire also carries `cron`, `prompt` and `taskId` on the system record and `scheduledTaskId` / `scheduledFireId` on the prompt record; a wakeup's carries neither set. `promptSource:\"system\"` is not specific to the scheduler: the submit path stamps it on EVERY `isMeta` submission through one ternary, and Claude Code's own reader calls the `isMeta` + `promptSource` pair a system-injected turn prompt while testing `isMeta` + NO `promptSource` for a human entry. Measured over every transcript under one projects root: 171 records carry the pair without an `origin` object, 170 of them are parented to a `scheduled_task_fire` record and all 170 of those name a readable instant; 465 fire records exist over 7 files, 459 with the wakeup wording and 6 with the cron wording.",
+      "behavior": "A scheduled task coming due lands THREE lines, in this order. (1) A `type:\"queue-operation\"` line whose `content` is the armed text. (2) A `type:\"system\"` record with `subtype:\"scheduled_task_fire\"` whose `content` names the instant in a trailing parenthesis - `Running scheduled task (<when>)` for a cron task, `Claude resuming /loop wakeup (<when>)` for a wakeup - both built by one formatter, `toLocaleString(\"en-US\", {month:\"short\", day:\"numeric\", hour:\"numeric\", minute:\"2-digit\"})` with the comma and the space before the meridiem removed and the meridiem lowercased. (3) A `type:\"user\"` record with `isMeta:true`, `promptSource:\"system\"`, `userType:\"external\"` and `parentUuid` equal to the fire record's `uuid`, whose message content is the armed text. A cron task's fire also carries `cron`, `prompt` and `taskId` on the system record and `scheduledTaskId` / `scheduledFireId` on the prompt record; a wakeup's carries neither set. `promptSource:\"system\"` is not specific to the scheduler: the submit path stamps it on EVERY `isMeta` submission through one ternary, and Claude Code's own reader calls the `isMeta` + `promptSource` pair a system-injected turn prompt while testing `isMeta` + NO `promptSource` for a human entry. Measured over every transcript under one projects root: 171 records carry the pair without an `origin` object, 170 of them are parented to a `scheduled_task_fire` record and all 170 of those name a readable instant; 465 fire records exist over 5 of the 80 top-level transcripts, 459 with the wakeup wording and 6 with the cron wording. Both counts are per raw record - a fire record being a JSON object whose top-level `type` is \"system\" and `subtype` \"scheduled_task_fire\", which is a narrower rule than the 7 files that carry the literal anywhere.",
       "depends": "csift classifies the PROMPT `harness.schedule.fire` and joins its instant to the fire record by `parentUuid`, so a cron-fired prompt is searchable, censusable and dated; before the leaf it matched no marker and fell into the isMeta exclusion, invisible on every surface. The `queue-operation` line stays unlabeled (a harness rider, the same content-shape law `user.queued` applies) and the fire record stays under the gated `harness.meta.system`, so a default scan gains no hit from the keep that reads the instant. An `origin` object refuses the leaf, because the harness stamps one on everything it did not submit itself and reads it back as the first test of its own foreign-input veto - without that guard a tagless cross-session delivery, which carries the identical pair, would read as a fire. If a build stops stamping `promptSource`, the leaf empties; if it stops writing the fire record, the instant goes null and the leaf holds.",
       "code": [
         {
@@ -85275,8 +85275,8 @@
           "date": "2026-09-11",
           "verdict": "holds",
           "instrument": "The census above over every transcript under one projects root, plus the seven producer hops read in the 2.1.258 build at the offsets recorded here, plus `csift search '' --count-by label` before and after the leaf.",
-          "observed": "171 records of the pair without an `origin`; 170 parented to a `scheduled_task_fire` record, all 170 naming a readable instant; 465 fire records over 7 of 80 files, 459 `Claude resuming /loop wakeup (<when>)` and 6 `Running scheduled task (<when>)`. Three of the 171 carry a loop marker at offset 0 and keep `harness.schedule.wakeup` / `harness.meta.loop` by arm order, leaving 168 under the new leaf. The seven hops read verbatim at their offsets, including the ternary that proves the stamp is not the scheduler's.",
-          "rule": "One count per raw record for every census figure; one count per classified record for the csift rows; a parent resolved through the file's own uuid map, last occurrence winning.",
+          "observed": "171 records of the pair without an `origin`; 170 parented to a `scheduled_task_fire` record, all 170 naming a readable instant; 465 fire records over 5 of the 80 top-level transcripts, 459 `Claude resuming /loop wakeup (<when>)` and 6 `Running scheduled task (<when>)`. A different rule - a line carrying the literal anywhere, payloads included - spans 7 files, which is the count the conjunction keep is sized against and not the one stated here. Three of the 171 carry a loop marker at offset 0 and keep `harness.schedule.wakeup` / `harness.meta.loop` by arm order, leaving 168 under the new leaf. The seven hops read verbatim at their offsets, including the ternary that proves the stamp is not the scheduler's.",
+          "rule": "One count per raw record for every census figure, a fire record being a JSON object whose top-level `type` is \"system\" and `subtype` \"scheduled_task_fire\" and a fire-SHAPE record one whose `type` is \"user\" with `isMeta` true, `promptSource` \"system\" and no `origin` key; a file counts when it holds at least one such record; one count per classified record for the csift rows; a parent resolved through the file's own uuid map, last occurrence winning.",
           "note": "The shape was measured on a 2.1.268 transcript and the producer read in the 2.1.258 build; the cron wording and the `taskId` key set are present in both, and the wakeup wording carries the corpus back to the floor recorded here."
         }
       ]

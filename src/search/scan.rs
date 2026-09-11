@@ -541,11 +541,16 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         || (gates.system && SUBTYPE_FINDER.find(line).is_some())
         // v0.12.2: the `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a
         // DEFAULT scan (the label gate is on whenever a selector can reach the leaf). A
-        // CONJUNCTION for the C-40 reason - measured over every transcript under one projects
-        // root, all 465 true fire records carry the key-only bytes `"subtype"` while all 196
-        // lines that carry the literal only in a payload (user, assistant, attachment and
-        // `queue-operation` lines) carry it in none - and the rare literal is tested first, so
-        // the key memmem runs on those few hundred lines rather than on every non-role line.
+        // CONJUNCTION for the C-40 reason - measured over the 80 top-level transcripts of one
+        // corpus, all 465 records with top-level `type:"system"` and `subtype:"scheduled_task_fire"`
+        // carry the key-only bytes `"subtype"`, and of the lines carrying the literal WITHOUT
+        // being such a record not one does. That second population is a MOVING count, not a
+        // fixed one: 216 lines at the instant of the measurement, 72 of them reached by no role
+        // keep, and 211 of the 216 sat in the transcript of the session doing the measuring,
+        // because a session writing ABOUT the literal accumulates it in prose. That is the
+        // hazard itself, and it is why the discriminator is the KEY - a property of the
+        // producer - and never the literal's rarity. The rare literal is tested FIRST, so the
+        // key memmem runs on those few hundred lines rather than on every non-role line.
         || (gates.schedule_fire
             && SCHEDULE_FIRE_FINDER.find(line).is_some()
             && SUBTYPE_FINDER.find(line).is_some())
