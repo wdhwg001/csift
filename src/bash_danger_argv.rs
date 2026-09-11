@@ -405,3 +405,7 @@ fn sentinel_for(name: &str) -> String {
         VAR_SENTINEL.to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "bash_danger_argv_tests.rs"]
+mod tests;
