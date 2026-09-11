@@ -51,6 +51,37 @@ surface change bumps the PATCH.
   rather than adding one: a session whose store is found through the `cleared_from` root
   or the team file now reports its tasks where it reported none, so `tasks` moves from
   null to an array and `tasks_completed` from null to a count.
+- **`agents` gains `pending_reason` and `pending_checker`** on a frozen lane, in JSON and as two
+  lines under the text tree's `PENDING` line: the harness's own reason tail for a predicted ask,
+  and one disclosure line naming the path, the checker and the generation
+  (`path: structured · checker: structured · gen2`), with `assumed` when the record carries no
+  `version`. Both are `null` for a pending call these lexical layers do not model, a Windows
+  `PowerShell` call included.
+- **`toolDenialKind`, the harness's own reason a tool call did not run.** Modeled on the record,
+  rendered on a tool-result hit as `[denied: user-rejected]` in the label zone, and carried as
+  `denial_kind` in hit JSON. Four values are written (`user-rejected`, `interrupted`,
+  `cancelled`, `permission-rule`); the classifier's reason sentence is rendered into the prompt
+  only and never reaches disk, so this field is the whole on-disk answer to why a call was
+  refused. `--count-by result` is unchanged: a denial is an `error`.
+
+### Changed
+
+- **A frozen lane's `pending_classification` is now decided by the checker the harness would
+  actually have run, for the Claude Code generation that recorded it.** Claude Code decides a
+  dangerous removal with one of TWO checkers and the tree-sitter decomposition picks which: a
+  too-complex parse reaches the lexical classifier, a cleanly parsed removal reaches the
+  structured one, and both produce the same bypass-immune ask. csift ran the lexical classifier
+  on everything, so it attributed structured verdicts to the wrong grammar. It also stripped
+  leading shell keywords, which the real clause head does not do, and that was a pure false
+  positive on `do rm` / `then rm` / `else rm`. The port now branches on the parse shape, runs
+  the generation's chain (`< 2.1.208`, `2.1.208..=2.1.260`, `>= 2.1.261`), and reports every
+  arm's reason tail verbatim. Over 162,118 distinct Bash commands in a local corpus, 12 lanes
+  flip: 8 up to `escalation-blocked`, 4 down to `awaiting-execution` (all four the removed
+  keyword false positive). No other command's output changes.
+- **An arm csift cannot decide now says so instead of guessing.** The structured checker
+  resolves the operand against the shell cwd, realpaths both, and compares against the
+  working-directory set; a transcript carries none of that. Those two arms answer
+  `awaiting-execution` with the reason `removal target needs the filesystem state at the time`.
 
 ### Fixed
 
