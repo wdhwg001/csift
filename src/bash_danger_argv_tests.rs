@@ -132,3 +132,58 @@ fn a_statements_argv_drops_its_assignments_and_its_redirections() {
     // An assignment AFTER the verb is an ordinary argument.
     assert_eq!(command_argv("rm A=1"), v(&["rm", "A=1"]));
 }
+
+#[test]
+fn the_substitution_walk_extracts_each_body_exactly() {
+    // The four delimiter forms, each yielding its inside and nothing else.
+    assert_eq!(substitution_bodies("echo $(a b)"), v(&["a b"]));
+    assert_eq!(substitution_bodies("x `a b` y"), v(&["a b"]));
+    assert_eq!(substitution_bodies("diff <(a) >(b)"), v(&["a", "b"]));
+    // A nested pair is passed over WHOLE here: the outer body is the unit, and
+    // the inner one is reached by walking that body in turn.
+    assert_eq!(substitution_bodies("$(a $(b) c)"), v(&["a $(b) c"]));
+    // Two in a row: the walk resumes just past each closer, never inside it.
+    assert_eq!(substitution_bodies("$(a)$(b)"), v(&["a", "b"]));
+    assert_eq!(substitution_bodies("`a``b`"), v(&["a", "b"]));
+    // An empty body is a body.
+    assert_eq!(substitution_bodies("$()"), v(&[""]));
+    // A backslash escapes the next character, so the escaped opener is not one.
+    assert_eq!(substitution_bodies("\\$(a) $(b)"), v(&["b"]));
+    // An opener with no closer yields nothing rather than running off the end.
+    assert!(substitution_bodies("echo $(a").is_empty());
+    assert!(substitution_bodies("echo `a").is_empty());
+    // A redirection is not a process substitution.
+    assert_eq!(substitution_bodies("a < b $(c)"), v(&["c"]));
+    assert!(substitution_bodies("echo plain").is_empty());
+}
+
+#[test]
+fn decomposition_reaches_a_removal_inside_a_substitution() {
+    let out = simple_commands("echo $(rm x); ls");
+    // The outer statements see the sentinel the decomposer leaves behind, and the
+    // substitution's own command is decomposed beside them.
+    assert!(out.iter().any(|s| s == "rm x"), "{out:?}");
+    assert!(out.iter().any(|s| s == "ls"), "{out:?}");
+    assert!(
+        out.iter().any(|s| s.contains("__CMDSUB_OUTPUT__")),
+        "{out:?}"
+    );
+    assert_eq!(out.len(), 3, "{out:?}");
+}
+
+#[test]
+fn the_decomposition_queue_stops_at_its_own_bound() {
+    // The walk is breadth-first over substitutions, so a command can enqueue more
+    // work than it is worth doing. The bound is 256 iterations: the command itself
+    // plus 255 of its bodies, which is exactly what a pathological input returns.
+    let subs: String = (0..300).map(|i| format!("$(x{i})")).collect();
+    let out = simple_commands(&format!("echo {subs}"));
+    assert_eq!(out.len(), 256, "the bound is a count, not an approximation");
+    // A command inside the bound loses nothing.
+    let small: String = (0..10).map(|i| format!("$(y{i})")).collect();
+    let ten = simple_commands(&format!("echo {small}"));
+    assert_eq!(ten.len(), 11, "{ten:?}");
+    for i in 0..10 {
+        assert!(ten.iter().any(|s| s == &format!("y{i}")), "{ten:?}");
+    }
+}
