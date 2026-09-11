@@ -295,6 +295,61 @@ fn classify_schedule_wakeup_fired_timer_markers() {
     );
 }
 
+// ── v0.12.2: the loop markers anchor at CONTENT START, never mid-body ──
+
+#[test]
+fn loop_markers_anchor_at_content_start() {
+    // A skill's instruction record EMBEDS the fired preamble to explain it. Both wakeup
+    // markers sit deep in the body, so neither may claim the record: it is isMeta with no
+    // marker at start, which the taxonomy models as nothing at all.
+    let instructions = parse(
+        r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# /loop - schedule the autonomous default\n\nThe user invoked /loop with no prompt. Each fire delivers:\n\n# Autonomous loop check\n\nYou're being invoked on a timer while the user is away or occupied."}}"##,
+    );
+    assert!(
+        instructions.classify(&ClassifyCtx::top_level()).is_empty(),
+        "a record QUOTING the preamble is not the fired tick"
+    );
+    // The same law for the meta.loop driver markers.
+    let quotes_tick = parse(
+        r##"{"type":"user","message":{"role":"user","content":"Here is what the driver says:\n\n# Autonomous loop tick\n\nRun the autonomous check using the loop instructions."}}"##,
+    );
+    assert_eq!(
+        quotes_tick.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage],
+        "a human quoting the driver keeps user.message"
+    );
+    // The dynamic sentinel quoted mid-prose is prose (the one corpus record under
+    // harness.schedule.wakeup before this rule was a genuine operator prompt doing exactly
+    // this, and it lost its own leaf).
+    let quotes_sentinel = parse(
+        r#"{"type":"user","message":{"role":"user","content":"csift models the <<autonomous-loop-dynamic>> sentinel; check the arm order."}}"#,
+    );
+    assert_eq!(
+        quotes_sentinel.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
+    );
+}
+
+#[test]
+fn loop_markers_tolerate_leading_whitespace() {
+    // Content start is read after the shared `trim_start` (the FINDING-1 discipline), so a
+    // leading newline in the delivered prompt still opens a tick.
+    let wake = parse(
+        r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"\n  # Autonomous loop check\n\nYou're being invoked on a timer."}}"##,
+    );
+    assert_eq!(
+        wake.classify(&ClassifyCtx::top_level()),
+        vec![Class::ScheduleWakeup]
+    );
+    let tick = parse(
+        r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"\n# Autonomous loop tick\n\nproceed."}}"##,
+    );
+    assert_eq!(
+        tick.classify(&ClassifyCtx::top_level()),
+        vec![Class::MetaLoop]
+    );
+}
+
 #[test]
 fn classify_wakeup_check_vs_loop_tick_no_collision() {
     // "# Autonomous loop check" → schedule.wakeup; "# Autonomous loop tick" → meta.loop. The

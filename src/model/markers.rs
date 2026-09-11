@@ -237,6 +237,9 @@ pub(crate) const SYNTHETIC_MODEL: &str = "<synthetic>";
 /// cron/monitor tick's injected prompt is still operator-authored free text with no universal
 /// marker (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action, classified
 /// `agent.tool.use`, not the fired tick). See the GOLD-gap note in the module docs.
+///
+/// CONTENT-START anchored, like every marker of this family - see the anchoring law on
+/// [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`].
 pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 
 /// The header of the harness-injected FIRED autonomous-loop / `ScheduleWakeup` timer tick (P1c
@@ -244,13 +247,22 @@ pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 /// `isMeta` `type:"user"` record whose content opens `# Autonomous loop check\n\nYou're being
 /// invoked on a timer …`. DISTINCT from the `meta.loop` DRIVER ticks
 /// ([`AUTONOMOUS_LOOP_TICK_PREFIX`] = `# Autonomous loop tick` / [`AUTONOMOUS_CHECK_MARKER`]):
-/// `check` ≠ `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the
+/// `check` != `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the
 /// meta.loop arm in [`Record::classify`], so the fired tick routes to `schedule.wakeup`.
+///
+/// THE ANCHORING LAW (v0.12.2, shared by all four markers of this family). Each one is matched
+/// only at CONTENT START, after the same `trim_start` the FINDING-1 section discipline uses. The
+/// resolver builds the whole delivered prompt and the fire writes it as its OWN record, so the
+/// marker sits at offset 0 of a real tick; an occurrence deeper in a body is therefore a record
+/// QUOTING the prompt - a skill's instruction text that embeds the loop preamble, a peer message
+/// relaying a tick, a compaction summary recapping one. Matching those with `contains` labeled
+/// the quoting record as the tick and stripped the leaf it had earned.
 pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = "# Autonomous loop check";
 
-/// See [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] - the fired-timer body sentence (matched anywhere,
-/// as it follows the `# Autonomous loop check` header after a blank line). Verified verbatim
-/// against real `~/.claude/projects` data (straight ASCII apostrophe).
+/// See [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] - the fired-timer body sentence, which follows the
+/// `# Autonomous loop check` header after a blank line and so opens a tick only when the
+/// preamble variant in force omits that header. Verified verbatim against real
+/// `~/.claude/projects` data (straight ASCII apostrophe). Content-start anchored.
 pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer";
 
 /// `harness.meta.hook` markers (GOLD §2, edge-fixtures G2) - hook-injected feedback, NOT the
@@ -265,9 +277,11 @@ pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
 pub const EDIT_RETRY_MARKER: &str = "The last Edit failed because the target file was modified";
 
 /// `harness.meta.loop` markers (GOLD §2, edge-fixtures G2) - autonomous-loop drivers (distinct
-/// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`).
+/// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`). Both
+/// are CONTENT-START anchored (the law on [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`]).
 pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = "# Autonomous loop tick";
-/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - matched anywhere (it can sit mid-prompt).
+/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the
+/// delivered text on the builds whose driver template carries no header.
 pub const AUTONOMOUS_CHECK_MARKER: &str = "Run the autonomous check";
 
 /// An `isMeta` `[Image: source:…]` pseudo-record (GOLD §2, edge-fixtures G2) - EXCLUDED from

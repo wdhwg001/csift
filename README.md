@@ -262,11 +262,11 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
-| end-to-end | 514 | 78.8% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| &nbsp;&nbsp;of which chain traced | 514 | 78.8% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
+| end-to-end | 515 | 79.0% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| &nbsp;&nbsp;of which chain traced | 515 | 79.0% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
 | &nbsp;&nbsp;of which audit-graded, chain not yet traced | 0 | 0.0% | graded end-to-end from the release-audit checks (writer offsets cited there) before the three-hop tracing existed; the next audit traces them |
 | specimen-only | 43 | 6.6% | observed on disk or live; the writer not traced (or traced only in part) (28 of them with a partly traced writer) |
-| producer-only | 34 | 5.2% | the writer traced in full; no specimen exists in the corpus or could be produced here |
+| producer-only | 33 | 5.1% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 47 | 7.2% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
 | upstream | 14 | 2.1% | the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed |

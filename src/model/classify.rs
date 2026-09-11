@@ -307,10 +307,18 @@ impl Record {
         // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three
         // fixed markers (P1c M2a): the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous
         // loop check` header, and the `You're being invoked on a timer` body sentence. Matched
-        // BEFORE the meta.loop arm - `check` ≠ `tick`, so the loop-DRIVER prefix never collides.
-        if s.contains(SCHEDULE_WAKEUP_MARKER)
-            || s.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)
-            || s.contains(SCHEDULE_WAKEUP_TIMER_MARKER)
+        // BEFORE the meta.loop arm - `check` != `tick`, so the loop-DRIVER prefix never collides.
+        //
+        // All three anchor at CONTENT START (the FINDING-1 discipline, one `trim_start` the
+        // harness marker arms share): the harness injects the fired prompt as its own record
+        // and the resolver writes the marker at offset 0, so a marker found mid-body belongs
+        // to a record QUOTING the prompt - a skill's instruction text that embeds the loop
+        // preamble, a peer message relaying a tick. A `contains` there labeled the quoting
+        // record as the tick itself and stripped its own leaf.
+        let at_start = s.trim_start();
+        if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)
+            || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)
+            || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)
         {
             push_unique(out, Class::ScheduleWakeup);
             return;
@@ -327,7 +335,11 @@ impl Record {
         }
         // harness.meta.loop (G2): autonomous-loop DRIVER ticks (`# Autonomous loop tick` /
         // `Run the autonomous check`), distinct from the schedule.wakeup fired tick above.
-        if s.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX) || s.contains(AUTONOMOUS_CHECK_MARKER) {
+        // Content-start anchored for the same reason as the wakeup arm: the driver text is
+        // the whole delivered prompt, so a mid-body occurrence is a quotation.
+        if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)
+            || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)
+        {
             push_unique(out, Class::MetaLoop);
             return;
         }

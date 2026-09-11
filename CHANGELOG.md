@@ -5,6 +5,19 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.12.2] - unreleased
+
+### Fixed
+
+- **The autonomous-loop markers now anchor at the start of a record's content.**
+  `harness.schedule.wakeup` and `harness.meta.loop` used to match their markers anywhere in a
+  body, so a record that merely QUOTED a fired tick was read as one: a skill's instruction text
+  that embeds the loop preamble to explain it, a peer message relaying a tick, a compaction
+  summary recapping one. Each lost the leaf it had earned. The resolver builds the whole
+  delivered prompt and the fire writes it as its own record, so a real tick carries its marker
+  at offset 0; the arms now test exactly that, after the same leading-whitespace trim the other
+  harness marker arms use. A genuine tick classifies as before.
+
 ## [0.12.1] - 2026-09-11
 
 ### Changed
