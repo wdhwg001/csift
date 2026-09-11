@@ -172,6 +172,14 @@ fn decomposition_reaches_a_removal_inside_a_substitution() {
 }
 
 #[test]
+fn a_statement_the_split_cannot_balance_is_decomposed_whole() {
+    // An unbalanced quote or paren is exactly where a removal could hide, so the
+    // text is handed on as ONE simple command rather than dropped.
+    assert_eq!(simple_commands("echo \"a"), v(&["echo \"a"]));
+    assert_eq!(simple_commands("rm -rf $D/* )"), v(&["rm -rf $D/* )"]));
+}
+
+#[test]
 fn the_decomposition_queue_stops_at_its_own_bound() {
     // The walk is breadth-first over substitutions, so a command can enqueue more
     // work than it is worth doing. The bound is 256 iterations: the command itself

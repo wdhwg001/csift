@@ -563,3 +563,7 @@ fn replace_plain_parens(s: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "bash_danger_out_tests.rs"]
+mod tests;

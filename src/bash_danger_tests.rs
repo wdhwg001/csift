@@ -537,51 +537,48 @@ fn the_lexical_guard_needs_both_a_dollar_and_a_removal_word() {
 }
 
 #[test]
-fn the_census_group_peel_takes_exactly_one_wrapper() {
-    use crate::bash_danger_census::{statements_of, unwrap_group};
-    assert_eq!(unwrap_group("{ rm -rf $D/*; }"), "rm -rf $D/*");
-    assert_eq!(unwrap_group("(rm -rf $D/*)"), "rm -rf $D/*");
-    // A wrapper that does not close is not a wrapper.
-    assert_eq!(unwrap_group("{ rm -rf $D/*"), "{ rm -rf $D/*");
-    assert_eq!(unwrap_group("(rm -rf $D/*"), "(rm -rf $D/*");
-    // An unwrapped statement is returned unchanged.
-    assert_eq!(unwrap_group("rm -rf $D/*"), "rm -rf $D/*");
-    // The split yields each statement, not the whole string.
-    let parts = statements_of("a; b; c");
-    assert_eq!(parts.len(), 3, "{parts:?}");
-    assert_eq!(parts[1].trim(), "b");
+fn the_generation_label_names_each_generation() {
+    // The label is the disclosure's third field, so a wrong one misattributes the
+    // whole verdict to the wrong Claude Code build.
+    assert_eq!(Generation::Gen1.label(), "gen1");
+    assert_eq!(Generation::Gen2.label(), "gen2");
+    assert_eq!(Generation::Gen3.label(), "gen3");
+    assert_eq!(Checker::Lexical.label(), "lexical");
+    assert_eq!(Checker::Structured.label(), "structured");
+    assert_eq!(Checker::Census.label(), "census");
 }
 
 #[test]
-fn the_bounded_cmdsub_fixpoint_stops_at_sixteen_iterations() {
-    use crate::bash_danger_census::cmdsub_fixpoint;
-    // Backticks go first and unconditionally.
-    assert_eq!(cmdsub_fixpoint("a `b` c"), "a __CMDSUB__ c");
-    // Each iteration removes ONE nesting level, innermost first.
-    assert_eq!(cmdsub_fixpoint("$(a $(b))"), "__CMDSUB__");
-    assert_eq!(cmdsub_fixpoint("x $(a) y"), "x __CMDSUB__ y");
-    // Sixteen levels resolve; seventeen do not, which is the cap being real.
-    let deep = |n: usize| "$(".repeat(n) + "x" + &")".repeat(n);
-    assert_eq!(cmdsub_fixpoint(&deep(15)), "__CMDSUB__");
-    assert!(
-        cmdsub_fixpoint(&deep(40)).contains("$("),
-        "the cap must leave the deepest nesting untouched"
-    );
-    // A command with no substitution is returned unchanged.
-    assert_eq!(cmdsub_fixpoint("rm -rf $D/*"), "rm -rf $D/*");
-}
-
-#[test]
-fn the_census_counts_nested_substitutions_and_the_brace_command_form() {
-    use crate::bash_danger_census::{brace_command_body, collect_substitutions};
-    // A nested pair counts twice: the walk pushes every node it passes.
-    assert_eq!(collect_substitutions("echo $(a $(b))").len(), 2);
-    assert_eq!(collect_substitutions("echo `x` $(y)").len(), 2);
-    assert!(collect_substitutions("echo plain").is_empty());
-    // The `${ cmd}` form is a substitution too, with its pipe and semicolon trimmed.
+fn each_census_verdict_reaches_the_disclosure_as_the_census() {
+    // A lexical hit inside a substitution: the census's own tail, not the plain
+    // lexical one, because the variable is not in the command the harness ran.
+    let inner = classify("if true; then echo $(rm -rf $D/*); fi", Some("2.1.258"));
+    assert_eq!(inner.decision, Decision::Ask, "{}", inner.disclosure());
+    assert_eq!(inner.checker, Checker::Census);
     assert_eq!(
-        brace_command_body("x ${ |rm -rf $D/*;}", 2).as_deref(),
-        Some("rm -rf $D/*")
+        inner.reason,
+        "on possibly-empty variable path inside command substitution: $D/*"
     );
-    assert_eq!(collect_substitutions("x ${ |echo hi;}").len(), 1);
+    // The structured checker on the tokenised remainder keeps its own tail.
+    let structured = classify("[[ -f x ]] && rm -rf /tmp", Some("2.1.258"));
+    assert_eq!(structured.decision, Decision::Ask);
+    assert_eq!(structured.checker, Checker::Census);
+    assert_eq!(structured.reason, "on critical path: /tmp");
+    // And its filesystem-dependent arms answer with csift's note, never a guess.
+    let needs_fs = classify("[[ -f x ]] && rm -rf /tmp/build", Some("2.1.258"));
+    assert_eq!(needs_fs.decision, Decision::Unresolved);
+    assert_eq!(needs_fs.checker, Checker::Census);
+    assert_eq!(needs_fs.reason, NOTE_NEEDS_FS);
+    assert!(!needs_fs.blocks());
+}
+
+#[test]
+fn an_operand_the_decomposer_resolves_from_the_environment_is_unresolved() {
+    // A cleanly parsed removal whose operand names one of the twenty environment
+    // variables the decomposer resolves: its value is not in the transcript.
+    let v = classify("rm -rf $HOME/*", Some("2.1.258"));
+    assert_eq!(v.decision, Decision::Unresolved, "{}", v.disclosure());
+    assert_eq!(v.checker, Checker::Structured);
+    assert_eq!(v.branch, Branch::Structured);
+    assert_eq!(v.reason, NOTE_NEEDS_FS);
 }

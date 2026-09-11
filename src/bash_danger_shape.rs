@@ -394,6 +394,109 @@ mod tests {
     }
 
     #[test]
+    fn the_brace_mask_carries_an_escape_through_each_quote_state() {
+        // Inside a backtick span a backslash before `` ` ``, `\` or `$` carries
+        // its partner, so the span does not end on the escaped delimiter.
+        assert_eq!(mask_quoted_braces("echo `a\\`b{c}`"), "echo `a\\`b c}`");
+        // Inside double quotes the same holds for `"`, `\` and `` ` ``.
+        assert_eq!(
+            mask_quoted_braces("echo \"a\\\"b{c}\""),
+            "echo \"a\\\"b c}\""
+        );
+        // A backtick INSIDE double quotes opens a substitution, not a word, so
+        // what follows is read in the backtick state.
+        assert_eq!(mask_quoted_braces("echo \"a`b{c}`\""), "echo \"a`b c}`\"");
+    }
+
+    #[test]
+    fn the_prechecks_answer_before_any_node_walk() {
+        // `Dfe`'s six text prechecks, in its own order. Each is a too-complex
+        // answer taken before the walk, so a command tripping one never reaches
+        // the structured checker.
+        for (command, reason) in [
+            ("rm -rf $D/*\u{1}", "Contains control characters"),
+            ("rm -rf\u{a0}$D/*", "Contains Unicode whitespace"),
+            ("rm -rf\\ x $D/*", "Contains backslash-escaped whitespace"),
+            ("rm -rf ~[x]/*", "Contains zsh ~[ dynamic directory syntax"),
+            ("=ls -rf $D/*", "Contains zsh =cmd equals expansion"),
+            ("rm -rf <1-9>/*", "Contains zsh <N-M> numeric-range glob"),
+        ] {
+            assert_eq!(branch_of(command), Branch::Lexical(reason), "{command:?}");
+        }
+    }
+
+    #[test]
+    fn an_argument_shape_forces_the_lexical_path_wherever_it_appears() {
+        assert_eq!(
+            branch_of("cat <<< x"),
+            Branch::Lexical("herestring_redirect")
+        );
+        assert_eq!(branch_of("cat << EOF"), Branch::Lexical("heredoc_redirect"));
+        assert_eq!(
+            branch_of("[[ -f x ]] && rm y"),
+            Branch::Lexical("test_command")
+        );
+        assert_eq!(branch_of("echo $'a'"), Branch::Lexical("ansi_c_string"));
+        assert_eq!(
+            branch_of("echo $\"a\""),
+            Branch::Lexical("translated_string")
+        );
+        // A `{a,b}` word that is not an expansion is a brace_expression node.
+        assert_eq!(
+            branch_of("rm -rf /{a,b}"),
+            Branch::Lexical("brace_expression")
+        );
+        // With a `${` anywhere the walk would see an expansion instead.
+        assert_eq!(branch_of("rm -rf ${D}/{a,b}"), Branch::Structured);
+    }
+
+    #[test]
+    fn a_statement_head_the_walk_cannot_decompose_names_its_node() {
+        assert_eq!(branch_of("(rm -rf x)"), Branch::Lexical("subshell"));
+        assert_eq!(
+            branch_of("{ rm -rf x; }"),
+            Branch::Lexical("compound_statement")
+        );
+        for def in ["f() { rm -rf x; }", "function f { rm -rf x; }"] {
+            assert_eq!(branch_of(def), Branch::Lexical("function_definition"));
+        }
+        for (head, node) in KEYWORD_STATEMENTS {
+            let command = format!("{head} x; do rm y; done");
+            assert_eq!(branch_of(&command), Branch::Lexical(node), "{command:?}");
+        }
+        // A bare loop keyword at a statement head means the split lost the shape
+        // it belongs to, which csift declines to guess at.
+        assert_eq!(branch_of("then rm -rf x"), Branch::Lexical(SHAPE_UNKNOWN));
+        assert_eq!(
+            branch_of("then rm -rf x").label(),
+            "lexical (shape unknown)"
+        );
+        // An empty statement is skipped rather than classified, and a command
+        // that is all whitespace decomposes cleanly into nothing.
+        assert_eq!(branch_of("; rm -rf x"), Branch::Structured);
+        assert_eq!(branch_of("   "), Branch::Structured);
+    }
+
+    #[test]
+    fn the_statement_split_answers_none_where_tree_sitter_would_answer_error() {
+        // An unbalanced quote, an unbalanced opener, and a closer with nothing
+        // open: all three are the ERROR node, whose reason is `Parse error`.
+        assert!(split_statements("echo \"a").is_none());
+        assert!(split_statements("echo (a").is_none());
+        assert!(split_statements("echo )").is_none());
+        assert_eq!(branch_of("rm -rf \"$D/*"), Branch::Lexical("Parse error"));
+        // A backslash inside double quotes carries its partner, so an escaped
+        // quote does not close the span and the `;` after it is still a split.
+        assert_eq!(
+            split_statements("echo \"a\\\"b\"; ls"),
+            Some(vec!["echo \"a\\\"b\"", " ls"])
+        );
+        // Outside a quote it carries the next byte too, so an escaped separator
+        // is not one.
+        assert_eq!(split_statements("echo a\\;b"), Some(vec!["echo a\\;b"]));
+    }
+
+    #[test]
     fn the_brace_quote_precheck_reads_the_masked_command() {
         // An UNQUOTED brace group carrying a quote character is the obfuscation
         // the arm exists for.

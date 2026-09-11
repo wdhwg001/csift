@@ -180,3 +180,7 @@ pub(crate) fn cmdsub_fixpoint(s: &str) -> String {
     }
     b
 }
+
+#[cfg(test)]
+#[path = "bash_danger_census_tests.rs"]
+mod tests;

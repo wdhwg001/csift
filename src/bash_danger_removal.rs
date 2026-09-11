@@ -314,3 +314,7 @@ fn ends_with_star_slash(b: &str) -> bool {
     let t = b.trim_end_matches(['/', '\\']);
     t.len() < b.len() && t.ends_with('*')
 }
+
+#[cfg(test)]
+#[path = "bash_danger_removal_tests.rs"]
+mod tests;
