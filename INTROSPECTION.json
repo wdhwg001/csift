@@ -79480,7 +79480,7 @@
           "snippet": "let packed = pack(msg, &body, budget, parts)?;\n        let produced = u32::try_from(packed.len()).unwrap_or(u32::MAX);\n        if produced == parts {\n            return Ok(packed);"
         }
       ],
-      "instrument": "Read the constant region at 160361600 and the helper at 165809812 in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; the helper's own branch shows the return-unchanged path, the persist path and the truncate-on-failure path. Then a live capture: install a hook returning more than 10000 characters of additionalContext and read the receiving transcript for a persisted-output block with an absolute path and a 2000-character preview.",
+      "instrument": "Read the constants bank at 160361461 and the helper at 165809812 in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; the helper's own branch shows the return-unchanged path, the persist path and the truncate-on-failure path. Then a live capture: install a hook returning more than 10000 characters of additionalContext and read the receiving transcript for a persisted-output block with an absolute path and a 2000-character preview.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -79499,11 +79499,18 @@
           "name": "the helper every hook string passes through",
           "offset": 165809812,
           "excerpt": "async function ipe(e,n,r,{threshold:o=NQn,storageV5:d}={}){",
-          "note": "additionalContext, systemMessage, initialUserMessage and a command hook's stdout all reach the threshold here."
+          "note": "additionalContext, systemMessage, initialUserMessage and a command hook's stdout all reach the threshold here. The default parameter names the constant below."
         },
         {
           "role": "gate",
-          "name": "the at-or-below branch and the declared default",
+          "name": "the default threshold among the sibling output budgets",
+          "offset": 160361461,
+          "excerpt": "var aJ=50000,WNe=500000;var QSt=4,LQn=400000,MQn=200000,$w=50,NQn=1e4,$7e=1e4,FQn=1e5;",
+          "note": "The declared default the helper's parameter falls back to, 1e4, sitting in one bank with the other output budgets."
+        },
+        {
+          "role": "gate",
+          "name": "the at-or-below early return",
           "offset": 165809871,
           "excerpt": "if(e.length<=o)return e;",
           "note": "At or below the threshold the string is returned unchanged, so a chunk inside the budget is never rewritten."
@@ -79545,18 +79552,18 @@
           "claude_code": "2.1.258",
           "csift": "0.12.2",
           "date": "2026-09-11",
-          "verdict": "holds",
+          "verdict": "refined",
           "instrument": "Read the shared hook-string helper, its at-or-below branch, the declared threshold among the sibling output budgets, the persisted-output formatter, the preview budget and the write-failure fallback in the Claude Code 2.1.258 executable at their offsets.",
           "observed": "The default threshold is 1e4 in a bank of sibling budgets. At or below it the string returns unchanged. Above it the value becomes a persisted-output block naming an absolute path with a preview budgeted at 2000 characters. The 10000-character slice and its truncation note appear only on the branch where the persist-to-disk write failed, so the threshold is a persist boundary.",
           "rule": "Constants are declared values in the named build; branches are read from the helper body.",
-          "note": "The formatter and the preview budget carried as bare offsets are now verbatim hops, which closes the producer leg; the live capture stays open."
+          "note": "The formatter and the preview budget carried as bare offsets are now verbatim hops, which closes the producer leg; the live capture stays open. Two hop corrections: the constants-bank anchor at 160361461, a byte-exact anchor in the prior chain, is restored as a gate hop rather than left as a bare offset in prose, and the instrument now names that offset instead of 160361600; the helper hop is re-roled writer -> trigger, since it is the entry every hook string passes through and the bytes that replace an over-threshold string are written by the formatter. The hop whose excerpt is the early return is named for what that excerpt shows."
         }
       ]
     },
     {
       "id": "MSG-016",
       "area": "messaging",
-      "behavior": "In Claude Code 2.1.258 a Stop or SubagentStop hook that exits 2 blocks the turn from ending. The harness counts consecutive blocks and overrides once the count exceeds a cap read from the environment variable CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, whose default is 8; the comparison is count > cap, so the ninth consecutive block is the one that trips the override and the turn ends as completed, and a non-positive cap disables the blocking vehicle outright. The max-turns check runs before it. The cap comparison sits at 164744170. The blocking outcome itself is built at 161909054, where an exit 2 outside PreToolUse becomes `{decision:\"block\",reason:<stderr>}`, and reaches the conversation as the `hook_blocking_error` attachment constructed at 165818145. The environment-variable literal occurs on 5 lines in 2.1.258 and on 5 in 2.1.260 (counting rule: lines carrying the literal, whole file).",
+      "behavior": "In Claude Code 2.1.258 a Stop or SubagentStop hook that exits 2 blocks the turn from ending. The harness counts consecutive blocks and overrides once the count exceeds a cap read from the environment variable CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, whose default is 8; the comparison is count > cap, so the ninth consecutive block is the one that trips the override and the turn ends as completed, and a non-positive cap disables the blocking vehicle outright. The max-turns check runs before it. The cap comparison sits at 164744170. The blocking outcome itself is built at 161909054, where an exit 2 outside PreToolUse becomes `{decision:\"block\",reason:<stderr>}`, and reaches the conversation as the `hook_blocking_error` attachment constructed at 165818141. The environment-variable literal occurs on 5 lines in 2.1.258 and on 5 in 2.1.260 (counting rule: lines carrying the literal, whole file).",
       "depends": "A queue delivery may use the exit2 vehicle at Stop or SubagentStop, and a channel that blocked the turn nine times in a row would wedge the receiver rather than message it. So every emit line records its vehicle, an exit2 emit records the block count it carried, and ledger::consecutive_exit2_blocks counts back from the newest line to the last emit on another vehicle or the last ack - a hold or an expiry says nothing about blocking and does not break the run. A delivery compares that count plus one against the cap before choosing exit2 and falls back to the additionalContext vehicle otherwise, which is why the cap and its comparison direction are load-bearing rather than advisory.",
       "code": [
         {
@@ -79570,7 +79577,7 @@
           "snippet": "/// The consecutive-block count this emit carried, recorded only on the exit2\n        /// vehicle, where the harness overrides after a fixed number of blocks.\n        block_count: Option<u32>,"
         }
       ],
-      "instrument": "Binary: read 164744170 (the cap comparison and the environment-variable read) and 165866560 (the blocking-error construction) in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; count the environment literal with grep -a -c -F CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, counting rule = lines carrying the literal over the whole file. Live: a Stop hook exiting 2 nine times in a row with stop_hook_active ignored, once at the default cap and once with the cap set to 0, reading whether the ninth block trips the override and how the transcript records it.",
+      "instrument": "Binary: read 164744170 (the cap comparison and the environment-variable read), 161909054 (the construction that turns an exit 2 outside PreToolUse into a block decision carrying the hook's stderr) and 165818141 (the hook_blocking_error attachment that reaches the transcript) in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; count the environment literal with grep -a -c -F CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, counting rule = lines carrying the literal over the whole file. Live: a Stop hook exiting 2 nine times in a row with stop_hook_active ignored, once at the default cap and once with the cap set to 0, reading whether the ninth block trips the override and how the transcript records it.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -79632,7 +79639,7 @@
           "instrument": "Read the cap comparison with its environment read, the exit-code mapper's exit-2 arm, the blocking-answer construction and the blocking-error attachment in the Claude Code 2.1.258 executable at their offsets; count the environment literal with a fixed-string line scan.",
           "observed": "The cap reads the environment with a default of 8 and compares strictly greater-than, behind a positivity test, so the ninth consecutive block trips the override and a non-positive cap skips the branch. The max-turns return sits immediately above it. An exit 2 outside PreToolUse becomes a block decision carrying the hook's stderr as its reason, which reaches the transcript as a hook_blocking_error attachment.",
           "rule": "Lines carrying the literal over the whole file for the environment count; branches are read from the named build at their offsets.",
-          "note": "The text cited 165866560 as the blocking-error construction. Those bytes are the NON-blocking downgrade for a missing hook script. The blocking outcome is built at 161909054 and reaches the transcript through the attachment at 165818145; both citations corrected and read as hops. The cap behaviour csift depends on is unchanged."
+          "note": "The text cited 165866560 as the blocking-error construction. Those bytes are the NON-blocking downgrade for a missing hook script. The blocking outcome is built at 161909054 and reaches the transcript through the attachment at 165818145; both citations corrected and read as hops. The cap behaviour csift depends on is unchanged. The attachment offset is stated as 165818141 throughout, matching the hop; the instrument no longer names the non-blocking downgrade as the blocking-error construction."
         }
       ]
     },
@@ -79850,7 +79857,7 @@
     {
       "id": "MSG-011",
       "area": "messaging",
-      "behavior": "A hook's `hookSpecificOutput.additionalContext` enters the conversation as a `hook_additional_context` attachment record. Over the whole Claude Code 2.1.258 file the attachment is constructed at SIXTEEN sites (counting rule: occurrences of the literal `{type:\"hook_additional_context\"`), carrying TWELVE distinct event values: PreToolUse, PostToolUse, PostToolUseFailure, PostToolBatch, PostModelSwitch, UserPromptSubmit, UserPromptExpansion, SessionStart, Setup, SubagentStart, and the pair Stop and SubagentStop, which share one lane-selected inserter whose hookName and hookEvent are both the variable the agent id picks. PostToolUse, UserPromptSubmit and Stop each have more than one inserter; one further site carries harness-authored text rather than a hook response, and one is a tool-call context builder stamped `hookName:\"tool.call\"`. The hook-output union declares an `additionalContext` member for fifteen events, so declaring the field and inserting it are different sets.",
+      "behavior": "A hook's `hookSpecificOutput.additionalContext` enters the conversation as a `hook_additional_context` attachment record. Over the whole Claude Code 2.1.258 file the attachment is constructed at SIXTEEN sites (counting rule: occurrences of the literal `{type:\"hook_additional_context\"`), carrying TWELVE distinct event values: PreToolUse, PostToolUse, PostToolUseFailure, PostToolBatch, PostModelSwitch, UserPromptSubmit, UserPromptExpansion, SessionStart, Setup, SubagentStart, and the pair Stop and SubagentStop, which share one lane-selected inserter whose hookName and hookEvent are both the variable the agent id picks. PostToolUse, UserPromptSubmit and Stop each have more than one inserter; one further site carries harness-authored text rather than a hook response, and one is a tool-call context builder stamped `hookName:\"tool.call\"`. The hook-output union declares an `additionalContext` member for THIRTEEN events (counting rule: an entry's own brace-matched body, from its `c({` to the matching close, carries the member; both declaration regions agree, 0 events mixed). The declaring set is the twelve inserting events plus `Notification`, which declares the member and has no inserter, so declaring the field and inserting it are different sets by exactly that one event.",
       "depends": "csift reads a csift-channel delivery out of that attachment wherever it lands: the classifier keys on the attachment payload and on the injected text, never on the event that produced it, so a delivery injected at any of those events classifies `agent.communication.channel` beside `harness.meta.hook`. The delivery hook can therefore be registered on whichever event a receiver has configured. If one event stopped inserting, a delivery emitted at that event would leave no transcript record and the transcript half of the delivery evidence would be missing while the sender's ledger still recorded the emission.",
       "code": [
         {
@@ -79864,7 +79871,7 @@
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
-      "instrument": "Binary: count the literal `{type:\"hook_additional_context\"` over the whole Claude Code 2.1.258 file, read each occurrence, and extract the `hookEvent` value beside each; counting rule for the site count = occurrences of that fixed byte string, for the event count = distinct `hookEvent` tokens over those sites, with the lane-selected variable counted as the two events it resolves to. Separately count the hook-output union's construction form `hookEventName:x(\"` and read each. Corpus half: `csift search \"\" --additional-context -t harness.meta.hook --count-by label` over the projects root, one observation per record carrying the leaf.",
+      "instrument": "Binary: count the literal `{type:\"hook_additional_context\"` over the whole Claude Code 2.1.258 file, read each occurrence, and extract the `hookEvent` value beside each; counting rule for the site count = occurrences of that fixed byte string, for the event count = distinct `hookEvent` tokens over those sites, with the lane-selected variable counted as the two events it resolves to. Separately enumerate the hook-output union's construction form `hookEventName:x(\"` over the whole file and, for each occurrence, test its own brace-matched entry body - from the enclosing `c({` to the matching close brace - for the member name; counting rule for the declaring count = distinct event values whose entry body carries it, agreeing across both declaration regions. A window rule is NOT sound here: a fixed byte window after the construction, and a window bounded by the next construction, each bleed into a neighbouring entry and each return a different, larger set. Corpus half: `csift search \"\" --additional-context -t harness.meta.hook --count-by label` over the projects root, one observation per record carrying the leaf.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -79874,26 +79881,27 @@
       "producer_trace": "complete",
       "specimen": "observed",
       "attribution": "end-to-end",
-      "checks": [
+      "producer_chain": [
         {
-          "claude_code": "2.1.258",
-          "csift": "0.11.0",
-          "date": "2026-09-05",
-          "verdict": "holds",
-          "instrument": "Byte-offset reads of the ten inserter constructions in the Claude Code 2.1.258 binary, paired with the corpus census of attachment-carried hook-context records.",
-          "observed": "Ten distinct inserter sites: SessionStart 163199540, Setup 163200632, UserPromptSubmit 162720432, UserPromptExpansion 173533268, PreToolUse 162929090, PostToolUse 162921651, PostToolBatch 164749828, SubagentStart 163778093, Stop/SubagentStop 164633290 (one lane-selected inserter for the pair) and PostModelSwitch 164703453; 88,889 attachment-carried hook-context records in the corpus.",
-          "rule": "One site per distinct inserter construction in the binary; one record per corpus record carrying the harness.meta.hook leaf.",
-          "note": "Landed with the `agent.communication.channel` leaf, which reads a delivery out of the attachment these ten events write."
+          "role": "trigger",
+          "name": "the hook-executor dispatch map that reaches every emitter",
+          "offset": 165806668,
+          "excerpt": "PostToolBatch:Qft,PermissionDenied:JUt,",
+          "note": "Each event value reaches its own emitter, and the emitter's result is what an inserter reads."
         },
         {
-          "claude_code": "2.1.258",
-          "csift": "0.12.2",
-          "date": "2026-09-11",
-          "verdict": "refined",
-          "instrument": "Count the literal for the attachment construction over the whole Claude Code 2.1.258 file, read every occurrence, and extract the hookEvent token beside each; separately enumerate the hook-output union's construction form and read each occurrence.",
-          "observed": "16 construction sites carrying 12 distinct event values once the lane-selected variable is resolved to its two events. PostToolUseFailure inserts and was not in the ten previously listed. PostToolUse, UserPromptSubmit and Stop each carry more than one inserter; one site carries harness-authored formatter text and one is a tool-call context builder stamped hookName tool.call. The union's construction form gives 44 occurrences over 22 events declared twice each, 15 of them declaring an additionalContext member, so the declaring set is wider than the inserting set.",
-          "rule": "Occurrences of the fixed byte string over the whole file for the site count; distinct hookEvent tokens over those sites for the event count, with the lane-selected variable counted as the two events it resolves to.",
-          "note": "The text said ten events through ten inserters. Enumeration gives sixteen sites and twelve events, PostToolUseFailure being the event the list missed. Nothing csift does changes: the classifier keys on the attachment and the injected text, never on the event, so a wider event set only widens where a delivery may be registered."
+          "role": "gate",
+          "name": "the lane-selected inserter's own gate",
+          "offset": 164633180,
+          "excerpt": "if(nt.additionalContexts&&nt.additionalContexts.length>0){let ln=f.agentId?\"SubagentStop\":\"Stop\",",
+          "note": "Nothing is inserted unless the hook response carried contexts, and one site serves two events by picking the name off the agent id."
+        },
+        {
+          "role": "writer",
+          "name": "the lane-selected Stop/SubagentStop insertion",
+          "offset": 164633277,
+          "excerpt": "pn=Sn({type:\"hook_additional_context\",content:nt.additionalContexts,hookName:ln,toolUseID:Lt,hookEvent:ln});",
+          "note": "Both name fields are the selected variable, which is why one site covers two of the twelve events."
         }
       ],
       "enumeration": [
@@ -79994,27 +80002,26 @@
           "verdict": "inserts the expansion hook response's additionalContexts"
         }
       ],
-      "producer_chain": [
+      "checks": [
         {
-          "role": "trigger",
-          "name": "the hook-executor dispatch map that reaches every emitter",
-          "offset": 165806668,
-          "excerpt": "PostToolBatch:Qft,PermissionDenied:JUt,",
-          "note": "Each event value reaches its own emitter, and the emitter's result is what an inserter reads."
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Byte-offset reads of the ten inserter constructions in the Claude Code 2.1.258 binary, paired with the corpus census of attachment-carried hook-context records.",
+          "observed": "Ten distinct inserter sites: SessionStart 163199540, Setup 163200632, UserPromptSubmit 162720432, UserPromptExpansion 173533268, PreToolUse 162929090, PostToolUse 162921651, PostToolBatch 164749828, SubagentStart 163778093, Stop/SubagentStop 164633290 (one lane-selected inserter for the pair) and PostModelSwitch 164703453; 88,889 attachment-carried hook-context records in the corpus.",
+          "rule": "One site per distinct inserter construction in the binary; one record per corpus record carrying the harness.meta.hook leaf.",
+          "note": "Landed with the `agent.communication.channel` leaf, which reads a delivery out of the attachment these ten events write."
         },
         {
-          "role": "gate",
-          "name": "the lane-selected inserter's own gate",
-          "offset": 164633180,
-          "excerpt": "if(nt.additionalContexts&&nt.additionalContexts.length>0){let ln=f.agentId?\"SubagentStop\":\"Stop\",",
-          "note": "Nothing is inserted unless the hook response carried contexts, and one site serves two events by picking the name off the agent id."
-        },
-        {
-          "role": "writer",
-          "name": "the lane-selected Stop/SubagentStop insertion",
-          "offset": 164633277,
-          "excerpt": "pn=Sn({type:\"hook_additional_context\",content:nt.additionalContexts,hookName:ln,toolUseID:Lt,hookEvent:ln});",
-          "note": "Both name fields are the selected variable, which is why one site covers two of the twelve events."
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Count the literal for the attachment construction over the whole Claude Code 2.1.258 file, read every occurrence, and extract the hookEvent token beside each; separately enumerate the hook-output union's construction form and read each occurrence.",
+          "observed": "16 construction sites carrying 12 distinct event values once the lane-selected variable is resolved to its two events. PostToolUseFailure inserts and was not in the ten previously listed. PostToolUse, UserPromptSubmit and Stop each carry more than one inserter; one site carries harness-authored formatter text and one is a tool-call context builder stamped hookName tool.call. The union's construction form gives 44 occurrences over 22 events declared twice each. Testing each occurrence's own brace-matched entry body, 13 events declare an additionalContext member and 9 do not (CwdChanged, Elicitation, ElicitationResult, FileChanged, MessageDisplay, PermissionDenied, PermissionRequest, PreModelSwitch, WorktreeCreate), with 0 events disagreeing between the two declaration regions. The declaring set is the twelve inserting events plus Notification.",
+          "rule": "Occurrences of the fixed byte string over the whole file for the site count; distinct hookEvent tokens over those sites for the event count, with the lane-selected variable counted as the two events it resolves to; for the union's declaring count, distinct event values whose own brace-matched entry body carries the member name.",
+          "note": "The text said ten events through ten inserters. Enumeration gives sixteen sites and twelve events, PostToolUseFailure being the event the list missed. Nothing csift does changes: the classifier keys on the attachment and the injected text, never on the event, so a wider event set only widens where a delivery may be registered. A first pass read the union's declaring count as 15 from a fixed byte window after each construction; that window bleeds into the neighbouring entry. Under the entry's own brace-matched body the number is 13, and the two events the window added - PermissionDenied, which declares only retry, and PreModelSwitch, which declares only the permission pair - declare no such member in either region."
         }
       ]
     },
@@ -80426,7 +80433,7 @@
           "snippet": "    /// `SubagentStop` only: the CHILD lane's own transcript, distinct from\n    /// `transcript_path`, which names the top-level session file in every lane.\n    pub(crate) agent_transcript_path: Option<String>,"
         }
       ],
-      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial fires a SubagentStop hook that logs its whole payload and compares the two path fields against the on-disk transcript tree.",
+      "instrument": "Enumerate every occurrence of the literal `agent_transcript_path` over the whole shipped Claude Code binary with a fixed byte-string scan and read each (`tail -c +OFFSET+1 | head -c N`), giving each a verdict. Counting rule: OCCURRENCES of the literal are counted over the whole file, but the enumeration lists SITES - adjacent occurrences inside one conditional rewrite are one site, which is what collapses 12 occurrences to 8 sites. Then read the Stop-family emitter, its agent-id ternary and the child path builder at their offsets and confirm each byte for byte. A live trial fires a SubagentStop hook that logs its whole payload and compares the two path fields against the on-disk transcript tree.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -81095,7 +81102,7 @@
           "claude_code": "2.1.258",
           "csift": "0.12.2",
           "date": "2026-09-11",
-          "verdict": "holds",
+          "verdict": "refined",
           "instrument": "Read the base builder, its transcript_path fill, the session-path builder and the separate per-agent path builder in the Claude Code 2.1.258 executable at their offsets, side by side.",
           "observed": "The base fills the field from a builder keyed on the session id alone, which branches only on whether that id is the current one; nothing about the firing transcript reaches it. The per-agent builder is a different function with a different root, an `agent-<id>.jsonl` stem and a per-agent subdirectory lookup, and only the SubagentStop payload's own field reaches it.",
           "rule": "Branches are read from each function body at its offset in the named build.",
@@ -81795,7 +81802,7 @@
           "claude_code": "2.1.258",
           "csift": "0.12.2",
           "date": "2026-09-11",
-          "verdict": "holds",
+          "verdict": "refined",
           "instrument": "Read the same-process branch that chooses the source value, the fork-specific bookkeeping beside it, the hook runner that receives the value and the payload that writes it, in the Claude Code 2.1.258 executable at their offsets.",
           "observed": "One ternary passes the literal fork where a resume would pass resume, and the same flag drives the branch's own bookkeeping, so the two are distinct paths. The runner takes the value as its second parameter and passes it through untouched to the payload, which writes it as source.",
           "rule": "Branches are read from each body at its offset in the named build.",
@@ -83838,7 +83845,7 @@
           "claude_code": "2.1.258",
           "csift": "0.12.2",
           "date": "2026-09-11",
-          "verdict": "holds",
+          "verdict": "refined",
           "instrument": "Read the switch head, the classifier that produces the value it dispatches on, and every arm in order in the Claude Code 2.1.258 executable; count the route-label construction form within the tool's byte range 175718336-175793426.",
           "observed": "Eight arms, in order main, agent-live, agent-stopped-by-user, agent-stopped, agent-evicted, local-session, cloud-session and mailbox, and no default anywhere in the switch - the region after the last arm closes into the module's exports. The label census reproduces exactly: unresolved 19, bridge 12, mailbox 10, uds 7, desktop_host 7, resume 6, in_process 4.",
           "rule": "Occurrences of the label construction form within the stated byte range; arms are case labels read in file order from the switch head.",
@@ -85802,7 +85809,7 @@
           "snippet": "        Some(_)\n            if hook.session_start_source(\"compact\")\n                && !redelivered_since_emit(ledger, &line.id) =>\n        {\n            Verdict::Send {\n                redeliver: Some(RedeliverSource::Compact),\n            }\n        }"
         }
       ],
-      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The absence is stated in ONE construction form: count that form for PostCompact and for SubagentStart over the whole binary, then read the PostCompact runner at its offset and list the members it collects.",
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte. The negative closes by ENUMERATION, not by one counted form: enumerate every occurrence of the hook-output union's construction form `hookEventName:x(\"` over the whole file, read each, and record the event it names; then count every occurrence of the bare member key `hookEventName:` and read the remainder, which are runtime constructions and a documentation table. Counting rule: occurrences of the fixed byte string over the whole file, each read and given a verdict. Finally read the PostCompact runner at its offset and list the members it collects.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -85860,7 +85867,7 @@
           "claude_code": "2.1.258",
           "csift": "0.12.2",
           "date": "2026-09-11",
-          "verdict": "holds",
+          "verdict": "refined",
           "instrument": "Enumerate every occurrence of the hook-output union's construction form over the whole Claude Code 2.1.258 file and read each; then count every occurrence of the bare member key and read the remainder; read the PostCompact runner and list the members it collects.",
           "observed": "44 occurrences of the construction form over 22 distinct events, each declared twice, PostCompact among none of them. The bare key occurs 70 times whole-file; the remaining 26 are runtime constructions and a documentation table, and none names PostCompact. The runner builds a PostCompact payload and folds each hook result into a display string, returning userDisplayMessage alone.",
           "rule": "Occurrences of the fixed byte string over the whole file, each read and given a verdict; a member is a declared key in the union entry.",
@@ -85958,7 +85965,7 @@
           "snippet": "    let kind = match me.kind {\n        crate::subagent::SubagentKind::Teammate => ReceiverKind::Teammate,\n        crate::subagent::SubagentKind::Workflow => ReceiverKind::WorkflowLane,\n        crate::subagent::SubagentKind::BuiltinTask => ReceiverKind::UnnamedSubagent,\n    };"
         }
       ],
-      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Read the default agent type at its offsets in both builds. The named-agent merge is re-located by its own byte search before it is cited: the offset carried in the finding this claim comes from is about 1500 bytes off.",
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Read the default agent type at its offsets in both builds. The named-agent merge is re-located by its own byte search before it is cited - search the binary for the assignment that writes `agentType:\"subagent\"` beside `subagentName`, rather than carrying an offset forward.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -86013,7 +86020,7 @@
           "instrument": "Read the bare workflow agent definition and the agent context a named workflow agent produces in the Claude Code 2.1.258 executable at their offsets, locating the second by searching for the assignment itself rather than by a carried offset.",
           "observed": "The bare definition declares agentType workflow-subagent and is the default for a workflow agent() call that names no type. The context a spawn builds writes agentType subagent with the real type in subagentName beside the workflow run id, so the workflow-subagent string never appears in what a named workflow agent writes.",
           "rule": "Values are keys in the named object literals, read at their offsets in the named build.",
-          "note": "The named-agent merge is re-located by searching for the assignment, which is what the open leg required; the offset the claim came from is not carried."
+          "note": "The named-agent merge is re-located by searching for the assignment, which is what the open leg required; the offset the claim came from is not carried. The instrument sentence is rewritten to name the byte search itself rather than describing where an offset came from."
         }
       ]
     },
