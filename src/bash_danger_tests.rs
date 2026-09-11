@@ -390,6 +390,34 @@ fn the_generation_three_token_walk_reaches_a_prefixed_removal() {
 }
 
 #[test]
+fn a_keyword_attached_removal_is_reachable_only_from_generation_three() {
+    // The two assertions the old port had backwards, kept here in their original
+    // form. Its clause head was hand-patched to strip a leading `do`/`then`; the
+    // real head `_to` @162773345 strips nothing, so neither of these is a removal
+    // the harness sees until the token walk arrives at 2.1.261.
+    for cmd in [
+        "for f in a; do rm -rf $TMP/$f; done",
+        "if true; then rm $TMP/*; fi",
+    ] {
+        for version in ["2.1.193", "2.1.258"] {
+            let v = classify(cmd, Some(version));
+            assert_eq!(
+                v.decision,
+                Decision::Passthrough,
+                "{cmd} at {version}: {}",
+                v.disclosure()
+            );
+            assert!(!v.blocks(), "{cmd} at {version}");
+        }
+        assert_eq!(
+            classify(cmd, Some("2.1.268")).decision,
+            Decision::Ask,
+            "{cmd}"
+        );
+    }
+}
+
+#[test]
 fn the_generation_three_find_scan_reaches_an_exec_removal() {
     let cmd = "if true; then find . -exec rm -rf $TMP/* \\; ; fi";
     assert_eq!(
