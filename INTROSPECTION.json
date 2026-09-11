@@ -14720,7 +14720,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "140-146",
+          "lines": "141-146",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -16299,7 +16299,7 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "137-144",
+          "lines": "146-153",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file.\n    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {"
         }
       ],
@@ -19552,7 +19552,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "771-776",
+          "lines": "772-777",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19776,7 +19776,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2110",
+          "lines": "2132",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20018,12 +20018,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "769",
+          "lines": "770",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "778-779",
+          "lines": "779-780",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -20958,12 +20958,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "735",
+          "lines": "736",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "757",
+          "lines": "758",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21134,12 +21134,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "735",
+          "lines": "736",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "757",
+          "lines": "758",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21322,7 +21322,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "801",
+          "lines": "802",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21589,12 +21589,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "737",
+          "lines": "738",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "801",
+          "lines": "802",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21691,7 +21691,7 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "737",
+          "lines": "738",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -38426,12 +38426,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "729",
+          "lines": "730",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "737",
+          "lines": "738",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -43333,12 +43333,12 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "110-118",
+          "lines": "119-127",
           "snippet": "        let Some(att) = rec.attachment_value() else {\n            continue;\n        };\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"plan_mode\") {\n            continue;\n        }\n        let Some(plan_file) = att.get(\"planFilePath\").and_then(serde_json::Value::as_str) else {\n            continue;\n        };"
         },
         {
           "path": "src/plan.rs",
-          "lines": "82-90",
+          "lines": "91-99",
           "snippet": "/// Tight byte prefilter for the plan-resolution pre-pass: `plan_mode` is a rare token, so\n/// a giant transcript parses only its handful of attachment lines (the scan still splits\n/// newlines over the whole file, but `serde_json` runs on almost nothing).\nfn line_is_plan_candidate(line: &[u8]) -> bool {\n    // Built ONCE (per-line hot path - the stateless form rebuilt its searcher every call).\n    static PLAN_MODE: std::sync::LazyLock<memchr::memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b\"plan_mode\"));\n    PLAN_MODE.find(line).is_some()\n}"
         }
       ],
@@ -43473,7 +43473,7 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "107-109",
+          "lines": "116-118",
           "snippet": "    // File order == line order; overwriting keeps the LATEST plan_mode binding.\n    let mut latest: Option<PlanRef> = None;\n    for (line_no, rec) in &records {"
         }
       ],
@@ -43758,7 +43758,7 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "63",
+          "lines": "72",
           "snippet": "/// The session's plan slug (the harness derives the plan file name from it)."
         },
         {
@@ -43888,17 +43888,17 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "63",
+          "lines": "72",
           "snippet": "/// The session's plan slug (the harness derives the plan file name from it)."
         },
         {
           "path": "src/plan.rs",
-          "lines": "63-68",
+          "lines": "72-77",
           "snippet": "    /// The session's plan slug (the harness derives the plan file name from it).\n    /// Read from the binding record itself: the `plan_mode` attachment record always\n    /// carries it. The slug is minted BEFORE Plan-Mode entry (measured at CC 2.1.258:\n    /// the first slug-carrying record precedes the `plan_mode` line in 18 of 18\n    /// transcripts), so earlier records may carry it too - the binding record is\n    /// simply the authoritative carrier. `None` when the record predates the field."
         },
         {
           "path": "src/plan.rs",
-          "lines": "143-149",
+          "lines": "152-158",
           "snippet": "    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11; v0.10.2)."
         },
         {
@@ -44051,12 +44051,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "137-142",
+          "lines": "146-151",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         },
         {
           "path": "src/plan.rs",
-          "lines": "145",
+          "lines": "154",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         },
         {
@@ -44275,7 +44275,7 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "144-151",
+          "lines": "153-160",
           "snippet": "        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11; v0.10.2).\n                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());\n                let root = root_owned.as_deref().map(Path::new);"
         },
         {
@@ -44787,12 +44787,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "76-80",
+          "lines": "85-89",
           "snippet": "    /// True when the first slug-carrying record is a `compact_boundary` itself: the\n    /// slug was MINTED at that compaction (Plan Mode never ran; Claude Code will\n    /// still inject or rebuild the file it names) - the forked-session signature.\n    pub minted_at_compaction: bool,\n}"
         },
         {
           "path": "src/plan.rs",
-          "lines": "145",
+          "lines": "154",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         }
       ],
@@ -44908,12 +44908,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "70-75",
+          "lines": "79-84",
           "snippet": "    /// How the binding was established: `plan_mode` (the explicit attachment, path\n    /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying\n    /// record binds `<plans-dir>/<slug>.md` - Claude Code's own binding law, which a\n    /// forked/background session reaches because the fork strips its history's\n    /// attachments, and any compaction mints a slug even without Plan Mode).\n    pub binding_source: &'static str,"
         },
         {
           "path": "src/plan.rs",
-          "lines": "137-142",
+          "lines": "146-151",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         }
       ],
@@ -45072,12 +45072,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "58-60",
+          "lines": "67-69",
           "snippet": "    /// Whether that plan file currently exists on disk (a recover target need NOT exist -\n    /// recovering a deleted plan from the transcript is the whole point).\n    pub plan_exists: bool,"
         },
         {
           "path": "src/plan.rs",
-          "lines": "63",
+          "lines": "72",
           "snippet": "/// The session's plan slug (the harness derives the plan file name from it)."
         }
       ],
@@ -84944,7 +84944,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "97-104",
+          "lines": "98-104",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
@@ -86230,7 +86230,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "92-105",
+          "lines": "93-105",
           "snippet": "/// One record's place in the surviving conversation.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub enum Survival {\n    /// On the chain the loader walks (or rescued onto it).\n    #[default]\n    Live,\n    /// Above a cut the loader stops at, or in a region csift could not resolve. Kept and\n    /// selectable exactly as before - only flagged.\n    PreCut,\n    /// Off the chain, in a region the chain resolved. `root` is the index of the\n    /// abandoned branch's topmost record (the branch head a reader should look at).\n    Abandoned { root: usize },\n}\n"
         }
       ],
@@ -86410,7 +86410,7 @@
       "code": [
         {
           "path": "src/model/chain/leaf.rs",
-          "lines": "106-111",
+          "lines": "107-111",
           "snippet": "fn tail_index(b: &Builder<'_>) -> Option<usize> {\n    (0..b.len())\n        .rev()\n        .find(|&i| b.admit[i] && !b.removed[i] && b.is_survivor(i) && !b.is_sidechain(i))\n}\n"
         },
         {
@@ -88225,6 +88225,73 @@
           "instrument": "Read the list-id resolver, the team initializer, the config literal and the rename in the 2.1.258 build; then joined every current registry row against every team config by `startedAt` versus `createdAt`.",
           "observed": "6 registry rows, 26 team configs. Every row matched EXACTLY ONE config within five seconds, at deltas of -716, -1043, -1100, -1124, -1187 and -3496 ms (the config is written first). On 4 of the 6, the team name does not begin with the row's own session id prefix, which is the resumed-launch shape. All 26 team names equal `session-` plus the first eight characters of their own `leadSessionId`, and all 26 have a directory under the tasks root.",
           "rule": "One row per registry file; a config matches when the absolute difference between `createdAt` and `startedAt` is at most 5000 ms. Name comparisons are exact string equality on the first eight characters.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "PLAN-021",
+      "area": "plan",
+      "behavior": "A `/clear` ends the plan binding. The session-id regeneration the clear runs opens by calling `forgetPlanSlug` on the OUTGOING id, before the new id is minted and before the ledger is re-scoped, so nothing in the new session's state carries the old slug. The new transcript therefore gets neither of the two things a binding can be read from: no `plan_mode` attachment (plan mode was never entered in it) and no slug of its own until it is. The same call sits in the other re-identification path, so a resume that changes the id drops it too.",
+      "depends": "csift needs no clear-specific code in `plan`, and that is the claim: both binding laws already key on the TRANSCRIPT's own records, so a clear-minted file resolves to no plan, which is the correct answer rather than a gap. The risk the claim closes is the opposite move - inheriting the predecessor's binding through the `cleared_from` join would assert a plan the model no longer has. A reader who wants the old session's plan takes the `cleared_from` id and looks that session up directly.",
+      "code": [
+        {
+          "path": "src/plan.rs",
+          "snippet": "//! A `/clear` ENDS the binding and csift needs no code for it (claim PLAN-021). The",
+          "lines": "26-26"
+        },
+        {
+          "path": "src/plan.rs",
+          "snippet": "pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {",
+          "lines": "103-103"
+        }
+      ],
+      "instrument": "Byte-search the shipped binary for the regeneration head `function BIn(e={}){let t=n(),o=t.id;t.sessionScratch.forgetPlanSlug(o)` and read the function to its return. On disk, take a transcript whose first non-isMeta user record is the `/clear` wrapper and count its `plan_mode` attachments and its slug-carrying records; run `csift plan @<that id>` and confirm it reports no plan.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 6.7.1"
+      },
+      "first_seen_claude_code": "2.1.258",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "No clear-minted transcript with a plan-bound predecessor exists in this corpus, so the specimen shows the absence rather than the contrast. Capture one by entering plan mode, clearing, and reading `plan` on both ids."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the clear's call into the regeneration",
+          "offset": 173273779,
+          "excerpt": "yield{type:\"conversation_reset\",newConversationId:w},BPn(s),Ihe();",
+          "note": "the generator reaches the regeneration two statements after the saver"
+        },
+        {
+          "role": "gate",
+          "name": "the regeneration head",
+          "offset": 156787897,
+          "excerpt": "function BIn(e={}){let t=n(),o=t.id;t.sessionScratch.forgetPlanSlug(o),t.identity.replaceProjectDir(null);",
+          "note": "forgetPlanSlug runs on the outgoing id, first, before any new id exists"
+        },
+        {
+          "role": "writer",
+          "name": "the regeneration tail",
+          "offset": 156788404,
+          "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,...e.setCurrentAsParent&&{parentId:o}}),cn(t,\"clear\",i),t.id}",
+          "note": "the new id is minted after the slug is already forgotten, so nothing carries it forward"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the regeneration from its head to its return in the 2.1.258 build; counted `plan_mode` attachments and slug-carrying records on the clear-minted transcript of one projects root.",
+          "observed": "`forgetPlanSlug(o)` is the first statement of the regeneration, with `o` bound to the pre-swap id on the line above; the new id is minted eight statements later. The clear-minted transcript carries 0 `plan_mode` attachments and 0 slug-carrying records over its 103 lines, and `csift plan` on it reports no plan. Its predecessor carries 0 and 0 over 88 lines and reports none either, so this specimen shows the absence, not a contrast - a clear-minted transcript with a bound predecessor is the stronger specimen and is not in this corpus.",
+          "rule": "An attachment counts when its parsed `attachment.type` is `plan_mode` and a record is slug-carrying when its top-level `slug` is non-empty; the transcript is the one whose first non-isMeta user record is the `/clear` wrapper.",
           "note": ""
         }
       ]

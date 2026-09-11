@@ -23,6 +23,30 @@ surface change bumps the PATCH.
   `harness.meta.loop` by arm order, and an inbound peer message, which carries the identical
   stamp, is refused by its relay framing and its `origin` object. `Class::ALL` grows to 38
   leaves; every search hit's JSON gains a `scheduled_at` field.
+- **`list` joins a cleared session to the transcript it was cleared from.** A `/clear`
+  mints a new session id inside the same process and writes no lineage anywhere on disk,
+  so the row infers the predecessor and says so. A transcript is `minted_by: "clear"` when
+  its first non-isMeta user record is the `/clear` slash wrapper, which lands in the file
+  the command created rather than the one it ended; the predecessor is the sibling in the
+  same project directory whose cost-ledger checkpoint (`startTime + totalDuration` on a
+  `cost-state` line) closes within 2000 ms of that wrapper. The nearest line wins, and a
+  tie between two different files is reported and joined to neither. New JSON fields
+  `minted_by`, `cleared_from`, `cleared_from_distance_ms` and `cleared_from_candidates`,
+  and one `cleared` text row; never a file mtime, never the time adjacency of ordinary
+  records.
+- **`status` and `wait` report a cost-ledger checkpoint at the tail as evidence.** When a
+  transcript's last line is a `cost-state` line, a `checkpoint` evidence row names it and
+  JSON carries `last_checkpoint: {line, kind}`. No verdict was added: the harness writes a
+  checkpoint at a clear, a background handover, an in-app resume and at exit, most of them
+  mid-file, so a tail one says only that nothing was appended after it, and the registry
+  row keeps deciding liveness. With no registry row and a tail checkpoint, that note gains
+  a clause saying the session closed or was handed over.
+- **`status` finds the task store a clear left behind.** The store is named after the id
+  the process started with, so the session's own id is now the first candidate rather than
+  the only one: then the root of the `cleared_from` chain, then the team file written
+  within five seconds of the registry row's `startedAt`. A directory matching no candidate
+  is never read, and every store that answered prints as `tasks store: <dir> (via
+  <candidate>)`, with the same pairs in JSON `tasks_stores`.
 
 ### Fixed
 

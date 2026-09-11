@@ -22,6 +22,15 @@
 //! Within one transcript every `plan_mode` attachment carries the same `planFilePath`
 //! (only `planExists` flips `false→true` once the plan is first written); we take the
 //! LATEST occurrence as the current binding.
+//!
+//! A `/clear` ENDS the binding and csift needs no code for it (claim PLAN-021). The
+//! session-id regeneration a clear runs calls `forgetPlanSlug` on the outgoing id before
+//! minting the new one, so a clear-minted transcript carries neither a `plan_mode`
+//! attachment nor a slug of its own until plan mode is entered again. Both binding laws
+//! already key on the TRANSCRIPT's own records, so the cleared file resolves to no plan -
+//! which is the correct answer, not a gap. A reader who wants the PREDECESSOR's plan
+//! takes the `cleared_from` id `list` reports and looks that session up directly; csift
+//! never inherits a binding across the clear, because Claude Code does not either.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

@@ -41,13 +41,26 @@ use super::*;
         ONE `{kind:\"session\", …}` row per session: {session_id, is_subagent, \
         parent_session_id, path, cwd, git_branch, git_branch_first, git_branch_last, version, \
         version_first, version_last, first_user, last_user, last_agent, \
-        skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar}, then \
+        skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar, \
+        minted_by, cleared_from, cleared_from_distance_ms, cleared_from_candidates}, then \
         a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
         the re-feedable owning uuid (= session_id for a top-level row); never re-feed a \
         subagent `session_id`. The `first_user`/`last_user`/`last_agent` fields are {excerpt, \
         ts_utc, ts_local} sub-objects (or null when absent). `dropped_by_cap` > 0 when the \
         unscoped-flood cap trimmed rows (the most-recent 50 are kept).\n\n\
+        CLEAR LINEAGE (an inference, and the row says so)\n  \
+          A `/clear` mints a new session id inside the same process and writes no lineage \
+        anywhere on disk, so a cleared transcript names no predecessor. csift reads two \
+        facts instead: a transcript whose FIRST non-isMeta user record is the `/clear` \
+        wrapper was minted by that clear (`minted_by:\"clear\"`, text row `cleared`), and its \
+        predecessor is the sibling in the same project directory whose cost-ledger \
+        checkpoint (`startTime + totalDuration` on a `cost-state` line) closes within \
+        2000 ms of the wrapper's timestamp (`cleared_from`, with the distance in \
+        `cleared_from_distance_ms`). The nearest line wins; if two different files tie, \
+        both are reported in `cleared_from_candidates` and NEITHER is joined. Never a file \
+        mtime, and never the time adjacency of ordinary records - two busy sessions share \
+        those.\n\n\
         SKIPPED_LINES SEMANTICS (window census, NOT a whole-file verdict)\n  \
           `list` reads only the head/tail lines it needs (the §7 fast-overview contract; it \
         never scans the middle of a transcript), so its `skipped_lines` counts malformed lines \

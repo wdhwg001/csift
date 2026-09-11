@@ -128,6 +128,7 @@ pub struct BackgroundLensArgs {
         evidence:[{surface, value, age_secs}], children:[{session_id, state, detail} - \
         live lanes only], settled_children, tasks:[{id, subject, status, blocked_by}] \
         (null when the session has no tasks dir), tasks_completed, \
+        tasks_stores:[{dir, via}], last_checkpoint:{line, kind}|null, \
         pending:[...], background:{open, ignored, completed, failed, killed, stopped, timed_out, blocked, other, \
         scanned_files, tasks:[{kind, id, tool_use_id, lane, state, entered_by \
         (model|user|timeout|deliver-message; null for an agent or a monitor), \
@@ -136,6 +137,18 @@ pub struct BackgroundLensArgs {
         output_age_secs, ignored_by} - open tasks only], notes:[...]}, \
         last:{user:{ts_utc, ts_local, text, truncated}|null, agent:{...}|null}, \
         tail_state, notes:[...]} → {kind:\"summary\", verdict}.\n\n\
+        A CHECKPOINT AT THE TAIL, AND THE TASK STORE A CLEAR LEFT BEHIND\n  \
+          When the transcript's LAST line is a `cost-state` line (the cost ledger's \
+        checkpoint), an evidence row names it and `last_checkpoint` carries its line. \
+        It is EVIDENCE, never a verdict: the harness writes one at a clear, a background \
+        handover, an in-app resume and at exit, and most such lines sit mid-file, so all \
+        a tail one says is that nothing was appended after it - liveness stays the \
+        registry row's answer and the verdict set is unchanged. The tasks section reads \
+        the same store it always did, but that store is named after the id the PROCESS \
+        started with and a `/clear` never renames it: when the session's own id finds \
+        nothing, csift tries the root of the `cleared_from` chain (see `csift list`), \
+        then the team file written within 5s of the registry row's startedAt. Each store \
+        that answered prints as `tasks store: <dir> (via <candidate>)`.\n\n\
         SEE ALSO\n  \
           csift whoami --peers        every live lane at once, as `id kind state` only\n  \
           csift whoami --to @<lane>   liveness turned into a reach prediction for one lane\n  \
