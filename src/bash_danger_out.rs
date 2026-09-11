@@ -24,7 +24,10 @@
 //! of the clause: the shield has already replaced the script's separators, so the
 //! runs are reassembled and unmasked (@166795979) first, and the allowance the
 //! positional target form runs under is derived from the script's own tail
-//! (@166796336). One divergence in this neighbourhood is DECLINED, because it is
+//! (@166796336). `Xct` enters the recursion once, at @166794394 as
+//! `iLo(C,r===0||n,r+1)`, and `iLo` calls back into `Xct` on the rebuilt script at
+//! @166796542, writing the escaped-dollar stand-in back as `\$` in the target it
+//! returns. One divergence in this neighbourhood is DECLINED, because it is
 //! nothing the nested port needs and nothing the contract asked for: `MIn`
 //! @166793250, the blanking mask the top-level function scan reads, decides a
 //! backslash with `RNe` and emits two blanks where it blanks an escape pair, while

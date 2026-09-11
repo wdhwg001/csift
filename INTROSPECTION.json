@@ -91069,17 +91069,17 @@
       "code": [
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "136",
+          "lines": "139",
           "snippet": "pub(crate) fn out(command: &str) -> Option<OutHit> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "254",
+          "lines": "257",
           "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "398",
+          "lines": "401",
           "snippet": "fn nested_shell(clause: &str, depth: usize, inherited_positional: bool) -> Option<OutHit> {"
         },
         {
