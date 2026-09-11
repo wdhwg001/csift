@@ -121,10 +121,10 @@ pub(crate) fn out(command: &str) -> Option<OutHit> {
         .collect();
     let positional_ok =
         !FUNCTION_SCAN.is_match(&mask(&cleaned, true)) && !has_set_dashdash(&cleaned);
-    if let Some(hit) = clause_pass(&cleaned, positional_ok, 0, true) {
+    if let Some(hit) = clause_pass(&cleaned, positional_ok, 0, true, false) {
         return Some(hit);
     }
-    clause_pass(&cleaned, false, 0, false)
+    clause_pass(&cleaned, false, 0, false, false)
 }
 
 /// `QNo` with its negative lookahead applied in code: a `set --` whose first
@@ -151,7 +151,13 @@ fn has_set_dashdash(s: &str) -> bool {
 }
 
 /// `Xct` @166794... - one pass over the statements of a script.
-fn clause_pass(text: &str, positional_ok: bool, depth: usize, quote_aware: bool) -> Option<OutHit> {
+fn clause_pass(
+    text: &str,
+    positional_ok: bool,
+    depth: usize,
+    quote_aware: bool,
+    in_dquote: bool,
+) -> Option<OutHit> {
     let p = text.replace("\\\r\n", " ").replace("\\\n", " ");
     let masked = if quote_aware { mask_specials(&p) } else { p };
     let mut s = strip_backticks(&masked);
@@ -176,7 +182,7 @@ fn clause_pass(text: &str, positional_ok: bool, depth: usize, quote_aware: bool)
             }
         }
         for inv in &candidates {
-            if let Some(hit) = operand_walk(inv, positional_ok, quote_aware) {
+            if let Some(hit) = operand_walk(inv, positional_ok, in_dquote) {
                 return Some(hit);
             }
         }
@@ -322,7 +328,7 @@ fn truncate_at_find_predicate(mut inv: Invocation) -> Invocation {
 }
 
 /// `rLo` @166794... - the operand walk and the two target tests.
-fn operand_walk(inv: &Invocation, positional_ok: bool, quote_aware: bool) -> Option<OutHit> {
+fn operand_walk(inv: &Invocation, positional_ok: bool, in_dquote: bool) -> Option<OutHit> {
     let mut p = 0usize;
     while p < inv.tokens.len() {
         let t = inv.tokens[p].trim_end_matches([')', ']', '}']);
@@ -330,7 +336,10 @@ fn operand_walk(inv: &Invocation, positional_ok: bool, quote_aware: bool) -> Opt
             p += 1;
             continue;
         }
-        if !quote_aware && t.starts_with('\'') && !t[1..].contains('\'') && t.ends_with('$') {
+        // The skip is gated on whether this script came out of a DOUBLE-quoted
+        // nested shell, not on the pass: both top-level passes carry the flag
+        // false, so both skip a token that opens a single quote and ends on `$`.
+        if !in_dquote && t.starts_with('\'') && !t[1..].contains('\'') && t.ends_with('$') {
             p += 1;
             continue;
         }
@@ -363,7 +372,7 @@ fn nested_shell(clause: &str, depth: usize, positional_ok: bool) -> Option<OutHi
         if script.is_empty() {
             continue;
         }
-        if let Some(hit) = clause_pass(script, positional_ok, depth, true) {
+        if let Some(hit) = clause_pass(script, positional_ok, depth, true, quote == '"') {
             return Some(hit);
         }
     }

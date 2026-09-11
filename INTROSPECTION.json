@@ -91031,7 +91031,7 @@
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "226",
+          "lines": "232",
           "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
         },
         {
