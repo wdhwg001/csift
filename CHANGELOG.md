@@ -82,6 +82,21 @@ surface change bumps the PATCH.
   preview - reports no lines at all, because no original newline can be located in a string the
   record does not carry; the old figure was measured against a different string.
 
+
+- **The generation-3 blanking mask decides a backslash the way the harness does.** The
+  rewritten dangerous-removal classifier masks its input twice before its clause walk
+  starts, once blanking every quoted run and comment and once keeping them, and those two
+  answers decide whether a positional parameter (`$1`, `$@`, `$*`, `$!`) counts as a removal
+  target. csift's mask read every backslash outside a single quote as an escape; the harness
+  reads an in-quote one with the same helper its quote shield uses and blanks the escape as a
+  pair, so a `\"` does not end the run that hides it. The old reading flipped the quote state
+  for the whole rest of the command, which made a function definition written inside a quoted
+  string count as a real one and hid a definition that genuinely followed the string. No
+  corpus lane changes verdict: over 165,314 distinct (Bash command, version) pairs the two
+  readings differ on 4,097 masked strings and 165 function-scan answers, but the generations
+  before the rewrite never call a mask and the three differing commands recorded at or past
+  the rewrite floor carry no `$`, which the classifier's entry guard wants first.
+
 ## [0.12.2] - 2026-09-12
 
 ### Added
