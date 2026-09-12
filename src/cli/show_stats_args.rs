@@ -66,8 +66,16 @@ use super::*;
         turn_index, line (null for a sidecar-merged record), uuid, label, labels:[…], \
         tool_name, from, to, pairing (paired | pending | orphan | null), tool_use_id, \
         source (\"elicitation-sidecar\" | null), survival (live | pre-cut | abandoned), \
-        abandoned_root_line, replay_copy_of, ts_utc, ts_local, text (FULL; never \
-        clipped), image_ids:[…], mode, compact_metadata}. `mode` and `compact_metadata` are \
+        abandoned_root_line, replay_copy_of, ts_utc, ts_local, text, body, \
+        image_ids:[…], mode, compact_metadata}. `text` is one line: whitespace runs are \
+        collapsed to single spaces, and it is FULL under a `--line`/`--uuid` address (which \
+        lifts the excerpt cap) but CLIPPED to ~400 chars with the explicit `… (+N chars)` \
+        marker under `--turn`, which is a window rather than an address. `body` carries the \
+        same rendered text with its NEWLINES intact - so a markdown table or a paragraph \
+        break survives - and is non-null under exactly the addresses that lift the cap \
+        (`--line` / `--uuid`), null under `--turn`. It is the RENDERED form, so a record \
+        whose text the opener renderer already flattened (a user message) carries no \
+        newline there either; `--raw` stays the path to the bytes. `mode` and `compact_metadata` are \
         the compaction pair's own fields and null on every other record: `mode` is \
         `compact` | `summarize-from-here` | `summarize-up-to-here` (a `/rewind` summarize \
         IS a compaction; the boundary learns its mode from the summary that follows it, and \

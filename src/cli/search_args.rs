@@ -311,8 +311,13 @@ pub struct SearchArgs {
     /// Emit each matched (and `--siblings`) record's FULL text instead of the ~400-char
     /// excerpt, so you can READ a found message end-to-end (e.g. the question at the tail
     /// of a long reply) without dropping to the raw jsonl. Newlines are still collapsed to
-    /// single spaces (one line per record). The default excerpt stays centered on the match
-    /// with an explicit `… (+N chars)` marker; `--no-truncate` removes the cap entirely.
+    /// single spaces (one line per record) in the text output and in the JSON `excerpt`;
+    /// under `--format json` this flag ALSO fills a `body` field per hit, carrying the same
+    /// rendered text with its newlines intact (so a markdown table or a paragraph break
+    /// survives). `body` is null without this flag - the default excerpt is a fragment
+    /// anyway, so a wide scan is not doubled by a full copy of every record. The default
+    /// excerpt stays centered on the match with an explicit `… (+N chars)` marker;
+    /// `--no-truncate` removes the cap entirely.
     #[arg(long)]
     pub no_truncate: bool,
 

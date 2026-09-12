@@ -281,12 +281,19 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
-        labels:[…], line, uuid, excerpt, tool_name, pairing, \
+        labels:[…], line, uuid, excerpt, body, tool_name, pairing, \
         from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, \
         survival, abandoned_root_line, replay_copy_of, mode, compact_metadata, \
         refetch, refetch_uuid}, …]}: \
         `label` is the matched dotted path, `labels` \
-        the record's full label set, `pairing` the tool_use↔tool_result join state \
+        the record's full label set, `excerpt` the match-centered fragment (ONE line: \
+        whitespace runs collapse to single spaces, and it is clipped with the explicit \
+        `… (+N chars)` marker unless `--no-truncate` lifts the cap), `body` the SAME \
+        rendered text with its NEWLINES intact - non-null only under `--no-truncate`, so a \
+        default scan carries one fragment per hit rather than a fragment plus a full copy of \
+        every record, and it is the RENDERED form, so a user message the opener renderer \
+        already flattened carries no newline there either (`--raw` is the path to the \
+        bytes), `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
         when the hit is `agent.communication.*`, `refetch` is the ready-to-run `csift show` \
         command addressed at the RIGHT id (run it verbatim), and `refetch_uuid` its \

@@ -5,6 +5,22 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.12.3] - unreleased
+
+### Added
+
+- **`body`, a newline-preserving field on every `search` hit and `show` record
+  (`--format json`).** A hit's `excerpt` is a match-centered fragment and it is one line by
+  contract, so it collapses every newline to a space - a markdown table arrived as one run
+  of `|` characters and a reader who took `excerpt` for the message lost every paragraph
+  boundary, even under `--no-truncate` where nothing was clipped. `body` carries the same
+  rendered section text before that collapse. It is non-null exactly where the excerpt cap
+  is lifted: `search --no-truncate`, and `show`'s `--line`/`--uuid` address. Under the
+  default cap it is null - the excerpt there is a fragment anyway, and a second full copy
+  of every matched record would multiply a wide scan's output for a consumer that did not
+  ask for it; `show --turn` is a window rather than an address, so it keeps the cap and
+  reports null too. `excerpt` and `show`'s `text` keep their exact bytes in every mode.
+
 ## [0.12.2] - 2026-09-12
 
 ### Added

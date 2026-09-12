@@ -590,6 +590,9 @@ classification.
 
 ## 6. Subcommand specifications
 
+> **v0.12.3 CHANGE LEDGER (non-breaking; one added JSON field -- `csift 0.12.3`).**
+> ① **`body`, the newline-preserving companion of `excerpt`** (§8.2 carries the contract). A hit's `excerpt` is a match-CENTERED fragment and it is one line by contract - `match_excerpt` collapses every whitespace run to a single space - so a consumer reading it as the message loses every paragraph boundary and every table row, and that holds even under `--no-truncate`, where nothing was clipped. Measured on a synthetic table-bearing assistant record: the rendered body is 638 chars with 21 newlines and 72 `|`; `search --format json` reports an `excerpt` of 412 chars / 0 newlines / 47 `|` under the default cap and 636 / 0 / 72 under `--no-truncate`, and `show --line N --format json` reports the same 636 / 0 / 72 in its `text`. The flattening site is `search::match_excerpt` (`normalize_line` on both the head form and the match-centered window). `body` now carries that same rendered section text VERBATIM (638 / 21 / 72), per section on a multi-section record, on every `search` hit and sibling and on every `show` record row. It is non-null EXACTLY when the excerpt cap was lifted, read off the one budget: `search --no-truncate`, and `show`'s `--line`/`--uuid` address; NULL under the default cap, where the excerpt is a fragment anyway and a second full copy of every matched record would multiply a wide scan's stream for a consumer that did not ask for the body. `show --turn` selects records through the default cap (it is a window, not an address), so its rows report a capped `text` and a null `body` - and the §4 note that claimed `--turn` lifts the cap is corrected with it. `body` is the RENDERED form, so a source the shared opener renderer already flattened in the MODEL layer (`user.message` and the other `reconstructed_user_text` cases, via `flatten_content_text`) carries no newline there either; `--raw` stays the only path to the bytes. `excerpt`, `show`'s `text` and every text-mode byte are unchanged in both modes, pinned by a before/after comparison of the whole JSON stream with the new key removed. `verbatim --format json` flattens its unit `text` too (the same 636 / 0 / 72), but at a different layer: `Record::agent_text` normalizes in the model, and `verbatim`'s `full_chars` / `elided_chars` / `elided_lines` accounting and its dedup fingerprints are all computed from the normalized string - so a body there is a change to the unit pipeline rather than an added field, and it is not part of this item.
+>
 > **v0.12.2 CHANGE LEDGER (non-breaking; the cleared-session surfaces, one new leaf and one matching fix -- `csift 0.12.2`).**
 > ① **`list` joins a cleared session to the transcript it was cleared FROM** (claims MISC-044, MISC-045, REC-105, QT-042, QT-044; §4.10 carries the facts). `/clear` mints a new session id inside the same process and writes no lineage on disk, so the join is an inference and the row says so. A top-level transcript is `minted_by: "clear"` when its first non-isMeta user record is the `/clear` slash wrapper - the wrapper for the command that ENDED the previous session lands in the file that command CREATED, which is what makes the new file self-identifying. Its predecessor is the sibling in the SAME project directory carrying a `cost-state` line whose `startTime + totalDuration` sits within 2000 ms of the wrapper's timestamp; the nearest LINE wins, and a tie between two different FILES is reported and joined to neither, exactly as `clone_of` refuses its own ambiguity. Text adds one `cleared` row naming the predecessor's first-8 token, the distance and its direction; JSON adds `minted_by`, `cleared_from`, `cleared_from_distance_ms` and `cleared_from_candidates`. Never a file mtime, never the time adjacency of ordinary records: two busy sessions share those, and only the checkpoint sum is the boundary between two sessions. The probe rides the head scan `list` already runs, and the sibling sweep runs only for a transcript that opens with the wrapper.
 > ② **`status` and `wait` report a tail checkpoint as EVIDENCE** (claim QT-043). When a transcript's LAST line is a `cost-state` line, a `checkpoint` evidence row prints directly under the `tail` row it qualifies, naming the line and the four events that write one, and JSON carries `last_checkpoint: {line, kind}`. There is NO new verdict: the seven-verdict set stays closed so a consumer matching on it keeps matching, and the registry row keeps deciding liveness. The checkpoint is repeatable - 35 of 44 checkpoint lines over one corpus are not their file's last - so a mid-file one is reported as nothing at all. When there is no registry row AND the tail is a checkpoint, that note gains the clause that the session closed or was handed over.
@@ -2658,6 +2661,27 @@ summary) and the verbatim `compact_metadata` object on both compaction records, 
 `parent_line`, `parent_type`, `live_child_line` and per-child `survival` + `verdict` on a
 `branch-point` row, and `entered_by` (`model` | `user` | `timeout` | `deliver-message`),
 `timed_out_after_ms` and `launch_note` on a `status`/`wait` background row.
+
+**`body` — the newline-preserving companion of `excerpt` (v0.12.3).** A hit's `excerpt` is a
+match-CENTERED fragment and it is one line by contract: `match_excerpt` collapses every run
+of whitespace to a single space, so a markdown table or a paragraph break arrives with its
+structure gone even when nothing was clipped. `body` carries the SAME text the excerpt
+windows into, before that collapse, so a consumer that wants the message rather than a
+fragment reads one field instead of re-reading the raw jsonl. It is the RENDERED form (what
+`record_text_sections` / `auq_exchange` / `automation_label` produced for this hit's own
+section, per section on a multi-section record), never the raw JSON — so a source the
+shared opener renderer already flattened in the model layer (`user.message` and the other
+`reconstructed_user_text` cases) carries no newline here either, and `--raw` stays the only
+path to the bytes.
+
+`body` is non-null EXACTLY when the excerpt cap was lifted, which is one condition read off
+one budget: `search --no-truncate`, and `show`'s `--line`/`--uuid` address. Under the
+default 400-char cap it is NULL on every `search` hit and sibling — the excerpt there is a
+fragment anyway, and pairing every hit of a wide scan with a full second copy of its record
+would multiply the default stream for a consumer that did not ask for the body. `show
+--turn` selects records through that same default cap (it is a window, not an address), so
+its rows carry a capped `text` and a null `body`; `--line`/`--uuid` on the same records
+carry both.
 
 
 ## 9. Non-functional gates & invariants (checklist)
