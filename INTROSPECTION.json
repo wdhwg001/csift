@@ -91069,17 +91069,17 @@
       "code": [
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "143",
+          "lines": "152",
           "snippet": "pub(crate) fn out(command: &str) -> Option<OutHit> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "261",
+          "lines": "270",
           "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "405",
+          "lines": "414",
           "snippet": "fn nested_shell(clause: &str, depth: usize, inherited_positional: bool) -> Option<OutHit> {"
         },
         {
@@ -91429,7 +91429,7 @@
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "151-152",
+          "lines": "160-161",
           "snippet": "    let positional_ok =\n        !FUNCTION_SCAN.is_match(&mask(&cleaned, true)) && !has_set_dashdash(&cleaned);"
         }
       ],
@@ -91449,7 +91449,8 @@
       ],
       "residue": [
         "Rule 12 cannot check this claim's anchors: they belong to a build other than the verified one.",
-        "The in-quote arm's own floor is bounded by the builds held here - absent in the 61 from 1.0.60 through 2.1.259 and present once at 2.1.268, with 2.1.260 through 2.1.267 not held - so the rewrite floor BASH-038 bisects is the tighter bound."
+        "The in-quote arm's own floor is bounded by the builds held here - absent in the 61 from 1.0.60 through 2.1.259 and present once at 2.1.268, with 2.1.260 through 2.1.267 not held - so the rewrite floor BASH-038 bisects is the tighter bound.",
+        "The same function admits a comment-opening `#` after `/[\\s;&|()]/`, whose `\\s` is the whole JavaScript whitespace class, while the port lists the four ASCII blanks: over 20,000 randomized strings drawn from an alphabet carrying a vertical tab, a form feed, a no-break space and U+2028 the two disagree on 1,220. Closing it wants its own claim, because neither `char::is_whitespace` nor the ASCII list is that class - the first adds U+0085 and drops U+FEFF - so the port is an explicit set rather than a predicate."
       ],
       "producer_chain": [
         {
