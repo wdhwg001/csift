@@ -2,6 +2,8 @@ use super::*;
 use std::io::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod lineage;
+
 #[test]
 fn truncate_short_excerpt_unchanged() {
     assert_eq!(truncate_excerpt("hello"), "hello");

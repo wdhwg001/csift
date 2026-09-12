@@ -90,6 +90,14 @@ pub struct SessionSummary {
     /// The tied ids when two different siblings share the smallest distance: reported,
     /// joined to neither.
     pub cleared_from_candidates: Vec<String>,
+    /// The CHILD session this one was handed to at a background handoff, read from the
+    /// `continuedInSessionId` of the parent-side `type:"continued-in"` line. Unlike
+    /// `clone_of` / `cleared_from` this is no inference: Claude Code states the child id
+    /// itself. `None` when the windows read carry no such line - and because `list` reads
+    /// head/tail windows only, a `continued-in` line a later resume of the parent pushed
+    /// above the tail window is outside them (`csift stats` counts the line type
+    /// whole-file).
+    pub continued_in: Option<String>,
 }
 
 /// A short, timestamped preview of one message for the `list` view.

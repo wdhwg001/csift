@@ -76,6 +76,15 @@ pub(crate) fn render_text(
         if s.minted_by_clear {
             println!("  cleared  {}", cleared_line(s));
         }
+        // The background handoff is the one lineage link Claude Code states outright: the
+        // parent-side line names the child id, so this row is a fact, not an inference.
+        if let Some(child) = &s.continued_in {
+            println!(
+                "  handoff  continued in {} (a background handoff: Claude Code names the \
+                 child itself, so this one is no inference)",
+                first8(child)
+            );
+        }
         print_preview("first ◂", s.first_user.as_ref());
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
@@ -233,6 +242,11 @@ pub(crate) fn render_json(
             "cleared_from": s.cleared_from,
             "cleared_from_distance_ms": s.cleared_from_distance_ms,
             "cleared_from_candidates": s.cleared_from_candidates,
+            // The background handoff's child id, verbatim from the parent-side
+            // `continued-in` line - a STATED fact, not the inference `cleared_from` is.
+            // Null when the head/tail windows carry no such line, which includes the case
+            // of a later resume of the parent pushing it above the tail window.
+            "continued_in": s.continued_in,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

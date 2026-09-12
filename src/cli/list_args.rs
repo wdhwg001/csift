@@ -42,7 +42,8 @@ use super::*;
         parent_session_id, path, cwd, git_branch, git_branch_first, git_branch_last, version, \
         version_first, version_last, first_user, last_user, last_agent, \
         skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar, \
-        minted_by, cleared_from, cleared_from_distance_ms, cleared_from_candidates}, then \
+        minted_by, cleared_from, cleared_from_distance_ms, cleared_from_candidates, \
+        continued_in}, then \
         a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
         the re-feedable owning uuid (= session_id for a top-level row); never re-feed a \
@@ -61,6 +62,20 @@ use super::*;
         both are reported in `cleared_from_candidates` and NEITHER is joined. Never a file \
         mtime, and never the time adjacency of ordinary records - two busy sessions share \
         those.\n\n\
+        BACKGROUND HANDOFF (`continued_in`, text row `handoff`) - a STATED fact\n  \
+          When a session is handed to a background child (the left-arrow gesture, or the \
+        background-fork command), Claude Code appends a `type:\"continued-in\"` line to the \
+        PARENT transcript naming the child's session id. Unlike the clone and clear \
+        lineage above, nothing is inferred here: the harness writes the child id itself, \
+        and csift reports it verbatim in `continued_in` (text: `handoff  continued in \
+        <first8> ...`). The line carries four keys and no `uuid`, so it is not a chain \
+        node and its only address is its jsonl line. An in-place `/fork` writes no such \
+        line, so its absence never means the session was not forked.\n  \
+          WINDOW LIMIT: the line is written after the last conversation record, so the \
+        backward tail read normally reaches it. A later `--resume` of the parent appends \
+        new turns BELOW it, and once those fill the tail window the line sits outside \
+        both windows and `continued_in` reads null. The whole-file answer is the line-type \
+        census `csift stats` prints (`continued-in` is one of its `types` keys).\n\n\
         SKIPPED_LINES SEMANTICS (window census, NOT a whole-file verdict)\n  \
           `list` reads only the head/tail lines it needs (the §7 fast-overview contract; it \
         never scans the middle of a transcript), so its `skipped_lines` counts malformed lines \

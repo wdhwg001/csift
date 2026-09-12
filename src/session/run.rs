@@ -139,5 +139,18 @@ pub(crate) fn preview_text(rec: &Record) -> Option<String> {
 /// between a head/tail read and paying `serde_json` for megabyte noise lines.
 pub(crate) fn line_is_list_candidate(line: &[u8]) -> bool {
     // R13: serialization-tolerant (whitespace around the colon is the same record).
-    crate::parse::line_has_role_marker(line)
+    crate::parse::line_has_role_marker(line) || line_has_continued_in_key(line)
+}
+
+/// The parent-side background-handoff line (`type:"continued-in"`) carries no
+/// `message{}` and no `role`, so the role keep alone drops it unparsed. Its own field
+/// name is the needle, in the KEY-ONLY form the R13 needle law prescribes: a quoted key
+/// survives a reserialize, and it is rarer than the `continued-in` type VALUE, which an
+/// ordinary payload can carry in prose. A prose mention cannot become a false positive
+/// either way, because serde only reads TOP-LEVEL keys - the extra cost of such a line
+/// is one parse, not a wrong answer.
+fn line_has_continued_in_key(line: &[u8]) -> bool {
+    static KEY: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"\"continuedInSessionId\""));
+    KEY.find(line).is_some()
 }

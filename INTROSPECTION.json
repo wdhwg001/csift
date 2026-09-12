@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "260-267",
+          "lines": "267-274",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7192,12 +7192,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "206-207",
+          "lines": "213-214",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "389-391",
+          "lines": "396-398",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9969,7 +9969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "376-382",
+          "lines": "383-389",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -13101,7 +13101,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "434",
+          "lines": "441",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -14631,12 +14631,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "73-75",
+          "lines": "80-82",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "84-86",
+          "lines": "91-93",
           "snippet": "    /// Co-set with `isCompactSummary` on compaction-summary records (\u00a74.7).\n    #[serde(default, rename = \"isVisibleInTranscriptOnly\")]\n    pub is_visible_in_transcript_only: Option<bool>,"
         },
         {
@@ -14753,7 +14753,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "152-157",
+          "lines": "159-164",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14899,7 +14899,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "187-192",
+          "lines": "194-199",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
@@ -15930,12 +15930,12 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "376-383",
+          "lines": "392-399",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "389-400",
+          "lines": "405-416",
           "snippet": "    for line in mmap.split(|&b| b == b'\\n') {\n        if TS.find(line).is_none() {\n            continue;\n        }\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if rec.timestamp.is_some() {\n                let hit = rec.is_compact_boundary();\n                return Ok(hit\n                    .then(|| rec.uuid.clone().unwrap_or_default())\n                    .filter(|u| !u.is_empty()));\n            }\n        }"
         }
       ],
@@ -16041,7 +16041,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "379-382",
+          "lines": "395-398",
           "snippet": "/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -16219,7 +16219,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "405-413",
+          "lines": "421-429",
           "snippet": "/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary\n/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own\n/// uuid differs; a co-clone's head probe returns the same boundary uuid and is\n/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY\n/// when a clone was detected.\npub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -16449,7 +16449,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "376-382",
+          "lines": "392-398",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -18919,7 +18919,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "304-307",
+          "lines": "311-314",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -19809,7 +19809,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2143",
+          "lines": "2146",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20061,7 +20061,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "293-297",
+          "lines": "300-304",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -21979,7 +21979,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "218-226",
+          "lines": "225-233",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22099,7 +22099,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "221-224",
+          "lines": "228-231",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22194,7 +22194,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "228-236",
+          "lines": "235-243",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "389-390",
+          "lines": "396-397",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -36614,7 +36614,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "221-224",
+          "lines": "228-231",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -38358,7 +38358,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "101-106",
+          "lines": "114-119",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -38564,7 +38564,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "410-413",
+          "lines": "426-429",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -42633,7 +42633,7 @@
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "47-52",
+          "lines": "53-58",
           "snippet": "            if let Some(text) = preview_text(rec) {\n                // Capture identity off the first user record (it carries cwd / version /\n                // gitBranch / sessionId in real data).\n                cwd = rec.cwd.clone();\n                version = rec.version.clone();\n                git_branch = rec.git_branch.clone();"
         }
       ],
@@ -43126,7 +43126,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "101-106",
+          "lines": "114-119",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -45850,7 +45850,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "238-242",
+          "lines": "245-249",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46102,7 +46102,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "244-248",
+          "lines": "251-255",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -47020,7 +47020,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "260-263",
+          "lines": "267-270",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48574,7 +48574,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "278-284",
+          "lines": "285-291",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -51000,12 +51000,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "353-358",
+          "lines": "360-365",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "364-367",
+          "lines": "371-374",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51132,12 +51132,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "364-367",
+          "lines": "371-374",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "353-358",
+          "lines": "360-365",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52350,7 +52350,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "194-196",
+          "lines": "201-203",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -52501,7 +52501,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "147-154",
+          "lines": "154-161",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52687,7 +52687,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "160-166",
+          "lines": "173-179",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),\n        git_branch: git_branch_last.clone().or_else(|| git_branch.clone()),\n        git_branch_first: git_branch.or(git_branch_last),"
         }
       ],
@@ -52838,7 +52838,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "344-346",
+          "lines": "351-353",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53089,12 +53089,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "428",
+          "lines": "435",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "450-455",
+          "lines": "457-462",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53201,7 +53201,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "450-455",
+          "lines": "457-462",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53290,7 +53290,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "434-436",
+          "lines": "441-443",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53391,7 +53391,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "205-207",
+          "lines": "212-214",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53473,7 +53473,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "198-202",
+          "lines": "205-209",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -53575,7 +53575,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "389-390",
+          "lines": "396-397",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53677,7 +53677,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "209-212",
+          "lines": "216-219",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -53969,7 +53969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "330-335",
+          "lines": "337-342",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54067,7 +54067,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "337-341",
+          "lines": "344-348",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -54937,7 +54937,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "187-192",
+          "lines": "194-199",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -56392,7 +56392,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "160-164",
+          "lines": "173-177",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),"
         }
       ],
@@ -60120,7 +60120,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "383-388",
+          "lines": "390-395",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -64205,7 +64205,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "410-412",
+          "lines": "426-428",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());"
         }
       ],
@@ -64489,7 +64489,7 @@
         },
         {
           "path": "src/session/summarize.rs",
-          "lines": "26-27",
+          "lines": "29-30",
           "snippet": "    let (head_skipped, head_consumed) =\n        head_records_prefiltered(path, line_is_list_candidate, |rec| {"
         }
       ],
@@ -64664,7 +64664,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "192",
+          "lines": "199",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -65262,7 +65262,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "353-358",
+          "lines": "360-365",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65427,7 +65427,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "364-367",
+          "lines": "371-374",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -66019,7 +66019,7 @@
       "code": [
         {
           "path": "src/session/summarize.rs",
-          "lines": "101-106",
+          "lines": "114-119",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -71201,7 +71201,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "77-82",
+          "lines": "84-89",
           "snippet": "    /// System-injected pseudo-turn marker (\u00a74.2). `true` \u21d2 a `type:\"user\"` record\n    /// whose string/text content LOOKS human (\"Continue from where you left off.\",\n    /// loop ticks, stop-hook feedback, `<local-command-caveat>\u2026`) but is machine-\n    /// generated - must be excluded from genuine-user and from turn-delimiting.\n    #[serde(default, rename = \"isMeta\")]\n    pub is_meta: Option<bool>,"
         },
         {
@@ -73789,7 +73789,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "73-75",
+          "lines": "80-82",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
@@ -87056,7 +87056,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "109-115",
+          "lines": "116-122",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
@@ -88211,7 +88211,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "159-164",
+          "lines": "166-171",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         },
         {
@@ -88441,7 +88441,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "159-164",
+          "lines": "166-171",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         }
       ],
@@ -88860,7 +88860,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "177-180",
+          "lines": "184-187",
           "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
         },
         {
@@ -89559,7 +89559,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "124-125",
+          "lines": "131-132",
           "snippet": "    #[serde(default, rename = \"promptSource\")]\n    pub prompt_source: Option<String>,"
         }
       ],
@@ -89758,7 +89758,7 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "pub(crate) fn cleared_from_origin(path: &Path, wrapper_ts: &str) -> ClearJoin {",
-          "lines": "288-288"
+          "lines": "304"
         },
         {
           "path": "src/session/rows.rs",
@@ -89857,7 +89857,7 @@
         {
           "path": "src/session/render.rs",
           "snippet": "pub(crate) fn cleared_line(s: &SessionSummary) -> String {",
-          "lines": "116-116"
+          "lines": "125"
         },
         {
           "path": "src/session/rows.rs",
@@ -89935,7 +89935,7 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "                saw_first_user_record = true;",
-          "lines": "34-34"
+          "lines": "40"
         },
         {
           "path": "tests/cli/list/clear.rs",
@@ -89978,12 +89978,12 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {",
-          "lines": "366-366"
+          "lines": "382"
         },
         {
           "path": "src/session/tests.rs",
           "snippet": "fn checkpoint_close_reads_the_sum_and_refuses_other_types() {",
-          "lines": "409-409"
+          "lines": "411"
         }
       ],
       "instrument": "Census every transcript under the projects root for lines whose top-level `type` is `cost-state`, collecting the sorted key tuple of each; report the number of transcripts carrying one, the number of lines, and every distinct key set. Cross-read the shipped binary at the schema literal `w.literal(\"cost-state\")` and at the builder head `function ddn(){if(!GPn())return;return{type:\"cost-state\"` and compare the field lists.",
@@ -90056,12 +90056,12 @@
         {
           "path": "src/session/summarize.rs",
           "snippet": "pub(crate) const CLEAR_JOIN_WINDOW_MS: i64 = 2000;",
-          "lines": "259-259"
+          "lines": "275"
         },
         {
           "path": "src/session/summarize.rs",
           "snippet": "fn nearest_checkpoint_close(sib: &Path, t_wrapper: i64) -> Option<(i64, i64)> {",
-          "lines": "337-337"
+          "lines": "353"
         }
       ],
       "instrument": "Find every top-level transcript whose first non-isMeta user record is a `clear` slash wrapper. For each, read the wrapper's timestamp as epoch milliseconds and, over every sibling `.jsonl` in the same directory, every `cost-state` line's `startTime + totalDuration`; print the signed difference for each candidate line. The counting rule is one row per candidate LINE, not per file, so a file with several checkpoints contributes several rows.",
@@ -91296,7 +91296,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "106-107",
+          "lines": "113-114",
           "snippet": "    #[serde(default, rename = \"toolDenialKind\")]\n    pub tool_denial_kind: Option<String>,"
         },
         {
@@ -91521,6 +91521,180 @@
           "observed": "`MIn(` occurs six times: the two-argument mask's definition, the classifier's two calls to it on one line, and a one-argument permission-update normaliser with its definition and its two calls. So the mask blanks quoted runs and comments and has exactly two readers, both in the classifier. `RNe` returns false inside a single quote, true outside quotes, and inside a double quote true only before a double quote, a backslash, a dollar or a backtick. The in-quote arm writes two blanks under the flag and the pair verbatim without it, stepping over two characters in both. Its literal occurs once at 2.1.268 and zero times in the 61 builds from 1.0.60 through 2.1.259. Over 165,314 distinct pairs, read off the 273,750 verbatim lines carrying 170,019 Bash blocks that ONE extraction pass saw - the corpus is live, so a later pass reads more of each and the figures below are counts under the rule, not a fixed corpus size - the two readings differ on 4,097 masked strings - 1,620 recorded before the census floor, 2,474 under the generation between that floor and the rewrite floor, which is also where a record carrying no readable version falls, and 3 at or past the rewrite floor. Of the 4,097, 165 change the function-definition scan answer (145 hiding a definition the character rule revealed, 20 revealing one it hid), 0 change the `set --` answer, and 0 change the classifier's hit even when the classifier is run at the rewrite generation for every pair. All 4,097 carry at least one escaped double quote; 363 carry a backslash run of two or more, 83 of those directly before a quote; 954 carry a hash. The three pairs recorded at or past the rewrite floor all lack the dollar the entry guard wants, so the mask is never reached for them. Two planted commands, one hiding a definition inside a quoted run and one leaving it outside, are caught by the same probe with opposite directions, which is what qualifies the zero.",
           "rule": "one pair per distinct (command, version) from one extraction pass over a live corpus, each counted under every flag it carries; raw byte occurrences per build file; six occurrences of `MIn(` read, grouped into five enumeration entries because the classifier's two calls share a line",
           "note": "Lands with the port of the mask's backslash rule. The declined-divergence note in the classifier's module doc is replaced by the rule it describes."
+        }
+      ]
+    },
+    {
+      "id": "REC-106",
+      "area": "record-model",
+      "behavior": "When a session is handed to a BACKGROUND child, Claude Code appends one line to the PARENT transcript: `{type:\"continued-in\", timestamp, sessionId, continuedInSessionId}`, built by a single constructor and carrying exactly those four keys - no `uuid`, no `parentUuid`, no `message{}` and no `role`, so the line is not a chain node, the loader never admits it to the message array, and its only address is its jsonl line. `sessionId` is the parent's own id and `continuedInSessionId` the child's; both are validated as uuids before the append, which is itself best-effort (`onlyIfExists`, a failure logged at warn level and never raised). Two handoff entries reach the writer, the left-arrow gesture and the background-fork command, and one path that shares the spawner does NOT: an in-place `/fork` passes `keepParent` and writes no such line. A second write point on the same handoff appends the line when the spawn FAILED but a rescue row was queued, so the line's presence does not prove the child ever ran - which is why Claude Code's own reader opens the named child transcript and requires conversation content in it before treating the parent as superseded. Claude Code reads the line only when it is NEWER than the last `user`/`assistant` record of the file, and the append policy table classifies the type as `always` (never deduped) while a compaction boundary clears it from the carried set.",
+      "depends": "`list` reports the child id verbatim as `continued_in` (text row `handoff`), the one lineage link on a `list` row that is a STATED fact rather than the inference `clone_of` and `cleared_from` are. The field is read off `Record.continued_in_session_id`, so it is a TOP-LEVEL key only and a transcript quoting the shape in prose reports nothing. The line carries no `role` and no `message{}`, so the head/tail prefilter needs its own needle - the quoted KEY, in the R13 key-only form - or the field could never be read at all. Because the line is appended after the last conversation record, the backward tail walk normally reaches it before the anchors that stop the walk; a later resume of the parent appends turns below it and can push it out of both windows, which is why the null is documented as a window limit and `stats`' whole-file line-type census is named as the exact answer. If a build moved the field onto a different line type, csift would still read it wherever the key sits at top level; if the constructor dropped the key, the row would go silent rather than wrong.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, rename = \"continuedInSessionId\")]\n    pub continued_in_session_id: Option<String>,",
+          "lines": "67-68"
+        },
+        {
+          "path": "src/session/run.rs",
+          "snippet": "fn line_has_continued_in_key(line: &[u8]) -> bool {",
+          "lines": "152"
+        },
+        {
+          "path": "src/session/summarize.rs",
+          "snippet": "        continued_in: continued_in_tail.or(continued_in_head),",
+          "lines": "195"
+        },
+        {
+          "path": "tests/cli/list/handoff.rs",
+          "snippet": "fn a_quoted_field_name_in_a_prompt_is_not_a_handoff() {",
+          "lines": "79"
+        }
+      ],
+      "instrument": "Corpus: over every `*.jsonl` under the projects root, read each file as BYTES, split on `\\n` only (never a str line splitter), and count the lines whose `json.loads` yields a dict with top-level `type` equal to `continued-in`; report the total, the number of files, the exact top-level key set, and for each hit its 1-based index among the file's NON-BLANK lines over that file's non-blank total. Binary: in the build named by `verified_claude_code`, count non-overlapping occurrences of the literals `continued-in` and `continuedInSessionId` and read every one; the closure is that exactly one occurrence constructs the object, its enclosing function has exactly one call site, that caller has exactly two, and the function containing both passes through three call sites of which one supplies `keepParent:!0`. Minified names are REUSED across chunks, so a raw count of an identifier plus `(` overcounts: read each occurrence and keep the ones whose enclosing declaration is the same function. Version floor: byte-count the literal `continued-in` in each cached native build.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 6"
+      },
+      "first_seen_claude_code": "2.1.258",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The corpus holds ONE specimen, so the line's position within a file is measured once (3rd from last non-blank line). A second specimen, ideally on a parent that was resumed after the handoff, would measure the window limit the docs state rather than reasoning it from the append order."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "mVe (the left-arrow background gesture)",
+          "offset": 180414748,
+          "excerpt": "async function mVe(T,I,O,q,oe,ue,Se,Ce,Re,Pe,Ie){let Ee=!1;try{let De=await(async()=>{t(\"[PERF:bg-leftarrow-start]\");let Ne=bae(T,\"\");if(Ne!==null&&pu())return s(\"tengu_left_arrow_blocked\",{reason:b(\"persistence\"),inflight_count:Re?.inflightCount??0,inflight_kinds:Ly(Re?.inflightKinds??[])}),\"Cannot",
+          "note": "The first of the two handoff entries: the gesture handler, which calls the background spawner with via `left_arrow` and no `keepParent`."
+        },
+        {
+          "role": "trigger",
+          "name": "the background-fork command entry",
+          "offset": 180379027,
+          "excerpt": "void 0,Se=await Wxe(oe,T.prompt,T.sessionEffort,T.permissionMode,T.additionalWorkingDirectories,T.alwaysAllowRules,T.alwaysDenyRules,\"command\",T.messages,{replyOnResume:T.isMidTurn,providedSessionId:O,workerName:ue,taskFreeInFlight:I&&O&&WZt(I.payload)?void 0:{tasks:0,queued:0,kinds:[]},storageV5:T.",
+          "note": "The second handoff entry, via `command`, also without `keepParent` - so both reach the gate below."
+        },
+        {
+          "role": "gate",
+          "name": "the handoff gate inside the background spawner",
+          "offset": 180375191,
+          "excerpt": "if(!Pe?.keepParent&&ho!==null&&Po!==void 0)await Eqe(ho,Mo,Po,Pe?.storageV5);if(",
+          "note": "Three conjuncts decide the line exists at all: the caller did not ask to keep the parent (so this is a handoff, not a fork), the parent transcript path resolved, and the child id is known."
+        },
+        {
+          "role": "gate",
+          "name": "the queued-rescue arm of the same append",
+          "offset": 180374734,
+          "excerpt": "if(nn&&so)await Eqe(ho,Mo,Pe.providedSessionId,Pe.storageV5);if(",
+          "note": "The second write point, on the failed-spawn path once a rescue row is queued: the line can name a child that was queued rather than started."
+        },
+        {
+          "role": "writer",
+          "name": "the four-key constructor",
+          "offset": 160428091,
+          "excerpt": "function MYn(e,t){return{type:\"continued-in\",timestamp:new Date().toISOString(),sessionId:e,continuedInSessionId:t}}func",
+          "note": "The only construction of the object; the trailing bytes of the next declaration are included so the closing brace is inside the excerpt."
+        },
+        {
+          "role": "writer",
+          "name": "the append, with the uuid validation and the best-effort catch",
+          "offset": 180375802,
+          "excerpt": "async function Eqe(T,I,O,q){let oe=Vn(I),ue=Vn(O);if(oe===null||ue===null)return;await JE(T,MYn(oe,ue),q,{onlyIfExists:!0}).catch((Se)=>{t(`[bg] continued-in record not written: ${l(Se)}`,{level:\"warn\"})})}var Dqe=[\"tmp\",\"parent-transcript.json",
+          "note": "Both ids are validated as uuids, the append never creates the file, and a failure is a warn - so an absent line is not evidence that no handoff happened."
+        },
+        {
+          "role": "gate",
+          "name": "the reader's freshness rule",
+          "offset": 160428207,
+          "excerpt": "function T9t(e){if(!e.includes(G))return;let t=e.length;while(t>0){let o=e.lastIndexOf(`\n`,t-1),n=e.slice(o+1,t);t=o;let r=n.includes(G),s=n.includes('\"type\":\"user\"')||n.includes('\"type\":\"assistant\"');if(r||s)try{let a=JSON.parse(n);if(r){let d=oe().safeParse(a);if(d.success)return Wf(d.data.continu",
+          "note": "Claude Code's own reader walks the tail backward and returns the child id only when the handoff line is newer than the last conversation record - the same order csift's tail walk relies on."
+        },
+        {
+          "role": "gate",
+          "name": "the successor-liveness probe behind the /resume filter",
+          "offset": 160428762,
+          "excerpt": "async function w9t(e,t,o){let n=ie(re(e),`${t}.jsonl`),r=await ihe(n,hu(jl(n,o)));return r!==null&&await d_n(n,r.head,r.tail,r.size,o)}var v='\"parentUuid\":',ce=",
+          "note": "Before hiding the parent from the resume picker the harness opens the named child and requires conversation content in it, which is why the line alone does not prove the child ran."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "continuedInSessionId",
+        "lowest_present": "2.1.258",
+        "highest_absent": "2.1.252",
+        "ladder": "Byte-count the literal in each cached native build: present in 2.1.258, 2.1.259 and 2.1.268 (15 occurrences each) and absent in the 59 builds below, the highest of which is 2.1.252. The cache holds no build between 2.1.252 and 2.1.258, so the floor is bracketed, not pinned."
+      },
+      "enumeration": [
+        {
+          "site": "interned string, the warn text",
+          "offset": 70818373,
+          "excerpt": "continued-in record not written: ",
+          "verdict": "A bytecode string-table entry for the writer's failure log. Not code."
+        },
+        {
+          "site": "interned string, the line-type name run",
+          "offset": 74526400,
+          "excerpt": "continued-in",
+          "verdict": "A string-table entry among the transcript line-type names. Not code."
+        },
+        {
+          "site": "interned string, the reader's needle",
+          "offset": 76080952,
+          "excerpt": "continued-in\"",
+          "verdict": "A string-table entry for the quoted type needle. Not code."
+        },
+        {
+          "site": "the reader's byte needle and the parse schema",
+          "offset": 160427411,
+          "excerpt": "continued-in\"',oe=m(()=>ft({type:x(\"continued-in\"),continuedInSessionId:i()})),se=m(()=>ft({type:x(\"assistant\"),isApiErrorMessage:M().optional(),messa",
+          "verdict": "The interned needle the tail reader prefilters on, immediately followed by the two-key validation schema it parses against. A reader, not a writer."
+        },
+        {
+          "site": "the schema's type literal",
+          "offset": 160427447,
+          "excerpt": "continued-in\"),continuedInSessionId:i()})),se=m(()=>ft({type:x(\"assistant\"),isApiErrorMessage:M().optional(),message:ft({stop_reason:i().nullish()}).o",
+          "verdict": "The same schema's own type value - the second half of the previous entry, counted separately because the literal occurs twice there."
+        },
+        {
+          "site": "THE WRITER",
+          "offset": 160428122,
+          "excerpt": "continued-in\",timestamp:new Date().toISOString(),sessionId:e,continuedInSessionId:t}}function T9t(e){if(!e.includes(G))return;let t=e.length;while(t>0",
+          "verdict": "The only construction of the object. Every other occurrence of the literal is a needle, a schema, a policy-table key or a log string."
+        },
+        {
+          "site": "the compaction-boundary policy table",
+          "offset": 166050723,
+          "excerpt": "continued-in\":\"boundary-cleared\",\"marble-origami-commit\":\"boundary-cleared\",\"marble-origami-snapshot\":\"boundary-cleared\",\"marble-origami-reset\":\"bound",
+          "verdict": "A lookup entry: a compaction boundary clears lines of this type from the carried set. Not a writer."
+        },
+        {
+          "site": "the append policy table",
+          "offset": 166066708,
+          "excerpt": "continued-in\":\"always\",\"ai-title\":\"always\",\"last-prompt\":\"always\",tag:\"always\",relocated:\"always\",\"agent-name\":\"always\",\"agent-color\":\"always\",\"agent-",
+          "verdict": "A lookup entry classifying the type as always written through rather than deduped. Not a writer."
+        },
+        {
+          "site": "the writer's own failure log",
+          "offset": 180375947,
+          "excerpt": "continued-in record not written: ${l(Se)}`,{level:\"warn\"})})}var Dqe=[\"tmp\",\"parent-transcript.jsonl\"];async function lfr(T,I,O,q){let oe=Uqe(rr(I),..",
+          "verdict": "The warn template inside the append, not a second writer."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.3",
+          "date": "2026-09-12",
+          "verdict": "holds",
+          "instrument": "Corpus census of top-level `type:\"continued-in\"` lines over every `*.jsonl` under the projects root, bytes split on `\\n` only, with the key set and the hit's position among non-blank lines. Binary: the literals `continued-in`, `continuedInSessionId`, `MYn(`, `Eqe(`, `Wxe(` and `keepParent` byte-counted and every occurrence read, with each traced hop re-sliced at its recorded offset and compared byte for byte. Ladder: the literal `continued-in` byte-counted in each cached native build.",
+          "observed": "1 line in 1 file of 9,600 files and 1,679,818 non-blank lines; key set exactly `continuedInSessionId, sessionId, timestamp, type` with no `uuid`; the line sits at non-blank index 45 of 47, i.e. third from last, with a `last-prompt` and a `cost-state` line below it, and the sibling transcript it names exists in the same project directory carrying 2 bookkeeping lines and no conversation record - the queued-rescue shape. The carrying file's versioned records read 2.1.258. In the binary: `continued-in` 9 occurrences, `continuedInSessionId` 15, and of the 9 exactly one constructs the object; the constructor's identifier occurs with a call paren 5 times, of which 3 belong to a DIFFERENT function of the same minified name in another chunk, leaving exactly 1 call site; the appender's identifier occurs 7 times, 4 of them a different function, leaving 1 declaration and 2 call sites; the spawner's identifier occurs 8 times, 4 of them a different function, leaving 1 declaration and 3 call sites, of which only the `fork_session` one carries `keepParent:!0`. All 20 traced hops re-sliced byte-exact at their offsets and each occurs exactly once in the build. Ladder: present in 2.1.258, 2.1.259, 2.1.268; absent in the 59 lower builds, highest absent 2.1.252.",
+          "rule": "A corpus line counts once when its decoded top-level `type` equals the literal; position is the 1-based index among that file's non-blank lines. A binary occurrence is a non-overlapping byte match; an identifier occurrence counts as a call site only after its enclosing declaration is read and found to be the same function, because minified names repeat across chunks. A ladder build counts as present when the literal occurs at least once.",
+          "note": ""
         }
       ]
     }

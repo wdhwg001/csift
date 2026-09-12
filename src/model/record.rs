@@ -60,6 +60,13 @@ pub struct Record {
     #[serde(default, rename = "contextLength")]
     pub context_length: Option<u64>,
 
+    /// Background-handoff provenance, written into the PARENT transcript as a
+    /// `type:"continued-in"` line: the id of the CHILD session the parent was handed
+    /// to. The line carries four keys and no `uuid`, so it is not a chain node and its
+    /// only address is its jsonl line. Absent on every other line type.
+    #[serde(default, rename = "continuedInSessionId")]
+    pub continued_in_session_id: Option<String>,
+
     /// The pasted-image ids of a user prompt, in the ORDER OF ITS IMAGE BLOCKS (the
     /// submit path builds the block array and this array together in one ascending-id
     /// pass, while the `[Image #N]` markers keep the operator's text order; ledger

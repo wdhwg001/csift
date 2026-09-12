@@ -22,9 +22,15 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let mut minted_by_clear = false;
     let mut clear_wrapper_ts: Option<String> = None;
     let mut saw_first_user_record = false;
+    // The background handoff's parent-side line. File order in the head window, so the
+    // LAST one seen is the newest of that window.
+    let mut continued_in_head: Option<String> = None;
 
     let (head_skipped, head_consumed) =
         head_records_prefiltered(path, line_is_list_candidate, |rec| {
+            if let Some(child) = rec.continued_in_session_id.clone() {
+                continued_in_head = Some(child);
+            }
             // The FIRST non-isMeta user record decides the mint: the `/clear` wrapper
             // lands in the NEW transcript (the isMeta `<local-command-caveat>` record
             // may precede it), and any other opener means this file was not minted by a
@@ -65,11 +71,18 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // are already being read for last_user/last_agent.
     let mut version_last: Option<String> = None;
     let mut git_branch_last: Option<String> = None;
+    // The handoff line is written AFTER the last conversation record of the session it
+    // hands over, so the newest-first tail walk normally reaches it BEFORE the anchors
+    // that stop the walk. First seen wins here: newest-first order makes it the newest.
+    let mut continued_in_tail: Option<String> = None;
     // `head_consumed` as the floor keeps the two windows DISJOINT: a malformed line is
     // counted exactly once (R12 killed the head+tail double-book on files where both
     // scans used to walk the same region).
     let tail_skipped =
         tail_records_prefiltered(path, line_is_list_candidate, head_consumed, |rec| {
+            if continued_in_tail.is_none() {
+                continued_in_tail = rec.continued_in_session_id.clone();
+            }
             if version_last.is_none() {
                 version_last = rec.version.clone();
             }
@@ -177,6 +190,9 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         cleared_from_distance_ms: clear_join.distance_ms,
         cleared_from_after: clear_join.after,
         cleared_from_candidates: clear_join.candidates,
+        // The tail window is where the handoff line lands, so it answers first; the head
+        // window covers a transcript short enough for the two to meet.
+        continued_in: continued_in_tail.or(continued_in_head),
     })
 }
 

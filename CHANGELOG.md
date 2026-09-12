@@ -53,6 +53,21 @@ surface change bumps the PATCH.
   WHOLE session at an unbounded budget, 42 of 1,224 and 212 of 1,759 folded messages reach the
   threshold.
 
+- **`list` names the child a background handoff continued the session in.** A session handed
+  to a background child - the left-arrow gesture, or the background-fork command - leaves one
+  line in the PARENT transcript: `{type:"continued-in", timestamp, sessionId,
+  continuedInSessionId}`, four keys and no `uuid`, so it is not a chain node and its only
+  address is its jsonl line. This is the third lineage link on a `list` row and the only one
+  that is not an inference: `clone_of` reads a boundary shape and `cleared_from` a checkpoint
+  sum, while here Claude Code writes the child id itself. Text gains a `handoff` row naming the
+  child's first-8 token; JSON gains `continued_in`. Two limits ride the docs. An in-place
+  `/fork` reaches the same spawner with `keepParent` and writes no such line, so absence never
+  means "not forked"; and the append also runs on the failed-spawn path once a rescue row is
+  queued, so presence does not prove the child ran. Because `list` reads head/tail windows
+  only, a line a later `--resume` of the parent pushed above the tail window reads null, and
+  `stats`' line-type census (which already counts `continued-in`) is the whole-file answer.
+  (claim REC-106)
+
 ### Changed
 
 - **`verbatim`'s docs say which path the 600/900 per-role caps apply to** (documentation only;
