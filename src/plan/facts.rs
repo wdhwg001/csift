@@ -290,17 +290,30 @@ mod tests {
     #[test]
     fn an_equal_instant_reads_same() {
         // Derived, not hardcoded: read the file's OWN birth instant back and feed it in, so
-        // the equality arm is exercised without depending on a clock.
+        // the equality arm is exercised without depending on a clock. A platform that records
+        // no birth time (a musl target: `created()` errors there) cannot reach that arm, and
+        // its answer is Unknown with that reason - the claim the fact makes about such a host.
         let p = tmp("same.md", "# the plan\n");
         let path = p.to_str().unwrap().to_string();
-        let created = plan_file_created_ms(&path).expect("this platform records a birth time");
-        let iso = jiff::Timestamp::from_millisecond(created)
-            .expect("an in-range instant")
-            .to_string();
-        let v = slug_vs_plan_file(Some(&iso), &path);
-        std::fs::remove_file(&p).ok();
-        assert_eq!(v, SlugVsFile::Same, "iso {iso} vs created {created}");
-        assert_eq!(v.token(), "same");
-        assert_eq!(v.reason(), None);
+        match plan_file_created_ms(&path) {
+            Ok(created) => {
+                let iso = jiff::Timestamp::from_millisecond(created)
+                    .expect("an in-range instant")
+                    .to_string();
+                let v = slug_vs_plan_file(Some(&iso), &path);
+                std::fs::remove_file(&p).ok();
+                assert_eq!(v, SlugVsFile::Same, "iso {iso} vs created {created}");
+                assert_eq!(v.token(), "same");
+                assert_eq!(v.reason(), None);
+            }
+            Err(why) => {
+                let v = slug_vs_plan_file(Some("2020-06-07T05:00:00.000Z"), &path);
+                std::fs::remove_file(&p).ok();
+                assert_eq!(why, "this platform records no file birth time");
+                assert_eq!(v, SlugVsFile::Unknown(why));
+                assert_eq!(v.token(), "unknown");
+                assert_eq!(v.reason(), Some(why));
+            }
+        }
     }
 }

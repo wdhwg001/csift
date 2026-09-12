@@ -374,6 +374,15 @@ fn a_prose_mention_of_the_attachment_type_is_not_a_plan_reference() {
 
 // ── (d) the slug against the plan file's birth instant ────────────────────────
 
+/// Whether this host records a file birth time. A musl target does not (`created()` errors
+/// there), so the comparison can read nothing but `unknown` with that reason - the answer the
+/// fact documents for such a platform, and the arm these tests assert there.
+fn host_records_birth_time(plan_file: &std::path::Path) -> bool {
+    std::fs::metadata(plan_file)
+        .and_then(|m| m.created())
+        .is_ok()
+}
+
 #[test]
 fn a_slug_older_than_the_plan_file_reads_before() {
     // The ordinary order: the name is minted at Plan-Mode entry, the file lands later. The
@@ -393,12 +402,6 @@ fn a_slug_older_than_the_plan_file_reads_before() {
         ),
     );
     let out = h.run(&["plan", "--audit", &format!("@{SESSION}")]);
-    assert!(
-        out.stdout
-            .contains("birth    the first slug-carrying record is before the plan file's birth"),
-        "{}",
-        out.stdout
-    );
     let b = one(
         &h.run(&[
             "plan",
@@ -409,8 +412,29 @@ fn a_slug_older_than_the_plan_file_reads_before() {
         ]),
         "binding",
     );
-    assert_eq!(b["slug_vs_plan_file"], "before", "{b}");
-    assert!(b["slug_vs_plan_file_reason"].is_null(), "{b}");
+    if host_records_birth_time(&plan) {
+        assert!(
+            out.stdout.contains(
+                "birth    the first slug-carrying record is before the plan file's birth"
+            ),
+            "{}",
+            out.stdout
+        );
+        assert_eq!(b["slug_vs_plan_file"], "before", "{b}");
+        assert!(b["slug_vs_plan_file_reason"].is_null(), "{b}");
+    } else {
+        assert!(
+            out.stdout
+                .contains("birth    unknown - this platform records no file birth time"),
+            "{}",
+            out.stdout
+        );
+        assert_eq!(b["slug_vs_plan_file"], "unknown", "{b}");
+        assert_eq!(
+            b["slug_vs_plan_file_reason"], "this platform records no file birth time",
+            "{b}"
+        );
+    }
 }
 
 #[test]
@@ -441,7 +465,15 @@ fn a_slug_newer_than_the_plan_file_reads_after() {
         ]),
         "binding",
     );
-    assert_eq!(b["slug_vs_plan_file"], "after", "{b}");
+    if host_records_birth_time(&plan) {
+        assert_eq!(b["slug_vs_plan_file"], "after", "{b}");
+    } else {
+        assert_eq!(b["slug_vs_plan_file"], "unknown", "{b}");
+        assert_eq!(
+            b["slug_vs_plan_file_reason"], "this platform records no file birth time",
+            "{b}"
+        );
+    }
 }
 
 #[test]
