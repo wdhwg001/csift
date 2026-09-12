@@ -42,6 +42,14 @@ use super::*;
         `… [+K chars, L lines elided] …` marker; the assistant head is larger than the \
         user head (its prose front-loads context, back-loads the decision). Nothing is \
         ever fabricated or silently dropped.\n\n\
+        WHICH PATH THE PER-ROLE CAPS APPLY TO: the 600-char user / 900-char assistant body \
+        caps are the DIRECT path's - a plain run, with or without `--out`, and the legacy \
+        budget-driven `--slice i` on its own. `--slices N` (the fixed-fleet hook-injection \
+        path) DROPS them for a WINDOW cap instead: a body renders whole up to one window less a \
+        small headroom, so a turn is ellipsized only when it ALONE exceeds a window, and the \
+        oldest turns that do not fit the N slices are discarded rather than every turn being \
+        shortened. So the same session read two ways differs on purpose: the direct path keeps \
+        MORE turns each cut to 600/900, the fleet path keeps FEWER turns whole.\n\n\
         THE `L lines elided` FIGURE counts the newlines the CUT removed, not the message's \
         whole newline count: the rendered body is the whitespace-collapsed one line, so a unit \
         carries the offsets at which its original newlines landed in that line, and the note \

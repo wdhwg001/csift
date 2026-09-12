@@ -53,6 +53,21 @@ surface change bumps the PATCH.
   WHOLE session at an unbounded budget, 42 of 1,224 and 212 of 1,759 folded messages reach the
   threshold.
 
+### Changed
+
+- **`verbatim`'s docs say which path the 600/900 per-role caps apply to** (documentation only;
+  no cap moved). The caps are the DIRECT path's - a plain run, `--out`, and the legacy
+  budget-driven `--slice i` alone. `--slices N`, the fixed-fleet hook-injection path, drops them
+  for a window cap and holds its slice count by discarding the oldest turns that do not fit, so
+  the same session read two ways differs on purpose: the direct path keeps more turns each cut
+  to 600/900, the fleet path keeps fewer turns whole. Only the `--slices` flag doc had said so.
+  The measured cost of the direct cap, over the last 40 turns of the two largest top-level
+  transcripts of one corpus (assistant units): the 900-char cap keeps 32,404 of 59,965 chars (27
+  of 42 units cut) and 67,846 of 117,878 (48 of 101 cut); at 1,800 those would be 50,657 (12
+  cut) and 95,262 (18 cut), i.e. 18,253 and 27,416 more chars kept. Recorded as a number, not
+  acted on. The `--agent-msgs` help text also drops a stale claim that the default is
+  `eot-only`; it has been `longest` since that mode shipped.
+
 ### Fixed
 
 - **`verbatim`'s `L lines elided` note counts the cut, not the message.** The figure was the
