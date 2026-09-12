@@ -91069,17 +91069,17 @@
       "code": [
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "139",
+          "lines": "143",
           "snippet": "pub(crate) fn out(command: &str) -> Option<OutHit> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "257",
+          "lines": "261",
           "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
         },
         {
           "path": "src/bash_danger_out.rs",
-          "lines": "401",
+          "lines": "405",
           "snippet": "fn nested_shell(clause: &str, depth: usize, inherited_positional: bool) -> Option<OutHit> {"
         },
         {
@@ -91403,6 +91403,123 @@
           "observed": "36 feedback records in 12 transcripts; 30 have both neighbours in the same turn; longest common normalized prefix over those 30: 29 at 0 chars, 1 at 4 chars, 0 at 20 or more. Same-prefix same-turn pairs over 6,468 turns / 35,052 assistant messages: 76 total, 53 at the full 80-char width, 0 with a feedback record between the two lines. Divergence within the 53: 1 identical, 25 with a common prefix under 120 chars, 22 whose later member is shorter.",
           "rule": "One row per feedback record for the first figure and one row per (earlier member, group's last member) pair for the second; a pair counts only when both members carry the same turn index; prefixes are compared after collapsing every whitespace run to one space, trimming and lowercasing.",
           "note": "The measurement is what fixed the fold's name and its predicate: the marker says same-prefix re-send rather than Stop-hook re-send, and containment rather than prefix equality is required."
+        }
+      ]
+    },
+    {
+      "id": "BASH-041",
+      "area": "bash-shell",
+      "behavior": "The rewritten lexical classifier reads its input through a BLANKING mask twice before its clause walk starts. `MIn` (@166793140 at Claude Code 2.1.268) walks the command once, blanking every quoted run and every comment so a scan cannot read inside them, and the classifier's two calls @166792956 are the mask's only readers: one with the blank flag set, whose output the function-definition scan reads, and one with it clear, whose output the `set --` scan reads. `MIn(` occurs five times in the build, and the other three belong to a ONE-argument permission-update normaliser carrying the same minified name (its definition @163230658 and its two calls @180109983 and @180110717), so the enumeration is closed. The mask decides a backslash with `RNe` (@166796663), the same helper the shield and the quote-state probe read: never an escape inside a single quote, always one outside quotes, and inside a double quote only before `\"`, `\\`, `$` or a backtick. It spells that decision at TWO sites. Outside a quote @166793266 the backslash and the character after it are copied verbatim, whatever the flag says. Inside a quote @166793429 the pair is replaced by TWO blanks when the flag is set and copied verbatim when it is clear, and both arms step the walk over BOTH characters - so an escaped quote does not close the run that hides it. The blank arm can never run out of characters: inside a single quote `RNe` refuses every backslash and inside a double quote it requires one of four, so a next character exists wherever that arm is reached. Two blanks for two characters also keep the masked string exactly as long as its input, which is why the rule's whole effect is the quote STATE carried forward - which later text is blanked, and whether a later `#` opens a comment. The mask belongs to the rewritten classifier and not to the one it replaced.",
+      "depends": "csift's `mask` is that function and `out` calls it at the same two sites, so the rule decides the POSITIONAL ALLOWANCE - the flag the `$1`/`$@`/`$*`/`$!` target form is gated on - and nothing else. Reading an in-quote backslash as an ordinary character ends a double-quoted run at the first escaped quote and flips the quote state for the whole remainder of the command, in both directions: a function definition written INSIDE a quoted string is then read as a real one and retires the positional form, while a definition that genuinely FOLLOWS the string is blanked and retires nothing. Over the distinct Bash commands of one corpus the two readings disagree on the function-scan answer 165 times, 145 of them where the pair rule hides a definition the character rule revealed and 20 the other way, so a port keeping the character rule mispredicts in both directions on a build at or past the rewrite floor. No predicted verdict moves on that corpus, for two reasons that are properties of the corpus rather than of the rule: the generations before the rewrite never call a mask at all, and the three differing commands recorded at or past the floor carry no `$`, which the classifier's entry guard wants before the mask is read.",
+      "code": [
+        {
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "380",
+          "snippet": "pub(crate) fn mask(s: &str, blank: bool) -> String {"
+        },
+        {
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "398-400",
+          "snippet": "        if c == '\\\\' && escapes_next(&chars, i, quote) {\n            if blank && quote.is_some() {\n                out.push_str(\"  \");"
+        },
+        {
+          "path": "src/bash_danger_lexical.rs",
+          "lines": "202",
+          "snippet": "pub(crate) fn escapes_next(chars: &[char], i: usize, quote: Option<char>) -> bool {"
+        },
+        {
+          "path": "src/bash_danger_out.rs",
+          "lines": "151-152",
+          "snippet": "    let positional_ok =\n        !FUNCTION_SCAN.is_match(&mask(&cleaned, true)) && !has_set_dashdash(&cleaned);"
+        }
+      ],
+      "instrument": "Read `MIn` and `RNe` whole in the newest build held here and enumerate every occurrence of `MIn(` in it, reading each one; then byte-search the in-quote arm's literal `&&RNe(e,p,o)){r+=n?\"  \":_+(e[p+1]??\"\")` in every build held here. Then extract every distinct (Bash `input.command`, record `version`) pair from the verbatim lines `csift search '' -t agent.tool.use --raw --max-count 0` emits over all projects, run both readings of the mask over each pair, and count the pairs whose masked string differs, whose function-definition scan answer differs, whose `set --` answer differs, and whose classifier hit differs when the classifier is run at the rewrite generation regardless of the recorded version. Counting rule: one pair per distinct (command, version), a pair counted under every flag it carries; raw byte occurrences per build file for the literal; one verdict per read occurrence for the enumeration.",
+      "located": {
+        "claude_code": "2.1.268",
+        "csift": "0.12.3",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": "2.1.268",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "PRODUCER: the mask's hops are quoted from the newest build held here and carry no byte offset, because the build the ledger is verified at does not contain the rewritten classifier; they gain offsets when the verified version moves to the rewrite floor or later.",
+        "SPECIMEN: a live trial on a build at or past the rewrite floor, running a removal whose positional target is gated by a function definition written inside a double-quoted run behind an escaped quote, and recording whether the permission prompt appears."
+      ],
+      "residue": [
+        "Rule 12 cannot check this claim's anchors: they belong to a build other than the verified one.",
+        "The in-quote arm's own floor is bounded by the builds held here - absent in the 61 from 1.0.60 through 2.1.259 and present once at 2.1.268, with 2.1.260 through 2.1.267 not held - so the rewrite floor BASH-038 bisects is the tighter bound."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the classifier's two mask calls",
+          "excerpt": "let n=!XNo.test(MIn(e,!0))&&!QNo.test(MIn(e,!1)),r=Jg(e);",
+          "note": "the function-definition scan and the `set --` scan, the mask's only two readers, quoted from the newest build held here"
+        },
+        {
+          "role": "gate",
+          "name": "RNe",
+          "excerpt": "function RNe(e,n,r){if(r===\"'\")return!1;if(r===null)return!0;let o=e[n+1];return o==='\"'||o===\"\\\\\"||o===\"$\"||o===\"`\"}",
+          "note": "the three arms a backslash is decided by, quoted from the newest build held here"
+        },
+        {
+          "role": "writer",
+          "name": "MIn outside-quote arm",
+          "excerpt": "if(o===null){if(_===\"\\\\\"){r+=_+(e[p+1]??\"\"),p++;continue}",
+          "note": "outside a quote the pair is copied verbatim whatever the blank flag says, quoted from the newest build held here"
+        },
+        {
+          "role": "writer",
+          "name": "MIn in-quote arm",
+          "excerpt": "if(_===\"\\\\\"&&RNe(e,p,o)){r+=n?\"  \":_+(e[p+1]??\"\"),p++;continue}",
+          "note": "two blanks for the pair under the flag, the pair verbatim without it, and both step over two characters, quoted from the newest build held here"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "&&RNe(e,p,o)){r+=n?\"  \":_+(e[p+1]??\"\")",
+        "lowest_present": "2.1.268",
+        "highest_absent": "2.1.259",
+        "ladder": "62 builds held here from 1.0.60 through 2.1.268; the literal occurs once at 2.1.268 and zero times in the other 61, and 2.1.260 through 2.1.267 are not held"
+      },
+      "enumeration": [
+        {
+          "site": "the classifier's two calls",
+          "excerpt": "!XNo.test(MIn(e,!0))&&!QNo.test(MIn(e,!1))",
+          "verdict": "the only two readers of the two-argument mask: the function-definition scan with the blank flag set, the `set --` scan with it clear"
+        },
+        {
+          "site": "the mask's own definition",
+          "excerpt": "function MIn(e,n){let r=\"\",o=null,d=!1;",
+          "verdict": "the definition itself, not a call"
+        },
+        {
+          "site": "a one-argument function of the same minified name",
+          "excerpt": "function MIn(e){if(!Array.isArray(e))",
+          "verdict": "a permission-update list normaliser: one argument, no quote state, no mask behaviour"
+        },
+        {
+          "site": "that normaliser's first call",
+          "excerpt": "let M=MIn(P),E=o.forRemoteExecution===!0",
+          "verdict": "reads the one-argument form, never the mask"
+        },
+        {
+          "site": "that normaliser's second call",
+          "excerpt": "let R=MIn(P),U=this.persistPermissions(",
+          "verdict": "reads the one-argument form, never the mask"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.3",
+          "date": "2026-09-12",
+          "verdict": "holds",
+          "instrument": "Read `MIn` @166793140 and `RNe` @166796663 whole in the 2.1.268 build, enumerate all five occurrences of `MIn(` in it and read each, byte-search the in-quote arm's literal in the 62 builds held here, and run both readings of the mask over every distinct (Bash command, version) pair extracted from the verbatim lines `csift search '' -t agent.tool.use --raw --max-count 0` emits over all projects.",
+          "observed": "`MIn(e,n)` blanks quoted runs and comments and has exactly two readers, both in the classifier; the other three `MIn(` occurrences are a one-argument permission-update normaliser and its two calls. `RNe` returns false inside a single quote, true outside quotes, and inside a double quote true only before a double quote, a backslash, a dollar or a backtick. The in-quote arm writes two blanks under the flag and the pair verbatim without it, stepping over two characters in both. Its literal occurs once at 2.1.268 and zero times in the 61 builds from 1.0.60 through 2.1.259. Over 165,314 distinct pairs, read off 273,750 verbatim lines carrying 170,019 Bash blocks, the two readings differ on 4,097 masked strings - 1,620 recorded before the census floor, 2,474 under the generation between that floor and the rewrite floor, which is also where a record carrying no readable version falls, and 3 at or past the rewrite floor. Of the 4,097, 165 change the function-definition scan answer (145 hiding a definition the character rule revealed, 20 revealing one it hid), 0 change the `set --` answer, and 0 change the classifier's hit even when the classifier is run at the rewrite generation for every pair. All 4,097 carry at least one escaped double quote; 363 carry a backslash run of two or more, 83 of those directly before a quote; 954 carry a hash. The three pairs recorded at or past the rewrite floor all lack the dollar the entry guard wants, so the mask is never reached for them. Two planted commands, one hiding a definition inside a quoted run and one leaving it outside, are caught by the same probe with opposite directions, which is what qualifies the zero.",
+          "rule": "one pair per distinct (command, version), each counted under every flag it carries; raw byte occurrences per build file; one verdict per read occurrence of `MIn(`",
+          "note": "Lands with the port of the mask's backslash rule. The declined-divergence note in the classifier's module doc is replaced by the rule it describes."
         }
       ]
     }

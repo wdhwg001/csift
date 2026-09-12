@@ -27,13 +27,17 @@
 //! (@166796336). `Xct` enters the recursion once, at @166794394 as
 //! `iLo(C,r===0||n,r+1)`, and `iLo` calls back into `Xct` on the rebuilt script at
 //! @166796542, writing the escaped-dollar stand-in back as `\$` in the target it
-//! returns. One divergence in this neighbourhood is DECLINED, because it is
-//! nothing the nested port needs and nothing the contract asked for: `MIn`
-//! @166793250, the blanking mask the top-level function scan reads, decides a
-//! backslash with `RNe` and emits two blanks where it blanks an escape pair, while
-//! `mask` below treats every backslash outside a single quote as an escape and
-//! emits one character per character. It is recorded here so the next pass over
-//! this file starts from a known list rather than a rediscovery.
+//! returns.
+//!
+//! The BLANKING mask `MIn` @166793140 decides a backslash with the same `RNe`, and
+//! that is ported too: outside a quote @166793266 the pair is copied verbatim in
+//! both modes, and inside one @166793429 it is blanked as a PAIR, so an escaped
+//! quote does not close the run that hides it. The rule is observable exactly
+//! where the escaped character IS a quote - a blanked pair is two blanks either
+//! way, so what moves is the quote state, and with it which later text is blanked
+//! and whether a later `#` opens a comment. Its only two readers are the two calls
+//! @166792956 below, the function scan and the `set --` scan, so it can reach a
+//! verdict through the positional allowance and through nothing else.
 
 use crate::bash_danger_lexical::{
     amp_to_semicolon, escapes_next, mask, mask_specials, open_quote, paren_fixpoint,

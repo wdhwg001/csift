@@ -145,11 +145,23 @@ fn the_scan_mask_blanks_a_quoted_run_and_a_comment() {
     assert_eq!(mask("a # b\nc", true), "a    \nc");
     // A `#` inside a word is an ordinary character.
     assert_eq!(mask("a#b", true), "a#b");
-    // A backslash carries its partner past every test above, wherever in the command
-    // the pair sits, so the character it escapes is never blanked or re-read.
+    // OUTSIDE a quote a backslash carries its partner past every test above, in
+    // BOTH modes, so the character it escapes is never blanked or re-read.
     assert_eq!(mask("a \\' b", true), "a \\' b");
     assert_eq!(mask("a\\xy", true), "a\\xy");
+    assert_eq!(mask("a\\;b", true), "a\\;b");
     assert_eq!(mask("a\"xy\"", true), "a\"  \"");
+    // INSIDE a double quote `RNe` lets a backslash escape the quote, and the pair
+    // is blanked as TWO characters - so the escaped quote does NOT close the run,
+    // and whether the text after it is blanked or read follows from that. An ODD
+    // run of backslashes before the quote keeps the run open to the end of the
+    // command; an EVEN one lets the quote close.
+    assert_eq!(mask("\"a\\\"b\" c", true), "\"    \" c");
+    assert_eq!(mask("\"a\\\"b", true), "\"    ");
+    assert_eq!(mask("\"a\\\\\"b", true), "\"   \"b");
+    // Unblanked, the same state decides whether a later `#` opens a comment, which
+    // is the one arm that drops a character in that mode.
+    assert_eq!(mask("\"a\\\"b\" #c", false), "\"a\\\"b\"   ");
 }
 
 #[test]

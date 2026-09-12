@@ -368,8 +368,15 @@ fn drop_backslashes_before_dollar(s: &str) -> String {
     out
 }
 
-/// `MIn` @166793250 - blank out quoted runs (and comments) so a scan cannot read
+/// `MIn` @166793140 - blank out quoted runs (and comments) so a scan cannot read
 /// inside them.
+///
+/// A backslash is decided by `RNe`, the same helper the shield reads, and the two
+/// sites the harness spells the escape at fuse into the one arm below: OUTSIDE a
+/// quote @166793266 the pair is copied verbatim in both modes, and INSIDE one
+/// @166793429 it is blanked as a PAIR, which is what keeps an escaped quote from
+/// closing the run that hides it. Inside a single quote `RNe` refuses every
+/// backslash, so the pair arm is reached only where a next character exists.
 pub(crate) fn mask(s: &str, blank: bool) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
@@ -388,15 +395,17 @@ pub(crate) fn mask(s: &str, blank: bool) -> String {
             i += 1;
             continue;
         }
-        if quote.is_none() {
-            if c == '\\' {
+        if c == '\\' && escapes_next(&chars, i, quote) {
+            if blank && quote.is_some() {
+                out.push_str("  ");
+            } else {
                 out.push(c);
-                if let Some(n) = chars.get(i + 1) {
-                    out.push(*n);
-                }
-                i += 2;
-                continue;
+                out.extend(chars.get(i + 1));
             }
+            i += 2;
+            continue;
+        }
+        if quote.is_none() {
             if c == '#'
                 && (i == 0
                     || matches!(
@@ -566,6 +575,17 @@ mod tests {
     #[test]
     fn an_escaped_special_that_is_not_a_blank_keeps_its_character() {
         assert_eq!(mask_specials("a\\ b\\;c"), format!("a\\{}b\\;c", shield(8)));
+    }
+
+    /// The blanking mask reads an in-quote backslash with `RNe` too, so its two
+    /// REFUSALS leave the pair alone: inside a single quote nothing is escaped, so
+    /// the run still closes on the character the backslash stands before, and a
+    /// backslash with no next character escapes nothing either - which is why the
+    /// pair arm never blanks two characters where only one was consumed.
+    #[test]
+    fn the_mask_escape_arm_keeps_every_refusal_rne_makes() {
+        assert_eq!(mask("'a\\'b", true), "'  'b");
+        assert_eq!(mask("\"a\\", true), "\"  ");
     }
 
     /// `sut` maps back only the code points the shield alphabet owns. The one just
