@@ -188,3 +188,97 @@ pub(crate) fn slug_vs_plan_file(first_slug_utc: Option<&str>, plan_file: &str) -
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    fn tmp(name: &str, body: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "csift-planfacts-{}-{}-{name}",
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let mut f = std::fs::File::create(&p).unwrap();
+        f.write_all(body.as_bytes()).unwrap();
+        p
+    }
+
+    #[test]
+    fn an_empty_transcript_yields_the_default_facts() {
+        // A file the mapper cannot map (it is empty) is not an error: nothing is known, and
+        // every derived fact says so rather than fabricating an absence.
+        let p = tmp("empty.jsonl", "");
+        let f = binding_facts(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert!(f.changes.is_empty());
+        assert_eq!(f.first_slug_line, None);
+        assert!(f.plan_ref_lines.is_empty());
+        assert!(f.no_slug());
+    }
+
+    #[test]
+    fn a_torn_slug_line_neither_mints_nor_ends_a_run() {
+        // The walk cannot finish the torn line, so it says nothing about the slug: the run the
+        // first line opened is still open, and the third line is no second change point.
+        let p = tmp(
+            "torn.jsonl",
+            concat!(
+                r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","slug":"quiet-harbor-relay"}"#,
+                "\n",
+                r#"{"type":"user","slug":"quiet-harbor-relay","message":{"role":"us"#,
+                "\n",
+                r#"{"type":"user","timestamp":"2026-06-07T05:02:00.000Z","slug":"quiet-harbor-relay"}"#,
+                "\n",
+            ),
+        );
+        let f = binding_facts(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(f.changes.len(), 1, "one mint, no spurious second change");
+        assert_eq!(f.changes[0].line, 1);
+        assert_eq!(f.first_slug_line, Some(1));
+    }
+
+    #[test]
+    fn a_torn_line_carrying_the_attachment_literal_is_not_a_plan_reference() {
+        // The literal admitted the line; the attachment's own `type` is what decides, and a
+        // line that does not parse has none.
+        let p = tmp(
+            "tornref.jsonl",
+            "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_file_reference\",\"conte\n",
+        );
+        let f = binding_facts(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert!(f.plan_ref_lines.is_empty());
+    }
+
+    #[test]
+    fn an_unparseable_slug_timestamp_reads_unknown_with_its_reason() {
+        let v = slug_vs_plan_file(Some("not-a-time"), "/nonexistent/plan.md");
+        assert_eq!(v.token(), "unknown");
+        assert_eq!(
+            v.reason(),
+            Some("the slug record's timestamp is unparseable")
+        );
+    }
+
+    #[test]
+    fn an_equal_instant_reads_same() {
+        // Derived, not hardcoded: read the file's OWN birth instant back and feed it in, so
+        // the equality arm is exercised without depending on a clock.
+        let p = tmp("same.md", "# the plan\n");
+        let path = p.to_str().unwrap().to_string();
+        let created = plan_file_created_ms(&path).expect("this platform records a birth time");
+        let iso = jiff::Timestamp::from_millisecond(created)
+            .expect("an in-range instant")
+            .to_string();
+        let v = slug_vs_plan_file(Some(&iso), &path);
+        std::fs::remove_file(&p).ok();
+        assert_eq!(v, SlugVsFile::Same, "iso {iso} vs created {created}");
+        assert_eq!(v.token(), "same");
+        assert_eq!(v.reason(), None);
+    }
+}

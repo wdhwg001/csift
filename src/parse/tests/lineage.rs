@@ -107,3 +107,39 @@ fn a_torn_line_carries_no_key_instead_of_failing() {
     let torn_early = br#"{"type":"assistant","message":{"role":"assis"#;
     assert_eq!(lineage_fields(torn_early), None);
 }
+
+#[test]
+fn a_malformed_object_interior_stops_the_walk_rather_than_guessing() {
+    // Two shapes the walk cannot continue past, both yielding nothing: a token at a KEY
+    // position that is not a string, and a key with no colon after it. Neither can be a
+    // field, and inventing one from the bytes already read would be worse than saying so.
+    assert_eq!(
+        lineage_fields(br#"{"sessionKind":"bg", 7:"x"}"#),
+        None,
+        "a bare number at a key position ends the walk"
+    );
+    assert_eq!(
+        lineage_fields(br#"{"slug" "quiet-harbor-relay"}"#),
+        None,
+        "a key with no colon ends the walk"
+    );
+}
+
+#[test]
+fn the_slug_and_the_timestamp_ride_the_same_walk() {
+    // `plan --audit` reads these two; an EMPTY slug is read as absent, because an empty slug
+    // binds nothing and would otherwise register as a change point of its own.
+    let f = lineage_fields(
+        br#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","slug":"quiet-harbor-relay"}"#,
+    )
+    .expect("an object");
+    assert_eq!(f.slug.as_deref(), Some("quiet-harbor-relay"));
+    assert_eq!(f.timestamp.as_deref(), Some("2026-06-07T05:00:00.000Z"));
+    // A slug-only line carries no SESSION lineage, which is what the narrower predicate says.
+    assert!(f.no_session_lineage());
+
+    let empty = lineage_fields(br#"{"type":"user","slug":""}"#).expect("an object");
+    assert_eq!(empty.slug, None, "an empty slug binds nothing");
+    assert!(line_has_slug_key(br#"{"type":"user","slug":"x"}"#));
+    assert!(!line_has_slug_key(br#"{"type":"user","sessionKind":"bg"}"#));
+}
