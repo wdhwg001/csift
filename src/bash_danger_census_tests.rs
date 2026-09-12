@@ -86,6 +86,14 @@ fn the_bounded_cmdsub_fixpoint_stops_at_sixteen_iterations() {
         cmdsub_fixpoint(&deep(40)).contains("$("),
         "the cap must leave the deepest nesting untouched"
     );
+    // The cap sits exactly ON sixteen: one level per iteration, so sixteen levels are
+    // the deepest nesting the fixpoint resolves and the seventeenth keeps its
+    // outermost substitution.
+    assert_eq!(cmdsub_fixpoint(&deep(16)), "__CMDSUB__");
+    assert!(
+        cmdsub_fixpoint(&deep(17)).contains("$("),
+        "seventeen levels need a seventeenth iteration the cap does not give"
+    );
     // A command with no substitution is returned unchanged.
     assert_eq!(cmdsub_fixpoint("rm -rf $D/*"), "rm -rf $D/*");
 }
@@ -111,4 +119,30 @@ fn the_substitution_walk_stops_at_its_own_bound() {
     // pop and the guard is observable as a count: 4096 bodies from 4100 levels.
     let deep = "$(".repeat(4100) + "x" + &")".repeat(4100);
     assert_eq!(collect_substitutions(&deep).len(), 4096);
+}
+
+// `resolve_dquote_escapes`, one transform of the shared text layer the fixpoint above
+// sits beside: it lives in `bash_danger_lexical`, which this census is a caller of.
+// Its cases are hosted here because `src/` sits at the 20-file structure cap, so that
+// layer has no `*_tests.rs` file of its own to take them and the two files that do
+// cover it are within a dozen lines of the 600-line cap.
+
+/// A `\$` resolves by what FOLLOWS the dollar: a name keeps a real `$`, and anything
+/// else leaves the stand-in, so a literal `$1` cannot read as a positional parameter.
+/// The braced form looks one character further on.
+#[test]
+fn an_escaped_dollar_resolves_by_what_names_a_variable() {
+    use crate::bash_danger_lexical::{resolve_dquote_escapes, KCT};
+    assert_eq!(resolve_dquote_escapes("\\$D"), "$D");
+    assert_eq!(resolve_dquote_escapes("\\${D}"), "${D}");
+    assert_eq!(resolve_dquote_escapes("\\$0X"), format!("{KCT}0X"));
+}
+
+/// The other three replaces drop the backslash they carry.
+#[test]
+fn a_double_quoted_escape_drops_the_backslash_it_carries() {
+    use crate::bash_danger_lexical::resolve_dquote_escapes;
+    assert_eq!(resolve_dquote_escapes("a\\\"b"), "a\"b");
+    assert_eq!(resolve_dquote_escapes("a\\\\b"), "a\\b");
+    assert_eq!(resolve_dquote_escapes("a\\`b"), "a`b");
 }

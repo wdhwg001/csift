@@ -145,8 +145,11 @@ fn the_scan_mask_blanks_a_quoted_run_and_a_comment() {
     assert_eq!(mask("a # b\nc", true), "a    \nc");
     // A `#` inside a word is an ordinary character.
     assert_eq!(mask("a#b", true), "a#b");
-    // A backslash carries its partner past every test above.
+    // A backslash carries its partner past every test above, wherever in the command
+    // the pair sits, so the character it escapes is never blanked or re-read.
     assert_eq!(mask("a \\' b", true), "a \\' b");
+    assert_eq!(mask("a\\xy", true), "a\\xy");
+    assert_eq!(mask("a\"xy\"", true), "a\"  \"");
 }
 
 #[test]
@@ -195,8 +198,10 @@ fn the_backtick_strip_substitutes_the_sentinel() {
     assert_eq!(strip_backticks("a `b` c"), format!("a {VCT} c"));
     // A backslash carries its partner, so an escaped backtick opens nothing.
     assert_eq!(strip_backticks("a \\`b\\` c"), "a \\`b\\` c");
-    // An opener with no closer is kept verbatim.
+    // An opener with no closer is kept verbatim, and so is a TRAILING lone backslash,
+    // which has no partner to carry.
     assert_eq!(strip_backticks("a `b"), "a `b");
+    assert_eq!(strip_backticks("a\\"), "a\\");
     assert_eq!(strip_backticks("plain"), "plain");
 }
 
@@ -213,6 +218,10 @@ fn the_paren_fixpoint_substitutes_a_group_and_keeps_an_unclosed_one() {
     // Neither is a group whose closer is escaped, or missing before the next one.
     assert_eq!(replace_plain_parens("a (b\\) c"), "a (b\\) c");
     assert_eq!(replace_plain_parens("a (b (c) d"), format!("a (b {VCT} d"));
+    // A group that OPENS the command, and one whose scan runs off the end of it:
+    // the first has no preceding character to disarm it, the second no closer at all.
+    assert_eq!(replace_plain_parens("(a)"), VCT.to_string());
+    assert_eq!(replace_plain_parens("(abc"), "(abc");
 }
 
 #[test]
@@ -511,4 +520,68 @@ fn a_too_complex_head_carrying_a_nested_removal_asks_at_generation_three() {
     let v2 = classify("if true; then sh -c 'rm -rf $D/*'; fi", Some("2.1.258"));
     assert_eq!(v2.generation, Generation::Gen2);
     assert_ne!(v2.checker, Checker::Lexical);
+}
+
+#[test]
+fn the_entry_guard_reads_the_command_before_the_sentinel_strip() {
+    // The guard runs on the text AS WRITTEN, and the sentinel strip that follows it
+    // cannot put back a verb the guard already failed to find: a private-use
+    // character splitting `rm` means there is no removal word to match.
+    assert_eq!(out("r\u{E020}m -rf $D/*"), None);
+    assert_eq!(out("rm -rf $D/*").map(|h| h.target), tgt("$D/*"));
+}
+
+#[test]
+fn the_token_walk_stops_on_a_verb_whose_word_also_looks_skippable() {
+    // A `$`-led path prefix makes the verb token match one of the walk's own skip
+    // shapes. The verb test runs FIRST, so the walk stops there instead of stepping
+    // over the removal it was looking for.
+    let inv = token_walk("sudo $x/rm -rf $D/*").expect("the verb is found");
+    assert_eq!(inv.command, "rm");
+    assert_eq!(inv.tokens, vec!["-rf", "$D/*"]);
+}
+
+#[test]
+fn the_operand_skip_needs_a_single_quote_that_stays_open() {
+    // The skip drops a token that OPENS a single quote and ends on `$`, whose `$` is
+    // therefore literal. A token that closes its quote again is an ordinary operand,
+    // and this one is a target.
+    let target = Invocation {
+        command: "rm",
+        tokens: vec!["'$D/'$".to_string()],
+    };
+    assert_eq!(
+        operand_walk(&target, true, false).map(|h| h.target),
+        tgt("'$D/'$")
+    );
+    let literal = Invocation {
+        command: "rm",
+        tokens: vec!["'$D/$".to_string()],
+    };
+    assert!(operand_walk(&literal, true, false).is_none());
+}
+
+#[test]
+fn the_run_split_keeps_a_trailing_unquoted_run() {
+    // `iLo` rebuilds the script from its runs, so the text after the closing quote
+    // belongs to it: dropping that run would hand the walk a shorter script than the
+    // shell would run.
+    let chars: Vec<char> = "'ab'c".chars().collect();
+    let (runs, end) = quoted_runs(&chars, 0);
+    assert_eq!(
+        runs,
+        vec![(Some('\''), "ab".to_string()), (None, "c".to_string())]
+    );
+    assert_eq!(end, chars.len());
+}
+
+#[test]
+fn the_wrapping_quote_strip_needs_a_quote_at_both_ends() {
+    // The reassembly puts a single-quoted run's own quotes back, and this undoes
+    // exactly that. A script quoted at one end only is not the shape, so nothing is
+    // cut off it - cutting would drop a real character from the nested command.
+    assert_eq!(strip_wrapping_quotes("'abc'"), "abc");
+    assert_eq!(strip_wrapping_quotes("'abc"), "'abc");
+    assert_eq!(strip_wrapping_quotes("abc'"), "abc'");
+    assert_eq!(strip_wrapping_quotes(""), "");
 }

@@ -512,3 +512,67 @@ pub(crate) fn amp_to_semicolon(s: &str) -> String {
     }
     String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Qct` reads a backslash and the character it escapes as ONE unit, so the `"`
+    /// a backslash escapes never opens a quote. Without the backslash the same
+    /// quote is still open when the prefix runs out.
+    #[test]
+    fn a_backslash_escape_steps_the_quote_scan_over_both_characters() {
+        let escaped: Vec<char> = "x\\\"y".chars().collect();
+        assert_eq!(open_quote(&escaped, escaped.len()), None);
+        let bare: Vec<char> = "x\"y".chars().collect();
+        assert_eq!(open_quote(&bare, bare.len()), Some('"'));
+    }
+
+    /// The probe `sLo`'s guard asks: is there a BLANK the backslash escapes? Both
+    /// bytes are required and in that order, so an unescaped blank is not one and
+    /// neither is a backslash before anything else.
+    #[test]
+    fn the_escaped_blank_probe_wants_a_backslash_before_the_blank() {
+        assert!(has_escaped_blank("a\\ b"));
+        assert!(has_escaped_blank("a\\\tb"));
+        assert!(!has_escaped_blank("rm -rf $D/*"));
+        assert!(!has_escaped_blank("a b"));
+    }
+
+    /// `sLo`'s guard admits a command with NO quote at all when it carries a
+    /// backslash-escaped blank, and the walk then stands that blank in so the clause
+    /// split cannot cut one operand into two. A command carrying neither comes back
+    /// unchanged.
+    #[test]
+    fn an_escaped_blank_admits_a_quoteless_command_to_the_shield() {
+        assert_eq!(mask_specials("a\\ b"), format!("a\\{}b", shield(8)));
+        assert_eq!(mask_specials("rm -rf $D/*"), "rm -rf $D/*");
+    }
+
+    /// The shield stands in for a special INSIDE a quoted run and keeps the same
+    /// character outside one: that difference is the whole point of the pass.
+    #[test]
+    fn a_special_is_shielded_only_inside_a_quoted_run() {
+        assert_eq!(
+            mask_specials("echo \"a;b\""),
+            format!("echo \"a{}b\"", shield(0))
+        );
+        assert_eq!(mask_specials("echo a;b"), "echo a;b");
+    }
+
+    /// Outside a quote only a blank the backslash escapes is stood in for; every
+    /// other escaped special keeps its own character, which is what lets the clause
+    /// split still read an escaped separator as escaped.
+    #[test]
+    fn an_escaped_special_that_is_not_a_blank_keeps_its_character() {
+        assert_eq!(mask_specials("a\\ b\\;c"), format!("a\\{}b\\;c", shield(8)));
+    }
+
+    /// `sut` maps back only the code points the shield alphabet owns. The one just
+    /// past its end is content and is left alone.
+    #[test]
+    fn the_unshield_leaves_the_code_point_past_the_alphabet_alone() {
+        assert_eq!(unmask(&format!("a{}b", shield(9))), "a\tb");
+        assert_eq!(unmask("a\u{E00B}b"), "a\u{E00B}b");
+    }
+}

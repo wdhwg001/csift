@@ -92,6 +92,50 @@ fn a_checkpoint_that_is_not_the_last_line_is_not_evidence() {
     );
 }
 
+/// A `cost-state` line padded to exactly `bytes`, so a fixture can place one ON the
+/// tail window's own boundary.
+fn padded_checkpoint(session: &str, close_ms: i64, bytes: usize) -> String {
+    let head = format!("{},\"pad\":\"", {
+        let c = checkpoint(session, close_ms);
+        c[..c.len() - 1].to_string()
+    });
+    let tail = "\"}";
+    let line = format!(
+        "{head}{}{tail}",
+        "x".repeat(bytes - head.len() - tail.len())
+    );
+    assert_eq!(line.len(), bytes, "the pad arithmetic");
+    line
+}
+
+#[test]
+fn a_tail_line_that_exactly_fills_the_window_is_refused() {
+    // The tail read is bounded at 512 KiB, so a last line reaching the window's head
+    // MAY be a cut one and csift reads nothing rather than half a record - including
+    // when the line happens to be whole, which is what makes this a refusal rather
+    // than a parse failure. One byte shorter leaves the preceding newline inside the
+    // window, and the same checkpoint is read.
+    const WINDOW: usize = 512 * 1024;
+    for (bytes, want) in [(WINDOW, false), (WINDOW - 1, true)] {
+        let h = Home::new();
+        h.write(
+            &format!("{LIVE_ENC}/{LIVE_SESS}.jsonl"),
+            &format!(
+                "{EOT_MAIN}{}",
+                padded_checkpoint(LIVE_SESS, 1_780_809_000_000, bytes)
+            ),
+        );
+        let out = h.run(&["status", &at(LIVE_SESS)]);
+        assert!(out.success, "{bytes}: stderr {}", out.stderr);
+        assert_eq!(
+            out.stdout.contains("checkpoint cost-state at L3"),
+            want,
+            "a last line of {bytes} bytes:\n{}",
+            out.stdout
+        );
+    }
+}
+
 #[test]
 fn the_tasks_store_is_found_through_the_session_own_id() {
     let h = Home::new();

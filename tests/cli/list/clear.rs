@@ -223,3 +223,41 @@ fn list_needs_the_wrapper_first_not_merely_present() {
         "only the FIRST non-isMeta user record decides the mint: {row}"
     );
 }
+
+#[test]
+fn list_never_joins_a_clear_lineage_for_a_subagent() {
+    // A subagent is never cleared, so neither half of the lineage is reported for one
+    // even when its transcript opens with a `/clear` wrapper and a sibling in the same
+    // directory carries a checkpoint inside the join window. The sweep is what must not
+    // run: the row it would produce would name a peer agent as a predecessor session.
+    let h = Home::new();
+    let parent = "dddddddd-bbbb-4ccc-8ddd-eeeeeeeeee10";
+    let cleared = "1111111111111111";
+    let neighbour = "2222222222222222";
+    h.write(
+        &format!("{ENC}/{parent}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"t1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"spawn a helper"}}"#,
+            "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{parent}/subagents/agent-{cleared}.jsonl"),
+        &cleared_jsonl(),
+    );
+    h.write(
+        &format!("{ENC}/{parent}/subagents/agent-{neighbour}.jsonl"),
+        &origin_jsonl(neighbour, WRAPPER_MS - 3, ""),
+    );
+    let out = h.run(&["list", &format!("@{parent}"), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let row = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["session_id"] == cleared)
+        .expect("the subagent row");
+    assert!(row["minted_by"].is_null(), "{row}");
+    assert!(row["cleared_from"].is_null(), "{row}");
+    assert!(row["cleared_from_distance_ms"].is_null(), "{row}");
+}

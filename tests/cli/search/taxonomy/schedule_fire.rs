@@ -217,6 +217,55 @@ fn a_record_quoting_the_preamble_is_not_the_tick() {
 }
 
 #[test]
+fn the_demote_leaves_the_fire_line_addressable_and_keeps_it_on_the_chain() {
+    let h = fire_home();
+    // An ADDRESS turns the gated `harness.meta.system` leaf on, so the demote that a
+    // scan applies must not run: `show` renders the fire record whole.
+    let show = h.run(&["show", &at(SESS), "--line", "4"]);
+    assert!(show.success, "stderr: {}", show.stderr);
+    assert!(
+        show.stdout
+            .contains("[scheduled_task_fire] Running scheduled task (Jun 7 5:28am)"),
+        "an addressed fire record renders under the system leaf:\n{}",
+        show.stdout
+    );
+    // Under a SCAN the record is demoted to a spine row rather than dropped, because
+    // the chain walks parentUuid THROUGH it - a fired prompt's parent IS one. Losing
+    // the row would break the walk there and leave every record above it pre-cut.
+    let json = h.run(&[
+        "search",
+        "zzfired",
+        &at(SESS),
+        "-t",
+        "harness.schedule.fire",
+        "--format",
+        "json",
+    ]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let survival: Vec<String> = json
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|v| {
+            v["hits"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|h| h["survival"].as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert_eq!(
+        survival,
+        vec!["live".to_string(), "live".to_string()],
+        "both fired prompts stay on the chain:\n{}",
+        json.stdout
+    );
+}
+
+#[test]
 fn a_fire_with_no_sibling_record_reports_no_instant() {
     // The builds that write no `scheduled_task_fire` record at all give the same answer a
     // windowed read does: the leaf holds, the instant is null, nothing is guessed.

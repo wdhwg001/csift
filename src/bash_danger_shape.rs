@@ -497,6 +497,79 @@ mod tests {
     }
 
     #[test]
+    fn the_double_quote_span_ends_on_its_own_quote() {
+        // Every character inside the span that is not the closing quote, an escape
+        // pair or a backtick leaves the state where it was, so a brace AFTER the span
+        // is outside one and is kept.
+        assert_eq!(mask_quoted_braces("echo \"x\" {a}"), "echo \"x\" {a}");
+    }
+
+    #[test]
+    fn a_trailing_lone_backslash_is_not_an_escape_pair() {
+        // It has no partner to carry, so the walk copies it and stops rather than
+        // reading past the end of the command.
+        assert_eq!(mask_quoted_braces("{a} \\"), "{a} \\");
+    }
+
+    #[test]
+    fn a_line_continuation_keeps_the_word_start_a_comment_needs() {
+        // The backslash pair before a newline leaves the next line at a word start, so
+        // the `#` that opens it is a comment and the quotes in it never open a span.
+        assert_eq!(
+            mask_quoted_braces("echo \\\n# \"{a}\""),
+            "echo \\\n# \"{a}\""
+        );
+    }
+
+    #[test]
+    fn the_mask_opens_at_a_word_so_a_leading_hash_is_a_comment() {
+        assert_eq!(mask_quoted_braces("# \"{a}\""), "# \"{a}\"");
+    }
+
+    #[test]
+    fn the_parse_ceiling_admits_a_command_of_exactly_the_limit() {
+        // `ls` is the ceiling, not one byte below it: a command of exactly that length
+        // still parses, and the next byte is what aborts.
+        let head = "rm -rf /tmp/";
+        let at_limit = format!("{head}{}", "a".repeat(PARSE_LIMIT - head.len()));
+        assert_eq!(at_limit.len(), PARSE_LIMIT);
+        assert_eq!(branch_of(&at_limit), Branch::Structured);
+        assert_eq!(
+            branch_of(&format!("{at_limit}a")),
+            Branch::Lexical("PARSE_ABORT")
+        );
+    }
+
+    #[test]
+    fn a_brace_needs_a_blank_after_it_to_open_a_compound_statement() {
+        // Both halves are required: a two-word command whose second character is a
+        // space is an ordinary command, not a group.
+        assert_eq!(branch_of("a b"), Branch::Structured);
+    }
+
+    #[test]
+    fn an_escaped_separator_advances_the_split_past_both_bytes() {
+        // The pair is consumed whole, so the separator it escapes is not one - and the
+        // byte right after the pair is still read.
+        assert_eq!(split_statements("a\\;b"), Some(vec!["a\\;b"]));
+    }
+
+    #[test]
+    fn a_separator_inside_a_group_is_not_a_top_level_split() {
+        // The depth guard is what keeps a subshell one statement; splitting inside one
+        // would leave its closer unmatched and answer `Parse error` instead.
+        assert_eq!(split_statements("(a; b)"), Some(vec!["(a; b)"]));
+    }
+
+    #[test]
+    fn a_two_character_operator_is_consumed_whole() {
+        // `&&` yields two statements and not three, while a one-character separator at
+        // the very end still yields the empty statement after it.
+        assert_eq!(split_statements("a && b"), Some(vec!["a ", " b"]));
+        assert_eq!(split_statements("a;"), Some(vec!["a", ""]));
+    }
+
+    #[test]
     fn the_brace_quote_precheck_reads_the_masked_command() {
         // An UNQUOTED brace group carrying a quote character is the obfuscation
         // the arm exists for.

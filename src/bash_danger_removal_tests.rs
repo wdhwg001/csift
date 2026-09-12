@@ -45,6 +45,11 @@ fn the_unresolvable_arm_reads_each_of_its_shapes_in_turn() {
     );
     assert_eq!(ask("rm -rf ../*"), unresolvable("../*"));
     assert_eq!(ask("rmdir -p a/*"), unresolvable("a/*"));
+    // That last shape is a conjunction of three things: the verb, a resolved target
+    // ending in `/*`, and a `-p` in the argv. A trailing glob run that leaves no `/*`
+    // behind is not it, and neither is the same flag under `rm`.
+    assert_eq!(structured("rmdir -p a/*/"), OperandVerdict::NeedsFs);
+    assert_eq!(structured("rm -p a/*"), OperandVerdict::NeedsFs);
     // A relative glob carrying none of those shapes falls through the whole
     // chain and lands on the arm that reads the filesystem.
     assert_eq!(structured("rm -rf build/*"), OperandVerdict::NeedsFs);
@@ -75,6 +80,10 @@ fn the_critical_path_arm_answers_for_a_root_a_drive_and_a_top_level_name() {
     // A bare `~` is critical whatever the home directory turns out to be.
     assert_eq!(ask("rm ~"), critical("~"));
     assert_eq!(ask("rm ~/"), critical("~/"));
+    // The gate above this test is "no glob run was stripped OR what is left carries
+    // no glob character". A `*` glued to a segment name strips nothing, so the
+    // critical test is the one that answers even though the operand is a pattern.
+    assert_eq!(ask("rm -rf /tmp*"), critical("/tmp*"));
     // Two levels down is not critical, and what follows needs the filesystem.
     assert_eq!(structured("rm -rf /tmp/build"), OperandVerdict::NeedsFs);
     // A drive-relative name carries no separator, so its dirname is `.`.
@@ -125,6 +134,10 @@ fn the_trailing_glob_fixpoint_strips_only_a_trailing_run() {
         "an empty strip becomes the root"
     );
     assert_eq!(trailing_glob_fixpoint("/a/b"), "/a/b");
+    // The stripped remainder is normalized whenever it carries EITHER separator, so a
+    // posix path's duplicate separators and `..` segments collapse too.
+    assert_eq!(trailing_glob_fixpoint("/a//b/*"), "/a/b");
+    assert_eq!(trailing_glob_fixpoint("/a/b/../*"), "/a");
     // A stripped remainder carrying no separator is kept as it is rather than
     // normalized, which is how the symbolic cwd survives the walk.
     assert_eq!(trailing_glob_fixpoint(&format!("{CWD}/*")), CWD);
@@ -185,6 +198,10 @@ fn the_path_helpers_are_the_node_ones_they_are_named_for() {
     assert!(!has_dotdot_after_segment("../b"));
     assert!(!has_dotdot_after_segment("../../b"));
     assert!(!has_dotdot_after_segment("a/b"));
+    // An empty segment and a `.` are skipped rather than counted, so neither can
+    // stand in for the real segment the `..` has to follow.
+    assert!(!has_dotdot_after_segment("/../b"));
+    assert!(!has_dotdot_after_segment("./../b"));
     // The other two shape tests the arm reads.
     assert!(has_dotdot_segment("../b"));
     assert!(!has_dotdot_segment("a/..b"));
