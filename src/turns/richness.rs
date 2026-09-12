@@ -16,8 +16,9 @@ pub(crate) struct RenderedUnit {
 /// Middle-truncate a unit to a cap (`cap_override` when set - the fixed-fleet `--slices` window
 /// cap that keeps whole turns - else the unit's per-role cap), keeping head+tail, with an explicit
 /// elided marker. A unit at or below the cap renders verbatim. The cut is on `char` boundaries
-/// (never mid-codepoint). The `L lines elided` note is included only when the original text spanned
-/// ≥1 newline.
+/// (never mid-codepoint). The `L lines elided` note counts the newlines the cut REMOVED
+/// ([`elided_newlines`]), so it is absent from an uncut body and from a cut that fell between two
+/// of them.
 pub(crate) fn render_unit_body(unit: &TurnUnit, cap_override: Option<usize>) -> RenderedUnit {
     let cap = cap_override.unwrap_or_else(|| unit.role.cap());
     let chars: Vec<char> = unit.text.chars().collect();
@@ -37,10 +38,7 @@ pub(crate) fn render_unit_body(unit: &TurnUnit, cap_override: Option<usize>) -> 
     let head: String = chars[..head_keep].iter().collect();
     let tail: String = chars[total - tail_keep..].iter().collect();
     let elided_chars = total - cap;
-    // Lines elided: original newline count, surfaced only for multi-line bodies. The
-    // rendered one-line form has no newlines, so we report the original's count as the
-    // magnitude the consumer should expect in the raw record.
-    let elided_lines = unit.orig_newlines;
+    let elided_lines = elided_newlines(&unit.newline_positions, head_keep, total - tail_keep);
     let nl_note = if elided_lines > 0 {
         format!(", {elided_lines} lines elided")
     } else {
@@ -54,6 +52,33 @@ pub(crate) fn render_unit_body(unit: &TurnUnit, cap_override: Option<usize>) -> 
         elided_chars,
         elided_lines,
     }
+}
+
+/// How many of the original body's newlines the middle-truncation DELETED: the count of
+/// `positions` (the ascending offsets `TurnUnit::newline_positions` carries) that fall STRICTLY
+/// INSIDE the removed span `[cut_from, cut_to)`.
+///
+/// The rule, precisely. The render keeps the head `[0, cut_from)` and the tail `[cut_to, total)`
+/// and removes everything between, so a newline is elided exactly when its offset is `>= cut_from`
+/// and `< cut_to`. A cut that lands MID-LINE therefore counts the newlines strictly inside the
+/// removed span and neither of the two that bound it: the line the head ends inside keeps its
+/// opening newline (offset `< cut_from`) and the line the tail resumes inside keeps its own
+/// (offset `>= cut_to`). Several newlines collapsed into one whitespace run share an offset and
+/// are each counted, which is right - they were all removed together. An UNCUT body passes an
+/// empty span and reads 0, and so does a body whose newlines all sit outside the cut, which is
+/// the whole point: `[+1907 chars, 2 lines elided]` and `[+9807 chars, 274 lines elided]` now
+/// describe two different cuts of one message instead of repeating its whole newline count.
+pub(crate) fn elided_newlines(positions: &[u32], cut_from: usize, cut_to: usize) -> usize {
+    if cut_to <= cut_from {
+        return 0;
+    }
+    let lo = cut_from.min(u32::MAX as usize) as u32;
+    let hi = cut_to.min(u32::MAX as usize) as u32;
+    // Ascending by construction, so the two bounds are binary searches; `partition_point`
+    // returns the first index at/after each bound.
+    let start = positions.partition_point(|&p| p < lo);
+    let end = positions.partition_point(|&p| p < hi);
+    end - start
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

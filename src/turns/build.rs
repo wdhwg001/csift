@@ -199,9 +199,9 @@ pub(crate) fn build(
     (slices, summaries)
 }
 
-/// Build a [`TurnUnit`] from a record's already-normalized one-line `text`. The
-/// `orig_newlines` count is taken from the record's ORIGINAL (pre-normalization) text so
-/// the `L lines elided` note is meaningful.
+/// Build a [`TurnUnit`] from a record's already-normalized one-line `text`. The newline
+/// positions come from the record's ORIGINAL (pre-normalization) body, expressed in `text`'s
+/// own char coordinates, so the `L lines elided` note can count the newlines a CUT removed.
 pub(crate) fn make_unit(
     line_no: usize,
     role: Role,
@@ -209,13 +209,13 @@ pub(crate) fn make_unit(
     rec: &Record,
     survival: &'static str,
 ) -> TurnUnit {
-    let orig_newlines = raw_body_newlines(rec);
+    let newline_positions = body_newline_positions(rec, text);
     TurnUnit {
         line_no,
         role,
         full_chars: text.chars().count(),
         text: text.to_string(),
-        orig_newlines,
+        newline_positions,
         ts_utc: rec.timestamp.clone(),
         also_in_summary: false,
         from_sidecar: rec.is_elicitation_marker(),
@@ -224,18 +224,13 @@ pub(crate) fn make_unit(
     }
 }
 
-/// Count newlines in a record's ORIGINAL message body (pre-normalization) - the basis
-/// for the `L lines elided` note. A bare-string body is counted as-is; a block body is
-/// the visible `text` blocks joined with `\n` (matching how they would print). Returns 0
-/// when the body is unavailable (→ note omitted).
-pub(crate) fn raw_body_newlines(rec: &Record) -> usize {
-    let Some(msg) = rec.message.as_ref() else {
-        return 0;
-    };
-    let Some(content) = msg.content.as_ref() else {
-        return 0;
-    };
-    let raw = match content {
+/// A record's ORIGINAL message body (pre-normalization): a bare-string body as-is, a block
+/// body as the visible `text` blocks joined with `\n` (a block seam IS a line break in the
+/// record's visual form, and normalizing either join yields the same one-line string).
+/// `None` when the record carries no message body.
+pub(crate) fn raw_body(rec: &Record) -> Option<String> {
+    let content = rec.message.as_ref()?.content.as_ref()?;
+    Some(match content {
         Content::Text(s) => s.clone(),
         Content::Blocks(blocks) => blocks
             .iter()
@@ -245,8 +240,32 @@ pub(crate) fn raw_body_newlines(rec: &Record) -> usize {
             })
             .collect::<Vec<_>>()
             .join("\n"),
+    })
+}
+
+/// Where the record's ORIGINAL body newlines sit in `text`'s char coordinates - the basis for
+/// the `L lines elided` note, which counts only the ones a cap's cut removed.
+///
+/// The positions address the NORMALIZATION of the raw body, so they are returned ONLY when
+/// `text` IS that normalization. Every ordinary user / assistant body is (both
+/// `Record::agent_text` and `Record::genuine_user_text` return exactly it), while a FABRICATED
+/// body is not: an AskUserQuestion scaffold, an automation attribution label and a peer-message
+/// preview are strings csift composes, and the raw record's newlines do not sit anywhere in
+/// them. For those the answer is an empty list - the note is omitted rather than reporting a
+/// count from a different string, which is what the whole-message figure used to do.
+pub(crate) fn body_newline_positions(rec: &Record, text: &str) -> Vec<u32> {
+    let Some(raw) = raw_body(rec) else {
+        return Vec::new();
     };
-    raw.matches('\n').count()
+    if !raw.contains('\n') {
+        return Vec::new();
+    }
+    let (normalized, positions) = crate::model::normalize_line_with_newlines(&raw);
+    if normalized == text {
+        positions
+    } else {
+        Vec::new()
+    }
 }
 
 /// The body text of a compaction-summary record (a `type:"user"` `isCompactSummary`

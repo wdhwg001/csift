@@ -224,6 +224,79 @@ fn turns_surfaces_image_ids_under_the_user_turn() {
 }
 
 #[test]
+fn turns_lines_elided_describes_the_cut_not_the_whole_message() {
+    // A 12-line assistant body, each line 200 chars: normalized it is 12*200 + 11 = 2411
+    // chars with its newlines at 200, 401, 602, …, 2210. The 900-char assistant cap keeps
+    // head 594 + tail 306, so the cut removes [594, 2105) - the EIGHT newlines from 602 to
+    // 2009. The whole body carries ELEVEN; the note must report the eight the cut removed.
+    let h = Home::new();
+    let sess = "1c1c1c1c-2d2d-4e4e-8f8f-909090909090";
+    let body = (0..12)
+        .map(|_| "a".repeat(200))
+        .collect::<Vec<_>>()
+        .join("\\n");
+    let lines = [
+        r#"{"type":"user","uuid":"s0","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued."}}"#.to_string(),
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"ask for the twelve-line reply"}}"#.to_string(),
+        format!(
+            r#"{{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"{body}"}}]}}}}"#
+        ),
+    ];
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        &format!("{}\n", lines.join("\n")),
+    );
+
+    let json = h.run(&[
+        "verbatim",
+        at(sess).as_str(),
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let unit = json_rows(&json.stdout, "turn")
+        .into_iter()
+        .find(|o| o["role"] == "assistant")
+        .expect("the assistant unit");
+    assert_eq!(unit["full_chars"].as_u64().unwrap(), 2411);
+    assert_eq!(unit["elided_chars"].as_u64().unwrap(), 2411 - 900);
+    assert_eq!(
+        unit["elided_lines"].as_u64().unwrap(),
+        8,
+        "eight of the eleven newlines sit inside the removed span: {unit}"
+    );
+
+    // The TEXT render carries the same figure in its marker.
+    let text = h.run(&["verbatim", at(sess).as_str(), "--budget", "40000"]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    assert!(
+        text.stdout.contains("[+1511 chars, 8 lines elided]"),
+        "marker names the cut's own line count:\n{}",
+        text.stdout
+    );
+
+    // A window cap wide enough to keep the body whole prints no line note at all.
+    let whole = h.run(&[
+        "verbatim",
+        at(sess).as_str(),
+        "--slices",
+        "2",
+        "--slice",
+        "1",
+        "--window",
+        "4000",
+    ]);
+    assert!(whole.success, "stderr: {}", whole.stderr);
+    assert!(
+        !whole.stdout.contains("lines elided"),
+        "an uncut body carries no line note:\n{}",
+        whole.stdout
+    );
+}
+
+#[test]
 fn turns_ellipsis_role_asymmetry_and_counts() {
     // The huge live round-trip: user > 600 → head 360 / tail 240; assistant > 900 →
     // head 594 / tail 306. The assistant head is strictly larger. The text output shows

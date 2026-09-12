@@ -8,20 +8,31 @@
 use super::*;
 
 /// Build a [`TurnUnit`] for a role from a plain string (no record), for cost/ellipsis
-/// tests. `orig_newlines` lets a test assert the `L lines elided` note.
-fn unit(role: Role, line_no: usize, text: &str, orig_newlines: usize) -> TurnUnit {
+/// tests. `newlines_at` lets a test place the original body's newlines in the unit's own
+/// char coordinates, which is what the `L lines elided` note counts inside a cut.
+fn unit_at(role: Role, line_no: usize, text: &str, newlines_at: &[u32]) -> TurnUnit {
     TurnUnit {
         line_no,
         role,
         full_chars: text.chars().count(),
         text: text.to_string(),
-        orig_newlines,
+        newline_positions: newlines_at.to_vec(),
         ts_utc: Some("2026-06-07T05:00:00.000Z".to_string()),
         also_in_summary: false,
         from_sidecar: false,
         inbound: None,
         survival: "live",
     }
+}
+
+/// A unit whose `n` original newlines are spread EVENLY across the body, so a test can say
+/// "this message has n newlines" without hand-placing each. `n == 0` ⇒ a single-line body.
+fn unit(role: Role, line_no: usize, text: &str, orig_newlines: usize) -> TurnUnit {
+    let total = text.chars().count();
+    let at: Vec<u32> = (0..orig_newlines)
+        .map(|i| ((i + 1) * total / (orig_newlines + 1)) as u32)
+        .collect();
+    unit_at(role, line_no, text, &at)
 }
 
 /// Build a single [`AgentMsg`] wrapping a unit, with the given per-message attribution.

@@ -44,9 +44,13 @@ pub(crate) struct TurnUnit {
     pub(crate) full_chars: usize,
     /// Normalized one-line text (rendered verbatim or middle-truncated later).
     pub(crate) text: String,
-    /// Newline count of the ORIGINAL (pre-normalization) text - drives the
-    /// `L lines elided` note (omitted when 0, i.e. a single-line message).
-    pub(crate) orig_newlines: usize,
+    /// Where the ORIGINAL body's newlines sit in `text`'s char coordinates (ascending) -
+    /// what the `L lines elided` note counts INSIDE the span a cap removed, so the figure
+    /// describes the cut and not the whole message. EMPTY for a single-line body, and empty
+    /// for a FABRICATED body (an AskUserQuestion scaffold, an automation label, a peer-message
+    /// preview): no original newline can be located in a string the record does not carry, so
+    /// the note is omitted rather than guessed. See [`body_newline_positions`].
+    pub(crate) newline_positions: Vec<u32>,
     pub(crate) ts_utc: Option<String>,
     /// True once dedup flags this unit as already present in the newest summary.
     pub(crate) also_in_summary: bool,
@@ -85,7 +89,7 @@ pub(crate) enum AgentPos {
 /// carries the per-message tool/failed attribution the collapse placeholder needs.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentMsg {
-    /// The render/cost unit (line_no, full_chars, text, orig_newlines, ts_utc,
+    /// The render/cost unit (line_no, full_chars, text, newline_positions, ts_utc,
     /// also_in_summary, role = Assistant).
     pub(crate) unit: TurnUnit,
     /// First / Middle / Last within the turn's agent run (assigned after the push loop).

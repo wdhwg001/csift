@@ -21,6 +21,20 @@ surface change bumps the PATCH.
   ask for it; `show --turn` is a window rather than an address, so it keeps the cap and
   reports null too. `excerpt` and `show`'s `text` keep their exact bytes in every mode.
 
+### Fixed
+
+- **`verbatim`'s `L lines elided` note counts the cut, not the message.** The figure was the
+  whole body's newline count, so deleting 9,807 chars and deleting 1,907 chars of one message
+  printed the same number, and a cut of 17 chars could claim 95 elided lines - 18 of the 2,480
+  truncated units on two large sessions reported more lines than they removed characters, which
+  is arithmetically impossible. A unit now carries its original body's newlines as offsets into
+  the one-line text it renders, and the note counts the ones STRICTLY INSIDE the removed span:
+  an uncut body reports 0, a cut that falls between two newlines reports 0, and a wider cut of
+  the same message reports more. Text `, N lines elided` and JSON `elided_lines` follow. A
+  FABRICATED body - an AskUserQuestion scaffold, an automation attribution label, a peer-message
+  preview - reports no lines at all, because no original newline can be located in a string the
+  record does not carry; the old figure was measured against a different string.
+
 ## [0.12.2] - 2026-09-12
 
 ### Added

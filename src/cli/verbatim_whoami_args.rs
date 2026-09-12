@@ -42,6 +42,15 @@ use super::*;
         `… [+K chars, L lines elided] …` marker; the assistant head is larger than the \
         user head (its prose front-loads context, back-loads the decision). Nothing is \
         ever fabricated or silently dropped.\n\n\
+        THE `L lines elided` FIGURE counts the newlines the CUT removed, not the message's \
+        whole newline count: the rendered body is the whitespace-collapsed one line, so a unit \
+        carries the offsets at which its original newlines landed in that line, and the note \
+        counts the ones strictly inside the removed span (the head keeps everything before the \
+        cut, the tail everything after). An UNCUT body prints no note; a cut that falls between \
+        two newlines prints none either; a WIDER cut of the same message prints a larger figure. \
+        A body csift COMPOSED rather than read - an AskUserQuestion question+answer scaffold, an \
+        automation attribution label, a peer-message preview - prints no line note at all, \
+        because the record's own newlines sit nowhere inside it.\n\n\
         AGENT MESSAGES (`--agent-msgs`, default `eot-only` = non-breaking): a single \
         genuine-user turn can own a LONG run of agent messages (a debugging/build chain \
         the model narrates) that the summary clips to one §9 quote. `eot-only` restores \

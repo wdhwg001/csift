@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── compact_summary_body / raw_body_newlines via real Record parse ──
+// ── compact_summary_body / body_newline_positions via real Record parse ──
 
 #[test]
 fn compact_summary_body_reads_string_content_only() {
@@ -24,22 +24,48 @@ fn compact_summary_body_reads_string_content_only() {
 }
 
 #[test]
-fn raw_body_newlines_counts_user_and_assistant_bodies() {
+fn body_newline_positions_locates_original_newlines_in_the_rendered_body() {
+    // "line one\nline two\nline three" normalizes to "line one line two line three": each
+    // newline became the space that follows its 8-char / 17-char prefix, so those are the
+    // offsets a cut has to compare against.
     let u = rec(
         r#"{"type":"user","message":{"role":"user","content":"line one\nline two\nline three"}}"#,
     );
-    assert_eq!(raw_body_newlines(&u), 2);
+    let text = u.genuine_user_text().expect("genuine body");
+    assert_eq!(text, "line one line two line three");
+    assert_eq!(body_newline_positions(&u, &text), vec![8, 17]);
+    // Two text blocks: the seam between them IS a line break in the record's visual form.
     let a = rec(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"first"},{"type":"text","text":"second"}]}}"#,
     );
-    // two text blocks joined by \n → 1 newline.
-    assert_eq!(raw_body_newlines(&a), 1);
-    // No message → 0.
+    let atext = a.agent_text().expect("agent body");
+    assert_eq!(atext, "first second");
+    assert_eq!(body_newline_positions(&a, &atext), vec![5]);
+    // No message → no positions.
     let bare = rec(r#"{"type":"system","subtype":"x"}"#);
-    assert_eq!(raw_body_newlines(&bare), 0);
-    // message but no content → 0.
+    assert!(body_newline_positions(&bare, "anything").is_empty());
+    // message but no content → no positions.
     let nocontent = rec(r#"{"type":"user","message":{"role":"user"}}"#);
-    assert_eq!(raw_body_newlines(&nocontent), 0);
+    assert!(body_newline_positions(&nocontent, "anything").is_empty());
+    // A single-line body → no positions (so no `lines elided` note can ever print).
+    let oneline = rec(r#"{"type":"user","message":{"role":"user","content":"one line only"}}"#);
+    assert!(body_newline_positions(&oneline, "one line only").is_empty());
+}
+
+#[test]
+fn body_newline_positions_refuses_a_fabricated_body() {
+    // An automation opener renders a csift-composed attribution LABEL, not the record's own
+    // prose, so the raw newlines sit nowhere in it: the positions are empty and the note is
+    // omitted rather than reporting a count measured against a different string.
+    let r = rec(
+        r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b1234abcd</task-id>\n<summary>Background command \"build\" completed</summary>\n</task-notification>"}}"#,
+    );
+    let label = r.automation_label().expect("an automation label");
+    assert!(!label.contains("task-id"), "the label is composed: {label}");
+    assert!(body_newline_positions(&r, &label).is_empty());
+    // The same record's RAW body does carry newlines - the refusal is about coordinates,
+    // not about their absence.
+    assert!(raw_body(&r).expect("a body").contains('\n'));
 }
 
 // ── build(): turn slices + tool-call counts from line-numbered records ──
@@ -192,18 +218,20 @@ fn build_summary_with_block_body_is_not_captured() {
 // ── Render-helper + raw-body branch completeness ──
 
 #[test]
-fn raw_body_newlines_block_with_empty_text_blocks() {
+fn body_newline_positions_block_with_empty_text_blocks() {
     // A block body where one text block is blank → it is skipped (the `!text.trim()`
-    // false arm); only the non-blank block contributes.
+    // false arm); only the non-blank block contributes, so its own newline is the only one.
     let r = rec(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"   "},{"type":"text","text":"real\nline"}]}}"#,
     );
-    assert_eq!(raw_body_newlines(&r), 1);
+    let t = r.agent_text().expect("agent body");
+    assert_eq!(body_newline_positions(&r, &t), vec![4]);
     // A block body with a non-text block (tool_use) interleaved → only text counts.
     let r2 = rec(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}},{"type":"text","text":"a\nb\nc"}]}}"#,
     );
-    assert_eq!(raw_body_newlines(&r2), 2);
+    let t2 = r2.agent_text().expect("agent body");
+    assert_eq!(body_newline_positions(&r2, &t2), vec![1, 3]);
 }
 
 #[test]
@@ -236,13 +264,13 @@ fn build_skips_non_genuine_user_opener() {
 }
 
 #[test]
-fn raw_body_newlines_no_message_and_no_content() {
-    // No message at all → 0 (the `let Some(msg) else` arm).
+fn raw_body_none_when_no_message_and_no_content() {
+    // No message at all → None (the `rec.message.as_ref()?` arm).
     let no_msg = rec(r#"{"type":"system","subtype":"x"}"#);
-    assert_eq!(raw_body_newlines(&no_msg), 0);
-    // message present, no content → 0 (the `let Some(content) else` arm).
+    assert!(raw_body(&no_msg).is_none());
+    // message present, no content → None (the `content.as_ref()?` arm).
     let no_content = rec(r#"{"type":"user","message":{"role":"user"}}"#);
-    assert_eq!(raw_body_newlines(&no_content), 0);
+    assert!(raw_body(&no_content).is_none());
 }
 
 #[test]

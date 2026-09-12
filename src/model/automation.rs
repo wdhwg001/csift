@@ -186,16 +186,48 @@ pub(crate) fn extract_xml_tag(s: &str, tag: &str) -> Option<String> {
 /// and trim the ends, so an excerpt renders on one line. Does NOT truncate -
 /// length capping with an explicit `… (+N chars)` marker is the caller's job.
 pub(crate) fn normalize_line(s: &str) -> String {
+    normalize_collapse(s, |_| {})
+}
+
+/// [`normalize_line`] plus, for every `\n` in `s`, the CHAR offset in the RESULT at which
+/// that newline's collapsed whitespace run landed. The offsets are what lets a consumer of
+/// the one-line form still answer a question about the original's LINES - a newline is not a
+/// character of the result, so its only address is the position of the space that replaced
+/// its run (several newlines in one run therefore share an offset, which is correct: they
+/// were collapsed together). Offsets are ascending. A newline in a LEADING run reads 0 (that
+/// run pushes no space) and one in the TRAILING run reads the result's own length (its space
+/// is trimmed away), so both sit outside any interior span by construction.
+pub(crate) fn normalize_line_with_newlines(s: &str) -> (String, Vec<u32>) {
+    let mut positions: Vec<u32> = Vec::new();
+    let out = normalize_collapse(s, |at| positions.push(at));
+    (out, positions)
+}
+
+/// The ONE whitespace-collapse walk both public forms run, so the string they produce can
+/// never drift apart. `on_newline` is invoked, for each `\n`, with the result-char offset of
+/// the space standing in for its run; [`normalize_line`] passes a no-op that inlines away.
+fn normalize_collapse(s: &str, mut on_newline: impl FnMut(u32)) -> String {
     let mut out = String::with_capacity(s.len());
+    // Result-char count so far, and the offset of the current run's collapsed space.
+    let mut chars = 0usize;
+    let mut run_at = 0usize;
     let mut prev_ws = false;
     for ch in s.chars() {
         if ch.is_whitespace() {
-            if !prev_ws && !out.is_empty() {
-                out.push(' ');
+            if !prev_ws {
+                run_at = chars;
+                if !out.is_empty() {
+                    out.push(' ');
+                    chars += 1;
+                }
             }
             prev_ws = true;
+            if ch == '\n' {
+                on_newline(run_at.min(u32::MAX as usize) as u32);
+            }
         } else {
             out.push(ch);
+            chars += 1;
             prev_ws = false;
         }
     }

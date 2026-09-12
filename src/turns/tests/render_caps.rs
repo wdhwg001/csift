@@ -31,11 +31,14 @@ fn user_ellipsis_head_360_tail_240_with_counts() {
     let r = render_unit_body(&u, None);
     assert!(r.truncated);
     assert_eq!(r.elided_chars, 1000 - 600);
-    assert_eq!(r.elided_lines, 3);
+    // The three newlines sit at 250 / 500 / 750 (evenly spread by the helper); the cut
+    // removes [360, 760), so the two at 500 and 750 are gone and the one at 250 survives
+    // inside the kept head.
+    assert_eq!(r.elided_lines, 2);
     // head 360, tail 240 (600 cap, 0.60 head frac).
     assert!(r.body.starts_with(&"a".repeat(360)));
     assert!(r.body.ends_with(&"a".repeat(240)));
-    assert!(r.body.contains("[+400 chars, 3 lines elided]"));
+    assert!(r.body.contains("[+400 chars, 2 lines elided]"));
     // The displayed (rendered) char count excludes the marker scaffolding.
     assert_eq!(r.rendered_chars, 600);
 }
@@ -52,7 +55,9 @@ fn assistant_ellipsis_head_larger_than_user_head() {
     // head 594.
     assert!(r.body.starts_with(&"b".repeat(594)));
     assert!(r.body.ends_with(&"b".repeat(306)));
-    assert!(r.body.contains("[+1100 chars, 7 lines elided]"));
+    // Seven newlines evenly spread → 250, 500, …, 1750; the cut removes [594, 1694), so the
+    // four at 750/1000/1250/1500 are elided (250 and 500 sit in the head, 1750 in the tail).
+    assert!(r.body.contains("[+1100 chars, 4 lines elided]"));
     assert_eq!(r.rendered_chars, 900);
 
     // The assistant head (594) is strictly larger than the user head (360).
@@ -63,6 +68,57 @@ fn assistant_ellipsis_head_larger_than_user_head() {
     assert!(asst_head_len > user_head_len);
     // and the rendered user head prefix is shorter than the assistant head prefix.
     assert!(ru.body.starts_with(&"u".repeat(360)));
+}
+
+#[test]
+fn lines_elided_counts_only_the_newlines_the_cut_removed() {
+    // A 1000-char user body with FIVE original newlines placed so the removed span
+    // [360, 760) contains exactly TWO of them: 100 and 200 sit in the kept head, 400 and 700
+    // inside the cut, 800 in the kept tail.
+    let body: String = "a".repeat(1000);
+    let u = unit_at(Role::User, 10, &body, &[100, 200, 400, 700, 800]);
+    let r = render_unit_body(&u, None);
+    assert!(r.truncated);
+    assert_eq!(r.elided_chars, 400);
+    assert_eq!(
+        r.elided_lines, 2,
+        "only the newlines strictly inside [360,760) are elided: {}",
+        r.body
+    );
+    assert!(
+        r.body.contains("[+400 chars, 2 lines elided]"),
+        "{}",
+        r.body
+    );
+
+    // The SAME message uncut (a cap above its length) reports 0 and prints no note at all.
+    let uncut = render_unit_body(&u, Some(1000));
+    assert!(!uncut.truncated);
+    assert_eq!(uncut.elided_lines, 0);
+    assert!(!uncut.body.contains("lines elided"), "{}", uncut.body);
+
+    // And a WIDER cut of the same message reports MORE lines - the figure follows the cut,
+    // which is exactly what the whole-message count could not do. Cap 300 → head 180, tail
+    // 120, removed [180, 880): four newlines (200, 400, 700, 800).
+    let wider = render_unit_body(&u, Some(300));
+    assert_eq!(wider.elided_chars, 700);
+    assert_eq!(wider.elided_lines, 4, "{}", wider.body);
+}
+
+#[test]
+fn elided_newlines_counts_the_half_open_span() {
+    // The span is [cut_from, cut_to): the lower bound is INCLUDED, the upper EXCLUDED, so a
+    // newline exactly at either edge lands on the documented side.
+    let at = [10u32, 20, 30, 40];
+    assert_eq!(elided_newlines(&at, 20, 40), 2, "20 in, 40 out");
+    assert_eq!(elided_newlines(&at, 0, 41), 4);
+    assert_eq!(elided_newlines(&at, 41, 99), 0);
+    // Collapsed-together newlines share one offset and are each counted.
+    assert_eq!(elided_newlines(&[15, 15, 15], 10, 20), 3);
+    // An empty or inverted span removes nothing.
+    assert_eq!(elided_newlines(&at, 20, 20), 0);
+    assert_eq!(elided_newlines(&at, 40, 20), 0);
+    assert_eq!(elided_newlines(&[], 0, 99), 0);
 }
 
 #[test]
