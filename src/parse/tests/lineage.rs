@@ -16,7 +16,7 @@ fn a_top_level_key_is_a_field_and_a_nested_one_is_not() {
         f.session_kind, None,
         "a key inside a payload is not a top-level field"
     );
-    assert!(f.is_empty());
+    assert!(f.no_session_lineage());
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn the_handoff_child_id_is_read_from_the_same_walk() {
         Some("99999999-2222-4333-8444-555555555555")
     );
     assert_eq!(f.session_kind, None);
-    assert!(!f.is_empty());
+    assert!(!f.no_session_lineage());
 }
 
 #[test]

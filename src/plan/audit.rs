@@ -63,14 +63,21 @@ pub(crate) fn run_plan_audit(args: &PlanArgs, session_files: &[PathBuf]) -> Resu
         }
     }
 
-    // 2. The scope's OWN bindings (status line + the bound_by_owner check base).
-    let own: Vec<PlanRef> = session_files
+    // 2. The scope's OWN bindings (status line + the bound_by_owner check base), each paired
+    //    with the BINDING FACTS its own records carry: the slug's change points, whether the
+    //    bound file is on disk, plan text held without a binding, and the slug against the
+    //    file's birth instant. One walk per transcript, beside the binding resolution it
+    //    already runs.
+    let audited: Vec<Audited> = session_files
         .par_iter()
-        .map(|p| resolve_session_plan(p))
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
+        .map(|p| -> Result<Audited> {
+            Ok(Audited {
+                session_id: crate::subagent::session_id_from_path(p),
+                binding: resolve_session_plan(p)?,
+                facts: binding_facts(p)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
     let owners: BTreeSet<String> = session_files
         .iter()
         .map(|p| {
@@ -131,27 +138,37 @@ pub(crate) fn run_plan_audit(args: &PlanArgs, session_files: &[PathBuf]) -> Resu
         .collect();
 
     match args.format {
-        OutputFormat::Text => render_audit_text(&own, &owners, &rows, skipped),
-        OutputFormat::Json => render_audit_json(&own, &rows, skipped)?,
+        OutputFormat::Text => render_audit_text(&audited, &owners, &rows, skipped),
+        OutputFormat::Json => render_audit_json(&audited, &rows, skipped)?,
     }
     Ok(())
 }
 
-fn render_audit_text(own: &[PlanRef], owners: &BTreeSet<String>, rows: &[EditRow], skipped: usize) {
+/// One in-scope transcript: its binding, if any, and the facts its own records carry about
+/// that binding. A transcript with NO binding is still audited, because "holds plan text with
+/// nothing bound" is precisely a state that has no binding to hang off.
+#[derive(Debug)]
+pub(crate) struct Audited {
+    pub(crate) session_id: String,
+    pub(crate) binding: Option<PlanRef>,
+    pub(crate) facts: BindingFacts,
+}
+
+fn render_audit_text(
+    audited: &[Audited],
+    owners: &BTreeSet<String>,
+    rows: &[EditRow],
+    skipped: usize,
+) {
     println!("PLAN AUDIT");
-    if own.is_empty() {
+    if audited.iter().all(|a| a.binding.is_none()) {
         println!("binds    none (no Plan Mode in the resolved scope)");
     }
-    for r in own {
-        let slug = r
-            .slug
-            .as_deref()
-            .map(|s| format!(", slug {s}"))
-            .unwrap_or_default();
-        println!(
-            "binds    {} -> {}  (L{}{slug})",
-            r.session_id, r.plan_file, r.line_no
-        );
+    for a in audited {
+        if let Some(r) = &a.binding {
+            render_binding_text(r, &a.facts);
+        }
+        render_unbound_text(a);
     }
     if rows.is_empty() {
         println!(
@@ -195,20 +212,97 @@ fn render_audit_text(own: &[PlanRef], owners: &BTreeSet<String>, rows: &[EditRow
     }
 }
 
-fn render_audit_json(own: &[PlanRef], rows: &[EditRow], skipped: usize) -> Result<()> {
+/// One binding, with the three facts that qualify it: whether the bound file is on disk
+/// (check b), where the slug came from (check a) and how it sits against the file's birth
+/// instant (check d).
+fn render_binding_text(r: &PlanRef, facts: &BindingFacts) {
+    let slug = r
+        .slug
+        .as_deref()
+        .map(|s| format!(", slug {s}"))
+        .unwrap_or_default();
+    // (b) The same `Path::is_file` verdict `csift plan` prints as `[exists]`/`[missing]`,
+    // read off the SAME `PlanRef.plan_exists` field the forward view uses. The plan name is
+    // minted at Plan-Mode entry and the file lands only when content is first written
+    // (PLAN-014), so `[missing]` is an ordinary state and not a fault.
+    println!(
+        "binds    {} -> {}  [{}]  (L{}{slug})",
+        r.session_id,
+        r.plan_file,
+        if r.plan_exists { "exists" } else { "missing" },
+        r.line_no
+    );
+    // (a) The change points: where the binding key came into being, and any later move.
+    match facts.changes.as_slice() {
+        [] => println!(
+            "slug     none carried by this transcript's records (the binding is the \
+             attachment's, not a slug's)"
+        ),
+        changes => {
+            for c in changes {
+                println!("slug     L{}  {}", c.line, change_arrow(c));
+            }
+        }
+    }
+    // (d) Which came first, the binding or the file.
+    let v = slug_vs_plan_file(facts.first_slug_utc.as_deref(), &r.plan_file);
+    let tail = match v.reason() {
+        Some(why) => format!("unknown - {why}"),
+        None => format!(
+            "the first slug-carrying record is {} the plan file's birth instant",
+            v.token()
+        ),
+    };
+    println!("birth    {tail}");
+}
+
+/// (c) A transcript holding a re-injected plan while NO record carries a slug: plan text with
+/// nothing bound to it. Only the BOUND plan comes back in full after a compaction (PLAN-016),
+/// so this text will not.
+fn render_unbound_text(a: &Audited) {
+    if a.facts.plan_ref_lines.is_empty() || !a.facts.no_slug() {
+        return;
+    }
+    println!(
+        "warning: {} holds a plan_file_reference attachment (L{}) while NO record carries a \
+         slug - plan text without a binding. Only the BOUND plan is re-injected in full after \
+         a compaction, so this text is not coming back.",
+        a.session_id,
+        a.facts
+            .plan_ref_lines
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", L")
+    );
+}
+
+/// One change point as text. `from: None` is the MINT, which is what all but a moved slug is.
+fn change_arrow(c: &SlugChange) -> String {
+    let to = c.to.as_deref().unwrap_or("none");
+    match c.from.as_deref() {
+        None => format!("none -> {to}  (the slug is minted here)"),
+        Some(from) => format!("{from} -> {to}  (the binding MOVED here)"),
+    }
+}
+
+fn render_audit_json(audited: &[Audited], rows: &[EditRow], skipped: usize) -> Result<()> {
     let header = crate::text::envelope_header("plan", json!({"mode": "audit"}));
     println!("{}", serde_json::to_string(&header)?);
-    for r in own {
-        let obj = json!({
-            "kind": "binding",
-            "session_id": r.session_id,
-            "is_subagent": r.is_subagent,
-            "parent_session_id": r.parent_session_id,
-            "plan_file": r.plan_file,
-            "line": r.line_no,
-            "slug": r.slug,
-        });
-        println!("{}", serde_json::to_string(&obj)?);
+    for a in audited {
+        if let Some(r) = &a.binding {
+            println!("{}", serde_json::to_string(&binding_json(r, &a.facts))?);
+        }
+        if !a.facts.plan_ref_lines.is_empty() && a.facts.no_slug() {
+            // (c) One row per transcript in that state, so a consumer can act on it without
+            // reading the warning prose.
+            let obj = json!({
+                "kind": "plan-unbound-text",
+                "session_id": a.session_id,
+                "plan_file_reference_lines": a.facts.plan_ref_lines,
+            });
+            println!("{}", serde_json::to_string(&obj)?);
+        }
     }
     for r in rows {
         let obj = json!({
@@ -222,12 +316,47 @@ fn render_audit_json(own: &[PlanRef], rows: &[EditRow], skipped: usize) -> Resul
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
+    let unbound = audited
+        .iter()
+        .filter(|a| !a.facts.plan_ref_lines.is_empty() && a.facts.no_slug())
+        .count();
     let summary = crate::text::envelope_summary(json!({
-        "bindings": own.len(),
+        "bindings": audited.iter().filter(|a| a.binding.is_some()).count(),
         "plan_files_touched": rows.len(),
-        "warnings": rows.iter().filter(|r| !r.bound_by_owner).count(),
+        "warnings": rows.iter().filter(|r| !r.bound_by_owner).count() + unbound,
+        // Transcripts holding a re-injected plan with no slug anywhere (check c).
+        "unbound_plan_text": unbound,
         "skipped_lines": skipped,
     }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
+}
+
+/// One binding row, with the three qualifying facts beside it.
+fn binding_json(r: &PlanRef, facts: &BindingFacts) -> serde_json::Value {
+    let v = slug_vs_plan_file(facts.first_slug_utc.as_deref(), &r.plan_file);
+    json!({
+        "kind": "binding",
+        "session_id": r.session_id,
+        "is_subagent": r.is_subagent,
+        "parent_session_id": r.parent_session_id,
+        "plan_file": r.plan_file,
+        "line": r.line_no,
+        "slug": r.slug,
+        // (b) The same `Path::is_file` verdict the forward `csift plan` view prints.
+        "plan_exists": r.plan_exists,
+        // (a) Every point the slug changed, in file order; `from: null` is the mint.
+        "slug_changes": facts.changes.iter().map(|c| json!({
+            "line": c.line,
+            "from": c.from,
+            "to": c.to,
+        })).collect::<Vec<_>>(),
+        "first_slug_line": facts.first_slug_line,
+        "first_slug_utc": facts.first_slug_utc,
+        "first_slug_local": facts.first_slug_utc.as_deref().and_then(crate::timez::local_iso),
+        // (d) The first slug-carrying record against the plan file's birth instant, with the
+        // reason on the `unknown` arm rather than a guessed direction.
+        "slug_vs_plan_file": v.token(),
+        "slug_vs_plan_file_reason": v.reason(),
+    })
 }

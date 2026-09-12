@@ -174,7 +174,19 @@ impl ImageArgs {
         `slug` is the session's plan slug (one stable value per session, minted before Plan \
         Mode is entered - the first slug-carrying record precedes the plan_mode line; the \
         harness derives the plan file name from it and re-keys recovery on it) - \
-        null when the binding record predates the field."
+        null when the binding record predates the field.\n\n\
+        JSON SCHEMA under --audit\n  \
+          Envelope: header {mode:\"audit\"} -> {kind:\"binding\", session_id, is_subagent, \
+        parent_session_id, plan_file, line, slug, plan_exists, slug_changes:[{line, from, \
+        to}], first_slug_line, first_slug_utc, first_slug_local, slug_vs_plan_file \
+        (before|after|same|unknown), slug_vs_plan_file_reason} rows -> \
+        {kind:\"plan-unbound-text\", session_id, plan_file_reference_lines[]} rows (one per \
+        transcript holding re-injected plan text with no slug anywhere) -> \
+        {kind:\"plan-edit\", owner_session_id, path, mutations, bound_by_owner, \
+        binder_session_id, binder_line} rows -> {kind:\"summary\", bindings, \
+        plan_files_touched, warnings, unbound_plan_text, skipped_lines}. A `from` of null \
+        in `slug_changes` is the MINT; `warnings` counts the unbound-plan-text rows \
+        alongside the unbound-edit ones."
 )]
 pub struct PlanArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to resolve the bound
@@ -218,6 +230,23 @@ pub struct PlanArgs {
     /// plan_mode bindings (one prefiltered scan of every project), never by guessing a
     /// plans directory (plansDirectory is configurable). Bash-side edits are outside
     /// this audit (structured tools only).
+    ///
+    /// Each binding in scope is also QUALIFIED by four facts its own records carry.
+    /// (a) The slug's CHANGE POINTS - `slug  L<n>  none -> <value>` is the mint, and
+    /// `<a> -> <b>` reads as the binding having MOVED; the binding csift reports is the
+    /// harness's, and this says when it became so. Every measured transcript has exactly
+    /// one change point, so two is news. (b) Whether the bound plan file is on disk, the
+    /// same `[exists]`/`[missing]` verdict the forward view prints - `[missing]` is an
+    /// ordinary state, because the name is minted at Plan-Mode entry and the file lands
+    /// only when content is first written. (c) A `plan_file_reference` attachment (the
+    /// post-compaction re-injection of the bound plan's whole content) present while NO
+    /// record carries a slug: plan text with nothing bound to it, which nothing will
+    /// re-inject. It is a warning with no corpus specimen, kept because the fork path
+    /// that strips a slug can produce it. (d) The first slug-carrying record against the
+    /// plan file's BIRTH instant: `before` is the ordinary order, `after` means this
+    /// transcript bound a file that already existed, and `unknown` names its reason (no
+    /// file, no timestamp, or a platform that records no birth time) rather than guessing
+    /// a direction.
     #[arg(long, conflicts_with = "reverse")]
     pub audit: bool,
 

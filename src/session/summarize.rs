@@ -264,7 +264,7 @@ pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {
         let Some(f) = crate::parse::lineage_fields(line) else {
             continue;
         };
-        if f.is_empty() {
+        if f.no_session_lineage() {
             continue;
         }
         // 1-based, the coordinate every csift surface addresses a line by.

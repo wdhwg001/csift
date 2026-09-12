@@ -84,6 +84,23 @@ surface change bumps the PATCH.
   `skipped_lines`. Measured on a 720 MB transcript it costs 2.1x the same-binary control band,
   which is why it is opt-in; the default path stays inside that band. (claim REC-107)
 
+- **`plan --audit` qualifies each binding with four facts its own records carry.** The audit
+  said which plan file a session binds; these say how much that binding is worth, each as a
+  text block and a JSON field, and each reading a fact on disk rather than deriving one.
+  (a) The slug's change points: `none -> <value>` is the mint, `<a> -> <b>` reads as the
+  binding having MOVED (`slug_changes`, `first_slug_line`, `first_slug_utc`,
+  `first_slug_local`). The binding csift reports is the harness's; this says when it became
+  so, which is the question a fork raises. Measured over 9,601 transcripts, the 7,810 that
+  carry a slug each have exactly one distinct value and exactly one absent-to-value
+  transition, so two change points is a shape the corpus has never shown. (b) Whether the
+  bound file is on disk: `[exists]`/`[missing]` and `plan_exists`, the same field the forward
+  view prints. (c) A `plan_file_reference` attachment present while no record carries a slug -
+  plan text with nothing bound to it, which nothing will re-inject: a `plan-unbound-text` row,
+  a warning, and a count in `unbound_plan_text`. Zero corpus specimens; kept because the fork
+  path that strips a slug can produce it. (d) The first slug-carrying record against the plan
+  file's birth instant: `before`, `after`, `same`, or `unknown` with the reason named rather
+  than a guessed direction. (claim PLAN-022)
+
 ### Changed
 
 - **`verbatim`'s docs say which path the 600/900 per-role caps apply to** (documentation only;

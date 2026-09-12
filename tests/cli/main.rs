@@ -14,6 +14,7 @@ mod ledger;
 mod list;
 mod live;
 mod plan_audit;
+mod plan_facts;
 mod plan_whoami;
 mod recover;
 mod search;

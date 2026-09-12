@@ -16332,7 +16332,7 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "146-153",
+          "lines": "148-155",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file.\n    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {"
         }
       ],
@@ -19809,7 +19809,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2150",
+          "lines": "2160",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -43366,12 +43366,12 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "119-127",
+          "lines": "121-129",
           "snippet": "        let Some(att) = rec.attachment_value() else {\n            continue;\n        };\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"plan_mode\") {\n            continue;\n        }\n        let Some(plan_file) = att.get(\"planFilePath\").and_then(serde_json::Value::as_str) else {\n            continue;\n        };"
         },
         {
           "path": "src/plan.rs",
-          "lines": "91-99",
+          "lines": "93-101",
           "snippet": "/// Tight byte prefilter for the plan-resolution pre-pass: `plan_mode` is a rare token, so\n/// a giant transcript parses only its handful of attachment lines (the scan still splits\n/// newlines over the whole file, but `serde_json` runs on almost nothing).\nfn line_is_plan_candidate(line: &[u8]) -> bool {\n    // Built ONCE (per-line hot path - the stateless form rebuilt its searcher every call).\n    static PLAN_MODE: std::sync::LazyLock<memchr::memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b\"plan_mode\"));\n    PLAN_MODE.find(line).is_some()\n}"
         }
       ],
@@ -43506,7 +43506,7 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "116-118",
+          "lines": "118-120",
           "snippet": "    // File order == line order; overwriting keeps the LATEST plan_mode binding.\n    let mut latest: Option<PlanRef> = None;\n    for (line_no, rec) in &records {"
         }
       ],
@@ -43791,7 +43791,7 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "72",
+          "lines": "74",
           "snippet": "/// The session's plan slug (the harness derives the plan file name from it)."
         },
         {
@@ -43921,17 +43921,17 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "72",
+          "lines": "74",
           "snippet": "/// The session's plan slug (the harness derives the plan file name from it)."
         },
         {
           "path": "src/plan.rs",
-          "lines": "72-77",
+          "lines": "74-79",
           "snippet": "    /// The session's plan slug (the harness derives the plan file name from it).\n    /// Read from the binding record itself: the `plan_mode` attachment record always\n    /// carries it. The slug is minted BEFORE Plan-Mode entry (measured at CC 2.1.258:\n    /// the first slug-carrying record precedes the `plan_mode` line in 18 of 18\n    /// transcripts), so earlier records may carry it too - the binding record is\n    /// simply the authoritative carrier. `None` when the record predates the field."
         },
         {
           "path": "src/plan.rs",
-          "lines": "152-158",
+          "lines": "154-160",
           "snippet": "    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11; v0.10.2)."
         },
         {
@@ -44084,12 +44084,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "146-151",
+          "lines": "148-153",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         },
         {
           "path": "src/plan.rs",
-          "lines": "154",
+          "lines": "156",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         },
         {
@@ -44308,7 +44308,7 @@
         },
         {
           "path": "src/plan.rs",
-          "lines": "153-160",
+          "lines": "155-162",
           "snippet": "        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11; v0.10.2).\n                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());\n                let root = root_owned.as_deref().map(Path::new);"
         },
         {
@@ -44820,12 +44820,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "85-89",
+          "lines": "87-91",
           "snippet": "    /// True when the first slug-carrying record is a `compact_boundary` itself: the\n    /// slug was MINTED at that compaction (Plan Mode never ran; Claude Code will\n    /// still inject or rebuild the file it names) - the forked-session signature.\n    pub minted_at_compaction: bool,\n}"
         },
         {
           "path": "src/plan.rs",
-          "lines": "154",
+          "lines": "156",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         }
       ],
@@ -44941,12 +44941,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "79-84",
+          "lines": "81-86",
           "snippet": "    /// How the binding was established: `plan_mode` (the explicit attachment, path\n    /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying\n    /// record binds `<plans-dir>/<slug>.md` - Claude Code's own binding law, which a\n    /// forked/background session reaches because the fork strips its history's\n    /// attachments, and any compaction mints a slug even without Plan Mode).\n    pub binding_source: &'static str,"
         },
         {
           "path": "src/plan.rs",
-          "lines": "146-151",
+          "lines": "148-153",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         }
       ],
@@ -45105,12 +45105,12 @@
       "code": [
         {
           "path": "src/plan.rs",
-          "lines": "67-69",
+          "lines": "69-71",
           "snippet": "    /// Whether that plan file currently exists on disk (a recover target need NOT exist -\n    /// recovering a deleted plan from the transcript is the whole point).\n    pub plan_exists: bool,"
         },
         {
           "path": "src/plan.rs",
-          "lines": "72",
+          "lines": "74",
           "snippet": "/// The session's plan slug (the harness derives the plan file name from it)."
         }
       ],
@@ -90355,7 +90355,7 @@
         {
           "path": "src/plan.rs",
           "snippet": "pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {",
-          "lines": "103-103"
+          "lines": "105"
         }
       ],
       "instrument": "Byte-search the shipped binary for the regeneration head `function BIn(e={}){let t=n(),o=t.id;t.sessionScratch.forgetPlanSlug(o)` and read the function to its return. On disk, take a transcript whose first non-isMeta user record is the `/clear` wrapper and count its `plan_mode` attachments and its slug-carrying records; run `csift plan @<that id>` and confirm it reports no plan.",
@@ -91712,7 +91712,7 @@
         {
           "path": "src/parse/lineage.rs",
           "snippet": "pub(crate) fn lineage_fields(line: &[u8]) -> Option<LineageFields> {",
-          "lines": "61"
+          "lines": "81"
         },
         {
           "path": "src/session/summarize.rs",
@@ -91957,6 +91957,55 @@
           "instrument": "Corpus census of top-level `sessionKind` carriers over every `*.jsonl` under the projects root, bytes split on `\\n` only, with the value set, the by-type breakdown, the `version` histogram and each file's carrier span against its non-blank total. Binary: the literals `sessionKind`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_SESSION_KIND:\"bg\"`, `sessionKind:Ij()` and `sessionKind:void 0` byte-counted and every occurrence of the first two read and classified, with each traced hop re-sliced at its recorded offset. Ladder: the writer-side literal byte-counted in each cached native build. Span cross-check: the two boundary lines and their neighbours re-read out of the mixed file by physical line number.",
           "observed": "6,225 carrier lines over 21 files of 9,600 and 1,679,892 non-blank lines; the distinct value set is exactly `bg`; by type 3,591 assistant, 2,105 user, 446 attachment, 83 system, and no other type; every counted line carries version 2.1.252. 20 of the 21 files are subagent transcripts whose carrier count EQUALS their non-blank total, so the key is on every line; the 21st is a top-level transcript with 909 carriers over 29,392 non-blank lines, span 28 to 1361, and inside that span the non-carriers are exactly the bookkeeping line types (last-prompt, ai-title, agent-name, mode, permission-mode, atis-latch, file-history-snapshot, queue-operation, file-history-delta) - the four record types carry it without exception. Above the span sit only bookkeeping lines with no version; below it 1,252 records at 2.1.252, 2,350 at 2.1.257 and 13,418 at 2.1.259, none carrying the key: the foreground-resume shape. `--lineage` reports `bg on L28..L1361` on that file and line 27 and line 1362 carry no such key while 28 and 1361 do. In the binary: `sessionKind` 26 occurrences, all read - 2 string-table, 1 stamp, 1 merge (via the stamp call), 3 strippers, 11 readers, 5 comparisons, 3 telemetry; `sessionKind:Ij()` occurs once; `CLAUDE_CODE_SESSION_KIND` 39 times with exactly 2 writes, both `bg`, one strip-list membership that deletes the variable from TOOL subprocess env copies only, and 36 reads or declarations. All traced hops re-sliced byte-exact and each occurs exactly once in the build. Ladder: `CLAUDE_CODE_SESSION_KIND:\"bg\"` present with 2 occurrences in every build from 2.1.124 up, absent in the 5 below, highest absent 2.1.100.",
           "rule": "A corpus line counts once when its decoded object has `sessionKind` among its TOP-LEVEL keys; a byte occurrence of the literal elsewhere in the line does not count. A file's span endpoints are 1-based indices among its non-blank lines for the census and physical line numbers for the `--lineage` cross-check; the two agree here because the region holds no blank line. A binary occurrence is a non-overlapping byte match, classified by reading its enclosing expression. A ladder build counts as present when the literal occurs at least once.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "PLAN-022",
+      "area": "plan",
+      "behavior": "A transcript's `slug` field - Claude Code's plan-BINDING key - takes exactly ONE transition in its own file, from absent to a value, and never moves after that. Censused over every `*.jsonl` under one projects root: of 9,601 transcripts, 7,810 carry at least one record with a non-empty top-level `slug`; every one of those 7,810 carries exactly ONE distinct value and exactly ONE change point, and the corpus holds 7,810 absent-to-value transitions, 0 value-to-value transitions and 0 value-to-absent transitions. The first slug-carrying record is a `user` record on 7,767 of them, an `assistant` record on 30, an `attachment` on 7 and a `system` on 6, so the mint point is not tied to one line type. Separately, a `plan_file_reference` attachment - the post-compaction re-injection of the BOUND plan's whole content - appears on 14 transcripts of that corpus, and ALL 14 also carry a slug: the state in which a transcript holds re-injected plan text while NO record carries a slug has ZERO specimens there, even though the fork path that strips a slug from the records it copies can produce it.",
+      "depends": "`plan --audit` reports both. The slug's CHANGE POINTS say when the binding csift reports came into being: a `from: null` change is the mint (the only shape the corpus contains) and a value-to-value change reads as the binding having MOVED, which is why the two render differently instead of as one arrow. Because every measured transcript has exactly one change point, an audit that prints two is reporting something the corpus has never shown, and that is the point of printing them. The scan reads the key through the depth-1 walk, so a `slug` NESTED in a tool input is not a change point, and a line the walk cannot finish neither mints a slug nor ends a run - it says nothing, exactly like a line with no key. The `plan_file_reference`-with-no-slug state is a WARNING with no corpus specimen: csift flags it because only the bound plan is re-injected in full, so plan text with no binding is text that is not coming back. Its detector reads the attachment's own `type` rather than the byte match that admitted the line, so a prose mention of the attachment type never fires it.",
+      "code": [
+        {
+          "path": "src/plan/facts.rs",
+          "snippet": "pub(crate) fn binding_facts(path: &Path) -> Result<BindingFacts> {",
+          "lines": "70"
+        },
+        {
+          "path": "src/plan/audit.rs",
+          "snippet": "fn change_arrow(c: &SlugChange) -> String {",
+          "lines": "281"
+        },
+        {
+          "path": "tests/cli/plan_facts.rs",
+          "snippet": "fn a_slug_that_moves_is_reported_as_a_second_change_point() {",
+          "lines": "116"
+        }
+      ],
+      "instrument": "Over every `*.jsonl` under the projects root, read each file as BYTES and split on `\\n` only. For each line that carries the quoted key `\"slug\"`, decode it and take the TOP-LEVEL `slug` when it is a non-empty string; walk those lines in file order and count a CHANGE POINT whenever the value differs from the previous one, classifying it absent-to-value, value-to-value or value-to-absent. A line that does not decode is skipped and ends no run. Report the number of transcripts carrying at least one carrier, the histogram of DISTINCT values per transcript, the histogram of change points per transcript, the three transition totals, and the `type` of each transcript's first carrier. In the same pass, for each line carrying the literal `plan_file_reference`, decode it and count the transcript when its `attachment.type` equals that literal; report how many such transcripts also carry a slug and how many carry none.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 6"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The writer that mints the slug and stamps it onto every later record is not read: byte-search the shipped binary for the slug field name on the record-stamp path and for the mint call, then confirm the stamp is the same per-process funnel the other record stamps ride, which is what would make one-value-per-file a property of the writer rather than of the corpus.",
+        "The `plan_file_reference`-with-no-slug state has no specimen: produce one by resuming a forked transcript whose slug the fork stripped and reading whether the re-injection lands without a slug, or trace the fork copier and the re-injection writer to show the two can co-occur."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.3",
+          "date": "2026-09-12",
+          "verdict": "holds",
+          "instrument": "The slug change-point and `plan_file_reference` census described in this claim's instrument, run over every `*.jsonl` under one projects root, bytes split on `\\n` only, top-level key decoded per line.",
+          "observed": "9,601 files scanned, 101 of them top-level. 7,810 transcripts carry at least one slug record. Distinct-value histogram: {1: 7810} - no transcript carries two. Change-point histogram: {1: 7810} - no transcript changes twice. Transitions: 7,810 absent-to-value, 0 value-to-value, 0 value-to-absent. First carrier's type: 7,767 user, 30 assistant, 7 attachment, 6 system. `plan_file_reference`: 14 transcripts, 14 of them also carrying a slug, 0 carrying none. A live transcript whose binding csift resolves at line 49 has its slug minted at line 39, so the mint precedes the binding attachment by 10 lines there.",
+          "rule": "A transcript counts once. A carrier is a line whose decoded object has a non-empty string `slug` among its TOP-LEVEL keys; an empty string and a nested key both count as absent. A change point is a position in the file-ordered sequence of carrier and non-carrier KEY-BEARING lines where the value differs from the previous one; a line that does not decode is skipped and ends no run. A `plan_file_reference` transcript is one with at least one line whose decoded `attachment.type` equals that literal.",
           "note": ""
         }
       ]

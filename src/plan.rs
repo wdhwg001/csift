@@ -43,8 +43,10 @@ use crate::parse::mmap_bytes;
 use crate::path;
 
 mod audit;
+mod facts;
 mod slug;
 pub(crate) use audit::*;
+use facts::*;
 use slug::*;
 
 /// The magic `--file` value that tells `recover` to reconstruct the session-bound plan
