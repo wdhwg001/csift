@@ -523,7 +523,9 @@ fn a_binding_whose_records_carry_no_slug_says_so_instead_of_inventing_one() {
     // slug-derived facts report their own absence.
     let h = Home::new();
     let plan = h.write_claude("plans/quiet-harbor-relay.md", "# the plan\n");
-    let escaped = plan.to_str().unwrap();
+    // A hand-built record: the path is JSON-escaped like the fixture helpers do, or a Windows
+    // path's backslashes make the line unparseable and the binding vanishes with it.
+    let escaped = plan.to_str().unwrap().replace('\\', "\\\\");
     h.write(
         &format!("{ENC}/{SESSION}.jsonl"),
         &format!(
