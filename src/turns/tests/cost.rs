@@ -356,3 +356,41 @@ fn the_image_marker_line_and_the_cost_reserved_for_it_agree_to_the_character() {
     assert_eq!(image_marker_cost(&two), 27);
     assert_eq!(image_marker_cost(&[]), 0, "no images, no line, no cost");
 }
+
+#[test]
+fn turn_cost_charges_the_image_marker_on_the_user_side() {
+    // Every existing turn_cost test uses a turn with NO images, so the image-marker term
+    // contributed 0 and any sign would have done: a mutant that SUBTRACTED it survived the
+    // whole suite. A turn WITH images pins the term, and the assertion is the sum of the
+    // parts the renderer emits - user unit + image marker + tool marker + assistant lane.
+    let mut t = mk_turn(0, Some("the ask"), Some("the reply"), 3, 0);
+    t.image_ids = vec!["L1i1".to_string(), "L1i2".to_string()];
+    let u = t.user.as_ref().expect("a user side");
+    assert!(
+        image_marker_cost(&t.image_ids) > 0,
+        "the term must be non-zero"
+    );
+    assert_eq!(
+        turn_cost(&t, SelSides::Both, &cfg()),
+        unit_cost(u)
+            + image_marker_cost(&t.image_ids)
+            + marker_cost(3)
+            + assistant_lane_cost(&t, &cfg())
+    );
+    // The marker is tied to the USER side, so a user-only selection still charges it and an
+    // assistant-only selection charges none of it.
+    assert_eq!(
+        turn_cost(&t, SelSides::UserOnly, &cfg()),
+        unit_cost(u) + image_marker_cost(&t.image_ids)
+    );
+    assert_eq!(
+        turn_cost(&t, SelSides::AssistantOnly, &cfg()),
+        assistant_lane_cost(&t, &cfg()),
+        "no user side, no image marker"
+    );
+    // And the charge equals what the renderer emits for that line.
+    let mut lines: Vec<String> = Vec::new();
+    render_turn_text(&t, SelSides::Both, &cfg(), None, &mut |s| lines.push(s));
+    let emitted: usize = lines.iter().map(|l| l.chars().count() + NEWLINE_COST).sum();
+    assert_eq!(emitted, turn_cost(&t, SelSides::Both, &cfg()));
+}
