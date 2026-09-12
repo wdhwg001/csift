@@ -30,6 +30,7 @@ fn render_label_decorates_pairing_and_direction() {
         class: Some(Class::AgentToolUse),
         labels: vec!["agent.tool.use"],
         excerpt: String::new(),
+        body: None,
         timestamp_utc: None,
         tool_name: None,
         model: None,
@@ -193,6 +194,28 @@ fn match_excerpt_full_budget_emits_whole_message() {
 }
 
 #[test]
+fn uncapped_body_is_keyed_on_the_budget_and_keeps_newlines() {
+    // The `body` companion of `match_excerpt`: present ONLY at the uncapped budget, and
+    // then the text VERBATIM - the excerpt's whitespace collapse is not applied.
+    let text = "first line\n\nthird line\twith a tab";
+    assert_eq!(uncapped_body(text, usize::MAX).as_deref(), Some(text));
+    assert_eq!(
+        uncapped_body(text, usize::MAX)
+            .expect("body")
+            .matches('\n')
+            .count(),
+        2,
+        "both newlines survive - a body is not one line"
+    );
+    // Any real budget yields nothing, including a budget wide enough for this text: the
+    // pairing is with the MODE (`--no-truncate` / an address), never with whether this
+    // particular record happened to fit.
+    assert_eq!(uncapped_body(text, EXCERPT_MAX), None);
+    assert_eq!(uncapped_body(text, usize::MAX - 1), None);
+    assert_eq!(uncapped_body("", usize::MAX).as_deref(), Some(""));
+}
+
+#[test]
 fn a_channel_delivery_renders_verbatim_as_a_message() {
     // The record-text view of `agent.communication.channel` is the injected string
     // VERBATIM (header line + body): the header is the receipt a reader audits, and a
@@ -229,6 +252,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         class: Some(Class::CommChannel),
         labels: vec!["agent.communication.channel", "harness.meta.hook"],
         excerpt: String::new(),
+        body: None,
         timestamp_utc: None,
         tool_name: None,
         model: None,
@@ -286,6 +310,7 @@ fn a_summarize_summary_names_its_direction_in_the_label_zone() {
         class: Some(Class::CompactionSummary),
         labels: vec!["harness.compaction.summary"],
         excerpt: String::new(),
+        body: None,
         timestamp_utc: None,
         tool_name: None,
         model: None,

@@ -41123,7 +41123,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "470-472",
+          "lines": "471-473",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
@@ -55421,7 +55421,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "324-328",
+          "lines": "325-329",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -88865,7 +88865,7 @@
         },
         {
           "path": "src/search/hit_facts.rs",
-          "lines": "56-59",
+          "lines": "57-60",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],

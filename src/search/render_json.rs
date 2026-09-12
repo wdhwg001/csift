@@ -97,6 +97,12 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // `labels` is not the delivery verdict, which is why this rides beside it.
         "delivered": h.delivered(),
         "excerpt": h.excerpt,
+        // The same section text the excerpt windows into, with its newlines intact -
+        // `excerpt` is a match-centered fragment and collapses every newline to a space,
+        // so a consumer reading it as the body lost every paragraph and table row.
+        // Non-null ONLY under `--no-truncate`: the default stream stays one fragment per
+        // hit rather than a fragment plus a full copy of the record.
+        "body": h.body,
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
         "tool_name": h.tool_name,

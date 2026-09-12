@@ -501,6 +501,20 @@ pub(crate) fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
 
+/// The [`Hit::body`] companion of [`match_excerpt`]: the SAME rendered section text,
+/// verbatim, when the caller's budget is the uncapped `usize::MAX` that `--no-truncate`
+/// and a `show --line`/`--uuid` address install - else `None`.
+///
+/// Keyed on the budget rather than on a flag so the two fields can never disagree: an
+/// excerpt built under a real cap is a match-centered fragment, and pairing it with a
+/// full second copy of every matched record would multiply the default stream for a
+/// consumer that did not ask for the body. `match_excerpt` normalizes whitespace (the
+/// excerpt is one line by contract); this does not, so a body keeps every newline its
+/// renderer produced.
+pub(crate) fn uncapped_body(text: &str, max: usize) -> Option<String> {
+    (max == usize::MAX).then(|| text.to_string())
+}
+
 /// Build the inline excerpt, CENTERED on the match so a hit DEEP in a long message is
 /// actually visible - not just the message head (the old behavior, which silently hid
 /// any match past the first `max` chars and forced readers back to the raw jsonl).

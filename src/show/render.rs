@@ -162,6 +162,11 @@ pub(crate) fn render_json(
                 "ts_utc": h.timestamp_utc,
                 "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
                 "text": h.excerpt,
+                // The same record text with its newlines intact (`text` collapses them to
+                // spaces). Non-null under a `--line`/`--uuid` address, which lifts the
+                // excerpt cap; NULL under `--turn`, which does not - there `text` is a
+                // capped fragment and the body would be a fragment too.
+                "body": h.body,
                 "image_ids": h.image_ids,
                 // C-33: the compaction facts of a boundary/summary record; null elsewhere.
                 "mode": crate::search::compaction_mode_json(h),

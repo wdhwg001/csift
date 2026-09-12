@@ -113,6 +113,19 @@ pub struct Hit {
     pub labels: Vec<&'static str>,
     /// The matched text excerpt (whitespace-normalized, explicitly truncated).
     pub excerpt: String,
+    /// The hit's own section text as the renderer produced it, BEFORE [`match_excerpt`]
+    /// windowed and whitespace-normalized it - so a JSON consumer that wants the body
+    /// rather than a fragment reads this and keeps every newline the render carried.
+    /// Populated ONLY when the excerpt cap was lifted (`search --no-truncate`, and
+    /// `show`'s `--line`/`--uuid` address); `None` under the default cap, where the
+    /// excerpt is a fragment anyway and carrying a second full copy of every matched
+    /// record would multiply the default stream's size for nothing.
+    ///
+    /// It is the RENDERED form, not the raw JSON: a source that the shared opener
+    /// renderer already flattened (`user.message` and the other
+    /// [`Record::reconstructed_user_text`] cases go through `normalize_line` in the model
+    /// layer) carries no newlines here either. `--raw` stays the only path to the bytes.
+    pub body: Option<String>,
     pub timestamp_utc: Option<String>,
     /// Tool name when the hit is a tool-use/tool-result block, for the header.
     pub tool_name: Option<String>,

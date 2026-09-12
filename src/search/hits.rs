@@ -280,6 +280,7 @@ pub(crate) fn collect_record_hits(
                 class: Some(class),
                 labels: label_paths.clone(),
                 excerpt,
+                body: uncapped_body(text, excerpt_max),
                 timestamp_utc: ts.clone(),
                 tool_name,
                 model: model.clone(),

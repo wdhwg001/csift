@@ -20,6 +20,7 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         class: None,
         labels: Vec::new(),
         excerpt,
+        body: uncapped_body(&text, excerpt_max),
         timestamp_utc: rec.timestamp.clone(),
         tool_name: None,
         model: None,
