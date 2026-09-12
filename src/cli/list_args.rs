@@ -43,7 +43,8 @@ use super::*;
         version_first, version_last, first_user, last_user, last_agent, \
         skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar, \
         minted_by, cleared_from, cleared_from_distance_ms, cleared_from_candidates, \
-        continued_in}, then \
+        continued_in, session_kind, session_kind_first_line, session_kind_last_line, \
+        lineage_scanned}, then \
         a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
         the re-feedable owning uuid (= session_id for a top-level row); never re-feed a \
@@ -72,10 +73,25 @@ use super::*;
         node and its only address is its jsonl line. An in-place `/fork` writes no such \
         line, so its absence never means the session was not forked.\n  \
           WINDOW LIMIT: the line is written after the last conversation record, so the \
-        backward tail read normally reaches it. A later `--resume` of the parent appends \
-        new turns BELOW it, and once those fill the tail window the line sits outside \
-        both windows and `continued_in` reads null. The whole-file answer is the line-type \
-        census `csift stats` prints (`continued-in` is one of its `types` keys).\n\n\
+        backward tail read normally reaches it. The tail read STOPS once it has both of \
+        its anchors - the last genuine-user and the last agent message - so a later \
+        `--resume` of the parent that appends both of those below the line pushes it \
+        outside the window and `continued_in` reads null. (A transcript missing one \
+        anchor is walked to the top, so nothing is lost there.) Two whole-file answers \
+        exist: `--lineage` below, and the line-type census `csift stats` prints \
+        (`continued-in` is one of its `types` keys).\n\n\
+        LANE LINEAGE (`session_kind`, text row `lane`)\n  \
+          Every record a BACKGROUND lane writes carries a top-level \
+        `sessionKind:\"bg\"`; a foreground lane's records carry no such key at all, so \
+        `session_kind` is an EMPTY array for an ordinary session rather than a sentinel \
+        value. It is an array because the stamp is a per-PROCESS fact: one transcript can \
+        hold records from a background lane and, below them, records a foreground resume \
+        of that same session appended without the key. That is also why the SPAN needs \
+        `--lineage`: the stamp can stop mid-file and no head or tail window can see \
+        where. With the flag, `session_kind_first_line` / `session_kind_last_line` give \
+        the first and last carrier's jsonl line and the row reads `lane  bg on \
+        L<a>..L<b>`; without it both are null, the row says the span needs the flag, and \
+        `lineage_scanned` tells a consumer which of the two it is looking at.\n\n\
         SKIPPED_LINES SEMANTICS (window census, NOT a whole-file verdict)\n  \
           `list` reads only the head/tail lines it needs (the §7 fast-overview contract; it \
         never scans the middle of a transcript), so its `skipped_lines` counts malformed lines \
@@ -83,7 +99,9 @@ use super::*;
         OUTSIDE the windows by design. The full-scan corruption census over the same bytes is \
         `csift stats` (every full-scan command, search/files/recover, agrees with it). \
         Within the read windows every malformed line, and every sidecar marker the current \
-        schema cannot read, is booked exactly once."
+        schema cannot read, is booked exactly once. `--lineage` does NOT widen this count: \
+        its pass is a key walk with no record parse, so it has no parse failure to report \
+        and cannot book a line the windows already booked."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, a direct
@@ -155,6 +173,18 @@ pub struct ListArgs {
     /// span command answers the same two switches (`--subagents` / `--no-subagents`).
     #[arg(long = "subagents", conflicts_with = "no_subagents")]
     pub subagents: bool,
+
+    /// Answer the session-lineage fields over the WHOLE file instead of the head/tail
+    /// windows. `list` is a head/tail reader by contract, so two lineage answers are
+    /// window-bounded without this: the background-lane stamp's SPAN
+    /// (`session_kind_first_line` / `session_kind_last_line`, null without the flag - a
+    /// lane handed back to the foreground stops carrying the key mid-file, and no window
+    /// can see where) and `continued_in` (a handoff line a later `--resume` of the parent
+    /// pushed above the tail window). The pass is ONE depth-1 key walk per file that never
+    /// parses a payload, so it adds nothing to `skipped_lines`, whose meaning stays "the
+    /// head/tail lines read"; the whole-file corruption census is still `csift stats`.
+    #[arg(long = "lineage")]
+    pub lineage: bool,
 
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]

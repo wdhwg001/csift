@@ -421,7 +421,7 @@ pub(crate) fn line_type_and_spine(
     Ok(Some((census, spine_record_from(line_no, &fields))))
 }
 
-fn skip_ws(b: &[u8], mut i: usize) -> usize {
+pub(crate) fn skip_ws(b: &[u8], mut i: usize) -> usize {
     while matches!(b.get(i), Some(c) if c.is_ascii_whitespace()) {
         i += 1;
     }
@@ -431,7 +431,7 @@ fn skip_ws(b: &[u8], mut i: usize) -> usize {
 /// The span of a JSON string starting at `i` (which must be `"`), returning its RAW
 /// inner bytes (escapes untouched - object keys in this format never carry one) and
 /// the offset just past the closing quote.
-fn read_string_span(b: &[u8], i: usize) -> Option<(&[u8], usize)> {
+pub(crate) fn read_string_span(b: &[u8], i: usize) -> Option<(&[u8], usize)> {
     let mut j = i + 1;
     while j < b.len() {
         match b[j] {
@@ -451,7 +451,7 @@ fn read_string_span(b: &[u8], i: usize) -> Option<(&[u8], usize)> {
 /// bytes matter - so the walk jumps to the next `\` or `"` with `memchr2` instead of
 /// stepping. That is the difference between reading a 200 MB transcript's attachment
 /// lines at scan speed and reading them a byte at a time.
-fn skip_value(b: &[u8], i: usize) -> Option<usize> {
+pub(crate) fn skip_value(b: &[u8], i: usize) -> Option<usize> {
     let mut j = i;
     let mut depth = 0usize;
     let mut in_str = false;
@@ -503,7 +503,7 @@ fn skip_value(b: &[u8], i: usize) -> Option<usize> {
 /// A JSON string value's decoded content (`None` for `null` or any other shape). A uuid,
 /// a type name and an ISO timestamp carry no escape, so the common case copies the bytes
 /// straight out and only an escaped value pays for a decoder.
-fn str_value(raw: &[u8]) -> Option<String> {
+pub(crate) fn str_value(raw: &[u8]) -> Option<String> {
     if raw.first() != Some(&b'"') || raw.len() < 2 || raw.last() != Some(&b'"') {
         return None;
     }

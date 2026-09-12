@@ -115,7 +115,7 @@ fn summarize_head_first_user_captures_identity() {
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"last agent"}]}}"#,
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(s.cwd.as_deref(), Some("/Users/testuser/Projects/foo"));
     assert_eq!(s.version.as_deref(), Some("2.1.0"));
@@ -140,7 +140,7 @@ fn summarize_backfills_identity_from_tail_when_head_user_lacks_it() {
             r#"{"type":"user","cwd":"/tail/cwd","version":"3.0","gitBranch":"dev","sessionId":"sid-tail","message":{"role":"user","content":"last q, has identity"}}"#,
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     // The head found the first user, but identity was backfilled from the tail.
     assert_eq!(
@@ -168,7 +168,7 @@ fn summarize_session_id_from_data_when_filename_has_no_stem() {
         "dataid",
         &[r#"{"type":"user","sessionId":"sid-data-xyz","message":{"role":"user","content":"hi"}}"#],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     // Filename stem wins (non-empty) - the documented precedence.
     assert!(!s.session_id.is_empty());
@@ -189,7 +189,7 @@ fn summarize_head_skips_non_genuine_records_before_first_user() {
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"a"}]}}"#,
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(
         s.first_user.as_ref().unwrap().excerpt,
@@ -204,7 +204,7 @@ fn top_level_summary_is_not_subagent_and_is_its_own_parent() {
         "toplevel",
         &[r#"{"type":"user","message":{"role":"user","content":"hi"}}"#],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
     std::fs::remove_file(&p).ok();
     assert!(!s.is_subagent);
@@ -232,7 +232,7 @@ fn subagent_summary_carries_is_subagent_and_refeedable_parent() {
         )
         .unwrap();
     }
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(
         s.session_id, "deadbeefcafe1234",
@@ -253,7 +253,7 @@ fn summarize_session_id_is_filename_stem() {
         "stemid",
         &[r#"{"type":"user","sessionId":"DATA-ID","message":{"role":"user","content":"hi"}}"#],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
     std::fs::remove_file(&p).ok();
     assert_eq!(s.session_id, stem);

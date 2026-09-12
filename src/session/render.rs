@@ -85,6 +85,9 @@ pub(crate) fn render_text(
                 first8(child)
             );
         }
+        if !s.session_kind.is_empty() {
+            println!("  lane     {}", lane_line(s));
+        }
         print_preview("first ◂", s.first_user.as_ref());
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
@@ -149,6 +152,23 @@ pub(crate) fn cleared_line(s: &SessionSummary) -> String {
             "minted by /clear; no cost-ledger checkpoint within {} ms in this project dir",
             crate::session::CLEAR_JOIN_WINDOW_MS
         ),
+    }
+}
+
+/// The `lane` row's body: the `sessionKind` values seen, then either the whole-file SPAN or
+/// the reason there is none. The stamp is a per-PROCESS fact, so a transcript appended to by
+/// a foreground process after a background lane carries the key only over part of its lines -
+/// which is what the span answers and what no head/tail window can.
+pub(crate) fn lane_line(s: &SessionSummary) -> String {
+    let kinds = s.session_kind.join(", ");
+    match (
+        s.session_kind_first_line,
+        s.session_kind_last_line,
+        s.lineage_scanned,
+    ) {
+        (Some(a), Some(b), _) => format!("{kinds} on L{a}..L{b}"),
+        (_, _, true) => format!("{kinds} (no line carries the stamp over the whole file)"),
+        _ => format!("{kinds} (seen in the head/tail windows; span needs --lineage)"),
     }
 }
 
@@ -247,6 +267,16 @@ pub(crate) fn render_json(
             // Null when the head/tail windows carry no such line, which includes the case
             // of a later resume of the parent pushing it above the tail window.
             "continued_in": s.continued_in,
+            // The background-lane stamp: the distinct values seen, `["bg"]` for a
+            // background lane and EMPTY for an ordinary foreground one (a foreground record
+            // carries no such key rather than a different value). The SPAN is a whole-file
+            // fact - the stamp stops appearing once a foreground process appends to the same
+            // transcript - so both line fields stay null until `--lineage` runs that pass,
+            // and `lineage_scanned` separates "not asked for" from "no carrier".
+            "session_kind": s.session_kind,
+            "session_kind_first_line": s.session_kind_first_line,
+            "session_kind_last_line": s.session_kind_last_line,
+            "lineage_scanned": s.lineage_scanned,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

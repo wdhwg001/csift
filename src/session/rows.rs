@@ -98,6 +98,21 @@ pub struct SessionSummary {
     /// above the tail window is outside them (`csift stats` counts the line type
     /// whole-file).
     pub continued_in: Option<String>,
+    /// The distinct `sessionKind` values this transcript's records carry, sorted. `["bg"]`
+    /// for a background lane, EMPTY for an ordinary foreground one - the key is absent from
+    /// a foreground record rather than set to something else. Read from the head and tail
+    /// windows, which is where Claude Code's own session summary reads it too (it lifts the
+    /// key off the FIRST record of the file); `--lineage` widens it to the whole file.
+    pub session_kind: Vec<String>,
+    /// The 1-based jsonl line of the FIRST record carrying `sessionKind`, and of the LAST.
+    /// Both `None` without `--lineage`: the span is a whole-file fact (a lane handed back
+    /// to the foreground stops carrying the key mid-file) and no head/tail window can see
+    /// where it ends.
+    pub session_kind_first_line: Option<usize>,
+    pub session_kind_last_line: Option<usize>,
+    /// True when a whole-file lineage pass produced the two fields above - so a consumer can
+    /// tell "no span, not asked for" from "no span, no carrier".
+    pub lineage_scanned: bool,
 }
 
 /// A short, timestamped preview of one message for the `list` view.

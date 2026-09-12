@@ -25,7 +25,7 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     // 3. Parallel across files (head+tail read each), collect order-stable.
     let mut summaries: Vec<SessionSummary> = session_files
         .par_iter()
-        .map(|p| summarize_session(p))
+        .map(|p| summarize_session(p, args.lineage))
         .collect::<Result<Vec<_>>>()?;
     // Deterministic order regardless of rayon completion order: by path.
     summaries.sort_by(|a, b| a.path.cmp(&b.path));

@@ -67,6 +67,15 @@ pub struct Record {
     #[serde(default, rename = "continuedInSessionId")]
     pub continued_in_session_id: Option<String>,
 
+    /// The LANE KIND the writing process reported: `bg` on every record a background lane
+    /// writes, absent from a foreground lane's records. It is a per-PROCESS fact, not a
+    /// per-record one - one stamp built from one environment variable, whose value is
+    /// undefined in a foreground process, and the serializer drops an undefined property -
+    /// so the key stops appearing in the SAME transcript once a foreground process appends
+    /// to it. Rides the four record-bearing line types only.
+    #[serde(default, rename = "sessionKind")]
+    pub session_kind: Option<String>,
+
     /// The pasted-image ids of a user prompt, in the ORDER OF ITS IMAGE BLOCKS (the
     /// submit path builds the block array and this array together in one ascending-id
     /// pass, while the `[Image #N]` markers keep the operator's text order; ledger

@@ -63,6 +63,7 @@ mod tempfile_path {
     }
 }
 
+mod lineage;
 mod lines;
 mod parallel;
 mod readers;

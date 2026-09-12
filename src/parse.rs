@@ -37,11 +37,13 @@ use rayon::prelude::*;
 
 use crate::model::Record;
 
+mod lineage;
 mod lines;
 mod parallel;
 mod readers;
 mod spine;
 
+pub(crate) use lineage::*;
 pub(crate) use lines::*;
 pub(crate) use parallel::*;
 pub(crate) use readers::*;

@@ -68,6 +68,22 @@ surface change bumps the PATCH.
   `stats`' line-type census (which already counts `continued-in`) is the whole-file answer.
   (claim REC-106)
 
+- **`list` reports the background-lane stamp, and `--lineage` gives its span.** Every record
+  a background lane writes carries a top-level `sessionKind:"bg"`; a foreground lane's records
+  carry no such key at all, because one stamp builds the value from one environment variable
+  whose value is undefined there and the serializer drops an undefined property. That makes it
+  a per-PROCESS fact, so `session_kind` is an ARRAY and is EMPTY for an ordinary session rather
+  than carrying a sentinel - and one transcript can hold a background lane's records above the
+  records a foreground resume of that same session appended without the key. The values come
+  from the head/tail windows, which is where Claude Code's own session summary reads them too
+  (off the first record of the file). The SPAN cannot: the stamp stops mid-file and no window
+  can see where. So the new `--lineage` flag runs one whole-file pass for
+  `session_kind_first_line` / `session_kind_last_line` and an exact `continued_in`, with
+  `lineage_scanned` separating "not asked for" from "no carrier". That pass is a depth-1 key
+  walk, never a record parse, so a nested key is not a field and it adds nothing to
+  `skipped_lines`. Measured on a 720 MB transcript it costs 2.1x the same-binary control band,
+  which is why it is opt-in; the default path stays inside that band. (claim REC-107)
+
 ### Changed
 
 - **`verbatim`'s docs say which path the 600/900 per-role caps apply to** (documentation only;

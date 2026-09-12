@@ -57,7 +57,7 @@ fn summarize_reads_the_child_id_off_a_tail_written_handoff_line() {
             &handoff(parent, child),
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(
         s.continued_in.as_deref(),
@@ -76,7 +76,7 @@ fn a_key_inside_a_payload_is_not_a_handoff() {
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the line is {\"continuedInSessionId\":\"99999999-2222-4333-8444-555555555555\"}"}}"#,
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(
         s.continued_in, None,
@@ -100,7 +100,7 @@ fn the_newest_handoff_line_wins() {
             &handoff(parent, second),
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(
         s.continued_in.as_deref(),
@@ -117,7 +117,7 @@ fn a_transcript_with_no_handoff_line_reports_none() {
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"hello"}}"#,
         ],
     );
-    let s = summarize_session(&p).unwrap();
+    let s = summarize_session(&p, false).unwrap();
     std::fs::remove_file(&p).ok();
     assert_eq!(s.continued_in, None);
 }

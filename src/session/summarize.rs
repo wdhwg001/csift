@@ -3,7 +3,19 @@
 use super::*;
 
 /// Build a [`SessionSummary`] for one session file via HEAD + TAIL reads only.
-pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
+///
+/// `want_lineage` adds the opt-in whole-file LINEAGE pass (`list --lineage`): the
+/// `sessionKind` span and an exact `continued_in`, neither of which a head/tail window can
+/// answer. It never changes any other field, so a caller that does not want it passes false
+/// and gets exactly the head/tail answer.
+pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSummary> {
+    // Run FIRST so the fold at the bottom is a plain `or`/`union` over a value that is
+    // simply all-default when the flag is off.
+    let lineage = if want_lineage {
+        lineage_scan(path)?
+    } else {
+        LineageScan::default()
+    };
     // The session id is authoritatively the jsonl basename (== uuid; verified the
     // env var CLAUDE_CODE_SESSION_ID equals it). For a SUBAGENT transcript the stem is
     // `agent-<hex>`; the shared helper strips the prefix to the bare-hex canonical id
@@ -25,11 +37,18 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // The background handoff's parent-side line. File order in the head window, so the
     // LAST one seen is the newest of that window.
     let mut continued_in_head: Option<String> = None;
+    // The background-lane stamp is a per-PROCESS fact, so the VALUES a window sees are the
+    // answer even when the span is not; collected as a set because one transcript can carry
+    // records from a background lane and from a later foreground resume.
+    let mut kinds: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
     let (head_skipped, head_consumed) =
         head_records_prefiltered(path, line_is_list_candidate, |rec| {
             if let Some(child) = rec.continued_in_session_id.clone() {
                 continued_in_head = Some(child);
+            }
+            if let Some(kind) = rec.session_kind.clone() {
+                kinds.insert(kind);
             }
             // The FIRST non-isMeta user record decides the mint: the `/clear` wrapper
             // lands in the NEW transcript (the isMeta `<local-command-caveat>` record
@@ -82,6 +101,9 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         tail_records_prefiltered(path, line_is_list_candidate, head_consumed, |rec| {
             if continued_in_tail.is_none() {
                 continued_in_tail = rec.continued_in_session_id.clone();
+            }
+            if let Some(kind) = rec.session_kind.clone() {
+                kinds.insert(kind);
             }
             if version_last.is_none() {
                 version_last = rec.version.clone();
@@ -191,9 +213,73 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         cleared_from_after: clear_join.after,
         cleared_from_candidates: clear_join.candidates,
         // The tail window is where the handoff line lands, so it answers first; the head
-        // window covers a transcript short enough for the two to meet.
-        continued_in: continued_in_tail.or(continued_in_head),
+        // window covers a transcript short enough for the two to meet. A whole-file pass
+        // outranks both, because it read every line either of them could have.
+        continued_in: lineage
+            .continued_in
+            .or(continued_in_tail)
+            .or(continued_in_head),
+        // The window values and the whole-file values are the same KIND of answer, so they
+        // union: a `--lineage` run can only add carriers a window missed.
+        session_kind: kinds.union(&lineage.kinds).cloned().collect(),
+        session_kind_first_line: lineage.first_line,
+        session_kind_last_line: lineage.last_line,
+        lineage_scanned: lineage.scanned,
     })
+}
+
+/// What one whole-file lineage pass found. All-default (and `scanned` false) when the pass
+/// did not run, so the caller's `or`/`union` folds read the same either way.
+#[derive(Debug, Default)]
+pub(crate) struct LineageScan {
+    pub(crate) kinds: std::collections::BTreeSet<String>,
+    pub(crate) first_line: Option<usize>,
+    pub(crate) last_line: Option<usize>,
+    pub(crate) continued_in: Option<String>,
+    pub(crate) scanned: bool,
+}
+
+/// The `list --lineage` pass: ONE walk over every line of the file, lifting the two
+/// top-level lineage fields without parsing a single payload (`parse::lineage_fields`).
+///
+/// The byte prefilter means the walk itself runs only on the lines carrying one of the two
+/// quoted keys, so a transcript with no background lane and no handoff pays the newline
+/// scan and two memmem passes and nothing else. The walk cannot fail the way a parse can -
+/// a torn line carries no top-level key - which is exactly why this pass contributes no
+/// malformed count: `list`'s `skipped_lines` keeps meaning the head/tail lines it read
+/// (R12), and `stats` stays the whole-file census authority.
+pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {
+    let mut out = LineageScan {
+        scanned: true,
+        ..LineageScan::default()
+    };
+    let Some(mmap) = crate::parse::mmap_bytes(path)? else {
+        return Ok(out);
+    };
+    let bytes: &[u8] = &mmap;
+    for (line_no, line) in bytes.split(|&b| b == b'\n').enumerate() {
+        if !crate::parse::line_has_lineage_key(line) {
+            continue;
+        }
+        let Some(f) = crate::parse::lineage_fields(line) else {
+            continue;
+        };
+        if f.is_empty() {
+            continue;
+        }
+        // 1-based, the coordinate every csift surface addresses a line by.
+        let n = line_no + 1;
+        if let Some(kind) = f.session_kind {
+            out.kinds.insert(kind);
+            out.first_line.get_or_insert(n);
+            out.last_line = Some(n);
+        }
+        // File order, so the LAST handoff line is the current child.
+        if let Some(child) = f.continued_in_session_id {
+            out.continued_in = Some(child);
+        }
+    }
+    Ok(out)
 }
 
 /// The `/clear` mint decision for ONE record: `Some(true)` when this record is the
