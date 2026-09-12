@@ -336,8 +336,11 @@ live/channel/      # the v0.11.0 CHANNEL. Data layer: types (message + closed en
                    #   gathered facts); deliver + deliver_plan + deliver_emit + hook_input +
                    #   recipe; msg (msg + ack); reach/ (facts, predict, peers, render) behind
                    #   whoami's lane sections, --to and --peers
-turns/             # `verbatim`: config, units, run, build, richness, select, planning
-                   #   (plan_session), render, scope, json
+turns/             # `verbatim`: config, units, run, build, richness, select (the keep/collapse
+                   #   decision, the fold placeholder + its previews, and the v0.12.3
+                   #   same-prefix re-send fold), cost (the render GEOMETRY + budget cost model
+                   #   the planner shares with the renderer - one list of lines per marker, so
+                   #   summed-cost == summed-emitted), planning (plan_session), render, scope, json
 image/             # refs (base64 probes), selection (#N), run, convert (transcode), render
 elicitation.rs     # transparent elicitation-sidecar merge (no subcommand)
 time_window.rs     # --since/--until parsing (shared by all WHEN consumers)

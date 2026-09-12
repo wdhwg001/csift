@@ -15584,7 +15584,7 @@
         },
         {
           "path": "src/turns/config.rs",
-          "lines": "56-60",
+          "lines": "60-64",
           "snippet": "// A genuine-user turn can own a LONG run of agent messages (a debugging/build chain the\n// model narrates step by step) that a compaction summary clips to its single \u00a79 EOT\n// quote. The reconstruction's job is to restore the LOAD-BEARING members of that run\n// without flooding the budget with pure \"let me look into this\" declarations. The model\n// keeps EVERY agent message on the slice (`TurnSlice.agents`) but SELECTS a survivor set."
         }
       ],
@@ -15685,7 +15685,7 @@
       "code": [
         {
           "path": "src/turns/config.rs",
-          "lines": "56-60",
+          "lines": "60-64",
           "snippet": "// A genuine-user turn can own a LONG run of agent messages (a debugging/build chain the\n// model narrates step by step) that a compaction summary clips to its single \u00a79 EOT\n// quote. The reconstruction's job is to restore the LOAD-BEARING members of that run\n// without flooding the budget with pure \"let me look into this\" declarations. The model\n// keeps EVERY agent message on the slice (`TurnSlice.agents`) but SELECTS a survivor set."
         }
       ],

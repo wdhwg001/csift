@@ -35,9 +35,13 @@ pub(crate) const NEWLINE_COST: usize = 1;
 /// the fold marker - its first [`COLLAPSED_PREVIEW_CHARS`] chars, so a reader can tell a
 /// substantive body from a "let me look" declaration without fetching the range. Sized above
 /// the pure-declaration band (`declaration_max_chars` 200 at the default profile, 240 at
-/// `light`) so a preview means "this was not a declaration"; the cost is bounded by design -
-/// on the installed hook's path (`--slices 4 --window 9000`) the two largest top-level
-/// transcripts of one corpus carried 2 and 3 fold markers in the whole four-slice document.
+/// `light`) so a preview means "this was not a declaration". A folded body is always BELOW
+/// `rich_min_chars` (a message at or above it is KEPT, not folded), so the widest band a
+/// preview can occupy is 210..`rich_min_chars`; in `Rich` mode the drop predicate's own
+/// `declaration_max_chars` bound leaves no band at all under the default profile. The cost is
+/// bounded by design - on the installed hook's path (`--slices 4 --window 9000`) the two
+/// largest top-level transcripts of one corpus carried 2 and 3 fold markers, and 0 preview
+/// lines, in the whole four-slice document.
 pub(crate) const COLLAPSED_PREVIEW_MIN_CHARS: usize = 210;
 
 /// How many chars of a collapsed message the preview line shows (via
