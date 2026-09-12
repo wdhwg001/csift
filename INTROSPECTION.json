@@ -91722,7 +91722,7 @@
         {
           "path": "src/session/render.rs",
           "snippet": "pub(crate) fn lane_line(s: &SessionSummary) -> String {",
-          "lines": "162"
+          "lines": "168"
         }
       ],
       "instrument": "Corpus: over every `*.jsonl` under the projects root, read each file as BYTES, split on `\\n` only, and count the lines whose `json.loads` yields a dict with `sessionKind` as a TOP-LEVEL key; report the total, the distinct values, the breakdown by the object's `type`, the number of files, the `version` histogram of the counted lines, and per file the first and last carrier's 1-based index among non-blank lines over that file's non-blank total - a file whose carrier count equals its non-blank total carries the key on every line, and one where it does not is the mixed shape the span exists for. Binary: in the build named by `verified_claude_code`, byte-count `sessionKind`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_SESSION_KIND:\"bg\"`, `sessionKind:Ij()` and `sessionKind:void 0`, and read every occurrence of the first two, sorting them into string-table entries, the one stamp, the one merge, the strippers, the readers and the telemetry sink. Version floor: byte-count `CLAUDE_CODE_SESSION_KIND:\"bg\"` in each cached native build.",

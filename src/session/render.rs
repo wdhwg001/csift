@@ -159,15 +159,16 @@ pub(crate) fn cleared_line(s: &SessionSummary) -> String {
 /// the reason there is none. The stamp is a per-PROCESS fact, so a transcript appended to by
 /// a foreground process after a background lane carries the key only over part of its lines -
 /// which is what the span answers and what no head/tail window can.
+///
+/// TWO arms, not three, and the missing third is unreachable rather than unhandled: this row
+/// prints only when some value was seen, and the whole-file pass reads a SUPERSET of the lines
+/// the head and tail windows read - so a `--lineage` run that saw a value has necessarily
+/// located its span. "Scanned but no carrier" is therefore a state with no row, and the only
+/// place it is visible is JSON, where `lineage_scanned` beside an empty `session_kind` says it.
 pub(crate) fn lane_line(s: &SessionSummary) -> String {
     let kinds = s.session_kind.join(", ");
-    match (
-        s.session_kind_first_line,
-        s.session_kind_last_line,
-        s.lineage_scanned,
-    ) {
-        (Some(a), Some(b), _) => format!("{kinds} on L{a}..L{b}"),
-        (_, _, true) => format!("{kinds} (no line carries the stamp over the whole file)"),
+    match (s.session_kind_first_line, s.session_kind_last_line) {
+        (Some(a), Some(b)) => format!("{kinds} on L{a}..L{b}"),
         _ => format!("{kinds} (seen in the head/tail windows; span needs --lineage)"),
     }
 }

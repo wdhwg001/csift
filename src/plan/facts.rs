@@ -243,6 +243,28 @@ mod tests {
     }
 
     #[test]
+    fn the_plan_reference_needle_is_selective_on_its_own() {
+        // The needle is pinned DIRECTLY rather than through the `&&` it guards. With the exact
+        // check behind it, a needle that admitted every line would still give the right answer
+        // and only cost a parse per line, so no consumer assertion can tell the two apart -
+        // only a direct one can. The job it does is real: it is what keeps the audit from
+        // running a record parse over every line of a 700 MB transcript.
+        assert!(line_mentions_plan_reference(
+            br#"{"attachment":{"type":"plan_file_reference"}}"#
+        ));
+        assert!(
+            !line_mentions_plan_reference(
+                br#"{"type":"user","message":{"role":"user","content":"hi"}}"#
+            ),
+            "an ordinary record must be skipped before the parse"
+        );
+        assert!(
+            !line_mentions_plan_reference(br#"{"attachment":{"type":"plan_mode"}}"#),
+            "the OTHER plan attachment is not this one"
+        );
+    }
+
+    #[test]
     fn a_torn_line_carrying_the_attachment_literal_is_not_a_plan_reference() {
         // The literal admitted the line; the attachment's own `type` is what decides, and a
         // line that does not parse has none.
