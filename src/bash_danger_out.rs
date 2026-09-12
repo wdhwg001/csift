@@ -42,11 +42,13 @@
 //! One divergence in the SAME function is left in place, recorded here rather than
 //! rediscovered: the `#` that opens a comment is admitted after `/[\s;&|()]/`,
 //! whose `\s` is the whole JavaScript whitespace class, while `mask` lists the four
-//! ASCII blanks. Over 20,000 randomized strings drawn from an alphabet carrying a
-//! vertical tab, a form feed, a no-break space and U+2028, the two disagree on
-//! 1,220. Closing it wants its own claim: neither `char::is_whitespace` nor the
-//! ASCII list is that class (the first adds U+0085 and drops U+FEFF), so the port
-//! is an explicit set, not a predicate.
+//! ASCII blanks. Over 48,880 DISTINCT randomized strings drawn from an alphabet
+//! carrying a vertical tab, a form feed, a no-break space and U+2028, the two
+//! disagree on 4,979, and every one of those carries a `#` - so the comment opener
+//! is the whole of it and the backslash rule above is clean on the same instrument.
+//! Closing it wants its own claim: neither `char::is_whitespace` nor the ASCII list
+//! is that class (the first adds U+0085 and drops U+FEFF), so the port is an
+//! explicit set, not a predicate.
 
 use crate::bash_danger_lexical::{
     amp_to_semicolon, escapes_next, mask, mask_specials, open_quote, paren_fixpoint,
