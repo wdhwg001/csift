@@ -63,6 +63,16 @@ use super::*;
         the mode's threshold; default 6; `--profile heavy` 4 / `light` 8). `all` keeps \
         every agent message. `--profile heavy|light` is the WHOLE tuning surface (per-knob \
         flags are gone).\n\n\
+        A SAME-PREFIX RE-SEND: when one turn carries two assistant messages and the LATER \
+        one's body CONTAINS the earlier one's whole body - the model re-sent its message with \
+        an addendum - the earlier renders as `△ L<n>  [superseded by the same-prefix re-send \
+        at L<m>, N chars]` instead of a second copy of the prose, and the survivor prints in \
+        full. CONTAINMENT is the test, not a shared opening: two messages routinely share a \
+        long boilerplate head and then say different things, and suppressing one of those \
+        would drop prose the survivor never carried. A body under 80 normalized chars is \
+        never folded this way. `--format json` still emits the superseded message's own \
+        object with its FULL text, plus `superseded_by_line` naming the survivor, so nothing \
+        is lost to a machine reader.\n\n\
         WHAT A FOLD DISCLOSES: the placeholder's `N chars` is the summed length of the \
         bodies it stands for, so the line says how much prose was folded and not only how \
         many messages. Each folded message of 210 chars or more is then shown as an \
@@ -176,7 +186,8 @@ use super::*;
           automation exists vs was rendered). Then one object PER emitted unit:\n  \
           {session_id, is_subagent, parent_session_id, turn_index, line_no, role, ts_utc,\n  \
           ts_local, tool_calls, full_chars, rendered_chars, truncated, elided_chars,\n  \
-          elided_lines, also_in_summary, compactions_before, survival, text, is_automation}\n  \
+          elided_lines, also_in_summary, compactions_before, survival, superseded_by_line,\n  \
+          text, is_automation}\n  \
           (is_subagent\n  \
           flags a bare-hex subagent unit; re-feed parent_session_id, never the bare session_id;\n  \
           `survival` is `live`, or `pre-cut` for a unit ABOVE a compaction cut Claude Code's\n  \

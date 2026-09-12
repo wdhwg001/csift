@@ -82,6 +82,7 @@ use crate::timez::{format_timestamp, local_iso};
 
 mod build;
 mod config;
+mod cost;
 mod json;
 mod planning;
 mod render;
@@ -93,6 +94,7 @@ mod units;
 
 pub(crate) use build::*;
 pub(crate) use config::*;
+pub(crate) use cost::*;
 pub(crate) use json::*;
 pub(crate) use planning::*;
 pub(crate) use render::*;

@@ -487,6 +487,7 @@ pub(crate) fn render_turn_text(
                     emit(line);
                 }
             }
+            AgentRender::Superseded { msg, by_line } => emit(superseded_line(msg, by_line)),
         }
     }
 }

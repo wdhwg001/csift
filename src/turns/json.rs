@@ -124,16 +124,21 @@ pub(crate) fn render_json(
             );
 
             if let Some(u) = shown_user(turn, sel.sides) {
-                emit_unit_json(sr, turn, u, &mut out_blob)?;
+                emit_unit_json(sr, turn, u, None, &mut out_blob)?;
             }
             // The assistant lane: one object per KEPT agent message, plus a
             // `collapsed_agents` placeholder object per contiguous dropped span (carrying
-            // X/Y/Z + the fetchable line range), in ascending agent order.
+            // X/Y/Z + the fetchable line range), in ascending agent order. A SUPERSEDED
+            // message keeps its full object (JSON loses nothing the text render folds) and
+            // carries `superseded_by_line`.
             for entry in shown_agent_lane(turn, sel.sides, &ctx.cfg) {
                 match entry {
-                    AgentRender::Kept(a) => emit_unit_json(sr, turn, &a.unit, &mut out_blob)?,
+                    AgentRender::Kept(a) => emit_unit_json(sr, turn, &a.unit, None, &mut out_blob)?,
                     AgentRender::Placeholder(s) => {
                         emit_placeholder_json(sr, turn, &s, &mut out_blob)?
+                    }
+                    AgentRender::Superseded { msg, by_line } => {
+                        emit_unit_json(sr, turn, &msg.unit, Some(by_line), &mut out_blob)?
                     }
                 }
             }
@@ -163,11 +168,14 @@ pub(crate) fn render_json(
 
 /// Emit one unit as a JSON object. The `text` field is ALWAYS the full verbatim
 /// message (json is for machines that do their own windowing); the truncation metadata
-/// describes what the TEXT render would show.
+/// describes what the TEXT render would show. `superseded_by` names the LATER message whose
+/// body carries this one's whole text, when the text render replaced this unit with the
+/// same-prefix re-send marker - the JSON row still carries the prose in full.
 pub(crate) fn emit_unit_json(
     sr: &ScanResult,
     turn: &TurnSlice,
     unit: &TurnUnit,
+    superseded_by: Option<usize>,
     out_blob: &mut String,
 ) -> Result<()> {
     use serde_json::json;
@@ -200,6 +208,9 @@ pub(crate) fn emit_unit_json(
         // stops at (csift keeps reconstructing across it - that is the command's purpose).
         // A unit is never `abandoned`: those turns are counted in the summary, not replayed.
         "survival": unit.survival,
+        // The jsonl line of the LATER message that re-sent this one's whole body (the text
+        // render shows a one-line marker in its place); null on every ordinary unit.
+        "superseded_by_line": superseded_by,
         "text": unit.text,
     });
     // STRUCTURED automation attribution on a USER segment: a machine pulse opener carries

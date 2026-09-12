@@ -15809,8 +15809,8 @@
           "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
-          "path": "src/turns/select.rs",
-          "lines": "351",
+          "path": "src/turns/cost.rs",
+          "lines": "92",
           "snippet": "pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {"
         }
       ],
@@ -16854,8 +16854,8 @@
           "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
-          "path": "src/turns/select.rs",
-          "lines": "348-350",
+          "path": "src/turns/cost.rs",
+          "lines": "89-91",
           "snippet": "/// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing\n/// newline). The renderer and the budget reservation both call this so the reserved\n/// banner length is byte-for-byte what is emitted."
         }
       ],
@@ -19585,7 +19585,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "774-779",
+          "lines": "775-780",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19809,7 +19809,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2139",
+          "lines": "2142",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20051,12 +20051,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "772",
+          "lines": "773",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "781-782",
+          "lines": "782-783",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -20991,12 +20991,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "738",
+          "lines": "739",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "760",
+          "lines": "761",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21167,12 +21167,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "738",
+          "lines": "739",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "760",
+          "lines": "761",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21355,7 +21355,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "804",
+          "lines": "805",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21622,12 +21622,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "740",
+          "lines": "741",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "804",
+          "lines": "805",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21719,12 +21719,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "488",
+          "lines": "489",
           "snippet": "- Slicing (hook injection, \u226410000-char cap): `--slices N --slice i --window W` = fixed-fleet chunks, whole turns; out-of-range \u21d2 nothing, exit 0 (hook affordance). Text-only."
         },
         {
           "path": "SKILL.md",
-          "lines": "740",
+          "lines": "741",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -21734,7 +21734,7 @@
         },
         {
           "path": "src/cli/verbatim_whoami_args.rs",
-          "lines": "334-337",
+          "lines": "345-348",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
         },
         {
@@ -36698,7 +36698,7 @@
       "code": [
         {
           "path": "src/cli/verbatim_whoami_args.rs",
-          "lines": "334-337",
+          "lines": "345-348",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
         },
         {
@@ -38459,12 +38459,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "732",
+          "lines": "733",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "740",
+          "lines": "741",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -91359,6 +91359,50 @@
           "observed": "47 lines carry the key across 27 files: 45 `user-rejected` and 2 `interrupted`, with no `cancelled` and no `permission-rule` locally. Beside the 45, `toolUseResult` is the bare `User rejected tool use` on 34 and an `Error: ...` body on the remaining 11.",
           "rule": "one line per occurrence of the key, grouped by value; files counted by distinct path",
           "note": "Lands with the record field and its two surfaces. The two unobserved values are recorded as residue rather than asserted from the corpus."
+        }
+      ]
+    },
+    {
+      "id": "MSG-095",
+      "area": "messaging",
+      "behavior": "A Stop hook exiting 2 injects its stderr into the transcript as an isMeta `type:\"user\"` record opening `Stop hook feedback:` (CLS-016 for the shape, MSG-017 for the exit-2 vehicle), and the record lands INSIDE the turn it blocked rather than opening one. What Claude Code 2.1.258 does NOT do is make the model re-send the message the feedback interrupted: over every `^Stop hook feedback` record of one projects root (36 records across 12 of 80 top-level transcripts), 30 have their nearest assistant neighbours in the SAME turn, and 0 of those 30 pairs share 20 or more leading chars of their whitespace-collapsed lowercased bodies - 29 of the 30 share none, the remaining one shares 4. The assistant message after the feedback is new prose, not a repetition with an addendum. Independently, the same-turn assistant pairs that DO share a long prefix carry no such record between them: 76 pairs (53 at the full 80-char width) over 6,468 turns and 35,052 assistant messages, 0 with a `^Stop hook feedback` record between the two lines.",
+      "depends": "`verbatim`'s fold for a repeated message is named and predicated on what it can MATCH - a later assistant message in the same turn whose body CONTAINS an earlier one's whole body - and never on the presence of a feedback record, which would make it fire on nothing. The marker therefore reads `superseded by the same-prefix re-send`, not by a Stop hook: attributing the fold to that producer would be a story the measurement refutes, and a later build that did start producing re-sends would be credited for behaviour csift had already claimed. The containment predicate is what the second count forces: 52 of the 53 full-width pairs are not duplicates (1 identical, 25 diverging before char 120, 22 with a SHORTER later member), so a fold keyed on prefix equality alone would suppress prose the survivor does not carry.",
+      "code": [
+        {
+          "path": "src/turns/select.rs",
+          "lines": "252",
+          "snippet": "pub(crate) fn mark_resends(lane: &mut [AgentRender<'_>]) {"
+        },
+        {
+          "path": "src/turns/select.rs",
+          "lines": "305-309",
+          "snippet": "pub(crate) fn superseded_line(msg: &AgentMsg, by_line: usize) -> String {\n    format!(\n        \"\u25b3 L{}  [superseded by the same-prefix re-send at L{by_line}, {} chars]\",\n        msg.unit.line_no, msg.unit.full_chars\n    )"
+        }
+      ],
+      "instrument": "`csift search '^Stop hook feedback' --no-subagents --format json` over a projects root gives every such record's transcript id and line; `csift verbatim <file> --budget 100000000 --agent-msgs all --format json --no-subagents` per top-level transcript gives every assistant message with its turn index, line and text. Counting rule for the first figure: per feedback record take the nearest assistant message before it and the nearest after, keep the pairs whose two members share a turn index, and report the longest common prefix of their whitespace-collapsed lowercased texts. Counting rule for the second: within one (transcript, turn index), group assistant messages by the first 80 chars of that same normalization, count one pair per earlier member against the group's LAST member, and test whether any feedback record's line of that transcript lies strictly between the two lines. Neither figure reads transcript content; both are counts.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 6 v0.12.3 ledger"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "upstream",
+      "specimen": "observed",
+      "attribution": "upstream",
+      "upstream_reason": "What the model writes after receiving hook feedback is produced on the model API side, not in the shipped binary: the binary's part - injecting the stderr as an isMeta `Stop hook feedback:` record inside the blocked turn - is the traced half (CLS-016, MSG-017), and what the next assistant record CONTAINS is the model's own choice. The client-side treatment of that choice is what csift fixes here: the fold reads the records it can see, matching a later body that contains an earlier one, and asserts nothing about why the two look alike.",
+      "open_legs": [
+        "What the model writes after receiving hook feedback is decided outside the shipped binary, so the absence is bounded by the hooks this corpus ran. A live trial closes it: arm a Stop hook that exits 2 on a turn whose final message is several hundred chars, then read the two assistant records around the injected feedback with `csift show <target> --turn -1..` and compare their leading whitespace-collapsed chars."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.3",
+          "date": "2026-09-12",
+          "verdict": "holds",
+          "instrument": "`csift search '^Stop hook feedback' --no-subagents --format json` over one projects root, plus `csift verbatim <file> --budget 100000000 --agent-msgs all --format json --no-subagents` for each of its 80 top-level transcripts, joined in a script that (a) pairs each feedback record with its nearest assistant neighbour on each side and reports their longest common normalized prefix, and (b) groups same-turn assistant messages by their first 80 normalized chars and asks whether a feedback line sits between the members.",
+          "observed": "36 feedback records in 12 transcripts; 30 have both neighbours in the same turn; longest common normalized prefix over those 30: 29 at 0 chars, 1 at 4 chars, 0 at 20 or more. Same-prefix same-turn pairs over 6,468 turns / 35,052 assistant messages: 76 total, 53 at the full 80-char width, 0 with a feedback record between the two lines. Divergence within the 53: 1 identical, 25 with a common prefix under 120 chars, 22 whose later member is shorter.",
+          "rule": "One row per feedback record for the first figure and one row per (earlier member, group's last member) pair for the second; a pair counts only when both members carry the same turn index; prefixes are compared after collapsing every whitespace run to one space, trimming and lowercasing.",
+          "note": "The measurement is what fixed the fold's name and its predicate: the marker says same-prefix re-send rather than Stop-hook re-send, and containment rather than prefix equality is required."
         }
       ]
     }

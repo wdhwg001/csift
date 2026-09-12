@@ -3,8 +3,9 @@
 use super::*;
 
 /// Count selected user + assistant UNITS in a plan (an assistant unit = one KEPT agent
-/// message; collapsed placeholders are not units). With the richness model a turn's
-/// assistant side can contribute more than one kept message, so this walks the lane.
+/// message; neither a collapsed placeholder nor a superseded same-prefix re-send is a unit -
+/// neither prints a body). With the richness model a turn's assistant side can contribute more
+/// than one kept message, so this walks the lane.
 pub(crate) fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usize) {
     let mut u = 0;
     let mut a = 0;

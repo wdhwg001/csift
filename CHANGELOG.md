@@ -21,6 +21,22 @@ surface change bumps the PATCH.
   ask for it; `show --turn` is a window rather than an address, so it keeps the cap and
   reports null too. `excerpt` and `show`'s `text` keep their exact bytes in every mode.
 
+
+- **`verbatim` folds a same-prefix re-send.** When one turn carries two assistant messages and
+  the LATER one's body contains the earlier one's whole body - a re-send with an addendum - the
+  text render prints the earlier as `△ L<n>  [superseded by the same-prefix re-send at L<m>, N
+  chars]` instead of a second copy of the prose, and the JSON row keeps the full text with
+  `superseded_by_line` set, so a machine reader loses nothing. CONTAINMENT is the predicate, and
+  that is measured, not stylistic: over every top-level transcript of one corpus (80 files,
+  6,468 turns, 35,052 assistant messages) 53 same-turn pairs shared their first 80 normalized
+  chars, but only 1 was a true duplicate, 25 diverged before char 120, and on 22 the later
+  member was SHORTER - so a fold keyed on the 80-char prefix alone would have dropped prose the
+  survivor never said. Under containment the same corpus yields 2 folds. The name follows the
+  same discipline (claim MSG-095): the shape that motivated the rule is a Stop hook exiting 2,
+  but none of that corpus's 36 `Stop hook feedback:` records produced a same-prefix pair (their
+  neighbouring assistant messages share 0 to 4 normalized chars; 0 of the 30 same-turn pairs
+  reach 20), and no same-prefix pair has one between its members - so the marker names what it
+  matched, not a producer it cannot attribute.
 - **`verbatim`'s fold marker says what it folded.** A collapsed run of agent messages
   rendered `[X agent message(s), Y tool call(s)]` - counts, with no way to tell a folded
   finding from a folded "let me look into this" without fetching the range. The marker is now

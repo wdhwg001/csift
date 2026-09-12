@@ -1,5 +1,6 @@
 mod artifacts;
 mod budget;
+mod fold;
 mod render;
 mod selection;
 mod slices;

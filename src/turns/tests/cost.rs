@@ -229,6 +229,10 @@ fn cost_invariant_holds_with_placeholders_under_rich_and_all() {
                         emitted.push('\n');
                     }
                 }
+                AgentRender::Superseded { msg, by_line } => {
+                    emitted.push_str(&superseded_line(msg, by_line));
+                    emitted.push('\n');
+                }
             }
         }
         assert_eq!(
@@ -280,6 +284,10 @@ fn cost_invariant_holds_when_a_fold_carries_preview_lines() {
                     emitted.push_str(&line);
                     emitted.push('\n');
                 }
+            }
+            AgentRender::Superseded { msg, by_line } => {
+                emitted.push_str(&superseded_line(msg, by_line));
+                emitted.push('\n');
             }
         }
     }
