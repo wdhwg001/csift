@@ -453,4 +453,5 @@ fn empty_out_never_clobbers_or_lies() {
     assert!(!written.is_empty(), "written artifact is empty");
 }
 
+mod body;
 mod survival;
