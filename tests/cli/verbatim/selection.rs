@@ -316,6 +316,88 @@ fn turns_agent_msgs_rich_placeholder_range_is_fetchable_and_attributed() {
     assert!(first <= last && first > 0, "a fetchable jsonl line range");
 }
 
+/// A session whose ONE turn folds two agent messages - a 12-char opener and a 240-char
+/// signal-free middle - while a 400-char last message wins the longest-privilege and is kept.
+/// The 240-char member is over the preview threshold, the 12-char one is under it.
+fn fold_preview_home() -> (Home, &'static str) {
+    let sess = "3e3e3e3e-4f4f-4a4a-8b8b-5c5c5c5c5c5c";
+    let middle = format!("MIDBODY {} MIDTAIL", "x".repeat(224));
+    let last = format!("ANSWERHEAD {} ANSWERTAIL", "y".repeat(378));
+    assert_eq!(middle.chars().count(), 240);
+    assert_eq!(last.chars().count(), 400);
+    let lines = [
+        r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued."}}"#.to_string(),
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"kick off the fold"}}"#.to_string(),
+        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"brief opener"}]}}"#.to_string(),
+        format!(
+            r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:02.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"{middle}"}}]}}}}"#
+        ),
+        format!(
+            r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"{last}"}}]}}}}"#
+        ),
+    ];
+    let h = Home::new();
+    h.write(&format!("{ENC}/{sess}.jsonl"), &(lines.join("\n") + "\n"));
+    (h, sess)
+}
+
+#[test]
+fn turns_fold_marker_names_the_chars_and_previews_the_substantive_bodies() {
+    // The fold used to say only HOW MANY messages it swallowed. It now names the summed chars
+    // and shows the head of every collapsed message at or above 210 chars, so a reader can
+    // tell a folded finding from a folded "let me look" without fetching the range.
+    let (h, sess) = fold_preview_home();
+    let text = h.run(&["verbatim", at(sess).as_str(), "--budget", "40000"]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    // The opener (L3) and the middle (L4) fold together: 12 + 240 = 252 chars, 0 tool calls.
+    assert!(
+        text.stdout
+            .contains("△ L3–L4  [2 agent messages collapsed, 252 chars, 0 tool calls]"),
+        "the fold marker must name X, N chars and Y:\n{}",
+        text.stdout
+    );
+    // ONE preview line, for the 240-char member only, indented under the marker and stating
+    // its own remainder (240 - 60 = 180).
+    let preview = format!("    L4  MIDBODY {}… (+180 chars)", "x".repeat(52));
+    assert!(
+        text.stdout.contains(&preview),
+        "the 240-char folded body earns a preview line:\n{}",
+        text.stdout
+    );
+    assert!(
+        !text.stdout.contains("    L3  brief opener"),
+        "a 12-char folded body is under the threshold and earns none:\n{}",
+        text.stdout
+    );
+    // The kept longest message is still whole.
+    assert!(text.stdout.contains("ANSWERHEAD") && text.stdout.contains("ANSWERTAIL"));
+
+    // JSON twin: collapsed_chars + one collapsed_previews entry.
+    let json = h.run(&[
+        "verbatim",
+        at(sess).as_str(),
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let ph = json_rows(&json.stdout, "collapsed_agents")
+        .into_iter()
+        .next()
+        .expect("a collapsed_agents row");
+    assert_eq!(ph["agent_messages"].as_u64().unwrap(), 2);
+    assert_eq!(ph["collapsed_chars"].as_u64().unwrap(), 252);
+    let previews = ph["collapsed_previews"].as_array().expect("an array");
+    assert_eq!(previews.len(), 1, "only the substantive member: {ph}");
+    assert_eq!(previews[0]["line"].as_u64().unwrap(), 4);
+    let ex = previews[0]["excerpt"].as_str().unwrap();
+    assert!(
+        ex.starts_with("MIDBODY ") && ex.ends_with("… (+180 chars)"),
+        "{ex}"
+    );
+}
+
 #[test]
 fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
     // `--agent-msgs all` emits every agent message of the long run, no placeholder.
@@ -337,9 +419,9 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
         all.stdout
     );
     assert!(all.stdout.contains("AGENTRICHFIRST") && all.stdout.contains("AGENTEOT"));
-    // No collapsed-agents placeholder line.
+    // No collapsed-agents placeholder line (the fold marker's own `collapsed,` clause).
     assert!(
-        !all.stdout.contains("agent messages]") && !all.stdout.contains("agent message]"),
+        !all.stdout.contains(" collapsed, "),
         "all mode emits no placeholder: {}",
         all.stdout
     );

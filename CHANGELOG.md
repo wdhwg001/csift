@@ -21,6 +21,22 @@ surface change bumps the PATCH.
   ask for it; `show --turn` is a window rather than an address, so it keeps the cap and
   reports null too. `excerpt` and `show`'s `text` keep their exact bytes in every mode.
 
+- **`verbatim`'s fold marker says what it folded.** A collapsed run of agent messages
+  rendered `[X agent message(s), Y tool call(s)]` - counts, with no way to tell a folded
+  finding from a folded "let me look into this" without fetching the range. The marker is now
+  `[X agent message(s) collapsed, N chars, Y tool call(s)]` (N = the summed `full_chars` of the
+  collapsed bodies, so the line says how much prose it stands for), and every collapsed message
+  of at least 210 chars is followed by an indented `L<n>  <first 60 chars>… (+K chars)` preview
+  line - above the pure-declaration band, so a preview means "this was not a declaration". JSON
+  `collapsed_agents` rows gain `collapsed_chars` and `collapsed_previews[]`. The budget charges
+  exactly the lines emitted: the renderer and the cost model both walk one
+  `agent_placeholder_lines` list. Cost on the installed hook's path (`--slices 4 --window
+  9000`), measured on the two largest top-level transcripts of one corpus: 2 and 3 fold markers
+  in the whole four-slice document, 0 preview lines (every folded body there is under the
+  threshold), and +41 / +61 chars from the `N chars` clause on a ~24,700-char document. Over a
+  WHOLE session at an unbounded budget, 42 of 1,224 and 212 of 1,759 folded messages reach the
+  threshold.
+
 ### Fixed
 
 - **`verbatim`'s `L lines elided` note counts the cut, not the message.** The figure was the

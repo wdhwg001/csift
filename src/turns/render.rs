@@ -482,7 +482,11 @@ pub(crate) fn render_turn_text(
     for entry in shown_agent_lane(turn, sides, cfg) {
         match entry {
             AgentRender::Kept(a) => emit_unit_text(&a.unit, cap_override, emit),
-            AgentRender::Placeholder(s) => emit(agent_placeholder_line(&s)),
+            AgentRender::Placeholder(s) => {
+                for line in agent_placeholder_lines(&s) {
+                    emit(line);
+                }
+            }
         }
     }
 }

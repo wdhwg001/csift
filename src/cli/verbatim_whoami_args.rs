@@ -51,16 +51,27 @@ use super::*;
         A body csift COMPOSED rather than read - an AskUserQuestion question+answer scaffold, an \
         automation attribution label, a peer-message preview - prints no line note at all, \
         because the record's own newlines sit nowhere inside it.\n\n\
-        AGENT MESSAGES (`--agent-msgs`, default `eot-only` = non-breaking): a single \
-        genuine-user turn can own a LONG run of agent messages (a debugging/build chain \
-        the model narrates) that the summary clips to one §9 quote. `eot-only` restores \
-        just the last (today's behavior). `rich` ALSO restores the first/middle messages \
-        that carry important info: a count, a commit hash, a `file.rs:NNN` ref, backtick \
-        code, or a finding/decision lexeme, or that are clearly long, collapsing pure \
-        \"let me look into this\" declarations into a `△ L… [X agent messages, Y tool \
-        calls, Z failed]` placeholder (only on runs longer than the mode's threshold; \
-        default 6; `--profile heavy` 4 / `light` 8). `all` keeps every agent message. \
-        `--profile heavy|light` is the WHOLE tuning surface (per-knob flags are gone).\n\n\
+        AGENT MESSAGES (`--agent-msgs`, default `longest`): a single genuine-user turn can \
+        own a LONG run of agent messages (a debugging/build chain the model narrates) that \
+        the summary clips to one §9 quote. `longest` keeps the longest message of the run \
+        plus the first when substantive plus each rich middle. `eot-only` restores just the \
+        last (the pre-expansion single-EOT output). `rich` ALSO restores the first/middle \
+        messages that carry important info: a count, a commit hash, a `file.rs:NNN` ref, \
+        backtick code, or a finding/decision lexeme, or that are clearly long, collapsing \
+        pure \"let me look into this\" declarations into a `△ L… [X agent messages \
+        collapsed, N chars, Y tool calls, Z failed]` placeholder (only on runs longer than \
+        the mode's threshold; default 6; `--profile heavy` 4 / `light` 8). `all` keeps \
+        every agent message. `--profile heavy|light` is the WHOLE tuning surface (per-knob \
+        flags are gone).\n\n\
+        WHAT A FOLD DISCLOSES: the placeholder's `N chars` is the summed length of the \
+        bodies it stands for, so the line says how much prose was folded and not only how \
+        many messages. Each folded message of 210 chars or more is then shown as an \
+        indented `L<n>  <its first 60 chars>… (+K chars)` line under the marker - enough to \
+        tell a folded finding from a folded declaration without fetching the range, and \
+        bounded by construction: 210 sits above the pure-declaration band, and a message at \
+        or above the rich threshold is KEPT rather than folded, so only the band between \
+        them can ever carry a preview. The fetchable range is still the marker's own \
+        `L{first}–L{last}` (JSON carries `refetch`).\n\n\
         THE SURVIVAL AXIS: only LIVE turns are replayed - the turns Claude Code's own \
         conversation chain still reaches. A turn the operator rewound past, or a prompt \
         recalled and re-typed, is COUNTED in a per-session `abandoned  N turn(s) off the \
@@ -174,7 +185,9 @@ use super::*;
           an automation USER unit additionally\n  \
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
-          {kind:\"compaction_boundary\", line, summary_chars, mode} / {kind:\"collapsed_agents\",…};\n  \
+          {kind:\"compaction_boundary\", line, summary_chars, mode} / {kind:\"collapsed_agents\",\n  \
+          agent_messages, tool_calls, failed, first_line, last_line, collapsed_chars,\n  \
+          collapsed_previews[{line, excerpt}], refetch};\n  \
           a summarize-mode boundary also names its gesture in the text banner\n  \
           (`… summary at L<n> · summarize <direction> · …`) - a `/rewind` summarize IS a\n  \
           compaction, so the turns it clipped are reconstructed exactly like any other's;\n  \

@@ -31,6 +31,19 @@ pub(crate) const USER_HEAD_FRAC: f64 = 0.60;
 /// pays for it - charging it is what makes the summed cost equal the real emitted length.
 pub(crate) const NEWLINE_COST: usize = 1;
 
+/// A collapsed agent message at or above this many `full_chars` earns a PREVIEW line under
+/// the fold marker - its first [`COLLAPSED_PREVIEW_CHARS`] chars, so a reader can tell a
+/// substantive body from a "let me look" declaration without fetching the range. Sized above
+/// the pure-declaration band (`declaration_max_chars` 200 at the default profile, 240 at
+/// `light`) so a preview means "this was not a declaration"; the cost is bounded by design -
+/// on the installed hook's path (`--slices 4 --window 9000`) the two largest top-level
+/// transcripts of one corpus carried 2 and 3 fold markers in the whole four-slice document.
+pub(crate) const COLLAPSED_PREVIEW_MIN_CHARS: usize = 210;
+
+/// How many chars of a collapsed message the preview line shows (via
+/// `text::truncate_excerpt`, so the line discloses its own elision as `… (+N chars)`).
+pub(crate) const COLLAPSED_PREVIEW_CHARS: usize = 60;
+
 /// Normalized-prefix length used for the summary-dedup fingerprint (§6.2): a unit whose
 /// first `DEDUP_PREFIX` normalized chars match a summary bullet/quote is flagged
 /// `also_in_summary` and demoted. Strict (long) prefix ⇒ a false positive is unlikely.

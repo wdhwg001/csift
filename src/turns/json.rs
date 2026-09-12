@@ -261,6 +261,14 @@ pub(crate) fn emit_placeholder_json(
         "failed": span.failed,
         "first_line": span.first_line,
         "last_line": span.last_line,
+        // WHAT the fold stood for: the summed `full_chars` of the collapsed bodies, and one
+        // head excerpt per collapsed message that reached the preview threshold (the machine
+        // twin of the indented `L<n>  <excerpt>` lines under the text marker).
+        "collapsed_chars": span.chars,
+        "collapsed_previews": span.previews.iter().map(|p| json!({
+            "line": p.line,
+            "excerpt": p.excerpt,
+        })).collect::<Vec<_>>(),
         "compactions_before": turn.compactions_before,
         // Ready-to-run fetch of the collapsed span, addressed at the OWNING transcript.
         "refetch": if span.first_line == span.last_line {

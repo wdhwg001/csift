@@ -269,43 +269,100 @@ fn emit_unit_text_non_dup_has_no_flag() {
     assert!(lines[0].starts_with("▽ L3"));
 }
 
+/// A [`PlaceholderSpan`] with the X/Y/Z counts, the line range, the folded char total and no
+/// previews - the shape the marker-wording tests exercise.
+fn span(
+    messages: usize,
+    tool_calls: usize,
+    failed: usize,
+    first_line: usize,
+    last_line: usize,
+    chars: usize,
+) -> PlaceholderSpan {
+    PlaceholderSpan {
+        messages,
+        tool_calls,
+        failed,
+        first_line,
+        last_line,
+        chars,
+        previews: Vec::new(),
+    }
+}
+
 #[test]
 fn agent_placeholder_line_pluralizes_each_noun_independently() {
-    // X==1 → "1 agent message" + single L{n} (no dash); Y==0 shown; Z==0 omitted.
-    let one = PlaceholderSpan {
-        messages: 1,
-        tool_calls: 0,
-        failed: 0,
-        first_line: 42,
-        last_line: 42,
-    };
+    // X==1 → "1 agent message" + single L{n} (no dash); Y==0 shown; Z==0 omitted; N is the
+    // summed chars of the collapsed bodies.
+    let one = span(1, 0, 0, 42, 42, 137);
     assert_eq!(
         agent_placeholder_line(&one),
-        "△ L42  [1 agent message, 0 tool calls]"
+        "△ L42  [1 agent message collapsed, 137 chars, 0 tool calls]"
     );
     // X>1 → range with a dash; Y>1 plural; Z>0 included, "failed" not pluralized.
-    let many = PlaceholderSpan {
-        messages: 3,
-        tool_calls: 4,
-        failed: 2,
-        first_line: 10,
-        last_line: 20,
-    };
+    let many = span(3, 4, 2, 10, 20, 512);
     assert_eq!(
         agent_placeholder_line(&many),
-        "△ L10–L20  [3 agent messages, 4 tool calls, 2 failed]"
+        "△ L10–L20  [3 agent messages collapsed, 512 chars, 4 tool calls, 2 failed]"
     );
     // Z==1 → "1 failed" (adjective, not "1 faileds").
-    let one_fail = PlaceholderSpan {
-        messages: 2,
-        tool_calls: 1,
-        failed: 1,
-        first_line: 5,
-        last_line: 9,
-    };
+    let one_fail = span(2, 1, 1, 5, 9, 64);
     assert_eq!(
         agent_placeholder_line(&one_fail),
-        "△ L5–L9  [2 agent messages, 1 tool call, 1 failed]"
+        "△ L5–L9  [2 agent messages collapsed, 64 chars, 1 tool call, 1 failed]"
+    );
+}
+
+#[test]
+fn a_fold_previews_only_its_substantive_members() {
+    // The preview gate is `full_chars >= COLLAPSED_PREVIEW_MIN_CHARS` (210): 209 chars earns
+    // none, 210 earns one. The excerpt is the first 60 chars and states its own remainder.
+    let under = unit(Role::Assistant, 11, &body_chars("SHORT", 209), 0);
+    assert_eq!(under.full_chars, 209);
+    assert!(collapsed_preview(&under).is_none());
+
+    let over = unit(Role::Assistant, 12, &body_chars("LONG", 210), 0);
+    assert_eq!(over.full_chars, 210);
+    let p = collapsed_preview(&over).expect("a preview at the threshold");
+    assert_eq!(p.line, 12);
+    assert_eq!(
+        p.excerpt.chars().count(),
+        60 + "… (+150 chars)".chars().count()
+    );
+    assert!(p.excerpt.contains("… (+150 chars)"), "{}", p.excerpt);
+    assert_eq!(
+        collapsed_preview_line(&p),
+        format!("    L12  {}", p.excerpt)
+    );
+}
+
+#[test]
+fn a_fold_marker_and_its_preview_lines_are_what_the_cost_charges() {
+    // `agent_placeholder_lines` is the ONE list the renderer emits and the cost model charges,
+    // so the two can never disagree: marker first, then one preview per substantive member.
+    let mut s = span(2, 3, 0, 7, 9, 430);
+    s.previews = vec![
+        CollapsedPreview {
+            line: 7,
+            excerpt: "first collapsed head".to_string(),
+        },
+        CollapsedPreview {
+            line: 9,
+            excerpt: "second collapsed head".to_string(),
+        },
+    ];
+    let lines = agent_placeholder_lines(&s);
+    assert_eq!(lines.len(), 3, "marker + two previews: {lines:?}");
+    assert_eq!(lines[0], agent_placeholder_line(&s));
+    assert_eq!(lines[1], "    L7  first collapsed head");
+    assert_eq!(lines[2], "    L9  second collapsed head");
+    let emitted: usize = lines.iter().map(|l| l.chars().count() + 1).sum();
+    assert_eq!(agent_placeholder_cost(&s), emitted);
+    // With no previews the cost is the marker line alone.
+    let bare = span(2, 3, 0, 7, 9, 430);
+    assert_eq!(
+        agent_placeholder_cost(&bare),
+        agent_placeholder_line(&bare).chars().count() + 1
     );
 }
 
@@ -354,4 +411,8 @@ fn placeholder_attribution_sums_per_message_tool_and_failed() {
     );
     assert_eq!(span.first_line, 20);
     assert_eq!(span.last_line, 70);
+    // N sums the collapsed bodies' own char counts ("let me a".."let me f", 8 chars each).
+    assert_eq!(span.chars, 6 * "let me a".chars().count());
+    // All six are far under the preview threshold, so the fold previews nothing.
+    assert!(span.previews.is_empty(), "{:?}", span.previews);
 }

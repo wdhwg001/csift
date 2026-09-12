@@ -224,8 +224,10 @@ fn cost_invariant_holds_with_placeholders_under_rich_and_all() {
                     emitted.push('\n');
                 }),
                 AgentRender::Placeholder(s) => {
-                    emitted.push_str(&agent_placeholder_line(&s));
-                    emitted.push('\n');
+                    for line in agent_placeholder_lines(&s) {
+                        emitted.push_str(&line);
+                        emitted.push('\n');
+                    }
                 }
             }
         }
@@ -236,6 +238,52 @@ fn cost_invariant_holds_with_placeholders_under_rich_and_all() {
             c.mode
         );
     }
+}
+
+#[test]
+fn cost_invariant_holds_when_a_fold_carries_preview_lines() {
+    // The DEFAULT `longest` mode collapses a signal-free middle under `rich_min_chars` (280),
+    // so a 240-char middle is folded AND long enough to earn a preview line: the invariant has
+    // to hold with the extra lines charged, not only with a bare marker.
+    let long_middle = body_chars("MIDDLE", 240);
+    // The last message must be the LONGEST (else the 240-char middle wins that privilege and
+    // is kept instead of folded).
+    let longest_last = body_chars("ANSWER", 400);
+    let t = mk_turn_agents(
+        0,
+        Some("ask"),
+        &["a short opener", &long_middle, &longest_last],
+        0,
+    );
+    let c = longest_cfg();
+    let lane = select_agent_messages(&t, &c);
+    let previews: usize = lane
+        .iter()
+        .filter_map(|r| match r {
+            AgentRender::Placeholder(s) => Some(s.previews.len()),
+            _ => None,
+        })
+        .sum();
+    assert!(
+        previews >= 1,
+        "the 240-char middle earns a preview: {lane:?}"
+    );
+    let mut emitted = String::new();
+    for entry in lane {
+        match entry {
+            AgentRender::Kept(a) => emit_unit_text(&a.unit, None, &mut |s| {
+                emitted.push_str(&s);
+                emitted.push('\n');
+            }),
+            AgentRender::Placeholder(s) => {
+                for line in agent_placeholder_lines(&s) {
+                    emitted.push_str(&line);
+                    emitted.push('\n');
+                }
+            }
+        }
+    }
+    assert_eq!(emitted.chars().count(), assistant_lane_cost(&t, &c));
 }
 
 #[test]

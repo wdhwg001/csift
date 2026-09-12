@@ -15584,7 +15584,7 @@
         },
         {
           "path": "src/turns/config.rs",
-          "lines": "43-47",
+          "lines": "56-60",
           "snippet": "// A genuine-user turn can own a LONG run of agent messages (a debugging/build chain the\n// model narrates step by step) that a compaction summary clips to its single \u00a79 EOT\n// quote. The reconstruction's job is to restore the LOAD-BEARING members of that run\n// without flooding the budget with pure \"let me look into this\" declarations. The model\n// keeps EVERY agent message on the slice (`TurnSlice.agents`) but SELECTS a survivor set."
         }
       ],
@@ -15685,7 +15685,7 @@
       "code": [
         {
           "path": "src/turns/config.rs",
-          "lines": "43-47",
+          "lines": "56-60",
           "snippet": "// A genuine-user turn can own a LONG run of agent messages (a debugging/build chain the\n// model narrates step by step) that a compaction summary clips to its single \u00a79 EOT\n// quote. The reconstruction's job is to restore the LOAD-BEARING members of that run\n// without flooding the budget with pure \"let me look into this\" declarations. The model\n// keeps EVERY agent message on the slice (`TurnSlice.agents`) but SELECTS a survivor set."
         }
       ],
@@ -15810,7 +15810,7 @@
         },
         {
           "path": "src/turns/select.rs",
-          "lines": "297",
+          "lines": "351",
           "snippet": "pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {"
         }
       ],
@@ -16855,7 +16855,7 @@
         },
         {
           "path": "src/turns/select.rs",
-          "lines": "294-296",
+          "lines": "348-350",
           "snippet": "/// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing\n/// newline). The renderer and the budget reservation both call this so the reserved\n/// banner length is byte-for-byte what is emitted."
         }
       ],
@@ -19809,7 +19809,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2138",
+          "lines": "2139",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -21734,7 +21734,7 @@
         },
         {
           "path": "src/cli/verbatim_whoami_args.rs",
-          "lines": "321-324",
+          "lines": "334-337",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
         },
         {
@@ -36698,7 +36698,7 @@
       "code": [
         {
           "path": "src/cli/verbatim_whoami_args.rs",
-          "lines": "321-324",
+          "lines": "334-337",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
         },
         {

@@ -12,7 +12,8 @@ pub(crate) enum AgentRender<'a> {
 
 /// A contiguous span of collapsed agent messages → one placeholder line. Carries the
 /// X/Y/Z counts + the first/last elided jsonl line numbers so a consumer can `Read` the
-/// raw range.
+/// raw range, plus WHAT was folded: the summed char count and one preview per substantive
+/// member.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlaceholderSpan {
     /// X - collapsed agent messages in this span (≥1).
@@ -24,6 +25,21 @@ pub(crate) struct PlaceholderSpan {
     /// First / last jsonl line of the collapsed agent records (for the fetchable range).
     pub(crate) first_line: usize,
     pub(crate) last_line: usize,
+    /// N - the summed `full_chars` of the collapsed messages: how much prose the fold
+    /// substituted, which the X/Y/Z counts alone never said.
+    pub(crate) chars: usize,
+    /// One entry per collapsed message of at least [`COLLAPSED_PREVIEW_MIN_CHARS`], in
+    /// ascending line order - the fold's own disclosure of what it swallowed.
+    pub(crate) previews: Vec<CollapsedPreview>,
+}
+
+/// The head of one collapsed agent message: its jsonl line + the first
+/// [`COLLAPSED_PREVIEW_CHARS`] chars of its body (through `text::truncate_excerpt`, so the
+/// excerpt states its own remainder).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CollapsedPreview {
+    pub(crate) line: usize,
+    pub(crate) excerpt: String,
 }
 
 /// Decide a turn's SURVIVING agent messages + the collapsed placeholder spans, per mode +
@@ -147,12 +163,15 @@ pub(crate) fn collapse_unkept<'a>(
         } else {
             // Extend (or open) the current contiguous collapsed span.
             let line = a.unit.line_no;
+            let preview = collapsed_preview(&a.unit);
             match span.as_mut() {
                 Some(s) => {
                     s.messages += 1;
                     s.tool_calls += a.preceding_tool_calls;
                     s.failed += a.preceding_failed;
                     s.last_line = line;
+                    s.chars += a.unit.full_chars;
+                    s.previews.extend(preview);
                 }
                 None => {
                     span = Some(PlaceholderSpan {
@@ -161,6 +180,8 @@ pub(crate) fn collapse_unkept<'a>(
                         failed: a.preceding_failed,
                         first_line: line,
                         last_line: line,
+                        chars: a.unit.full_chars,
+                        previews: preview.into_iter().collect(),
                     });
                 }
             }
@@ -181,11 +202,23 @@ pub(crate) fn plural(n: usize, noun: &str) -> String {
     }
 }
 
+/// The PREVIEW of one collapsed message, or `None` when its body is under
+/// [`COLLAPSED_PREVIEW_MIN_CHARS`] (a short body is exactly the declaration the fold exists to
+/// swallow, and a preview of it would cost more than it says).
+pub(crate) fn collapsed_preview(unit: &TurnUnit) -> Option<CollapsedPreview> {
+    (unit.full_chars >= COLLAPSED_PREVIEW_MIN_CHARS).then(|| CollapsedPreview {
+        line: unit.line_no,
+        excerpt: crate::text::truncate_excerpt(&unit.text, COLLAPSED_PREVIEW_CHARS),
+    })
+}
+
 /// The EXACT placeholder line a collapsed span renders to (no trailing newline):
-///   `△ L{first}–L{last}  [X agent message(s), Y tool call(s)[, Z failed]]`
+///   `△ L{first}–L{last}  [X agent message(s) collapsed, N chars, Y tool call(s)[, Z failed]]`
 /// X/Y are always shown (Y even at 0 - a zero-tool reasoning span is informative); the Z
-/// clause is OMITTED when Z == 0. Pluralization is INDEPENDENT per noun; "failed" is an
-/// adjective (never pluralized). A single-message span renders `L{n}` (no range dash).
+/// clause is OMITTED when Z == 0. N is the summed `full_chars` of the collapsed bodies, so the
+/// marker says HOW MUCH prose it stands for and not only how many messages. Pluralization is
+/// INDEPENDENT per noun; "failed" is an adjective (never pluralized). A single-message span
+/// renders `L{n}` (no range dash).
 pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
     let range = if span.first_line == span.last_line {
         format!("L{}", span.first_line)
@@ -195,18 +228,39 @@ pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
     let msgs = plural(span.messages, "agent message");
     let tools = plural(span.tool_calls, "tool call");
     let body = if span.failed == 0 {
-        format!("[{msgs}, {tools}]")
+        format!("[{msgs} collapsed, {} chars, {tools}]", span.chars)
     } else {
-        format!("[{msgs}, {tools}, {} failed]", span.failed)
+        format!(
+            "[{msgs} collapsed, {} chars, {tools}, {} failed]",
+            span.chars, span.failed
+        )
     };
     format!("△ {range}  {body}")
 }
 
-/// The budget cost of one placeholder line as a physical line (`chars + NEWLINE_COST`).
-/// The placeholder SUBSTITUTES the dropped bodies (they contribute zero unit cost), so
-/// only this line's own chars are charged - keeping summed-cost == summed-emitted.
+/// The EXACT line for one collapsed message's preview (no trailing newline), indented under
+/// the fold marker: `    L{line}  {first 60 chars}… (+N chars)`.
+pub(crate) fn collapsed_preview_line(p: &CollapsedPreview) -> String {
+    format!("    L{}  {}", p.line, p.excerpt)
+}
+
+/// EVERY line a collapsed span emits: the fold marker, then one preview line per collapsed
+/// message that reached [`COLLAPSED_PREVIEW_MIN_CHARS`]. The renderer and the cost model both
+/// walk THIS list, so the charged length is byte-for-byte what is emitted.
+pub(crate) fn agent_placeholder_lines(span: &PlaceholderSpan) -> Vec<String> {
+    let mut out = vec![agent_placeholder_line(span)];
+    out.extend(span.previews.iter().map(collapsed_preview_line));
+    out
+}
+
+/// The budget cost of one placeholder as physical lines (`chars + NEWLINE_COST` each). The
+/// placeholder SUBSTITUTES the dropped bodies (they contribute zero unit cost), so only the
+/// marker's and previews' own chars are charged - keeping summed-cost == summed-emitted.
 pub(crate) fn agent_placeholder_cost(span: &PlaceholderSpan) -> usize {
-    agent_placeholder_line(span).chars().count() + NEWLINE_COST
+    agent_placeholder_lines(span)
+        .iter()
+        .map(|l| l.chars().count() + NEWLINE_COST)
+        .sum()
 }
 
 /// The glyph that opens a unit's header line in the text render (`▽` user / `△` asst).
