@@ -417,4 +417,38 @@ fn a_human_origin_queued_command_is_reachable_as_the_persons_message() {
         "the hit carries the leaf:\n{}",
         raw.stdout
     );
+
+    // I1: a FLAGLESS scan is a SUPERSET of `-t user`, so the leaf the narrower query
+    // reaches cannot be one the wider query misses. The needle is default-on for the same
+    // reason the csift-channel delivery keep is: a message no ordinary query surfaces is a
+    // message nobody can audit.
+    let flagless = h.run(&["search", "zzsteer", &at(sess)]);
+    assert!(flagless.success, "stderr: {}", flagless.stderr);
+    assert!(
+        flagless.stdout.contains("zzsteer") && flagless.stdout.contains("user.message"),
+        "a flagless search reaches the person's steer:\n{}\nstderr: {}",
+        flagless.stdout,
+        flagless.stderr
+    );
+    let flagless_census = h.run(&["search", "", &at(sess), "--count-by", "label"]);
+    assert!(
+        flagless_census.success,
+        "stderr: {}",
+        flagless_census.stderr
+    );
+    assert!(
+        flagless_census.stdout.contains("2  user.message"),
+        "and it censuses under the leaf, beside the turn opener:\n{}",
+        flagless_census.stdout
+    );
+    // The PARSE still decides: the harness's own queued rider is admitted by the same
+    // needle and classifies as harness context, so a flagless scan gains the person's
+    // message and no machinery.
+    let rider = h.run(&["search", "zzpulse", &at(sess)]);
+    assert!(rider.success, "stderr: {}", rider.stderr);
+    assert!(
+        !rider.stdout.contains("zzpulse"),
+        "a queued rider stays behind its own gate on a flagless scan:\n{}",
+        rider.stdout
+    );
 }

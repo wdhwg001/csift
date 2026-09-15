@@ -407,7 +407,7 @@ pub fn system_line_leaves() -> Vec<Class> {
 pub fn attachment_leaves() -> Vec<Class> {
     let narrow: Vec<Class> = attachment_view_needles()
         .into_iter()
-        .map(|(_, c)| c)
+        .map(|(_, c, _)| c)
         .collect();
     let mut out: Vec<Class> = Vec::new();
     for r in crate::model::rows() {
@@ -433,13 +433,28 @@ pub fn attachment_leaves() -> Vec<Class> {
 /// `agent.message.structured` is the model's own answer, so a bare `-t user` or `-t agent`
 /// reaches one. That is exactly why they cannot ride the coarse keep.
 ///
+/// The third element is the GATE. `true` = DEFAULT-ON, the v0.11.0 channel keep's rule: a
+/// scan that does not EXCLUDE the leaf admits the needle, so a flagless scan reaches it.
+/// The person's mid-turn steer is `user.message`, and a flagless scan is a superset of
+/// `-t user` - a leaf the narrower query reaches and the wider one does not is not a cost
+/// decision, it is the selector law broken. `false` = the gated-leaf rule, an EXPLICIT
+/// `-t` reaching the leaf.
+///
+/// The needle only ADMITS the line; the parse decides the leaf. A `queued_command` whose
+/// payload `origin.kind` is not `human` stays `harness.context.task` behind that leaf's
+/// own gate, so a default scan gains the steer and nothing else.
+///
 /// `agent.communication.channel` is absent on purpose: it already has its own default-on
 /// needle (the envelope header), a stronger discriminator than its payload type.
 #[must_use]
-pub fn attachment_view_needles() -> Vec<(&'static str, Class)> {
+pub fn attachment_view_needles() -> Vec<(&'static str, Class, bool)> {
     vec![
-        ("\"queued_command\"", Class::UserMessage),
-        ("\"structured_output\"", Class::AgentMessageStructured),
+        ("\"queued_command\"", Class::UserMessage, true),
+        (
+            "\"structured_output\"",
+            Class::AgentMessageStructured,
+            false,
+        ),
     ]
 }
 

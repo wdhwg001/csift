@@ -12,6 +12,9 @@ fn flagless_gates() -> CandidateGates {
     CandidateGates {
         compact_boundary: true,
         channel: true,
+        // A DEFAULT-ON view needle is part of what a flagless scan IS, so the fixture
+        // derives the mask instead of hard-coding a zero that would stop tracking it.
+        attachment_views: attachment_view_mask(&args(""), false),
         ..CandidateGates::default()
     }
 }
@@ -199,10 +202,42 @@ fn an_attachment_view_needle_runs_only_for_the_leaf_its_bit_names() {
         &structured
     ));
 
-    // A flagless scan sets no bit and admits none of the three.
+    // A FLAGLESS scan admits the DEFAULT-ON needle and nothing else. A flagless scan is a
+    // superset of `-t user`, so the leaf `-t user` reaches cannot be one it misses - the
+    // channel keep is default-on for the same reason. The other needle keeps the gated-leaf
+    // rule, so the model's structured answer and every ordinary attachment line stay out.
     let flagless = flagless_gates();
-    assert_eq!(flagless.attachment_views, 0);
-    for line in [QUEUED_COMMAND_LINE, STRUCTURED_LINE, FILE_ATTACHMENT_LINE] {
+    assert!(
+        flagless.attachment_views & 1 != 0,
+        "the human-steer needle is default-on"
+    );
+    assert!(
+        flagless.attachment_views & 2 == 0,
+        "the structured-answer needle still wants its selector"
+    );
+    assert!(line_is_transcript_candidate(
+        QUEUED_COMMAND_LINE.as_bytes(),
+        &flagless
+    ));
+    for line in [STRUCTURED_LINE, FILE_ATTACHMENT_LINE] {
         assert!(!line_is_transcript_candidate(line.as_bytes(), &flagless));
     }
+
+    // A selector that EXCLUDES the leaf closes the default-on needle again, which is what
+    // makes it a gate rather than an always-on cost: `-t harness` short-circuits before
+    // the memmem exactly as it did before.
+    let mut harness = args("");
+    harness.labels = vec!["harness".to_string()];
+    let harness_gates = CandidateGates {
+        attachment_views: attachment_view_mask(&harness, false),
+        ..CandidateGates::default()
+    };
+    assert_eq!(
+        harness_gates.attachment_views, 0,
+        "a selector that cannot reach either view runs neither needle"
+    );
+    assert!(!line_is_transcript_candidate(
+        QUEUED_COMMAND_LINE.as_bytes(),
+        &harness_gates
+    ));
 }

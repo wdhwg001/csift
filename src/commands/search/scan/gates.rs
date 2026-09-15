@@ -92,16 +92,35 @@ pub(crate) struct CandidateGates {
 /// group off the flagless path.
 pub(crate) fn attachment_view_mask(args: &SearchArgs, addressed: bool) -> u32 {
     let mut mask = 0u32;
-    for (i, (_, leaf)) in crate::cli::attachment_view_needles().iter().enumerate() {
-        // An EXPLICIT selector, never a flagless scan: these are attachment lines, and the
-        // gated-leaf law is that a scan with no `-t` parses none of them. `reaches_gated`
-        // is the same predicate the other gated leaves take, so the three answers cannot
-        // drift apart.
-        if addressed || args.reaches_gated(*leaf) {
+    for (i, (_, leaf, default_on)) in crate::cli::attachment_view_needles().iter().enumerate() {
+        // Each entry names its own gate ([`crate::cli::attachment_view_needles`]).
+        // DEFAULT-ON takes the channel keep's rule - the label set does not EXCLUDE the
+        // leaf - because a flagless scan is a superset of `-t user` and the person's own
+        // message cannot be reachable only from the narrower query. The other takes the
+        // gated-leaf rule, an EXPLICIT `-t` reaching the leaf, which is the same
+        // `reaches_gated` predicate every other gated leaf answers to.
+        let on = if *default_on {
+            args.label_filter().selected(leaf.path())
+        } else {
+            args.reaches_gated(*leaf)
+        };
+        if addressed || on {
             mask |= 1 << i;
         }
     }
     mask
+}
+
+/// The BIT a record's own attachment VIEW answers to, if it is one - the demotion's half
+/// of [`attachment_view_mask`]. `None` for every record that is not one of the two views,
+/// which is every ordinary attachment line.
+#[must_use]
+pub(crate) fn record_view_bit(rec: &Record) -> Option<u32> {
+    let leaf = rec.attachment_view_leaf()?;
+    crate::cli::attachment_view_needles()
+        .iter()
+        .position(|(_, c, _)| *c == leaf)
+        .map(|i| 1u32 << i)
 }
 
 /// The per-VIEW needles: one quoted payload value each, tested only when a selector
@@ -111,7 +130,7 @@ static VIEW_FINDERS: std::sync::LazyLock<Vec<memmem::Finder<'static>>> =
     std::sync::LazyLock::new(|| {
         crate::cli::attachment_view_needles()
             .into_iter()
-            .map(|(n, _)| memmem::Finder::new(n.as_bytes()))
+            .map(|(n, _, _)| memmem::Finder::new(n.as_bytes()))
             .collect()
     });
 

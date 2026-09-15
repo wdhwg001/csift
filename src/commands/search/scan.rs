@@ -313,17 +313,26 @@ pub(crate) fn search_one_file(
     // the spine row the non-candidate arm would have produced for the same line, so it is
     // invisible to every emission pass and visible to the chain. An address or either
     // attachment flag admits it whole, as before.
-    if !gates.hook_context && !gates.attachments && gates.attachment_views == 0 && address.is_none()
-    {
+    if !gates.hook_context && !gates.attachments && address.is_none() {
         let mut demoted: Vec<crate::parse::SpineRow> = Vec::new();
         records.retain(|k| {
             let gated_attachment = k.rec.hook_additional_context_text().is_some()
                 || k.rec.attachment_payload_text().is_some();
-            if gated_attachment && k.rec.csift_channel_text().is_none() {
-                demoted.push(crate::parse::spine_from_record(k.line_no, &k.rec));
-                return false;
+            if !gated_attachment || k.rec.csift_channel_text().is_some() {
+                return true;
             }
-            true
+            // A record that IS one of the two attachment VIEWS is not machinery: it is the
+            // person's own mid-turn steer or the model's own answer, and it stays whole
+            // whenever its own needle admitted the line. That is per RECORD, not per scan -
+            // the needle admits every `queued_command` line, and only the human-origin one
+            // is a view, so the gated payloads around it are demoted exactly as before.
+            if crate::commands::search::scan::gates::record_view_bit(&k.rec)
+                .is_some_and(|bit| gates.attachment_views & bit != 0)
+            {
+                return true;
+            }
+            demoted.push(crate::parse::spine_from_record(k.line_no, &k.rec));
+            false
         });
         // `retain` visits in order, so `demoted` is ascending by line and merges with the
         // scan's own spine stream in one linear pass.

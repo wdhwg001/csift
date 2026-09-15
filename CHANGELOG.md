@@ -84,6 +84,15 @@ surface change bumps the PATCH.
   when the arm did fire the record emitted nothing at all - no hit, no census key, no
   `-t user` result, reachable only by an address. It renders its payload JSON, the same
   verbatim form the model's own structured answer takes on that line type.
+- **A flagless scan reaches the person's mid-turn steer too.** The needle that admits a
+  `queued_command` line was gated on an explicit selector, so `-t user` found the steer
+  and a bare `csift search` did not - and a flagless scan is a superset of `-t user`, so
+  that was the selector law broken rather than a cost saved. It takes the same gate the
+  csift-channel delivery keep has had since 0.11.0: on unless your `-t` excludes
+  `user.message`, which keeps `-t harness` paying nothing. The parse still decides - only
+  a payload whose own `origin.kind` reads `human` becomes `user.message`, every other
+  `queued_command` stays `harness.context.task` behind its own gate, and the model's
+  `structured_output` answer keeps its explicit selector.
 - **`csift msg` prints a command that still runs.** Its lane listing recited the fact half
   of its own join as `csift search '<id>' @<lane> --additional-context`, a flag this release
   retires, so the one recipe a reader needs in order to check the channel without trusting

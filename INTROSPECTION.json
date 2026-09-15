@@ -13220,7 +13220,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "159-160",
+          "lines": "178-179",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13307,7 +13307,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "165-166",
+          "lines": "184-185",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13434,7 +13434,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "221",
+          "lines": "240",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13566,7 +13566,7 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "161-164",
+          "lines": "180-183",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13640,7 +13640,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "228-232",
+          "lines": "247-251",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a\n        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.\n        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14803,7 +14803,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "212-214",
+          "lines": "231-233",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -22244,7 +22244,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "179-180",
+          "lines": "198-199",
           "snippet": "    static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"file-history-\"));"
         }
       ],
@@ -48213,7 +48213,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "476-478",
+          "lines": "491-493",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -48484,7 +48484,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "228-232",
+          "lines": "247-251",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a\n        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.\n        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -48817,7 +48817,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "228-232",
+          "lines": "247-251",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a\n        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.\n        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         },
         {
@@ -50976,7 +50976,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "147-150",
+          "lines": "166-169",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -52276,7 +52276,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "142-147",
+          "lines": "161-166",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -53832,12 +53832,12 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "142-147",
+          "lines": "161-166",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "165-166",
+          "lines": "184-185",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53937,7 +53937,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "159-160",
+          "lines": "178-179",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
@@ -55372,7 +55372,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "386-387",
+          "lines": "395-396",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -56187,7 +56187,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "181-187",
+          "lines": "200-206",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -70654,7 +70654,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "187",
+          "lines": "206",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -79965,7 +79965,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "222-226",
+          "lines": "241-245",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -83637,7 +83637,7 @@
         },
         {
           "path": "src/model/classify/attachments.rs",
-          "lines": "102-108",
+          "lines": "123-129",
           "snippet": "pub(crate) fn payload_origin_is_human(payload: &serde_json::Value) -> bool {\n    payload\n        .get(\"origin\")\n        .and_then(|o| o.get(\"kind\"))\n        .and_then(serde_json::Value::as_str)\n        == Some(\"human\")\n}"
         }
       ],
@@ -87024,7 +87024,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "499-504",
+          "lines": "514-519",
           "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],
@@ -87418,7 +87418,7 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "186-187",
+          "lines": "205-206",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
