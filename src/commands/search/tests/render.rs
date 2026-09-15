@@ -401,7 +401,13 @@ fn the_compaction_pairing_is_skipped_when_no_compaction_leaf_is_selectable() {
             "{reaching} reaches a compaction leaf"
         );
     }
-    for missing in ["user", "user.unsent", "agent", "agent.tool", "harness.meta"] {
+    for missing in [
+        "user",
+        "user.unsent",
+        "agent",
+        "agent.tool",
+        "harness.bookkeeping",
+    ] {
         let inc = vec![missing.to_string()];
         assert!(
             !wants_compaction_pairing(&LabelFilter::new(&inc, &none)),
@@ -412,4 +418,26 @@ fn the_compaction_pairing_is_skipped_when_no_compaction_leaf_is_selectable() {
     let inc = vec!["harness".to_string()];
     let exc = vec!["harness.compaction".to_string()];
     assert!(!wants_compaction_pairing(&LabelFilter::new(&inc, &exc)));
+}
+
+/// The two EXTENSION POINTS a family lane adds to, pinned at their contract rather than
+/// through a surface: a `Marker` renders `[head]` or `[head detail]`, and a `HitFact`
+/// projects itself into the label zone and into JSON. A family that adds a variant gets
+/// both surfaces for free only while these two projections stay the one place it is
+/// decided.
+#[test]
+fn a_marker_and_a_fact_each_project_themselves() {
+    assert_eq!(Marker::plain("not delivered").render(), "[not delivered]");
+    let detailed = Marker {
+        head: "scheduled fire",
+        detail: Some("2026-09-15T10:00:00Z".to_string()),
+    };
+    assert_eq!(detailed.render(), "[scheduled fire 2026-09-15T10:00:00Z]");
+
+    let fact = HitFact::Unmodeled("system/progress".to_string());
+    // The shape IS the label for an unmodeled unit, so it adds no second label-zone tag.
+    assert!(fact.label_zone().is_none());
+    let (key, value) = fact.json();
+    assert_eq!(key, "unmodeled");
+    assert_eq!(value, serde_json::json!("system/progress"));
 }

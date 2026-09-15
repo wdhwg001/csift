@@ -326,3 +326,41 @@ fn an_unmodeled_system_subtype_names_the_subtype_not_the_type() {
         show.stdout
     );
 }
+
+#[test]
+fn an_unmodeled_attachment_payload_names_the_payload_type() {
+    // The third axis the unmodeled unit splits on. An attachment line carries its kind in
+    // a payload `type`, so a payload csift has no row for must name THAT value - naming
+    // `attachment` alone would point a reader at a line type csift models perfectly well.
+    let h = Home::new();
+    let sess = "5e4d3c2b-1a0f-49e8-97d6-a5b4c3d2e1f0";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"zzatt open"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T06:00:01.000Z","attachment":{"type":"some_future_payload","content":"zzatt body"}}"#, "\n",
+        ),
+    );
+    let show = h.run(&["show", &at(sess), "--line", "2"]);
+    assert!(show.success, "stderr: {}", show.stderr);
+    assert!(
+        show.stdout
+            .contains("? unmodeled: attachment/some_future_payload"),
+        "the payload type is what csift did not model:\n{}",
+        show.stdout
+    );
+    let js = h.run(&["show", &at(sess), "--line", "2", "--format", "json"]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    let row: serde_json::Value = js
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["kind"] == "record")
+        .expect("the record row");
+    assert_eq!(row["label"], serde_json::Value::Null, "{}", js.stdout);
+    assert_eq!(
+        row["unmodeled"], "attachment/some_future_payload",
+        "{}",
+        js.stdout
+    );
+}

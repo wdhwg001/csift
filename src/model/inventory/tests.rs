@@ -163,6 +163,36 @@ fn a_row_with_no_leaf_is_reachable_only_by_an_address() {
     }
 }
 
+/// `e` is a `const fn`, so every one of the 105 table rows is built by the COMPILER and
+/// no test reaches the constructor at runtime. It builds a five-field struct out of five
+/// positional arguments, which is exactly the shape a column swap hides in, so the
+/// mapping from argument position to field is pinned against a real row: rebuild the
+/// `queue-operation` row from its own recorded columns and require the two to answer
+/// identically on every accessor.
+#[test]
+fn the_row_constructor_maps_each_argument_to_its_own_column() {
+    let table = rows()
+        .find(|r| matches!(r.shape, Shape::TopLevelType("queue-operation")))
+        .expect("the queue-operation row");
+    let built = e(table.shape, table.leaf, table.gate, table.llm, table.human);
+    assert_eq!(built.value(), table.value());
+    assert_eq!(built.disk(), table.disk());
+    assert_eq!(built.leaf, table.leaf);
+    assert_eq!(built.gate, table.gate);
+    assert_eq!(built.llm, table.llm);
+    assert_eq!(built.human, table.human);
+    // ... and the first argument really is the SHAPE: the same value on another axis
+    // renders another disk string, so a swap could not pass the equality above.
+    let other_axis = e(
+        Shape::SystemSubtype("queue-operation"),
+        table.leaf,
+        table.gate,
+        table.llm,
+        table.human,
+    );
+    assert_ne!(other_axis.disk(), table.disk());
+}
+
 #[test]
 fn the_disk_string_is_derived_from_the_shape() {
     let top = rows()
