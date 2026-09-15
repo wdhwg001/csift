@@ -214,3 +214,90 @@ fn boundary_excerpt_prints_only_the_survivor_parts_it_has() {
         Some("Conversation compacted")
     );
 }
+/// The comm class a `tool_use` BLOCK carries, at all three answers it has. The spawn arm
+/// is a GUARD, and a guard that always says yes is invisible to a test that only ever
+/// asks about spawn tools: a mutation run replaced both `is_spawn_tool_name` and the
+/// guard calling it with `true` and nothing failed, so the half of the rule that says
+/// every OTHER tool is not a communication had never been asserted. A false positive
+/// there relabels an ordinary `Bash` call `agent.communication.sent`.
+#[test]
+fn only_a_send_or_a_spawn_is_a_communication_tool_use() {
+    for spawn in ["Task", "Agent", "Workflow"] {
+        assert_eq!(
+            tool_use_comm_class(Some(spawn), None),
+            Some(Class::CommSent),
+            "{spawn}"
+        );
+    }
+    assert_eq!(
+        tool_use_comm_class(Some("SendMessage"), None),
+        Some(Class::CommSent)
+    );
+    let signal = serde_json::json!({"message": {"type": "shutdown_request"}});
+    assert_eq!(
+        tool_use_comm_class(Some("SendMessage"), Some(&signal)),
+        Some(Class::CommSignal)
+    );
+    // The half the mutants walked through, including two names that only LOOK like the
+    // spawn set and one that differs from it by case alone.
+    for other in ["Bash", "Read", "TaskStop", "AgentOutput", "", "task"] {
+        assert_eq!(tool_use_comm_class(Some(other), None), None, "{other:?}");
+    }
+    assert_eq!(tool_use_comm_class(None, None), None);
+}
+
+/// Both overruns that decide an excerpt are STRICT, and the boundary is the whole
+/// difference: a body of exactly the budget is complete, so nothing is clipped, the
+/// window form is not entered, and the reader is not told that something was elided.
+/// Two mutants relaxed the two comparisons and neither was caught - one would have
+/// flagged a whole message as truncated, the other would have re-rendered it as a
+/// centered fragment and flagged it anyway.
+#[test]
+fn an_excerpt_exactly_at_the_budget_is_whole_with_or_without_a_span() {
+    let max = 40usize;
+    let exact = "x".repeat(max);
+
+    let (text, truncated) = match_excerpt(&exact, None, max);
+    assert_eq!(text, exact);
+    assert!(!truncated, "a body of exactly the budget is whole");
+
+    // WITH a span, the window form must still not be reached at the boundary.
+    let (text, truncated) = match_excerpt(&exact, Some((0, 1)), max);
+    assert_eq!(text, exact);
+    assert!(!truncated, "the window form is for a body that overruns");
+
+    let over = "x".repeat(max + 1);
+    let (_, truncated_over) = match_excerpt(&over, None, max);
+    assert!(truncated_over, "one char past the budget IS clipped");
+}
+
+/// The windowed form keeps a QUARTER of the budget as leading context and counts what
+/// follows exactly. Both numbers were unasserted: a mutant that turned the quarter into a
+/// remainder put the window at the match itself, dropping the context that makes a hit
+/// readable, and a mutant that relaxed the trailing test appended `... (+0 chars)` to a
+/// window that had already reached the end - a promise of more text that is not there.
+#[test]
+fn a_windowed_excerpt_keeps_its_quarter_of_context_and_counts_only_real_remainder() {
+    let max = 40usize;
+    let text = format!("{}NEEDLE{}", "A".repeat(60), "B".repeat(60));
+    let (out, truncated) = match_excerpt(&text, Some((60, 66)), max);
+    assert!(truncated);
+    // 10 chars of context (max / 4) precede the match, and the elision mark precedes them.
+    assert!(
+        out.starts_with(&format!("\u{2026}{}NEEDLE", "A".repeat(10))),
+        "the window opens a quarter of the budget before the match: {out}"
+    );
+    // 126 chars total, a 40-char window starting at char 50, so 36 follow.
+    assert!(
+        out.ends_with("\u{2026} (+36 chars)"),
+        "the remainder is counted exactly: {out}"
+    );
+
+    // A window that reaches the END promises nothing after it.
+    let tail = format!("{}NEEDLE{}", "A".repeat(60), "B".repeat(24));
+    let (out, _) = match_excerpt(&tail, Some((60, 66)), max);
+    assert!(
+        !out.contains("(+0 chars)"),
+        "a window at the end must not promise more: {out}"
+    );
+}
