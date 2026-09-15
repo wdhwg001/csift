@@ -16,8 +16,11 @@ surface change bumps the PATCH.
   `src/bash/danger/` and `src/bash/mutations.rs` + `src/bash/mutations/`; the thirteen
   subcommand families move under `src/commands/`, leaving the crate root to the base
   layer they build on (`cli`, `model`, `parse`, `path`, `subagent`, `bash`, `chardiff`,
-  `text`, `time_window`, `timez`). Every path is respelled at every call site, with no
-  alias and no forwarding shim. No behaviour change.
+  `text`, `time_window`, `timez`); and the four `model/classify_*.rs` siblings become
+  `model/classify/{support,promoted,channel,resume}.rs` under the engine that uses them,
+  with `Record::direction` moved verbatim into a fifth child so the engine stays under
+  the 600-line cap. Every path is respelled at every call site, with no alias and no
+  forwarding shim. No behaviour change.
 
 ## [0.12.3] - 2026-09-13
 
