@@ -140,3 +140,79 @@ fn rollup_counts_and_labels_carry_the_external_write() {
         out.stdout
     );
 }
+
+/// The interval join is spelling-symmetric, and an unreadable entry is no sample.
+///
+/// TWO facts, both read off section 4.9's scope law - an external write is a version
+/// jump with NO tool write of that path in the interval.
+///
+/// (a) The cross-spelling pin above runs one way round: a RELATIVE snapshot key
+/// against an ABSOLUTE tool path. This is the MIRROR, which a bash mutation on a
+/// record carrying no `cwd` produces - the operand cannot be joined and stays
+/// verbatim relative (the `unresolved` resolution class) while the snapshot key is
+/// absolute. A jump that tool write explains must not be reported, or csift would
+/// accuse the harness of a silent write its own record already accounts for.
+///
+/// (b) A tracked entry whose `version` csift cannot read contributes NO SAMPLE, so
+/// the sequence closes over it. The `other/` path here goes v1, then an entry with
+/// no `version`, then v3, and the reported jump is therefore `v1->v3` - a build that
+/// substituted any value for the unreadable one would report a different pair.
+#[test]
+fn the_interval_join_reads_both_spellings_and_skips_an_unversioned_entry() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{XSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"tune"}}"#, "\n",
+            r#"{"type":"file-history-snapshot","messageId":"m1","snapshot":{"messageId":"m1","timestamp":"2026-06-07T05:01:00.000Z","trackedFileBackups":{"/Users/dev/.claude/settings.json":{"backupFileName":"aa@v1","version":1,"backupTime":"2026-06-07T05:01:00.000Z"},"/Users/dev/other/.claude/settings.local.json":{"backupFileName":"cc@v1","version":1,"backupTime":"2026-06-07T05:01:00.000Z"}}},"isSnapshotUpdate":false}"#, "\n",
+            // A Bash write of the RELATIVE spelling on a record with no `cwd`, so the
+            // operand cannot be joined and stays relative. It suffix-matches the
+            // absolute `settings.json` key and nothing else here.
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"printf 'x' >> .claude/settings.json"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:02:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"ok"}]}}"#, "\n",
+            // settings.json bumps (explained by the bash write above); the `other/`
+            // entry carries NO `version` and is therefore no sample at all.
+            r#"{"type":"file-history-snapshot","messageId":"m2","snapshot":{"messageId":"m2","timestamp":"2026-06-07T05:03:00.000Z","trackedFileBackups":{"/Users/dev/.claude/settings.json":{"backupFileName":"aa@v2","version":2,"backupTime":"2026-06-07T05:03:00.000Z"},"/Users/dev/other/.claude/settings.local.json":{"backupFileName":"cc@v2","backupTime":"2026-06-07T05:03:00.000Z"}}},"isSnapshotUpdate":false}"#, "\n",
+            // The `other/` path reappears at v3, with no tool record anywhere in the
+            // run: its jump is v1->v3, closing over the unreadable entry.
+            r#"{"type":"file-history-snapshot","messageId":"m3","snapshot":{"messageId":"m3","timestamp":"2026-06-07T05:04:00.000Z","trackedFileBackups":{"/Users/dev/other/.claude/settings.local.json":{"backupFileName":"cc@v3","version":3,"backupTime":"2026-06-07T05:04:00.000Z"}}},"isSnapshotUpdate":false}"#, "\n",
+        ),
+    );
+    let j = h.run(&[
+        "files",
+        at(XSESS).as_str(),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let externals: Vec<(String, String)> = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["op"] == "external_write")
+        .map(|v| {
+            (
+                v["path"].as_str().unwrap_or_default().to_string(),
+                v["detail"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        externals.len(),
+        1,
+        "exactly one jump is unexplained:\n{}",
+        j.stdout
+    );
+    assert_eq!(
+        externals[0].0, "/Users/dev/other/.claude/settings.local.json",
+        "the relative-spelling Bash write explains the settings.json jump:\n{}",
+        j.stdout
+    );
+    assert!(
+        externals[0].1.contains("v1->v3"),
+        "the unreadable entry is no sample, so the jump closes over it:\n{}",
+        j.stdout
+    );
+}
