@@ -198,11 +198,20 @@ fn a_single_message_report_names_its_sender_and_the_equivalent_search() {
         "the fact cites the record that proves it:\n{}",
         out.stdout
     );
-    // The equivalence the help states: the fact half is a plain search anyone can run.
+    // The equivalence the help states: the fact half is a plain search anyone can run -
+    // and it has to be a command that still RUNS. The retired flag was printed here at
+    // runtime for a release in which `search --additional-context` exits 1, which is the
+    // one place a retirement can hand a reader a dead command, so the selector is pinned.
     assert!(
-        out.stdout
-            .contains(&format!("csift search '<id>' @{SESS} --additional-context")),
+        out.stdout.contains(&format!(
+            "csift search '<id>' @{SESS} -t harness.hook.context"
+        )),
         "the fact half is stated as a runnable search:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("--additional-context"),
+        "no retired spelling is printed at runtime:\n{}",
         out.stdout
     );
 }

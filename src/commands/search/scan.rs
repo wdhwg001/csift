@@ -81,10 +81,10 @@ pub(crate) fn search_one_file(
     let needs_compact_boundary = args
         .label_filter()
         .selected(Class::CompactionBoundary.path());
-    // The hook-context keep is now SELECTOR-gated like every other gated leaf: an
-    // explicit `-t` reaching `harness.hook.context` (or an ADDRESS, which must render an
-    // addressed attachment record flag-free). The `--additional-context` flag that used
-    // to open it is retired - naming the leaf is the form that survived.
+    // The hook-context keep is SELECTOR-gated like every other gated leaf: an explicit
+    // `-t` reaching `harness.hook.context`, or an ADDRESS, which must render an addressed
+    // attachment record flag-free. The flag that used to open it is retired; naming the
+    // leaf is the form that survived.
     let needs_hook_context = args.scans_gated(Class::HookContext) || address.is_some();
     // The FULL attachment keep: every `type:"attachment"` line, admitted by `--attachments`
     // (or the `--count-by attachment` axis, which implies it) with a selector that can

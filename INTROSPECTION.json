@@ -412,7 +412,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "198-203",
+          "lines": "203-208",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
@@ -552,7 +552,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "198-203",
+          "lines": "203-208",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -3400,7 +3400,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "58-79",
+          "lines": "63-84",
           "snippet": "/// The harness's \"N background agent(s) were stopped by the user: ...\" notice (v0.10.0):\n/// a plain-string `type:\"user\"` record Claude Code writes when async agents are killed\n/// from the UI. It names a count and truncated prompt prefixes, never an id, and it\n/// triggers no generation - the model sees it only alongside the next real prompt. Not\n/// the operator, never a turn opener; classifies `harness.notification.subagent`.\n#[must_use]\npub fn is_agents_stopped_notice(content: &str) -> bool {\n    let s = content.trim_start();\n    // The singular template names the agent: `Background agent \"<desc>\" was stopped by\n    // the user.` (no count).\n    if s.starts_with(\"Background agent \\\"\") && s.contains(\" was stopped by the user\") {\n        return true;\n    }\n    let digits = s.bytes().take_while(u8::is_ascii_digit).count();\n    if digits == 0 {\n        return false;\n    }\n    let rest = &s[digits..];\n    (rest.starts_with(\" background agent was stopped by the user\")\n        || rest.starts_with(\" background agents were stopped by the user\"))\n        && rest.contains(AGENTS_STOPPED_MARKER)\n}"
         },
         {
@@ -11047,7 +11047,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "124-131",
+          "lines": "129-136",
           "snippet": "/// Prefix of a `<task-notification>\u2026</task-notification>` user record - a MACHINE-INJECTED\n/// automation trigger (a background-command / workflow / spawned-task completion notice CC\n/// inserts as a `type:\"user\"`, non-`isMeta`, STRING-content record). It LOOKS like a human\n/// turn to [`Record::is_genuine_user`] (it passes every gate), so it DOES open a turn - but\n/// it is an automation pulse, not the operator's prose. [`Record::automation_trigger`]\n/// classifies it so surfaces can LABEL the segment (`[workflow <id> completed] <summary>`)\n/// instead of dumping the raw `<task-id>`/`<output-file>`/`<status>` XML wrapper.\npub const TASK_NOTIFICATION_PREFIX: &str = \"<task-notification>\";"
         }
       ],
@@ -11766,12 +11766,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "64-70",
+          "lines": "69-75",
           "snippet": "pub fn is_agents_stopped_notice(content: &str) -> bool {\n    let s = content.trim_start();\n    // The singular template names the agent: `Background agent \"<desc>\" was stopped by\n    // the user.` (no count).\n    if s.starts_with(\"Background agent \\\"\") && s.contains(\" was stopped by the user\") {\n        return true;\n    }"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "76-83",
+          "lines": "81-88",
           "snippet": "    (rest.starts_with(\" background agent was stopped by the user\")\n        || rest.starts_with(\" background agents were stopped by the user\"))\n        && rest.contains(AGENTS_STOPPED_MARKER)\n}\n\n/// The raw-byte marker the agents-stopped notice always carries (the synth-marker\n/// needle for its fabricated `[subagent stopped]` label prefix).\npub const AGENTS_STOPPED_MARKER: &str = \"stopped by the user\";"
         },
         {
@@ -11987,7 +11987,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "198-203",
+          "lines": "203-208",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
@@ -12473,7 +12473,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "205-207",
+          "lines": "210-212",
           "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
@@ -12599,17 +12599,17 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "261",
+          "lines": "266",
           "snippet": "pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = \"# Autonomous loop check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "342-345",
+          "lines": "347-350",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "243",
+          "lines": "248",
           "snippet": "pub const SCHEDULE_WAKEUP_MARKER: &str = \"<<autonomous-loop-dynamic>>\";"
         },
         {
@@ -12806,12 +12806,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "278-280",
+          "lines": "283-285",
           "snippet": "pub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` executor wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "283",
+          "lines": "288",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         }
       ],
@@ -12973,8 +12973,8 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "347-351",
-          "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// (@164500384) writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
+          "lines": "352-356",
+          "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
           "path": "src/model/classify/injections.rs",
@@ -17359,17 +17359,17 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "3-9",
+          "lines": "8-14",
           "snippet": "/// The synthesized prefixes Claude Code writes into the `tool_result` answering an\n/// `AskUserQuestion` (\u00a74.4). CC has shipped THREE phrasings for the same synthesized\n/// answer - verified across real `~/.claude/projects` data and the 2.1.258 binary:\n///\n/// - `\"User has answered your questions: \\\"<q>\\\"=\\\"<a>\\\". \u2026\"`\n/// - `\"Your questions have been answered: \\\"<q>\\\"=\\\"<a>\\\". \u2026\"`  (the dominant form\n///   in older data; a single hardcoded marker missed it entirely)"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "15",
+          "lines": "20",
           "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &["
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "38-42",
+          "lines": "43-47",
           "snippet": "#[must_use]\npub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
@@ -17379,7 +17379,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "15-26",
+          "lines": "20-31",
           "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
@@ -35382,7 +35382,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "215",
+          "lines": "220",
           "snippet": "pub const RESUME_PROMPT_MARKER: &str = \"Continue from where you left off.\";"
         }
       ],
@@ -35467,7 +35467,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "230-231",
+          "lines": "235-236",
           "snippet": "/// The `ScheduleWakeup` TIMER's fired-prompt sentinel (GOLD \u00a75) - `harness.schedule.wakeup`.\n/// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is"
         }
       ],
@@ -50952,7 +50952,7 @@
         {
           "path": "src/commands/search/scan/gates.rs",
           "lines": "54-60",
-          "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
+          "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `-t harness.hook.context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
@@ -68015,7 +68015,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "203",
+          "lines": "208",
           "snippet": "pub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -71256,7 +71256,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "205-207",
+          "lines": "210-212",
           "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
@@ -71375,12 +71375,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "85-94",
+          "lines": "90-99",
           "snippet": "/// The two exact-content synthesized strings Claude Code writes when the user\n/// interrupts (\u00a74.2.1). They are a `type:\"user\"` `text`-block record whose content is\n/// EXACTLY one of these - a machine-synthesized interrupt marker, NOT a human turn.\n/// Verified across real `~/.claude/projects` data: 116 + 21 occurrences, all\n/// non-`isMeta`, none carrying any extra prose (dropping them as turn boundaries loses\n/// zero user content).\npub const INTERRUPT_MARKERS: &[&str] = &[\n    \"[Request interrupted by user]\",\n    \"[Request interrupted by user for tool use]\",\n];"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "51-56",
+          "lines": "56-61",
           "snippet": "pub fn is_synthetic_user_marker(content: &str) -> bool {\n    INTERRUPT_MARKERS.contains(&content)\n        || content.starts_with(LOCAL_COMMAND_STDOUT_PREFIX)\n        || is_slash_command_wrapper(content)\n        || is_agents_stopped_notice(content)\n}"
         }
       ],
@@ -71575,7 +71575,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "96-100",
+          "lines": "101-105",
           "snippet": "/// Prefix of a `<local-command-stdout>\u2026` user record (\u00a74.2.2) - local-command OUTPUT\n/// (machine), not the user's prose. Non-`isMeta` string content (its sibling\n/// `<local-command-caveat>` carries `isMeta` and is already excluded). Must NOT open a\n/// turn.\npub const LOCAL_COMMAND_STDOUT_PREFIX: &str = \"<local-command-stdout>\";"
         },
         {
@@ -71747,12 +71747,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "109-116",
+          "lines": "114-121",
           "snippet": "/// The SAME slash-command wrapper in the NEWER tag order: current CC emits\n/// `<command-message>\u2026</command-message>\\n<command-name>/x</command-name>\\n<command-args>\u2026`\n/// -- the message tag FIRST (verified live 2026-07: 14 sessions new-order vs 35 old-order\n/// in one real corpus; both orders coexist). Detection must accept EITHER leading tag:\n/// anchoring on `<command-name>` alone silently reclassified every new-order record as\n/// GENUINE user prose - raw wrapper XML surfaced as `user.message`, and a no-args\n/// wrapper opened a turn.\npub const COMMAND_MESSAGE_PREFIX: &str = \"<command-message>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "118-122",
+          "lines": "123-127",
           "snippet": "/// True when `content` is a slash-command wrapper (\u00a74.2.3) in EITHER tag order.\n#[must_use]\npub fn is_slash_command_wrapper(content: &str) -> bool {\n    content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)\n}"
         }
       ],
@@ -71997,27 +71997,27 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "3-9",
+          "lines": "8-14",
           "snippet": "/// The synthesized prefixes Claude Code writes into the `tool_result` answering an\n/// `AskUserQuestion` (\u00a74.4). CC has shipped THREE phrasings for the same synthesized\n/// answer - verified across real `~/.claude/projects` data and the 2.1.258 binary:\n///\n/// - `\"User has answered your questions: \\\"<q>\\\"=\\\"<a>\\\". \u2026\"`\n/// - `\"Your questions have been answered: \\\"<q>\\\"=\\\"<a>\\\". \u2026\"`  (the dominant form\n///   in older data; a single hardcoded marker missed it entirely)"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "15",
+          "lines": "20",
           "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &["
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "39-42",
+          "lines": "44-47",
           "snippet": "pub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "15-26",
+          "lines": "20-31",
           "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "38-42",
+          "lines": "43-47",
           "snippet": "#[must_use]\npub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
@@ -72585,12 +72585,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "133-138",
+          "lines": "138-143",
           "snippet": "/// The synthesized marker Claude Code writes into the `tool_result` when the user\n/// REJECTS a tool use (\u00a74.2.4) - fires for ANY rejected tool_use (ExitPlanMode plan\n/// kick-backs AND rejected AskUserQuestion / Edit / etc.). On its own it is NOT a user\n/// turn; it becomes one only when followed by the [`PLAN_REJECTION_USER_PREFIX`] tail\n/// (a real typed user instruction).\npub const PLAN_REJECTION_MARKER: &str = \"The user doesn't want to proceed with this tool use\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "140-144",
+          "lines": "145-149",
           "snippet": "/// The fixed ASCII delimiter that precedes the user's typed instruction in a\n/// rejection-with-message (\u00a74.2.4): everything AFTER it is the genuine user message.\n/// A rejection WITHOUT this delimiter (the `STOP what you are doing and wait\u2026` form)\n/// carries no typed message and must NOT open a turn.\npub const PLAN_REJECTION_USER_PREFIX: &str = \"To tell you how to proceed, the user said:\\n\";"
         },
         {
@@ -72932,12 +72932,12 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "152",
+          "lines": "157",
           "snippet": "pub const TEAMMATE_MESSAGE_OPEN: &str = \"<teammate-message\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "155",
+          "lines": "160",
           "snippet": "/// `Another Claude session sent a message:\\n<teammate-message \u2026>`. A peer tag IMMEDIATELY after"
         },
         {
@@ -73175,12 +73175,12 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "173",
+          "lines": "178",
           "snippet": "pub const AGENT_MESSAGE_OPEN: &str = \"<agent-message\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "162-166",
+          "lines": "167-171",
           "snippet": "pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[\n    \"Another Claude session sent a message:\",\n    \"Another Claude session sent a message while you were working:\",\n    \"A peer session sent a message while you were working:\",\n];"
         },
         {
@@ -73420,7 +73420,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "188-195",
+          "lines": "193-200",
           "snippet": "/// Section CLOSE tags (FINDING-1). A peer / `<task-notification>` open tag that sits right after\n/// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a\n/// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine\n/// user message that merely mentions the literal tag, common in csift's OWN dev sessions) is NOT a\n/// boundary and never starts a section. Kept beside their open-tag constants so the pair never drift.\npub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
@@ -73561,7 +73561,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "124-131",
+          "lines": "129-136",
           "snippet": "/// Prefix of a `<task-notification>\u2026</task-notification>` user record - a MACHINE-INJECTED\n/// automation trigger (a background-command / workflow / spawned-task completion notice CC\n/// inserts as a `type:\"user\"`, non-`isMeta`, STRING-content record). It LOOKS like a human\n/// turn to [`Record::is_genuine_user`] (it passes every gate), so it DOES open a turn - but\n/// it is an automation pulse, not the operator's prose. [`Record::automation_trigger`]\n/// classifies it so surfaces can LABEL the segment (`[workflow <id> completed] <summary>`)\n/// instead of dumping the raw `<task-id>`/`<output-file>`/`<status>` XML wrapper.\npub const TASK_NOTIFICATION_PREFIX: &str = \"<task-notification>\";"
         },
         {
@@ -73662,17 +73662,17 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "58-62",
+          "lines": "63-67",
           "snippet": "/// The harness's \"N background agent(s) were stopped by the user: ...\" notice (v0.10.0):\n/// a plain-string `type:\"user\"` record Claude Code writes when async agents are killed\n/// from the UI. It names a count and truncated prompt prefixes, never an id, and it\n/// triggers no generation - the model sees it only alongside the next real prompt. Not\n/// the operator, never a turn opener; classifies `harness.notification.subagent`."
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "64-79",
+          "lines": "69-84",
           "snippet": "pub fn is_agents_stopped_notice(content: &str) -> bool {\n    let s = content.trim_start();\n    // The singular template names the agent: `Background agent \"<desc>\" was stopped by\n    // the user.` (no count).\n    if s.starts_with(\"Background agent \\\"\") && s.contains(\" was stopped by the user\") {\n        return true;\n    }\n    let digits = s.bytes().take_while(u8::is_ascii_digit).count();\n    if digits == 0 {\n        return false;\n    }\n    let rest = &s[digits..];\n    (rest.starts_with(\" background agent was stopped by the user\")\n        || rest.starts_with(\" background agents were stopped by the user\"))\n        && rest.contains(AGENTS_STOPPED_MARKER)\n}"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "51-56",
+          "lines": "56-61",
           "snippet": "pub fn is_synthetic_user_marker(content: &str) -> bool {\n    INTERRUPT_MARKERS.contains(&content)\n        || content.starts_with(LOCAL_COMMAND_STDOUT_PREFIX)\n        || is_slash_command_wrapper(content)\n        || is_agents_stopped_notice(content)\n}"
         }
       ],
@@ -77552,12 +77552,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "15-26",
+          "lines": "20-31",
           "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "39-42",
+          "lines": "44-47",
           "snippet": "pub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
@@ -86110,7 +86110,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "193-195",
+          "lines": "198-200",
           "snippet": "pub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
@@ -86263,7 +86263,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "162-166",
+          "lines": "167-171",
           "snippet": "pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[\n    \"Another Claude session sent a message:\",\n    \"Another Claude session sent a message while you were working:\",\n    \"A peer session sent a message while you were working:\",\n];"
         }
       ],
@@ -87207,7 +87207,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "120-122",
+          "lines": "125-127",
           "snippet": "pub fn is_slash_command_wrapper(content: &str) -> bool {\n    content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)\n}"
         }
       ],
@@ -87287,7 +87287,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "107",
+          "lines": "112",
           "snippet": "pub const COMMAND_NAME_PREFIX: &str = \"<command-name>\";"
         }
       ],
@@ -87530,7 +87530,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "118-122",
+          "lines": "123-127",
           "snippet": "/// True when `content` is a slash-command wrapper (\u00a74.2.3) in EITHER tag order.\n#[must_use]\npub fn is_slash_command_wrapper(content: &str) -> bool {\n    content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)\n}"
         },
         {
@@ -87596,7 +87596,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "186",
+          "lines": "191",
           "snippet": "pub const CROSS_SESSION_MESSAGE_OPEN: &str = \"<cross-session-message\";"
         },
         {
@@ -87718,7 +87718,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "222",
+          "lines": "227",
           "snippet": "pub const RESUME_PLACEHOLDER_TEXT: &str = \"No response requested.\";"
         }
       ],
@@ -92342,7 +92342,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "290-295",
+          "lines": "295-300",
           "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
         }
       ],

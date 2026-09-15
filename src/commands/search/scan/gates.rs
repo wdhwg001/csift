@@ -54,7 +54,7 @@ pub(crate) fn bookkeeping_mask(args: &SearchArgs, addressed: bool) -> u32 {
 pub(crate) struct CandidateGates {
     /// D7: the `compact_boundary` metrics record (selected label).
     pub(crate) compact_boundary: bool,
-    /// `--additional-context` (or an address): hook-injected context attachments.
+    /// `-t harness.hook.context` (or an address): hook-injected context attachments.
     pub(crate) hook_context: bool,
     /// `--attachments` / the attachment axis (or an address): every attachment line.
     pub(crate) attachments: bool,
@@ -212,9 +212,9 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         || (needs_compact_boundary
             && COMPACT_BOUNDARY_FINDER.find(line).is_some()
             && SUBTYPE_FINDER.find(line).is_some())
-        // Opt-in hook-injected additionalContext (`search --additional-context`, or an explicit
-        // `show --line`/`--uuid` address - the refetch a search hit prints must resolve without
-        // the flag). Same `&&`-gating law as the boundary: a default scan pays ZERO.
+        // Opt-in hook-injected additionalContext (`-t harness.hook.context`, or an explicit
+        // `show --line`/`--uuid` address - the refetch a search hit prints must resolve with no
+        // selector at all). Same `&&`-gating law as the boundary: a default scan pays ZERO.
         || (needs_hook_context && HOOK_CONTEXT_FINDER.find(line).is_some())
         // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
         // explicit address). Same `&&`-gating law: a default scan pays ZERO.

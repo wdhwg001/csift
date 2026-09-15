@@ -290,7 +290,7 @@ fn render_text(ctx: &LaneCtx, reports: &[MsgReport], skipped_lines: usize) {
         }
     );
     println!(
-        "the fact half on its own: csift search '<id>' @{} --additional-context",
+        "the fact half on its own: csift search '<id>' @{} -t harness.hook.context",
         ctx.lane
     );
 }
