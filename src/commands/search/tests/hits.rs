@@ -12,6 +12,7 @@ fn collect_hits_thinking_category() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["agent.thinking".to_string()], &[]),
         &m,
         false,
@@ -36,6 +37,7 @@ fn collect_hits_agent_text_only_from_assistant() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["agent.message".to_string()], &[]),
         &m,
         false,
@@ -58,6 +60,7 @@ fn collect_hits_tool_use_matches_name_and_input() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
+        None,
         None,
         LabelFilter::new(&["agent.tool.use".to_string()], &[]),
         &m,
@@ -84,6 +87,7 @@ fn collect_hits_mcp_elicitation_system_marker() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
+        None,
         None,
         LabelFilter::new(&["agent.tool.use".to_string()], &[]),
         &m,
@@ -117,6 +121,7 @@ fn collect_hits_auq_marker_does_not_double_emit() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["agent.tool.use".to_string()], &[]),
         &m,
         false,
@@ -144,6 +149,7 @@ fn collect_hits_auq_answer_under_user() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["user".to_string()], &[]),
         &m,
         false,
@@ -168,6 +174,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["user".to_string()], &[]),
         &m,
         false,
@@ -182,6 +189,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
     let mut hits2 = Vec::new();
     collect_record_hits(
         &r,
+        None,
         None,
         LabelFilter::new(&["agent.tool.result".to_string()], &[]),
         &m,
@@ -303,6 +311,7 @@ fn auq_answer_under_user_present_but_pattern_does_not_match() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["user".to_string()], &[]),
         &m,
         false,
@@ -330,6 +339,7 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         can_hit: m.line_may_match(raw),
         line_no: 1,
         from_sidecar: false,
+        gated_raw: None,
     };
     assert!(!kept.can_hit);
     let turn = Turn {
@@ -367,6 +377,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         can_hit: m.line_may_match(raw),
         line_no: 1,
         from_sidecar: false,
+        gated_raw: None,
     };
     let turn = Turn {
         index: 0,
@@ -423,6 +434,7 @@ fn collect_record_hits_resolve_persisted_with_no_pointer_keeps_inline() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["agent.tool.result".to_string()], &[]),
         &m,
         true,
@@ -451,6 +463,7 @@ fn agent_text_block_only_from_assistant_not_user_text_block() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
+        None,
         None,
         LabelFilter::new(&["agent.message".to_string()], &[]),
         &m,
@@ -497,6 +510,7 @@ fn redacted_thinking_respects_the_label_filter() {
     let mut hits = Vec::new();
     collect_record_hits(
         &rec,
+        None,
         None,
         filter,
         &Matcher::pure(),

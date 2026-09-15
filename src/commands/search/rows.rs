@@ -34,6 +34,13 @@ pub(crate) struct Kept {
     /// the native jsonl. Such a record has no physical `line_no` (0); its hits render
     /// `(elicitation sidecar)` instead of `Lnnnn`.
     pub(crate) from_sidecar: bool,
+    /// The record's own source line, kept ONLY for a NON-ROLE line - one a gate or an
+    /// explicit address admitted, never one the §7d role keep already had. Those are the
+    /// lines whose content the `Record` struct cannot answer for: it deserializes what
+    /// csift uses and ignores the rest, and a bookkeeping line consists of exactly the
+    /// rest. The render and the unmodeled unit read it; `None` on every conversation
+    /// record, so the scan allocates nothing for a line it would have kept anyway.
+    pub(crate) gated_raw: Option<String>,
 }
 
 /// One row of the file-order list the SURVIVAL AXIS walks: a searchable record, or a

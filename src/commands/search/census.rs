@@ -233,9 +233,6 @@ pub(crate) fn active_filters_str(args: &SearchArgs) -> String {
     if let Some(t) = &args.turn_range {
         parts.push(format!("--turn {t}"));
     }
-    if args.additional_context {
-        parts.push("--additional-context".to_string());
-    }
     if args.attachments {
         parts.push("--attachments".to_string());
     }
@@ -309,7 +306,8 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
         // never looked at those lines, so say so. The list is DERIVED from the gated set
         // itself, so a leaf added to (or admitted differently by) the scan can never
         // leave a stale name in the note - the drift this hard-coded list already grew.
-        let leaves: Vec<&str> = crate::cli::GATED_LEAVES.iter().map(|c| c.path()).collect();
+        let gated = crate::cli::gated_leaves();
+        let leaves: Vec<&str> = gated.iter().map(|c| c.path()).collect();
         eprintln!(
             "csift: note: the gated leaves ({}) are scanned only under a -t that reaches \
              them - this absence does not cover those lines.",

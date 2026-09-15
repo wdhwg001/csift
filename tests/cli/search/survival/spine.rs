@@ -171,12 +171,13 @@ fn the_chain_answer_is_the_same_through_every_entry() {
             ],
         ),
         (
-            "--additional-context",
+            "-t harness.hook.context",
             vec![
                 "search".into(),
                 String::new(),
                 at(SSESS),
-                "--additional-context".into(),
+                "-t".into(),
+                "harness.hook.context".into(),
                 "--format".into(),
                 "json".into(),
             ],

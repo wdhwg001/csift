@@ -204,9 +204,9 @@ fn an_unlabeled_unit_enters_no_census_axis() {
 
 #[test]
 fn a_line_that_is_not_a_record_at_all_stays_a_hard_miss() {
-    // The fetch domain did not widen to everything: a session-state cache line carries no
-    // message, no attachment and no promoted leaf, so the address is still a hard miss that
-    // points at `--raw` rather than rendering a fabricated unit.
+    // The fetch domain is exactly what its name says. A bookkeeping line IS a record
+    // now - it carries a leaf, so an address renders it - while a line that is not a
+    // JSON object at all still misses and points at `--raw`.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-0000000000fe";
     h.write(
@@ -216,18 +216,35 @@ fn a_line_that_is_not_a_record_at_all_stays_a_hard_miss() {
             r#"{"type":"last-prompt","lastPrompt":"chart the reef"}"#, "\n",
         ),
     );
+    // The bookkeeping line renders under its own leaf.
     let out = h.run(&["show", at(sess).as_str(), "--line", "2"]);
-    assert!(!out.success, "stdout: {}", out.stdout);
+    assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stderr.contains("no such record(s)"),
-        "stderr: {}",
-        out.stderr
+        out.stdout.contains("harness.bookkeeping.last-prompt"),
+        "stdout: {}",
+        out.stdout
     );
-    let raw = h.run(&["show", at(sess).as_str(), "--line", "2", "--raw"]);
+    // A TORN line is not a record at all: still a hard miss pointing at `--raw`.
+    let torn = "00000000-0000-4000-8000-0000000000fd";
+    h.write(
+        &format!("{ENC}/{torn}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            r#"{"type":"last-prompt","lastProm"#, "\n",
+        ),
+    );
+    let miss = h.run(&["show", at(torn).as_str(), "--line", "2"]);
+    assert!(!miss.success, "stdout: {}", miss.stdout);
+    assert!(
+        miss.stderr.contains("no such record(s)"),
+        "stderr: {}",
+        miss.stderr
+    );
+    let raw = h.run(&["show", at(torn).as_str(), "--line", "2", "--raw"]);
     assert!(
         raw.success,
         "but --raw still shows the bytes: {}",
         raw.stderr
     );
-    assert!(raw.stdout.contains("last-prompt"), "{}", raw.stdout);
+    assert!(raw.stdout.contains("lastProm"), "{}", raw.stdout);
 }

@@ -231,6 +231,16 @@ pub struct Record {
     #[serde(default)]
     pub attachment: Option<Box<serde_json::value::RawValue>>,
 
+    /// The text the harness's attachment CONVERTER produced for this record, written as
+    /// a TOP-LEVEL key of the attachment record (a sibling of `attachment`, never a key
+    /// inside the payload). Present only when the whole conversion was text, so its
+    /// presence WITNESSES that a record converted; its absence is not evidence of the
+    /// opposite, because a mixed text-and-image conversion writes none. Kept unparsed
+    /// (a conversion can embed a whole file) and read for exactly one question:
+    /// [`Record::delivery_override`]'s `hook_success` arm.
+    #[serde(default)]
+    pub rendered: Option<Box<serde_json::value::RawValue>>,
+
     /// `file-history-snapshot` payload (a top-level sibling). Carries
     /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.
     /// Read only by `recover` to know a disk backup EXISTED for a path at a time

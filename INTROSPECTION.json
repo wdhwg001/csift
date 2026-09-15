@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "276-283",
+          "lines": "286-293",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7197,7 +7197,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "405-407",
+          "lines": "415-417",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9969,7 +9969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "392-398",
+          "lines": "402-408",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -13101,7 +13101,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "450",
+          "lines": "460",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -13194,8 +13194,8 @@
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "481-482",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "119-120",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13281,8 +13281,8 @@
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "487-488",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "125-126",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13408,8 +13408,8 @@
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "550",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "188",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13540,8 +13540,8 @@
       "depends": "csift's attachment needle is the QUOTED form `\"attachment\"`, which is serialization-tolerant and never false-keeps on prose mentioning the word; a bare-word needle would defeat the prefilter on every csift development transcript.",
       "code": [
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "483-486",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "121-124",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13610,12 +13610,12 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "114-120",
-          "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,\n        queued: reach(Class::UserQueued),\n        turn_duration: reach(Class::TurnDuration),"
+          "lines": "115-119",
+          "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "557-561",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "195-199",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14305,7 +14305,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "503-506",
+          "lines": "505-508",
           "snippet": "    // v0.10.0 promoted lines whose render FABRICATES text (key=value excerpts): the\n    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
@@ -14391,8 +14391,8 @@
           "snippet": "        \"file-history-snapshot\" | \"file-history-delta\" => Class::BookkeepingFileHistory,"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "454",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "73",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14767,8 +14767,8 @@
           "snippet": "/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a\n/// legacy boundary carrying just the four scalars renders byte-for-byte as before:"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "541-543",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "179-181",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -14997,7 +14997,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "497-502",
+          "lines": "499-504",
           "snippet": "    if args\n        .label_filter()\n        .selected(Class::CompactionBoundary.path())\n    {\n        verifiable.push(b\"compact_boundary\");\n    }"
         }
       ],
@@ -17349,7 +17349,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "494",
+          "lines": "496",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
@@ -17359,7 +17359,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "487-496",
+          "lines": "489-498",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -18919,7 +18919,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "320-323",
+          "lines": "330-333",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20061,7 +20061,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "309-313",
+          "lines": "319-323",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -21979,7 +21979,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "234-242",
+          "lines": "244-252",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22099,7 +22099,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "237-240",
+          "lines": "247-250",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22194,7 +22194,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "244-252",
+          "lines": "254-262",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -22208,8 +22208,8 @@
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "495-499",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "133-137",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -35179,8 +35179,8 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "328",
-          "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
+          "lines": "328-334",
+          "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
       "instrument": "`rg -m1 'hook_additional_context' <transcript> | jq '.attachment.content | type'` prints `array`; then `csift search '<a needle only in injected hook context>' --additional-context @<id>` must find it while the same search without the flag must not. Counting rule: one payload per raw attachment line.",
@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "405-406",
+          "lines": "415-416",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -36614,7 +36614,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "237-240",
+          "lines": "247-250",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -37041,7 +37041,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "494",
+          "lines": "496",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         }
       ],
@@ -41123,7 +41123,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "471-473",
+          "lines": "478-480",
           "snippet": "                    // Adjacency is never consulted, and a mixed multi-block record splits\n                    // per BLOCK.\n                    let Some(class) = crate::model::thinking_block_leaf(block) else {"
         },
         {
@@ -41224,7 +41224,7 @@
       "code": [
         {
           "path": "src/commands/search/render.rs",
-          "lines": "76-79",
+          "lines": "102-105",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -43235,7 +43235,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "542-544",
+          "lines": "544-546",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
@@ -45850,7 +45850,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "254-258",
+          "lines": "264-268",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46102,7 +46102,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "260-264",
+          "lines": "270-274",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -46303,12 +46303,12 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "219-229",
+          "lines": "222-232",
           "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "81-89",
+          "lines": "107-115",
           "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -46916,7 +46916,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "507-509",
+          "lines": "509-511",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
@@ -47020,7 +47020,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "276-279",
+          "lines": "286-289",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48178,7 +48178,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "413-415",
+          "lines": "446-448",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -48448,8 +48448,8 @@
           "snippet": "            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];\n            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "556-562",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "194-200",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48574,7 +48574,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "294-300",
+          "lines": "304-310",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -48666,7 +48666,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "507-514",
+          "lines": "509-516",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
@@ -48781,8 +48781,8 @@
           "snippet": "    #[must_use]\n    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "556-562",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "194-200",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -50704,7 +50704,7 @@
       "code": [
         {
           "path": "src/model/delivery.rs",
-          "lines": "62-64",
+          "lines": "65-67",
           "snippet": "        if self.is_virtual == Some(true) {\n            return Some(false);\n        }"
         }
       ],
@@ -50905,13 +50905,13 @@
       "depends": "csift gates each promoted leaf behind an explicit selector or a `show` address through `CandidateGates` - one `&&`-gated SIMD memmem per leaf, so a default scan pays nothing. The gate is STRICTER than the compaction-boundary keep, which a match-all scan admits while these leaves stay out.",
       "code": [
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "435-441",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "54-60",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "469-472",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "107-110",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -51000,12 +51000,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "369-374",
+          "lines": "379-384",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "380-383",
+          "lines": "390-393",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51132,12 +51132,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "380-383",
+          "lines": "390-393",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "369-374",
+          "lines": "379-384",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52210,8 +52210,8 @@
           "snippet": "    /// Record discriminator: \"user\", \"assistant\", \"system\", \"summary\",\n    /// \"last-prompt\", \"attachment\", \u2026 (open set - keep as String, never enum-panic).\n    #[serde(default)]\n    pub r#type: Option<String>,"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "464-469",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "102-107",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -52838,7 +52838,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "360-362",
+          "lines": "370-372",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53089,12 +53089,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "444",
+          "lines": "454",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "466-471",
+          "lines": "476-481",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53201,7 +53201,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "466-471",
+          "lines": "476-481",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53290,7 +53290,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "450-452",
+          "lines": "460-462",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53575,7 +53575,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "405-406",
+          "lines": "415-416",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53766,13 +53766,13 @@
       "depends": "csift's stage-1 prefilter drops attachment lines pre-JSON unless a gate admits them (`--additional-context`, `--attachments`, `--count-by attachment`, or an explicit `show` address); admitting them by default doubles scan cost and floods every search.",
       "code": [
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "464-469",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "102-107",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "487-488",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "125-126",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53871,14 +53871,14 @@
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "481-482",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "119-120",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "328",
-          "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
+          "lines": "328-334",
+          "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
       "instrument": "`jq -r 'select(.type==\"attachment\") | .attachment.type' <transcript> | sort | uniq -c` must show `hook_additional_context` and `jq '.attachment.content | type'` on one such line must print `array`; then `csift search '<a string your hook injects>' @<session> --additional-context` must match while the same search without the flag must not. Counting rule: one attachment record per hook injection.",
@@ -53969,7 +53969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "346-351",
+          "lines": "356-361",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54067,7 +54067,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "353-357",
+          "lines": "363-367",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -55307,7 +55307,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "356-357",
+          "lines": "378-379",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55406,7 +55406,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "182-190",
+          "lines": "185-193",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -55421,7 +55421,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "325-329",
+          "lines": "332-336",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -55929,12 +55929,12 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "338-342",
+          "lines": "340-344",
           "snippet": "    // A char that JSON escapes inside a string does not survive verbatim in the raw\n    // line bytes the prefilter scans - emitting a literal for it causes false\n    // negatives. `\\` is already excluded via META above; guard `\"`, control chars,\n    // and DEL here.\n    if pattern.chars().any(json_escapes_in_string) {"
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "539-541",
+          "lines": "541-543",
           "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, any C0 control char (`< 0x20`), or DEL.\n/// (`\\` is handled separately as a regex metacharacter.)"
         }
       ],
@@ -56016,7 +56016,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "243-254",
+          "lines": "258-269",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],
@@ -56121,8 +56121,8 @@
           "snippet": "/// `\"role\"` is `\"user\"` OR `\"assistant\"` (any JSON whitespace around the colon) -\n/// the candidate test for `search`/`show`/`verbatim`/`list`/`stats` stage-1 filters.\npub fn line_has_role_marker(line: &[u8]) -> bool {\n    line_role_value_matches(line, true, true)\n}\n\n/// `\"role\"` is `\"user\"` only - the genuine-user/carrier hook `files`/`recover` use\n/// (their assistant-side coverage rides tool-name needles, so admitting every\n/// assistant text record here would repeal their \u00a77 prefilter).\npub fn line_has_user_role_marker(line: &[u8]) -> bool {\n    line_role_value_matches(line, true, false)\n}"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "510-516",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "148-154",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -56210,7 +56210,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "526-530",
+          "lines": "528-532",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -60120,7 +60120,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "399-404",
+          "lines": "409-414",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -64659,7 +64659,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "20-21",
+          "lines": "27-28",
           "snippet": "    let address = AddressSet { lines, uuids };\n    let use_address = !(address.lines.is_empty() && address.uuids.is_empty());"
         },
         {
@@ -64758,7 +64758,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "547-553",
+          "lines": "549-555",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -65178,7 +65178,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "542-544",
+          "lines": "544-546",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],
@@ -65262,7 +65262,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "369-374",
+          "lines": "379-384",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65427,7 +65427,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "380-383",
+          "lines": "390-393",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -70588,8 +70588,8 @@
           "snippet": "let subtype = rec.subtype.as_deref().unwrap_or(\"system\");"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "516",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "154",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -71977,7 +71977,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "487-496",
+          "lines": "489-498",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -72555,7 +72555,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "525-526",
+          "lines": "527-528",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         }
       ],
@@ -74386,7 +74386,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "187-190",
+          "lines": "190-193",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -79899,8 +79899,8 @@
           "snippet": "    pub(crate) fn push_hook_classes(&self, out: &mut Vec<Class>) {\n        if self.csift_channel_text().is_some() {\n            push_unique(out, Class::CommChannel);\n        }\n        push_unique(out, Class::HookContext);\n    }"
         },
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "551-555",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "189-193",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -80066,7 +80066,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "99-106",
+          "lines": "100-107",
           "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
@@ -80147,7 +80147,7 @@
         },
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "137-141",
+          "lines": "138-142",
           "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.hook.context` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
         }
       ],
@@ -86627,7 +86627,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "182-190",
+          "lines": "185-193",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -86934,8 +86934,8 @@
       "code": [
         {
           "path": "src/model/delivery.rs",
-          "lines": "56-68",
-          "snippet": "        if ty == \"system\" {\n            return (self.subtype.as_deref() == Some(\"local_command\")).then_some(true);\n        }\n        if ty != \"user\" && ty != \"assistant\" {\n            return None;\n        }\n        if self.is_virtual == Some(true) {\n            return Some(false);\n        }\n        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
+          "lines": "56-71",
+          "snippet": "        if ty == \"system\" {\n            return (self.subtype.as_deref() == Some(\"local_command\")).then_some(true);\n        }\n        if ty == \"attachment\" {\n            return self.attachment_delivery();\n        }\n        if ty != \"user\" && ty != \"assistant\" {\n            return None;\n        }\n        if self.is_virtual == Some(true) {\n            return Some(false);\n        }\n        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
         },
         {
           "path": "src/cli/selectors.rs",
@@ -86944,8 +86944,8 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "435-438",
-          "snippet": "    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        SYSTEM_LINE_LEAVES.iter().any(|&c| self.reaches_gated(c)) || self.bare_harness_role()\n    }"
+          "lines": "469-474",
+          "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],
       "instrument": "Binary: `grep -abo 'function LP(' <executable>` and read 120 bytes at the returned offset; the same for `function UWt(`, `function zj(`, `function LV(`, `Jc=\"<synthetic>\"` and the loop literal `for(let nt of B){if(LP(nt))continue;`. Window negative: `grep -c local-command-stdout` over the whole executable and over bytes 165390000-166100000, counting rule one observation per byte match. Corpus: sum `rg -c '\"subtype\":\"local_command\"'` over the top-level transcripts under the projects root, counting rule one observation per record, and cross-check against `csift search \"\" -t harness.meta.system --no-subagents --count-by label`.",
@@ -87051,7 +87051,7 @@
       "code": [
         {
           "path": "src/model/delivery.rs",
-          "lines": "65-68",
+          "lines": "68-71",
           "snippet": "        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
         },
         {
@@ -87061,8 +87061,8 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "35-43",
-          "snippet": "    // C-28: a record Claude Code's request assembler DROPPED says so in the label zone -\n    // display-only, like [narration summary]: it is not matchable text, so it needs no\n    // synthesized-marker registration. Reachable only through a glob or an explicit\n    // leaf; a bare role never selects such a record in the first place.\n    let nd = if h.delivery == Some(false) {\n        \" [not delivered]\"\n    } else {\n        \"\"\n    };"
+          "lines": "51-57",
+          "snippet": "    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's\n    // own marker and the engine's own come out in the same shape.\n    let nd = if h.delivery == Some(false) {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    } else {\n        String::new()\n    };"
         }
       ],
       "instrument": "Binary: `grep -abo 'isApiErrorMessage:!0' <executable>` (expect 4 offsets) and read 180 bytes at each to separate the record factory from the wire projections; `grep -abo 'model:Jc,role:\"assistant\"'` and `grep -abo 'Jc=\"<synthetic>\"'` for the sentinel. Corpus: `rg -c '\"isApiErrorMessage\":true'` summed over the top-level transcripts, then the same matching lines piped through `rg -c '\"model\":\"<synthetic>\"'`; counting rule one observation per record. Effect side: `csift search \"\" -t agent --no-subagents --count-by label` before and after, reading the `agent.message` row.",
@@ -87237,7 +87237,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "250-255",
+          "lines": "247-252",
           "snippet": "pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {\n    eprintln!(\n        \"csift: 0 matches \u2014 a DEFINITIVE absence (exit 0), NOT an error. \\\n         Scope: {} session(s). Active filters: {}.\",\n        diag.sessions_in_scope, diag.active_filters\n    );"
         },
         {
@@ -87337,8 +87337,8 @@
       "depends": "csift keys the delivered case on the record shape `type:\"system\"` plus `subtype:\"local_command\"` alone (`Record::delivery_override`), not on any command name or tag, and that is sound only because one factory writes the shape. The candidate gate that admits the line is the key-only `\"subtype\"` byte needle, so a second writer producing the same subtype would be picked up automatically, but a writer producing a DIFFERENT subtype for the same purpose would silently fall out of the bare-role view.",
       "code": [
         {
-          "path": "src/commands/search/scan.rs",
-          "lines": "515-516",
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "153-154",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
@@ -88570,8 +88570,8 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "57-60",
-          "snippet": "        let filter = filter.with_survival(chain.survival(idx).selectable());\n        collect_record_hits(\n            rec,\n            chain.opener_class(idx),"
+          "lines": "57-61",
+          "snippet": "        let filter = filter.with_survival(chain.survival(idx).selectable());\n        collect_record_hits(\n            rec,\n            kept.gated_raw.as_deref(),\n            chain.opener_class(idx),"
         }
       ],
       "instrument": "On a transcript carrying a rewound turn, compare `csift search \"\" @<id> -t user` with `-t 'user.*'` and with `-t user.rewound`, and compare `--count-by label` under each: the bare role must omit the rewound records, the other two must include them, and the census keys must match what each selector surfaces.",
@@ -88865,7 +88865,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "57-60",
+          "lines": "132-135",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -91301,7 +91301,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "55-58",
+          "lines": "69-72",
           "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
         }
       ],

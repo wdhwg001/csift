@@ -205,7 +205,9 @@ impl Matcher {
                 return true;
             }
         }
-        if let Some(t) = record_raw_text(rec) {
+        // The synth re-render only ever sees MARKER-bearing role lines, which carry
+        // their text in `message` - no source line needed.
+        if let Some(t) = record_raw_text(rec, None) {
             if self.locate(&t).is_some() {
                 return true;
             }

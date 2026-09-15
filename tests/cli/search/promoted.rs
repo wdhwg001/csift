@@ -308,13 +308,16 @@ fn show_renders_promoted_lines_flag_free() {
     // By uuid too (the system records carry one).
     let byu = h.run(&["show", &at(SESS), "--uuid", "w1"]);
     assert!(byu.stdout.contains("Survey finished"), "{}", byu.stdout);
-    // A content-less dequeue and an automation rider are still not renderable records.
+    // A content-less dequeue carries no HUMAN text, so it is not `user.queued` - but it
+    // is a line, and an address renders it under the harness's own queue leaf (the 1:1
+    // law: a parseable line an address names never reads as absent).
     let dq = h.run(&["show", &at(SESS), "--line", "4"]);
-    assert!(!dq.success, "{}", dq.stdout);
+    assert!(dq.success, "stderr: {}", dq.stderr);
     assert!(
-        dq.stderr.contains("no such record(s): L4") && dq.stderr.contains("--raw"),
+        dq.stdout.contains("harness.bookkeeping.queue")
+            && dq.stdout.contains(r#""operation":"dequeue""#),
         "{}",
-        dq.stderr
+        dq.stdout
     );
     let raw = h.run(&["show", &at(SESS), "--line", "4", "--raw"]);
     assert!(

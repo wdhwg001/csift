@@ -1,4 +1,11 @@
-//! Per-file scan: fetch_records (show's engine), search_one_file, the candidate prefilter.
+//! Per-file scan: fetch_records (show's engine), search_one_file, the per-file pipeline.
+//!
+//! A PAIRED ROOT: the pipeline lives here and the CANDIDATE GATES - which lines a query
+//! admits, and the needle each one costs - live in [`gates`].
+
+mod gates;
+
+pub(crate) use gates::*;
 
 use super::*;
 
@@ -74,22 +81,16 @@ pub(crate) fn search_one_file(
     let needs_compact_boundary = args
         .label_filter()
         .selected(Class::CompactionBoundary.path());
-    // The `--additional-context` widening mirrors the D7 gate: only when the flag is set AND
-    // the selector can reach `harness.hook.context` - OR when an ADDRESS names records directly
-    // (`show --line`/`--uuid` must render an addressed attachment record flag-free).
-    let needs_hook_context = (args.additional_context
-        && args.label_filter().selected(Class::HookContext.path()))
-        || address.is_some();
-    // The `--attachments` widening (a SUPERSET of `--additional-context`): keep EVERY
-    // `type:"attachment"` line when the flag (or the `--count-by attachment` axis, which
-    // implies it) is set AND the selector can reach either `harness.meta` leaf - or when
-    // an ADDRESS names records directly (`show --line`/`--uuid` renders any addressed
-    // attachment record flag-free).
-    let needs_attachments = (args.scan_attachments()
-        && ATTACHMENT_CARRIED_LEAVES
-            .iter()
-            .any(|c| args.label_filter().selected(c.path())))
-        || address.is_some();
+    // The hook-context keep is now SELECTOR-gated like every other gated leaf: an
+    // explicit `-t` reaching `harness.hook.context` (or an ADDRESS, which must render an
+    // addressed attachment record flag-free). The `--additional-context` flag that used
+    // to open it is retired - naming the leaf is the form that survived.
+    let needs_hook_context = args.scans_gated(Class::HookContext) || address.is_some();
+    // The FULL attachment keep: every `type:"attachment"` line, admitted by `--attachments`
+    // (or the `--count-by attachment` axis, which implies it) with a selector that can
+    // reach some attachment-carried leaf, by an explicit selector naming one of those
+    // leaves, or by an ADDRESS.
+    let needs_attachments = args.scans_attachment_lines() || address.is_some();
     // v0.10.0 promoted non-record lines: admitted ONLY under a selector that reaches the
     // leaf (`scans_gated` - a bare no-`-t` scan never parses them) or an address (`show
     // --line`/`--uuid` renders an addressed line flag-free). `scans_gated` is the ONE
@@ -116,11 +117,18 @@ pub(crate) fn search_one_file(
         hook_context: needs_hook_context,
         attachments: needs_attachments,
         channel: needs_channel,
-        queued: reach(Class::UserQueued),
+        // ONE needle, TWO leaves: a `queue-operation` line is the human's queued text or
+        // the harness's own queue row, and only its CONTENT says which - so either
+        // selector has to admit the line.
+        queued: reach(Class::UserQueued) || reach(Class::BookkeepingQueue),
         turn_duration: reach(Class::TurnDuration),
         away_summary: reach(Class::TurnRecap),
         stop_hooks: reach(Class::TurnStopHooks),
         snapshot: reach(Class::BookkeepingFileHistory),
+        // v0.13.0: the 15 remaining non-transcript line types, one needle each behind
+        // its own leaf's gate (the bitmask below). The whole group short-circuits on a
+        // zero mask, so a default scan pays for none of them.
+        bookkeeping: bookkeeping_mask(args, address.is_some()),
         // v0.11.1: `scans_gated` ALSO admits this leaf under a BARE `harness` role
         // selector. It holds the one gated shape the model actually receives - a
         // `system`/`local_command` record, which the request assembler re-mints as a
@@ -129,7 +137,7 @@ pub(crate) fn search_one_file(
         // is the same key-only `"subtype"` memmem, still `&&`-gated; the per-record
         // override (`Record::delivery_override`) then drops every non-delivered system
         // record this admission parsed. Every other gated leaf is unchanged.
-        system: SYSTEM_LINE_LEAVES.iter().any(|&c| reach(c)),
+        system: system_line_leaves().into_iter().any(reach),
         schedule_fire: needs_schedule_fire,
     };
 
@@ -241,7 +249,14 @@ pub(crate) fn search_one_file(
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut spine, mut skipped): (Vec<Kept>, Vec<crate::parse::SpineRow>, usize) =
         crate::parse::scan_lines_parallel_split(bytes, |line, line_no| {
-            if !line_is_transcript_candidate(line, &gates) {
+            let ordinary = line_is_transcript_candidate(line, &gates);
+            // The 1:1 LAW: an explicit `--line` address names a physical line, and csift
+            // answers for it - a shape the prefilter drops and csift models no leaf for
+            // still renders, as an unmodeled unit, rather than reading as "no such
+            // record". Scoped to the NAMED lines, so a `show --line` on a giant transcript
+            // parses those few extra lines and not the file. A `--uuid` address cannot
+            // name a line before the scan, so it keeps the ordinary admission.
+            if !ordinary && !address.is_some_and(|a| a.lines.contains(&line_no)) {
                 // The SURVIVAL AXIS needs the DAG, and the DAG threads through the
                 // `attachment` / `system` lines this prefilter drops - a prompt submitted
                 // after a SessionStart hook is parented to that hook's attachment record.
@@ -262,6 +277,12 @@ pub(crate) fn search_one_file(
                     can_hit,
                     line_no,
                     from_sidecar: false,
+                    // A NON-ROLE line is one a gate admitted, and its content lives in
+                    // fields the `Record` struct does not model - so the render and the
+                    // unmodeled unit need the bytes. A conversation record allocates
+                    // nothing.
+                    gated_raw: (!crate::parse::line_has_role_marker(line))
+                        .then(|| String::from_utf8_lossy(line).into_owned()),
                 }),
                 Ok(None) => crate::parse::SplitVerdict::Ignore,
                 Err(_) => crate::parse::SplitVerdict::Skip,
@@ -346,6 +367,7 @@ pub(crate) fn search_one_file(
                 can_hit: true, // no physical line to prefilter - let the matcher decide.
                 line_no: 0,
                 from_sidecar: true,
+                gated_raw: None,
             });
         }
     }
@@ -408,171 +430,4 @@ pub(crate) fn search_one_file(
         turn_count,
         chain: chain_counts,
     })
-}
-
-/// Every leaf a `type:"attachment"` line can carry - the label side of the
-/// `--attachments` gate, so a selector that can reach none of them short-circuits
-/// before the memmem exactly as the D7 law requires.
-pub(crate) const ATTACHMENT_CARRIED_LEAVES: [Class; 13] = [
-    Class::UserMessage,
-    Class::AgentMessageStructured,
-    Class::CommChannel,
-    Class::HookContext,
-    Class::HookOutcome,
-    Class::ContextReminder,
-    Class::ContextListing,
-    Class::ContextPrompt,
-    Class::ContextFile,
-    Class::ContextMode,
-    Class::ContextIde,
-    Class::ContextTask,
-    Class::ContextSkill,
-];
-
-/// The `&&`-gated candidate keeps beyond the role marker (each one a SIMD memmem that
-/// runs only when its gate is on, so a default scan pays ZERO for all of them).
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct CandidateGates {
-    /// D7: the `compact_boundary` metrics record (selected label).
-    pub(crate) compact_boundary: bool,
-    /// `--additional-context` (or an address): hook-injected context attachments.
-    pub(crate) hook_context: bool,
-    /// `--attachments` / the attachment axis (or an address): every attachment line.
-    pub(crate) attachments: bool,
-    /// v0.11.0 (a selector reaching `agent.communication.channel`, which a bare scan
-    /// does): a csift-channel delivery attachment. DEFAULT-ON, unlike every other
-    /// attachment keep - a delivery is a message, not machinery.
-    pub(crate) channel: bool,
-    /// v0.10.0 (explicit selector or address): `queue-operation` lines.
-    pub(crate) queued: bool,
-    /// v0.10.0: `system`/`turn_duration` lines.
-    pub(crate) turn_duration: bool,
-    /// v0.10.0: `system`/`away_summary` lines.
-    pub(crate) away_summary: bool,
-    /// v0.10.0: `system`/`stop_hook_summary` lines.
-    pub(crate) stop_hooks: bool,
-    /// v0.10.0: `file-history-snapshot` + `file-history-delta` lines.
-    pub(crate) snapshot: bool,
-    /// v0.10.1: every OTHER `type:"system"` subtype (`harness.meta.system`).
-    pub(crate) system: bool,
-    /// v0.12.2 (a selector reaching `harness.schedule.fire`, which a bare scan does): the
-    /// `system`/`scheduled_task_fire` line that names WHEN a fired prompt fired. DEFAULT-ON
-    /// like the channel keep, and demoted to a chain row again once its instant is read.
-    pub(crate) schedule_fire: bool,
-}
-
-/// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
-/// transcript message (user/assistant role marker) - drops `attachment`,
-/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the
-/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive
-/// (substring, not structural) so no genuine turn is lost.
-pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {
-    let needs_compact_boundary = gates.compact_boundary;
-    let needs_hook_context = gates.hook_context;
-    let needs_attachments = gates.attachments;
-    // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
-    // marker (genuine-user string content, tool carriers, assistant blocks all do).
-    // R13: matched serialization-tolerantly - `"role": "user"` (reserialized JSON,
-    // whitespace around the colon) is the same record and must not vanish silently.
-    static COMPACT_BOUNDARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"compact_boundary"));
-    // R13 needle law: a bare VALUE substring (the attachment payload's `type` value), never a
-    // compact `"key":"value"` byte pair - a reserialized line keeps the value intact.
-    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"hook_additional_context"));
-    // Quoted needle: `"attachment"` appears verbatim as the record's `"type"` VALUE (and as
-    // its payload KEY); an in-content quote is escaped to `\"` in raw bytes, so prose that
-    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value
-    // survives a reserialize; R13).
-    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
-    // v0.11.0 csift channel: the envelope needle is a bare VALUE substring of the injected
-    // content - ASCII, no JSON-escaped character - so it survives a reserialize (R13) and a
-    // decoded match implies a raw match. Shared with the classifier via one constant so the
-    // byte scan and the leaf can never drift.
-    static CHANNEL_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(Record::CSIFT_CHANNEL_NEEDLE.as_bytes()));
-    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the
-    // `type` values `"queue-operation"` and `"file-history-` (a prefix covering both
-    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system
-    // records (a value substring survives a reserialize; prose quoting the word lands
-    // on a role line and is harmless - it already parses).
-    static QUEUED_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"queue-operation\""));
-    static TURN_DURATION_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"turn_duration"));
-    static AWAY_SUMMARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"away_summary"));
-    static STOP_HOOKS_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"stop_hook_summary"));
-    static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"file-history-"));
-    // v0.10.1 catch-all system subtypes: the key-only needle `"subtype"` (every system
-    // record carries it; a quoted KEY survives a reserialize, and the classify arm
-    // decides which subtype it is - the already-modeled ones simply reclassify). Also the
-    // second half of the D7 boundary conjunction below, which narrows the same property to
-    // the one subtype it models.
-    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"subtype\""));
-    // v0.12.2: the fired-prompt sibling. Bare VALUE substring (R13-safe) shared with the
-    // classifier through one constant, and the RARE half of the conjunction below, so it is
-    // tested first and the key needle runs on the handful of lines that carry it.
-    static SCHEDULE_FIRE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| {
-            memmem::Finder::new(crate::model::SCHEDULED_TASK_FIRE_SUBTYPE.as_bytes())
-        });
-    crate::parse::line_has_role_marker(line)
-        // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
-        // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
-        // inspect their `compactMetadata` - but ONLY when an active `-t` selector can reach that label
-        // (`needs_compact_boundary`, derived once via `label_selected`). For every other query the
-        // `&&` short-circuits BEFORE the memmem, so a non-boundary search pays ZERO. When it IS run,
-        // the `||` chain still reaches this memmem only on lines that already failed both role checks,
-        // and boundary records are rare - so the §7 perf contract holds either way.
-        // The keep is a CONJUNCTION because the rare literal alone is not the discriminator:
-        // over every top-level transcript on one corpus (76 files, 2661636749 bytes, lines split
-        // on `\n` only) 252 of 252 true boundaries - a JSON object with top-level
-        // `type=="system"` and `subtype=="compact_boundary"` - carry the key-only bytes
-        // `"subtype"`, while 226 of 226 lines that carry the literal in a payload and would
-        // otherwise be admitted by D7 alone (attachments and `queue-operation` lines, which no
-        // other flagless keep reaches) carry it in none. The key needle is R13-safe by form (a
-        // quoted KEY survives a reserialize) and the boundary finder stays FIRST, so the second
-        // memmem runs only on the handful of lines carrying the rare literal.
-        || (needs_compact_boundary
-            && COMPACT_BOUNDARY_FINDER.find(line).is_some()
-            && SUBTYPE_FINDER.find(line).is_some())
-        // Opt-in hook-injected additionalContext (`search --additional-context`, or an explicit
-        // `show --line`/`--uuid` address - the refetch a search hit prints must resolve without
-        // the flag). Same `&&`-gating law as the boundary: a default scan pays ZERO.
-        || (needs_hook_context && HOOK_CONTEXT_FINDER.find(line).is_some())
-        // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
-        // explicit address). Same `&&`-gating law: a default scan pays ZERO.
-        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())
-        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on
-        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it
-        // still runs only on a line that failed both role checks, and a `-t` that cannot
-        // reach the leaf short-circuits before the memmem.
-        || (gates.channel && CHANNEL_FINDER.find(line).is_some())
-        // v0.10.0 promoted lines, each behind its own explicit-selector gate.
-        || (gates.queued && QUEUED_FINDER.find(line).is_some())
-        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())
-        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())
-        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())
-        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
-        || (gates.system && SUBTYPE_FINDER.find(line).is_some())
-        // v0.12.2: the `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a
-        // DEFAULT scan (the label gate is on whenever a selector can reach the leaf). A
-        // CONJUNCTION for the C-40 reason - measured over the 80 top-level transcripts of one
-        // corpus, all 465 records with top-level `type:"system"` and `subtype:"scheduled_task_fire"`
-        // carry the key-only bytes `"subtype"`, and of the lines carrying the literal WITHOUT
-        // being such a record not one does. That second population is a MOVING count, not a
-        // fixed one: 216 lines at the instant of the measurement, 72 of them reached by no role
-        // keep, and 211 of the 216 sat in the transcript of the session doing the measuring,
-        // because a session writing ABOUT the literal accumulates it in prose. That is the
-        // hazard itself, and it is why the discriminator is the KEY - a property of the
-        // producer - and never the literal's rarity. The rare literal is tested FIRST, so the
-        // key memmem runs on those few hundred lines rather than on every non-role line.
-        || (gates.schedule_fire
-            && SCHEDULE_FIRE_FINDER.find(line).is_some()
-            && SUBTYPE_FINDER.find(line).is_some())
 }

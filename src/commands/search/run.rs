@@ -83,6 +83,15 @@ fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> 
 }
 
 pub fn run_search(args: &SearchArgs) -> Result<()> {
+    // The retired `--additional-context` (v0.13.0). A hard error, never a quiet no-op:
+    // a run that silently scanned fewer lines than the caller asked for would read as a
+    // definitive absence, which is the one thing csift promises an empty result means.
+    if args.additional_context {
+        bail!(
+            "--additional-context was retired in 0.13.0; select the leaf: \
+             -t harness.hook.context"
+        );
+    }
     // ── PATTERN-position traps (the ONE place csift's positional grammar differs:
     //    search's first positional is the PATTERN, not a target) ──
     if args.pattern.starts_with('@') {

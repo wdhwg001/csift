@@ -58,6 +58,8 @@ fn render_label_decorates_pairing_and_direction() {
         replay_copy_of: None,
         compaction: None,
         truncated: false,
+        markers: Vec::new(),
+        facts: Vec::new(),
     };
     assert_eq!(render_label(&paired), "agent.tool.use ▹ agent.tool.result");
     let pending = Hit {
@@ -225,9 +227,14 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
     )
     .unwrap();
     let labels = rec.classify(&crate::model::ClassifyCtx::top_level());
-    let (class, text) =
-        record_text_emission(&rec, &labels, LabelFilter::all(), &PlanIndex::default())
-            .expect("a channel delivery emits");
+    let (class, text) = record_text_emission(
+        &rec,
+        None,
+        &labels,
+        LabelFilter::all(),
+        &PlanIndex::default(),
+    )
+    .expect("a channel delivery emits");
     assert_eq!(class, Class::CommChannel, "the message view is the richest");
     assert_eq!(
         text,
@@ -237,8 +244,8 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
     // joined content, exactly as every other hook context renders.
     let include = vec!["harness.hook.context".to_string()];
     let hook_only = LabelFilter::new(&include, &[]);
-    let (class, text) =
-        record_text_emission(&rec, &labels, hook_only, &PlanIndex::default()).expect("hook view");
+    let (class, text) = record_text_emission(&rec, None, &labels, hook_only, &PlanIndex::default())
+        .expect("hook view");
     assert_eq!(class, Class::HookContext);
     assert!(
         text.ends_with("\na second block"),
@@ -280,6 +287,8 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         replay_copy_of: None,
         compaction: None,
         truncated: false,
+        markers: Vec::new(),
+        facts: Vec::new(),
     };
     assert_eq!(
         render_label(&hit),
@@ -338,6 +347,8 @@ fn a_summarize_summary_names_its_direction_in_the_label_zone() {
         replay_copy_of: None,
         compaction,
         truncated: false,
+        markers: Vec::new(),
+        facts: Vec::new(),
     };
     let tagged = mk(Some(Box::new(CompactionHit {
         metadata: None,

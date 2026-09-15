@@ -35,7 +35,7 @@ use memchr::memmem;
 use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
 
-use crate::cli::{LabelFilter, OutputFormat, SearchArgs, SYSTEM_LINE_LEAVES};
+use crate::cli::{system_line_leaves, LabelFilter, OutputFormat, SearchArgs};
 use crate::model::{
     normalize_line, tool_result_content_text, Block, Class, ClassifyCtx, Content, PlanIndex,
     Record, SpawnLookup,

@@ -56,6 +56,9 @@ impl Record {
         if ty == "system" {
             return (self.subtype.as_deref() == Some("local_command")).then_some(true);
         }
+        if ty == "attachment" {
+            return self.attachment_delivery();
+        }
         if ty != "user" && ty != "assistant" {
             return None;
         }
@@ -66,5 +69,35 @@ impl Record {
             && self.is_api_error_message == Some(true)
             && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);
         synthetic_api_error.then_some(false)
+    }
+
+    /// The attachment arm of [`Record::delivery_override`]: whether the harness's
+    /// converter turned THIS attachment record into content the model received.
+    ///
+    /// Two shapes need an answer the leaf default cannot give.
+    ///
+    /// A payload type in [`NEVER_CONVERTS`] is one of the converter's own drop arms, so
+    /// the record is NOT delivered whatever its leaf says - and several of those leaves
+    /// (`harness.context.*`, `agent.message.structured`) are otherwise visible, which is
+    /// exactly why this is a per-record verdict.
+    ///
+    /// A `hook_success` is the mirror image: its leaf, `harness.hook.outcome`, says
+    /// invisible, and the few records the converter DID turn into text are the ones that
+    /// carry a rendered body. `rendered` is a TOP-LEVEL key of the attachment RECORD (not
+    /// of its payload), written only when the whole conversion was text; for this payload
+    /// type its presence coincides with the converter's own gate on every measured
+    /// record, which is why the test is narrowed to it rather than applied to attachments
+    /// at large.
+    ///
+    /// Every other attachment carries no override: the leaf default stands.
+    fn attachment_delivery(&self) -> Option<bool> {
+        let ty = self.attachment_type()?;
+        if NEVER_CONVERTS.contains(&ty.as_str()) {
+            return Some(false);
+        }
+        if ty == "hook_success" {
+            return Some(self.rendered.is_some());
+        }
+        None
     }
 }

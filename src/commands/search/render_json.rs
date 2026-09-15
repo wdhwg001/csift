@@ -79,7 +79,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
     };
     // Tool pairing (GOLD §7): the `▹` join state of an agent.tool.use/result hit, else null.
     let pairing = pairing_json(h.pair);
-    serde_json::json!({
+    let mut obj = serde_json::json!({
         // The id TRIO rides EVERY hit row too (R9): bare `.hits[]` flattening is the single
         // most natural jq idiom against the most-piped command, and with the trio only on
         // the exchange row it yielded silent nulls - two independent audits tripped on it.
@@ -157,7 +157,15 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // fetches the wrong record).
         "refetch": refetch_json(session_id, h),
         "refetch_uuid": refetch_uuid_json(session_id, h),
-    })
+    });
+    // The EXTENSION POINT: every `HitFact` projects its own key, so a family adds a
+    // variant and the wire shape follows with no edit here. Appended after the fixed
+    // keys and only when the hit carries a fact, so the default stream is unchanged.
+    for f in &h.facts {
+        let (key, value) = f.json();
+        obj[key] = value;
+    }
+    obj
 }
 
 pub(crate) fn render_json(

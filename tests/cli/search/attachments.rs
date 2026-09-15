@@ -98,6 +98,8 @@ fn attachments_are_invisible_by_default() {
         "default scan must not see attachment payloads:\n{}",
         out.stdout
     );
+    // Naming the LEAF is now a gate of its own (the `--additional-context` retirement
+    // generalised): the payload surfaces without `--attachments`.
     let labeled = h.run(&[
         "search",
         "glowlantern",
@@ -106,9 +108,22 @@ fn attachments_are_invisible_by_default() {
         "harness.context.file",
     ]);
     assert!(
-        labeled.stdout.contains("no matching exchanges"),
-        "the selector alone does not imply the gate:\n{}",
+        labeled.stdout.contains("harness.context.file"),
+        "an explicit leaf admits the attachment line:\n{}",
         labeled.stdout
+    );
+    // A selector that reaches NO attachment leaf still does not.
+    let other = h.run(&[
+        "search",
+        "glowlantern",
+        &at(ATTACH_SESS),
+        "-t",
+        "user.message",
+    ]);
+    assert!(
+        other.stdout.contains("no matching exchanges"),
+        "an unrelated selector never opens the gate:\n{}",
+        other.stdout
     );
 }
 

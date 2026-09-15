@@ -57,6 +57,7 @@ pub(crate) fn collect_turn_hits(
         let filter = filter.with_survival(chain.survival(idx).selectable());
         collect_record_hits(
             rec,
+            kept.gated_raw.as_deref(),
             chain.opener_class(idx),
             filter,
             matcher,
@@ -75,7 +76,7 @@ pub(crate) fn collect_turn_hits(
         // that is plainly there. Emit ONE unlabeled unit instead. Only an ADDRESS reaches
         // this: a scan still sees nothing, so no census, count or `-t` result moves.
         if address.is_some() && hits.len() == before {
-            if let Some(hit) = unlabeled_hit(rec, matcher, excerpt_max) {
+            if let Some(hit) = unlabeled_hit(rec, kept.gated_raw.as_deref(), matcher, excerpt_max) {
                 hits.push(hit);
             }
         }
@@ -121,6 +122,7 @@ pub(crate) fn collect_turn_siblings(
         let before = sibs.len();
         collect_record_hits(
             &kept.rec,
+            kept.gated_raw.as_deref(),
             None,
             all,
             &pure,
@@ -169,6 +171,7 @@ pub(crate) fn collect_turn_siblings(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_record_hits(
     rec: &Record,
+    raw: Option<&str>,
     opener_override: Option<Class>,
     filter: LabelFilter<'_>,
     matcher: &Matcher,
@@ -308,6 +311,10 @@ pub(crate) fn collect_record_hits(
                 compaction: compaction.clone(),
                 scheduled_at: scheduled_at.clone(),
                 truncated,
+                // The extension points start empty: `push_markers` fills what the
+                // engine itself knows, and a family adds its own beside it.
+                markers: Vec::new(),
+                facts: Vec::new(),
             });
         }
     };
@@ -328,7 +335,7 @@ pub(crate) fn collect_record_hits(
         rec.record_text_sections(ctx)
     };
     if sections.is_empty() {
-        if let Some((class, text)) = record_text_emission(rec, &labels, filter, plan_index) {
+        if let Some((class, text)) = record_text_emission(rec, raw, &labels, filter, plan_index) {
             let dir = if is_comm_class(class) {
                 direction.clone()
             } else {

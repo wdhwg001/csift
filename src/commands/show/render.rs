@@ -131,7 +131,7 @@ pub(crate) fn render_json(
                     serde_json::Value::Null,
                 ),
             };
-            let row = json!({
+            let mut row = json!({
                 "kind": "record",
                 "session_id": session_id,
                 "is_subagent": is_subagent,
@@ -173,6 +173,13 @@ pub(crate) fn render_json(
                 "mode": crate::commands::search::compaction_mode_json(h),
                 "compact_metadata": crate::commands::search::compact_metadata_json(h),
             });
+            // The EXTENSION POINT, same law as `search`'s hit rows: every `HitFact`
+            // projects its own key, so a fact a family adds reaches `show` with no edit
+            // here. Appended after the fixed keys, only when the hit carries a fact.
+            for f in &h.facts {
+                let (key, value) = f.json();
+                row[key] = value;
+            }
             println!("{}", serde_json::to_string(&row)?);
         }
     }

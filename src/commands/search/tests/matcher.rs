@@ -277,6 +277,7 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     collect_record_hits(
         &r,
         None,
+        None,
         LabelFilter::new(&["agent.tool.result".to_string()], &[]),
         &m,
         false,
@@ -292,6 +293,7 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     let mut with_resolve = Vec::new();
     collect_record_hits(
         &r,
+        None,
         None,
         LabelFilter::new(&["agent.tool.result".to_string()], &[]),
         &m,

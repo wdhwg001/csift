@@ -116,6 +116,7 @@ fn kept_fixture(lines: &[&str], matcher: &Matcher) -> Vec<Kept> {
                 can_hit: matcher.line_may_match(raw),
                 line_no: 1,
                 from_sidecar: false,
+                gated_raw: None,
             }
         })
         .collect()

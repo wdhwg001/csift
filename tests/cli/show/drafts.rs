@@ -162,17 +162,16 @@ fn show_prints_the_malformed_note_when_a_torn_line_exists() {
 }
 
 #[test]
-fn show_miss_error_states_the_current_render_domain() {
+fn show_renders_a_metadata_line_under_its_own_leaf() {
+    // The 1:1 law: a metadata line an address names is a bookkeeping RECORD, not a miss.
     let h = Home::new();
     draft_fixture(&h);
     let out = h.run(&["show", at(SESS).as_str(), "--line", "4"]);
-    assert!(!out.success, "a metadata line is still a miss");
+    assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stderr.contains("superseded drafts included")
-            && out.stderr.contains("attachment lines")
-            && out.stderr.contains("--raw"),
-        "the error names what DOES render (no stale metadata/attachment claim):\n{}",
-        out.stderr
+        out.stdout.contains("harness.bookkeeping."),
+        "the line renders under its own leaf:\n{}",
+        out.stdout
     );
 }
 

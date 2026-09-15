@@ -20,9 +20,21 @@ pub(crate) fn role_glyph(class: Option<Class>) -> char {
 /// markers - a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
 pub(crate) fn render_label(h: &Hit) -> String {
     // An ADDRESSED record csift models no leaf for (the refetch law, `Hit::class`): say so
-    // instead of borrowing a neighbouring leaf's name.
+    // instead of borrowing a neighbouring leaf's name - and NAME the on-disk shape when
+    // the record carries one, so a reader learns what the line is rather than only that
+    // csift had nothing to say about it.
     let Some(class) = h.class else {
-        return "(no label)".to_string();
+        let shape = h
+            .facts
+            .iter()
+            .map(|f| match f {
+                HitFact::Unmodeled(s) => s.as_str(),
+            })
+            .next();
+        return match shape {
+            Some(s) => format!("unmodeled: {s}"),
+            None => "(no label)".to_string(),
+        };
     };
     // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
     // C-13: a RESULT-side hit whose tool_result carried `is_error` says so in-band -
@@ -36,10 +48,12 @@ pub(crate) fn render_label(h: &Hit) -> String {
     // display-only, like [narration summary]: it is not matchable text, so it needs no
     // synthesized-marker registration. Reachable only through a glob or an explicit
     // leaf; a bare role never selects such a record in the first place.
+    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's
+    // own marker and the engine's own come out in the same shape.
     let nd = if h.delivery == Some(false) {
-        " [not delivered]"
+        format!(" {}", Marker::plain("not delivered").render())
     } else {
-        ""
+        String::new()
     };
     // C-31: the SURVIVAL AXIS rides the label zone the same way - display-only, so it
     // needs no synthesized-marker registration. `[rewound]` says the branch WAS answered
@@ -56,7 +70,19 @@ pub(crate) fn render_label(h: &Hit) -> String {
         (Class::AgentToolResult, Some(kind)) => format!(" [denied: {kind}]"),
         _ => String::new(),
     };
-    let nd = format!("{nd}{sv}{dk}");
+    // The EXTENSION POINTS ride the label zone after the markers this function computes
+    // itself: a family's `Marker` in push order, then any `HitFact` that projects one.
+    let ext: String = h
+        .markers
+        .iter()
+        .map(|m| format!(" {}", m.render()))
+        .chain(
+            h.facts
+                .iter()
+                .filter_map(|f| f.label_zone().map(|z| format!(" {z}"))),
+        )
+        .collect();
+    let nd = format!("{nd}{sv}{dk}{ext}");
     let nd = nd.as_str();
     match (class, h.pair) {
         (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {

@@ -28,6 +28,7 @@ fn kept_at(line: usize) -> Kept {
         can_hit: true,
         line_no: line,
         from_sidecar: line == 0,
+        gated_raw: None,
     }
 }
 

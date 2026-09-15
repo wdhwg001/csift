@@ -19,7 +19,7 @@ fn promoted_text_is_verbatim_for_queued_and_recap() {
         Some("check the widget build")
     );
     assert_eq!(
-        record_raw_text(&q).as_deref(),
+        record_raw_text(&q, None).as_deref(),
         Some("check the widget build")
     );
     let a = rec(
@@ -29,11 +29,14 @@ fn promoted_text_is_verbatim_for_queued_and_recap() {
         promoted_record_text(&a).as_deref(),
         Some("Two checks finished.")
     );
-    assert_eq!(record_raw_text(&a).as_deref(), Some("Two checks finished."));
+    assert_eq!(
+        record_raw_text(&a, None).as_deref(),
+        Some("Two checks finished.")
+    );
     // A non-promoted record is untouched by the promoted path.
     let u = rec(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
     assert_eq!(promoted_record_text(&u), None);
-    assert_eq!(record_raw_text(&u).as_deref(), Some("hi"));
+    assert_eq!(record_raw_text(&u, None).as_deref(), Some("hi"));
 }
 
 #[test]

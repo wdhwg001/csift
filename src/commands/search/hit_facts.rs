@@ -7,13 +7,30 @@
 use super::*;
 
 /// The ONE unit an ADDRESSED record with no modeled leaf renders (see the refetch-law note in
-/// [`collect_turn_hits`]): the record's own raw text under an EMPTY label ([`Hit::class`] is
-/// `None`), so a reader sees the bytes csift has rather than a bail. `None` when the record
-/// carries no text anywhere - there is nothing to render and the address stays a miss, which is
-/// the honest answer for a session-state cache line. The address/line/uuid are backfilled by the
-/// caller like any other hit.
-pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize) -> Option<Hit> {
-    let text = record_raw_text(rec)?;
+/// [`collect_turn_hits`]): the record under an EMPTY label ([`Hit::class`] is `None`), so a
+/// reader sees what csift has rather than a bail.
+///
+/// The 1:1 law says an address never hard-misses a PARSEABLE line, so the unit has two
+/// bodies. A record with text renders that text, exactly as before. A record with NONE -
+/// a line type csift models no leaf for, a subtype a later build added - renders a
+/// key=value excerpt of its own top-level keys instead, and the unit NAMES its shape
+/// ([`HitFact::Unmodeled`]) so the reader learns what the line IS. The excerpt is
+/// fabricated, which is safe here and only here: an address needs no match, so no
+/// prefilter or whole-file gate is reasoning about this text.
+///
+/// `None` only when the line is no record at all (no text, no keys) - the address then
+/// stays a miss, which is the honest answer.
+pub(crate) fn unlabeled_hit(
+    rec: &Record,
+    raw: Option<&str>,
+    matcher: &Matcher,
+    excerpt_max: usize,
+) -> Option<Hit> {
+    let shape = unmodeled_shape(rec);
+    let text = match record_raw_text(rec, raw) {
+        Some(t) => t,
+        None => top_level_key_excerpt(raw)?,
+    };
     let span = matcher.locate(&text)?;
     let (excerpt, truncated) = match_excerpt(&text, span, excerpt_max);
     Some(Hit {
@@ -51,7 +68,65 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         // An unlabeled unit carries no leaf, so it is never the fired prompt.
         scheduled_at: None,
         truncated,
+        markers: Vec::new(),
+        // The shape csift models no leaf for. An address is the only way here, and
+        // naming the shape is the whole point of the unit: a reader learns WHAT the
+        // line is rather than that csift had nothing to say.
+        facts: shape.into_iter().map(HitFact::Unmodeled).collect(),
     })
+}
+
+/// The on-disk SHAPE of a record csift models no leaf for: its top-level `type`, and
+/// the deeper axis where the shape splits on one - `system/<subtype>`,
+/// `attachment/<payload type>`. `None` when the record HAS a leaf somewhere (the caller
+/// only reaches this for a record that produced no unit, so that means a text-less
+/// block record rather than an unknown shape) or when the line carries no `type` at all.
+///
+/// Naming the shape is what makes the unit useful: `? unmodeled: system/some_new_subtype`
+/// tells a reader exactly which build-side shape csift has not caught up with, which
+/// `? (no label)` never did.
+pub(crate) fn unmodeled_shape(rec: &Record) -> Option<String> {
+    let ty = rec.r#type.as_deref()?;
+    // A record whose type IS modeled but whose own leaf is decided deeper: name the
+    // deeper value, which is the part csift did not model.
+    if ty == "system" {
+        return Some(match rec.subtype.as_deref() {
+            Some(s) if crate::model::system_leaf(s).is_none() => format!("system/{s}"),
+            Some(_) | None => return None,
+        });
+    }
+    if ty == "attachment" {
+        return match rec.attachment_type() {
+            Some(a) if crate::model::attachment_leaf(&a).is_none() => {
+                Some(format!("attachment/{a}"))
+            }
+            _ => None,
+        };
+    }
+    // Any other top-level type with no leaf of its own.
+    (crate::model::bookkeeping_leaf(ty).is_none() && ty != "user" && ty != "assistant")
+        .then(|| ty.to_string())
+}
+
+/// A key=value excerpt of a line's own top-level keys, for a record that carries no
+/// renderable text at all. Keys in their on-disk order, values cut at 80 characters, so
+/// a reader sees the SHAPE of an unknown line without csift claiming to interpret it.
+/// `None` when the caller has no source line (every ordinary record) or the line is not
+/// a JSON object with keys.
+fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(raw?).ok()?;
+    let obj = v.as_object()?;
+    let parts: Vec<String> = obj
+        .iter()
+        .map(|(k, v)| {
+            let rendered = match v {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            format!("{k}={}", crate::text::truncate_excerpt(&rendered, 80))
+        })
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" "))
 }
 
 /// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything

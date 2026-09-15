@@ -373,8 +373,9 @@ fn show_turn_oob_and_flood_guard() {
     let out = h.run(&["show", &at, "--turn", "-9.."]);
     assert!(out.success, "stderr: {}", out.stderr);
 
-    // (4) Flood guard: keep-first + the exact continuation command; the metadata line
-    //     in the addressed range is counted, not silently absorbed.
+    // (4) Flood guard: keep-first + the exact continuation command. The metadata line in
+    //     the addressed range is a RECORD unit of its own now (the 1:1 law), so it is
+    //     counted in the remainder like any other.
     let out = h.run(&["show", &at, "--line", "..", "--max-count", "2"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -383,27 +384,24 @@ fn show_turn_oob_and_flood_guard() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("+4 more record unit(s)"),
+        out.stdout.contains("+5 more record unit(s)"),
         "{}",
         out.stdout
     );
     assert!(
         out.stdout
-            .contains(&format!("continue: csift show @{sess} --line 3..6")),
+            .contains(&format!("continue: csift show @{sess} --line 3..7")),
         "{}",
         out.stdout
     );
-    assert!(
-        out.stdout
-            .contains("1 line(s) in the addressed range are not records"),
-        "{}",
-        out.stdout
-    );
+    // Nothing in the addressed range is a NON-record any more: the metadata line has a
+    // leaf, so the disclosure has nothing to disclose.
+    assert!(!out.stdout.contains("are not records"), "{}", out.stdout);
 
     // (5) `--max-count 0` = uncapped (the crate-wide convention).
     let out = h.run(&["show", &at, "--line", "..", "--max-count", "0"]);
     assert!(
-        out.stdout.contains("fetched 6 record unit(s)"),
+        out.stdout.contains("fetched 7 record unit(s)"),
         "{}",
         out.stdout
     );
@@ -420,12 +418,12 @@ fn show_turn_oob_and_flood_guard() {
         "json",
     ]);
     let summary = json_summary(&out.stdout);
-    assert_eq!(summary["dropped_by_cap"].as_u64(), Some(4), "{summary}");
-    assert_eq!(summary["non_record_lines"].as_u64(), Some(1), "{summary}");
+    assert_eq!(summary["dropped_by_cap"].as_u64(), Some(5), "{summary}");
+    assert_eq!(summary["non_record_lines"].as_u64(), Some(0), "{summary}");
     assert!(
         summary["refetch_remainder"]
             .as_str()
-            .is_some_and(|s| s.contains("--line 3..6")),
+            .is_some_and(|s| s.contains("--line 3..7")),
         "{summary}"
     );
 

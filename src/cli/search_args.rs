@@ -325,14 +325,12 @@ pub struct SearchArgs {
     #[arg(long)]
     pub resolve_persisted: bool,
 
-    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /
-    /// UserPromptSubmit / … hook writes into the transcript. Off by default: injected context
-    /// is harness machinery and often echoes prompts and files wholesale, drowning genuine
-    /// hits. When enabled, these records surface under `harness.hook.context`; an explicit
-    /// `show --line`/`--uuid` address always renders one, flag or not. ONE hook payload is
-    /// exempt and always scanned: a csift-channel delivery (`agent.communication.channel`),
-    /// because a message another lane sent this one is not machinery.
-    #[arg(long)]
+    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser
+    /// and then a hard error naming the successor, so a stale invocation fails loudly
+    /// instead of silently scanning less than it asked for (the `turns` tombstone
+    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it
+    /// with `-t harness.hook.context`.
+    #[arg(long, hide = true)]
     pub additional_context: bool,
 
     /// Also scan EVERY `type:"attachment"` record: the harness sidecar payloads (hook
@@ -352,33 +350,68 @@ pub struct SearchArgs {
 }
 
 /// The NON-TRANSCRIPT leaves - scanned only under an explicit selector
-/// ([`SearchArgs::reaches_gated`]) or a `show` address. None of these lines carries a
-/// `message{}`, so a default scan never parses them.
-pub const GATED_LEAVES: [Class; 11] = [
-    Class::UserQueued,
-    Class::TurnDuration,
-    Class::TurnRecap,
-    Class::TurnStopHooks,
-    Class::BookkeepingFileHistory,
-    Class::ScheduleEvent,
-    Class::SystemRefusal,
-    Class::SystemApiError,
-    Class::SystemNotice,
-    Class::SystemKill,
-    Class::SystemCommand,
-];
+/// ([`SearchArgs::reaches_gated`]) or a `show` address. DERIVED from the shape
+/// inventory's `Gate::Selector` rows, so a shape that becomes gated (or stops being)
+/// moves this set with it and the honest-empties note can never name a stale leaf.
+/// `harness.hook.context` is here too: `--additional-context` was retired, and the leaf
+/// it gated is now reached by naming it.
+#[must_use]
+pub fn gated_leaves() -> Vec<Class> {
+    let mut out: Vec<Class> = Vec::new();
+    for r in crate::model::rows() {
+        if r.gate == crate::model::Gate::Selector {
+            if let Some(c) = r.leaf {
+                if !out.contains(&c) {
+                    out.push(c);
+                }
+            }
+        }
+    }
+    // `user.queued` is the one gated leaf with no shape row of its own: the line type
+    // carries `harness.bookkeeping.queue` and the CONTENT decides which of the two it
+    // is, so the inventory cannot list it and this set would otherwise lose it.
+    out.push(Class::UserQueued);
+    out
+}
 
 /// The leaves carried by a `type:"system"` line that is NOT the compaction boundary -
-/// the six admitted by ONE key-only `"subtype"` candidate needle, so they share one
-/// admission predicate ([`SearchArgs::scans_system_lines`]).
-pub const SYSTEM_LINE_LEAVES: [Class; 6] = [
-    Class::ScheduleEvent,
-    Class::SystemRefusal,
-    Class::SystemApiError,
-    Class::SystemNotice,
-    Class::SystemKill,
-    Class::SystemCommand,
-];
+/// admitted by ONE key-only `"subtype"` candidate needle, so they share one admission
+/// predicate ([`SearchArgs::scans_system_lines`]). Derived from the inventory's system
+/// axis, minus the boundary, which a flagless scan reaches through its own keep.
+#[must_use]
+pub fn system_line_leaves() -> Vec<Class> {
+    let mut out: Vec<Class> = Vec::new();
+    for r in crate::model::rows() {
+        if matches!(r.shape, crate::model::Shape::SystemSubtype(_)) {
+            if let Some(c) = r.leaf {
+                if c != Class::CompactionBoundary && !out.contains(&c) {
+                    out.push(c);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Every leaf a `type:"attachment"` line can carry - the label side of the attachment
+/// keep, derived from the inventory's attachment axis plus the two leaves an attachment
+/// reaches without being its payload type: a csift-channel delivery (the FIRST content
+/// string of a `hook_additional_context` payload) and the human's own mid-turn steer (a
+/// `queued_command` whose `origin` says so).
+#[must_use]
+pub fn attachment_leaves() -> Vec<Class> {
+    let mut out = vec![Class::CommChannel, Class::UserMessage];
+    for r in crate::model::rows() {
+        if matches!(r.shape, crate::model::Shape::AttachmentType(_)) {
+            if let Some(c) = r.leaf {
+                if !out.contains(&c) {
+                    out.push(c);
+                }
+            }
+        }
+    }
+    out
+}
 
 impl SearchArgs {
     /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
@@ -434,7 +467,10 @@ impl SearchArgs {
     /// that holds it (a silent drop, the §7 landmine).
     #[must_use]
     pub fn scans_system_lines(&self) -> bool {
-        SYSTEM_LINE_LEAVES.iter().any(|&c| self.reaches_gated(c)) || self.bare_harness_role()
+        system_line_leaves()
+            .into_iter()
+            .any(|c| self.reaches_gated(c))
+            || self.bare_harness_role()
     }
 
     /// True when the scan actually PARSES a gated leaf's lines: an explicit selector
@@ -444,7 +480,7 @@ impl SearchArgs {
     /// it", which is not the same question.
     #[must_use]
     pub fn scans_gated(&self, c: Class) -> bool {
-        if SYSTEM_LINE_LEAVES.contains(&c) {
+        if system_line_leaves().contains(&c) {
             return self.scans_system_lines();
         }
         self.reaches_gated(c)
@@ -457,7 +493,23 @@ impl SearchArgs {
     /// honest-empties keystone.
     #[must_use]
     pub fn gated_unreached(&self) -> bool {
-        !GATED_LEAVES.iter().any(|&c| self.scans_gated(c))
+        !gated_leaves().into_iter().any(|c| self.scans_gated(c))
+    }
+
+    /// True when the scan keeps `type:"attachment"` lines at all: an explicit `-t`
+    /// reaching any attachment-carried leaf, or the `--attachments` flag (and the
+    /// `--count-by attachment` axis, which cannot be answered without it). The flag is
+    /// the WIDE form - it admits every attachment line for a pattern scan - and a
+    /// selector is the narrow one, which is what replaced `--additional-context`.
+    #[must_use]
+    pub fn scans_attachment_lines(&self) -> bool {
+        let leaves = attachment_leaves();
+        if self.scan_attachments() {
+            return leaves
+                .iter()
+                .any(|c| self.label_filter().selected(c.path()));
+        }
+        leaves.into_iter().any(|c| self.reaches_gated(c))
     }
 
     /// The effective `-t`/`-T` filter (include minus exclude).

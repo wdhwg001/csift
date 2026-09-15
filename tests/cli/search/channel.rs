@@ -88,23 +88,31 @@ fn the_leaf_answers_the_role_the_prefix_and_the_full_path() {
 }
 
 #[test]
-fn the_harness_twin_stays_behind_its_own_flag() {
+fn the_harness_twin_renders_under_its_own_leaf() {
     let h = channel_home();
-    // `-t harness` cannot reach the message view, and the hook view still needs
-    // --additional-context - so a harness-role query surfaces nothing.
+    // A delivery carries TWO views and the selector picks which one renders. Under a
+    // harness selector the record is the hook CONTEXT it is on disk - injected text the
+    // model reads, so a bare `-t harness` reaches it - and never the message view.
     let harness = h.run(&["search", "throttlebeacon", &at(SESS), "-t", "harness"]);
     assert!(harness.success, "stderr: {}", harness.stderr);
     assert!(
-        harness.stdout.contains("no matching exchanges"),
-        "the harness role never surfaces a delivery:\n{}",
+        harness.stdout.contains("harness.hook.context")
+            && !harness.stdout.contains("agent.communication.channel"),
+        "the harness selector renders the hook view, never the delivery:\n{}",
         harness.stdout
     );
-    // With the flag, the SAME record renders under its harness leaf (the dual label).
+    // A USER selector reaches neither view: the record is not the person's.
+    let user = h.run(&["search", "throttlebeacon", &at(SESS), "-t", "user"]);
+    assert!(
+        user.stdout.contains("no matching exchanges"),
+        "the user role never surfaces a delivery:\n{}",
+        user.stdout
+    );
+    // Named explicitly, the SAME record renders under its harness leaf (the dual label).
     let hook = h.run(&[
         "search",
         "throttlebeacon",
         &at(SESS),
-        "--additional-context",
         "-t",
         "harness.hook.context",
     ]);
@@ -335,13 +343,19 @@ fn a_hook_context_that_merely_mentions_the_literal_stays_gated() {
         "a mere mention never leaks into a flagless scan:\n{}",
         bare.stdout
     );
-    // Under its own flag the same record is the hook leaf and nothing more.
-    let flagged = h.run(&["search", "mentionbeacon", &at(SESS), "--additional-context"]);
+    // Under its own selector the same record is the hook leaf and nothing more.
+    let flagged = h.run(&[
+        "search",
+        "mentionbeacon",
+        &at(SESS),
+        "-t",
+        "harness.hook.context",
+    ]);
     assert!(flagged.success, "stderr: {}", flagged.stderr);
     assert!(
         flagged.stdout.contains("harness.hook.context")
             && !flagged.stdout.contains("agent.communication.channel"),
-        "under --additional-context it is the hook view, not a delivery:\n{}",
+        "under -t harness.hook.context it is the hook view, not a delivery:\n{}",
         flagged.stdout
     );
 }

@@ -117,6 +117,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
 /// text class is selected (or it has no text).
 pub(crate) fn record_text_emission(
     rec: &Record,
+    raw: Option<&str>,
     labels: &[Class],
     filter: LabelFilter<'_>,
     plan_index: &PlanIndex,
@@ -143,8 +144,8 @@ pub(crate) fn record_text_emission(
             // teammate record (it flattens the content), with the raw text as the fallback.
             Class::CommSignal => rec
                 .reconstructed_user_text(Some(plan_index))
-                .or_else(|| record_raw_text(rec)),
-            _ => record_raw_text(rec),
+                .or_else(|| record_raw_text(rec, raw)),
+            _ => record_raw_text(rec, raw),
         };
         if let Some(text) = text {
             return Some((c, text));
@@ -158,7 +159,7 @@ pub(crate) fn record_text_emission(
 /// `type:"system"` record - e.g. the `compact_boundary` metrics record) it falls back (D7) to the
 /// top-level `content` plus a readable `compactMetadata` excerpt, so the boundary is BOTH matchable
 /// and rendered. `None` when there is no text anywhere.
-pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
+pub(crate) fn record_raw_text(rec: &Record, raw: Option<&str>) -> Option<String> {
     // Hook-injected additionalContext attachment: its joined content IS the record's text -
     // both the searchable body under `--additional-context` and the `show`-addressed render.
     if let Some(text) = rec.hook_additional_context_text() {
@@ -176,6 +177,20 @@ pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
     // synth marker (`synth_marker_finders`) so the whole-file gate stays sound.
     if let Some(text) = promoted_record_text(rec) {
         return Some(text);
+    }
+    // A BOOKKEEPING line with no dedicated render: its own VERBATIM JSON, exactly as an
+    // attachment payload renders, and for the same reason - the text is a byte substring
+    // of the source line, so the 7d prefilter and the 7f whole-file gate stay sound with
+    // no synthesized marker. The line's content lives in fields `Record` does not model,
+    // which is why this is the ONE render that reads the source line rather than the
+    // record. (`raw` is present only for a non-role line a gate admitted.)
+    if rec
+        .promoted_class()
+        .is_some_and(|c| c.category() == "harness.bookkeeping")
+    {
+        if let Some(text) = raw {
+            return Some(text.to_string());
+        }
     }
     let Some(msg) = rec.message.as_ref() else {
         // No `message` blocks → a system record. D7: the boundary's content + compactMetadata.

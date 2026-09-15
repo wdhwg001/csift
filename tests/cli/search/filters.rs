@@ -352,7 +352,7 @@ fn additional_context_is_invisible_by_default() {
 }
 
 #[test]
-fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
+fn the_hook_context_selector_surfaces_the_injected_attachment() {
     let h = Home::new();
     hook_context_scenario(&h);
     // First array element matches; the hit is labeled harness.hook.context at its real line.
@@ -360,14 +360,15 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         "search",
         "quartzlantern",
         &at(HOOKCTX_SESS),
-        "--additional-context",
+        "-t",
+        "harness.hook.context",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("harness.hook.context")
             && out.stdout.contains("L2")
             && out.stdout.contains("quartzlantern"),
-        "flag surfaces the attachment under harness.hook.context:\n{}",
+        "the selector surfaces the attachment under harness.hook.context:\n{}",
         out.stdout
     );
     // Second array element is part of the SAME joined text (the `\n` join seam).
@@ -375,7 +376,8 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         "search",
         "harborlight",
         &at(HOOKCTX_SESS),
-        "--additional-context",
+        "-t",
+        "harness.hook.context",
     ]);
     assert!(
         out2.stdout.contains("harness.hook.context"),
@@ -387,13 +389,13 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         "search",
         "quartzlantern",
         &at(HOOKCTX_SESS),
-        "--additional-context",
+        "--attachments",
         "-t",
         "user",
     ]);
     assert!(
         out3.stdout.contains("no matching exchanges"),
-        "-t user excludes meta.hook even with the flag:\n{}",
+        "-t user excludes the hook leaf even under the wide flag:\n{}",
         out3.stdout
     );
     // JSON: the hit carries the leaf as `label`, and the summary reconciles.
@@ -401,7 +403,8 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         "search",
         "quartzlantern",
         &at(HOOKCTX_SESS),
-        "--additional-context",
+        "-t",
+        "harness.hook.context",
         "--format",
         "json",
     ]);
