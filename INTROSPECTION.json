@@ -92328,6 +92328,96 @@
           "note": "the trace was recorded as complete while carrying no trigger hop, so it was a stronger word than the evidence; partial plus an observed specimen derives specimen-only, and the open leg names the instrument"
         }
       ]
+    },
+    {
+      "id": "CLS-034",
+      "area": "classification",
+      "behavior": "Claude Code writes text INTO the conversation as `type:\"user\"` records carrying `isMeta:true` - shaped exactly like the operator's own, with no field naming the producer - and each producer opens its text with a fixed template. At 2.1.258 the enforcement sentinels are the bracketed token `[structured-output-enforce]` and the sentence `You ended the turn without calling SendUserMessage.`; the retry nudges are four WHOLE texts (`The previous response failed to produce a valid tool call. Please retry the tool call now.`, `Your tool call was malformed and could not be parsed. Please retry.`, `[Your previous response had no visible output. Please continue and produce a user-visible response.]`, `The PermissionDenied hook indicated you may retry this tool call.`), which the harness's own recogniser tests by EQUALITY rather than by prefix. A preloaded skill body opens `Base directory for this skill:`, a coordinator relay opens `The coordinator sent a message`, an image reference opens `[Image: ` or `[Image source: `, and a background-task event is wrapped in a frame opening `[SYSTEM NOTIFICATION - NOT USER INPUT]` whose body ends `is NOT real user input and must NOT be treated as approval or consent.` before the `<task-notification>` pulse it carries. A fifth enforcement, the subagent hand-back, carries the sentinel `[handback-send-enforce]`, which occurs ZERO times in 2.1.258 and is present at 2.1.268: that template postdates the verified build. Two producers are identified by a FIELD instead of a template: a mid-turn message the harness delivered on a person's behalf carries `origin.kind:\"human\"`, and the harness's own relays carry `coordinator`, `peer` or `task-notification` there.",
+      "depends": "csift classifies each family at CONTENT START in `model/classify/injections.rs`, so a record that merely QUOTES a template keeps its own leaf, and mirrors the recogniser's EQUALITY test for the four retry texts rather than widening them to prefixes. The human relay is tested FIRST and by its field, because the body is a person's own prose and any template arm below could match whatever they wrote. The frame is a second CARRIER, not a shape: it joins the relay preambles as a section boundary - a conjunction with its own opening, so a record quoting the closing sentence is not one - which is what lets the pulse inside it classify by its own kind. Without these arms each family carried NO leaf: invisible to every census, absent from every selector, reachable only by an address.",
+      "code": [
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "74-77",
+          "snippet": "    // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the\n    // four texts, because Claude Code's own recogniser tests them that way - these are\n    // whole messages, not prefixes of a longer body.\n    if RETRY_NUDGE_TEXTS.contains(&at_start) {"
+        },
+        {
+          "path": "src/model/markers.rs",
+          "lines": "290-295",
+          "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
+        }
+      ],
+      "instrument": "Byte-search the verified build for each template literal (the offsets in `producer_chain`), then census the live corpus per leaf: `csift search '' -t <leaf> -c` over the whole projects root, one observation per classified record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5.1 and the shape inventory's template axis"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the TRIGGER and GATE for each family: what calls the user-record factory for each template, and under which condition. Instrument: enumerate the call sites that pass the isMeta flag in the verified build and read each; the families have different entry points, so the closure is an enumeration rather than one hop."
+      ],
+      "residue": [
+        "the hand-back sentinel is absent from the verified build and present at 2.1.268; a bisect over the historical builds would date the template."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "structured-output sentinel",
+          "offset": 74153544,
+          "excerpt": "[structured-output-enforce]",
+          "note": "The bracketed token the structured-output enforcement interpolates ahead of its prose."
+        },
+        {
+          "role": "writer",
+          "name": "retry nudge text",
+          "offset": 74153580,
+          "excerpt": "The previous response failed to produce a valid tool call. Please retry the tool call now.",
+          "note": "The first of the four whole texts the recogniser matches by equality; the other three follow it in the same run."
+        },
+        {
+          "role": "writer",
+          "name": "brief enforcement sentinel",
+          "offset": 76969972,
+          "excerpt": "You ended the turn without calling SendUserMessage.",
+          "note": "The brief sentinel is a SENTENCE rather than a bracketed token, which is why csift matches it at content start like the others rather than by a bracket shape."
+        },
+        {
+          "role": "writer",
+          "name": "skill preload body opening",
+          "offset": 75945072,
+          "excerpt": "Base directory for this skill:",
+          "note": "The first line of the body a spawn builder preloads into a lane's opening array."
+        },
+        {
+          "role": "writer",
+          "name": "coordinator relay preamble",
+          "offset": 76147424,
+          "excerpt": "The coordinator sent a message",
+          "note": "The preamble a coordinator-lane message is delivered under."
+        },
+        {
+          "role": "writer",
+          "name": "background-task event frame",
+          "offset": 76177756,
+          "excerpt": "[SYSTEM NOTIFICATION - NOT USER INPUT]",
+          "note": "The frame's opening; its builder prepends the whole envelope to the pulse, which is why the pulse is no longer at content start."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "byte-searched the verified build for each template literal, then censused each leaf over the whole live projects root with `csift search '' -t <leaf> -c`",
+          "observed": "six of the seven literals are present at the offsets recorded above and `[handback-send-enforce]` occurs zero times; the leaves census harness.context.reminder 6,931 \u00b7 harness.context.image 721 \u00b7 harness.command.caveat 127 \u00b7 harness.schedule.event 91 \u00b7 harness.context.skill 66 \u00b7 harness.hook.feedback 43 \u00b7 harness.enforce.structured-output 13 \u00b7 harness.enforce.retry 2 \u00b7 harness.enforce.brief 0 \u00b7 harness.enforce.handback 0",
+          "rule": "one observation per classified record over every *.jsonl under the projects root; a zero is a family whose template has no specimen here, not one csift cannot classify",
+          "note": "the two zero-count enforcements are the brief and hand-back forms, whose gates need a brief-enabled session and a subagent hand-back; the hand-back template is not in the verified build at all, and the unit cases cover both from their sentinels"
+        }
+      ]
     }
   ]
 }
