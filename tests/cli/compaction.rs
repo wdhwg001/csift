@@ -132,7 +132,7 @@ fn the_summarize_mode_rides_both_records_in_text_and_json() {
         "",
         at(SESS).as_str(),
         "-t",
-        "harness.compaction",
+        "harness.compaction.*",
         "--format",
         "json",
     ]);
@@ -177,7 +177,7 @@ fn the_summarize_mode_rides_both_records_in_text_and_json() {
         "",
         at(LEGACY).as_str(),
         "-t",
-        "harness.compaction",
+        "harness.compaction.*",
         "--format",
         "json",
     ]);
@@ -288,7 +288,7 @@ fn an_unmodeled_direction_reads_a_null_mode_on_both_records() {
         "",
         at(sess).as_str(),
         "-t",
-        "harness.compaction",
+        "harness.compaction.*",
         "--format",
         "json",
     ]);
@@ -449,7 +449,7 @@ fn an_unrelated_system_record_between_the_two_does_not_break_the_pairing() {
             r#"{"type":"user","uuid":"s1","parentUuid":"cb1","timestamp":"2026-06-07T05:10:02.000Z","isCompactSummary":true,"summarizeMetadata":{"messagesSummarized":3,"direction":"up_to"},"message":{"role":"user","content":"This session is being continued."}}"#, "\n",
         ),
     );
-    // Both leaves are named explicitly so the system catch-all is actually parsed - the note
+    // Both leaves are named explicitly so the notice line is actually parsed - the note
     // has to be IN the record set for it to be able to steal the pairing.
     let json = h.run(&[
         "search",
@@ -458,7 +458,7 @@ fn an_unrelated_system_record_between_the_two_does_not_break_the_pairing() {
         "-t",
         "harness.compaction.boundary",
         "-t",
-        "harness.meta.system",
+        "harness.system.notice",
         "--format",
         "json",
     ]);
@@ -481,7 +481,7 @@ fn an_unrelated_system_record_between_the_two_does_not_break_the_pairing() {
     );
     let note = hits
         .iter()
-        .find(|h| h["label"] == "harness.meta.system")
+        .find(|h| h["label"] == "harness.system.notice")
         .expect("the informational record was parsed");
     assert!(
         note["mode"].is_null(),

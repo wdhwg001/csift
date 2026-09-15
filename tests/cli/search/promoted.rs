@@ -72,7 +72,9 @@ fn gated_leaves_stay_out_of_bare_and_role_scans() {
     // The label census without -t never counts them.
     let census = h.run(&["search", "", &at(SESS), "--count-by", "label"]);
     assert!(
-        !census.stdout.contains("user.queued") && !census.stdout.contains("harness.meta."),
+        !census.stdout.contains("user.queued")
+            && !census.stdout.contains("harness.turn.")
+            && !census.stdout.contains("harness.bookkeeping."),
         "{}",
         census.stdout
     );
@@ -97,28 +99,37 @@ fn explicit_selectors_reach_each_promoted_leaf() {
         "{}",
         q.stdout
     );
-    // The glob and the harness.meta prefix reach the rest.
+    // The glob reaches the rest of the user face; the two harness categories reach
+    // their own leaves (the family no longer shares one prefix).
     let glob = h.run(&["search", "", &at(SESS), "-t", "user.*"]);
     assert!(
         glob.stdout.contains("reef shoals") && glob.stdout.contains("harbor survey"),
         "{}",
         glob.stdout
     );
-    let meta = h.run(&["search", "", &at(SESS), "-t", "harness.meta"]);
+    let meta = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "harness.turn.*",
+        "-t",
+        "harness.bookkeeping.file-history",
+    ]);
     assert!(meta.success, "stderr: {}", meta.stderr);
     for (leaf, text) in [
         (
-            "harness.meta.turn-duration",
+            "harness.turn.duration",
             "[turn duration: 1m 5s · durationMs=64911 messageCount=12 pendingBackgroundAgentCount=2]",
         ),
-        ("harness.meta.stop-hooks", "[stop hooks: count=2 errors=0 prevented=false]"),
-        ("harness.meta.away-summary", "Survey finished; the reef pass is charted."),
+        ("harness.turn.stop-hooks", "[stop hooks: count=2 errors=0 prevented=false]"),
+        ("harness.turn.recap", "Survey finished; the reef pass is charted."),
         (
-            "harness.meta.snapshot",
+            "harness.bookkeeping.file-history",
             "[file-history snapshot at 2026-06-07T05:00:00.500Z: /proj/notes.md@v3]",
         ),
         (
-            "harness.meta.snapshot",
+            "harness.bookkeeping.file-history",
             "[file-history delta at 2026-06-07T05:00:30.000Z: /proj/notes.md@v4 backup=notes.md@v4]",
         ),
     ] {
@@ -135,7 +146,7 @@ fn explicit_selectors_reach_each_promoted_leaf() {
         meta.stdout
     );
     // A single exact leaf selects just that leaf.
-    let one = h.run(&["search", "", &at(SESS), "-t", "harness.meta.away-summary"]);
+    let one = h.run(&["search", "", &at(SESS), "-t", "harness.turn.recap"]);
     assert!(
         one.stdout.contains("Survey finished") && !one.stdout.contains("[turn duration:"),
         "{}",
@@ -153,25 +164,25 @@ fn fabricated_excerpts_survive_the_whole_file_gate() {
     for (pattern, leaf, want) in [
         (
             "pendingBackgroundAgentCount=2",
-            "harness.meta.turn-duration",
+            "harness.turn.duration",
             "[turn duration:",
         ),
         (
             "count=2 errors=0",
-            "harness.meta.stop-hooks",
+            "harness.turn.stop-hooks",
             "[stop hooks:",
         ),
         (
             "notes\\.md@v3",
-            "harness.meta.snapshot",
+            "harness.bookkeeping.file-history",
             "[file-history snapshot",
         ),
         (
             "notes\\.md@v4",
-            "harness.meta.snapshot",
+            "harness.bookkeeping.file-history",
             "[file-history delta",
         ),
-        ("1m 5s", "harness.meta.turn-duration", "durationMs=64911"),
+        ("1m 5s", "harness.turn.duration", "durationMs=64911"),
     ] {
         let out = h.run(&["search", pattern, &at(SESS), "-t", leaf]);
         assert!(out.success, "stderr: {}", out.stderr);
@@ -188,7 +199,7 @@ fn fabricated_excerpts_survive_the_whole_file_gate() {
         "reef pass is charted",
         &at(SESS),
         "-t",
-        "harness.meta.away-summary",
+        "harness.turn.recap",
     ]);
     assert!(out.stdout.contains("matched 1 exchange"), "{}", out.stdout);
 }
@@ -257,10 +268,10 @@ fn json_carries_queue_facts_and_census_counts_gated_leaves() {
         "harness.*",
     ]);
     for want in [
-        "harness.meta.turn-duration",
-        "harness.meta.stop-hooks",
-        "harness.meta.away-summary",
-        "harness.meta.snapshot",
+        "harness.turn.duration",
+        "harness.turn.stop-hooks",
+        "harness.turn.recap",
+        "harness.bookkeeping.file-history",
     ] {
         assert!(
             census.stdout.contains(want),
@@ -277,7 +288,7 @@ fn show_renders_promoted_lines_flag_free() {
     let td = h.run(&["show", &at(SESS), "--line", "7"]);
     assert!(td.success, "stderr: {}", td.stderr);
     assert!(
-        td.stdout.contains("harness.meta.turn-duration")
+        td.stdout.contains("harness.turn.duration")
             && td.stdout.contains("pendingBackgroundAgentCount=2"),
         "{}",
         td.stdout
@@ -333,7 +344,13 @@ fn zero_match_diagnosis_names_the_gate() {
         .unwrap();
     assert_eq!(summary["gated_leaves_unreached"], true, "{}", j.stdout);
     // With an explicit gated selector the note is gone (those lines WERE scanned).
-    let out = h.run(&["search", "quartz-lantern", &at(SESS), "-t", "harness.meta"]);
+    let out = h.run(&[
+        "search",
+        "quartz-lantern",
+        &at(SESS),
+        "-t",
+        "harness.turn.*",
+    ]);
     assert!(
         !out.stderr.contains("scanned only under a -t"),
         "{}",
@@ -341,7 +358,7 @@ fn zero_match_diagnosis_names_the_gate() {
     );
 }
 
-/// v0.10.1: the `harness.meta.system` catch-all. L1 user · L2 an `informational`
+/// The `harness.system` family, one leaf per subtype. L1 user . L2 an `informational`
 /// warning (the Remote Control disconnect notice shape) · L3 an `agents_killed`
 /// record with a non-string content · L4 a `compact_boundary` (its own leaf, never
 /// the catch-all) · L5 assistant.
@@ -361,7 +378,7 @@ fn system_home() -> Home {
 }
 
 #[test]
-fn meta_system_catch_all_is_gated_rendered_and_gate_sound() {
+fn the_system_leaves_are_gated_rendered_and_gate_sound() {
     let h = system_home();
     // A bare scan never parses the line; the diagnosis names the gate.
     let bare = h.run(&["search", "Remote Control disconnected", &at(SESS)]);
@@ -371,26 +388,31 @@ fn meta_system_catch_all_is_gated_rendered_and_gate_sound() {
         bare.stdout
     );
     assert!(
-        bare.stderr.contains("harness.meta.system"),
+        bare.stderr.contains("harness.system.notice"),
         "{}",
         bare.stderr
     );
-    // The explicit leaf reaches both catch-all records, rendered as
+    // The CATEGORY reaches both records, each under its own event-kind leaf, rendered as
     // `[<subtype> <level>] <content>` / `[<subtype>] <json>`.
-    let out = h.run(&["search", "", &at(SESS), "-t", "harness.meta.system"]);
+    let out = h.run(&["search", "", &at(SESS), "-t", "harness.system.*"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("harness.meta.system")
+        out.stdout.contains("harness.system.notice")
             && out
                 .stdout
-                .contains("[informational warning] Remote Control disconnected")
-            && out
-                .stdout
-                .contains(r#"[agents_killed] {"count":2,"reason":"user"}"#),
+                .contains("[informational warning] Remote Control disconnected"),
         "{}",
         out.stdout
     );
-    // The compaction boundary keeps its own leaf: it never appears under the catch-all.
+    assert!(
+        out.stdout.contains("harness.system.kill")
+            && out
+                .stdout
+                .contains(r#"[agents_killed] {"count":2,"reason":"user"}"#),
+        "a kill notice is its own event kind, not the notice leaf:\n{}",
+        out.stdout
+    );
+    // The compaction boundary keeps its own leaf: it is never a harness.system one.
     assert!(
         !out.stdout.contains("Conversation compacted"),
         "{}",
@@ -398,8 +420,15 @@ fn meta_system_catch_all_is_gated_rendered_and_gate_sound() {
     );
     // Both records sit in the same turn: one exchange, two hit lines.
     assert!(out.stdout.contains("matched 1 exchange"), "{}", out.stdout);
-    // The `harness.meta` prefix and the harness glob reach it too; the bare role does not.
-    let prefix = h.run(&["search", "Remote Control", &at(SESS), "-t", "harness.meta"]);
+    // The category GLOB and the harness glob reach it too; neither the bare role nor the
+    // bare category does - their visible face holds only harness.system.command.
+    let prefix = h.run(&[
+        "search",
+        "Remote Control",
+        &at(SESS),
+        "-t",
+        "harness.system.*",
+    ]);
     assert!(
         prefix.stdout.contains("[informational warning]"),
         "{}",
@@ -417,7 +446,7 @@ fn meta_system_catch_all_is_gated_rendered_and_gate_sound() {
         r"\[informational warning\]",
         &at(SESS),
         "-t",
-        "harness.meta.system",
+        "harness.system.notice",
     ]);
     assert!(
         head.stdout.contains("matched 1 exchange"),
@@ -427,15 +456,15 @@ fn meta_system_catch_all_is_gated_rendered_and_gate_sound() {
     // JSON carries the leaf; `show --line` renders it flag-free (the refetch law).
     let js = h.run(&[
         "search",
-        "",
+        "Remote Control",
         &at(SESS),
         "-t",
-        "harness.meta.system",
+        "harness.system.notice",
         "--format",
         "json",
     ]);
     assert!(
-        js.stdout.contains(r#""label":"harness.meta.system""#),
+        js.stdout.contains(r#""label":"harness.system.notice""#),
         "{}",
         js.stdout
     );
@@ -455,12 +484,13 @@ fn meta_system_catch_all_is_gated_rendered_and_gate_sound() {
         "",
         &at(SESS),
         "-t",
-        "harness.meta.system",
+        "harness.system.*",
         "--count-by",
         "label",
     ]);
     assert!(
-        census.stdout.contains("2  harness.meta.system"),
+        census.stdout.contains("1  harness.system.notice")
+            && census.stdout.contains("1  harness.system.kill"),
         "{}",
         census.stdout
     );

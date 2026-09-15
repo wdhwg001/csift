@@ -393,8 +393,8 @@ fn queued_cross_session_rider_is_never_the_human() {
     );
     assert_eq!(
         rider.promoted_class(),
-        None,
-        "a peer rider is not user.queued"
+        Some(Class::BookkeepingQueue),
+        "a peer rider is the harness's own queue row, not user.queued"
     );
     // The human's own queued text still is.
     let typed = parse(

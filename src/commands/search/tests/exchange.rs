@@ -110,7 +110,7 @@ fn label_not_excludes_and_composes_with_include() {
     assert!(
         ex0.iter()
             .flat_map(|e| &e.hits)
-            .any(|h| h.class == Some(Class::AgentThinking)),
+            .any(|h| h.class == Some(Class::AgentThinkingSummary)),
         "fixture premise: 'straddling' hits agent.thinking"
     );
     // -T agent.thinking (no -t): ALL minus thinking - the thinking hit is gone.
@@ -120,7 +120,7 @@ fn label_not_excludes_and_composes_with_include() {
     assert!(
         ex.iter()
             .flat_map(|e| &e.hits)
-            .all(|h| h.class != Some(Class::AgentThinking)),
+            .all(|h| h.class != Some(Class::AgentThinkingSummary)),
         "-T agent.thinking must drop thinking hits"
     );
     // -t agent -T agent.thinking: the agent role minus its thinking leaf.
@@ -131,7 +131,7 @@ fn label_not_excludes_and_composes_with_include() {
     for h in exb.iter().flat_map(|e| &e.hits) {
         assert!(
             h.class.is_some_and(|c| c.path().starts_with("agent"))
-                && h.class != Some(Class::AgentThinking),
+                && h.class != Some(Class::AgentThinkingSummary),
             "surviving hits stay within -t minus -T; got {:?}",
             h.class.map(Class::path)
         );
@@ -190,7 +190,7 @@ fn exchange_returns_full_round_trip() {
     assert_eq!(ex.len(), 1);
     assert_eq!(ex[0].turn_index, Some(0));
     assert_eq!(ex[0].hits.len(), 1);
-    assert_eq!(ex[0].hits[0].class, Some(Class::AgentThinking));
+    assert_eq!(ex[0].hits[0].class, Some(Class::AgentThinkingSummary));
     // Full turn membership (the carry's complete round-trip).
     let uuids = &ex[0].record_uuids;
     for expected in ["u0", "a0t", "a0u", "c0", "a0f"] {
@@ -216,7 +216,7 @@ fn category_filter_restricts_hits() {
     assert!(ex[0]
         .hits
         .iter()
-        .all(|h| h.class == Some(Class::AgentMessage)));
+        .all(|h| h.class == Some(Class::AgentMessagePlain)));
 }
 
 #[test]

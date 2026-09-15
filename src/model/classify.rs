@@ -1,29 +1,29 @@
-//! The classify engine: multi-label role.class.sub assignment + direction.
+//! The classify engine: multi-label role.category.leaf assignment + direction.
 //!
-//! The children carry the leaf families that need more room than an arm:
-//! [`support`] (the shared predicates, re-exported from `model` so a
-//! `crate::model::` path still resolves), [`promoted`] (the non-record line
-//! types), [`channel`] (the csift-channel delivery leaf), [`resume`] (the
-//! loader's resume repair pair), and [`direction`] (who was talking to whom,
-//! a separate question from which leaves a record carries).
+//! The engine here is the DISPATCH; the leaf families live in the children, one
+//! module per shape axis, each a MECHANICAL table from an on-disk value to a leaf:
+//! [`bookkeeping`] (top-level line types), [`system`] (`type:"system"` subtypes),
+//! [`attachments`] (attachment payload types), [`thinking`] (thinking-block shapes)
+//! and [`injections`] (the isMeta-user templates). Beside them sit [`support`] (the
+//! shared predicates, re-exported from `model` so a `crate::model::` path still
+//! resolves), [`channel`] (the csift-channel delivery leaf), [`resume`] (the loader's
+//! resume repair pair) and [`direction`] (who was talking to whom, a separate
+//! question from which leaves a record carries).
 
+pub(super) mod attachments;
+pub(super) mod bookkeeping;
 pub(super) mod channel;
 pub(super) mod direction;
-pub(super) mod promoted;
+pub(super) mod injections;
 pub(super) mod resume;
 pub(super) mod support;
+pub(super) mod system;
+pub(super) mod thinking;
 
 use super::*;
 
 #[allow(dead_code)]
 impl Record {
-    /// True when this is the `system`/`compact_boundary` metrics record (GOLD §5) -
-    /// `harness.compaction.boundary`.
-    #[must_use]
-    pub fn is_compact_boundary(&self) -> bool {
-        self.is_type("system") && self.subtype.as_deref() == Some("compact_boundary")
-    }
-
     /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2 + C-30) - a
     /// `<teammate-message>`, `<agent-message>` OR `<cross-session-message>` at a section boundary. The predicate
     /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is
@@ -143,9 +143,15 @@ impl Record {
         })
     }
 
-    /// Classify this record into ALL applicable leaf [`Class`]es (GOLD §3, multi-label,
-    /// deduped, richest-first order). Pure + tolerant + no `unwrap` - an unmodeled record
-    /// yields an empty `Vec`. Cross-record facts come from `ctx` (see [`ClassifyCtx`]).
+    /// Classify this record into ALL applicable leaf [`Class`]es (multi-label, deduped,
+    /// richest-first order). Pure + tolerant + no `unwrap` - a record whose shape csift
+    /// models no leaf for yields an empty `Vec`. Cross-record facts come from `ctx`
+    /// (see [`ClassifyCtx`]).
+    ///
+    /// The dispatch order is fixed and each step is exhaustive for its own shape axis:
+    /// the elicitation sidecar, then the csift CHANNEL and the rest of the attachment
+    /// payload types, then the non-transcript line types (system subtypes included),
+    /// then the three transcript record types.
     #[must_use]
     pub fn classify(&self, ctx: &ClassifyCtx) -> Vec<Class> {
         let mut out: Vec<Class> = Vec::new();
@@ -160,42 +166,49 @@ impl Record {
             return out;
         }
 
-        // Hook-injected additionalContext (a `type:"attachment"` record): harness machinery,
-        // not a message - `harness.meta.hook`, LED by `agent.communication.channel` when the
-        // injected text is a csift-channel delivery. Only `search --additional-context` (or an
-        // address, or the channel keep) parses these lines; the record never opens a turn.
+        // Hook-injected additionalContext (a `type:"attachment"` record): the injected
+        // text the model reads - `harness.hook.context`, LED by
+        // `agent.communication.channel` when that text is a csift-channel delivery. The
+        // channel view is the ONE attachment leaf a default scan reaches; the record
+        // never opens a turn either way.
         if self.hook_additional_context_text().is_some() {
             self.push_hook_classes(&mut out);
             return out;
         }
 
-        // Any OTHER `type:"attachment"` record (edited_text_file, compact_file_reference,
-        // file snapshots, …): harness sidecar payload - labeled `harness.meta.attachment`.
-        // Only `search --attachments` / `--count-by attachment` (or an explicit `show`
-        // address) ever parses these lines; the record never opens a turn.
-        if self.attachment_payload_text().is_some() {
-            push_unique(&mut out, Class::MetaAttachment);
+        // Every OTHER `type:"attachment"` record, by its payload's own `type` value
+        // (`classify/attachments.rs`). A `queued_command` the HUMAN queued mid-turn is
+        // the person's message rather than harness context, and the record's `origin`
+        // - not its payload type - is what says so.
+        if self.is_type("attachment") {
+            if let Some(ty) = self.attachment_type() {
+                if ty == "queued_command" && self.queued_command_is_human() {
+                    push_unique(&mut out, Class::UserMessage);
+                    return out;
+                }
+                if let Some(c) = attachments::classify(&ty) {
+                    push_unique(&mut out, c);
+                }
+            }
             return out;
         }
 
-        // v0.10.0: a promoted NON-message line (queue-operation / turn_duration /
-        // away_summary / stop_hook_summary / file-history-*) carries exactly one leaf
-        // (`classify/promoted.rs`); every one of them is LLM-invisible.
-        if let Some(c) = self.promoted_class() {
-            push_unique(&mut out, c);
+        // A NON-TRANSCRIPT line: a bookkeeping line type, a `type:"system"` subtype, or
+        // the human's own queued text (`classify/bookkeeping.rs` + `classify/system.rs`).
+        // Every leaf below is gated - a selector has to name it - except the compaction
+        // boundary, which a match-all scan reaches.
+        if !self.is_type("assistant") && !self.is_type("user") {
+            if let Some(c) = self.promoted_class() {
+                push_unique(&mut out, c);
+            }
             return out;
         }
 
         match self.r#type.as_deref() {
-            Some("system") => {
-                if self.is_compact_boundary() {
-                    push_unique(&mut out, Class::CompactionBoundary);
-                }
-            }
             // The loader's resume repair PLACEHOLDER wears an assistant record's clothes but
             // carries the `<synthetic>` model sentinel: it is harness text, so it takes the
-            // harness leaf INSTEAD of the per-block agent classes (`agent.message` would
-            // claim the model wrote it). Tested before the block walk, never inside it.
+            // harness leaf INSTEAD of the per-block agent classes (`agent.message.plain`
+            // would claim the model wrote it). Tested before the block walk, never inside it.
             Some("assistant") if self.is_resume_placeholder() => {
                 push_unique(&mut out, Class::ResumePlaceholder);
             }
@@ -206,28 +219,28 @@ impl Record {
         out
     }
 
-    /// Classify an `assistant` record's blocks (GOLD §2/§3): visible text → `agent.message`;
-    /// thinking → `agent.thinking`; tool_use → `agent.tool.use` (+ `…sent`/`…signal` for a
-    /// `SendMessage`/spawn); tool_result (rare on assistant) → `agent.tool.result`.
+    /// Classify an `assistant` record's blocks: visible text → `agent.message.plain`;
+    /// a thinking-family block → its own leaf (`classify/thinking.rs`); tool_use →
+    /// `agent.tool.use` (+ `…sent`/`…signal` for a `SendMessage`/spawn); tool_result
+    /// (rare on assistant) → `agent.tool.result`.
     pub(crate) fn classify_assistant(&self, out: &mut Vec<Class>) {
         let Some(blocks) = self.blocks() else {
             // A bare-string assistant body (rare) is a visible message (§ `agent_text`).
             if self.agent_text().is_some() {
-                push_unique(out, Class::AgentMessage);
+                push_unique(out, Class::AgentMessagePlain);
             }
             return;
         };
         for b in blocks {
             match b {
                 Block::Text { text } if !text.trim().is_empty() => {
-                    push_unique(out, Class::AgentMessage);
+                    push_unique(out, Class::AgentMessagePlain);
                 }
                 Block::Text { .. } => {}
-                Block::Thinking { signature, .. } => {
-                    push_unique(out, thinking_block_class(signature.as_deref()));
-                }
-                Block::RedactedThinking { .. } => {
-                    push_unique(out, Class::AgentThinking);
+                Block::Thinking { .. } | Block::RedactedThinking { .. } => {
+                    if let Some(c) = thinking::classify(b) {
+                        push_unique(out, c);
+                    }
                 }
                 Block::ToolUse { name, input, .. } => {
                     push_unique(out, Class::AgentToolUse);
@@ -306,57 +319,15 @@ impl Record {
             push_unique(out, Class::CommandInvocation);
             return;
         }
-        // harness.resume.prompt: the LOADER's repair prompt for a resumed transcript that
-        // ended on a dangling user record. Machinery, never the operator (see
-        // `model/classify/resume.rs` for the producer and why the test is a prefix).
-        // The isMeta half is what protects a human who happens to START a real message with
-        // this sentence: without it that prompt would be reclassified as machinery and
-        // dropped from turn numbering. Claude Code's own recogniser tests isMeta too, and
-        // this arm and `is_resume_prompt` must agree on the set for the pairing index.
-        if self.is_meta.unwrap_or(false) && s.trim_start().starts_with(RESUME_PROMPT_MARKER) {
-            push_unique(out, Class::ResumePrompt);
+        // The isMeta-USER INJECTION templates (`classify/injections.rs`): the resume
+        // repair prompt, the two schedule ticks, the stop-hook feedback, the local-command
+        // caveat and the edit-retry nudge. One module owns their order and their
+        // content-start anchoring; `None` means the text matched no template csift models.
+        if let Some(c) = injections::classify(self, s) {
+            push_unique(out, c);
             return;
         }
-        // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three
-        // fixed markers (P1c M2a): the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous
-        // loop check` header, and the `You're being invoked on a timer` body sentence. Matched
-        // BEFORE the meta.loop arm - `check` != `tick`, so the loop-DRIVER prefix never collides.
-        //
-        // All three anchor at CONTENT START (the FINDING-1 discipline, one `trim_start` the
-        // harness marker arms share): the harness injects the fired prompt as its own record
-        // and the resolver writes the marker at offset 0, so a marker found mid-body belongs
-        // to a record QUOTING the prompt - a skill's instruction text that embeds the loop
-        // preamble, a peer message relaying a tick. A `contains` there labeled the quoting
-        // record as the tick itself and stripped its own leaf.
-        let at_start = s.trim_start();
-        if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)
-            || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)
-            || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)
-        {
-            push_unique(out, Class::ScheduleWakeup);
-            return;
-        }
-        // harness.meta.hook (G2): hook-injected feedback - stop-hook, <local-command-caveat>,
-        // or the edit-failed-retry notice. (These are isMeta records that would otherwise fall
-        // through to user.message.)
-        if s.starts_with(STOP_HOOK_FEEDBACK_PREFIX)
-            || s.starts_with(LOCAL_COMMAND_CAVEAT_PREFIX)
-            || s.contains(EDIT_RETRY_MARKER)
-        {
-            push_unique(out, Class::MetaHook);
-            return;
-        }
-        // harness.meta.loop (G2): autonomous-loop DRIVER ticks (`# Autonomous loop tick` /
-        // `Run the autonomous check`), distinct from the schedule.wakeup fired tick above.
-        // Content-start anchored for the same reason as the wakeup arm: the driver text is
-        // the whole delivered prompt, so a mid-body occurrence is a quotation.
-        if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)
-            || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)
-        {
-            push_unique(out, Class::MetaLoop);
-            return;
-        }
-        // isMeta "[Image: source:…]" pseudo-record (G2): EXCLUDED - emit no label rather than
+        // isMeta "[Image: source:…]" pseudo-record: EXCLUDED - emit no label rather than
         // mislabel it user.message.
         if s.starts_with(IMAGE_SOURCE_PREFIX) {
             return;
@@ -377,7 +348,7 @@ impl Record {
         // above must get first refusal, and the two tick prompts that DO carry a marker keep
         // their own leaves. Before this arm such a record matched nothing and fell straight
         // into the isMeta exclusion below: unsearchable, and absent from every census.
-        if self.is_scheduled_fire_prompt() {
+        if self.is_scheduled_fire_prompt(ctx) {
             push_unique(out, Class::ScheduleFire);
             return;
         }
@@ -517,3 +488,6 @@ impl Record {
         out
     }
 }
+
+#[cfg(test)]
+mod tests;

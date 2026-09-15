@@ -231,7 +231,7 @@ pub(crate) const SYNTHETIC_MODEL: &str = "<synthetic>";
 /// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is
 /// that injected prompt. This is the SCHEDULER timer firing - DISTINCT from the autonomous-loop
 /// DRIVER ticks (`# Autonomous loop tick` / `Run the autonomous check`), which are
-/// `harness.meta.loop` ([`AUTONOMOUS_LOOP_TICK_PREFIX`] / [`AUTONOMOUS_CHECK_MARKER`]); the two
+/// `harness.schedule.tick` ([`AUTONOMOUS_LOOP_TICK_PREFIX`] / [`AUTONOMOUS_CHECK_MARKER`]); the two
 /// must not be conflated. Together with [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] /
 /// [`SCHEDULE_WAKEUP_TIMER_MARKER`] these are the fixed wakeup-tick markers - a generic
 /// cron/monitor tick's injected prompt is still operator-authored free text with no universal
@@ -266,7 +266,7 @@ pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = "# Autonomous loop check";
 /// `~/.claude/projects` data (straight ASCII apostrophe). Content-start anchored.
 pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer";
 
-/// `harness.meta.hook` markers (GOLD §2, edge-fixtures G2) - hook-injected feedback, NOT the
+/// `harness.hook.context` markers (GOLD §2, edge-fixtures G2) - hook-injected feedback, NOT the
 /// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the
 /// edit-failed-retry notice CC injects when an Edit's target changed under it. (These are
 /// `isMeta` user records that would otherwise fall through to `user.message`.)
@@ -277,7 +277,7 @@ pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
 /// also rides inside a `Stop hook feedback:` body).
 pub const EDIT_RETRY_MARKER: &str = "The last Edit failed because the target file was modified";
 
-/// `harness.meta.loop` markers (GOLD §2, edge-fixtures G2) - autonomous-loop drivers (distinct
+/// `harness.schedule.tick` markers (GOLD §2, edge-fixtures G2) - autonomous-loop drivers (distinct
 /// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`). Both
 /// are CONTENT-START anchored (the law on [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`]).
 pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = "# Autonomous loop tick";

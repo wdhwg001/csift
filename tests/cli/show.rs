@@ -19,7 +19,7 @@ fn show_json_is_header_record_summary() {
     // One physical record yields one row PER rendered unit (thinking + message here).
     let rec = rows
         .iter()
-        .find(|v| v["kind"] == "record" && v["line"] == 2 && v["label"] == "agent.message")
+        .find(|v| v["kind"] == "record" && v["line"] == 2 && v["label"] == "agent.message.plain")
         .expect("the agent.message row for L2");
     assert_eq!(rec["uuid"], "a0");
     assert_eq!(rec["session_id"], SESS);

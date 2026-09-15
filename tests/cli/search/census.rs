@@ -11,8 +11,8 @@ fn search_count_by_label_censuses_the_scope() {
     assert!(out.success, "stderr: {}", out.stderr);
     for leaf in [
         "user.message",
-        "agent.thinking",
-        "agent.message",
+        "agent.thinking.summary",
+        "agent.message.plain",
         "agent.tool.use",
         "agent.tool.result",
     ] {
@@ -98,7 +98,7 @@ fn search_census_counts_records_not_sections_and_pairing_rides_comm_views() {
             .find(|r| r["key"] == key)
             .map_or(0, |r| r["records"].as_u64().unwrap())
     };
-    assert_eq!(count("agent.message"), 1, "rows: {rows:?}");
+    assert_eq!(count("agent.message.plain"), 1, "rows: {rows:?}");
     // The text+tool record AND the SendMessage record both carry agent.tool.use.
     assert_eq!(count("agent.tool.use"), 2, "rows: {rows:?}");
     assert_eq!(count("agent.communication.sent"), 1, "rows: {rows:?}");

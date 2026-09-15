@@ -464,39 +464,35 @@ fn collect_block_hits(
     if let Some(blocks) = rec.blocks() {
         for block in blocks {
             match block {
-                Block::Thinking {
-                    thinking,
-                    signature,
-                } => {
-                    // Signature-only split (narration vs reasoning); adjacency is never
-                    // consulted, and a mixed multi-block record splits per BLOCK.
-                    let class = crate::model::thinking_block_class(signature.as_deref());
-                    if has(class) && sel(class) {
-                        emit(class, thinking, None, None, None, None);
+                Block::Thinking { .. } | Block::RedactedThinking { .. } => {
+                    // The four thinking leaves split on the BLOCK's own shape
+                    // (`model/classify/thinking.rs`): the signature tag for a narration
+                    // summary, the absent text for the two leaves that carry none.
+                    // Adjacency is never consulted, and a mixed multi-block record splits
+                    // per BLOCK.
+                    let Some(class) = crate::model::thinking_block_leaf(block) else {
+                        continue;
+                    };
+                    if !has(class) || !sel(class) {
+                        continue;
                     }
-                }
-                Block::RedactedThinking { .. }
-                    if has(Class::AgentThinking) && sel(Class::AgentThinking) =>
-                {
-                    // Opaque/encrypted reasoning - no readable text; surface a placeholder so
-                    // `-t agent.thinking` still finds the block (GOLD §2 / oracle B3).
-                    emit(
-                        Class::AgentThinking,
-                        REDACTED_THINKING_PLACEHOLDER,
-                        None,
-                        None,
-                        None,
-                        None,
-                    );
+                    // Redacted reasoning is opaque ciphertext with no readable text at all,
+                    // so it surfaces a placeholder rather than the blob; every other
+                    // thinking block surfaces its own text, empty included.
+                    let text = match block {
+                        Block::Thinking { thinking, .. } => thinking.as_str(),
+                        _ => REDACTED_THINKING_PLACEHOLDER,
+                    };
+                    emit(class, text, None, None, None, None);
                 }
                 Block::Text { text }
                     if rec.is_type("assistant")
-                        && has(Class::AgentMessage)
-                        && sel(Class::AgentMessage) =>
+                        && has(Class::AgentMessagePlain)
+                        && sel(Class::AgentMessagePlain) =>
                 {
                     // Only assistant `text` blocks are the agent message; a user `text` block is
                     // a record-text unit (handled above), never agent.message.
-                    emit(Class::AgentMessage, text, None, None, None, None);
+                    emit(Class::AgentMessagePlain, text, None, None, None, None);
                 }
                 Block::ToolUse { id, name, input } => {
                     // Richest-selected for this tool_use: comm (sent/signal) > agent.tool.use.

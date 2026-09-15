@@ -95,7 +95,7 @@ fn probe1_show_labels_the_discriminating_pair() {
         .collect();
     let recs: Vec<&serde_json::Value> = rows.iter().filter(|r| r["kind"] == "record").collect();
     assert_eq!(recs.len(), 2);
-    assert_eq!(recs[0]["label"], "agent.thinking", "{}", out.stdout);
+    assert_eq!(recs[0]["label"], "agent.thinking.summary", "{}", out.stdout);
     assert_eq!(
         recs[1]["label"], "agent.thinking.narration",
         "{}",
@@ -112,10 +112,18 @@ fn probe2_census_conservation_and_degradation() {
     let h = narration_home();
     let out = h.run(&["search", "", &at(SESS), "--count-by", "label"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // 2 reasoning (the thinking-tagged + the unparseable-signature record) vs 2 narration
-    // (one with EMPTY text): thinking+narration == the 4 a 0.9.1 binary counted as one key.
+    // 2 reasoning (the thinking-tagged + the unparseable-signature record), 1 narration
+    // and 1 omitted (the narration-tagged record with EMPTY text, whose leaf follows the
+    // absent text rather than the tag): the three keys conserve the 4 records a single
+    // `agent.thinking` key used to hold.
     assert!(
-        out.stdout.contains("2  agent.thinking\n") || out.stdout.contains("2 agent.thinking"),
+        out.stdout.contains("2  agent.thinking.summary\n")
+            || out.stdout.contains("2 agent.thinking.summary"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("agent.thinking.omitted"),
         "{}",
         out.stdout
     );
@@ -135,17 +143,19 @@ fn probe2_census_conservation_and_degradation() {
     ]);
     let mut thinking = 0u64;
     let mut narration = 0u64;
+    let mut omitted = 0u64;
     for line in json.stdout.lines() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
         if v["kind"] == "census" {
             match v["key"].as_str() {
-                Some("agent.thinking") => thinking = v["records"].as_u64().unwrap(),
+                Some("agent.thinking.summary") => thinking = v["records"].as_u64().unwrap(),
+                Some("agent.thinking.omitted") => omitted = v["records"].as_u64().unwrap(),
                 Some("agent.thinking.narration") => narration = v["records"].as_u64().unwrap(),
                 _ => {}
             }
         }
     }
-    assert_eq!((thinking, narration), (2, 2), "{}", json.stdout);
+    assert_eq!((thinking, narration, omitted), (2, 1, 1), "{}", json.stdout);
 }
 
 #[test]
@@ -244,7 +254,9 @@ fn probe5_span_counts_subagent_narration() {
             .and_then(|v| v["records"].as_u64())
             .unwrap_or(0)
     };
-    assert_eq!(narration_count(&spanned.stdout), 3, "{}", spanned.stdout);
+    // Two of the top-level narration records plus the child one; the third top-level
+    // narration-tagged record carries NO summary text, so its leaf is the omitted one.
+    assert_eq!(narration_count(&spanned.stdout), 2, "{}", spanned.stdout);
     let top = h.run(&[
         "search",
         "",
@@ -255,7 +267,7 @@ fn probe5_span_counts_subagent_narration() {
         "--format",
         "json",
     ]);
-    assert_eq!(narration_count(&top.stdout), 2, "{}", top.stdout);
+    assert_eq!(narration_count(&top.stdout), 1, "{}", top.stdout);
 }
 
 #[test]

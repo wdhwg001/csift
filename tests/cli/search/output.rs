@@ -251,7 +251,7 @@ fn search_siblings_fixed_policy_renders_turn_and_json_carries_array() {
     let env = json_rows(&j.stdout, "exchange").remove(0);
     let sibs = env["siblings"].as_array().expect("siblings array present");
     assert!(
-        sibs.iter().any(|s| s["label"] == "agent.message"),
+        sibs.iter().any(|s| s["label"] == "agent.message.plain"),
         "{sibs:?}"
     );
     assert_eq!(

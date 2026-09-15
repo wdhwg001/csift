@@ -124,7 +124,7 @@ fn the_label_census_counts_the_new_leaf_and_leaves_the_tick_leaves_alone() {
     // The first autonomous fire keeps the wakeup leaf, the later one the driver leaf - arm
     // order, not a second predicate - and the skill's instruction record joins neither.
     assert_eq!(row("harness.schedule.wakeup"), Some(1), "{}", out.stdout);
-    assert_eq!(row("harness.meta.loop"), Some(1), "{}", out.stdout);
+    assert_eq!(row("harness.schedule.tick"), Some(1), "{}", out.stdout);
     // The `scheduled_task_fire` lines the instant was read from stay GATED under
     // `harness.meta.system`: a default scan gains no hit from the keep that parsed them.
     assert_eq!(
@@ -266,9 +266,10 @@ fn the_demote_leaves_the_fire_line_addressable_and_keeps_it_on_the_chain() {
 }
 
 #[test]
-fn a_fire_with_no_sibling_record_reports_no_instant() {
-    // The builds that write no `scheduled_task_fire` record at all give the same answer a
-    // windowed read does: the leaf holds, the instant is null, nothing is guessed.
+fn a_fire_record_with_no_readable_instant_still_gates_its_prompt() {
+    // The instant is a DISPLAY fact read off the fire record's parenthesised tail; the
+    // LEAF is the parent link. A fire record whose tail is unreadable therefore still
+    // claims the prompt under it, and the instant reports null rather than a guess.
     let h = Home::new();
     let sess = "6b5a4c3d-2e1f-4a0b-8c7d-6e5f4a3b2c1d";
     h.write(
@@ -276,7 +277,8 @@ fn a_fire_with_no_sibling_record_reports_no_instant() {
         concat!(
             r#"{"type":"user","uuid":"00000000-0000-4000-8000-0000000000a1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"arm the monitor"}}"#, "\n",
             r#"{"type":"assistant","uuid":"00000000-0000-4000-8000-0000000000a2","parentUuid":"00000000-0000-4000-8000-0000000000a1","timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"assistant","model":"claude-opus-4-8","content":[{"type":"text","text":"armed"}]}}"#, "\n",
-            r#"{"type":"user","uuid":"00000000-0000-4000-8000-0000000000a3","parentUuid":"00000000-0000-4000-8000-0000000000a2","timestamp":"2026-06-07T05:10:00.000Z","isMeta":true,"promptSource":"system","userType":"external","message":{"role":"user","content":"zzsiblingless monitoring tick, read-only"}}"#, "\n",
+            r#"{"type":"system","subtype":"scheduled_task_fire","uuid":"00000000-0000-4000-8000-0000000000f1","parentUuid":"00000000-0000-4000-8000-0000000000a2","timestamp":"2026-06-07T05:09:59.000Z","content":"Running scheduled task"}"#, "\n",
+            r#"{"type":"user","uuid":"00000000-0000-4000-8000-0000000000a3","parentUuid":"00000000-0000-4000-8000-0000000000f1","timestamp":"2026-06-07T05:10:00.000Z","isMeta":true,"promptSource":"system","userType":"external","message":{"role":"user","content":"zzsiblingless monitoring tick, read-only"}}"#, "\n",
         ),
     );
     let out = h.run(&[
@@ -291,12 +293,12 @@ fn a_fire_with_no_sibling_record_reports_no_instant() {
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("\"label\":\"harness.schedule.fire\""),
-        "the leaf holds without a sibling:\n{}",
+        "the leaf holds on the link alone:\n{}",
         out.stdout
     );
     assert!(
         out.stdout.contains("\"scheduled_at\":null"),
-        "no sibling means a null instant, never a guessed one:\n{}",
+        "an unreadable tail means a null instant, never a guessed one:\n{}",
         out.stdout
     );
     let text = h.run(&[
@@ -308,7 +310,38 @@ fn a_fire_with_no_sibling_record_reports_no_instant() {
     ]);
     assert!(
         text.stdout.contains("harness.schedule.fire") && !text.stdout.contains("[scheduled fire"),
-        "the bare leaf renders with no instant marker:\n{}",
+        "the bare leaf renders without a fabricated instant:\n{}",
         text.stdout
+    );
+}
+
+#[test]
+fn a_prompt_with_no_fire_record_above_it_is_not_claimed() {
+    // The parent link is the ONLY mark the producer leaves on the prompt, so a record
+    // that merely carries the isMeta + promptSource stamp is not a fired prompt: csift
+    // declines to claim it rather than reading a stamp the submit path puts on every
+    // isMeta submission.
+    let h = Home::new();
+    let sess = "7c6b5d4e-3f2a-4b1c-9d8e-7f6a5b4c3d2e";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"00000000-0000-4000-8000-0000000000b1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"arm the monitor"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"00000000-0000-4000-8000-0000000000b2","parentUuid":"00000000-0000-4000-8000-0000000000b1","timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"assistant","model":"claude-opus-4-8","content":[{"type":"text","text":"armed"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"00000000-0000-4000-8000-0000000000b3","parentUuid":"00000000-0000-4000-8000-0000000000b2","timestamp":"2026-06-07T05:10:00.000Z","isMeta":true,"promptSource":"system","userType":"external","message":{"role":"user","content":"zzunlinked monitoring tick, read-only"}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "zzunlinked",
+        &at(sess),
+        "-t",
+        "harness.schedule.fire",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no matching exchanges"),
+        "an unlinked isMeta prompt is not a fired one:\n{}",
+        out.stdout
     );
 }

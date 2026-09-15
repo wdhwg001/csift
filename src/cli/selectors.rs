@@ -44,21 +44,34 @@ pub fn selector_is_valid(selector: &str) -> bool {
             .any(|c| selector_is_segment_prefix(bare, c.path()))
 }
 
-/// The three selector forms (v0.9.4 - the C-25 visibility law):
-/// - a BARE ROLE (`user` / `agent` / `harness`, i.e. any single-segment selector)
-///   matches only the leaves the model RECEIVED - the coarse "show me the
-///   conversation" ask (a superseded draft under `-t user` poisoned a real
-///   downstream consumer, which is how this law was born);
+/// A BARE FACE selector: a ROLE (`user` / `agent` / `harness`) or a CATEGORY
+/// (`agent.message`, `harness.bookkeeping`, …). These are the two coarse forms that
+/// claim to show THE CONVERSATION, so they select only the leaves the model receives -
+/// and only they consult the per-record delivery and survival verdicts. Everything
+/// else a selector can be (a full leaf path, or any form ending `.*`) names what it
+/// wants and gets it.
+///
+/// The category list is [`Class::CATEGORIES`], so a new category is a bare-face
+/// selector the moment the taxonomy declares it; `user` is both a role and a category
+/// and takes the same treatment either way.
+#[must_use]
+pub fn is_bare_face(selector: &str) -> bool {
+    !selector.contains('.') || Class::CATEGORIES.contains(&selector)
+}
+
+/// The three selector forms (the visibility law):
+/// - a BARE ROLE or CATEGORY ([`is_bare_face`]) matches only the leaves the model
+///   RECEIVED - the coarse "show me the conversation" ask (a superseded draft under
+///   `-t user` poisoned a real downstream consumer, which is how this law was born);
 /// - a GLOB (`user.*`, or any valid prefix + `.*`) matches EVERY leaf under the
 ///   prefix, visibility ignored - the explicit "truly everything" form;
-/// - an intermediate prefix or full leaf path (`harness.compaction`,
-///   `user.unsent`) matches by segment-prefix regardless of visibility - a
-///   deliberate drill-down names what it wants.
+/// - a full leaf path (`user.unsent`, `harness.turn.duration`) matches regardless of
+///   visibility - a deliberate drill-down names what it wants.
 ///
 /// `delivered` is the RECORD-level override ([`crate::model::Record::delivery_override`]):
 /// `Some(_)` when Claude Code's own request-assembler drop predicate disagrees with the
 /// leaf default for the record this label came from, `None` otherwise. Only the
-/// bare-role form consults it, because only the bare-role form claims to be the
+/// bare-face form consults it, because only the bare-face form claims to be the
 /// conversation. `None` = no record in hand (or none that disagrees), so the leaf
 /// default stands.
 #[must_use]
@@ -69,11 +82,11 @@ pub fn selector_matches(selector: &str, path: &str, delivered: Option<bool>) -> 
     if !selector_is_segment_prefix(selector, path) {
         return false;
     }
-    if selector.contains('.') {
-        return true; // intermediate prefix or exact leaf: any visibility.
+    if !is_bare_face(selector) {
+        return true; // an exact leaf: any visibility.
     }
-    // A bare role: what the model received - the leaf default unless this record's
-    // own delivery verdict overrides it.
+    // A bare role or category: what the model received - the leaf default unless this
+    // record's own delivery verdict overrides it.
     if let Some(d) = delivered {
         return d;
     }
@@ -81,6 +94,29 @@ pub fn selector_matches(selector: &str, path: &str, delivered: Option<bool>) -> 
         .iter()
         .find(|c| c.path() == path)
         .is_none_or(|c| c.llm_visible())
+}
+
+/// The bare-face selectors among `selectors` whose visible face is EMPTY - every leaf
+/// under them is one the model never receives, so the selector is accepted, matches
+/// nothing, and says so rather than reading as a miss. `harness.bookkeeping` is the one
+/// such category in the taxonomy today; the answer is derived, so a visibility change
+/// moves it without a second edit.
+#[must_use]
+pub fn empty_visible_faces(selectors: &[String]) -> Vec<String> {
+    selectors
+        .iter()
+        .filter(|s| is_bare_face(s))
+        .filter(|s| {
+            let reaches_any = Class::ALL
+                .iter()
+                .any(|c| selector_is_segment_prefix(s, c.path()));
+            let reaches_visible = Class::ALL
+                .iter()
+                .any(|c| selector_is_segment_prefix(s, c.path()) && c.llm_visible());
+            reaches_any && !reaches_visible
+        })
+        .cloned()
+        .collect()
 }
 
 /// Does a record-label `path` satisfy the active `-t` selectors? Empty selectors ⇒ every label is
@@ -116,13 +152,6 @@ pub struct LabelFilter<'a> {
     live: bool,
 }
 
-/// A BARE ROLE selector (`user` / `agent` / `harness`) - one segment, no glob. The form
-/// that claims to be "the conversation", and so the only one the delivery and survival
-/// verdicts narrow.
-fn is_bare_role(selector: &str) -> bool {
-    !selector.contains('.')
-}
-
 impl<'a> LabelFilter<'a> {
     #[must_use]
     pub fn new(include: &'a [String], exclude: &'a [String]) -> Self {
@@ -144,8 +173,8 @@ impl<'a> LabelFilter<'a> {
     }
 
     /// The same filter, applied to ONE record whose SURVIVAL verdict is `live` (false only
-    /// for a record Claude Code's conversation chain no longer reaches). A bare ROLE
-    /// selector then skips it: `-t user` means "what the human said in this conversation",
+    /// for a record Claude Code's conversation chain no longer reaches). A bare ROLE or
+    /// CATEGORY selector then skips it: `-t user` means "what the human said in this conversation",
     /// and a prompt that was recalled or rewound past is not in it. Every other selector
     /// form - an intermediate prefix, a full leaf, a glob - reaches it exactly as before,
     /// which is what makes `-t user.rewound` and `-t 'user.*'` the deliberate drill-downs.
@@ -174,7 +203,7 @@ impl<'a> LabelFilter<'a> {
     #[must_use]
     pub fn selected(&self, path: &str) -> bool {
         let reaches = |s: &String| {
-            (self.live || !is_bare_role(s)) && selector_matches(s, path, self.delivered)
+            (self.live || !is_bare_face(s)) && selector_matches(s, path, self.delivered)
         };
         let included = if self.live {
             label_selected(self.include, path, self.delivered)
@@ -184,11 +213,31 @@ impl<'a> LabelFilter<'a> {
         included && !self.exclude.iter().any(&reaches)
     }
 
-    /// True when NO leaf of [`Class::ALL`] survives - a statically-contradictory `-t`/`-T`
-    /// combination that could never match anything (hard error at the caller, fail-loud).
+    /// True when NO leaf of [`Class::ALL`] survives because `-T` cancels `-t` - a
+    /// statically-CONTRADICTORY combination that could never match anything (hard error
+    /// at the caller, fail-loud).
+    ///
+    /// The VISIBILITY narrowing is deliberately excluded from the include side. A bare
+    /// category whose whole face is invisible (`harness.bookkeeping`) also matches no
+    /// leaf, and that is a different fact with a different remedy: the query is well
+    /// formed, its answer is empty by the law, and the caller says so through
+    /// [`empty_visible_faces`] rather than refusing to run. Only the exclude side can
+    /// make a filter contradictory.
     #[must_use]
     pub fn is_statically_empty(&self) -> bool {
-        Class::ALL.iter().all(|c| !self.selected(c.path()))
+        let survives = |exclude: &[String]| {
+            Class::ALL.iter().any(|c| {
+                let path = c.path();
+                label_selected(self.include, path, self.delivered)
+                    && !exclude
+                        .iter()
+                        .any(|s| selector_matches(s, path, self.delivered))
+            })
+        };
+        // Empty WITH the exclude side and non-empty without it: `-T` is what cancelled
+        // `-t`. Empty either way means the INCLUDE side selected nothing on its own,
+        // which is the honest-empty case above and not an error.
+        !survives(self.exclude) && survives(&[])
     }
 }
 
@@ -203,23 +252,64 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
     }
     // A RETIRED spelling gets a direct successor pointer (faster convergence than scanning
     // the full selector list) - a guidance hint, not a compat shim: still a hard error.
-    let legacy = match s {
-        "thinking" => Some(("pre-v0.5 flat spelling", "agent.thinking")),
-        "tool" => Some(("pre-v0.5 flat spelling", "agent.tool")),
-        "tool-response" => Some(("pre-v0.5 flat spelling", "agent.tool.result")),
+    // The `.*` form of a retired prefix is the same retirement, so it is looked up bare.
+    let bare = s.strip_suffix(".*").unwrap_or(s);
+    let hint = retired_successors(bare).map_or(String::new(), |(era, t)| {
+        format!(" ('{bare}' is the {era} - today that is: {t}.)")
+    });
+    Err(format!(
+        "unknown label selector '{s}'.{hint} A selector is a dotted role.category.leaf path, \
+         its role or category prefix (a bare role or category selects its LLM-visible leaves \
+         only), or a prefix + `.*` (every leaf under it, visibility ignored). Valid: {}",
+        label_selectors().join(", ")
+    ))
+}
+
+/// The RETIRED selector spellings and the leaves that replaced each. Every entry is a
+/// HARD ERROR carrying this pointer - csift ships no alias, no forwarding arm and no
+/// deprecated path, so a stale invocation fails loudly and names where its records went.
+///
+/// `harness.meta` split along the PRODUCERS its leaves were pooled from: a hook's
+/// injected text, a hook's own run record, a slash command's caveat, the scheduler's
+/// ticks, the end-of-turn telemetry, the file-history instrument, and the harness's own
+/// UI events. Two more entries are LEAF spellings that became CATEGORIES rather than
+/// disappearing: `agent.message` and `agent.thinking` are still valid selectors, so they
+/// never reach this table - only the paths below do.
+fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
+    Some(match selector {
+        "thinking" => ("pre-v0.5 flat spelling", "agent.thinking"),
+        "tool" => ("pre-v0.5 flat spelling", "agent.tool"),
+        "tool-response" => ("pre-v0.5 flat spelling", "agent.tool.result"),
         // v0.12.0 renamed the resume repair prompt out of the schedule family: the record
         // comes from the resume loader, never from the scheduler. Same predicate, same
         // records, new path.
-        "harness.schedule.continuation" => Some(("pre-v0.12.0 name", "harness.resume.prompt")),
-        _ => None,
-    };
-    let hint = legacy.map_or(String::new(), |(era, t)| {
-        format!(" ('{s}' is the {era} — today that is `{t}`.)")
-    });
-    Err(format!(
-        "unknown label selector '{s}'.{hint} A selector is a dotted role.class.sub path, any \
-         prefix of one (a bare role selects its LLM-visible leaves only), or a prefix + `.*` \
-         (every leaf under it, visibility ignored). Valid: {}",
-        label_selectors().join(", ")
-    ))
+        "harness.schedule.continuation" => ("pre-v0.12.0 name", "harness.resume.prompt"),
+        "harness.meta" => (
+            "pre-v0.13.0 catch-all category",
+            "harness.hook.* · harness.command.caveat · harness.schedule.tick · \
+             harness.context.* · harness.turn.* · harness.system.* · \
+             harness.bookkeeping.* · agent.message.structured",
+        ),
+        "harness.meta.hook" => (
+            "pre-v0.13.0 name",
+            "harness.hook.context (hook-injected text) · harness.hook.feedback (a Stop \
+             hook's blocking feedback) · harness.command.caveat (<local-command-caveat>)",
+        ),
+        "harness.meta.loop" => ("pre-v0.13.0 name", "harness.schedule.tick"),
+        "harness.meta.attachment" => (
+            "pre-v0.13.0 catch-all",
+            "harness.context.* (the injected payloads) · harness.hook.outcome (a hook \
+             run's own record) · agent.message.structured (a subagent's structured answer)",
+        ),
+        "harness.meta.turn-duration" => ("pre-v0.13.0 name", "harness.turn.duration"),
+        "harness.meta.away-summary" => ("pre-v0.13.0 name", "harness.turn.recap"),
+        "harness.meta.stop-hooks" => ("pre-v0.13.0 name", "harness.turn.stop-hooks"),
+        "harness.meta.snapshot" => ("pre-v0.13.0 name", "harness.bookkeeping.file-history"),
+        "harness.meta.system" => (
+            "pre-v0.13.0 catch-all",
+            "harness.system.{refusal,api-error,notice,kill,command} · \
+             harness.schedule.event (the scheduler's fire record)",
+        ),
+        _ => return None,
+    })
 }

@@ -207,6 +207,11 @@ pub(crate) struct EmptyDiagnosis {
     /// v0.10.0: true when no active selector reached a gated (promoted non-record)
     /// leaf - those lines were never parsed, so the absence does not cover them.
     pub(crate) gated_unreached: bool,
+    /// The bare ROLE or CATEGORY selectors whose LLM-visible face is empty
+    /// ([`crate::cli::empty_visible_faces`]). Such a selector is valid and matches
+    /// nothing BY THE LAW, not by accident, so the empty result names it rather than
+    /// letting a reader take it for a miss. Empty on every other query.
+    pub(crate) empty_visible_face: Vec<String>,
 }
 
 /// Render the active `-t`/`-T`/time/turn filters as a compact echo (`none` when unfiltered) -
@@ -292,6 +297,12 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
                  `csift search \"\" <target> --count-by label`."
             );
         }
+    }
+    for sel in &diag.empty_visible_face {
+        // A bare role or category selects the LLM-VISIBLE face, and this one has none:
+        // the query is well formed and its answer is empty by the law, which is a
+        // different fact from "nothing matched" and has a different remedy.
+        eprintln!("csift: -t {sel} selects no LLM-visible leaf; use {sel}.* or a leaf");
     }
     if diag.gated_unreached {
         // The gated leaves are parsed only under a selector that reaches them; this run

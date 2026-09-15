@@ -15,14 +15,14 @@ fn a_peer_origin_nested_in_an_attachment_is_not_a_peer_message() {
     // DISCRIMINATION, and the shape of the break matters. What fails the row-count assertion
     // below (left 0, right 1) is a CLASSIFY-level widening that labels the payload AS an inbound
     // comm: reading `attachment.origin.kind` and, when it is `peer`, pushing `Class::CommInbox`
-    // and RETURNING, so the comm leaf REPLACES `harness.meta.attachment`. The mechanism is worth
+    // and RETURNING, so the comm leaf REPLACES the payload's own leaf. The mechanism is worth
     // knowing: a comm label routes the render through `reconstructed_user_text`, which an
     // attachment has no `message` for, so a mislabelled payload does not merely read wrong, it
     // stops rendering at all.
     //
     // Two widenings measured here do NOT fail it. (1) The same read pushing `Class::CommInbox`
     // ADDITIVELY, without the return: the record then carries `labels: [inbox, attachment]` and
-    // `label` stays `harness.meta.attachment`, because `record_text_emission` walks the labels
+    // `label` stays the payload's own leaf, because `record_text_emission` walks the labels
     // richest-first, gets `None` from `reconstructed_user_text` for the comm view, and falls
     // through to the attachment view that renders. (2) Widening `peer_origin()` to fall back to
     // the nested path: that function's one caller is reachable only from a parsed
@@ -59,7 +59,7 @@ fn a_peer_origin_nested_in_an_attachment_is_not_a_peer_message() {
     assert_eq!(rows.len(), 1, "one exchange in:\n{}", gated.stdout);
     let hit = &rows[0]["hits"][0];
     assert_eq!(
-        hit["label"], "harness.meta.attachment",
+        hit["label"], "harness.context.task",
         "a peer framing quoted INSIDE a payload is payload, not a delivered message"
     );
     assert!(
@@ -103,7 +103,7 @@ fn attachments_are_invisible_by_default() {
         "glowlantern",
         &at(ATTACH_SESS),
         "-t",
-        "harness.meta.attachment",
+        "harness.context.file",
     ]);
     assert!(
         labeled.stdout.contains("no matching exchanges"),
@@ -113,31 +113,31 @@ fn attachments_are_invisible_by_default() {
 }
 
 #[test]
-fn attachments_flag_surfaces_payloads_under_meta_attachment() {
+fn attachments_flag_surfaces_payloads_under_their_own_leaves() {
     let h = Home::new();
     attachment_scenario(&h);
-    // The payload's VERBATIM JSON is the matchable text; the hit is labeled
-    // harness.meta.attachment at its real line.
+    // The payload's VERBATIM JSON is the matchable text; an `edited_text_file` payload
+    // is labeled harness.context.file at its real line.
     let out = h.run(&["search", "glowlantern", &at(ATTACH_SESS), "--attachments"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("harness.meta.attachment")
+        out.stdout.contains("harness.context.file")
             && out.stdout.contains("L2")
             && out.stdout.contains("glowlantern"),
-        "flag surfaces the payload under harness.meta.attachment:\n{}",
+        "flag surfaces the payload under harness.context.file:\n{}",
         out.stdout
     );
-    // SUPERSET: the flag also reaches a hook payload, still under its richer meta.hook leaf.
+    // SUPERSET: the flag also reaches a hook payload, still under its own context leaf.
     let hook = h.run(&[
         "search",
         "mistgate",
         &at(ATTACH_SESS),
         "--attachments",
         "-t",
-        "harness.meta.hook",
+        "harness.hook.context",
     ]);
     assert!(
-        hook.stdout.contains("harness.meta.hook"),
+        hook.stdout.contains("harness.hook.context"),
         "--attachments is a superset of --additional-context:\n{}",
         hook.stdout
     );
@@ -152,7 +152,7 @@ fn attachments_flag_surfaces_payloads_under_meta_attachment() {
     ]);
     assert!(
         out3.stdout.contains("no matching exchanges"),
-        "-t user excludes meta.attachment even with the flag:\n{}",
+        "-t user excludes an attachment leaf even with the flag:\n{}",
         out3.stdout
     );
     // JSON: the hit carries the leaf as `label`.
@@ -165,7 +165,7 @@ fn attachments_flag_surfaces_payloads_under_meta_attachment() {
         "json",
     ]);
     assert!(
-        outj.stdout.contains(r#""label":"harness.meta.attachment""#),
+        outj.stdout.contains(r#""label":"harness.context.file""#),
         "JSON label: {}",
         outj.stdout
     );

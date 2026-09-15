@@ -425,6 +425,27 @@ fn files_encoded_token_then_flag_ordering() {
     }
 }
 
+/// `harness.bookkeeping` is the one CATEGORY whose visible face is empty: the bare form
+/// is valid, matches nothing by the law, and the caller says so rather than letting a
+/// reader take it for a miss.
+#[test]
+fn a_category_with_no_visible_face_is_named_not_refused() {
+    assert_eq!(
+        empty_visible_faces(&["harness.bookkeeping".to_string()]),
+        vec!["harness.bookkeeping".to_string()]
+    );
+    // A category with a visible face, a bare role, and an exact leaf all report nothing.
+    assert!(empty_visible_faces(&["harness".to_string()]).is_empty());
+    assert!(empty_visible_faces(&["harness.turn.duration".to_string()]).is_empty());
+    assert!(empty_visible_faces(&["harness.bookkeeping.*".to_string()]).is_empty());
+    // And it is NOT a contradiction: only `-T` cancelling `-t` is.
+    let include = vec!["harness.bookkeeping".to_string()];
+    assert!(!LabelFilter::new(&include, &[]).is_statically_empty());
+    let both = vec!["user".to_string()];
+    let glob = vec!["user.*".to_string()];
+    assert!(LabelFilter::new(&both, &glob).is_statically_empty());
+}
+
 #[test]
 fn selector_three_forms_and_visibility() {
     // Bare ROLE: the leaves the model received (no record in hand ⇒ the leaf default).
@@ -451,13 +472,23 @@ fn selector_three_forms_and_visibility() {
         "harness.compaction.boundary",
         None
     ));
-    assert!(!selector_matches("user.*", "agent.message", None));
-    // Intermediate prefix / exact leaf: a drill-down keeps its full set.
+    assert!(!selector_matches("user.*", "agent.message.plain", None));
+    // A bare CATEGORY is a bare FACE, exactly like a bare role: it selects the leaves
+    // the model receives and no others.
+    assert!(
+        !selector_matches("harness.compaction", "harness.compaction.boundary", None),
+        "a category selects its visible face"
+    );
     assert!(selector_matches(
         "harness.compaction",
-        "harness.compaction.boundary",
+        "harness.compaction.summary",
         None
     ));
+    assert!(
+        selector_matches("harness.compaction.*", "harness.compaction.boundary", None),
+        "and the glob form reaches the rest"
+    );
+    // An exact LEAF is the drill-down: any visibility.
     assert!(selector_matches("user.unsent", "user.unsent", None));
     assert!(selector_matches("agent.tool", "agent.tool.result", None));
     // Validity: globs on valid prefixes parse; degenerate forms error.
@@ -489,43 +520,59 @@ fn selector_three_forms_and_visibility() {
 /// both directions, and only for that form.
 #[test]
 fn a_bare_role_selector_follows_the_record_delivery_verdict() {
-    // Delivered although the leaf is invisible (a system/local_command record).
+    // Delivered although the leaf is invisible (a hook RUN record whose conversion
+    // produced text - the harness wrote a body onto it).
     assert!(
-        !selector_matches("harness", "harness.meta.system", None),
+        !selector_matches("harness", "harness.hook.outcome", None),
         "the leaf default alone hides it"
     );
     assert!(selector_matches(
         "harness",
-        "harness.meta.system",
+        "harness.hook.outcome",
         Some(true)
     ));
     // Not delivered although the leaf is visible (an api-error placeholder, an
     // isVirtual record).
-    assert!(selector_matches("agent", "agent.message", None));
-    assert!(!selector_matches("agent", "agent.message", Some(false)));
+    assert!(selector_matches("agent", "agent.message.plain", None));
+    assert!(!selector_matches(
+        "agent",
+        "agent.message.plain",
+        Some(false)
+    ));
     assert!(!selector_matches("user", "user.message", Some(false)));
     // Every OTHER form keeps its full set, whatever the record says.
     for (sel, path) in [
-        ("agent.*", "agent.message"),
-        ("agent.message", "agent.message"),
-        ("harness.*", "harness.meta.system"),
-        ("harness.meta", "harness.meta.system"),
-        ("harness.meta.system", "harness.meta.system"),
+        ("agent.*", "agent.message.plain"),
+        ("agent.message.plain", "agent.message.plain"),
+        ("harness.*", "harness.hook.outcome"),
+        ("harness.hook.*", "harness.hook.outcome"),
+        ("harness.hook.outcome", "harness.hook.outcome"),
     ] {
         assert!(
             selector_matches(sel, path, Some(false)) && selector_matches(sel, path, None),
             "{sel} -> {path} ignores delivery"
         );
     }
+    // A bare CATEGORY is NOT one of those forms: it consults the verdict like a role.
+    assert!(selector_matches(
+        "agent.message",
+        "agent.message.plain",
+        None
+    ));
+    assert!(!selector_matches(
+        "agent.message",
+        "agent.message.plain",
+        Some(false)
+    ));
     // `-T` speaks the same rule (LabelFilter feeds one verdict to both sides).
     let include: Vec<String> = Vec::new();
     let exclude = vec!["harness".to_string()];
     let f = LabelFilter::new(&include, &exclude);
     assert!(
-        f.selected("harness.meta.system"),
+        f.selected("harness.hook.outcome"),
         "-T harness excludes only what the model received"
     );
-    assert!(!f.with_delivery(Some(true)).selected("harness.meta.system"));
+    assert!(!f.with_delivery(Some(true)).selected("harness.hook.outcome"));
     // The include side, with no -t at all, is unaffected: every label is eligible.
     let f = LabelFilter::new(&include, &[]);
     assert!(f.with_delivery(Some(false)).selected("agent.message"));

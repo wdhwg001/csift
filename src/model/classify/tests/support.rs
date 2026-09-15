@@ -1,105 +1,9 @@
-//! Taxonomy drift guards, comm direction, and ClassifyCtx support.
+//! ClassifyCtx support, comm direction and the attachment-payload extractors.
+//!
+//! The leaf space itself (the 73 paths, the visible face, the category partition) is
+//! guarded in `model/taxonomy/tests.rs`, beside the table it pins.
 
 use super::*;
-
-// ── Class::path() + role() for EVERY variant (the canonical wire forms) ──
-
-#[test]
-fn class_path_for_every_variant() {
-    let table = [
-        (Class::UserMessage, "user.message"),
-        (Class::UserAnswer, "user.answer"),
-        (Class::UserRejection, "user.rejection"),
-        (Class::UserUnsent, "user.unsent"),
-        (Class::UserRewound, "user.rewound"),
-        (Class::UserQueued, "user.queued"),
-        (Class::AgentMessage, "agent.message"),
-        (Class::AgentThinking, "agent.thinking"),
-        (Class::AgentThinkingNarration, "agent.thinking.narration"),
-        (Class::AgentToolUse, "agent.tool.use"),
-        (Class::AgentToolResult, "agent.tool.result"),
-        (Class::CommInbox, "agent.communication.inbox"),
-        (Class::CommSent, "agent.communication.sent"),
-        (Class::CommSignal, "agent.communication.signal"),
-        (Class::CommChannel, "agent.communication.channel"),
-        (Class::NotificationWorkflow, "harness.notification.workflow"),
-        (Class::NotificationMonitor, "harness.notification.monitor"),
-        (Class::NotificationSubagent, "harness.notification.subagent"),
-        (
-            Class::NotificationBackgroundCommand,
-            "harness.notification.background-command",
-        ),
-        (Class::NotificationTask, "harness.notification.task"),
-        (Class::CompactionSummary, "harness.compaction.summary"),
-        (Class::CompactionBoundary, "harness.compaction.boundary"),
-        (Class::CommandInvocation, "harness.command.invocation"),
-        (Class::CommandStdout, "harness.command.stdout"),
-        (Class::InterruptUser, "harness.interrupt.user"),
-        (Class::InterruptTool, "harness.interrupt.tool"),
-        (Class::ScheduleWakeup, "harness.schedule.wakeup"),
-        (Class::ScheduleFire, "harness.schedule.fire"),
-        (Class::ResumePrompt, "harness.resume.prompt"),
-        (Class::ResumePlaceholder, "harness.resume.placeholder"),
-        (Class::MetaHook, "harness.meta.hook"),
-        (Class::MetaLoop, "harness.meta.loop"),
-        (Class::MetaAttachment, "harness.meta.attachment"),
-        (Class::MetaTurnDuration, "harness.meta.turn-duration"),
-        (Class::MetaAwaySummary, "harness.meta.away-summary"),
-        (Class::MetaStopHooks, "harness.meta.stop-hooks"),
-        (Class::MetaSnapshot, "harness.meta.snapshot"),
-        (Class::MetaSystem, "harness.meta.system"),
-    ];
-    // The hand-kept oracle covers the WHOLE enum - a leaf added to Class::ALL but not
-    // here slid past this test once (MetaAttachment, v0.8.1); the length pin closes that.
-    assert_eq!(
-        table.len(),
-        Class::ALL.len(),
-        "oracle table drifted from Class::ALL"
-    );
-    for (c, p) in table {
-        assert_eq!(c.path(), p, "path mismatch for {c:?}");
-        // The role is always the first dot-segment of the path.
-        let head = p.split('.').next().unwrap();
-        assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
-    }
-    // No two leaves share a path (the selector space is unambiguous).
-    let mut paths: Vec<&str> = table.iter().map(|(c, _)| c.path()).collect();
-    paths.sort_unstable();
-    let n = paths.len();
-    paths.dedup();
-    assert_eq!(paths.len(), n, "duplicate Class path");
-}
-
-#[test]
-fn all_classes_cover_the_enum() {
-    // Class::ALL must list EVERY variant (the local table here is the independent oracle);
-    // a variant added to the enum but missing from ALL is caught by the path/role coverage.
-    for &c in Class::ALL {
-        // path() is total + role()'s as_str() is the path head - exercised for every leaf.
-        let head = c.path().split('.').next().unwrap();
-        assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
-    }
-    // ALL has no duplicates and matches the verified table size (38 leaves).
-    let mut seen: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
-    seen.sort_unstable();
-    let n = seen.len();
-    seen.dedup();
-    assert_eq!(seen.len(), n, "duplicate in Class::ALL");
-    assert_eq!(n, 38, "Class::ALL leaf count drifted");
-}
-
-#[test]
-fn role_as_str_and_class_role_partition() {
-    assert_eq!(Role::User.as_str(), "user");
-    assert_eq!(Role::Agent.as_str(), "agent");
-    assert_eq!(Role::Harness.as_str(), "harness");
-    // Spot-check the role partition.
-    assert_eq!(Class::UserAnswer.role(), Role::User);
-    assert_eq!(Class::CommSignal.role(), Role::Agent);
-    assert_eq!(Class::AgentToolResult.role(), Role::Agent);
-    assert_eq!(Class::CompactionBoundary.role(), Role::Harness);
-    assert_eq!(Class::ScheduleWakeup.role(), Role::Harness);
-}
 
 // ── direction() (GOLD §4) ──
 
@@ -268,7 +172,7 @@ fn hook_additional_context_text_shapes_and_classify() {
         Some("alpha block\nbeta block")
     );
     let ctx = ClassifyCtx::top_level();
-    assert_eq!(arr.classify(&ctx), vec![Class::MetaHook]);
+    assert_eq!(arr.classify(&ctx), vec![Class::HookContext]);
     assert!(!arr.opens_turn());
 
     // Bare-string content is tolerated (trimmed); a different attachment type is None.
@@ -282,13 +186,14 @@ fn hook_additional_context_text_shapes_and_classify() {
     )
     .unwrap();
     assert_eq!(other.hook_additional_context_text(), None);
-    // A non-hook payload is no longer invisible: it classifies the generic attachment leaf.
-    assert_eq!(other.classify(&ctx), vec![Class::MetaAttachment]);
+    // A payload type csift models no leaf for carries none: an address then renders it
+    // as an unmodeled unit naming the type.
+    assert!(other.classify(&ctx).is_empty());
 }
 
 #[test]
 fn attachment_type_and_payload_text_extraction() {
-    // A generic attachment: type extracted, payload text VERBATIM, MetaAttachment leaf,
+    // A file attachment: type extracted, payload text VERBATIM, the context.file leaf,
     // never a turn opener.
     let rec: Record = serde_json::from_str(
         r#"{"type":"attachment","uuid":"x2","attachment":{"type":"edited_text_file","filePath":"/tmp/a.rs","snippet":"fn x() {}"}}"#,
@@ -298,9 +203,9 @@ fn attachment_type_and_payload_text_extraction() {
     let text = rec.attachment_payload_text().unwrap();
     assert!(text.contains("edited_text_file") && text.contains("fn x() {}"));
     let ctx = ClassifyCtx::top_level();
-    assert_eq!(rec.classify(&ctx), vec![Class::MetaAttachment]);
+    assert_eq!(rec.classify(&ctx), vec![Class::ContextFile]);
     assert!(!rec.opens_turn());
-    // A hook payload keeps the more specific MetaHook leaf but still censuses by type.
+    // A hook payload keeps the harness.hook.context leaf but still censuses by type.
     let hook: Record = serde_json::from_str(
         r#"{"type":"attachment","attachment":{"type":"hook_additional_context","content":["ctx"]}}"#,
     )
@@ -309,7 +214,7 @@ fn attachment_type_and_payload_text_extraction() {
         hook.attachment_type().as_deref(),
         Some("hook_additional_context")
     );
-    assert_eq!(hook.classify(&ctx), vec![Class::MetaHook]);
+    assert_eq!(hook.classify(&ctx), vec![Class::HookContext]);
     // A non-attachment record: both extractors None.
     let user: Record =
         serde_json::from_str(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#)

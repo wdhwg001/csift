@@ -50,17 +50,17 @@ const NARRATION_B64_ALIGNMENTS: [&str; 3] = ["bmFycmF0aW9u", "5hcnJhdGlv", "uYXJ
 /// stays `agent.thinking`.
 pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {
     let Some(sig) = signature else {
-        return Class::AgentThinking;
+        return Class::AgentThinkingSummary;
     };
     let gate_open = NARRATION_B64_ALIGNMENTS.iter().any(|n| sig.contains(n))
         || sig.bytes().any(|b| b.is_ascii_whitespace());
     if !gate_open {
-        return Class::AgentThinking;
+        return Class::AgentThinkingSummary;
     }
     if thinking_signature_tag(Some(sig)).as_deref() == Some(NARRATION_TAG) {
         Class::AgentThinkingNarration
     } else {
-        Class::AgentThinking
+        Class::AgentThinkingSummary
     }
 }
 

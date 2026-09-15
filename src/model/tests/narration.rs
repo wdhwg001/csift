@@ -77,14 +77,14 @@ fn narration_tag_decodes_and_classifies() {
         thinking_signature_tag(Some(&t)).as_deref(),
         Some("thinking")
     );
-    assert_eq!(thinking_block_class(Some(&t)), Class::AgentThinking);
+    assert_eq!(thinking_block_class(Some(&t)), Class::AgentThinkingSummary);
     // The tag set is OPEN: an unknown value stays plain thinking, never an error.
     let f = tagged_signature("future-tag");
     assert_eq!(
         thinking_signature_tag(Some(&f)).as_deref(),
         Some("future-tag")
     );
-    assert_eq!(thinking_block_class(Some(&f)), Class::AgentThinking);
+    assert_eq!(thinking_block_class(Some(&f)), Class::AgentThinkingSummary);
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn every_degradation_path_falls_to_plain_thinking() {
         assert_eq!(thinking_signature_tag(sig.as_deref()), None, "{sig:?}");
         assert_eq!(
             thinking_block_class(sig.as_deref()),
-            Class::AgentThinking,
+            Class::AgentThinkingSummary,
             "{sig:?}"
         );
     }
@@ -131,7 +131,7 @@ fn last_field_wins_at_every_level() {
     };
     assert_eq!(
         thinking_block_class(Some(&inner_repeat)),
-        Class::AgentThinking
+        Class::AgentThinkingSummary
     );
 }
 
@@ -151,7 +151,7 @@ fn foreign_fields_skip_and_unknown_wire_aborts() {
     torn.push(0x0b); // field 1, wire 3 (group start - never emitted by the API)
     assert_eq!(
         thinking_block_class(Some(&b64(&torn))),
-        Class::AgentThinking
+        Class::AgentThinkingSummary
     );
 }
 
@@ -171,16 +171,25 @@ fn whole_string_decode_survives_a_giant_leading_field() {
 
 #[test]
 fn classify_splits_thinking_records_by_signature_only() {
-    // A narration record (empty text included) classifies by SIGNATURE, never adjacency.
+    // A narration record classifies by SIGNATURE, never adjacency - and only when it
+    // carries text at all: a block with NO summary text is the `omitted` shape whatever
+    // its tag says, because the leaf's whole definition is the absent text.
     let sig = tagged_signature("narration");
-    for text in ["placeholder narration summary", ""] {
+    for (text, want) in [
+        (
+            "placeholder narration summary",
+            Class::AgentThinkingNarration,
+        ),
+        ("", Class::AgentThinkingOmitted),
+    ] {
         let rec: Record = serde_json::from_str(&format!(
             r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"thinking","thinking":"{text}","signature":"{sig}"}}]}}}}"#
         ))
         .unwrap();
         assert_eq!(
             rec.classify(&ClassifyCtx::top_level()),
-            vec![Class::AgentThinkingNarration]
+            vec![want],
+            "{text:?}"
         );
     }
     // A thinking-tagged and an untagged block both stay plain reasoning.
@@ -192,7 +201,7 @@ fn classify_splits_thinking_records_by_signature_only() {
         .unwrap();
         assert_eq!(
             rec.classify(&ClassifyCtx::top_level()),
-            vec![Class::AgentThinking]
+            vec![Class::AgentThinkingSummary]
         );
     }
 }

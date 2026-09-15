@@ -49,9 +49,9 @@ impl Activity {
                         }
                     }
                 }
-                crate::model::Class::AgentThinking
+                crate::model::Class::AgentThinkingSummary
                 | crate::model::Class::AgentThinkingNarration => self.thinking += 1,
-                crate::model::Class::AgentMessage => self.agent_messages += 1,
+                crate::model::Class::AgentMessagePlain => self.agent_messages += 1,
                 crate::model::Class::UserMessage => self.user_prompts += 1,
                 c if c.path().starts_with("harness.notification") => self.notifications += 1,
                 _ => {}

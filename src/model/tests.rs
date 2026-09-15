@@ -21,7 +21,6 @@ mod boundaries;
 mod chain;
 mod chain_relink;
 mod chain_view;
-mod classify;
 mod classify_comm;
 mod classify_harness;
 mod classify_roles;

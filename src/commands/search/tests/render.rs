@@ -15,7 +15,7 @@ fn class_path_and_role_glyph_cover_every_leaf() {
         assert!(matches!(g, '◂' | '▸' | '⚙'), "{} -> {g}", c.path());
     }
     assert_eq!(role_glyph(Some(Class::UserMessage)), '◂');
-    assert_eq!(role_glyph(Some(Class::AgentMessage)), '▸');
+    assert_eq!(role_glyph(Some(Class::AgentMessagePlain)), '▸');
     assert_eq!(role_glyph(Some(Class::CommInbox)), '▸'); // comm is agent-side
     assert_eq!(role_glyph(Some(Class::NotificationWorkflow)), '⚙');
     // An addressed record with no modeled leaf takes its own marker (the refetch law).
@@ -235,11 +235,11 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
     );
     // Under a hook-only selector the SAME record renders the harness view instead: the
     // joined content, exactly as every other hook context renders.
-    let include = vec!["harness.meta.hook".to_string()];
+    let include = vec!["harness.hook.context".to_string()];
     let hook_only = LabelFilter::new(&include, &[]);
     let (class, text) =
         record_text_emission(&rec, &labels, hook_only, &PlanIndex::default()).expect("hook view");
-    assert_eq!(class, Class::MetaHook);
+    assert_eq!(class, Class::HookContext);
     assert!(
         text.ends_with("\na second block"),
         "the hook view is the joined content: {text:?}"
@@ -250,7 +250,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
     assert_eq!(sibling_cap(Class::CommChannel), None);
     let hit = Hit {
         class: Some(Class::CommChannel),
-        labels: vec!["agent.communication.channel", "harness.meta.hook"],
+        labels: vec!["agent.communication.channel", "harness.hook.context"],
         excerpt: String::new(),
         body: None,
         timestamp_utc: None,
@@ -291,9 +291,9 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
 fn sibling_cap_policy_is_fixed_and_message_classes_uncapped() {
     // Message classes always render (None = uncapped); chattier machinery is capped.
     assert_eq!(sibling_cap(Class::UserMessage), None);
-    assert_eq!(sibling_cap(Class::AgentMessage), None);
+    assert_eq!(sibling_cap(Class::AgentMessagePlain), None);
     assert_eq!(sibling_cap(Class::CommInbox), None);
-    assert_eq!(sibling_cap(Class::AgentThinking), Some(2));
+    assert_eq!(sibling_cap(Class::AgentThinkingSummary), Some(2));
     assert_eq!(sibling_cap(Class::AgentThinkingNarration), Some(1));
     assert_eq!(sibling_cap(Class::UserUnsent), None);
     assert_eq!(sibling_cap(Class::AgentToolUse), Some(3));

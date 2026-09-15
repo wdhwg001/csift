@@ -75,10 +75,10 @@ pub(crate) fn search_one_file(
         .label_filter()
         .selected(Class::CompactionBoundary.path());
     // The `--additional-context` widening mirrors the D7 gate: only when the flag is set AND
-    // the selector can reach `harness.meta.hook` - OR when an ADDRESS names records directly
+    // the selector can reach `harness.hook.context` - OR when an ADDRESS names records directly
     // (`show --line`/`--uuid` must render an addressed attachment record flag-free).
     let needs_hook_context = (args.additional_context
-        && args.label_filter().selected(Class::MetaHook.path()))
+        && args.label_filter().selected(Class::HookContext.path()))
         || address.is_some();
     // The `--attachments` widening (a SUPERSET of `--additional-context`): keep EVERY
     // `type:"attachment"` line when the flag (or the `--count-by attachment` axis, which
@@ -86,8 +86,9 @@ pub(crate) fn search_one_file(
     // an ADDRESS names records directly (`show --line`/`--uuid` renders any addressed
     // attachment record flag-free).
     let needs_attachments = (args.scan_attachments()
-        && (args.label_filter().selected(Class::MetaAttachment.path())
-            || args.label_filter().selected(Class::MetaHook.path())))
+        && ATTACHMENT_CARRIED_LEAVES
+            .iter()
+            .any(|c| args.label_filter().selected(c.path())))
         || address.is_some();
     // v0.10.0 promoted non-record lines: admitted ONLY under a selector that reaches the
     // leaf (`scans_gated` - a bare no-`-t` scan never parses them) or an address (`show
@@ -116,10 +117,10 @@ pub(crate) fn search_one_file(
         attachments: needs_attachments,
         channel: needs_channel,
         queued: reach(Class::UserQueued),
-        turn_duration: reach(Class::MetaTurnDuration),
-        away_summary: reach(Class::MetaAwaySummary),
-        stop_hooks: reach(Class::MetaStopHooks),
-        snapshot: reach(Class::MetaSnapshot),
+        turn_duration: reach(Class::TurnDuration),
+        away_summary: reach(Class::TurnRecap),
+        stop_hooks: reach(Class::TurnStopHooks),
+        snapshot: reach(Class::BookkeepingFileHistory),
         // v0.11.1: `scans_gated` ALSO admits this leaf under a BARE `harness` role
         // selector. It holds the one gated shape the model actually receives - a
         // `system`/`local_command` record, which the request assembler re-mints as a
@@ -128,7 +129,7 @@ pub(crate) fn search_one_file(
         // is the same key-only `"subtype"` memmem, still `&&`-gated; the per-record
         // override (`Record::delivery_override`) then drops every non-delivered system
         // record this admission parsed. Every other gated leaf is unchanged.
-        system: reach(Class::MetaSystem),
+        system: SYSTEM_LINE_LEAVES.iter().any(|&c| reach(c)),
         schedule_fire: needs_schedule_fire,
     };
 
@@ -274,7 +275,7 @@ pub(crate) fn search_one_file(
     // scan it admits any payload that merely mentions the word. Both attachment leaves keep
     // their own flag (the gated-leaves law): such a record surfaces on a default scan only as
     // a delivery (its first content string opens with the header), never as bare
-    // `harness.meta.hook` or `harness.meta.attachment`.
+    // `harness.hook.context` or `harness.meta.attachment`.
     //
     // DEMOTE it, never delete it. The SURVIVAL AXIS walks `parentUuid` THROUGH attachment
     // records - a prompt submitted after a SessionStart hook is parented to that hook's
@@ -408,6 +409,25 @@ pub(crate) fn search_one_file(
         chain: chain_counts,
     })
 }
+
+/// Every leaf a `type:"attachment"` line can carry - the label side of the
+/// `--attachments` gate, so a selector that can reach none of them short-circuits
+/// before the memmem exactly as the D7 law requires.
+pub(crate) const ATTACHMENT_CARRIED_LEAVES: [Class; 13] = [
+    Class::UserMessage,
+    Class::AgentMessageStructured,
+    Class::CommChannel,
+    Class::HookContext,
+    Class::HookOutcome,
+    Class::ContextReminder,
+    Class::ContextListing,
+    Class::ContextPrompt,
+    Class::ContextFile,
+    Class::ContextMode,
+    Class::ContextIde,
+    Class::ContextTask,
+    Class::ContextSkill,
+];
 
 /// The `&&`-gated candidate keeps beyond the role marker (each one a SIMD memmem that
 /// runs only when its gate is on, so a default scan pays ZERO for all of them).

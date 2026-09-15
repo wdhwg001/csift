@@ -328,7 +328,7 @@ pub struct SearchArgs {
     /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /
     /// UserPromptSubmit / … hook writes into the transcript. Off by default: injected context
     /// is harness machinery and often echoes prompts and files wholesale, drowning genuine
-    /// hits. When enabled, these records surface under `harness.meta.hook`; an explicit
+    /// hits. When enabled, these records surface under `harness.hook.context`; an explicit
     /// `show --line`/`--uuid` address always renders one, flag or not. ONE hook payload is
     /// exempt and always scanned: a csift-channel delivery (`agent.communication.channel`),
     /// because a message another lane sent this one is not machinery.
@@ -339,7 +339,7 @@ pub struct SearchArgs {
     /// context, edited-file snapshots, compact file references, file snapshots, …) a
     /// default scan never parses (they are the bulk of a transcript's bytes and echo files
     /// wholesale). A SUPERSET of --additional-context: a hook payload still surfaces under
-    /// `harness.meta.hook`; every other payload surfaces under `harness.meta.attachment`
+    /// `harness.hook.context`; every other payload surfaces under `harness.meta.attachment`
     /// with its VERBATIM payload JSON as the matchable text. `--count-by attachment`
     /// implies this gate; an explicit `show --line`/`--uuid` address always renders an
     /// addressed attachment record, flag or not.
@@ -351,15 +351,33 @@ pub struct SearchArgs {
     pub format: OutputFormat,
 }
 
-/// The promoted non-record leaves (v0.10.0, plus the v0.10.1 catch-all) - scanned only
-/// under an explicit selector ([`SearchArgs::reaches_gated`]) or a `show` address.
-pub const GATED_LEAVES: [Class; 6] = [
+/// The NON-TRANSCRIPT leaves - scanned only under an explicit selector
+/// ([`SearchArgs::reaches_gated`]) or a `show` address. None of these lines carries a
+/// `message{}`, so a default scan never parses them.
+pub const GATED_LEAVES: [Class; 11] = [
     Class::UserQueued,
-    Class::MetaTurnDuration,
-    Class::MetaAwaySummary,
-    Class::MetaStopHooks,
-    Class::MetaSnapshot,
-    Class::MetaSystem,
+    Class::TurnDuration,
+    Class::TurnRecap,
+    Class::TurnStopHooks,
+    Class::BookkeepingFileHistory,
+    Class::ScheduleEvent,
+    Class::SystemRefusal,
+    Class::SystemApiError,
+    Class::SystemNotice,
+    Class::SystemKill,
+    Class::SystemCommand,
+];
+
+/// The leaves carried by a `type:"system"` line that is NOT the compaction boundary -
+/// the six admitted by ONE key-only `"subtype"` candidate needle, so they share one
+/// admission predicate ([`SearchArgs::scans_system_lines`]).
+pub const SYSTEM_LINE_LEAVES: [Class; 6] = [
+    Class::ScheduleEvent,
+    Class::SystemRefusal,
+    Class::SystemApiError,
+    Class::SystemNotice,
+    Class::SystemKill,
+    Class::SystemCommand,
 ];
 
 impl SearchArgs {
@@ -397,36 +415,36 @@ impl SearchArgs {
     }
 
     /// True when a BARE `harness` role selector is active. Such a query asks for what
-    /// the model received under that role, and one gated leaf carries delivered
-    /// records: a `system`/`local_command` line, which Claude Code's request assembler
-    /// re-mints as a user message. The scan therefore admits the `"subtype"` candidate
-    /// lines under this selector too - a key-only memmem on a line shape that is rare
-    /// (585 in the whole measured corpus) - and the per-record override then keeps only
-    /// the `local_command` ones. Every OTHER gated leaf stays exactly as gated.
+    /// the model received under that role, and one system leaf carries delivered
+    /// records: `harness.system.command`, a `system`/`local_command` line which Claude
+    /// Code's request assembler re-mints as a user message. The scan therefore admits
+    /// the `"subtype"` candidate lines under this selector too - a key-only memmem on a
+    /// rare line shape - and the per-record override then keeps only the
+    /// `local_command` ones. Every OTHER gated leaf stays exactly as gated.
     #[must_use]
     pub fn bare_harness_role(&self) -> bool {
         self.labels.iter().any(|l| l == "harness")
     }
 
     /// True when the scan parses `type:"system"` candidate lines at all: an explicit
-    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE
-    /// one predicate for that admission - the candidate gate and the §7f whole-file
-    /// gate's synthesized-marker set must agree, or a pattern that can only match the
-    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds
-    /// it (a silent drop, the §7 landmine).
+    /// selector reaching any [`SYSTEM_LINE_LEAVES`] leaf, or a bare `harness` role
+    /// selector. THE one predicate for that admission - the candidate gate and the §7f
+    /// whole-file gate's synthesized-marker set must agree, or a pattern that can only
+    /// match the FABRICATED `[<subtype> <level>]` head would be gated away on a file
+    /// that holds it (a silent drop, the §7 landmine).
     #[must_use]
     pub fn scans_system_lines(&self) -> bool {
-        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()
+        SYSTEM_LINE_LEAVES.iter().any(|&c| self.reaches_gated(c)) || self.bare_harness_role()
     }
 
     /// True when the scan actually PARSES a gated leaf's lines: an explicit selector
-    /// reaches it, or - for `harness.meta.system` alone - a bare `harness` role admits
-    /// them ([`SearchArgs::scans_system_lines`]). THE predicate the candidate gate and
-    /// the zero-match diagnosis both key on: `reaches_gated` answers "did a selector
-    /// name it", which is no longer the same question.
+    /// reaches it, or - for the system-line leaves - a bare `harness` role admits them
+    /// ([`SearchArgs::scans_system_lines`]). THE predicate the candidate gate and the
+    /// zero-match diagnosis both key on: `reaches_gated` answers "did a selector name
+    /// it", which is not the same question.
     #[must_use]
     pub fn scans_gated(&self, c: Class) -> bool {
-        if c == Class::MetaSystem {
+        if SYSTEM_LINE_LEAVES.contains(&c) {
             return self.scans_system_lines();
         }
         self.reaches_gated(c)

@@ -49,6 +49,7 @@ mod taxonomy;
 pub(crate) use automation::*;
 pub(crate) use chain::*;
 pub(crate) use classify::support::*;
+pub(crate) use classify::thinking::classify as thinking_block_leaf;
 pub(crate) use compaction::*;
 pub(crate) use grouping::*;
 pub(crate) use markers::*;

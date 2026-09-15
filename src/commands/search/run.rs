@@ -428,6 +428,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             label_filtered,
             excluded_by_label,
             gated_unreached: args.gated_unreached(),
+            empty_visible_face: crate::cli::empty_visible_faces(&args.labels),
         };
         emit_empty_diagnosis(&args.pattern, &diag);
         Some(diag)

@@ -23,10 +23,6 @@ pub(crate) const NOTIFICATION_RESULT_TAG: &str = "<result>";
 /// needle the `search` prefilter uses for the same lines (a bare VALUE substring, R13-safe).
 pub const SCHEDULED_TASK_FIRE_SUBTYPE: &str = "scheduled_task_fire";
 
-/// The `promptSource` value Claude Code stamps on every submission it makes itself, as
-/// opposed to `typed` / `queued` / `suggestion_accepted` (the operator's box) or `sdk`.
-pub(crate) const PROMPT_SOURCE_SYSTEM: &str = "system";
-
 impl Record {
     /// Is this the `system`/`scheduled_task_fire` record the scheduler writes when a cron
     /// entry or a wakeup timer comes due? It carries the fired instant in its `content` and
@@ -51,38 +47,6 @@ impl Record {
         let when = inner[open + 1..].trim();
         (!when.is_empty()).then_some(when)
     }
-
-    /// Is this the PROMPT a scheduled task fired (`harness.schedule.fire`)? The shape is the
-    /// harness's own "system-injected turn prompt" test: a `type:"user"` record that is
-    /// `isMeta` (the authorship flag, which is what keeps a human's message out of this leaf)
-    /// and carries `promptSource:"system"` (the stamp the submit path puts on every isMeta
-    /// submission).
-    ///
-    /// An inbound message from elsewhere shares that stamp exactly, so TWO guards refuse one:
-    /// the relay FRAMING, through the same [`is_peer_message`] predicate `user.queued` uses
-    /// (one detector, no second rule to drift), and the `origin` OBJECT, which the harness
-    /// stamps on everything it did not submit itself and reads back as the first test of its
-    /// own "foreign user input" veto. The framing guard alone misses a tagless delivery, whose
-    /// preamble carries no tag to detect; the origin guard alone would miss a framing that
-    /// arrived without one. A fired prompt carries neither.
-    ///
-    /// The marker-carrying tick prompts are refused by ARM ORDER in
-    /// [`Record::classify_user_string`] instead: they reach their own leaves first.
-    #[must_use]
-    pub fn is_scheduled_fire_prompt(&self) -> bool {
-        if !self.is_type("user") || !self.is_meta.unwrap_or(false) {
-            return false;
-        }
-        if self.prompt_source.as_deref() != Some(PROMPT_SOURCE_SYSTEM) {
-            return false;
-        }
-        if self.origin.is_some() {
-            return false;
-        }
-        !self
-            .raw_message_text()
-            .is_some_and(|raw| is_peer_message(&raw))
-    }
 }
 
 /// Per-file join from a fired PROMPT to the instant its `system`/`scheduled_task_fire`
@@ -97,23 +61,43 @@ impl Record {
 #[derive(Debug, Clone, Default)]
 pub struct ScheduleFireIndex {
     by_parent: HashMap<String, String>,
+    /// Every `scheduled_task_fire` record's own uuid, instant or not. The instant map
+    /// above cannot stand in for this: a fire record whose parenthesised tail is
+    /// unreadable still FIRED a prompt, and gating the prompt's leaf on a readable
+    /// instant would lose the label to a display fact.
+    fire_uuids: HashSet<String>,
 }
 
 impl ScheduleFireIndex {
-    /// Index every `scheduled_task_fire` record that names a readable instant, keyed by its
-    /// own uuid (= the fired prompt's `parentUuid`).
+    /// Index every `scheduled_task_fire` record by its own uuid (= the fired prompt's
+    /// `parentUuid`), plus the instant for those that name a readable one.
     #[must_use]
     pub fn from_records<'a>(records: impl Iterator<Item = &'a Record>) -> Self {
         let mut by_parent = HashMap::new();
+        let mut fire_uuids = HashSet::new();
         for rec in records {
             if !rec.is_scheduled_task_fire() {
                 continue;
             }
-            if let (Some(uuid), Some(when)) = (rec.uuid.as_deref(), rec.scheduled_fire_instant()) {
+            let Some(uuid) = rec.uuid.as_deref() else {
+                continue;
+            };
+            fire_uuids.insert(uuid.to_string());
+            if let Some(when) = rec.scheduled_fire_instant() {
                 by_parent.insert(uuid.to_string(), when.to_string());
             }
         }
-        Self { by_parent }
+        Self {
+            by_parent,
+            fire_uuids,
+        }
+    }
+
+    /// Does `parent_uuid` name a `system`/`scheduled_task_fire` record in this
+    /// transcript? The structural gate behind [`Record::is_scheduled_fire_prompt`].
+    #[must_use]
+    pub fn is_fire_parent(&self, parent_uuid: Option<&str>) -> bool {
+        parent_uuid.is_some_and(|u| self.fire_uuids.contains(u))
     }
 
     /// The instant this record's fire sibling names, or `None` when the transcript holds no

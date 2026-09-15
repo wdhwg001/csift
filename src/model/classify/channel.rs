@@ -26,7 +26,7 @@ impl Record {
     /// stay sound with no synthesized-marker machinery.
     ///
     /// The FIRST string only. One hook event can inject several blocks and the joined form
-    /// is the `harness.meta.hook` view; only the block the header opens is the delivery.
+    /// is the `harness.hook.context` view; only the block the header opens is the delivery.
     pub(crate) fn csift_channel_text(&self) -> Option<String> {
         // Cheap raw-byte gate before any payload parse: the needle is ASCII with no
         // JSON-escaped character, so a decoded match implies a raw match. An ordinary
@@ -47,12 +47,12 @@ impl Record {
     /// The label set of a hook-injected `hook_additional_context` attachment. A csift-channel
     /// delivery is a MESSAGE addressed at this lane, so it LEADS (the richest-view law) and
     /// the harness leaf follows on the same record - the delivery is still hook machinery on
-    /// disk. Every other hook context carries `harness.meta.hook` alone.
+    /// disk. Every other hook context carries `harness.hook.context` alone.
     pub(crate) fn push_hook_classes(&self, out: &mut Vec<Class>) {
         if self.csift_channel_text().is_some() {
             push_unique(out, Class::CommChannel);
         }
-        push_unique(out, Class::MetaHook);
+        push_unique(out, Class::HookContext);
     }
 
     /// `<sender lane> ⇨ self` for a csift-channel delivery, the sender read from the

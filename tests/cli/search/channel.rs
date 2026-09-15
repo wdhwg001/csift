@@ -106,10 +106,10 @@ fn the_harness_twin_stays_behind_its_own_flag() {
         &at(SESS),
         "--additional-context",
         "-t",
-        "harness.meta.hook",
+        "harness.hook.context",
     ]);
     assert!(
-        hook.stdout.contains("harness.meta.hook") && hook.stdout.contains("throttlebeacon"),
+        hook.stdout.contains("harness.hook.context") && hook.stdout.contains("throttlebeacon"),
         "the hook view is still reachable:\n{}",
         hook.stdout
     );
@@ -168,7 +168,7 @@ fn json_carries_the_leaf_the_sender_and_an_unnamed_continuation() {
     assert_eq!(first["label"], "agent.communication.channel");
     assert_eq!(
         first["labels"],
-        serde_json::json!(["agent.communication.channel", "harness.meta.hook"]),
+        serde_json::json!(["agent.communication.channel", "harness.hook.context"]),
         "the record carries both views, message first"
     );
     assert_eq!(first["from"], RELAY, "the header's from= is the sender");
@@ -295,9 +295,9 @@ fn a_non_hook_attachment_carrying_the_literal_is_not_the_leaf_and_stays_gated() 
     let flagged = h.run(&["search", "editbeacon", &at(SESS), "--attachments"]);
     assert!(flagged.success, "stderr: {}", flagged.stderr);
     assert!(
-        flagged.stdout.contains("harness.meta.attachment")
+        flagged.stdout.contains("harness.context.file")
             && !flagged.stdout.contains("agent.communication.channel"),
-        "under its own flag it is the attachment leaf and nothing more:\n{}",
+        "under its own flag it is the payload's own leaf and nothing more:\n{}",
         flagged.stdout
     );
     // And the channel selector cannot reach it at all.
@@ -319,7 +319,7 @@ fn a_non_hook_attachment_carrying_the_literal_is_not_the_leaf_and_stays_gated() 
 fn a_hook_context_that_merely_mentions_the_literal_stays_gated() {
     // The channel keep is DEFAULT-ON and admits any line carrying the envelope literal,
     // so an ordinary hook context that only MENTIONS it is parsed too. It must not leak
-    // into a flagless scan as bare `harness.meta.hook`: the hook leaf keeps its own flag.
+    // into a flagless scan as bare `harness.hook.context`: the hook leaf keeps its own flag.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -339,7 +339,7 @@ fn a_hook_context_that_merely_mentions_the_literal_stays_gated() {
     let flagged = h.run(&["search", "mentionbeacon", &at(SESS), "--additional-context"]);
     assert!(flagged.success, "stderr: {}", flagged.stderr);
     assert!(
-        flagged.stdout.contains("harness.meta.hook")
+        flagged.stdout.contains("harness.hook.context")
             && !flagged.stdout.contains("agent.communication.channel"),
         "under --additional-context it is the hook view, not a delivery:\n{}",
         flagged.stdout

@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "476-479",
+          "lines": "447-450",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -2862,7 +2862,7 @@
         },
         {
           "path": "src/model/classify/support.rs",
-          "lines": "160-163",
+          "lines": "144-147",
           "snippet": "    let mut head = format!(\"[{} {id} {status}]\", kind.slug());\n    if let Some(k) = orphan_kind {\n        head.push_str(&format!(\" (orphan reconciliation: {k})\"));\n    }"
         }
       ],
@@ -3171,7 +3171,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "364-368",
+          "lines": "335-339",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3302,7 +3302,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "364-368",
+          "lines": "335-339",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3405,7 +3405,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "364-368",
+          "lines": "335-339",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
@@ -4295,8 +4295,8 @@
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "212-224",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "66-78",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {\n                if let Some(n) = Record::u64_field(v) {\n                    fields.push(format!(\"{key}={n}\"));\n                }\n            }\n            (!fields.is_empty()).then(|| format!(\"[turn duration: {}]\", fields.join(\" \")))"
         }
       ],
@@ -10605,9 +10605,9 @@
       "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins it two ways - the hand-kept oracle table must equal `Class::ALL.len()`, and the leaf count is asserted at 37 (src/model/tests/classify/support.rs). The taxonomy is exactly 37 leaf classes across three roles - 6 under user, 5 under agent plus 4 under agent.communication, and 22 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "263-269",
-          "snippet": "    pub const ALL: &'static [Class] = &[\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserRewound,\n        Class::UserQueued,"
+          "path": "src/model/taxonomy/paths.rs",
+          "lines": "13-20",
+          "snippet": "    pub const ALL: &'static [Class] = &[\n        // user (6)\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserRewound,\n        Class::UserQueued,"
         }
       ],
       "instrument": "Read the policy table and the append switch at the cited offsets and confirm the three cases and the absent default. For the writer closure, list every call site of the two serializers (`j5`, 8 occurrences; `Ikt`, 5) and every inline `JSON.stringify(<var>)+newline` in the whole executable (36 occurrences of the `S(<identifier>)+backtick-newline` form), read each and keep those whose target is a transcript file; for each keeper, read where its entry is constructed. Then census the projects root: for every `.jsonl` under it except workflow journals and the reading tool's sidecar files, parse each non-blank line and bucket by top-level `type`, and count the lines whose `version` is the import version. Counting rule: one row per non-blank line; a type counts mapped when at least one csift leaf models a record of it. For the taxonomy count, `csift search '' -t nosuchleaf` errors listing every valid selector - count the full dotted leaf paths, excluding bare roles and mid-path prefixes - and compare with the `Class::ALL.len()` assertion in the drift-guard unit test.",
@@ -10888,14 +10888,14 @@
       "depends": "csift's bare-role selectors expand to LLM-visible leaves using `Class::llm_visible`, keyed on the `message{}` instrument rather than on `isMeta`, `isVisibleInTranscriptOnly`, parentUuid threading or `compactMetadata.preservedMessages` membership; misreading `isMeta` as visibility poisoned a real last-human-touch hook. The instrument's margin is also what makes a NEW non-record type safe by default: `history-suppression` and `continued-in` arrived after the leaf set was fixed, scored zero on the instrument like every other non-record type, and needed no change to `llm_visible`.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "221-224",
-          "snippet": "    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         },
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "226-228",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "126-130",
+          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation no longer threads through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
         }
       ],
       "instrument": "`csift stats <target> --format json | tail -1 | jq .line_types` enumerates the file's line types, then `csift show <target> --line <n> --raw | jq 'has(\"message\")'` on one line of each type. Counting rule: one probe per distinct top-level `type`.",
@@ -11535,7 +11535,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "262-265",
+          "lines": "275-278",
           "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span (P1c M3). When \u22651 section matches, that fully classifies the record."
         }
       ],
@@ -11648,7 +11648,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "364-368",
+          "lines": "335-339",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -12117,8 +12117,8 @@
       "depends": "csift dual-labels them agent.tool.use plus agent.communication.{sent,signal} and emits the record ONCE under the richer communication view, with a from / to direction. The direction source differs by tool: a SendMessage reads input.to, while a spawn addresses its child by the spawn target's name or id and a Workflow spawn has no target to name yet, so 169 of 1819 sent hits (9.3%) render to as '?'. The owner's own id renders as the literal 'self'.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "275-277",
+          "path": "src/model/taxonomy/paths.rs",
+          "lines": "33-35",
           "snippet": "        Class::CommInbox,\n        Class::CommSent,\n        Class::CommSignal,"
         }
       ],
@@ -12613,14 +12613,14 @@
           "snippet": "pub const SCHEDULE_WAKEUP_MARKER: &str = \"<<autonomous-loop-dynamic>>\";"
         },
         {
-          "path": "src/model/classify.rs",
-          "lines": "332-338",
-          "snippet": "        if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n            || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n            || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n        {\n            push_unique(out, Class::ScheduleWakeup);\n            return;\n        }"
+          "path": "src/model/classify/injections.rs",
+          "lines": "36-41",
+          "snippet": "    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         },
         {
-          "path": "src/model/classify.rs",
-          "lines": "353-358",
-          "snippet": "        if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n            || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n        {\n            push_unique(out, Class::MetaLoop);\n            return;\n        }"
+          "path": "src/model/classify/injections.rs",
+          "lines": "61-65",
+          "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
       "instrument": "`rg -c \"You're being invoked on a timer\" ~/.claude/projects/*/*.jsonl` and `rg -c '# Autonomous loop tick' <same>`, then `csift search '' -t harness.schedule.wakeup -c` and `-t harness.meta.loop -c`. Counting rule: one per raw occurrence for rg, one per classified record for csift; the two csift counts must not overlap.",
@@ -12710,9 +12710,9 @@
       "depends": "csift classifies the arming call `agent.tool.use` and the marker-carrying fired tick `harness.schedule.wakeup`, so a search for scheduled work must look at both surfaces; expecting the arming call under `harness.schedule.*` returns a definitive empty. A custom-prompt tick carries no marker and lands under `harness.schedule.fire` instead (claim CLS-031).",
       "code": [
         {
-          "path": "src/model/classify.rs",
-          "lines": "320-334",
-          "snippet": "        // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three\n        // fixed markers (P1c M2a): the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous\n        // loop check` header, and the `You're being invoked on a timer` body sentence. Matched\n        // BEFORE the meta.loop arm - `check` != `tick`, so the loop-DRIVER prefix never collides.\n        //\n        // All three anchor at CONTENT START (the FINDING-1 discipline, one `trim_start` the\n        // harness marker arms share): the harness injects the fired prompt as its own record\n        // and the resolver writes the marker at offset 0, so a marker found mid-body belongs\n        // to a record QUOTING the prompt - a skill's instruction text that embeds the loop\n        // preamble, a peer message relaying a tick. A `contains` there labeled the quoting\n        // record as the tick itself and stripped its own leaf.\n        let at_start = s.trim_start();\n        if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n            || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n            || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)"
+          "path": "src/model/classify/injections.rs",
+          "lines": "34-41",
+          "snippet": "    let at_start = s.trim_start();\n    // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick.\n    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         }
       ],
       "instrument": "`csift search 'ScheduleWakeup' --count-by label` (arming records key under `agent.tool.use`) and `csift search \"You're being invoked on a timer\" --count-by label` (fired ticks key under `harness.schedule.wakeup`). Counting rule: one record per key.",
@@ -12806,8 +12806,8 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "269-275",
-          "snippet": "/// `harness.meta.hook` markers (GOLD \u00a72, edge-fixtures G2) - hook-injected feedback, NOT the\n/// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the\n/// edit-failed-retry notice CC injects when an Edit's target changed under it. (These are\n/// `isMeta` user records that would otherwise fall through to `user.message`.)\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` hook wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
+          "lines": "273-275",
+          "snippet": "pub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` hook wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
@@ -12963,12 +12963,12 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "359-363",
-          "snippet": "        // isMeta \"[Image: source:\u2026]\" pseudo-record (G2): EXCLUDED - emit no label rather than\n        // mislabel it user.message.\n        if s.starts_with(IMAGE_SOURCE_PREFIX) {\n            return;\n        }"
+          "lines": "330-334",
+          "snippet": "        // isMeta \"[Image: source:\u2026]\" pseudo-record: EXCLUDED - emit no label rather than\n        // mislabel it user.message.\n        if s.starts_with(IMAGE_SOURCE_PREFIX) {\n            return;\n        }"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "384-391",
+          "lines": "355-362",
           "snippet": "        // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched\n        // no marker above is a harness-injected pseudo-turn (a novel hook wrapper), NOT the\n        // operator - emit NOTHING rather than mislabel it `user.message` (the role-level isMeta\n        // gate `is_genuine_user` already applies). Only genuine, non-isMeta unmarked prose is\n        // `user.message`.\n        if !self.is_meta.unwrap_or(false) {\n            push_unique(out, Class::UserMessage);\n        }"
         },
         {
@@ -13195,7 +13195,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "461-462",
+          "lines": "481-482",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13282,7 +13282,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "467-468",
+          "lines": "487-488",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13409,7 +13409,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "530",
+          "lines": "550",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13541,7 +13541,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "463-466",
+          "lines": "483-486",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13610,12 +13610,12 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "113-119",
-          "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,\n        queued: reach(Class::UserQueued),\n        turn_duration: reach(Class::MetaTurnDuration),"
+          "lines": "114-120",
+          "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,\n        queued: reach(Class::UserQueued),\n        turn_duration: reach(Class::TurnDuration),"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "537-541",
+          "lines": "557-561",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14386,13 +14386,13 @@
       "depends": "csift maps BOTH line types to the single gated leaf `harness.meta.snapshot` with `Class::llm_visible` false, and its byte prefilter admits them only under an explicit `-t` selector reaching the leaf or a `show` address, so a bare scan or a `-T`-only filter never parses them and the performance contract holds.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "27",
-          "snippet": "\"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "36",
+          "snippet": "        \"file-history-snapshot\" | \"file-history-delta\" => Class::BookkeepingFileHistory,"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "434",
+          "lines": "454",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14646,7 +14646,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "258-261",
+          "lines": "271-274",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            push_unique(out, Class::CompactionSummary);\n            return;\n        }"
         }
       ],
@@ -14757,18 +14757,18 @@
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
-          "path": "src/model/classify.rs",
-          "lines": "20-25",
-          "snippet": "    /// True when this is the `system`/`compact_boundary` metrics record (GOLD \u00a75) -\n    /// `harness.compaction.boundary`.\n    #[must_use]\n    pub fn is_compact_boundary(&self) -> bool {\n        self.is_type(\"system\") && self.subtype.as_deref() == Some(\"compact_boundary\")\n    }"
+          "path": "src/model/classify/system.rs",
+          "lines": "37-42",
+          "snippet": "    /// True when this is the `system`/`compact_boundary` metrics record -\n    /// `harness.compaction.boundary`.\n    #[must_use]\n    pub fn is_compact_boundary(&self) -> bool {\n        self.is_type(\"system\") && self.subtype.as_deref() == Some(\"compact_boundary\")\n    }"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "331-332",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "190-191",
           "snippet": "/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a\n/// legacy boundary carrying just the four scalars renders byte-for-byte as before:"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "521-523",
+          "lines": "541-543",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -14903,8 +14903,8 @@
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "179-185",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "33-39",
           "snippet": "    // A boundary's `parentUuid` is null; `logicalParentUuid` names the record the\n    // compaction re-links to (harness ground truth) - surface it on the same line.\n    if rec.is_compact_boundary() {\n        if let Some(lp) = rec.logical_parent_uuid.as_deref() {\n            parts.push(format!(\"[logicalParent={lp}]\"));\n        }\n    }"
         }
       ],
@@ -14987,12 +14987,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "219-224",
-          "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
+          "lines": "143-145",
+          "snippet": "    /// `harness.compaction.boundary` - the `type:\"system\"` / `subtype:\"compact_boundary\"`\n    /// metrics record. No `message{}`, so it is not in the surviving conversation.\n    CompactionBoundary,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "161-164",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "15-18",
           "snippet": "/// Combines the top-level `content` string (`\"Conversation compacted \u2026\"`) with a readable\n/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE\n/// what each compaction clipped. `None` when neither is present (no fabricated text).\npub(crate) fn system_record_text(rec: &Record) -> Option<String> {"
         },
         {
@@ -15086,9 +15086,9 @@
       "depends": "csift classifies the boundary on type + subtype alone (src/model/classify.rs 176-181), so an isMeta, agentId or sessionKind rider never reroutes it out of harness.compaction.boundary. Two reader hazards follow from the measurement rather than from the claim's original rationale: because the rider's value is always false, a classifier gating on isMeta==true (as the genuine-user path does) would drop 0 boundaries - the hazard is a classifier gating on key PRESENCE - and because the key's presence tracks which lane and which route wrote the record, its absence is not a version stamp either.",
       "code": [
         {
-          "path": "src/model/classify.rs",
-          "lines": "189-194",
-          "snippet": "        match self.r#type.as_deref() {\n            Some(\"system\") => {\n                if self.is_compact_boundary() {\n                    push_unique(&mut out, Class::CompactionBoundary);\n                }\n            }"
+          "path": "src/model/classify/system.rs",
+          "lines": "17",
+          "snippet": "        \"compact_boundary\" => Class::CompactionBoundary,"
         }
       ],
       "instrument": "`rg -NI '\"subtype\":\"compact_boundary\"' ~/.claude/projects -g '*.jsonl' | jq -r '[(.isMeta//false),(.agentId!=null),(.sessionKind//\"-\")] | @tsv' | sort | uniq -c`. Counting rule: one row per boundary record; denominator = all boundary records in scope.",
@@ -15192,9 +15192,9 @@
       "depends": "csift refuses `preservedMessages` membership and DAG threading as LLM-visibility instruments and uses `message{}` presence instead; keying `llm_visible` off `preservedMessages` would mark render-internal telemetry as delivered conversation.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "226-232",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         }
       ],
       "instrument": "For each `compact_boundary`, join `compactMetadata.preservedMessages.uuids` against the uuids of the lines preceding that boundary in the same file, bucketed by `type`/`subtype`. Counting rule: per line, per boundary window; denominator = uuid-bearing lines in that boundary's own pre-window. Expect rate parity across types.",
@@ -15289,9 +15289,9 @@
       "depends": "That exclusion is the instrument behind csift labelling `user.unsent` LLM-invisible; read together with the tail-window rate parity it means absence from preservedMessages carries information while presence does not. The load-side reading matters as much as the live one: a draft is off the parent chain, so a resumed conversation does not re-admit it, and csift's rule that a superseded draft belongs to no numbered turn holds across a resume as well as inside one segment.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "214-218",
-          "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "154-157",
+          "snippet": "            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         }
       ],
       "instrument": "Draft uuids: `csift search '' -t user.unsent --format json --max-count 0` over all projects, subagents in scope, taking each hit's uuid, deduplicated. Preserved uuids: a json parse of every .jsonl under the projects root, taking the union of `compactMetadata.preservedMessages.uuids` and `.allUuids` over every record with `subtype:\"compact_boundary\"`, deduplicated. Numerator = the size of the intersection. The union makes the test strictly harder than uuids alone. Off-chain check: in each file that carries a draft, walk parentUuid backwards from the last line (falling back to logicalParentUuid at a boundary) and count how many draft uuids the walk reaches.",
@@ -15478,9 +15478,9 @@
       "depends": "csift keeps the summary LLM-visible (Class::llm_visible excludes CompactionBoundary but not CompactionSummary, src/model/taxonomy.rs) and reads neither flag as a delivery signal; misreading isVisibleInTranscriptOnly as a delivery flag would hide the one record carrying the compacted context from every role-level selector. The instrument must test the PARSED top-level key, never the byte string, or it overcounts several-fold on a corpus whose sessions discuss the field.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "219-224",
-          "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "159-161",
+          "snippet": "                | Class::CompactionBoundary\n                | Class::ScheduleEvent\n                | Class::HookOutcome"
         }
       ],
       "instrument": "Test the PARSED key, not the byte string: `rg -NI --no-filename 'isVisibleInTranscriptOnly' -g '*.jsonl' . | jq -r 'select(has(\"isVisibleInTranscriptOnly\"))|[.type,(.isCompactSummary|tostring)]|@tsv' | sort | uniq -c`. A bare `rg -c 'isVisibleInTranscriptOnly'` overcounts 2.75x on a corpus whose sessions discuss the format.",
@@ -17889,7 +17889,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "153-161",
+          "lines": "159-167",
           "snippet": "        // Elicitation sidecar markers (\u00a73.10): a PENDING marker stands in for the native\n        // tool_use CC has not yet written \u2192 agent.tool.use (covers the MCP `system` form too,\n        // which carries no tool_use block). A RESOLVED marker is a pairing artifact \u2192 no label.\n        if self.is_elicitation_marker() {\n            if self.csift_phase.as_deref() == Some(\"pending\") {\n                push_unique(&mut out, Class::AgentToolUse);\n            }\n            return out;\n        }"
         }
       ],
@@ -18831,7 +18831,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "153-161",
+          "lines": "159-167",
           "snippet": "        // Elicitation sidecar markers (\u00a73.10): a PENDING marker stands in for the native\n        // tool_use CC has not yet written \u2192 agent.tool.use (covers the MCP `system` form too,\n        // which carries no tool_use block). A RESOLVED marker is a pairing artifact \u2192 no label.\n        if self.is_elicitation_marker() {\n            if self.csift_phase.as_deref() == Some(\"pending\") {\n                push_unique(&mut out, Class::AgentToolUse);\n            }\n            return out;\n        }"
         }
       ],
@@ -20358,14 +20358,14 @@
       "depends": "csift's gated harness.meta.system leaf DOES classify such a record (verified against a synthetic fixture), but the record has no top-level content, so the leaf's [<subtype> <level>] <content> render produces [hook_response] with empty text: the hook's stdout/stderr are not matchable through it, and show --line shows the same empty excerpt. Only --raw would reach the bytes. And since no such record is ever written, csift cannot use it as evidence a hook ran. The on-disk trace of a hook that ran is the ATTACHMENT family instead, minted by the same outcome arms that feed the dropped hook_response (@165866018), stamped by Sn as {attachment, type:\"attachment\", uuid, timestamp} (@165765262) and appended by the recorder (@166105359). Corpus census 2026-09-04, counting one record per type:\"attachment\" line whose attachment.type begins with hook_: hook_success 364356 - csift leaf harness.meta.attachment, gated behind --attachments / --count-by attachment - carrying exactly command, content, durationMs, exitCode, hookEvent, hookName, stderr, stdout and toolUseID beside its type, on all 283417 sampled; hook_additional_context 88795 - csift leaf harness.meta.hook, gated behind --additional-context - when the hook injected context; then the smaller siblings hook_cancelled 770, hook_non_blocking_error 93, hook_blocking_error 30, hook_system_message 5 and hook_stopped_continuation 3. So \"nothing at all otherwise\" was wrong: a hook that ran and injected nothing still leaves a hook_success attachment.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "16-25",
-          "snippet": "            \"system\" => match self.subtype.as_deref()? {\n                \"turn_duration\" => Some(Class::MetaTurnDuration),\n                \"away_summary\" => Some(Class::MetaAwaySummary),\n                \"stop_hook_summary\" => Some(Class::MetaStopHooks),\n                // The compaction boundary has its own leaf (`classify`, D7); every OTHER\n                // system subtype is the harness talking to its own UI (v0.10.1 catch-all:\n                // informational, api_error, model_refusal_*, agents_killed, local_command,\n                // scheduled_task_fire, and whatever a later build adds).\n                \"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),"
+          "path": "src/model/classify/system.rs",
+          "lines": "25-32",
+          "snippet": "        // Two subtypes, one event kind: whether a fallback model was tried is a FIELD\n        // on the record, not a different event.\n        \"model_refusal_fallback\" | \"model_refusal_no_fallback\" => Class::SystemRefusal,\n        \"api_error\" => Class::SystemApiError,\n        \"informational\" => Class::SystemNotice,\n        \"agents_killed\" => Class::SystemKill,\n        \"local_command\" => Class::SystemCommand,\n        _ => return None,"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "195-206",
-          "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),\n    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,\n    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a\n    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so\n    /// invisible by the same instrument as the rest of this family; gated like them.\n    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible.\n    MetaSystem,"
+          "lines": "262-275",
+          "snippet": "    // \u2500\u2500 harness.system (5) \u2500\u2500\n    /// `harness.system.refusal` - a `type:\"system\"` record with subtype\n    /// `model_refusal_fallback` / `model_refusal_no_fallback`.\n    SystemRefusal,\n    /// `harness.system.api-error` - a `type:\"system\"` record with subtype `api_error`.\n    SystemApiError,\n    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,\n    /// `harness.system.kill` - a `type:\"system\"` record with subtype `agents_killed`.\n    SystemKill,\n    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         }
       ],
       "instrument": "`csift search \"\" <target> -t harness.meta.system --count-by label` (the leaf is gated: without an explicit `-t` reaching it those lines are never parsed), then address one hit with `csift show <target> --line <n> --raw | jq 'keys, .subtype'`. Counting rule: one record per jsonl line whose `type` is `system` and `subtype` is `hook_response`. Binary cross-check: resolve the Claude Code binary (`bin=$(command -v claude)`; follow symlinks with `readlink -f`) and `strings -n 40 \"$bin\" | grep -F 'subtype:\"hook_response\"' | head -1` prints the single minified record constructor listing the whole field set.",
@@ -21162,8 +21162,8 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "163-168",
-          "snippet": "        // Hook-injected additionalContext (a `type:\"attachment\"` record): harness machinery,\n        // not a message - `harness.meta.hook`, LED by `agent.communication.channel` when the\n        // injected text is a csift-channel delivery. Only `search --additional-context` (or an\n        // address, or the channel keep) parses these lines; the record never opens a turn.\n        if self.hook_additional_context_text().is_some() {\n            self.push_hook_classes(&mut out);"
+          "lines": "174-177",
+          "snippet": "        if self.hook_additional_context_text().is_some() {\n            self.push_hook_classes(&mut out);\n            return out;\n        }"
         },
         {
           "path": "SKILL.md",
@@ -21888,13 +21888,13 @@
       "depends": "csift models it as a timestamp-less metadata line, promotes it to the gated leaf `harness.meta.snapshot`, and reads the instant out of `snapshot.timestamp` (falling back to the record timestamp): reading a top-level timestamp yields nothing, which would place every `recover` snapshot event at an unknown time and drop the record from any time window.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "280-283",
-          "snippet": "/// The `harness.meta.snapshot` excerpt for a `file-history-snapshot` (every tracked\n/// path with its version, sorted) or a `file-history-delta` (the one path). The\n/// snapshot line has no top-level timestamp; the nested one rides the excerpt.\nfn snapshot_record_text(rec: &Record) -> Option<String> {"
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "139-142",
+          "snippet": "/// The `harness.bookkeeping.file-history` excerpt for a `file-history-snapshot` (every tracked\n/// path with its version, sorted) or a `file-history-delta` (the one path). The\n/// snapshot line has no top-level timestamp; the nested one rides the excerpt.\nfn snapshot_record_text(rec: &Record) -> Option<String> {"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "300-305",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "159-164",
           "snippet": "    }\n    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
         }
       ],
@@ -22198,18 +22198,18 @@
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "27",
-          "snippet": "            \"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "36",
+          "snippet": "        \"file-history-snapshot\" | \"file-history-delta\" => Class::BookkeepingFileHistory,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "287-291",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "146-150",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "475-479",
+          "lines": "495-499",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -35737,9 +35737,9 @@
       "depends": "csift uses these to justify marking the promoted non-record leaves `llm_visible = false` with the careful wording 'not in the surviving conversation' rather than the stronger, false claim that the model never saw them - the load-bearing instrument being that ZERO of them carries a `message{}` field.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "226-232",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         }
       ],
       "instrument": "`strings -n 6` over the installed Claude Code binary filtered for `turn_duration|away_summary|scheduled_task_fire|isVirtual`, reading the surrounding doc strings (counting rule: one per extracted string); then `rg -c '\"isVirtual\":' ~/.claude/projects -g '*.jsonl'` must be 0 (counting rule: one per matching line).",
@@ -36291,8 +36291,8 @@
       "depends": "csift must not source turn-timing or pending-agent facts from those phrases; the only structural carriers are `turn_duration.durationMs` and `turn_duration.pendingBackgroundAgentCount`, which its promoted-leaf render reads by key.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "212-219",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "66-73",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {"
         }
       ],
@@ -39435,8 +39435,8 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "75-79",
-          "snippet": "    /// `agent.thinking.narration` - a narration-tagged thinking block: an API-issued\n    /// one-sentence summary of the reasoning beside it, NOT the reasoning itself. The\n    /// tag hides inside the base64 `signature` (see `model/narration.rs`); the first\n    /// leaf whose path is prefixed by another leaf (`-t agent.thinking` selects both).\n    AgentThinkingNarration,"
+          "lines": "90-93",
+          "snippet": "    /// `agent.thinking.narration` - the API's progress update between tool calls: the\n    /// same block shape with the signature tag `narration` (the tag hides in the base64\n    /// `signature`; see `model/narration.rs`).\n    AgentThinkingNarration,"
         }
       ],
       "instrument": "`csift stats <target> --format json | tail -1 | jq '{narration_blocks, unknown_thinking_tags}'` counts narration BLOCKS per model; cross-check the leaf split with `csift search '' @<session> --count-by label | rg 'agent\\.thinking'`, which on one measured session read 609 `agent.thinking` and 313 `agent.thinking.narration`.",
@@ -40364,7 +40364,7 @@
         {
           "path": "src/model/narration.rs",
           "lines": "51-56",
-          "snippet": "pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinking;\n    };\n    let gate_open = NARRATION_B64_ALIGNMENTS.iter().any(|n| sig.contains(n))\n        || sig.bytes().any(|b| b.is_ascii_whitespace());"
+          "snippet": "pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinkingSummary;\n    };\n    let gate_open = NARRATION_B64_ALIGNMENTS.iter().any(|n| sig.contains(n))\n        || sig.bytes().any(|b| b.is_ascii_whitespace());"
         }
       ],
       "instrument": "Count each needle separately over one transcript (`rg -c 'bmFycmF0aW9u' <transcript>` and the same for `5hcnJhdGlv` and `uYXJyYXRp`): more than one alignment fires inside a single file. Soundness: for every signature under the projects root run both the full 2 -> 1 -> 8 decode and the three-needle gate, and assert the gate never closes on a signature the decode tags `narration`; precision: assert no signature the decode tags `thinking` contains a needle. Counting rules: one classification per signature; a file counts as mixed when two or more distinct needles occur among its narration signatures. Binary side: byte-grep `.signature=` and `signature:` over the whole binary and read every occurrence, classifying each as a thinking-signature write, a type test, or an unrelated subsystem. Removing the gate must leave output byte-identical while costing measurably more wall time on one large transcript, same query and warm cache, with the transcript's size named.",
@@ -41124,12 +41124,12 @@
         {
           "path": "src/commands/search/hits.rs",
           "lines": "471-473",
-          "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
+          "snippet": "                    // Adjacency is never consulted, and a mixed multi-block record splits\n                    // per BLOCK.\n                    let Some(class) = crate::model::thinking_block_leaf(block) else {"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "226-228",
-          "snippet": "                Block::Thinking { signature, .. } => {\n                    push_unique(out, thinking_block_class(signature.as_deref()));\n                }"
+          "lines": "240-244",
+          "snippet": "                Block::Thinking { .. } | Block::RedactedThinking { .. } => {\n                    if let Some(c) = thinking::classify(b) {\n                        push_unique(out, c);\n                    }\n                }"
         }
       ],
       "instrument": "`csift search '' @<session> -t agent.thinking.narration --format json | jq -r .line` names each narration record; for each, `csift show @<session> --line <n> --raw | jq '[.message.content[].type]'` shows the blocks on THAT RECORD, which is not the same question - group records by `message.id` first. Counting rule: narration blocks whose assistant message carries no thinking block of any other kind, over all narration blocks; measured 5.67% (176/3,103).",
@@ -41345,12 +41345,12 @@
         {
           "path": "src/model/narration.rs",
           "lines": "48-59",
-          "snippet": "/// The leaf for a thinking block: `agent.thinking.narration` iff the signature tag reads\n/// exactly `narration`; every other outcome (tag `thinking`, an unknown tag, no tag)\n/// stays `agent.thinking`.\npub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinking;\n    };\n    let gate_open = NARRATION_B64_ALIGNMENTS.iter().any(|n| sig.contains(n))\n        || sig.bytes().any(|b| b.is_ascii_whitespace());\n    if !gate_open {\n        return Class::AgentThinking;\n    }"
+          "snippet": "/// The leaf for a thinking block: `agent.thinking.narration` iff the signature tag reads\n/// exactly `narration`; every other outcome (tag `thinking`, an unknown tag, no tag)\n/// stays `agent.thinking`.\npub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinkingSummary;\n    };\n    let gate_open = NARRATION_B64_ALIGNMENTS.iter().any(|n| sig.contains(n))\n        || sig.bytes().any(|b| b.is_ascii_whitespace());\n    if !gate_open {\n        return Class::AgentThinkingSummary;\n    }"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "226-228",
-          "snippet": "                Block::Thinking { signature, .. } => {\n                    push_unique(out, thinking_block_class(signature.as_deref()));\n                }"
+          "lines": "240-244",
+          "snippet": "                Block::Thinking { .. } | Block::RedactedThinking { .. } => {\n                    if let Some(c) = thinking::classify(b) {\n                        push_unique(out, c);\n                    }\n                }"
         }
       ],
       "instrument": "Census with `csift search '' -t agent.thinking.narration --count-by label`, then again with `--no-subagents`: the difference is the subagent-resident narration record count. Cross-check per transcript with `--format json`, splitting hits on `is_subagent` and grouping by transcript and parent, and independently of csift by base64-decoding each thinking block's signature and reading protobuf path 2 -> 1 -> 8, taking the last length-delimited field at each level. Counting rule: one per record per leaf; subagent transcripts are the files under `<uuid>/subagents/` inside each project directory, excluding `journal.jsonl`. For the request-side half, read the lane runner's thinking-config call, the lane branch, the session-level source, the settings schema and the two request-builder sites in the shipped binary, and byte-census the corpus for `\"display\":\"summarized\"`, `\"display\":\"omitted\"`, `\"thinkingConfig\"` and the interactivity field names.",
@@ -46002,8 +46002,8 @@
       "depends": "csift assigns no label to a content-less queue line and renders the label zone as `[enqueue]` or `[remove - <reason>]`; a `dequeue` can be paired with its `enqueue` only by ordering and text, never by an id, since the builder puts no join key on the line. The conditional-spread shape is why csift must treat a missing `content` key as 'this operation carries nothing' rather than as an empty string, and why the promoted leaf user.queued exists only for the content-bearing operations.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "38-42",
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "53-57",
           "snippet": "    fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }"
         }
       ],
@@ -46313,8 +46313,8 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "64-69",
-          "snippet": "    /// (no `message{}`); the dispatched twin, when there is one, is the later\n    /// `user.message` record. Automation riders (a `<task-notification>` / peer\n    /// message queued by the harness) are NOT the human and carry no label here;\n    /// content-less `dequeue` lines carry nothing to search. The queue line has no\n    /// join key (measured: 4-6 keys, no promptId/uuid), so `dispatched` is never\n    /// asserted - only the verbatim `operation` + `reason` facts ride the hit."
+          "lines": "71-73",
+          "snippet": "    /// `user.queued` - the person's text while it sat in the input queue: a\n    /// `type:\"queue-operation\"` line carrying the human's own `content`.\n    UserQueued,"
         }
       ],
       "instrument": "`csift show <target> --line <a queue-operation line> --raw | jq 'keys'`: no promptId, uuid or queue-id field appears. Counting rule = the key set of one queue line, repeated over the corpus-wide union (three distinct key sets, none with a join field).",
@@ -46470,9 +46470,9 @@
       "depends": "csift labels only a human-typed queue line `user.queued`, refusing a rider by the same content-shape law that reparents the delivered user record; labelling every content-bearing queue line would inflate the apparent human queue traffic roughly sevenfold and duplicate records already labelled elsewhere.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "32-48",
-          "snippet": "    /// `user.queued` iff the queue line carries the HUMAN's text. The queue also\n    /// carries harness riders - a `<task-notification>` pulse or a peer message - whose\n    /// delivered twin already classifies `harness.notification.*` / `agent.communication\n    /// .inbox`; the same content-shape law that reparents those user records applies,\n    /// so a rider is never the human here. A content-less line (`dequeue`) has nothing\n    /// to search and carries no label.\n    fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        Some(Class::UserQueued)\n    }"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "53-63",
+          "snippet": "    pub(crate) fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        Some(Class::UserQueued)\n    }"
         }
       ],
       "instrument": "Extract content-bearing `queue-operation` lines and bucket them by the first non-whitespace token of `content`; counting rule = one bucket observation per content-bearing line (riders = a boundary-anchored notification or peer tag). Then `csift search '' <target> -t user.queued -c` must be far smaller than that denominator.",
@@ -46552,9 +46552,9 @@
       "depends": "csift models neither `origin` nor `promptSource` and classifies by content shape instead; these are the structural fields any future authorship or dispatch assertion would have to key on, and the draft census is why `promptSource` cannot stand in for csift's superseded-draft rule (the shared-`parentUuid` sibling test). If csift ever does key on promptSource it must accept all five values, not the three with large corpus counts, and must not read a missing key as a value - 198 of 840 drafts and 444 of 2,507 finals carry no promptSource at all.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "32-35",
-          "snippet": "    /// `user.queued` iff the queue line carries the HUMAN's text. The queue also\n    /// carries harness riders - a `<task-notification>` pulse or a peer message - whose\n    /// delivered twin already classifies `harness.notification.*` / `agent.communication\n    /// .inbox`; the same content-shape law that reparents those user records applies,"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "58-61",
+          "snippet": "        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }"
         }
       ],
       "instrument": "`rg -oNI '\"promptSource\":\"[a-z_]+\"' ~/.claude/projects -g '*.jsonl' | sort | uniq -c`, and the same for `\"commandMode\":\"[a-z-]+\"`; counting rule = one observation per match. For origin, collect every line matching `\"origin\"` and parse it, bucketing the top-level origin.kind by the line's own top-level type; counting rule = one observation per parsed line carrying a top-level origin object. For the draft-versus-final split, take the raw records of `csift search '' -t user.unsent --raw --max-count 0` and `csift search '' -t user.message --raw --max-count 0` and count promptSource per record with absence as its own bucket. Records carrying promptSource:\"queued\" are stamped from Claude Code 2.1.177 to 2.1.259.",
@@ -46745,8 +46745,8 @@
       "depends": "the gap is why `user.queued` exists as its own searchable leaf: for that 19-28% the queue line is the only on-disk copy of what the operator typed, and a `-t user.message` search over it would report a definitive absence.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "41-47",
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "56-62",
           "snippet": "            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        Some(Class::UserQueued)"
         }
       ],
@@ -46910,19 +46910,19 @@
       "depends": "csift promotes it to the gated leaf `harness.meta.turn-duration`, renders a FABRICATED `[turn duration: ...]` key=value excerpt from exactly these fields, and - because the record carries a uuid and a timestamp - lets `show --uuid` and `show --line` address it flag-free.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "206-211",
-          "snippet": "        Class::MetaTurnDuration => {\n            let mut fields: Vec<String> = Vec::new();\n            let ms = Record::u64_field(rec.duration_ms.as_ref());\n            if let Some(ms) = ms {\n                fields.push(format!(\"{} \u00b7 durationMs={ms}\", fmt_ms(ms)));\n            }"
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "60-65",
+          "snippet": "        Class::TurnDuration => {\n            let mut fields: Vec<String> = Vec::new();\n            let ms = Record::u64_field(rec.duration_ms.as_ref());\n            if let Some(ms) = ms {\n                fields.push(format!(\"{} \u00b7 durationMs={ms}\", fmt_ms(ms)));\n            }"
         },
         {
           "path": "src/commands/search/matcher.rs",
           "lines": "507-509",
-          "snippet": "    if args.reaches_gated(Class::MetaTurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
+          "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "19",
-          "snippet": "\"stop_hook_summary\" => Some(Class::MetaStopHooks),"
+          "path": "src/model/classify/system.rs",
+          "lines": "18-20",
+          "snippet": "        // The three end-of-turn telemetry records.\n        \"turn_duration\" => Class::TurnDuration,\n        \"stop_hook_summary\" => Class::TurnStopHooks,"
         }
       ],
       "instrument": "`rg -NI '\"subtype\":\"turn_duration\"' ~/.claude/projects -g '*.jsonl'` into a JSON reader; counting rule = one observation per physical line, unioning keys and computing a per-key presence rate. Then `csift search '' <project-dir> -t harness.meta.turn-duration --count-by label` must equal the line count, and `csift show <target> --uuid <a turn_duration uuid>` must render the record.",
@@ -47024,8 +47024,8 @@
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "211-218",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "65-72",
           "snippet": "            }\n            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),"
         }
       ],
@@ -47368,8 +47368,8 @@
       "depends": "csift cannot read open-shell state from end-of-turn telemetry, so `status` joins the session registry, the transcript tail, child lanes, the task list and a process probe, and its background section - a whole-transcript scan for launches and completions - is the only instrument for a running shell.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "211-218",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "65-72",
           "snippet": "            }\n            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),"
         }
       ],
@@ -47447,9 +47447,9 @@
       "depends": "the record is therefore usable as proof that the synchronous lane was clear at that instant, but not as a turn-end detector, because its presence is not guaranteed at every clean end.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "19",
-          "snippet": "\"stop_hook_summary\" => Some(Class::MetaStopHooks),"
+          "path": "src/model/classify/system.rs",
+          "lines": "18-20",
+          "snippet": "        // The three end-of-turn telemetry records.\n        \"turn_duration\" => Class::TurnDuration,\n        \"stop_hook_summary\" => Class::TurnStopHooks,"
         }
       ],
       "instrument": "Replay one transcript line by line maintaining a running set of `tool_use` ids minus the seen `tool_result` `tool_use_id`s; at every `subtype:\"turn_duration\"` line record the set size. Counting rule = one observation per turn_duration record; the expected census is 0 open ids in every observation.",
@@ -47611,8 +47611,8 @@
       "depends": "csift never reads the presence or absence of an end-of-turn telemetry record as proof that a session finished; `status` derives its verdict from the tail state machine, the registry and the background scan instead.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "193-199",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "47-53",
           "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration: `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908\n///   pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, \u2026]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
         }
       ],
@@ -47696,8 +47696,8 @@
       "depends": "csift must source turn timing and pending-agent facts from `durationMs` and `pendingBackgroundAgentCount` only; searching the transcript for the rendered phrases finds quoted prose, never telemetry.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "212-219",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "66-73",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {"
         }
       ],
@@ -47801,9 +47801,9 @@
       "depends": "csift promotes it to the gated leaf `harness.meta.away-summary` and matches on the VERBATIM `content` (a raw byte substring, so no synthesized marker is needed); it is the most valuable promoted prose, and because it is model-written it must never be presented as operator text. The record is also not evidence about when the operator returned: it is written during the blur, so its timestamp marks roughly the idle delay after the last activity, not a return.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "205",
-          "snippet": "        Class::UserQueued | Class::MetaAwaySummary => rec.content_str().map(str::to_string),"
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "59",
+          "snippet": "        Class::UserQueued | Class::TurnRecap => rec.content_str().map(str::to_string),"
         }
       ],
       "instrument": "`rg -cNI '\"subtype\":\"away_summary\"' ~/.claude/projects -g '*.jsonl'` for the population, then parse those lines and keep the records whose type is system and subtype away_summary; counting rule = one observation per such record. Census the content type, the distinct contents, the length distribution, and the exact trailing suffix ' (disable recaps in /config)' by endswith; for the positional split, order each transcript's recaps by timestamp and bucket positions 1, 2, 3 and 4-or-later. Version facts read the record's own version field. `csift search '' <target> -t harness.meta.away-summary --no-truncate` must print the verbatim recap.",
@@ -47931,9 +47931,9 @@
       "depends": "csift must not treat a missing away recap as evidence about the gap; the leaf is searchable when present and silent when the harness skipped it. Two thirds of the qualifying gaps in this corpus carry no recap, so absence is the common case rather than the exception, and the two unlogged suppressors mean even an exhaustive read of the skip strings would not let a consumer explain a particular absence.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "18",
-          "snippet": "                \"away_summary\" => Some(Class::MetaAwaySummary),"
+          "path": "src/model/classify/system.rs",
+          "lines": "21",
+          "snippet": "        \"away_summary\" => Class::TurnRecap,"
         }
       ],
       "instrument": "`strings -n 6` over the shipped Claude Code binary for the located version, grepped for `awaySummary`, gives the skip and abort strings; counting rule = one observation per extracted string, closed by a byte census of the literal `[awaySummary]` over the same binary with constant-table hits separated from readable ones. On disk, scope the cross-check to the top-level transcripts under the projects root (`<projects>/<project>/<id>.jsonl`) and exclude the subagent transcripts and elicitation sidecars one level deeper: a gap is the interval between two consecutive records that are not themselves recaps, a gap of 300 s or more qualifies, and it counts as containing a recap when an away_summary record lies inside it; quote per-transcript rates only for transcripts with at least 20 qualifying gaps. Beside it runs a record-shape census: every `type:\"system\"` `subtype:\"away_summary\"` record under the projects root, bucketed by key set, by whether `content` is a string and by whether the content ends in ` (disable recaps in /config)`.",
@@ -48178,13 +48178,13 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "395-397",
+          "lines": "413-415",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "178-182",
-          "snippet": "    /// `harness.meta.away-summary` - the `system`/`away_summary` recap the harness\n    /// generates (a side model call, config-gated) when the operator returns after 5+\n    /// minutes away. Model-generated prose, yet no `message{}`: shown in the UI, not in\n    /// the surviving conversation (measured 1,196/1,198 never re-appear downstream).\n    MetaAwaySummary,"
+          "lines": "258-260",
+          "snippet": "    /// `harness.turn.recap` - the `type:\"system\"` / `subtype:\"away_summary\"` recap the\n    /// harness generates when the operator returns after time away. No `message{}`.\n    TurnRecap,"
         }
       ],
       "instrument": "`csift search '' -t harness.meta.away-summary --count-by session` for the population. For recurrence, parse every line containing the away_summary needle and keep the records whose type is system and subtype away_summary; strip the ` (disable recaps in /config)` suffix from each content, take the longest line of at least 40 characters and a 50-character slice from its middle, and search that slice in JSON-escaped form on every strictly later line of the same file that is not itself an away_summary record. Counting rule = one observation per away_summary record; a record counts as recurring only when its slice is found on such a later line.",
@@ -48438,18 +48438,18 @@
       "depends": "csift promotes it to the gated leaf `harness.meta.stop-hooks` and renders a fabricated `[stop hooks: count=N errors=M prevented=B]` head (M = the LENGTH of `hookErrors`, not its text) plus one line per `hookInfos` element: `command (Nms)` when `durationMs` is present, the bare `command` when it is not, and no line at all for an element without a `command` string. The leaf is kept distinct from `harness.meta.hook`, which is the text a hook INJECTED, so run telemetry is never attributed to injected context.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "14-19",
-          "snippet": "        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class(),\n            \"system\" => match self.subtype.as_deref()? {\n                \"turn_duration\" => Some(Class::MetaTurnDuration),\n                \"away_summary\" => Some(Class::MetaAwaySummary),\n                \"stop_hook_summary\" => Some(Class::MetaStopHooks),"
+          "path": "src/model/classify/system.rs",
+          "lines": "15-20",
+          "snippet": "pub(crate) fn classify(subtype: &str) -> Option<Class> {\n    Some(match subtype {\n        \"compact_boundary\" => Class::CompactionBoundary,\n        // The three end-of-turn telemetry records.\n        \"turn_duration\" => Class::TurnDuration,\n        \"stop_hook_summary\" => Class::TurnStopHooks,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "233-247",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "87-101",
           "snippet": "            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];\n            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "536-542",
+          "lines": "556-562",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48568,9 +48568,9 @@
       "depends": "the fabricated stop-hooks excerpt prints `prevented=<bool>` from `preventedContinuation`, which is the field a consumer should key on; the free-text `stopReason` is empty on almost every record and carries no independent information.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "226-236",
-          "snippet": "        Class::MetaStopHooks => {\n            let count = Record::u64_field(rec.hook_count.as_ref()).unwrap_or(0);\n            let errors = rec\n                .hook_errors\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n                .map_or(0, Vec::len);\n            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];"
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "80-90",
+          "snippet": "        Class::TurnStopHooks => {\n            let count = Record::u64_field(rec.hook_count.as_ref()).unwrap_or(0);\n            let errors = rec\n                .hook_errors\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n                .map_or(0, Vec::len);\n            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];"
         },
         {
           "path": "src/model/record.rs",
@@ -48655,19 +48655,19 @@
       "depends": "csift joins the `hookInfos[].command` lines as the record text; treating `hookAdditionalContext` as the context the hooks contributed would yield nothing at all, and the fabricated head is what makes the leaf matchable.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "237-251",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "91-105",
           "snippet": "            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),\n                        None => lines.push(cmd.to_string()),\n                    }\n                }\n            }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "183-188",
-          "snippet": "    /// `harness.meta.stop-hooks` - the `system`/`stop_hook_summary` execution ledger\n    /// of the Stop hooks that ran at turn end (`hookInfos[].command` + durations,\n    /// `hookErrors`, `preventedContinuation`). Distinct from [`Class::MetaHook`], which\n    /// is the text a hook INJECTED into the model; this record is the run itself and\n    /// its `hookAdditionalContext` is empty on every measured instance.\n    MetaStopHooks,"
+          "lines": "255-257",
+          "snippet": "    /// `harness.turn.stop-hooks` - the `type:\"system\"` / `subtype:\"stop_hook_summary\"`\n    /// ledger of the Stop hooks that ran at turn end. No `message{}`.\n    TurnStopHooks,"
         },
         {
           "path": "src/commands/search/matcher.rs",
           "lines": "507-514",
-          "snippet": "    if args.reaches_gated(Class::MetaTurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::MetaStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::MetaSnapshot) {\n        verifiable.push(b\"file-history-\");"
+          "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
       "instrument": "Parse all `stop_hook_summary` lines and count the instances where `hookAdditionalContext` is present and its length is 0; counting rule = one observation per present instance (measured 4,865 of 4,865 empty).",
@@ -48771,9 +48771,9 @@
       "depends": "csift classifies the record as the gated searchable leaf `harness.meta.stop-hooks` (src/model/classify/promoted.rs) and never as a turn boundary: `opens_turn` is exactly `is_genuine_user() || is_auq_answer_boundary() || is_plan_rejection_boundary() || is_peer_message_record()` (src/model/exchange.rs), so a `type:\"system\"` stop-hook line is a turn MEMBER, never a delimiter. Turn counts stay keyed on the human's own records, which is what keeps them stable when either subtype is missing - stop_hook_summary because no Stop hook ran, turn_duration because it was deferred behind running background work. The leaf is admitted to a scan only behind an explicit `-t` selector reaching it or a `show --line`/`--uuid` address (src/commands/search/scan.rs `CandidateGates`), and the `show --turn` help states that the gated non-record lines a turn carries belong to no turn fetch (src/cli/show_stats_args.rs).",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "14-19",
-          "snippet": "        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class(),\n            \"system\" => match self.subtype.as_deref()? {\n                \"turn_duration\" => Some(Class::MetaTurnDuration),\n                \"away_summary\" => Some(Class::MetaAwaySummary),\n                \"stop_hook_summary\" => Some(Class::MetaStopHooks),"
+          "path": "src/model/classify/system.rs",
+          "lines": "15-20",
+          "snippet": "pub(crate) fn classify(subtype: &str) -> Option<Class> {\n    Some(match subtype {\n        \"compact_boundary\" => Class::CompactionBoundary,\n        // The three end-of-turn telemetry records.\n        \"turn_duration\" => Class::TurnDuration,\n        \"stop_hook_summary\" => Class::TurnStopHooks,"
         },
         {
           "path": "src/model/exchange.rs",
@@ -48782,7 +48782,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "536-542",
+          "lines": "556-562",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -48995,8 +48995,8 @@
       "depends": "csift renders both forms under the gated leaf `harness.meta.snapshot` with the tracked paths and versions as matchable text, and the byte prefilter admits them on the shared `\"file-history-` type prefix. `recover` consumes BOTH forms: its candidate needle is the same shared prefix and the delta's `trackingPath` + `backup.version` become a `HistorySnapshotMarker` for the target exactly as a snapshot entry does, so the external-write interval is bounded at the finer per-write grain rather than only at the per-prompt one.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "287-299",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "146-158",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let name = backup\n            .and_then(|b| b.get(\"backupFileName\"))\n            .and_then(serde_json::Value::as_str)\n            .map(|n| format!(\" backup={n}\"))\n            .unwrap_or_default();\n        return Some(format!(\n            \"[file-history delta at {at}: {path}@v{version}{name}]\"\n        ));"
         },
         {
@@ -49106,9 +49106,9 @@
       "depends": "csift promotes each of the five to exactly one LLM-invisible leaf (`user.queued`, `harness.meta.turn-duration`, `harness.meta.away-summary`, `harness.meta.stop-hooks`, `harness.meta.snapshot`) and admits them to a scan ONLY behind an explicit `-t` selector reaching that leaf or a `show` address, so a bare scan, a `-T`-only filter and a flagless `--count-by label` never parse them, and neither does a bare role selector - with ONE exception. A SIXTH gated leaf, `harness.meta.system`, catches every OTHER `type:\"system\"` subtype, the compaction boundary excepted (it keeps its own leaf), and a bare `harness` role DOES admit its lines: one subtype under it, `local_command`, is re-minted by the request assembler and sent (CLS-026), so the lines are parsed and the per-record delivery override keeps only that subtype. The other five leaves keep the explicit-selector rule exactly. The remaining message-less types stay unmodeled, which is safe only because the promotion is a whitelist of named types (src/model/classify/promoted.rs) rather than a message-less test: a rule keyed on the absence of `message{}` would sweep in attachment, last-prompt, mode, permission-mode, ai-title, agent-name, atis-latch and the rest of the bookkeeping set - 697,685 of 1,446,970 corpus lines.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "14-28",
-          "snippet": "        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class(),\n            \"system\" => match self.subtype.as_deref()? {\n                \"turn_duration\" => Some(Class::MetaTurnDuration),\n                \"away_summary\" => Some(Class::MetaAwaySummary),\n                \"stop_hook_summary\" => Some(Class::MetaStopHooks),\n                // The compaction boundary has its own leaf (`classify`, D7); every OTHER\n                // system subtype is the harness talking to its own UI (v0.10.1 catch-all:\n                // informational, api_error, model_refusal_*, agents_killed, local_command,\n                // scheduled_task_fire, and whatever a later build adds).\n                \"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),\n            },\n            \"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),\n            _ => None,"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "69-75",
+          "snippet": "    pub fn promoted_class(&self) -> Option<Class> {\n        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class().or(Some(Class::BookkeepingQueue)),\n            \"system\" => system::classify(self.subtype.as_deref()?),\n            other => classify(other),\n        }\n    }"
         }
       ],
       "instrument": "Census: parse every jsonl line under the projects root with json.loads and bucket it by (top-level type, subtype when the type is system), recording whether the parsed object has a top-level `message` key and classing the file as transcript, workflow journal or elicitation sidecar by its basename; counting rule one observation per physical line. Reconcile the observed type set against the policy table read whole from the binary at 166066494. Gating: `csift search '' <target> -t harness.meta --count-by label` against the same command without `-t` - the promoted leaves appear only in the gated run.",
@@ -49511,19 +49511,19 @@
       "depends": "csift decides `Class::llm_visible` on that shape rule, which is what keeps a bare role selector (`-t user`) expanding to the delivered leaves only while the glob form and explicit paths reach the rest; the three per-record exceptions the harness's own predicate names ride `Record::delivery_override` beside it.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "243-256",
-          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "66-83",
-          "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if selector.contains('.') {\n        return true; // intermediate prefix or exact leaf: any visibility.\n    }\n    // A bare role: what the model received - the leaf default unless this record's\n    // own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
+          "lines": "79-96",
+          "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if !is_bare_face(selector) {\n        return true; // an exact leaf: any visibility.\n    }\n    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
         },
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "226-241",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "126-130",
+          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation no longer threads through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
         }
       ],
       "instrument": "`csift stats <target>` prints a whole-file line-type census; for each non user/assistant type, count the lines of that type carrying `\"message\":{`. Counting rule = one observation per physical line, per type; expect 0 for every non-record type.",
@@ -49671,9 +49671,9 @@
       "depends": "csift keys visibility on `message{}` presence alone; keying it off parentUuid continuity would flip all five promoted leaves to visible and break the role-selector expansion contract, while the same threading is what makes the records addressable and lets the superseded-draft detector see them as shared parents.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "13-25",
-          "snippet": "    pub fn promoted_class(&self) -> Option<Class> {\n        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class(),\n            \"system\" => match self.subtype.as_deref()? {\n                \"turn_duration\" => Some(Class::MetaTurnDuration),\n                \"away_summary\" => Some(Class::MetaAwaySummary),\n                \"stop_hook_summary\" => Some(Class::MetaStopHooks),\n                // The compaction boundary has its own leaf (`classify`, D7); every OTHER\n                // system subtype is the harness talking to its own UI (v0.10.1 catch-all:\n                // informational, api_error, model_refusal_*, agents_killed, local_command,\n                // scheduled_task_fire, and whatever a later build adds).\n                \"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         }
       ],
       "instrument": "Take a `turn_duration` uuid from `csift show <target> -t harness.meta.turn-duration --raw`, then `rg '\"parentUuid\":\"<that uuid>\"' over the same file - a user record comes back. Counting rule = one hit per record naming it as parent.",
@@ -49753,18 +49753,18 @@
       "depends": "csift refuses preservedMessages as a delivery signal and keeps `message{}` presence as the leaf-level instrument, with the harness's own drop predicate overriding it per record (CLS-026); reading the list as a visibility filter would mark telemetry as delivered context.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "226-241",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "126-130",
+          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation no longer threads through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
         },
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "243-256",
-          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "341-343",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "200-202",
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();"
         },
         {
@@ -49872,9 +49872,9 @@
       "depends": "csift deliberately leaves them unmodeled and unaddressable by label: they carry no fact `stats` or `list` does not already expose, and a leaf would inject about 28,891 duplicate hits and skew `--count-by label`. They reach only `show --raw` and the `stats` line-type census.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "9-13",
-          "snippet": "    /// The single promoted leaf a NON-message line carries (v0.10.0), or `None` for a\n    /// message record and for every line type that stays unmodeled (the session-state\n    /// cache lines, the unpromoted system subtypes, a content-less queue `dequeue`).\n    #[must_use]\n    pub fn promoted_class(&self) -> Option<Class> {"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "18-25",
+          "snippet": "pub(crate) fn classify(line_type: &str) -> Option<Class> {\n    Some(match line_type {\n        \"last-prompt\" => Class::BookkeepingLastPrompt,\n        // Two line types, one leaf: the session's mode and its permission mode are\n        // the same fact recorded by two writers.\n        \"mode\" | \"permission-mode\" => Class::BookkeepingMode,\n        // The generated session title and the generated agent name, likewise.\n        \"ai-title\" | \"agent-name\" => Class::BookkeepingName,"
         },
         {
           "path": "src/commands/show/run.rs",
@@ -49972,13 +49972,13 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "190-194",
-          "snippet": "            Some(\"system\") => {\n                if self.is_compact_boundary() {\n                    push_unique(&mut out, Class::CompactionBoundary);\n                }\n            }"
+          "lines": "200-205",
+          "snippet": "        if !self.is_type(\"assistant\") && !self.is_type(\"user\") {\n            if let Some(c) = self.promoted_class() {\n                push_unique(&mut out, c);\n            }\n            return out;\n        }"
         },
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "16-26",
-          "snippet": "            \"system\" => match self.subtype.as_deref()? {\n                \"turn_duration\" => Some(Class::MetaTurnDuration),\n                \"away_summary\" => Some(Class::MetaAwaySummary),\n                \"stop_hook_summary\" => Some(Class::MetaStopHooks),\n                // The compaction boundary has its own leaf (`classify`, D7); every OTHER\n                // system subtype is the harness talking to its own UI (v0.10.1 catch-all:\n                // informational, api_error, model_refusal_*, agents_killed, local_command,\n                // scheduled_task_fire, and whatever a later build adds).\n                \"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),\n            },"
+          "path": "src/model/classify/system.rs",
+          "lines": "15-24",
+          "snippet": "pub(crate) fn classify(subtype: &str) -> Option<Class> {\n    Some(match subtype {\n        \"compact_boundary\" => Class::CompactionBoundary,\n        // The three end-of-turn telemetry records.\n        \"turn_duration\" => Class::TurnDuration,\n        \"stop_hook_summary\" => Class::TurnStopHooks,\n        \"away_summary\" => Class::TurnRecap,\n        // The scheduler's own fire RECORD (the prompt it submits is a user record and\n        // takes `harness.schedule.fire`).\n        \"scheduled_task_fire\" => Class::ScheduleEvent,"
         },
         {
           "path": "src/parse/spine.rs",
@@ -50551,9 +50551,9 @@
       "depends": "these strings corroborate the `message{}` instrument from the producing side, and they are why csift words the five promoted leaves as `not in the surviving conversation` rather than making the stronger, unprovable claim that the model never saw them.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "235-241",
-          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "162-164",
+          "snippet": "                | Class::TurnDuration\n                | Class::TurnStopHooks\n                | Class::TurnRecap"
         }
       ],
       "instrument": "Run `strings -n 6` over the shipped Claude Code binary for the located version and grep for `turn_duration|away_summary|scheduled_task_fire`, then read the surrounding doc comments; counting rule = one observation per extracted string.",
@@ -50703,9 +50703,9 @@
       "depends": "csift now reads the flag off the line: `Record::is_virtual` is deserialized and `Record::delivery_override` returns `Some(false)` for a user or assistant record carrying it, mirroring the `zj` arm of the request assembler's drop predicate (CLS-026), so a bare role selector drops such a record while a glob or an explicit leaf still reaches it. Because the strip is conditional rather than absolute, a reader should treat the key's absence as the overwhelmingly common case rather than an invariant: a resume run is the shape that would put the marker on disk, and a csift surface that ever consumed the field must tolerate its appearance rather than assume it impossible.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "235-241",
-          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
+          "path": "src/model/delivery.rs",
+          "lines": "62-64",
+          "snippet": "        if self.is_virtual == Some(true) {\n            return Some(false);\n        }"
         }
       ],
       "instrument": "`cd ~/.claude/projects && for n in '\"isVirtual\"' '\"is_virtual\"' '\"virtualInResumeRun\"' '\"resumedFromIncompleteThinking\"' '\"isMeta\"'; do rg -oNI -uu --no-messages \"$n\" -g '*.jsonl' . | wc -l; done`; counting rule = one observation per byte match, needles taken WITH the surrounding quotes. The first four must be 0 and the control must be large, which proves the scan reaches record interiors; the bare token without quotes is not the instrument (it matches prose about the flag, 1,945 times over 223 files against 0 for the quoted key). Binary side: `grep -abo 'isVirtual:!0' <executable>` returns the five client minters and the two wire-converter arms, and `strings -n 6` finds the is_virtual schema describe string.",
@@ -50906,12 +50906,12 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "415-421",
+          "lines": "435-441",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "449-452",
+          "lines": "469-472",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -52211,7 +52211,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "444-449",
+          "lines": "464-469",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -52344,9 +52344,9 @@
       "depends": "csift makes message{} presence the decisive instrument for Class::llm_visible() (src/model/taxonomy.rs, src/model/record.rs), so a bare-role selector such as -t user returns only leaves that could become an API message; if a non-message type ever gained a message{} the visibility split behind search -t would silently invert. The cross-tab instrument in this claim is what would catch that, and it is re-run whenever a new line type appears in the stats line-type census.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "243-256",
-          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-157",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::AgentThinkingOmitted"
         },
         {
           "path": "src/model/record.rs",
@@ -52604,9 +52604,9 @@
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "9-11",
-          "snippet": "    /// The single promoted leaf a NON-message line carries (v0.10.0), or `None` for a\n    /// message record and for every line type that stays unmodeled (the session-state\n    /// cache lines, the unpromoted system subtypes, a content-less queue `dequeue`)."
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "65-69",
+          "snippet": "    /// The single leaf a NON-MESSAGE line carries: the human's queued text, else the\n    /// bookkeeping leaf of its own line type, else the system leaf of its subtype.\n    /// `None` for a message record and for every line type that stays unmodeled.\n    #[must_use]\n    pub fn promoted_class(&self) -> Option<Class> {"
         }
       ],
       "instrument": "`rg -m5 '\"type\":\"mode\"' ~/.claude/projects/**/*.jsonl | jq -r 'has(\"timestamp\"), has(\"uuid\")'` must print `false false`, and `csift stats` over the same file must still report a span; then `csift show @<id> --line <a cache line number>` must bail with the 'no such record(s)' message while `--raw` prints the bytes. Counting rule: per raw line.",
@@ -52919,8 +52919,8 @@
       "depends": "csift models `Content` as an untagged string-or-array enum; a struct that assumed the array form would drop every string-content genuine user turn, which is the majority shape for human prose.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "53-58",
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "80-85",
           "snippet": "    pub fn content_str(&self) -> Option<&str> {\n        match self.content.as_ref()? {\n            serde_json::Value::String(s) => Some(s.as_str()),\n            _ => None,\n        }\n    }"
         },
         {
@@ -53100,7 +53100,7 @@
         {
           "path": "src/model/narration.rs",
           "lines": "51-54",
-          "snippet": "pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinking;\n    };"
+          "snippet": "pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinkingSummary;\n    };"
         }
       ],
       "instrument": "`rg -o '\"type\":\"(text|thinking|redacted_thinking|tool_use|tool_result|image)\"' <transcript> | sort | uniq -c` enumerates the live set, and `csift search '' -t agent --count-by label` must account for each. Counting rule: one per block occurrence in raw bytes for the rg, one per record for the census.",
@@ -53300,8 +53300,8 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "73-74",
-          "snippet": "    /// `agent.thinking` - a thinking block (see the GOLD-gap note re `redacted_thinking`).\n    AgentThinking,"
+          "lines": "98-101",
+          "snippet": "    /// `agent.thinking.redacted` - the API's safety-redacted ciphertext block,\n    /// `{type:\"redacted_thinking\", data:<base64>}`. Parsed verbatim and echoed back;\n    /// no readable text, so the leaf is invisible.\n    AgentThinkingRedacted,"
         }
       ],
       "instrument": "`rg -cNI '\"redacted_thinking\"' ~/.claude/projects -g '*.jsonl'` then `csift search 'redacted' @<id> -t agent.thinking`; counting rule = per record. A zero corpus count means the block type is absent locally, not that the arm is wrong - it is exercised by a synthetic fixture and the e2e taxonomy tests pin the placeholder render.",
@@ -53767,12 +53767,12 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "444-449",
+          "lines": "464-469",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "467-468",
+          "lines": "487-488",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53872,7 +53872,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "461-462",
+          "lines": "481-482",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
@@ -54512,9 +54512,9 @@
       "depends": "csift deliberately leaves them unpromoted, so they contribute no searchable leaf and no duplicate human turn; promoting them would double-count the last prompt in every `user.message` census.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "9-11",
-          "snippet": "    /// The single promoted leaf a NON-message line carries (v0.10.0), or `None` for a\n    /// message record and for every line type that stays unmodeled (the session-state\n    /// cache lines, the unpromoted system subtypes, a content-less queue `dequeue`)."
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "20-25",
+          "snippet": "        \"last-prompt\" => Class::BookkeepingLastPrompt,\n        // Two line types, one leaf: the session's mode and its permission mode are\n        // the same fact recorded by two writers.\n        \"mode\" | \"permission-mode\" => Class::BookkeepingMode,\n        // The generated session title and the generated agent name, likewise.\n        \"ai-title\" | \"agent-name\" => Class::BookkeepingName,"
         }
       ],
       "instrument": "`jq -r 'select(.type==\"last-prompt\") | keys | join(\",\")' <file> | sort | uniq -c` shows the absent uuid/timestamp/message; then `csift search '<the last prompt text>' @<session> --count-by label` must count it once. Counting rule: one line per cache write, excluded from every leaf.",
@@ -54639,9 +54639,9 @@
       "depends": "`Record::promoted_class` maps both `file-history-snapshot` and `file-history-delta` to `harness.meta.snapshot`; omitting the delta arm loses roughly 1,971 corpus lines from the SEARCHABLE surface. It also feeds recover's backup instrument: a delta whose `trackingPath` names the `--file` target contributes its `backup.version` to the same version sequence a snapshot entry does. `files`' ExternalWrite inference still keys on `file-history-snapshot` records alone (its per-path sequences come from the snapshot table), so the two consumers read the corpus at different grains on purpose.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "27",
-          "snippet": "\"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),"
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "36",
+          "snippet": "        \"file-history-snapshot\" | \"file-history-delta\" => Class::BookkeepingFileHistory,"
         }
       ],
       "instrument": "`csift search '' -t harness.meta.snapshot --count-by label --format json` over a corpus session, or `rg -c '\"type\":\"file-history-delta\"' ~/.claude/projects/**/*.jsonl`. Counting rule: one per raw jsonl line.",
@@ -54743,9 +54743,9 @@
       "depends": "csift's `harness.meta.snapshot` render carries a null hit timestamp and puts the nested instant into the excerpt (`[file-history snapshot at <snapshot.timestamp>: <path>@vN, ...]`); reading a top-level timestamp yields nothing and would drop the record from any time window.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "27-29",
-          "snippet": "            \"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),\n            _ => None,\n        }"
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "160-164",
+          "snippet": "    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
         }
       ],
       "instrument": "`rg -m1 '\"type\":\"file-history-snapshot\"' <transcript> | jq 'has(\"timestamp\"), .snapshot.timestamp'` must print `false` then an ISO instant. Counting rule: one record inspected.",
@@ -55297,7 +55297,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "369-374",
+          "lines": "340-345",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
@@ -55307,7 +55307,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "355-356",
+          "lines": "356-357",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55415,9 +55415,9 @@
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "235-255",
-          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )"
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "147-151",
+          "snippet": "    /// The leaf default is never the whole answer. Delivery is decided per RECORD by\n    /// [`Record::delivery_override`], and survival per record by the conversation\n    /// chain; a bare selector consults all three.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {"
         },
         {
           "path": "src/commands/search/hits.rs",
@@ -56016,7 +56016,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "449-460",
+          "lines": "243-254",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],
@@ -56122,7 +56122,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "490-496",
+          "lines": "510-516",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -57673,9 +57673,9 @@
       "depends": "csift classifies it under `harness.meta.attachment`, which is parsed only under `search --attachments` / `--count-by attachment` or an explicit `show` address - so a default scan cannot see that a read was capped, and `recover` ignores the record entirely.",
       "code": [
         {
-          "path": "src/model/classify.rs",
-          "lines": "172-179",
-          "snippet": "        // Any OTHER `type:\"attachment\"` record (edited_text_file, compact_file_reference,\n        // file snapshots, \u2026): harness sidecar payload - labeled `harness.meta.attachment`.\n        // Only `search --attachments` / `--count-by attachment` (or an explicit `show`\n        // address) ever parses these lines; the record never opens a turn.\n        if self.attachment_payload_text().is_some() {\n            push_unique(&mut out, Class::MetaAttachment);\n            return out;\n        }"
+          "path": "src/model/classify/attachments.rs",
+          "lines": "53-60",
+          "snippet": "        // \u2500\u2500 harness.context.file: file content the harness attached \u2500\u2500\n        \"file\"\n        | \"edited_text_file\"\n        | \"compact_file_reference\"\n        | \"nested_memory\"\n        | \"plan_file_reference\"\n        | \"read_truncation_notice\"\n        | \"bash_output_audience_note\" => Class::ContextFile,"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -57796,8 +57796,8 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "172-178",
-          "snippet": "        // Any OTHER `type:\"attachment\"` record (edited_text_file, compact_file_reference,\n        // file snapshots, \u2026): harness sidecar payload - labeled `harness.meta.attachment`.\n        // Only `search --attachments` / `--count-by attachment` (or an explicit `show`\n        // address) ever parses these lines; the record never opens a turn.\n        if self.attachment_payload_text().is_some() {\n            push_unique(&mut out, Class::MetaAttachment);\n            return out;"
+          "lines": "183-192",
+          "snippet": "        if self.is_type(\"attachment\") {\n            if let Some(ty) = self.attachment_type() {\n                if ty == \"queued_command\" && self.queued_command_is_human() {\n                    push_unique(&mut out, Class::UserMessage);\n                    return out;\n                }\n                if let Some(c) = attachments::classify(&ty) {\n                    push_unique(&mut out, c);\n                }\n            }"
         }
       ],
       "instrument": "Seek `In.attachment.type===\"read_truncation_notice\"||In.attachment.type===\"session_context\"` in a `strings -a` dump of the 2.1.258 binary; a second site in the forked-agent recorder gates persistence on `xt.type===\"attachment\"&&xt.attachment.type===\"read_truncation_notice\"`. Corpus confirmation: at least one `read_truncation_notice` record exists inside a `subagents/agent-*.jsonl` file under ~/.claude/projects.",
@@ -66551,7 +66551,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "369-374",
+          "lines": "340-345",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
@@ -70578,18 +70578,18 @@
       "depends": "`search -t harness.meta.system` (the v0.10.1 catch-all leaf, gated) classifies any system subtype other than the four modeled ones and renders `[<subtype> <level>] <content>`, falling back to `[<subtype>]` when the record carries no `level` (away_summary, turn_duration, scheduled_task_fire and agents_killed carry none; stop_hook_summary carries the unusual level `suggestion`) and to the head alone when there is no `content` (agents_killed carries neither); `show --line` renders such a line flag-free. Two csift laws rest on the record SHAPE rather than on the subtype list, which is exactly why the leaf is a catch-all and not an enumeration: the leaf DEFAULT is `llm_visible:false` because no such record carries a `message{}` field (0 of 13087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - and 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the catch-all admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The leaf default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the leaf is the harness sending a SECOND subtype (a new arm beside `UWt`) or moving a subtype into a differently-typed record.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "24-25",
-          "snippet": "\"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),"
+          "path": "src/model/classify/system.rs",
+          "lines": "27-32",
+          "snippet": "        \"model_refusal_fallback\" | \"model_refusal_no_fallback\" => Class::SystemRefusal,\n        \"api_error\" => Class::SystemApiError,\n        \"informational\" => Class::SystemNotice,\n        \"agents_killed\" => Class::SystemKill,\n        \"local_command\" => Class::SystemCommand,\n        _ => return None,"
         },
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "260",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "119",
           "snippet": "let subtype = rec.subtype.as_deref().unwrap_or(\"system\");"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "496",
+          "lines": "516",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -71535,7 +71535,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "293-296",
+          "lines": "306-309",
           "snippet": "        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {\n            push_unique(out, Class::CommandStdout);\n            return;\n        }"
         }
       ],
@@ -71863,7 +71863,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "297-308",
+          "lines": "310-321",
           "snippet": "        if is_slash_command_wrapper(s) {\n            // Prose typed after the slash command (`<command-args>`) IS genuine user\n            // input - and the RICHER view (richest-view law: the prose beats the\n            // wrapper), so it is pushed FIRST: the unfiltered record-text emission\n            // renders `/name args`, never the wrapper XML. An explicit\n            // `-t harness.command.invocation` still reaches the wrapper form.\n            if self.slash_command_args().is_some() {\n                push_unique(out, Class::UserMessage);\n            }\n            push_unique(out, Class::CommandInvocation);\n            return;\n        }"
         }
       ],
@@ -74391,8 +74391,8 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "44-51",
-          "snippet": "    /// `user.unsent` - a SUPERSEDED turn-opener draft: sent, esc-recalled into the input\n    /// box, edited and re-sent, leaving the original on disk sharing the resend's\n    /// parentUuid. Assigned at the SCAN layer (the superseded set needs a LATER sibling,\n    /// which a pure per-record classify cannot see); outside turn numbering; 99% never\n    /// drew a reply. A recalled-then-ABANDONED message has no sibling and is\n    /// structurally undetectable; a QUEUED text edited before dispatch never becomes a\n    /// user record at all (it survives only in `queue-operation` lines).\n    UserUnsent,"
+          "lines": "62-66",
+          "snippet": "    /// `user.unsent` - the esc-recalled draft left on disk: a `type:\"user\"` opener\n    /// sharing its `parentUuid` with a LATER opener and carrying no assistant\n    /// descendant. Assigned at the SCAN layer (the fact lives in the DAG around the\n    /// record); outside turn numbering, addressable.\n    UserUnsent,"
         }
       ],
       "instrument": "`csift search '' @<id> -t user.unsent --format json | jq -r '[.label, .turn_index] | @tsv'` - every row must read `user.unsent` with a null turn index - and record for each draft whether `message.content` is a JSON string or an array. Counting rule: one per superseded opener record, identified by a shared `parentUuid` with a later opener in the same file.",
@@ -74482,9 +74482,9 @@
       "depends": "That exclusion is the measured instrument behind classifying `user.unsent` LLM-invisible, and it is also the wording law: csift says 'not in the surviving conversation', never 'the model never saw it', because a few drafts did draw real replies before the retraction. csift also refuses to use `preservedMessages` membership as a general visibility test.",
       "code": [
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "214-219",
-          "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts\n    ///   drew real replies before the retraction.)"
+          "path": "src/model/chain.rs",
+          "lines": "152-156",
+          "snippet": "    pub fn class(self) -> Class {\n        match self {\n            Kind::Draft { .. } => Class::UserUnsent,\n            Kind::Rewound { .. } => Class::UserRewound,\n        }"
         }
       ],
       "instrument": "Take the draft uuids from `csift search '' @<id> -t user.unsent --format json` and test membership in the compaction boundary's `preservedMessages` array read via `csift show @<id> --uuid <boundary> --raw`. Counting rule: one membership test per draft uuid (expect 0 of N); reply rate = drafts with at least one assistant child over drafts tested.",
@@ -79896,11 +79896,11 @@
         {
           "path": "src/model/classify/channel.rs",
           "lines": "51-56",
-          "snippet": "    pub(crate) fn push_hook_classes(&self, out: &mut Vec<Class>) {\n        if self.csift_channel_text().is_some() {\n            push_unique(out, Class::CommChannel);\n        }\n        push_unique(out, Class::MetaHook);\n    }"
+          "snippet": "    pub(crate) fn push_hook_classes(&self, out: &mut Vec<Class>) {\n        if self.csift_channel_text().is_some() {\n            push_unique(out, Class::CommChannel);\n        }\n        push_unique(out, Class::HookContext);\n    }"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "531-535",
+          "lines": "551-555",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -80066,7 +80066,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "98-105",
+          "lines": "99-106",
           "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
@@ -80147,8 +80147,8 @@
         },
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "97-101",
-          "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.meta.hook` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
+          "lines": "137-141",
+          "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.hook.context` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
         }
       ],
       "instrument": "Two queries plus a grep: `csift search SubagentStart --additional-context -t harness.meta.hook -c` against `rg -c '\"hookEvent\":\"SubagentStart\"'` over the projects root. Counting rule: one per matched record for the query, one per matching line for the grep.",
@@ -86939,13 +86939,13 @@
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "75-79",
-          "snippet": "    // A bare role: what the model received - the leaf default unless this record's\n    // own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }"
+          "lines": "88-92",
+          "snippet": "    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }"
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "411-420",
-          "snippet": "    /// True when the scan parses `type:\"system\"` candidate lines at all: an explicit\n    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE\n    /// one predicate for that admission - the candidate gate and the \u00a77f whole-file\n    /// gate's synthesized-marker set must agree, or a pattern that can only match the\n    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds\n    /// it (a silent drop, the \u00a77 landmine).\n    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()\n    }"
+          "lines": "435-438",
+          "snippet": "    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        SYSTEM_LINE_LEAVES.iter().any(|&c| self.reaches_gated(c)) || self.bare_harness_role()\n    }"
         }
       ],
       "instrument": "Binary: `grep -abo 'function LP(' <executable>` and read 120 bytes at the returned offset; the same for `function UWt(`, `function zj(`, `function LV(`, `Jc=\"<synthetic>\"` and the loop literal `for(let nt of B){if(LP(nt))continue;`. Window negative: `grep -c local-command-stdout` over the whole executable and over bytes 165390000-166100000, counting rule one observation per byte match. Corpus: sum `rg -c '\"subtype\":\"local_command\"'` over the top-level transcripts under the projects root, counting rule one observation per record, and cross-check against `csift search \"\" -t harness.meta.system --no-subagents --count-by label`.",
@@ -87151,14 +87151,14 @@
       "depends": "csift classifies the two shapes differently and must keep doing so: the wrapper user record and its stdout sibling are `harness.command.invocation` / `harness.command.stdout`, while the `display:\"system\"` pair is `harness.meta.system` and gated. Only the second shape is re-minted by the request assembler (CLS-026), so delivery follows the record TYPE rather than the command, and a reader who assumes a slash command always leaves a user-record wrapper will mis-read both the skip arm and the system arm.",
       "code": [
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "24-25",
-          "snippet": "                \"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),"
+          "path": "src/model/classify/system.rs",
+          "lines": "31",
+          "snippet": "        \"local_command\" => Class::SystemCommand,"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "202-205",
-          "snippet": "    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible."
+          "lines": "272-275",
+          "snippet": "    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         },
         {
           "path": "src/model/markers.rs",
@@ -87237,7 +87237,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "245-250",
+          "lines": "250-255",
           "snippet": "pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {\n    eprintln!(\n        \"csift: 0 matches \u2014 a DEFINITIVE absence (exit 0), NOT an error. \\\n         Scope: {} session(s). Active filters: {}.\",\n        diag.sessions_in_scope, diag.active_filters\n    );"
         },
         {
@@ -87338,7 +87338,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "495-496",
+          "lines": "515-516",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
@@ -87420,8 +87420,8 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "195-197",
-          "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),"
+          "lines": "268-269",
+          "snippet": "    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,"
         }
       ],
       "instrument": "Binary: read 300 bytes at 181021865 for the tasks panel and count `display:\"skip\"` in bytes 181021865-181060000; read 300 bytes at 186349332 and at 163953658 for the release-notes path and the notice factory; read 330 bytes at 173524018 and 900 at 173525100 for the dismiss and the local result map. Corpus: `csift search \"\" -t harness.command.invocation --no-subagents --count-by label` and a per-name tally of the wrapper records; counting rule one observation per record.",
@@ -87570,8 +87570,8 @@
           "snippet": "    pub(crate) fn peer_origin(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {\n        let obj = self.origin.as_ref()?.as_object()?;\n        let peer = obj.get(\"kind\").and_then(serde_json::Value::as_str) == Some(\"peer\");\n        peer.then_some(obj)\n    }"
         },
         {
-          "path": "src/model/classify/promoted.rs",
-          "lines": "43-46",
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "58-61",
           "snippet": "        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }"
         }
       ],
@@ -87668,7 +87668,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "199-201",
+          "lines": "212-214",
           "snippet": "            Some(\"assistant\") if self.is_resume_placeholder() => {\n                push_unique(&mut out, Class::ResumePlaceholder);\n            }"
         },
         {
@@ -87787,8 +87787,8 @@
           "snippet": "    /// The RESUME PLACEHOLDER (`harness.resume.placeholder`) shares that sentinel model and\n    /// is deliberately NOT covered by this arm: the loader mints it WITHOUT\n    /// `isApiErrorMessage`, so the drop predicate's own conjunction is false and the record\n    /// reaches the model like any other."
         },
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "243-246",
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "151-154",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent"
         }
       ],
@@ -88479,8 +88479,8 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "52-61",
-          "snippet": "    /// `user.rewound` - a turn-opener the conversation was REWOUND past: it was sent,\n    /// it drew a reply, and Claude Code's own `parentUuid` chain now threads around it,\n    /// so the model no longer receives it or anything under it. The discriminator\n    /// against [`Class::UserUnsent`] is exactly that reply: a recalled draft has no\n    /// assistant descendant, a rewound turn does (measured over the shared-parent user\n    /// pairs of a real corpus: 868 without, 55 with, 0 on the chain). Assigned at the\n    /// SCAN layer like `user.unsent`, for the same reason - the fact lives in the DAG\n    /// around the record, not in the record. Outside turn numbering; addressable.\n    UserRewound,\n    /// `user.queued` - the human's text as it sat in the input QUEUE: a"
+          "lines": "67-70",
+          "snippet": "    /// `user.rewound` - an ANSWERED opener the conversation was rewound past: the same\n    /// shape as [`Class::UserUnsent`] WITH an assistant descendant. Scan layer, outside\n    /// turn numbering, addressable.\n    UserRewound,"
         },
         {
           "path": "src/model/chain/branches.rs",
@@ -88565,7 +88565,7 @@
       "code": [
         {
           "path": "src/cli/selectors.rs",
-          "lines": "154-156",
+          "lines": "183-185",
           "snippet": "    pub fn with_survival(self, live: bool) -> Self {\n        Self { live, ..self }\n    }"
         },
         {
@@ -88763,8 +88763,8 @@
       "depends": "csift prints `messagesSummarized` verbatim in the boundary excerpt and never converts it into a line count, a record count or a turn count: it counts entries of an in-memory array that holds shapes the file does not (progress entries, non-loggable entries), which is the same reason `compactMetadata.preservedMessages.allUuids` carries uuids that resolve to no line. `verbatim` reconstructs the clipped turns from the FILE, so it recovers exactly the records that were written, not the array the summariser saw; equating the two would make the excerpt assert how many lines a compaction removed. `csift verbatim` rests on the same fact from the other side: it replays LIVE turns only, counting a turn the surviving conversation no longer reaches in a per-session note with a `csift show --line` pointer instead of re-emitting it. The command exists to restore what a compaction CLIPPED, and the summariser could not have seen a turn the in-memory array no longer held, so replaying one would put text into that reconstruction which no model ever read. The same reading holds in the other direction: csift keeps reconstructing ACROSS a compaction cut, where those turns WERE the conversation when they were written, which is why a pre-cut unit is flagged and never dropped.",
       "code": [
         {
-          "path": "src/commands/search/record_text.rs",
-          "lines": "344-351",
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "203-210",
           "snippet": "    for key in [\n        \"trigger\",\n        \"preTokens\",\n        \"postTokens\",\n        \"durationMs\",\n        \"messagesSummarized\",\n        \"cumulativeDroppedTokens\",\n    ] {"
         },
         {
@@ -89538,23 +89538,23 @@
       "depends": "csift classifies the PROMPT `harness.schedule.fire` and joins its instant to the fire record by `parentUuid`, so a cron-fired prompt is searchable, censusable and dated; before the leaf it matched no marker and fell into the isMeta exclusion, invisible on every surface. The `queue-operation` line stays unlabeled (a harness rider, the same content-shape law `user.queued` applies) and the fire record stays under the gated `harness.meta.system`, so a default scan gains no hit from the keep that reads the instant. An `origin` object refuses the leaf, because the harness stamps one on everything it did not submit itself and reads it back as the first test of its own foreign-input veto - without that guard a tagless cross-session delivery, which carries the identical pair, would read as a fire. If a build stops stamping `promptSource`, the leaf empties; if it stops writing the fire record, the instant goes null and the leaf holds.",
       "code": [
         {
-          "path": "src/model/classify/support.rs",
-          "lines": "72-85",
-          "snippet": "    pub fn is_scheduled_fire_prompt(&self) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.prompt_source.as_deref() != Some(PROMPT_SOURCE_SYSTEM) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }\n        !self\n            .raw_message_text()\n            .is_some_and(|raw| is_peer_message(&raw))\n    }"
+          "path": "src/model/classify/injections.rs",
+          "lines": "89-95",
+          "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/support.rs",
-          "lines": "47-53",
+          "lines": "43-49",
           "snippet": "    pub fn scheduled_fire_instant(&self) -> Option<&str> {\n        let content = self.content_str()?.trim_end();\n        let inner = content.strip_suffix(')')?;\n        let open = inner.rfind('(')?;\n        let when = inner[open + 1..].trim();\n        (!when.is_empty()).then_some(when)\n    }"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "380-383",
-          "snippet": "        if self.is_scheduled_fire_prompt() {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
+          "lines": "351-354",
+          "snippet": "        if self.is_scheduled_fire_prompt(ctx) {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
         },
         {
-          "path": "src/model/taxonomy.rs",
-          "lines": "335",
+          "path": "src/model/taxonomy/paths.rs",
+          "lines": "142",
           "snippet": "            Class::ScheduleFire => \"harness.schedule.fire\","
         },
         {
@@ -89649,13 +89649,13 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "375-379",
+          "lines": "346-350",
           "snippet": "        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms\n        // by construction - the fired text is whatever the operator armed, so every marker\n        // above must get first refusal, and the two tick prompts that DO carry a marker keep\n        // their own leaves. Before this arm such a record matched nothing and fell straight\n        // into the isMeta exclusion below: unsearchable, and absent from every census."
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "131-136",
-          "snippet": "    /// The armed text reaches the record VERBATIM - the fire path applies exactly one\n    /// rewrite, the autonomous-loop sentinel resolution, and every other prompt falls\n    /// through it unchanged - so a fired prompt carries no marker of its own and looked,\n    /// until this leaf, exactly like an unmodeled isMeta pseudo-turn: excluded, unsearchable,\n    /// absent from every census. The tick prompts that DO carry a marker keep their own\n    /// leaves ([`Class::ScheduleWakeup`] / [`Class::MetaLoop`]), which is why this arm sits"
+          "lines": "172-175",
+          "snippet": "    /// `harness.schedule.fire` - the PROMPT the scheduler submits: an `isMeta`\n    /// `type:\"user\"` record parented to a [`Class::ScheduleEvent`] record. Delivered;\n    /// it does not open a turn, because the operator did not type it.\n    ScheduleFire,"
         }
       ],
       "instrument": "Over the projects root, take every `type:\"user\"` record with `isMeta` true, `promptSource == \"system\"` and no `origin`, and compare its joined message text with the `content` of the nearest preceding `type:\"queue-operation\"` line carrying one; separately count how many of those records open (after a leading-whitespace trim) with `# Autonomous loop check`, `# Autonomous loop tick`, `You're being invoked on a timer`, `Run the autonomous check` or `<<autonomous-loop-dynamic>>`. Counting rule: one per raw record.",

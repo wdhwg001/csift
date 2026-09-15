@@ -14,14 +14,14 @@ fn classify_meta_loop_variants() {
     );
     assert_eq!(
         tick.classify(&ClassifyCtx::top_level()),
-        vec![Class::MetaLoop]
+        vec![Class::ScheduleTick]
     );
     let check = parse(
         r#"{"type":"user","message":{"role":"user","content":"Run the autonomous check and continue."}}"#,
     );
     assert_eq!(
         check.classify(&ClassifyCtx::top_level()),
-        vec![Class::MetaLoop]
+        vec![Class::ScheduleTick]
     );
     // The schedule.wakeup sentinel stays its OWN class (not folded into meta.loop).
     let wake = parse(
@@ -95,89 +95,93 @@ fn loop_markers_anchor_at_content_start() {
 
 #[test]
 fn classify_scheduled_fire_prompt() {
-    // The fired prompt: isMeta + promptSource "system", body = the armed text verbatim.
+    // The fired prompt is recognised by its PARENT link: the scheduler appends the fire
+    // record and then submits the prompt under it. Its body is the armed text verbatim,
+    // so no text test could find one.
+    let fire = parse(
+        r#"{"type":"system","subtype":"scheduled_task_fire","uuid":"00000000-0000-4000-8000-000000000010","content":"Running scheduled task (Jun 7 5:28am)"}"#,
+    );
+    let ix = crate::model::ScheduleFireIndex::from_records(std::iter::once(&fire));
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.schedule_fires = Some(&ix);
     let fired = parse(
         r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000011","parentUuid":"00000000-0000-4000-8000-000000000010","isMeta":true,"promptSource":"system","userType":"external","message":{"role":"user","content":"reply with the single word PEONY and nothing else"}}"#,
     );
-    assert_eq!(
-        fired.classify(&ClassifyCtx::top_level()),
-        vec![Class::ScheduleFire]
-    );
-    // isMeta ALONE is not the leaf: an unmarked isMeta pseudo-turn with no promptSource is
+    assert_eq!(fired.classify(&ctx), vec![Class::ScheduleFire]);
+    // The same record with no fire record above it is NOT claimed: the link is the only
+    // mark the producer leaves on the prompt.
+    assert!(fired.classify(&ClassifyCtx::top_level()).is_empty());
+    // isMeta ALONE is not the leaf: an unmarked isMeta pseudo-turn under no fire record is
     // still excluded, exactly as before.
     let bare_meta = parse(
         r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"reply with the single word PEONY and nothing else"}}"#,
     );
-    assert!(bare_meta.classify(&ClassifyCtx::top_level()).is_empty());
-    // promptSource ALONE is not the leaf either: without the isMeta authorship flag the
-    // record is the operator's, and it keeps user.message.
-    let typed = parse(
-        r#"{"type":"user","promptSource":"typed","message":{"role":"user","content":"reply with the single word PEONY and nothing else"}}"#,
-    );
-    assert_eq!(
-        typed.classify(&ClassifyCtx::top_level()),
-        vec![Class::UserMessage]
-    );
-    // The SAME law where it actually bites: the submit path stamps `system` on a
-    // non-isMeta submission too (its other branch tests the caller, not the author), so a
-    // record carrying that value with NO isMeta is still the operator's and keeps its turn.
-    // isMeta is the half that protects a person, exactly as on the resume-prompt leaf.
+    assert!(bare_meta.classify(&ctx).is_empty());
+    // The `promptSource` stamp is NOT the gate: the submit path puts it on every isMeta
+    // submission, and the builds before it existed wrote none at all. A record carrying it
+    // with NO isMeta is still the operator's and keeps its turn.
     let system_no_meta = parse(
-        r#"{"type":"user","promptSource":"system","message":{"role":"user","content":"reply with the single word PEONY and nothing else"}}"#,
+        r#"{"type":"user","parentUuid":"00000000-0000-4000-8000-000000000010","promptSource":"system","message":{"role":"user","content":"reply with the single word PEONY and nothing else"}}"#,
     );
-    assert!(!system_no_meta.is_scheduled_fire_prompt());
-    assert_eq!(
-        system_no_meta.classify(&ClassifyCtx::top_level()),
-        vec![Class::UserMessage]
+    assert!(!system_no_meta.is_scheduled_fire_prompt(&ctx));
+    assert_eq!(system_no_meta.classify(&ctx), vec![Class::UserMessage]);
+    // And a prompt carrying NO promptSource at all is claimed on the link alone - the
+    // reason the stamp was dropped from the gate.
+    let stampless = parse(
+        r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000012","parentUuid":"00000000-0000-4000-8000-000000000010","isMeta":true,"message":{"role":"user","content":"sweep the queue"}}"#,
     );
+    assert_eq!(stampless.classify(&ctx), vec![Class::ScheduleFire]);
     // And the type half: only a `type:"user"` record is a submitted prompt at all.
     let not_a_user = parse(
-        r#"{"type":"system","subtype":"informational","isMeta":true,"promptSource":"system","content":"the remote control disconnected"}"#,
+        r#"{"type":"system","subtype":"informational","isMeta":true,"parentUuid":"00000000-0000-4000-8000-000000000010","content":"the remote control disconnected"}"#,
     );
-    assert!(!not_a_user.is_scheduled_fire_prompt());
+    assert!(!not_a_user.is_scheduled_fire_prompt(&ctx));
 }
 
 #[test]
 fn scheduled_fire_refuses_a_peer_message() {
-    // A cross-session peer message carries the SAME isMeta + promptSource stamp. It is a
-    // delivered message, not a fired prompt, so the shared `is_peer_message` predicate
-    // refuses it here and it keeps its inbox leaf.
+    // A cross-session peer message can sit under the same parent and carries the SAME
+    // isMeta stamp. It is a delivered message, not a fired prompt, so the shared
+    // `is_peer_message` predicate refuses it here and it keeps its inbox leaf.
+    let fire = parse(
+        r#"{"type":"system","subtype":"scheduled_task_fire","uuid":"00000000-0000-4000-8000-000000000010","content":"Running scheduled task (Jun 7 5:28am)"}"#,
+    );
+    let ix = crate::model::ScheduleFireIndex::from_records(std::iter::once(&fire));
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.schedule_fires = Some(&ix);
     let peer = parse(
-        r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000030","isMeta":true,"promptSource":"system","userType":"external","origin":{"kind":"peer","from":"uds:/Users/dev/relay.sock","verifiedPeerPid":4242},"message":{"role":"user","content":"Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\" from-name=\"relay-7\">\nthe shared resolver landed\n</cross-session-message>\n\nThis came from another Claude session."}}"#,
+        r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000030","parentUuid":"00000000-0000-4000-8000-000000000010","isMeta":true,"promptSource":"system","userType":"external","origin":{"kind":"peer","from":"uds:/Users/dev/relay.sock","verifiedPeerPid":4242},"message":{"role":"user","content":"Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\" from-name=\"relay-7\">\nthe shared resolver landed\n</cross-session-message>\n\nThis came from another Claude session."}}"#,
     );
-    assert_eq!(
-        peer.classify(&ClassifyCtx::top_level()),
-        vec![Class::CommInbox]
-    );
-    assert!(!peer.is_scheduled_fire_prompt());
+    assert_eq!(peer.classify(&ctx), vec![Class::CommInbox]);
+    assert!(!peer.is_scheduled_fire_prompt(&ctx));
     // A TAGLESS delivery carries the relay preamble but no tag to detect, so the framing
     // guard cannot see it. The `origin` object still can, and it is what the harness itself
     // reads as the first test of its own foreign-input veto.
     let tagless = parse(
-        r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000031","isMeta":true,"promptSource":"system","userType":"external","origin":{"kind":"peer","from":"probe-external","verifiedPeerPid":4242},"message":{"role":"user","content":"Another Claude session sent a message:\nreply with exactly PONG\n\nThis came from another Claude session."}}"#,
+        r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000031","parentUuid":"00000000-0000-4000-8000-000000000010","isMeta":true,"promptSource":"system","userType":"external","origin":{"kind":"peer","from":"probe-external","verifiedPeerPid":4242},"message":{"role":"user","content":"Another Claude session sent a message:\nreply with exactly PONG\n\nThis came from another Claude session."}}"#,
     );
-    assert!(!tagless.is_scheduled_fire_prompt());
-    assert!(tagless.classify(&ClassifyCtx::top_level()).is_empty());
+    assert!(!tagless.is_scheduled_fire_prompt(&ctx));
+    assert!(tagless.classify(&ctx).is_empty());
 }
 
 #[test]
 fn a_fired_tick_keeps_its_own_leaf_before_the_fire_arm() {
-    // The autonomous-loop fires carry the SAME fire stamp, and their markers reach their own
-    // leaves first: arm order, not a second predicate.
+    // The autonomous-loop fires sit under a fire record like any other, and their markers
+    // reach their own leaves first: arm order, not a second predicate.
+    let fire = parse(
+        r#"{"type":"system","subtype":"scheduled_task_fire","uuid":"00000000-0000-4000-8000-000000000010","content":"Claude resuming /loop wakeup (Jun 7 6:40am)"}"#,
+    );
+    let ix = crate::model::ScheduleFireIndex::from_records(std::iter::once(&fire));
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.schedule_fires = Some(&ix);
     let check = parse(
-        r##"{"type":"user","isMeta":true,"promptSource":"system","message":{"role":"user","content":"# Autonomous loop check\n\nYou're being invoked on a timer while the user is away."}}"##,
+        r##"{"type":"user","isMeta":true,"parentUuid":"00000000-0000-4000-8000-000000000010","message":{"role":"user","content":"# Autonomous loop check\n\nYou're being invoked on a timer while the user is away."}}"##,
     );
-    assert_eq!(
-        check.classify(&ClassifyCtx::top_level()),
-        vec![Class::ScheduleWakeup]
-    );
+    assert_eq!(check.classify(&ctx), vec![Class::ScheduleWakeup]);
     let tick = parse(
-        r##"{"type":"user","isMeta":true,"promptSource":"system","message":{"role":"user","content":"# Autonomous loop tick\n\nRun the autonomous check using the loop instructions."}}"##,
+        r##"{"type":"user","isMeta":true,"parentUuid":"00000000-0000-4000-8000-000000000010","message":{"role":"user","content":"# Autonomous loop tick\n\nRun the autonomous check using the loop instructions."}}"##,
     );
-    assert_eq!(
-        tick.classify(&ClassifyCtx::top_level()),
-        vec![Class::MetaLoop]
-    );
+    assert_eq!(tick.classify(&ctx), vec![Class::ScheduleTick]);
 }
 
 #[test]
@@ -231,6 +235,12 @@ fn schedule_fire_index_joins_by_parent_uuid() {
     );
     assert_eq!(ix.instant_for(Some("nothing-here")), None);
     assert_eq!(ix.instant_for(None), None);
+    // The STRUCTURAL half is separate: a fire record with no readable instant still gates
+    // the prompt under it, because the instant is a display fact.
+    assert!(ix.is_fire_parent(Some("00000000-0000-4000-8000-000000000010")));
+    assert!(ix.is_fire_parent(Some("00000000-0000-4000-8000-000000000040")));
+    assert!(!ix.is_fire_parent(Some("nothing-here")));
+    assert!(!ix.is_fire_parent(None));
 }
 
 #[test]
@@ -249,7 +259,7 @@ fn loop_markers_tolerate_leading_whitespace() {
     );
     assert_eq!(
         tick.classify(&ClassifyCtx::top_level()),
-        vec![Class::MetaLoop]
+        vec![Class::ScheduleTick]
     );
 }
 
@@ -269,7 +279,7 @@ fn classify_wakeup_check_vs_loop_tick_no_collision() {
     );
     assert_eq!(
         tick.classify(&ClassifyCtx::top_level()),
-        vec![Class::MetaLoop]
+        vec![Class::ScheduleTick]
     );
     // The sentinel stays schedule.wakeup; "Run the autonomous check" stays meta.loop.
     let sentinel = parse(
@@ -284,6 +294,6 @@ fn classify_wakeup_check_vs_loop_tick_no_collision() {
     );
     assert_eq!(
         run_check.classify(&ClassifyCtx::top_level()),
-        vec![Class::MetaLoop]
+        vec![Class::ScheduleTick]
     );
 }

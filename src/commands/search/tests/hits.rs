@@ -22,7 +22,7 @@ fn collect_hits_thinking_category() {
         &mut hits,
     );
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].class, Some(Class::AgentThinking));
+    assert_eq!(hits[0].class, Some(Class::AgentThinkingSummary));
     assert!(hits[0].excerpt.contains("carry"));
 }
 
@@ -46,7 +46,7 @@ fn collect_hits_agent_text_only_from_assistant() {
         &mut hits,
     );
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].class, Some(Class::AgentMessage));
+    assert_eq!(hits[0].class, Some(Class::AgentMessagePlain));
 }
 
 #[test]

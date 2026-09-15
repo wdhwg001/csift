@@ -112,7 +112,7 @@ fn a_real_assistant_turn_is_never_the_placeholder() {
     assert!(!real.is_resume_placeholder());
     assert_eq!(
         real.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentMessage]
+        vec![Class::AgentMessagePlain]
     );
     // An API-error notice shares the sentinel model but is not the placeholder text.
     let notice = parse(

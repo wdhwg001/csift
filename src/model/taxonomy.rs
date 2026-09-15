@@ -1,6 +1,17 @@
-//! Role + Class: the role.class.sub label taxonomy (Class::ALL is the source of truth).
+//! Role + Class: the role.category.leaf label taxonomy.
+//!
+//! [`Class::ALL`] is the single source of truth for the leaf space; [`paths`] carries
+//! the dotted path of each leaf and [`facets`] the three facets a selector reads
+//! (role, category, LLM visibility). Every leaf names the ON-DISK SHAPE it is read
+//! from, so a reader can cross-check a rendered label against `show --raw`.
 
-/// The top-level ROLE of a classified record (GOLD §2). The first dot-segment of every
+mod facets;
+mod paths;
+
+#[cfg(test)]
+mod tests;
+
+/// The top-level ROLE of a classified record. The first dot-segment of every
 /// [`Class::path`]. A multi-label record can span roles (e.g. an AUQ answer is both
 /// [`Role::User`] and [`Role::Agent`]).
 #[allow(dead_code)]
@@ -10,7 +21,8 @@ pub enum Role {
     User,
     /// The assistant (incl. its tool I/O and peer communication).
     Agent,
-    /// Claude Code machinery (notifications, compaction, slash wrappers, interrupts, schedule).
+    /// Claude Code machinery (notifications, compaction, slash wrappers, interrupts,
+    /// schedule, hooks, injected context, telemetry, bookkeeping).
     Harness,
 }
 
@@ -27,368 +39,273 @@ impl Role {
     }
 }
 
-/// A LEAF class in the role.class.sub taxonomy (GOLD §2). One variant per leaf; the dotted
-/// [`Class::path`] is the canonical wire/selector form and [`Class::role`] its top-level role.
-/// A record carries a `Vec<Class>` (multi-label, GOLD §3) via [`Record::classify`].
+/// A LEAF class in the role.category.leaf taxonomy. One variant per leaf; the dotted
+/// [`Class::path`] is the canonical wire/selector form, [`Class::role`] its top-level
+/// role and [`Class::category`] the dotted CATEGORY it belongs to. A record carries a
+/// `Vec<Class>` (multi-label) via [`Record::classify`].
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
-    /// `user.message` - genuine human prose (incl. slash-command `<command-args>`).
+    // ── user (6) ──
+    /// `user.message` - the person's own message. `type:"user"`, `role:"user"`, string
+    /// or `[{text}]` content, no `isMeta` (a with-args slash wrapper is dual-labeled,
+    /// this leaf first).
     UserMessage,
-    /// `user.answer` - an AskUserQuestion answer (the Q+options+answer unit). Dual-labeled
-    /// with [`Class::AgentToolResult`] (it rides on the answering tool_result carrier).
+    /// `user.answer` - the AskUserQuestion answer unit (the Q + options + answer). A
+    /// `type:"user"` tool_result carrier with `toolUseResult.answers` / `.response`.
+    /// Dual-labeled with [`Class::AgentToolResult`].
     UserAnswer,
-    /// `user.rejection` - a plan/tool rejection carrying a typed instruction. Dual-labeled
-    /// with [`Class::AgentToolResult`].
+    /// `user.rejection` - a tool rejected with a typed instruction: a tool_result
+    /// carrier whose text carries the `To tell you how to proceed, the user said:`
+    /// tail. Dual-labeled with [`Class::AgentToolResult`].
     UserRejection,
-    /// `user.unsent` - a SUPERSEDED turn-opener draft: sent, esc-recalled into the input
-    /// box, edited and re-sent, leaving the original on disk sharing the resend's
-    /// parentUuid. Assigned at the SCAN layer (the superseded set needs a LATER sibling,
-    /// which a pure per-record classify cannot see); outside turn numbering; 99% never
-    /// drew a reply. A recalled-then-ABANDONED message has no sibling and is
-    /// structurally undetectable; a QUEUED text edited before dispatch never becomes a
-    /// user record at all (it survives only in `queue-operation` lines).
+    /// `user.unsent` - the esc-recalled draft left on disk: a `type:"user"` opener
+    /// sharing its `parentUuid` with a LATER opener and carrying no assistant
+    /// descendant. Assigned at the SCAN layer (the fact lives in the DAG around the
+    /// record); outside turn numbering, addressable.
     UserUnsent,
-    /// `user.rewound` - a turn-opener the conversation was REWOUND past: it was sent,
-    /// it drew a reply, and Claude Code's own `parentUuid` chain now threads around it,
-    /// so the model no longer receives it or anything under it. The discriminator
-    /// against [`Class::UserUnsent`] is exactly that reply: a recalled draft has no
-    /// assistant descendant, a rewound turn does (measured over the shared-parent user
-    /// pairs of a real corpus: 868 without, 55 with, 0 on the chain). Assigned at the
-    /// SCAN layer like `user.unsent`, for the same reason - the fact lives in the DAG
-    /// around the record, not in the record. Outside turn numbering; addressable.
+    /// `user.rewound` - an ANSWERED opener the conversation was rewound past: the same
+    /// shape as [`Class::UserUnsent`] WITH an assistant descendant. Scan layer, outside
+    /// turn numbering, addressable.
     UserRewound,
-    /// `user.queued` - the human's text as it sat in the input QUEUE: a
-    /// `queue-operation` line carrying `content` (an `enqueue`, a `popAll` recall to
-    /// the input box, or a `remove` with the text). Not in the surviving conversation
-    /// (no `message{}`); the dispatched twin, when there is one, is the later
-    /// `user.message` record. Automation riders (a `<task-notification>` / peer
-    /// message queued by the harness) are NOT the human and carry no label here;
-    /// content-less `dequeue` lines carry nothing to search. The queue line has no
-    /// join key (measured: 4-6 keys, no promptId/uuid), so `dispatched` is never
-    /// asserted - only the verbatim `operation` + `reason` facts ride the hit.
+    /// `user.queued` - the person's text while it sat in the input queue: a
+    /// `type:"queue-operation"` line carrying the human's own `content`.
     UserQueued,
-    /// `agent.message` - the assistant's visible end-of-turn text block(s).
-    AgentMessage,
-    /// `agent.thinking` - a thinking block (see the GOLD-gap note re `redacted_thinking`).
-    AgentThinking,
-    /// `agent.thinking.narration` - a narration-tagged thinking block: an API-issued
-    /// one-sentence summary of the reasoning beside it, NOT the reasoning itself. The
-    /// tag hides inside the base64 `signature` (see `model/narration.rs`); the first
-    /// leaf whose path is prefixed by another leaf (`-t agent.thinking` selects both).
+
+    // ── agent.message (2) ──
+    /// `agent.message.plain` - the assistant's own text: a `type:"assistant"` record's
+    /// `[{text}]` block(s).
+    AgentMessagePlain,
+    /// `agent.message.structured` - a schema-bound subagent's final structured answer:
+    /// a `type:"attachment"` record whose payload `type` is `structured_output`,
+    /// parented to the assistant record that produced it. The model PRODUCED this text,
+    /// so it is LLM-visible although the harness never converts the attachment back.
+    AgentMessageStructured,
+
+    // ── agent.thinking (4) ──
+    /// `agent.thinking.summary` - the API-side summary of the reasoning (never the raw
+    /// chain of thought): a `{type:"thinking", thinking, signature}` block whose
+    /// signature tag reads `thinking`.
+    AgentThinkingSummary,
+    /// `agent.thinking.narration` - the API's progress update between tool calls: the
+    /// same block shape with the signature tag `narration` (the tag hides in the base64
+    /// `signature`; see `model/narration.rs`).
     AgentThinkingNarration,
-    /// `agent.tool.use` - a tool_use block (incl. a pending elicitation sidecar marker).
+    /// `agent.thinking.omitted` - a thinking block the API returned with NO summary
+    /// text: `{type:"thinking", thinking:"", signature:<non-empty>}`. The signature is
+    /// echoed back, but there is no text the model could read, so the leaf is invisible.
+    AgentThinkingOmitted,
+    /// `agent.thinking.redacted` - the API's safety-redacted ciphertext block,
+    /// `{type:"redacted_thinking", data:<base64>}`. Parsed verbatim and echoed back;
+    /// no readable text, so the leaf is invisible.
+    AgentThinkingRedacted,
+
+    // ── agent.tool (2) ──
+    /// `agent.tool.use` - a `type:"assistant"` record's `[{tool_use}]` block (incl. a
+    /// pending elicitation sidecar marker).
     AgentToolUse,
-    /// `agent.tool.result` - a tool_result block (incl. errored).
+    /// `agent.tool.result` - a `type:"user"` carrier's `[{tool_result}]` block plus its
+    /// `toolUseResult` (incl. errored results).
     AgentToolResult,
-    /// `agent.communication.inbox` - a received peer message / spawn prompt / subagent return.
+
+    /// `agent.communication.inbox` - a received peer message, spawn prompt or subagent
+    /// return.
     CommInbox,
     /// `agent.communication.sent` - a sent peer message (`SendMessage`) or a spawn.
     CommSent,
-    /// `agent.communication.signal` - a control/status comm (idle_notification, shutdown_*).
+    /// `agent.communication.signal` - a control/status comm (idle_notification,
+    /// shutdown_*).
     CommSignal,
-    /// `agent.communication.channel` - a csift-channel delivery: a hook-injected
+    /// `agent.communication.channel` - a csift-channel delivery: a
     /// `hook_additional_context` attachment whose FIRST content string opens with the
-    /// envelope header `[csift-channel v1 …]`. It is a MESSAGE addressed at this lane by
-    /// another lane (or by a sender outside Claude Code), so it is the RICHEST view of a
-    /// record that also carries [`Class::MetaHook`] - and unlike that leaf it is admitted
-    /// by a DEFAULT scan: a delivery no ordinary query surfaces is a delivery nobody can
-    /// audit.
+    /// envelope header `[csift-channel v1 …]`. A MESSAGE addressed at this lane, so it
+    /// is the RICHEST view of a record that also carries [`Class::HookContext`] - and
+    /// unlike that leaf it is admitted by a DEFAULT scan.
     CommChannel,
-    /// `harness.notification.workflow` - a `<task-notification>` for a dynamic/OMC workflow.
+
+    // ── harness.notification (5) ──
+    /// `harness.notification.workflow` - a `<task-notification>` for a dynamic/OMC
+    /// workflow.
     NotificationWorkflow,
     /// `harness.notification.monitor` - a monitor/cron cadence completion pulse.
     NotificationMonitor,
-    /// `harness.notification.subagent` - a spawned-subagent completion pulse (renamed from
-    /// [`AutomationKind::Agent`] so it never collides with the `agent` role).
+    /// `harness.notification.subagent` - a spawned-subagent completion pulse (named
+    /// apart from the `agent` ROLE so the two never collide).
     NotificationSubagent,
-    /// `harness.notification.background-command` - a `&`-detached shell command pulse.
+    /// `harness.notification.background-command` - a backgrounded shell command pulse.
     NotificationBackgroundCommand,
     /// `harness.notification.task` - any other / unclassified `<task-notification>`.
     NotificationTask,
+
+    // ── harness.compaction (2) ──
     /// `harness.compaction.summary` - the `isCompactSummary` summary record.
     CompactionSummary,
-    /// `harness.compaction.boundary` - the `system`/`compact_boundary` metrics record.
+    /// `harness.compaction.boundary` - the `type:"system"` / `subtype:"compact_boundary"`
+    /// metrics record. No `message{}`, so it is not in the surviving conversation.
     CompactionBoundary,
-    /// `harness.command.invocation` - a `<command-name>…` slash-command wrapper.
+
+    // ── harness.command (3) ──
+    /// `harness.command.invocation` - a `<command-name>` / `<command-message>` slash
+    /// wrapper.
     CommandInvocation,
     /// `harness.command.stdout` - a `<local-command-stdout>…` local-command output.
     CommandStdout,
+    /// `harness.command.caveat` - the caveat the slash-command EXECUTOR writes after a
+    /// local command: an `isMeta` `type:"user"` record whose content opens
+    /// `<local-command-caveat>`. Delivered to the model, never shown to the human.
+    CommandCaveat,
+
+    // ── harness.interrupt (2) ──
     /// `harness.interrupt.user` - `[Request interrupted by user]`.
     InterruptUser,
     /// `harness.interrupt.tool` - `[Request interrupted by user for tool use]`.
     InterruptTool,
-    /// `harness.schedule.wakeup` - a fired `ScheduleWakeup` TIMER tick (its injected
-    /// [`SCHEDULE_WAKEUP_MARKER`] prompt). Distinct from [`Class::MetaLoop`] (the
-    /// autonomous-loop driver prose); the timer is the harness scheduler firing.
+
+    // ── harness.schedule (4) ──
+    /// `harness.schedule.wakeup` - a fired `ScheduleWakeup` TIMER tick: the isMeta user
+    /// record carrying one of the wakeup markers at content start.
     ScheduleWakeup,
-    /// `harness.schedule.fire` - the PROMPT a scheduled task fires: the `isMeta`
-    /// `type:"user"` record Claude Code's scheduler submits on its own when a cron entry or
-    /// a `ScheduleWakeup` timer comes due, carrying `promptSource:"system"` (the stamp the
-    /// submit path puts on every isMeta submission) and, on the builds that write one, a
-    /// sibling `system`/`scheduled_task_fire` record naming the instant it fired.
-    ///
-    /// The armed text reaches the record VERBATIM - the fire path applies exactly one
-    /// rewrite, the autonomous-loop sentinel resolution, and every other prompt falls
-    /// through it unchanged - so a fired prompt carries no marker of its own and looked,
-    /// until this leaf, exactly like an unmodeled isMeta pseudo-turn: excluded, unsearchable,
-    /// absent from every census. The tick prompts that DO carry a marker keep their own
-    /// leaves ([`Class::ScheduleWakeup`] / [`Class::MetaLoop`]), which is why this arm sits
-    /// after them; an inbound peer message, which shares the isMeta + `promptSource` stamp,
-    /// is refused through the same `is_peer_message` predicate `user.queued` uses.
-    ///
-    /// DELIVERED: the model receives the prompt and answers it as an ordinary turn. It does
-    /// not OPEN one, for the same reason no isMeta record does - the operator did not type it.
+    /// `harness.schedule.event` - the fire RECORD itself: `type:"system"`,
+    /// `subtype:"scheduled_task_fire"`, whose `content` names the instant in a trailing
+    /// parenthesis. No `message{}`: the banner is the human's, not the model's.
+    ScheduleEvent,
+    /// `harness.schedule.fire` - the PROMPT the scheduler submits: an `isMeta`
+    /// `type:"user"` record parented to a [`Class::ScheduleEvent`] record. Delivered;
+    /// it does not open a turn, because the operator did not type it.
     ScheduleFire,
-    /// `harness.resume.prompt` - the repair PROMPT Claude Code's loader appends when a
-    /// resumed transcript ends on a dangling user record (an esc-recalled draft never
-    /// resent, any unanswered prompt): an `isMeta` `type:"user"` record carrying
-    /// [`RESUME_PROMPT_MARKER`]. It is delivered to the model, yet it is the LOADER's text,
-    /// not the operator's - so it never opens a turn and never counts as a human message.
-    /// (Named `harness.schedule.continuation` through v0.11.x; the record comes from the
-    /// resume loader, never from the scheduler, so the leaf moved to the family it belongs
-    /// to. Same predicate, same records.)
+    /// `harness.schedule.tick` - the autonomous-loop DRIVER tick (`# Autonomous loop
+    /// tick` / `Run the autonomous check` at content start), distinct from the fired
+    /// timer above.
+    ScheduleTick,
+
+    // ── harness.resume (2) ──
+    /// `harness.resume.prompt` - the repair PROMPT the loader appends when a resumed
+    /// transcript ends on a dangling user record: an `isMeta` `type:"user"` record
+    /// whose text opens `Continue from where you left off.`. Delivered, never the
+    /// operator's, so it opens no turn.
     ResumePrompt,
-    /// `harness.resume.placeholder` - the repair PLACEHOLDER spliced in right after a
-    /// resumed transcript's trailing user record so the loaded conversation does not end on
-    /// an unanswered prompt: an assistant record with the [`SYNTHETIC_MODEL`] model, no
-    /// `isApiErrorMessage`, and exactly [`RESUME_PLACEHOLDER_TEXT`] as its content. It is
-    /// delivered, and it is not the assistant's own text. Whether it closes a repair PAIR
-    /// (its parent is a [`Class::ResumePrompt`] record) is a FACT on the hit, not a second
-    /// leaf: the same splice writes the unpaired form after any other trailing user record.
+    /// `harness.resume.placeholder` - the repair PLACEHOLDER spliced after that
+    /// trailing user record: an assistant record with the `<synthetic>` model and
+    /// exactly the placeholder text. Whether it closes a PAIR is a fact on the hit, not
+    /// a second leaf.
     ResumePlaceholder,
-    /// `harness.meta.hook` - hook-injected feedback (stop-hook / `<local-command-caveat>` /
-    /// edit-failed-retry), not the operator.
-    MetaHook,
-    /// `harness.meta.loop` - an autonomous-loop driver tick (`# Autonomous loop tick` /
-    /// `Run the autonomous check`).
-    MetaLoop,
-    /// `harness.meta.attachment` - any OTHER `type:"attachment"` record's payload
-    /// (edited_text_file, compact_file_reference, file snapshots, todos, …). Scanned only
-    /// under `search --attachments` / `--count-by attachment` (or an explicit `show`
-    /// address); the matchable text is the VERBATIM payload JSON. A hook-context payload
-    /// stays the more specific [`Class::MetaHook`].
-    MetaAttachment,
-    /// `harness.meta.turn-duration` - the `system`/`turn_duration` end-of-turn
-    /// telemetry record (`durationMs`, `messageCount`, and the optional
-    /// `pendingBackgroundAgentCount` / `pendingWorkflowCount`): the structured body
-    /// behind the REPL's "Done in Ns" / "Waiting for N agents" lines, which never land
-    /// on disk themselves. No `message{}`: not in the surviving conversation.
-    MetaTurnDuration,
-    /// `harness.meta.away-summary` - the `system`/`away_summary` recap the harness
-    /// generates (a side model call, config-gated) when the operator returns after 5+
-    /// minutes away. Model-generated prose, yet no `message{}`: shown in the UI, not in
-    /// the surviving conversation (measured 1,196/1,198 never re-appear downstream).
-    MetaAwaySummary,
-    /// `harness.meta.stop-hooks` - the `system`/`stop_hook_summary` execution ledger
-    /// of the Stop hooks that ran at turn end (`hookInfos[].command` + durations,
-    /// `hookErrors`, `preventedContinuation`). Distinct from [`Class::MetaHook`], which
-    /// is the text a hook INJECTED into the model; this record is the run itself and
-    /// its `hookAdditionalContext` is empty on every measured instance.
-    MetaStopHooks,
-    /// `harness.meta.snapshot` - a `file-history-snapshot` (the per-prompt tracked-file
-    /// version table) or a `file-history-delta` (one path's version bump) line: the
-    /// instrument `recover` reads for external settings writes (v0.9.4), now
-    /// searchable by path and version. No `message{}`; a snapshot line has no
-    /// top-level timestamp (the excerpt carries the nested one).
-    MetaSnapshot,
-    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:"system"`
-    /// subtype the harness writes for its own UI:
-    /// `informational` (e.g. the Remote Control disconnect warning, `level:"warning"`),
-    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,
-    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a
-    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so
-    /// invisible by the same instrument as the rest of this family; gated like them.
-    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the
-    /// request assembler re-mints as a user message: that ONE subtype is delivered,
-    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces
-    /// it although this leaf's default says invisible.
-    MetaSystem,
-}
 
-#[allow(dead_code)]
-impl Class {
-    /// LLM-VISIBILITY (v0.9.4): true when the record's content is part of the
-    /// conversation the model actually receives or produces. Exactly TWO leaves are
-    /// invisible, each with a measured instrument:
-    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -
-    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes
-    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads
-    ///   through the resend sibling, never the draft. (Wording law: "not in the
-    ///   surviving conversation", never "the model never saw it" - a few drafts
-    ///   drew real replies before the retraction.)
-    /// - `harness.compaction.boundary`: a system record with NO message field at
-    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the
-    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on
-    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -
-    ///   neither is a visibility instrument.)
-    ///
-    /// v0.10.0 adds the promoted non-record line types, all invisible by the same
-    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured
-    /// over every non-record line type in the corpus; every user/assistant record
-    /// does), and Claude Code's
-    /// own source labels them REPL-render internals. DAG threading is NOT the
-    /// instrument here - later user records name a `turn_duration` uuid as parentUuid
-    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate
-    /// as messages (it is a tail window, not a visibility filter).
-    ///
-    /// The leaf default is not the whole answer, because delivery is decided per
-    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the
-    /// record list, and it disagrees with this table in three cases - a
-    /// `system`/`local_command` record IS sent (re-minted as a user message), while an
-    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is
-    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the
-    /// glob form and explicit paths reach every leaf regardless.
-    #[must_use]
-    pub fn llm_visible(self) -> bool {
-        !matches!(
-            self,
-            Class::UserUnsent
-                | Class::UserRewound
-                | Class::UserQueued
-                | Class::CompactionBoundary
-                | Class::MetaTurnDuration
-                | Class::MetaAwaySummary
-                | Class::MetaStopHooks
-                | Class::MetaSnapshot
-                | Class::MetaSystem
-        )
-    }
+    // ── harness.hook (3) ──
+    /// `harness.hook.context` - context a hook injected: a `type:"attachment"` record
+    /// whose payload `type` is `hook_additional_context` (with `hookName`, `hookEvent`
+    /// and a `content` string array). Delivered to the model as a
+    /// `<system-reminder>`-wrapped user message.
+    HookContext,
+    /// `harness.hook.outcome` - a hook RUN's own record: a `type:"attachment"` whose
+    /// payload `type` is one of the `hook_*` family (`hook_success`,
+    /// `hook_blocking_error`, …) or `async_hook_response_batch`. Not delivered, except
+    /// a `hook_success` that carries a rendered body.
+    HookOutcome,
+    /// `harness.hook.feedback` - the Stop hook's blocking feedback the model received:
+    /// an `isMeta` `type:"user"` record whose content opens `Stop hook feedback:`.
+    HookFeedback,
 
-    /// Every leaf [`Class`] in taxonomy order (GOLD §2). The single source of truth for
-    /// enumerating the class space - P2 builds the `-t` selector table from it, and tests
-    /// assert `path()`/`role()` exhaustively over it (a new variant added to the enum but not
-    /// here is caught by the `all_classes_cover_the_enum` test). Order: user, agent (+comm),
-    /// harness (notification, compaction, command, interrupt, schedule, meta).
-    pub const ALL: &'static [Class] = &[
-        Class::UserMessage,
-        Class::UserAnswer,
-        Class::UserRejection,
-        Class::UserUnsent,
-        Class::UserRewound,
-        Class::UserQueued,
-        Class::AgentMessage,
-        Class::AgentThinking,
-        Class::AgentThinkingNarration,
-        Class::AgentToolUse,
-        Class::AgentToolResult,
-        Class::CommInbox,
-        Class::CommSent,
-        Class::CommSignal,
-        Class::CommChannel,
-        Class::NotificationWorkflow,
-        Class::NotificationMonitor,
-        Class::NotificationSubagent,
-        Class::NotificationBackgroundCommand,
-        Class::NotificationTask,
-        Class::CompactionSummary,
-        Class::CompactionBoundary,
-        Class::CommandInvocation,
-        Class::CommandStdout,
-        Class::InterruptUser,
-        Class::InterruptTool,
-        Class::ScheduleWakeup,
-        Class::ScheduleFire,
-        Class::ResumePrompt,
-        Class::ResumePlaceholder,
-        Class::MetaHook,
-        Class::MetaLoop,
-        Class::MetaAttachment,
-        Class::MetaTurnDuration,
-        Class::MetaAwaySummary,
-        Class::MetaStopHooks,
-        Class::MetaSnapshot,
-        Class::MetaSystem,
-    ];
+    // ── harness.context (9) ──
+    /// `harness.context.reminder` - a nudge the harness re-injects each turn: the
+    /// reminder attachment payloads, plus the isMeta `<system-reminder>` injections
+    /// that match no more specific template.
+    ContextReminder,
+    /// `harness.context.listing` - an inventory the harness injects (skills, agents,
+    /// deferred tools).
+    ContextListing,
+    /// `harness.context.prompt` - a persisted system-prompt section (instructions,
+    /// date, environment, model, session context).
+    ContextPrompt,
+    /// `harness.context.file` - file content the harness attached (a read, an edited
+    /// snapshot, a compact file reference, nested memory, a plan file).
+    ContextFile,
+    /// `harness.context.mode` - a mode transition the harness recorded (plan mode and
+    /// its exits/re-entries, auto mode, command permissions).
+    ContextMode,
+    /// `harness.context.ide` - IDE state the harness attached (the open file, the
+    /// selection, diagnostics).
+    ContextIde,
+    /// `harness.context.task` - task/goal/memory state the harness attached, including
+    /// a `queued_command` that is NOT the human's own text.
+    ContextTask,
+    /// `harness.context.image` - an image the harness referenced into the conversation:
+    /// the isMeta `[Image: …]` reference records and the image-only isMeta records.
+    ContextImage,
+    /// `harness.context.skill` - a skill body preloaded into a subagent's opening
+    /// array (an isMeta `type:"user"` record with array content).
+    ContextSkill,
 
-    /// The canonical dotted path (GOLD §2) - the `-t` selector form (P2) and render label.
-    #[must_use]
-    pub fn path(self) -> &'static str {
-        match self {
-            Class::UserMessage => "user.message",
-            Class::UserAnswer => "user.answer",
-            Class::UserRejection => "user.rejection",
-            Class::UserUnsent => "user.unsent",
-            Class::UserRewound => "user.rewound",
-            Class::UserQueued => "user.queued",
-            Class::AgentMessage => "agent.message",
-            Class::AgentThinking => "agent.thinking",
-            Class::AgentThinkingNarration => "agent.thinking.narration",
-            Class::AgentToolUse => "agent.tool.use",
-            Class::AgentToolResult => "agent.tool.result",
-            Class::CommInbox => "agent.communication.inbox",
-            Class::CommSent => "agent.communication.sent",
-            Class::CommSignal => "agent.communication.signal",
-            Class::CommChannel => "agent.communication.channel",
-            Class::NotificationWorkflow => "harness.notification.workflow",
-            Class::NotificationMonitor => "harness.notification.monitor",
-            Class::NotificationSubagent => "harness.notification.subagent",
-            Class::NotificationBackgroundCommand => "harness.notification.background-command",
-            Class::NotificationTask => "harness.notification.task",
-            Class::CompactionSummary => "harness.compaction.summary",
-            Class::CompactionBoundary => "harness.compaction.boundary",
-            Class::CommandInvocation => "harness.command.invocation",
-            Class::CommandStdout => "harness.command.stdout",
-            Class::InterruptUser => "harness.interrupt.user",
-            Class::InterruptTool => "harness.interrupt.tool",
-            Class::ScheduleWakeup => "harness.schedule.wakeup",
-            Class::ScheduleFire => "harness.schedule.fire",
-            Class::ResumePrompt => "harness.resume.prompt",
-            Class::ResumePlaceholder => "harness.resume.placeholder",
-            Class::MetaHook => "harness.meta.hook",
-            Class::MetaLoop => "harness.meta.loop",
-            Class::MetaAttachment => "harness.meta.attachment",
-            Class::MetaTurnDuration => "harness.meta.turn-duration",
-            Class::MetaAwaySummary => "harness.meta.away-summary",
-            Class::MetaStopHooks => "harness.meta.stop-hooks",
-            Class::MetaSnapshot => "harness.meta.snapshot",
-            Class::MetaSystem => "harness.meta.system",
-        }
-    }
+    // ── harness.enforce (4) ──
+    /// `harness.enforce.structured-output` - the redo nudge that tells the model it
+    /// must call the StructuredOutput tool.
+    EnforceStructuredOutput,
+    /// `harness.enforce.brief` - the brief-enforce redo nudge.
+    EnforceBrief,
+    /// `harness.enforce.handback` - the subagent hand-back redo nudge.
+    EnforceHandback,
+    /// `harness.enforce.retry` - a redo nudge that tells the model to re-issue a call:
+    /// the malformed-tool-call nudge, and the edit-failed-retry notice
+    /// ([`EDIT_RETRY_MARKER`]).
+    EnforceRetry,
 
-    /// The top-level role (the first dot-segment of [`Class::path`]). Exhaustive (no
-    /// wildcard) so a future leaf forces an explicit role decision at compile time.
-    #[must_use]
-    pub fn role(self) -> Role {
-        match self {
-            Class::UserMessage
-            | Class::UserAnswer
-            | Class::UserRejection
-            | Class::UserUnsent
-            | Class::UserRewound
-            | Class::UserQueued => Role::User,
-            Class::AgentMessage
-            | Class::AgentThinking
-            | Class::AgentThinkingNarration
-            | Class::AgentToolUse
-            | Class::AgentToolResult
-            | Class::CommInbox
-            | Class::CommSent
-            | Class::CommSignal
-            | Class::CommChannel => Role::Agent,
-            Class::NotificationWorkflow
-            | Class::NotificationMonitor
-            | Class::NotificationSubagent
-            | Class::NotificationBackgroundCommand
-            | Class::NotificationTask
-            | Class::CompactionSummary
-            | Class::CompactionBoundary
-            | Class::CommandInvocation
-            | Class::CommandStdout
-            | Class::InterruptUser
-            | Class::InterruptTool
-            | Class::ScheduleWakeup
-            | Class::ScheduleFire
-            | Class::ResumePrompt
-            | Class::ResumePlaceholder
-            | Class::MetaHook
-            | Class::MetaLoop
-            | Class::MetaAttachment
-            | Class::MetaTurnDuration
-            | Class::MetaAwaySummary
-            | Class::MetaStopHooks
-            | Class::MetaSnapshot
-            | Class::MetaSystem => Role::Harness,
-        }
-    }
+    // ── harness.turn (3) ──
+    /// `harness.turn.duration` - the `type:"system"` / `subtype:"turn_duration"`
+    /// end-of-turn telemetry record. No `message{}`.
+    TurnDuration,
+    /// `harness.turn.stop-hooks` - the `type:"system"` / `subtype:"stop_hook_summary"`
+    /// ledger of the Stop hooks that ran at turn end. No `message{}`.
+    TurnStopHooks,
+    /// `harness.turn.recap` - the `type:"system"` / `subtype:"away_summary"` recap the
+    /// harness generates when the operator returns after time away. No `message{}`.
+    TurnRecap,
+
+    // ── harness.system (5) ──
+    /// `harness.system.refusal` - a `type:"system"` record with subtype
+    /// `model_refusal_fallback` / `model_refusal_no_fallback`.
+    SystemRefusal,
+    /// `harness.system.api-error` - a `type:"system"` record with subtype `api_error`.
+    SystemApiError,
+    /// `harness.system.notice` - a `type:"system"` record with subtype `informational`.
+    SystemNotice,
+    /// `harness.system.kill` - a `type:"system"` record with subtype `agents_killed`.
+    SystemKill,
+    /// `harness.system.command` - a `type:"system"` record with subtype
+    /// `local_command`: the ONE system subtype the request assembler re-mints as a user
+    /// message, so it is DELIVERED although it carries no `message{}`.
+    SystemCommand,
+
+    // ── harness.bookkeeping (13) ──
+    /// `harness.bookkeeping.last-prompt` - a `type:"last-prompt"` line (`leafUuid`,
+    /// `explicit`, `lastPrompt`).
+    BookkeepingLastPrompt,
+    /// `harness.bookkeeping.mode` - a `type:"mode"` or `type:"permission-mode"` line.
+    BookkeepingMode,
+    /// `harness.bookkeeping.name` - a `type:"ai-title"` or `type:"agent-name"` line.
+    BookkeepingName,
+    /// `harness.bookkeeping.atis` - a `type:"atis-latch"` line.
+    BookkeepingAtis,
+    /// `harness.bookkeeping.bridge` - a `type:"bridge-session"` line.
+    BookkeepingBridge,
+    /// `harness.bookkeeping.suppression` - a `type:"history-suppression"` line.
+    BookkeepingSuppression,
+    /// `harness.bookkeeping.pr-link` - a `type:"pr-link"` line.
+    BookkeepingPrLink,
+    /// `harness.bookkeeping.artifact` - a `type:"frame-link"`,
+    /// `type:"artifact-comment-monitor"` or `type:"artifact-autoreact-ledger"` line.
+    BookkeepingArtifact,
+    /// `harness.bookkeeping.file-history` - a `type:"file-history-snapshot"` (the
+    /// per-prompt tracked-file version table) or `type:"file-history-delta"` (one
+    /// path's version bump) line: the instrument `recover` reads for external writes.
+    BookkeepingFileHistory,
+    /// `harness.bookkeeping.cost` - a `type:"cost-state"` checkpoint line.
+    BookkeepingCost,
+    /// `harness.bookkeeping.fork` - a `type:"fork-context-ref"` line
+    /// (`parentSessionId`, `parentLastUuid`).
+    BookkeepingFork,
+    /// `harness.bookkeeping.continued` - a `type:"continued-in"` line naming the child
+    /// a background handoff minted.
+    BookkeepingContinued,
+    /// `harness.bookkeeping.queue` - a `type:"queue-operation"` line that is NOT the
+    /// human's own content (a `dequeue`, or a harness rider).
+    BookkeepingQueue,
 }

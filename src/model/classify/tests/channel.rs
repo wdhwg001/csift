@@ -25,7 +25,7 @@ fn channel_delivery_leads_the_hook_leaf_and_names_its_sender() {
     // this lane, and it is still hook machinery on disk.
     assert_eq!(
         r.classify(&ctx_owned()),
-        vec![Class::CommChannel, Class::MetaHook]
+        vec![Class::CommChannel, Class::HookContext]
     );
     assert_eq!(
         r.direction(&ctx_owned()),
@@ -54,7 +54,7 @@ fn a_continuation_chunk_is_the_leaf_with_no_direction() {
     let r = parse(NEXT_CHUNK);
     assert_eq!(
         r.classify(&ctx_owned()),
-        vec![Class::CommChannel, Class::MetaHook]
+        vec![Class::CommChannel, Class::HookContext]
     );
     // No `from=` in the header: the sender is unknown, so NO direction is reported rather
     // than a guessed one.
@@ -64,7 +64,7 @@ fn a_continuation_chunk_is_the_leaf_with_no_direction() {
 #[test]
 fn an_ordinary_hook_context_stays_hook_only() {
     let r = parse(PLAIN_HOOK);
-    assert_eq!(r.classify(&ctx_owned()), vec![Class::MetaHook]);
+    assert_eq!(r.classify(&ctx_owned()), vec![Class::HookContext]);
     assert_eq!(r.csift_channel_text(), None);
     assert_eq!(r.direction(&ctx_owned()), None);
     // A hook context that merely QUOTES the marker mid-text is not a delivery: the header
@@ -72,7 +72,7 @@ fn an_ordinary_hook_context_stays_hook_only() {
     let quoted = parse(
         r#"{"type":"attachment","uuid":"att4","attachment":{"type":"hook_additional_context","content":["the envelope opens [csift-channel v1 id=x] and so on"]}}"#,
     );
-    assert_eq!(quoted.classify(&ctx_owned()), vec![Class::MetaHook]);
+    assert_eq!(quoted.classify(&ctx_owned()), vec![Class::HookContext]);
     assert_eq!(quoted.csift_channel_text(), None);
 }
 
@@ -88,14 +88,14 @@ fn prose_quoting_the_envelope_is_not_the_channel_leaf() {
     let asst = parse(
         r#"{"type":"assistant","uuid":"a9","message":{"role":"assistant","content":[{"type":"text","text":"[csift-channel v1 id=abc from=aRelay-0123456789abcdef] is the header"}]}}"#,
     );
-    assert_eq!(asst.classify(&ctx_owned()), vec![Class::AgentMessage]);
+    assert_eq!(asst.classify(&ctx_owned()), vec![Class::AgentMessagePlain]);
     assert_eq!(asst.csift_channel_text(), None);
 }
 
 #[test]
 fn the_first_content_string_is_the_delivery() {
     // Several injected blocks: only the one the header OPENS is the delivery; the joined
-    // form stays the harness.meta.hook view.
+    // form stays the harness.hook.context view.
     let multi = parse(
         r#"{"type":"attachment","uuid":"att5","attachment":{"type":"hook_additional_context","content":["[csift-channel v1 id=abc part=1/1 from=aRelay-0123456789abcdef]\nfirst block","a second, unrelated block"]}}"#,
     );

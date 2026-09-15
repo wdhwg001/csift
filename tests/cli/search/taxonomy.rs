@@ -251,9 +251,9 @@ fn acceptance_harness_command_and_interrupt() {
 
 #[test]
 fn acceptance_harness_schedule_and_meta() {
-    // §D12 fired wakeup tick · §D13 the resume repair prompt · §G2 meta.hook (stop-hook
-    // feedback) · §G2 meta.loop (autonomous-loop driver). All ride on isMeta records that
-    // classify (not user.message).
+    // The fired wakeup tick, the resume repair prompt, the Stop-hook feedback and the
+    // autonomous-loop driver tick. All ride on isMeta records that classify (not
+    // user.message), each into the family its own producer belongs to.
     let h = acceptance_home();
     for (oracle, token, selector) in [
         ("D12 wakeup", "zzwakeup", "harness.schedule.wakeup"),
@@ -262,8 +262,8 @@ fn acceptance_harness_schedule_and_meta() {
             "Continue from where you left off",
             "harness.resume.prompt",
         ),
-        ("G2 meta.hook", "zzhook", "harness.meta.hook"),
-        ("G2 meta.loop", "zzloop", "harness.meta.loop"),
+        ("stop-hook feedback", "zzhook", "harness.hook.feedback"),
+        ("loop driver tick", "zzloop", "harness.schedule.tick"),
     ] {
         let out = acc(&h, token, selector);
         assert!(out.success, "{oracle}: stderr {}", out.stderr);
@@ -353,14 +353,14 @@ fn search_redacted_thinking_is_agent_thinking() {
         "search",
         "redacted",
         "-t",
-        "agent.thinking",
+        "agent.thinking.*",
         at(sess).as_str(),
         "--no-subagents",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("agent.thinking"),
-        "a redacted_thinking block must classify as agent.thinking; got: {}",
+        out.stdout.contains("agent.thinking.redacted"),
+        "a redacted_thinking block must classify as agent.thinking.redacted; got: {}",
         out.stdout
     );
     assert!(
@@ -506,7 +506,7 @@ fn harness_role_excludes_the_boundary_and_the_drilldown_keeps_it() {
         role.stdout
     );
     // The deliberate drill-down keeps its full set - compaction points stay findable.
-    let drill = h.run(&["search", "", &at(SESS), "-t", "harness.compaction"]);
+    let drill = h.run(&["search", "", &at(SESS), "-t", "harness.compaction.*"]);
     assert!(
         drill.stdout.contains("trigger=auto"),
         "-t harness.compaction still reaches the boundary:\n{}",
@@ -551,3 +551,4 @@ fn a_freeform_askuserquestion_response_is_a_user_answer() {
 }
 
 mod schedule_fire;
+mod selectors;

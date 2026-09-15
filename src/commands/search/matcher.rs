@@ -504,13 +504,13 @@ pub(crate) fn synth_marker_finders(
     // marker is the line's own type/subtype value, active only when the explicit
     // selector admits the line (otherwise it is not a candidate at all). The queued
     // and away-summary leaves render VERBATIM content and need no marker.
-    if args.reaches_gated(Class::MetaTurnDuration) {
+    if args.reaches_gated(Class::TurnDuration) {
         verifiable.push(b"turn_duration");
     }
-    if args.reaches_gated(Class::MetaStopHooks) {
+    if args.reaches_gated(Class::TurnStopHooks) {
         verifiable.push(b"stop_hook_summary");
     }
-    if args.reaches_gated(Class::MetaSnapshot) {
+    if args.reaches_gated(Class::BookkeepingFileHistory) {
         verifiable.push(b"file-history-");
     }
     // v0.10.1 catch-all system subtypes: the render fabricates the `[<subtype> <level>]`

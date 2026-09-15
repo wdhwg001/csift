@@ -74,7 +74,7 @@ fn agent_hit(stdout: &str) -> serde_json::Value {
     let hits: Vec<serde_json::Value> = json_rows(stdout, "exchange")
         .into_iter()
         .flat_map(|o| o["hits"].as_array().cloned().unwrap_or_default())
-        .filter(|h| h["label"] == "agent.message")
+        .filter(|h| h["label"] == "agent.message.plain")
         .collect();
     assert_eq!(hits.len(), 1, "exactly one agent.message hit: {stdout}");
     hits.into_iter().next().unwrap()
@@ -192,7 +192,7 @@ fn search_body_is_per_section_on_a_multi_block_record() {
     let bodies: Vec<String> = json_rows(&out.stdout, "exchange")
         .into_iter()
         .flat_map(|o| o["hits"].as_array().cloned().unwrap_or_default())
-        .filter(|h| h["label"] == "agent.message")
+        .filter(|h| h["label"] == "agent.message.plain")
         .map(|h| h["body"].as_str().expect("body").to_string())
         .collect();
     assert_eq!(bodies, vec![first.to_string(), second.to_string()]);
@@ -273,7 +273,7 @@ fn show_body_follows_the_address_that_lifts_the_cap() {
     assert!(by_turn.success, "stderr: {}", by_turn.stderr);
     let agent = json_rows(&by_turn.stdout, "record")
         .into_iter()
-        .find(|r| r["label"] == "agent.message")
+        .find(|r| r["label"] == "agent.message.plain")
         .expect("the agent record of turn 0");
     assert!(
         agent["text"].as_str().expect("text").contains("chars)"),

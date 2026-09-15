@@ -41,7 +41,7 @@ fn a_bare_harness_role_surfaces_the_delivered_local_command_record() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("harness.meta.system"),
+        out.stdout.contains("harness.system.command"),
         "it keeps its leaf label:\n{}",
         out.stdout
     );
@@ -56,13 +56,12 @@ fn a_bare_harness_role_surfaces_the_delivered_local_command_record() {
 #[test]
 fn the_explicit_leaf_and_the_glob_still_reach_every_system_subtype() {
     let h = delivery_home();
-    for sel in ["harness.meta.system", "harness.meta", "harness.*"] {
+    for sel in ["harness.system.*", "harness.system.notice", "harness.*"] {
         let out = h.run(&["search", "lagoon", &at(SESS), "-t", sel]);
         assert!(out.success, "{sel} stderr: {}", out.stderr);
         assert!(
-            out.stdout.contains("lagoon depth 12m")
-                && out.stdout.contains("Remote Control disconnected"),
-            "{sel} must keep its full set:\n{}",
+            out.stdout.contains("Remote Control disconnected"),
+            "{sel} must reach the undelivered notice:\n{}",
             out.stdout
         );
     }
@@ -106,10 +105,10 @@ fn the_api_error_placeholder_leaves_the_bare_agent_role() {
         bare.stdout
     );
     // The explicit leaf reaches it, and the label zone says it was dropped.
-    let leaf = h.run(&["search", "lagoon", &at(SESS), "-t", "agent.message"]);
+    let leaf = h.run(&["search", "lagoon", &at(SESS), "-t", "agent.message.plain"]);
     assert!(
         leaf.stdout.contains("API Error: lagoon upstream timeout")
-            && leaf.stdout.contains("agent.message [not delivered]"),
+            && leaf.stdout.contains("agent.message.plain [not delivered]"),
         "{}",
         leaf.stdout
     );
@@ -155,7 +154,7 @@ fn an_is_virtual_record_leaves_the_bare_user_role() {
 #[test]
 fn a_pattern_matching_only_the_fabricated_head_survives_the_whole_file_gate() {
     let h = delivery_home();
-    for sel in ["harness", "harness.meta.system"] {
+    for sel in ["harness", "harness.system.command"] {
         let out = h.run(&["search", r"\[local_command info\]", &at(SESS), "-t", sel]);
         assert!(out.success, "{sel} stderr: {}", out.stderr);
         assert!(
@@ -210,7 +209,8 @@ fn the_gated_leaves_note_follows_what_the_scan_actually_parsed() {
     // A bare `-t user` reaches no gated leaf at all, so the note stands.
     let user = h.run(&["search", "zzznotpresent", &at(SESS), "-t", "user"]);
     assert!(
-        user.stderr.contains("the gated leaves (") && user.stderr.contains("harness.meta.system"),
+        user.stderr.contains("the gated leaves (")
+            && user.stderr.contains("harness.system.command"),
         "{}",
         user.stderr
     );
@@ -242,35 +242,41 @@ fn the_label_census_counts_what_the_bare_role_would_surface() {
     ]);
     assert!(harness.success, "stderr: {}", harness.stderr);
     assert!(
-        harness.stdout.contains("harness.meta.system"),
+        harness.stdout.contains("harness.system.command"),
         "the delivered record is counted under its leaf:\n{}",
         harness.stdout
     );
     let n: usize = harness
         .stdout
         .lines()
-        .find(|l| l.contains("harness.meta.system"))
+        .find(|l| l.contains("harness.system.command"))
         .and_then(|l| l.split_whitespace().next())
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
-    assert_eq!(n, 1, "one delivered record, not both:\n{}", harness.stdout);
-    // The explicit leaf counts both.
+    assert_eq!(n, 1, "one delivered record:\n{}", harness.stdout);
+    // The bare role does NOT reach the undelivered notice beside it.
+    assert!(
+        !harness.stdout.contains("harness.system.notice"),
+        "the invisible sibling leaf stays out of the bare-role census:\n{}",
+        harness.stdout
+    );
+    // The category selector counts both.
     let leaf = h.run(&[
         "search",
         "lagoon",
         &at(SESS),
         "-t",
-        "harness.meta.system",
+        "harness.system.*",
         "--count-by",
         "label",
     ]);
     let n: usize = leaf
         .stdout
         .lines()
-        .find(|l| l.contains("harness.meta.system"))
-        .and_then(|l| l.split_whitespace().next())
-        .and_then(|n| n.parse().ok())
-        .unwrap_or(0);
+        .filter(|l| l.contains("harness.system."))
+        .filter_map(|l| l.split_whitespace().next())
+        .filter_map(|n| n.parse::<usize>().ok())
+        .sum();
     assert_eq!(n, 2, "{}", leaf.stdout);
     // The agent census loses the placeholder under the bare role.
     let agent = h.run(&[
@@ -285,7 +291,7 @@ fn the_label_census_counts_what_the_bare_role_would_surface() {
     let n: usize = agent
         .stdout
         .lines()
-        .find(|l| l.contains("agent.message"))
+        .find(|l| l.contains("agent.message.plain"))
         .and_then(|l| l.split_whitespace().next())
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
@@ -300,9 +306,9 @@ fn json_carries_delivered_on_every_hit_and_leaves_labels_alone() {
         "lagoon",
         &at(SESS),
         "-t",
-        "harness.meta.system",
+        "harness.system.*",
         "-t",
-        "agent.message",
+        "agent.message.plain",
         "-t",
         "user.message",
         "--format",
@@ -330,7 +336,7 @@ fn json_carries_delivered_on_every_hit_and_leaves_labels_alone() {
                     Some(1),
                     "the delivered record keeps its one leaf: {hit}"
                 );
-                assert_eq!(label, "harness.meta.system");
+                assert_eq!(label, "harness.system.command");
             }
         }
     }

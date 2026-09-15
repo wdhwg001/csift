@@ -98,7 +98,7 @@ fn an_attachment_the_flagless_scan_cannot_search_still_carries_the_chain() {
     assert!(census.success, "stderr: {}", census.stderr);
     assert!(
         !census.stdout.contains("harness.meta.attachment")
-            && !census.stdout.contains("harness.meta.hook"),
+            && !census.stdout.contains("harness.hook.context"),
         "no attachment leaf reaches a flagless census:\n{}",
         census.stdout
     );

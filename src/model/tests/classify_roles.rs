@@ -20,7 +20,7 @@ fn classify_assistant_text_is_message() {
     );
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentMessage]
+        vec![Class::AgentMessagePlain]
     );
 }
 
@@ -31,21 +31,21 @@ fn classify_assistant_thinking_only() {
     );
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentThinking]
+        vec![Class::AgentThinkingSummary]
     );
 }
 
 #[test]
 fn classify_assistant_redacted_thinking_only() {
-    // #12 / oracle B3: a `redacted_thinking` block (opaque encrypted reasoning, no readable
-    // text) classifies `agent.thinking` exactly like a normal thinking block. UNATTESTED in
-    // the corpus → exercised by this SYNTHETIC fixture.
+    // A `redacted_thinking` block (opaque encrypted reasoning, no readable text) takes its
+    // OWN leaf: the model echoes the ciphertext back but reads nothing from it. UNATTESTED
+    // in the corpus -> exercised by this SYNTHETIC fixture built from the documented shape.
     let r = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"EncryptedOpaqueBlob=="}]}}"#,
     );
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentThinking]
+        vec![Class::AgentThinkingRedacted]
     );
 }
 
@@ -56,7 +56,7 @@ fn classify_assistant_thinking_then_tool_use_multilabel() {
     );
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentThinking, Class::AgentToolUse]
+        vec![Class::AgentThinkingSummary, Class::AgentToolUse]
     );
 }
 
@@ -67,7 +67,7 @@ fn classify_assistant_text_and_tool_use_multilabel() {
     );
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentMessage, Class::AgentToolUse]
+        vec![Class::AgentMessagePlain, Class::AgentToolUse]
     );
 }
 
@@ -78,7 +78,7 @@ fn classify_assistant_bare_string_message() {
     );
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
-        vec![Class::AgentMessage]
+        vec![Class::AgentMessagePlain]
     );
 }
 

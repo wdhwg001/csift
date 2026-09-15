@@ -11,8 +11,8 @@ fn local_command_is_delivered_although_its_leaf_is_not() {
     let rec = parse(line);
     assert_eq!(rec.delivery_override(), Some(true));
     // The LABEL is unchanged: delivery is a selection fact, not a classification one.
-    assert_eq!(rec.promoted_class(), Some(Class::MetaSystem));
-    assert!(!Class::MetaSystem.llm_visible());
+    assert_eq!(rec.promoted_class(), Some(Class::SystemCommand));
+    assert!(Class::SystemCommand.llm_visible());
 }
 
 /// Every OTHER system subtype keeps the leaf default (no override), so the two agree.

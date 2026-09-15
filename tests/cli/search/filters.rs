@@ -355,7 +355,7 @@ fn additional_context_is_invisible_by_default() {
 fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
     let h = Home::new();
     hook_context_scenario(&h);
-    // First array element matches; the hit is labeled harness.meta.hook at its real line.
+    // First array element matches; the hit is labeled harness.hook.context at its real line.
     let out = h.run(&[
         "search",
         "quartzlantern",
@@ -364,10 +364,10 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("harness.meta.hook")
+        out.stdout.contains("harness.hook.context")
             && out.stdout.contains("L2")
             && out.stdout.contains("quartzlantern"),
-        "flag surfaces the attachment under harness.meta.hook:\n{}",
+        "flag surfaces the attachment under harness.hook.context:\n{}",
         out.stdout
     );
     // Second array element is part of the SAME joined text (the `\n` join seam).
@@ -378,7 +378,7 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         "--additional-context",
     ]);
     assert!(
-        out2.stdout.contains("harness.meta.hook"),
+        out2.stdout.contains("harness.hook.context"),
         "every content element is searchable:\n{}",
         out2.stdout
     );
@@ -406,7 +406,7 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         "json",
     ]);
     assert!(
-        outj.stdout.contains(r#""label":"harness.meta.hook""#),
+        outj.stdout.contains(r#""label":"harness.hook.context""#),
         "JSON hit label:\n{}",
         outj.stdout
     );
