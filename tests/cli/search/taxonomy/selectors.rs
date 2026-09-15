@@ -71,11 +71,14 @@ fn every_retired_spelling_is_a_hard_error_naming_its_successors() {
             "{retired} must be a hard error:\n{}",
             out.stdout
         );
+        // Read the successors out of the RETIREMENT HINT, never out of the whole message:
+        // the error also lists every valid selector, so a `stderr.contains` over the full
+        // text is satisfied by that list and would pass with the retirement arm deleted.
+        let hint = retirement_hint(&out.stderr, retired);
         for want in *successors {
             assert!(
-                out.stderr.contains(want),
-                "{retired} must name {want}:\n{}",
-                out.stderr
+                hint.contains(want),
+                "{retired}'s retirement hint must name {want}, got: {hint}"
             );
         }
     }
@@ -83,10 +86,26 @@ fn every_retired_spelling_is_a_hard_error_naming_its_successors() {
     let glob = h.run(&["search", "", &at(SESS), "-t", "harness.meta.*"]);
     assert!(!glob.success);
     assert!(
-        glob.stderr.contains("harness.hook."),
+        retirement_hint(&glob.stderr, "harness.meta").contains("harness.hook."),
         "the glob form names the same successors:\n{}",
         glob.stderr
     );
+}
+
+/// The parenthetical the error carries for a RETIRED spelling, isolated from the rest of
+/// the message: `('<selector>' is the <era> - today that is: <successors>.)`. Panics when
+/// it is absent, because a retired spelling that errors without naming where its records
+/// went is the failure this pins.
+fn retirement_hint(stderr: &str, retired: &str) -> String {
+    let opener = format!("('{retired}' is the ");
+    let at = stderr
+        .find(&opener)
+        .unwrap_or_else(|| panic!("no retirement hint for {retired} in: {stderr}"));
+    let rest = &stderr[at + opener.len()..];
+    let end = rest
+        .find(".)")
+        .unwrap_or_else(|| panic!("unterminated retirement hint for {retired}: {rest}"));
+    rest[..end].to_string()
 }
 
 #[test]

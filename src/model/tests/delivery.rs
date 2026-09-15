@@ -1,5 +1,6 @@
-//! The record-level delivery override: the three shapes where Claude Code's request
-//! assembler disagrees with the leaf default, and the shapes it must NOT fire on.
+//! The record-level delivery override: the shapes where Claude Code disagrees with the
+//! leaf default, and the shapes it must NOT fire on. Three come from the request
+//! assembler and two from the attachment converter.
 
 use super::*;
 
@@ -92,4 +93,41 @@ fn ordinary_records_carry_no_override() {
     assert_eq!(parse(attach).delivery_override(), None);
     let typeless = r#"{"uuid":"n1","timestamp":"2026-06-07T05:00:13.000Z"}"#;
     assert_eq!(parse(typeless).delivery_override(), None);
+}
+
+/// The attachment CONVERTER's two disagreements with the leaf default (claim REC-109).
+/// A payload type in `NEVER_CONVERTS` reaches the model as nothing whatever its leaf
+/// says, and a `hook_success` reaches it exactly when the record carries a rendered
+/// body - so the override answers `Some(false)` / `Some(rendered.is_some())` where the
+/// leaf alone would have answered "visible".
+#[test]
+fn the_attachment_converter_overrides_the_leaf_default() {
+    let never = r#"{"type":"attachment","uuid":"n1","attachment":{"type":"structured_output","content":"x"}}"#;
+    let rec = parse(never);
+    assert_eq!(rec.delivery_override(), Some(false));
+    // The LEAF is visible - the model PRODUCED that text - which is exactly why the
+    // record-level answer has to be the one a bare selector reads.
+    assert!(Class::AgentMessageStructured.llm_visible());
+
+    // One per never-convert payload type, so a row dropped from the list fails here.
+    for ty in crate::model::NEVER_CONVERTS {
+        let line = format!(
+            r#"{{"type":"attachment","uuid":"n2","attachment":{{"type":"{ty}","content":"x"}}}}"#
+        );
+        assert_eq!(
+            parse(&line).delivery_override(),
+            Some(false),
+            "{ty} is a never-convert payload"
+        );
+    }
+
+    let bare =
+        r#"{"type":"attachment","uuid":"h1","attachment":{"type":"hook_success","content":"x"}}"#;
+    assert_eq!(parse(bare).delivery_override(), Some(false));
+    let rendered = r#"{"type":"attachment","uuid":"h2","rendered":{"text":"the hook said so"},"attachment":{"type":"hook_success","content":"x"}}"#;
+    assert_eq!(parse(rendered).delivery_override(), Some(true));
+
+    // A payload type on neither list keeps the leaf default, override or not.
+    let other = r#"{"type":"attachment","uuid":"o1","attachment":{"type":"hook_additional_context","content":["x"]}}"#;
+    assert_eq!(parse(other).delivery_override(), None);
 }

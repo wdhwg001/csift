@@ -123,6 +123,7 @@ fn kept_fixture(lines: &[&str], matcher: &Matcher) -> Vec<Kept> {
 }
 
 mod exchange;
+mod hit_facts;
 mod hits;
 mod matcher;
 mod record_text;

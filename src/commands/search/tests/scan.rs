@@ -91,3 +91,55 @@ fn a_gate_that_cannot_reach_the_leaf_still_pays_nothing() {
         "no boundary selector, no boundary keep"
     );
 }
+
+/// A `cost-state` line and a `mode` line: two bookkeeping types, two different leaves,
+/// and the mask is what keeps them apart.
+const COST_LINE: &str =
+    r#"{"type":"cost-state","sessionId":"s1","totalCostUSD":1.5,"totalDuration":900}"#;
+const MODE_LINE: &str =
+    r#"{"type":"mode","mode":"acceptEdits","timestamp":"2026-06-07T05:00:00.000Z"}"#;
+
+/// The bookkeeping mask is PER LEAF, not per family: naming one leaf runs that leaf's
+/// needle and no other, and a default scan runs none of the fifteen. Without the mask a
+/// selector for one line type would parse all thirteen, which is the cost the gate law
+/// exists to refuse.
+#[test]
+fn a_bookkeeping_needle_runs_only_for_the_leaf_its_bit_names() {
+    let mut a = args("");
+    a.labels = vec!["harness.bookkeeping.cost".to_string()];
+    let gates = CandidateGates {
+        bookkeeping: bookkeeping_mask(&a, false),
+        ..CandidateGates::default()
+    };
+    assert!(gates.bookkeeping != 0, "the selector sets its leaf's bit");
+    assert!(
+        line_is_transcript_candidate(COST_LINE.as_bytes(), &gates),
+        "the named leaf's own line type is admitted"
+    );
+    assert!(
+        !line_is_transcript_candidate(MODE_LINE.as_bytes(), &gates),
+        "another bookkeeping line type is NOT: its bit is clear"
+    );
+
+    // The whole group short-circuits on a zero mask, which is every default scan.
+    let flagless = flagless_gates();
+    assert_eq!(flagless.bookkeeping, 0);
+    assert!(!line_is_transcript_candidate(
+        COST_LINE.as_bytes(),
+        &flagless
+    ));
+    assert!(!line_is_transcript_candidate(
+        MODE_LINE.as_bytes(),
+        &flagless
+    ));
+
+    // And the family glob sets every bit, so both lines come back.
+    let mut all = args("");
+    all.labels = vec!["harness.bookkeeping.*".to_string()];
+    let wide = CandidateGates {
+        bookkeeping: bookkeeping_mask(&all, false),
+        ..CandidateGates::default()
+    };
+    assert!(line_is_transcript_candidate(COST_LINE.as_bytes(), &wide));
+    assert!(line_is_transcript_candidate(MODE_LINE.as_bytes(), &wide));
+}

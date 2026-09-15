@@ -64,15 +64,13 @@ pub(crate) struct CandidateGates {
     pub(crate) channel: bool,
     /// v0.10.0 (explicit selector or address): `queue-operation` lines.
     pub(crate) queued: bool,
-    /// v0.10.0: `system`/`turn_duration` lines.
-    pub(crate) turn_duration: bool,
-    /// v0.10.0: `system`/`away_summary` lines.
-    pub(crate) away_summary: bool,
-    /// v0.10.0: `system`/`stop_hook_summary` lines.
-    pub(crate) stop_hooks: bool,
     /// v0.10.0: `file-history-snapshot` + `file-history-delta` lines.
     pub(crate) snapshot: bool,
-    /// v0.10.1: every OTHER `type:"system"` subtype (`harness.meta.system`).
+    /// v0.10.1, widened at v0.13.0: EVERY `type:"system"` subtype but the compaction
+    /// boundary - the `harness.system.*`, `harness.turn.*` and `harness.schedule.event`
+    /// leaves. One key-only `"subtype"` needle covers the whole axis, which is why the
+    /// three v0.10.0 per-subtype value needles are gone: their flags were this one and
+    /// every line they could admit carries the key.
     pub(crate) system: bool,
     /// v0.12.2 (a selector reaching `harness.schedule.fire`, which a bare scan does): the
     /// `system`/`scheduled_task_fire` line that names WHEN a fired prompt fired. DEFAULT-ON
@@ -130,19 +128,12 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     // byte scan and the leaf can never drift.
     static CHANNEL_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(Record::CSIFT_CHANNEL_NEEDLE.as_bytes()));
-    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the
-    // `type` values `"queue-operation"` and `"file-history-` (a prefix covering both
-    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system
-    // records (a value substring survives a reserialize; prose quoting the word lands
-    // on a role line and is harmless - it already parses).
+    // v0.10.0 promoted lines. Quoted-value needles per the R13 law: the `type` values
+    // `"queue-operation"` and `"file-history-` (a prefix covering both `-snapshot` and
+    // `-delta`). The system SUBTYPES need no value needle of their own - the key-only
+    // `"subtype"` keep below admits every one of them under the same flag.
     static QUEUED_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"queue-operation\""));
-    static TURN_DURATION_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"turn_duration"));
-    static AWAY_SUMMARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"away_summary"));
-    static STOP_HOOKS_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memmem::Finder::new(b"stop_hook_summary"));
     static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"file-history-"));
     // v0.10.1 catch-all system subtypes: the key-only needle `"subtype"` (every system
@@ -193,9 +184,6 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         || (gates.channel && CHANNEL_FINDER.find(line).is_some())
         // v0.10.0 promoted lines, each behind its own explicit-selector gate.
         || (gates.queued && QUEUED_FINDER.find(line).is_some())
-        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())
-        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())
-        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())
         || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
         || (gates.system && SUBTYPE_FINDER.find(line).is_some())
         // v0.12.2: the `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a

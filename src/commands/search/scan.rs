@@ -121,9 +121,6 @@ pub(crate) fn search_one_file(
         // the harness's own queue row, and only its CONTENT says which - so either
         // selector has to admit the line.
         queued: reach(Class::UserQueued) || reach(Class::BookkeepingQueue),
-        turn_duration: reach(Class::TurnDuration),
-        away_summary: reach(Class::TurnRecap),
-        stop_hooks: reach(Class::TurnStopHooks),
         snapshot: reach(Class::BookkeepingFileHistory),
         // v0.13.0: the 15 remaining non-transcript line types, one needle each behind
         // its own leaf's gate (the bitmask below). The whole group short-circuits on a
