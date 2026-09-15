@@ -187,4 +187,32 @@ fn the_disk_string_is_derived_from_the_shape() {
         tpl.disk(),
         r#"type:"user" isMeta:true template:resume-prompt"#
     );
+
+    // THREE shapes whose on-disk mark is not the axis value alone, because a second fact
+    // decides which leaf the line carries. These strings are what SPEC 5.3 and both SKILL
+    // tables print, so each names the field a reader greps for.
+    let queued = rows()
+        .find(|r| matches!(r.shape, Shape::AttachmentType("queued_command")))
+        .expect("the queued_command row");
+    assert!(
+        queued.disk().contains("attachment.origin.kind") && queued.disk().contains("user.message"),
+        "the queued row names the field that makes it the person's own: {}",
+        queued.disk()
+    );
+    let fire = rows()
+        .find(|r| matches!(r.shape, Shape::IsMetaFamily("schedule-fire")))
+        .expect("the schedule-fire row");
+    assert!(
+        fire.disk().contains("parentUuid") && !fire.disk().contains("template:"),
+        "the fired prompt has no template - its mark is the parent link: {}",
+        fire.disk()
+    );
+    let img = rows()
+        .find(|r| matches!(r.shape, Shape::Block("image")))
+        .expect("the image row");
+    assert!(
+        img.disk().contains("image-ONLY") && img.disk().contains("[Image: "),
+        "the image row names the SHAPE and its text form: {}",
+        img.disk()
+    );
 }
