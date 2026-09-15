@@ -268,7 +268,7 @@ Cases 2–3 are genuine user messages, so each opens a turn (§6.4). **Turn-open
 
 ### 4.2 `isMeta:true` pseudo-turns + synthesized markers — TRAP, must be excluded
 
-`isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from `user.message` **and** from turn-delimiting. The `isMeta` exclusion is load-bearing. Under the §5 taxonomy these are not dropped from search — `classify` reparents the recognized ones to `harness.schedule.wakeup` (a fired `ScheduleWakeup` / autonomous-loop timer tick), `harness.resume.prompt` (the resume loader's `Continue from where you left off.` repair prompt, §5.1) or `harness.meta.{hook,loop}` (stop-hook / `<local-command-caveat>` / edit-retry feedback; an autonomous-loop driver tick). An `isMeta` record that matches NO harness marker (a novel hook wrapper, the `[Image: source:…]` reference) classifies **empty** (excluded), never `user.message` (the M2b root-fix: a genuine `user.message` is never `isMeta`).
+`isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from `user.message` **and** from turn-delimiting. The `isMeta` exclusion is load-bearing. Under the §5 taxonomy these are not dropped from search — `classify` reparents the recognized ones through `model/classify/injections.rs` - `harness.schedule.wakeup` (a fired `ScheduleWakeup` / autonomous-loop timer tick), `harness.schedule.tick` (the autonomous-loop DRIVER tick), `harness.resume.prompt` (the resume loader's `Continue from where you left off.` repair prompt), `harness.hook.feedback` (a Stop hook's blocking feedback), `harness.command.caveat` (the `<local-command-caveat>` the command executor writes) and `harness.enforce.retry` (the edit-failed-retry nudge). An `isMeta` record that matches NO harness marker (a novel hook wrapper, the `[Image: source:…]` reference) classifies **empty** (excluded), never `user.message` (the M2b root-fix: a genuine `user.message` is never `isMeta`).
 
 **Beyond `isMeta`, four NON-`isMeta` user-record shapes are also machine-synthesized and must NOT open a turn** (verified on real `~/.claude/projects` data; corpus counts in parentheses):
 
@@ -276,7 +276,7 @@ Cases 2–3 are genuine user messages, so each opens a turn (§6.4). **Turn-open
 A `type:"user"` `text`-block (or bare-string) record whose content is **EXACTLY** `"[Request interrupted by user]"` or `"[Request interrupted by user for tool use]"` — a CC-synthesized interrupt marker, not a human turn. None carry extra prose (dropping them as boundaries loses zero user content). Match is **exact `==`** (a real message that merely *quotes* the phrase stays genuine).
 
 #### 4.2.2 `<local-command-stdout>…` (52)
-String content (NOT `isMeta`) starting with `<local-command-stdout>` — local-command OUTPUT (machine), not the user's prose. (Its sibling `<local-command-caveat>` carries `isMeta` and classifies `harness.meta.hook`.) Does NOT open a turn (excluded via `starts_with`); classifies **`harness.command.stdout`** (§5).
+String content (NOT `isMeta`) starting with `<local-command-stdout>` — local-command OUTPUT (machine), not the user's prose. (Its sibling `<local-command-caveat>` carries `isMeta` and classifies `harness.command.caveat` - its producer is the slash-command EXECUTOR, never a hook.) Does NOT open a turn (excluded via `starts_with`); classifies **`harness.command.stdout`** (§5).
 
 #### 4.2.3 slash-command wrapper — BOTH tag orders (`<command-name>…` / `<command-message>…`)
 The machine-templated EXPANSION of a slash command. **Current CC emits `<command-message>` FIRST, then `<command-name>`** (verified in real corpora: 14 new-order sessions vs 35 older `<command-name>`-first ones), so detection is `is_slash_command_wrapper` — string content (NOT `isMeta`) whose LEADING tag is EITHER `<command-name>` OR `<command-message>` (the new `COMMAND_MESSAGE_PREFIX`). **`is_genuine_user` excludes BOTH orders** (a new-order wrapper no longer masquerades as human prose or opens a turn — a v0.5 correctness fix; turn NUMBERING may shift on a transcript carrying new-order wrappers). The templated wrapper does NOT open a turn. Classification is multi-label: any genuine prose the user typed after the command lives in `<command-args>…</command-args>` and is recovered via `slash_command_name` as `/name args`, so a WITH-ARGS wrapper classifies **`[user.message, harness.command.invocation]`** with `user.message` FIRST (the richest-view law, §5.2) — the UNFILTERED render is the extracted `/name args`, never the wrapper XML; a NO-ARGS wrapper classifies **`harness.command.invocation`** ONLY. An explicit `-t harness.command.invocation` still renders the raw wrapper. (No new Matcher synth needle is needed — the name + args are verbatim raw substrings and the rendered seam is a space, so a whitespace-bearing pattern is never prefilter-eligible.)
@@ -435,52 +435,176 @@ Where the axis lands per command is §6.4.1 (live turn numbering and the disk / 
 
 ---
 
-## 5. Label taxonomy — `role.class.sub` (`search -t/--category`, repeatable)
+## 5. Label taxonomy - `role.category.leaf` (`search -t/--label`, repeatable)
 
-The `-t` axis is a 3-role, **37-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, pinned by a hand-kept oracle table whose length must equal it). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (an unmodeled record → empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path (so `-t agent` covers the whole role, `-t agent.tool` covers use+result), and the rendered/JSON label is always the full dotted leaf path.
+The `-t` axis is a **3-role, 17-category, 73-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, pinned by a hand-kept oracle table whose length must equal it, and `Class::CATEGORIES` the middle tier). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (a record whose shape csift models no leaf for yields an empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path, and the rendered/JSON label is always the full dotted leaf path.
 
-### 5.1 The tree (role → class → sub)
-```
-user                                       (the human)
-├─ user.message            genuine prose (string or text-only blocks; incl. a slash-command's args, rendered `/name args` — §4.2.3)
-├─ user.answer             AUQ answer (the Q+options+answer unit; INCLUDES the question)   ALSO agent.tool.result
-├─ user.rejection          plan/tool reject + typed instruction (render [plan:<path>] for ExitPlanMode)  ALSO agent.tool.result
-├─ user.unsent             a SUPERSEDED turn-opener draft (v0.9.2): sent, esc-recalled into the input box, edited, re-sent — the original stays on disk sharing the resend's parentUuid. Assigned at the SCAN layer (the set needs the LATER sibling; C-18's `superseded_draft_indices` is the one rule), SINGLE label (user.message stays pure), outside turn numbering (header `<tok>·draft`, JSON null turn_index), suppressed under a `--turn` window, always address-reachable. 99% never drew a reply (measured n=317). A rendered draft carries the C-27 DIFF against the message that replaced it (`differs from the sent message in N chars (P% of the final)`, or `identical to the sent message`; JSON `superseding_line`/`superseding_uuid`/`diff_chars`/`diff_pct`/`diff_exact`), and the label itself is RETROACTIVE - the discriminator is the later sibling, so nothing can assign it at prompt-submit time (v0.11.1 ledger ④, claim TURN-026). LIMITS: an abandoned recall (no resend) is structurally undetectable; a queued text edited before dispatch never becomes a user record (its `queue-operation` line is `user.queued`, v0.10.0).
-├─ user.rewound            a turn-opener the conversation was REWOUND past (v0.12.0): it was sent AND it drew a reply, and Claude Code's own `parentUuid` chain now threads around it, so neither it nor anything under it is in the surviving conversation. The discriminator against `user.unsent` is exactly that reply - a recalled draft has no assistant descendant, a rewound turn does (measured over the shared-parentUuid opener pairs of a real corpus: 858 without, 52 with, 0 on the chain). Assigned at the SCAN layer for the same reason `user.unsent` is - the fact lives in the DAG around the record, not in the record - so it is equally RETROACTIVE. Outside turn numbering (header `<tok>·rewound turn`, JSON null turn_index), suppressed under a `--turn` window, always address-reachable, and its C-27 line leads `rewound: the conversation continued from L<n> instead`. NOT LLM-visible: a bare `-t user` skips it, a glob or the full path reaches it. Every OTHER record of the rewound branch keeps its ordinary leaf and carries an `[abandoned]` / `[rewound]` label-zone marker.
-└─ user.queued             the human's text as it sat in the input QUEUE (v0.10.0): a `queue-operation` line carrying `content` — `enqueue` (typed while a turn ran), `popAll` (recalled to the input box), `remove` (consumed; `reason` ∈ {absorbed_mid_turn, delivered_to_agent}, measured the only two values). A content-less `dequeue` carries no label; a queued `<task-notification>` / peer message is a harness RIDER, not the human, and carries no label (the delivered twin already classifies harness.notification.* / agent.communication.inbox). No join key exists on the queue side (measured 4-6 keys, no promptId/uuid) so `dispatched` is NEVER asserted; the hit carries `operation` + `reason` verbatim (label zone `[enqueue]` / `[remove · absorbed_mid_turn]`, JSON `queue_operation`/`queue_reason`). GATED: parsed only under an explicit selector reaching the leaf (§7 gated-leaf law). LLM-invisible (no `message{}`).
+The space is split by PRODUCER: what wrote the record decides which category it lands in. That replaced the v0.10-era `harness.meta`, which had pooled hook-injected text, a hook run's own record, a slash command's caveat, the loop tick, the end-of-turn telemetry, the file-history instrument and every unmodeled `type:"system"` subtype into one bag plus two catch-alls - a shape a selector could not name and a census could not describe.
 
-agent                                      (the assistant)
-├─ agent.message           visible end-of-turn text (assistant `text` block)
-├─ agent.thinking          thinking block (incl. `redacted_thinking` → here, renders `[redacted thinking]`)
-├─ agent.thinking.narration  narration-TAGGED thinking block (v0.9.2): an API-issued one-sentence summary of the reasoning beside it, in the user's language. The tag hides in the base64 `signature` (protobuf field path 2→1→8, LAST length-delimited field at each level; decoded whole-string, every failure → plain `agent.thinking`; open tag set). Renders the `[narration summary]` LABEL-zone marker (display-only); sibling cap 1; excluded from `verbatim`. The first leaf whose path another leaf prefixes: `-t agent.thinking` selects both, pure reasoning = `-t agent.thinking -T agent.thinking.narration`.
-├─ agent.tool.use          tool_use block (incl. a pending elicitation sidecar marker — AUQ/ExitPlanMode/MCP)
-├─ agent.tool.result       tool_result block (incl. errored)
-└─ agent.communication                     (EVERY comm hit renders  from ⇨ to)
-   ├─ inbox                received prose (a peer/teammate message, a subagent spawn prompt, a subagent return)
-   ├─ sent                 sent prose (`SendMessage` type message; a Task/Agent/Workflow spawn)
-   ├─ signal               control/status (idle_notification, shutdown_request/approved, teammate_terminated)
-   └─ channel              (v0.11.0) a csift-channel DELIVERY: a `type:"attachment"` record whose payload is `hook_additional_context` and whose FIRST content string opens with `[csift-channel v1 ` (§6.17). It carries `harness.meta.hook` too and LEADS it (richest-view law): the record is hook machinery on disk and a message addressed at this lane in meaning. The one attachment leaf a DEFAULT scan reaches — the candidate needle `csift-channel v1` is a bare value substring with no JSON-escaped character (R13-safe) and is gated on the label selector alone, so `-t user` / `-t harness` short-circuit before the memmem and pay nothing. Rendered VERBATIM (the header line plus the body chunk, a byte substring of the decoded content), so the §7d prefilter and the §7f whole-file gate hold with no synthesized-marker machinery; direction comes from the header's `from=` (`<sender lane> ⇨ self`), and a CONTINUATION chunk, whose header carries only `id=` and `part=`, reports no direction rather than a guessed one.
+### 5.1 The engine: one dispatch over five mechanical family tables
 
-harness                                    (Claude Code machinery — render glyph ⚙)
-├─ harness.notification.{workflow, monitor, subagent, background-command, task}   <task-notification> completion pulses
-├─ harness.compaction.{summary, boundary}        the isCompactSummary record + the system compact_boundary
-├─ harness.command.{invocation, stdout}          <command-name> slash wrapper + <local-command-stdout>
-├─ harness.interrupt.{user, tool}                [Request interrupted by user] / …for tool use]
-├─ harness.schedule.wakeup                       fired ScheduleWakeup/autonomous-loop timer tick. Its markers - the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous loop check` header and the `You're being invoked on a timer` body sentence - are matched at CONTENT START only (v0.12.2), after the same `trim_start` the resume-prompt arm uses. The resolver builds the WHOLE delivered prompt and the fire writes it as its own record, so a real tick carries its marker at offset 0; a marker deeper in a body belongs to a record QUOTING the prompt (a skill's instruction text that embeds the preamble, a peer relay, a compaction summary recapping one), and matching anywhere read each of those as the tick and stripped the leaf it had earned. `harness.meta.loop` anchors the same way.
-├─ harness.schedule.fire                         (v0.12.2) the PROMPT a scheduled task FIRES: a cron entry or a `ScheduleWakeup` timer comes due and Claude Code submits the armed text as its own `type:"user"` record - `isMeta:true`, `promptSource:"system"`, `userType:"external"` - parented to the `system`/`scheduled_task_fire` record written one line earlier, whose `content` names the instant in a trailing parenthesis (`Running scheduled task (<when>)` for a cron task, `Claude resuming /loop wakeup (<when>)` for a wakeup; one formatter, two wordings, so csift reads the parenthesised TAIL rather than either sentence). The armed text reaches the record VERBATIM - the fire path applies exactly ONE rewrite, the autonomous-loop sentinel resolution, and every other prompt falls through it unchanged - so there is NO marker to match and this leaf keys on the record's own FIELDS. Its arm therefore sits LAST among the harness marker arms: a fired prompt may legitimately open with any of them, and a tick that really carries one keeps `harness.schedule.wakeup` / `harness.meta.loop` by arm order. `promptSource:"system"` is not the scheduler's own stamp (the submit path puts it on EVERY `isMeta` submission, and Claude Code's own reader calls the `isMeta` + `promptSource` pair a system-injected turn prompt while testing `isMeta` + NO `promptSource` for a human entry), so an inbound peer message shares it exactly and TWO guards refuse one: the relay FRAMING through the same `is_peer_message` predicate `user.queued` uses, and the `origin` OBJECT, which the harness stamps on everything it did not submit itself and reads back as the first test of its own foreign-input veto - the framing guard alone misses a TAGLESS delivery. The `queue-operation` line carrying the identical text one line earlier stays UNLABELED (a harness rider, the same content-shape law). DELIVERED (the model answers it as an ordinary turn) and never a turn OPENER, like every `isMeta` record. The INSTANT is a cross-record fact, so it rides the LABEL ZONE (`[scheduled fire <when>]`) and JSON `scheduled_at`, display-only like `[summarize <dir>]` and for the same reason - matchable text drawn from another record would need a synthesized-marker registration it does not earn. It is joined by `parentUuid` through a per-file `ScheduleFireIndex`, built from the fire lines one more `&&`-gated candidate keep admits (a C-40 conjunction of the rare literal `scheduled_task_fire` AND the key-only `"subtype"` bytes; measured over the 80 top-level transcripts of one corpus, all 465 records with top-level `type:"system"` and `subtype:"scheduled_task_fire"` carry the key, and of the lines that carry the literal WITHOUT being such a record not one does - 216 of them at the instant of the measurement, 72 reached by no role keep and so refused by this conjunction alone. That second population is not a fixed number and must not be read as one: 211 of the 216 sat in the transcript of the session doing the measuring, because a session writing ABOUT the literal accumulates it in prose. Which is precisely the hazard - the discriminator is the KEY, whose presence is a property of the producer, never the literal's rarity) and DEMOTED back to spine rows once read, so a flagless scan gains no `harness.meta.system` hit from the keep. A transcript holding no fire record reports a null instant, never a guessed one.
-├─ harness.resume.prompt                         (v0.12.0, renamed from `harness.schedule.continuation` — same predicate, same records) the repair PROMPT the resume LOADER appends when the transcript it loaded ends on a dangling `type:"user"` record: an `isMeta` user record whose text opens with `Continue from where you left off.` The producer is the resume post-processor, never the scheduler, which is why the leaf moved families. The predicate is `isMeta` AND `trim_start().starts_with` — not equality — because the sentence is the DEFAULT of an env-overridable getter and Claude Code sets two longer variants for its own respawns; Claude Code's own recogniser compares exactly against the value ITS environment resolved, which a transcript cannot show. **The `isMeta` half is what protects a person**: it is the authorship flag the injecting call site stamps, Claude Code's recogniser tests it too, and a human message that merely OPENS with the sentence carries no such flag — so it stays `user.message` and opens its turn as always. Both exclusions this leaf claims — never a turn opener, never the operator — hold THROUGH that gate, which is also what `is_genuine_user` reads. (csift does not apply the recogniser's third test, `promptSource` absent, so its set is a superset by exactly the records carrying that field; none exists in the corpus.) DELIVERED: the model receives it. The retired selector spelling is a hard parse error naming this path.
-├─ harness.resume.placeholder                    (v0.12.0) the stand-in reply the same loader splices in right after a resumed transcript's trailing user record, so the loaded conversation does not end unanswered: a `type:"assistant"` record with `message.model` `<synthetic>`, no `isApiErrorMessage`, and a single-text content of exactly `No response requested.` — a 1:1 port of Claude Code's own recogniser. Fabricated with no model call, so it is NOT `agent.message`. ONE writer produces it and its gate is only "the tail is a user record", while the prompt's gate is the tail classifier's interrupted-turn verdict — so the same record also appears ALONE after an interrupt marker, a `<local-command-stdout>` echo or a slash wrapper. That difference is a FACT on the hit, not a second leaf: `resume_paired` (JSON) / `[paired]` `[unpaired]` (label zone), computed from the record's `parentUuid` against the file's repair-prompt uuids. DELIVERED: the request assembler's `<synthetic>` arm also requires `isApiErrorMessage`, which the loader does not set.
-├─ harness.meta.{hook, loop}                     hook feedback (stop-hook / <local-command-caveat> / edit-retry) + autonomous-loop driver tick
-├─ harness.meta.attachment                       any OTHER attachment payload (v0.8.1; scanned only under --attachments / --count-by attachment / an explicit show address; text = the VERBATIM payload JSON)
-├─ harness.meta.turn-duration                    (v0.10.0, GATED, LLM-invisible) the `system`/`turn_duration` end-of-turn telemetry record: renders `[turn duration: 1m 5s · durationMs=… messageCount=… pendingBackgroundAgentCount=… pendingWorkflowCount=…]` (present fields only; the human form rounds to the second, tops out at `Nd Nh`) — the structured body behind the REPL's "Done in Ns" / "Waiting for N agents" lines, which never land on disk. Fires per assistant turn (measured 4,580 vs ~40k user records: not every turn). `pendingBackgroundAgentCount` since CC 2.1.159 (~3% of records), `pendingWorkflowCount` since 2.1.156 (~5%). The pending counts cover background agents and workflows ONLY — a turn that ended with a background shell still running wrote no pending field at all (measured on a live specimen: the REPL's "1 shell still running" had no on-disk counterpart), so an EOT record is never evidence that the session is done; that question belongs to `status`.
-├─ harness.meta.away-summary                     (v0.10.0, GATED, LLM-invisible) the `system`/`away_summary` recap: MODEL-GENERATED (a side `generate()` call, config-gated) when the operator returns after a 5+ minute blur; text = the verbatim `content`. Measured 1,196/1,198 never re-appear downstream — "not in the surviving conversation".
-├─ harness.meta.stop-hooks                       (v0.10.0, GATED, LLM-invisible) the `system`/`stop_hook_summary` Stop-hook execution ledger: renders `[stop hooks: count=N errors=M prevented=<bool>]` + one `<command> (<ms>ms)` line per `hookInfos[]` entry (the commands are the record's only text; `hookAdditionalContext` was EMPTY on 4,865/4,865 measured instances). Distinct from `harness.meta.hook` (text a hook INJECTED).
-├─ harness.meta.snapshot                         (v0.10.0, GATED, LLM-invisible) a `file-history-snapshot` (renders `[file-history snapshot at <snapshot.timestamp>: <path>@vN, …]`, every tracked path sorted — the line has NO top-level timestamp, so the hit's ts is null and the excerpt carries the nested one) or a `file-history-delta` (`[file-history delta at <ts>: <trackingPath>@vN backup=<backupFileName>]`, one path's bump; 1,934 corpus lines that nothing read before). The v0.9.4 recover instrument, now searchable by path and version.
-└─ harness.meta.system                           (v0.10.1, GATED, LLM-invisible BY LEAF DEFAULT) every OTHER `type:"system"` subtype the harness writes for its own UI: `informational` (the Remote Control disconnect warning after an account switch, `level:"warning"`), `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`, `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a later build adds; renders `[<subtype> <level>] <content>` (a string content verbatim, a JSON content compact, the bare head when there is none); the compaction boundary keeps its own leaf. Admitted by the key-only `"subtype"` needle under an explicit selector OR a bare `harness` role (§5.5), synth-marked on the same needle and the same predicate. ONE subtype under this leaf is DELIVERED: a `local_command` record is re-minted by the request assembler as a user message, so the leaf default is overridden per record and a bare `-t harness` surfaces it (§5.5).
-```
-Notes: `harness.notification.subagent` = the `AutomationKind::Agent` pulse (renamed so it never collides with the `agent` role) AND, since v0.10.0, the harness's plain-text agents-stopped notice (`N background agents were stopped by the user: …` / `Background agent "…" was stopped by the user.` - excluded from `is_genuine_user`, never a turn opener, rendered `[subagent stopped] <notice>`). Every pulse renders `[<kind> <task-id>[, <task-id>…] <status>] <summary>`, and the id slot holds EVERY task the pulse closes (v0.12.1): an ORPHAN RECONCILIATION — the one pulse the next session start writes for the tasks a previous session left open — lists several ids plus Claude Code's own scan markers, `__orphan_summary__:<agent|shell|workflow>` (the reconciled KIND) and `__orphan_summary_live__:<id>` (a still-live task excluded from the summary). Markers name no task, so they are split off by their shared `__orphan_summary` prefix and never enter the id slot; the kind renders as a trailing `(orphan reconciliation: <kind>)` and rides a hit as JSON `orphan_kind`, beside the `task_ids` array carrying every real id (empty / null on every other hit). The parsed trigger's single `task_id` is the FIRST REAL id. `harness.notification.monitor` = the Monitor tool's own pulses and termination notices ONLY (summary opens `Monitor`/`Scheduled`/`cron`); a `Background command "…"` pulse is always `.background-command` whatever its quoted name says (the v0.10.0 retirement of the quoted-name heuristic). An `isMeta` record matching no harness marker classifies **empty** (excluded), never `user.message`. `system` records other than `compact_boundary` / `turn_duration` / `away_summary` / `stop_hook_summary` (the unpromoted subtypes: scheduled_task_fire, api_error, model_refusal_fallback, local_command, agents_killed, …), plus the session-state cache records (`last-prompt`/`ai-title`/`agent-name`/`mode`/`permission-mode` — no uuid, no timestamp, no message; `lastPrompt` duplicates `user.message`) and the other bookkeeping types (`atis-latch`, `bridge-session`, `cost-state`, `fork-context-ref`), carry no label; `queue-operation` (with content) and `file-history-snapshot`/`-delta` carry the v0.10.0 leaves above; an `attachment` record classifies `harness.meta.hook` (a hook-context payload) or `harness.meta.attachment` (anything else), both reachable only through their gates (v0.8.1). `harness.compaction.boundary` IS a valid classify label and, since D7, IS surfaced by `search` (the §7 prefilter keeps the `compact_boundary` record; `record_raw_text` renders its content + `compactMetadata` — see §4.7); its sibling `harness.compaction.summary` is a `type:"user"` record and IS searchable.
+`Record::classify` is a DISPATCH; the leaf families live in `model/classify/`, one module per axis a transcript actually splits on, each a table from an on-disk VALUE to a leaf with no look at the payload:
 
-### 5.2 Multi-label (one record → ≥1 leaf) + Q4 dedup
+| module | axis | table |
+|---|---|---|
+| `bookkeeping` | the line's own top-level `type` | 18 non-transcript types -> 13 `harness.bookkeeping` leaves |
+| `system` | a `type:"system"` line's `subtype` | 11 subtypes -> the compaction boundary, the three `harness.turn` leaves, `harness.schedule.event` and the five `harness.system` event kinds |
+| `attachments` | an attachment payload's `type` | the payload types -> `harness.hook.{context,outcome}`, `harness.context.*`, `agent.message.structured` |
+| `thinking` | a content block's own shape | `thinking` (text present, absent, or narration-tagged) and `redacted_thinking` -> the four `agent.thinking` leaves |
+| `injections` | an isMeta user record's TEMPLATE | the templates csift recognises -> the caveat, the Stop-hook feedback, the two schedule ticks, the resume prompt, the retry nudge |
+
+Dispatch order is fixed: the elicitation sidecar, then the csift CHANNEL view and the rest of the attachment payload types, then the non-transcript line types (system subtypes included), then the three transcript record types. Two payload types need one more fact than their own value and the caller supplies it: `hook_additional_context` leads with `agent.communication.channel` when its FIRST content string is a csift envelope, and `queued_command` is the person's own mid-turn steer when the record's `origin.kind` says `human`.
+
+### 5.2 The selector law
+
+Three forms, and the first is what a coarse query means:
+
+- a bare **ROLE** (`user`) or **CATEGORY** (`agent.message`, `harness.turn`) selects only the leaves whose content the model receives - the "show me the conversation" ask. Both are `is_bare_face`, and only they consult the per-record delivery and survival verdicts;
+- a **GLOB** (`user.*`, or any valid prefix + `.*`) selects every leaf under the prefix, visibility ignored;
+- an exact **LEAF** path selects it regardless of visibility - a deliberate drill-down names what it wants.
+
+No `-t` means every label. `-T` excludes with the same grammar, and `is_statically_empty` bails ONLY when `-T` is what cancelled `-t`: a bare category whose whole face is invisible also matches nothing, and that is a different fact with a different remedy. `harness.bookkeeping` is the one such category today (all 13 leaves are invisible): the selector is accepted, matches nothing BY THE LAW, and `search` prints one stderr note naming the remedy (`-t harness.bookkeeping.*`) beside the ordinary empty-result diagnosis, with `empty_visible_face` in the JSON summary. The set is derived (`cli::empty_visible_faces`), so a visibility change moves it without a second edit.
+
+**Retired spellings are HARD ERRORS naming their successors** - no alias, no forwarding arm, no `labels[]` twin:
+
+| retired | successors the error names |
+|---|---|
+| `harness.meta` (bare) | `harness.hook.*` · `harness.command.caveat` · `harness.schedule.tick` · `harness.context.*` · `harness.turn.*` · `harness.system.*` · `harness.bookkeeping.*` · `agent.message.structured` |
+| `harness.meta.hook` | `harness.hook.context` (injected text) · `harness.hook.feedback` (a Stop hook's) · `harness.command.caveat` |
+| `harness.meta.loop` | `harness.schedule.tick` |
+| `harness.meta.attachment` | `harness.context.*` · `harness.hook.outcome` · `agent.message.structured` |
+| `harness.meta.turn-duration` / `-away-summary` / `-stop-hooks` | `harness.turn.duration` / `.recap` / `.stop-hooks` |
+| `harness.meta.snapshot` | `harness.bookkeeping.file-history` |
+| `harness.meta.system` | `harness.system.{refusal,api-error,notice,kill,command}` · `harness.schedule.event` |
+| `thinking` / `tool` / `tool-response` | `agent.thinking` / `agent.tool` / `agent.tool.result` |
+| `harness.schedule.continuation` | `harness.resume.prompt` |
+
+`agent.message` and `agent.thinking` are NOT retired: they were leaf paths and are now CATEGORIES, so they still parse and select their face. The JSON `label` of what they used to name reads `agent.message.plain` / `agent.thinking.summary`.
+
+`--additional-context` is retired the same way (a hidden tombstone flag that bails): it gated ONE leaf, and that leaf has a name. `--attachments` keeps its meaning - admit every `type:"attachment"` line for a pattern scan, which equals selecting every attachment-carried leaf with `.*`.
+
+### 5.3 The SHAPE inventory (`model::inventory`)
+
+One row per on-disk shape csift has modeled, along the five axes above: what leaf it carries (or none, where the leaf is decided deeper or csift models none), what admits it to a scan, whether the harness converts it for the model, and whether a person sees it. The candidate gates DERIVE from it (`cli::gated_leaves`, `system_line_leaves`, `attachment_leaves`), the drift tests pin it against `Class::ALL` in both directions, and the `?` in the human column is an honest hole a family lane fills with a measured value rather than a guess.
+
+GATE words: `default scan` a role-bearing line already parsed · `explicit -t` the leaf, its category or a glob reaching it must be named (a bare scan never parses the line) · `-t or --attachments` either that or the wide flag · `show address only` csift models no leaf, so only an address reaches it.
+
+
+| axis | value | leaf | gate | converts for the model | human sees |
+|---|---|---|---|---|---|
+| TopLevelType | `user` | (deeper axis / unmodeled) | default scan | yes | yes |
+| TopLevelType | `assistant` | (deeper axis / unmodeled) | default scan | yes | yes |
+| TopLevelType | `system` | (deeper axis / unmodeled) | explicit -t | no | verbose |
+| TopLevelType | `attachment` | (deeper axis / unmodeled) | -t or --attachments | yes | no |
+| TopLevelType | `last-prompt` | `harness.bookkeeping.last-prompt` | explicit -t | no | indirect |
+| TopLevelType | `mode` | `harness.bookkeeping.mode` | explicit -t | no | indirect |
+| TopLevelType | `permission-mode` | `harness.bookkeeping.mode` | explicit -t | no | indirect |
+| TopLevelType | `ai-title` | `harness.bookkeeping.name` | explicit -t | no | indirect |
+| TopLevelType | `agent-name` | `harness.bookkeeping.name` | explicit -t | no | indirect |
+| TopLevelType | `atis-latch` | `harness.bookkeeping.atis` | explicit -t | no | indirect |
+| TopLevelType | `bridge-session` | `harness.bookkeeping.bridge` | explicit -t | no | indirect |
+| TopLevelType | `history-suppression` | `harness.bookkeeping.suppression` | explicit -t | no | indirect |
+| TopLevelType | `pr-link` | `harness.bookkeeping.pr-link` | explicit -t | no | indirect |
+| TopLevelType | `frame-link` | `harness.bookkeeping.artifact` | explicit -t | no | indirect |
+| TopLevelType | `artifact-comment-monitor` | `harness.bookkeeping.artifact` | explicit -t | no | indirect |
+| TopLevelType | `artifact-autoreact-ledger` | `harness.bookkeeping.artifact` | explicit -t | no | indirect |
+| TopLevelType | `file-history-snapshot` | `harness.bookkeeping.file-history` | explicit -t | no | indirect |
+| TopLevelType | `file-history-delta` | `harness.bookkeeping.file-history` | explicit -t | no | indirect |
+| TopLevelType | `cost-state` | `harness.bookkeeping.cost` | explicit -t | no | indirect |
+| TopLevelType | `fork-context-ref` | `harness.bookkeeping.fork` | explicit -t | no | indirect |
+| TopLevelType | `continued-in` | `harness.bookkeeping.continued` | explicit -t | no | indirect |
+| TopLevelType | `queue-operation` | `harness.bookkeeping.queue` | explicit -t | no | yes |
+| SystemSubtype | `compact_boundary` | `harness.compaction.boundary` | default scan | no | yes |
+| SystemSubtype | `turn_duration` | `harness.turn.duration` | explicit -t | no | (unstated) |
+| SystemSubtype | `stop_hook_summary` | `harness.turn.stop-hooks` | explicit -t | no | (unstated) |
+| SystemSubtype | `away_summary` | `harness.turn.recap` | explicit -t | no | (unstated) |
+| SystemSubtype | `scheduled_task_fire` | `harness.schedule.event` | explicit -t | no | yes |
+| SystemSubtype | `model_refusal_fallback` | `harness.system.refusal` | explicit -t | no | verbose |
+| SystemSubtype | `model_refusal_no_fallback` | `harness.system.refusal` | explicit -t | no | no |
+| SystemSubtype | `api_error` | `harness.system.api-error` | explicit -t | no | no |
+| SystemSubtype | `informational` | `harness.system.notice` | explicit -t | no | verbose |
+| SystemSubtype | `agents_killed` | `harness.system.kill` | explicit -t | no | yes |
+| SystemSubtype | `local_command` | `harness.system.command` | explicit -t | yes | yes |
+| AttachmentType | `hook_additional_context` | `harness.hook.context` | explicit -t | yes | no |
+| AttachmentType | `hook_success` | `harness.hook.outcome` | -t or --attachments | no | verbose |
+| AttachmentType | `hook_blocking_error` | `harness.hook.outcome` | -t or --attachments | no | verbose |
+| AttachmentType | `hook_non_blocking_error` | `harness.hook.outcome` | -t or --attachments | no | verbose |
+| AttachmentType | `hook_cancelled` | `harness.hook.outcome` | -t or --attachments | no | verbose |
+| AttachmentType | `hook_stopped_continuation` | `harness.hook.outcome` | -t or --attachments | no | verbose |
+| AttachmentType | `hook_system_message` | `harness.hook.outcome` | -t or --attachments | no | verbose |
+| AttachmentType | `async_hook_response_batch` | `harness.hook.outcome` | -t or --attachments | no | (unstated) |
+| AttachmentType | `structured_output` | `agent.message.structured` | -t or --attachments | no | no |
+| AttachmentType | `total_tokens_reminder` | `harness.context.reminder` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `task_reminder` | `harness.context.reminder` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `silent_turn_reminder` | `harness.context.reminder` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `batching_reminder_sent` | `harness.context.reminder` | -t or --attachments | no | (unstated) |
+| AttachmentType | `ultrathink_effort` | `harness.context.reminder` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `skill_listing` | `harness.context.listing` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `agent_listing_delta` | `harness.context.listing` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `deferred_tools_delta` | `harness.context.listing` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `deferred_tools_record` | `harness.context.listing` | -t or --attachments | no | (unstated) |
+| AttachmentType | `invoked_skills` | `harness.context.listing` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `instructions` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `date` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `session_context` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `environment` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `model` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `prompt_snapshot` | `harness.context.prompt` | -t or --attachments | no | (unstated) |
+| AttachmentType | `date_change` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `file` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `edited_text_file` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `compact_file_reference` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `nested_memory` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `plan_file_reference` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `read_truncation_notice` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `bash_output_audience_note` | `harness.context.file` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `plan_mode` | `harness.context.mode` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `plan_mode_exit` | `harness.context.mode` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `plan_mode_reentry` | `harness.context.mode` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `auto_mode` | `harness.context.mode` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `command_permissions` | `harness.context.mode` | -t or --attachments | no | (unstated) |
+| AttachmentType | `opened_file_in_ide` | `harness.context.ide` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `selected_lines_in_ide` | `harness.context.ide` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `diagnostics` | `harness.context.ide` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `task_status` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `queued_command` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `workflow_keyword_request` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `goal_status` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `remote_session_change` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `relevant_memories` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `memory_update` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `thinking_stripped` | `harness.context.task` | -t or --attachments | no | (unstated) |
+| Block | `text` | `agent.message.plain` | default scan | yes | yes |
+| Block | `thinking` | `agent.thinking.summary` | default scan | yes | verbose |
+| Block | `redacted_thinking` | `agent.thinking.redacted` | default scan | no | verbose |
+| Block | `tool_use` | `agent.tool.use` | default scan | yes | yes |
+| Block | `tool_result` | `agent.tool.result` | default scan | yes | yes |
+| Block | `image` | `harness.context.image` | default scan | yes | yes |
+| Block | `document` | (deeper axis / unmodeled) | show address only | no | (unstated) |
+| Block | `fallback` | (deeper axis / unmodeled) | show address only | no | no |
+| IsMetaFamily | `local-command-caveat` | `harness.command.caveat` | default scan | yes | no |
+| IsMetaFamily | `stop-hook-feedback` | `harness.hook.feedback` | default scan | yes | no |
+| IsMetaFamily | `resume-prompt` | `harness.resume.prompt` | default scan | yes | no |
+| IsMetaFamily | `schedule-wakeup` | `harness.schedule.wakeup` | default scan | yes | no |
+| IsMetaFamily | `schedule-tick` | `harness.schedule.tick` | default scan | yes | no |
+| IsMetaFamily | `schedule-fire` | `harness.schedule.fire` | default scan | yes | no |
+| IsMetaFamily | `roster-reminder` | `harness.context.reminder` | default scan | yes | no |
+| IsMetaFamily | `image-reference` | `harness.context.image` | default scan | yes | yes |
+| IsMetaFamily | `skill-body` | `harness.context.skill` | default scan | yes | no |
+| IsMetaFamily | `enforce-structured-output` | `harness.enforce.structured-output` | default scan | yes | no |
+| IsMetaFamily | `enforce-brief` | `harness.enforce.brief` | default scan | yes | no |
+| IsMetaFamily | `enforce-handback` | `harness.enforce.handback` | default scan | yes | no |
+| IsMetaFamily | `enforce-retry` | `harness.enforce.retry` | default scan | yes | no |
+| IsMetaFamily | `human-relay` | `user.message` | default scan | yes | no |
+| IsMetaFamily | `residue` | (deeper axis / unmodeled) | show address only | yes | no |
+
+Leaves with NO shape row are listed in `inventory::UNSHAPED` with the reason: their discriminator is not a line-level field but a SECTION inside a record's text, a fact the surrounding DAG carries, or a tool the record names. The two tables partition `Class::ALL` exactly.
+
+### 5.4 The 1:1 law
+
+`csift show --line N` never hard-misses a PARSEABLE line. A record whose shape csift models no leaf for renders ONE unit reading `? unmodeled: <type[/subtype|/attachment.type]>` - the top-level type, plus the deeper value where the shape splits on one - with a key=value excerpt of the line's own top-level keys (values cut at 80 characters) as its body, and JSON `label: null`, `labels: []`, `unmodeled: "<shape>"`. The excerpt is fabricated, which is safe here and only here: an address needs no match, so no prefilter and no whole-file gate is reasoning about that text. An explicit `--line` address also admits the NAMED lines past the §7d prefilter, scoped to those lines, so a `show` on a giant transcript parses a few extra lines rather than the file. A SCAN never emits an unmodeled unit (it is gated on `address.is_some()`), so no census, count or `-t` result moves; and a line that is not a JSON object at all is still a hard miss pointing at `--raw`.
+
+### 5.5 Multi-label (one record → ≥1 leaf) + Q4 dedup
 A physical record can carry several labels; `search` emits it **ONCE** under the **richest** view when a query selects ≥2 of them (Q4 dedup), while JSON `labels[]` still lists the full set.
 
 | record (disk shape) | label A | label B | direction ⇨ | richest (dedup) |
@@ -496,11 +620,11 @@ A physical record can carry several labels; `search` emits it **ONCE** under the
 | subagent transcript opener (the delivered spawn prompt) | `agent.communication.inbox` | — | parent ⇨ self | `…inbox` |
 | subagent return (one-shot Task tool_result) | `agent.tool.result` | `agent.communication.inbox` | child ⇨ self | `…inbox` |
 | `harness.notification.{subagent,task,workflow}` carrying a `<result>` (bg-agent report, G1) | `harness.notification.*` | `agent.communication.inbox` | child ⇨ self | (per-section: both emit) |
-| csift-channel delivery attachment (v0.11.0) | `agent.communication.channel` | `harness.meta.hook` | from ⇨ self | `…channel` |
+| csift-channel delivery attachment (v0.11.0) | `agent.communication.channel` | `harness.hook.context` | from ⇨ self | `…channel` |
 
 A batched record (≥1 `<task-notification>` and/or ≥1 inbound peer section concatenated in ONE `type:"user"` record) classifies **PER SECTION** (the labels are the UNION), and `search` renders **one hit per section** (G4/G5); a peer tag merely QUOTED inside a notification span is masked by the notification (precedence). A spawn **launch-ack** (`teammate_spawned` / `Async agent launched successfully…`) is `agent.tool.result` ONLY — it is the launch confirmation, not the child's return.
 
-### 5.3 Direction (`from ⇨ to`) sources (GOLD §4)
+### 5.6 Direction (`from ⇨ to`) sources (GOLD §4)
 Every `agent.communication.*` hit renders a direction (`Record::direction`); the transcript owner's own id renders as the literal `self`.
 - `<teammate-message>`/`<agent-message>`: the `teammate_id`/`from` attribute = FROM; owner = TO (`from ⇨ self`).
 - `<cross-session-message>` (C-30): FROM = the `from-name` attribute when present, else `from` — `from` is a transport address (`uds:<socket path>`, a bridge id), `from-name` is the sending session's display name, so the name is the readable side. On a record carrying exactly ONE peer section the structured `origin.name` wins over the attribute; they are the same value (Claude Code fills `origin` by re-parsing the tag), and a BATCHED record reads each section's own attribute instead.
@@ -509,39 +633,41 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 - subagent opener: `parent ⇨ self`. subagent return / `<result>` pulse: `child ⇨ self` (child via the embedded `<tool-use-id>`).
 - csift-channel delivery (v0.11.0): FROM = the envelope header's `from=` value (a lane id, or `external:<label>`); owner = TO. A continuation chunk names no sender and therefore renders no direction.
 
-### 5.4 Render markers + selector grammar
+### 5.7 Render markers + selector grammar
 - **Role glyph** leads every hit line: **`◂` user · `▸` agent · `⚙` harness** (gear = machinery). `agent.communication.*` is agent-side, so `▸`.
 - **`⇨`** (hollow arrow) = the comm direction `<from> ⇨ <to>`. **`▹`** = ONLY the `agent.tool.use ▹ agent.tool.result` pairing (joined by `tool_use_id`; an unreturned use → `agent.tool.use (no result — pending)`, an orphan result → `agent.tool.result (use not in scope)`).
-- **Selector grammar**: a dotted `role.class.sub` path, dot-segment-prefix matched; with no `-t`, EVERY label is eligible (search everything except no-label records). The **old flat values** `thinking`/`tool`/`tool-response` HARD-error (0 back-compat, like `--full`), the error LISTING the valid selectors (derived from `Class::ALL`); `user`/`agent` keep working as ROLE selectors.
+- **Selector grammar**: §5.2. A `?` glyph leads an UNMODELED unit (§5.4) - it has no role to read, so it borrows none.
 
-### 5.5 Record-level delivery (v0.11.1): what a bare ROLE selector means
+### 5.8 Record-level delivery: what a bare ROLE or CATEGORY selector means
 
-A bare ROLE selector claims to show the conversation the model received. That is a
-per-RECORD fact, not a per-leaf one, and Claude Code decides it with ONE drop predicate
-inside the assembler that turns a transcript into an API request (claim CLS-026). The
-predicate disagrees with the leaf table of §5.1 in exactly THREE cases, and
-`Record::delivery_override` mirrors those three and nothing else:
+A bare ROLE or CATEGORY selector claims to show the conversation the model received.
+That is a per-RECORD fact, not a per-leaf one, and Claude Code decides it with drop
+predicates of its own (claim CLS-026 for the request assembler, REC-109 for the
+attachment converter). Where a predicate disagrees with the leaf table of §5.3,
+`Record::delivery_override` mirrors it and nothing else:
 
 | record shape | leaf default | the harness | csift |
 |---|---|---|---|
-| `type:"system"` + `subtype:"local_command"` | invisible (`harness.meta.system`) | RE-MINTS it as a user message and sends it | `Some(true)`: a bare `-t harness` surfaces it |
+| `type:"system"` + `subtype:"local_command"` | VISIBLE (`harness.system.command`) | RE-MINTS it as a user message and sends it | `Some(true)`: the leaf default and the predicate now agree, and the override states the producer's own verdict per record |
+| `type:"attachment"` whose payload type the converter DROPS (nine of them) | visible for most of those leaves | converts it to nothing | `Some(false)`: a bare role or category hides it |
+| `type:"attachment"` + `attachment.type:"hook_success"` | invisible (`harness.hook.outcome`) | converts it exactly when the record carries a rendered body | `Some(rendered.is_some())` |
 | `type:"user"`/`"assistant"` + `isVirtual:true` | visible | drops it (display-only by construction) | `Some(false)`: a bare role hides it |
 | `type:"assistant"` + `isApiErrorMessage:true` + `message.model=="<synthetic>"` | visible | drops it (claim CLS-027) | `Some(false)`: a bare role hides it |
 
-Every other record carries no override, so its leaf default stands. The predicate's two
+Every other record carries no override, so its leaf default stands. The assembler's two
 remaining arms need none: it KEEPS an `api_system` record and drops a `progress` record,
 and csift models no leaf for either type, so neither is selectable at all.
 
-Only the BARE-ROLE form consults the override. A glob (`-t 'agent.*'`), an intermediate
-prefix (`-t harness.meta`) and an exact leaf path keep their full sets, so every record
+Only the BARE-FACE forms consult the override. A glob (`-t 'agent.*'`) and an exact leaf
+path keep their full sets, so every record
 stays reachable by naming it; `-T` speaks the same rule on the exclude side. The label
 SET is untouched (`labels[]` is classification, never the delivery verdict); the verdict
 rides beside it as the JSON hit field `delivered` (the override, else the leaf default)
 and, on an undelivered record under an explicit selector, as the display-only label-zone
 marker `[not delivered]`.
 
-Candidate admission follows: `harness.meta.system` was reachable only under an explicit
-selector, so a bare `-t harness` could not have seen the delivered record at all. The
+Candidate admission follows: the `harness.system` leaves are reachable only under an
+explicit selector, so a bare `-t harness` could not have seen the delivered record at all. The
 key-only `"subtype"` needle is therefore also enabled under a bare `harness` role
 (`SearchArgs::scans_system_lines`), and the per-record override drops the rest of what
 that admission parsed. The §7f whole-file gate's synthesized-marker set reads the SAME
@@ -553,10 +679,10 @@ parsed.
 Measured on the reference corpus, 72 top-level transcripts, one observation per record:
 16 `system`/`local_command` records (12 carrying a `<local-command-stdout>` body, 4 being
 command echoes) appear under a bare `-t harness` where 0.11.0 showed none, and
-`agent.message` drops by exactly 118, the whole population of records carrying
+`agent.message.plain` drops by exactly 118, the whole population of records carrying
 `isApiErrorMessage` (118 of 118 also carry the `<synthetic>` model).
 
-### 5.6 Record-level survival (v0.12.0): the THIRD exclusion axis
+### 5.9 Record-level survival (v0.12.0): the THIRD exclusion axis
 
 A bare ROLE selector narrows on three axes, applied in this order, and only the first is
 per-leaf:
@@ -590,8 +716,17 @@ classification.
 
 ## 6. Subcommand specifications
 
-> **v0.13.0 CHANGE LEDGER (no surface change so far; `csift 0.13.0`).**
+> **v0.13.0 CHANGE LEDGER (BREAKING: the label taxonomy is rewritten; `csift 0.13.0`).**
 > ① **The source tree is re-managed.** `src/` stood at BOTH structure caps - 20 counted direct `.rs` files and 16 subfolders - and a cap that binds is a refactor gate, not a number to raise. The Bash LEXICAL layers move under one path-named root: `src/bash/danger.rs` + `src/bash/danger/{argv,census,lexical,out,removal,shape}.rs` (formerly the seven `src/bash_danger*.rs` files, which were siblings of the crate root precisely because a seventeenth subfolder would have failed the gate) and `src/bash/mutations.rs` + `src/bash/mutations/` (formerly `src/bash_mutations`); the five `bash_danger_*_tests.rs` files lose their `#[path]` attributes and become ordinary `tests` children of the modules that declare them. THIRTEEN SUBCOMMAND FAMILIES then move under `src/commands/` - `agents`, `elicitation`, `files`, `image`, `live` (channel included), `plan`, `recover`, `search`, `session`, `show`, `stats`, `turns`, `whoami` - leaving `src/` as the BASE LAYER those build on: `main.rs` plus `cli`, `model`, `parse`, `path`, `subagent`, `bash`, `chardiff`, `text`, `time_window`, `timez`. Dispatch reads `Command::Foo(args) => commands::foo::run_foo(&args)`. Finally the four `src/model/classify_*.rs` siblings become `src/model/classify/{support,promoted,channel,resume}.rs` under the engine that uses them, with the `support` glob still re-exported from the model root so every `crate::model::` path that resolved before resolves now; `Record::direction` moves verbatim into a fifth child `classify/direction.rs`, because the engine sat at 599 of its 600 permitted lines and could not host four `mod` declarations - a cap that binds is a refactor gate, not a number to raise. The engine's CASES follow the same nesting (`src/model/tests/classify_*.rs` becomes `src/model/tests/classify/{support,promoted,channel,resume}.rs`), which also takes `src/model/tests/` off the 20-file cap it was sitting at; and the five children are declared `pub(super)`, the narrowest visibility that still lets the model root re-export `classify::support::*`. Every `crate::<old>::` path is respelled at every call site in src and tests; no alias, no re-export and no forwarding shim is left behind, so an old spelling is a compile error rather than a deprecation. No logic line changes, and no output byte moves: `--help` is byte-identical for the root and all seventeen subcommands against a build of the BASE COMMIT (measured against an INSTALLED 0.12.3 it differs on one line, `[alias: --dry-run]` against `[aliases: --dry-run]` in `recover --help`, which is clap rendering its own `visible_alias` and moves with the clap patch version rather than with csift), the suite runs 1548 unit + 889 e2e + 1 ignored - the unit count unchanged and the e2e count one higher, for the single case that pins the external-write interval join (it reads both path spellings, and closes a version sequence over an entry whose version cannot be read) after a respelled call was reflowed across more lines than the old one - and a corpus differential over `list`/`search`/`stats`/`files`/`verbatim`/`show`/`recover`/`image`/`agents`/`whoami` compares byte-identical on stdout, stderr and exit code.
+> ② **The label taxonomy becomes 17 CATEGORIES over 73 LEAVES, split by PRODUCER** (§5; claims REC-108, REC-109, CLS-033). The old 38-leaf space had one bag in it: `harness.meta` pooled hook-injected text, a hook run's own record, a slash command's caveat, the loop tick, the end-of-turn telemetry and the file-history instrument, with `.attachment` and `.system` as catch-alls for everything else - so a selector could not name what it wanted and a census could not say what a scope held. The new space asks ONE question of every record, WHAT WROTE IT, and the answer is its category. `Class` carries the leaves, `Class::CATEGORIES` the middle tier, `Class::category` the facet a selector reads, `Class::llm_visible` the 28 leaves whose content the model never receives. Renames land 1:1 (`agent.message` -> `agent.message.plain`, `agent.thinking` -> `agent.thinking.summary`, `harness.meta.loop` -> `harness.schedule.tick`, the three `harness.meta` telemetry leaves -> `harness.turn.*`, `harness.meta.snapshot` -> `harness.bookkeeping.file-history`); `harness.meta.hook` splits three ways by producer (`harness.hook.context`, `harness.hook.feedback`, `harness.command.caveat`), and the two catch-alls become per-value tables. Every retired spelling is a HARD ERROR naming its successors - thirteen of them - and there is no alias, no forwarding arm and no `labels[]` twin. `agent.message` and `agent.thinking` are not retired: they were leaf paths and are now CATEGORIES, so they still parse.
+> ③ **`classify` becomes a dispatch over five MECHANICAL family tables** (§5.1): a top-level line `type` (`classify/bookkeeping.rs`), a `type:"system"` subtype (`system.rs`), an attachment payload `type` (`attachments.rs`), a content block's shape (`thinking.rs`) and an isMeta-user template (`injections.rs`). Each is a value in and a leaf out with no look at the payload, which is what makes the mapping checkable against the shape inventory rather than readable only as control flow. Three behaviour changes ride it, each a leaf reaching records that carried NONE: every non-transcript line type now carries a `harness.bookkeeping.*` leaf (a `queue-operation` line that is not the human's text included), an attachment carries the leaf of its own payload type instead of one catch-all, and a thinking block with no summary text or a `redacted_thinking` block takes its own leaf instead of both reading as plain reasoning. A value csift models no leaf for carries none - which §5.4 then renders rather than hiding.
+> ④ **`harness.schedule.fire` changes its GATE, not its meaning** (claim CLS-031, refined). It keyed on `promptSource:"system"`, a stamp the submit path puts on EVERY isMeta submission and which the builds before it wrote on nothing; it now keys on the PARENT LINK - the prompt's `parentUuid` names the `system`/`scheduled_task_fire` record the scheduler wrote just before it, joined through `ScheduleFireIndex`, which gained a structural half beside its instant map so a fire record with an unreadable instant still gates the prompt under it. That link is the only mark the producer leaves on the prompt itself, since the armed text reaches the record verbatim. The two peer guards are unchanged.
+> ⑤ **The SHAPE INVENTORY (`model::inventory`, §5.3)**: one row per on-disk shape on the five axes above - 22 top-level types, 11 system subtypes, 49 attachment payload types, 8 content block types, 15 isMeta template families - each naming its leaf, its gate, whether the harness converts it for the model and whether a person sees it. It is a RECORD of the mapping, never a second one: a unit test walks every row back through the family table that decides the leaf, and another asserts the shaped leaves and a hand-kept `UNSHAPED` table partition `Class::ALL` exactly. The candidate GATES derive from it (`gated_leaves`, `system_line_leaves`, `attachment_leaves`), so the honest-empties note can never name a stale leaf. Fifteen needles join the §7d prefilter for the remaining non-transcript line types, each a quoted VALUE behind its own leaf's bit in one mask, and the whole group short-circuits on a zero mask - a default scan pays for none of them. A bookkeeping line renders its own VERBATIM JSON, the choice `--attachments` already makes for a payload and for the same reason: a byte substring of the source line keeps the §7d prefilter and the §7f whole-file gate sound with no synthesized marker.
+> ⑥ **A bare CATEGORY narrows exactly as a bare ROLE does** (§5.2), because both are the coarse "show me the conversation" ask; a glob and an exact leaf still reach everything. `harness.bookkeeping` is the one category whose whole face is invisible: the selector is ACCEPTED, matches nothing by the law, and `search` prints one stderr note naming the remedy beside the ordinary empty-result diagnosis (JSON `empty_visible_face`). `is_statically_empty` bails only when `-T` is what cancelled `-t`, so the honest empty and the contradiction stay different answers with different remedies.
+> ⑦ **`--additional-context` is RETIRED** (a hidden tombstone flag that bails, the `turns` precedent). It gated ONE leaf and that leaf now has a name: `-t harness.hook.context`. Naming any attachment-carried leaf is a gate of its own now, so the narrow ask no longer needs a flag at all; `--attachments` keeps its wide meaning. The bail is deliberate over a quiet no-op: a run that silently scanned fewer lines than the caller asked for would read as the definitive absence csift promises an empty result means.
+> ⑧ **`Record::delivery_override` gains the ATTACHMENT arm** (claim REC-109): the nine payload types the harness's converter drops are NOT delivered whatever their leaf says, and a `hook_success` IS delivered exactly when the record carries a rendered body. `rendered` is a TOP-LEVEL key of the attachment RECORD, not of its payload - reading it off the payload finds it on no line of either measured corpus - and its ABSENCE is not evidence of non-delivery in general, which is why the test is narrowed to the one payload type where the coincidence was measured.
+> ⑨ **The 1:1 law: `show --line N` never hard-misses a parseable line** (§5.4). A shape csift models no leaf for renders `? unmodeled: <shape>` with the line's own top-level keys, and JSON carries `unmodeled` beside a null `label`. A SCAN never emits one, so no census, count or `-t` result moves; a line that is not a JSON object at all is still a hard miss pointing at `--raw`. The fetch domain is now exactly what its name always said - before this, every bookkeeping line type read as absent. Two EXTENSION POINTS land with their first users, so a family adds a variant rather than a field: `Hit.markers` carries display-only label-zone notes through one renderer, and `Hit.facts` carries per-record facts that project themselves into the label zone and into JSON.
+> ⑩ **Two files hit the 600-line cap and were re-managed** rather than squeezed: `record_text.rs` and `scan.rs` are paired roots now, with the non-message renders (`record_text/promoted.rs`) and the candidate gates (`scan/gates.rs`) in their own children.
 
 > **v0.12.3 CHANGE LEDGER (non-breaking; one added JSON field; `verbatim`'s fold accounting; ported-checker fidelity; the session-lineage leftovers -- `csift 0.12.3`).**
 > ① **`body`, the newline-preserving companion of `excerpt`** (§8.2 carries the contract). A hit's `excerpt` is a match-CENTERED fragment and it is one line by contract - `match_excerpt` collapses every whitespace run to a single space - so a consumer reading it as the message loses every paragraph boundary and every table row, and that holds even under `--no-truncate`, where nothing was clipped. Measured on a synthetic table-bearing assistant record: the rendered body is 638 chars with 21 newlines and 72 `|`; `search --format json` reports an `excerpt` of 412 chars / 0 newlines / 47 `|` under the default cap and 636 / 0 / 72 under `--no-truncate`, and `show --line N --format json` reports the same 636 / 0 / 72 in its `text`. The flattening site is `search::match_excerpt` (`normalize_line` on both the head form and the match-centered window). `body` now carries that same rendered section text VERBATIM (638 / 21 / 72), per section on a multi-section record, on every `search` hit and sibling and on every `show` record row. It is non-null EXACTLY when the excerpt cap was lifted, read off the one budget: `search --no-truncate`, and `show`'s `--line`/`--uuid` address; NULL under the default cap, where the excerpt is a fragment anyway and a second full copy of every matched record would multiply a wide scan's stream for a consumer that did not ask for the body. `show --turn` selects records through the default cap (it is a window, not an address), so its rows report a capped `text` and a null `body` - and the §4 note that claimed `--turn` lifts the cap is corrected with it. `body` is the RENDERED form, so a source the shared opener renderer already flattened in the MODEL layer (`user.message` and the other `reconstructed_user_text` cases, via `flatten_content_text`) carries no newline there either; `--raw` stays the only path to the bytes. `excerpt`, `show`'s `text` and every text-mode byte are unchanged in both modes, pinned by a before/after comparison of the whole JSON stream with the new key removed. `verbatim --format json` flattens its unit `text` too (the same 636 / 0 / 72), but at a different layer: `Record::agent_text` normalizes in the model, and `verbatim`'s `full_chars` / `elided_chars` / `elided_lines` accounting and its dedup fingerprints are all computed from the normalized string - so a body there is a change to the unit pipeline rather than an added field, and it is not part of this item.

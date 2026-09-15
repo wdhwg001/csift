@@ -9,6 +9,57 @@ surface change bumps the PATCH.
 
 ### Changed
 
+- **The `-t` label taxonomy is 17 categories over 73 leaves, split by producer.** The old
+  38-leaf space had one bag in it: `harness.meta` pooled hook-injected text, a hook run's own
+  record, a slash command's caveat, the loop tick, the end-of-turn telemetry and the
+  file-history instrument, and its `.attachment` and `.system` leaves were catch-alls for
+  everything else. A selector could not name what it wanted and a census could not say what a
+  scope held. The new space asks one question of every record, what wrote it, and the answer
+  is its category: `user`, `agent.{message,thinking,tool,communication}`, and under `harness`
+  the twelve producers `notification`, `compaction`, `command`, `interrupt`, `schedule`,
+  `resume`, `hook`, `context`, `enforce`, `turn`, `system` and `bookkeeping`. Renames land
+  one for one (`agent.message` becomes `agent.message.plain`, `agent.thinking` becomes
+  `agent.thinking.summary`, `harness.meta.loop` becomes `harness.schedule.tick`, the three
+  telemetry leaves become `harness.turn.*`, `harness.meta.snapshot` becomes
+  `harness.bookkeeping.file-history`); `harness.meta.hook` splits three ways by producer into
+  `harness.hook.context`, `harness.hook.feedback` and `harness.command.caveat`; and the two
+  catch-alls become per-value tables. `agent.message` and `agent.thinking` still parse - they
+  were leaf paths and are now categories, so they select their whole face.
+- **A bare CATEGORY narrows exactly as a bare ROLE does.** Both are the coarse "show me the
+  conversation" ask, so both select only the leaves whose content the model receives, while a
+  glob (`-t 'user.*'`) and an exact leaf path still reach every record. `harness.bookkeeping`
+  is the one category whose whole face is invisible: the bare form is accepted, matches
+  nothing by that law, and `search` prints one stderr note naming the remedy beside the
+  ordinary empty-result diagnosis (`empty_visible_face` in the JSON summary). A `-T` that
+  cancels your `-t` is still a hard error; an honest empty is not.
+- **`classify` became a dispatch over five mechanical family tables** - a top-level line
+  `type`, a `type:"system"` subtype, an attachment payload `type`, a content block's shape and
+  an isMeta user template - each a value in and a leaf out, with no look at the payload (the
+  v0.10.0 `classify/promoted.rs` is now `classify/bookkeeping.rs`, one of the five). Three
+  behaviour changes ride it, each a leaf reaching records that carried none: every
+  non-transcript line type now carries a `harness.bookkeeping.*` leaf, an attachment carries
+  the leaf of its own payload type rather than one catch-all, and a thinking block with no
+  summary text (`agent.thinking.omitted`) or a `redacted_thinking` block
+  (`agent.thinking.redacted`) takes its own leaf instead of both reading as plain reasoning.
+- **`show --line N` never hard-misses a parseable line.** A shape csift models no leaf for
+  renders one unit reading `? unmodeled: <type[/subtype|/attachment.type]>` with a key=value
+  excerpt of the line's own top-level keys, and JSON carries `unmodeled` beside a null `label`
+  and an empty `labels`. Before this, every bookkeeping line type read as absent. A SCAN never
+  emits such a unit, so no census, count or `-t` result moves, and a line that is not a JSON
+  object at all is still a hard miss pointing at `--raw`.
+- **`harness.schedule.fire` changes its gate, not its meaning.** It keyed on
+  `promptSource:"system"`, a stamp the submit path puts on every isMeta submission; it now
+  keys on the parent link to the `system`/`scheduled_task_fire` record the scheduler wrote
+  just before it, which is the only mark the producer leaves on the prompt itself. That fire
+  record gets a leaf of its own, `harness.schedule.event`.
+- **A shape inventory backs the taxonomy** (`model::inventory`): one row per on-disk shape on
+  those five axes - 22 top-level types, 11 system subtypes, 49 attachment payload types, 8
+  block types, 15 isMeta template families - each naming its leaf, its gate, whether the
+  harness converts it for the model and whether a person sees it. It is a record of the
+  mapping rather than a second one: a unit test walks every row back through the family table
+  that decides the leaf, and another asserts the shaped leaves and a hand-kept table of the
+  rest partition the leaf set exactly. The candidate gates and the generated SPEC and SKILL
+  tables all derive from it, so the honest-empties note can never name a stale leaf.
 - **The source tree is re-managed: command modules under `src/commands/`, the bash
   lexical layers under `src/bash/`.** `src/` sat at both structure caps (20 counted
   direct `.rs` files, 16 subfolders), which is a refactor gate rather than a number to
@@ -21,6 +72,20 @@ surface change bumps the PATCH.
   with `Record::direction` moved verbatim into a fifth child so the engine stays under
   the 600-line cap, and the engine's cases nested to match. Every path is respelled at
   every call site, with no alias and no forwarding shim. No behaviour change.
+
+### Removed
+
+- **`harness.meta` and every `harness.meta.*` selector.** They are hard errors naming their
+  successors, one error per retired spelling, and there is no alias, no forwarding arm and no
+  twin in `labels[]`. The same goes for `harness.schedule.continuation`, whose producer is the
+  resume loader (`harness.resume.prompt`), and for the 0.6-era flat `thinking`, `tool` and
+  `tool-response`, which were already errors and now point at the same three successors.
+- **`--additional-context`.** The flag gated one leaf and that leaf now has a name:
+  `-t harness.hook.context`. Naming any attachment-carried leaf is a gate of its own, so the
+  narrow ask needs no flag; `--attachments` keeps its wide meaning. The flag is a hidden
+  tombstone that bails with the successor, deliberately rather than becoming a quiet no-op: a
+  run that silently scanned fewer lines than the caller asked for would read as the definitive
+  absence an empty result promises.
 
 ## [0.12.3] - 2026-09-13
 

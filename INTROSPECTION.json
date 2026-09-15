@@ -19585,7 +19585,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "776-781",
+          "lines": "779-784",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19809,7 +19809,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2163",
+          "lines": "2298",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20051,12 +20051,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "774",
+          "lines": "777",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "783-784",
+          "lines": "786-787",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -20991,12 +20991,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "740",
+          "lines": "743",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "762",
+          "lines": "765",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21167,12 +21167,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "740",
+          "lines": "743",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "762",
+          "lines": "765",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21355,7 +21355,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "806",
+          "lines": "809",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21622,12 +21622,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "742",
+          "lines": "745",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "806",
+          "lines": "809",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21719,12 +21719,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "490",
+          "lines": "493",
           "snippet": "- Slicing (hook injection, \u226410000-char cap): `--slices N --slice i --window W` = fixed-fleet chunks, whole turns; out-of-range \u21d2 nothing, exit 0 (hook affordance). Text-only."
         },
         {
           "path": "SKILL.md",
-          "lines": "742",
+          "lines": "745",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -35179,7 +35179,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "328-334",
+          "lines": "327-333",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -38459,12 +38459,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "734",
+          "lines": "737",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "742",
+          "lines": "745",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -48178,7 +48178,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "446-448",
+          "lines": "445-447",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -49769,8 +49769,8 @@
         },
         {
           "path": "src/cli/search_help.rs",
-          "lines": "110-114",
-          "snippet": "        it. Nine leaves are invisible and need naming or a glob: `user.unsent` and\\n  \\\n        `user.rewound` (neither is in the surviving conversation - see AXIS 3 below),\\n  \\\n        `harness.compaction.boundary` (a metrics-only system record: no message field\\n  \\\n        at all), and the six gated leaves below. The glob form `-t 'user.*'` selects\\n  \\\n        EVERY leaf under the prefix, visibility ignored; an intermediate prefix\\n  \\"
+          "lines": "189-191",
+          "snippet": "        28 of the 73 leaves are outside a bare role or category - the two scan-layer user\\n  \\\n        leaves, `user.queued` and all 13 bookkeeping leaves (non-transcript lines with no\\n  \\\n        message field), the two textless thinking leaves, the message-less system records\\n  \\"
         }
       ],
       "instrument": "Read `compactMetadata.preservedMessages` from a boundary record via `csift show <target> --uuid <boundary uuid> --raw` and compare the uuid mix against the same file line-type census from `csift stats`. Counting rule = uuids per type over one preserved list, reported as a rate against that type total in the file.",
@@ -53877,7 +53877,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "328-334",
+          "lines": "327-333",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -54318,7 +54318,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "252-254",
+          "lines": "251-253",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -86944,7 +86944,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "469-474",
+          "lines": "468-473",
           "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],
@@ -87490,7 +87490,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "127-131",
+          "lines": "126-130",
           "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE\n    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation no\n    /// longer reaches, `harness.compaction.boundary`, which carries no message at all, and"
         }
       ],
@@ -89763,7 +89763,7 @@
         {
           "path": "src/commands/session/rows.rs",
           "snippet": "    pub minted_by_clear: bool,",
-          "lines": "78-78"
+          "lines": "78"
         }
       ],
       "instrument": "Byte-search the shipped Claude Code binary for the command registration literal `name:\"clear\",description:\"Start a new session with empty context`, the generator head `async function*wtn({session:o,setMessages:m`, and the regeneration tail `let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,`; read the generator body between them and confirm the call order `SEe(o,\"clear\",...)` then `BPn(s)` then `BIn({setCurrentAsParent:!0})` then `_V(o,\"clear\",...)`. Confirm on disk by clearing a live session and reading the two transcripts: the old file's last cost-state line carries the old session id, the new file opens in the same project directory under a fresh uuid.",
@@ -89862,7 +89862,7 @@
         {
           "path": "src/commands/session/rows.rs",
           "snippet": "    pub cleared_from: Option<String>,",
-          "lines": "84-84"
+          "lines": "84"
         }
       ],
       "instrument": "Word-boundary grep the shipped binary for `parentId` and read every occurrence, classifying each as a session-object site or an unrelated subsystem. Then census every transcript under the projects root for the byte keys `\"parentId\"`, `\"clearedFrom\"`, `\"previousSessionId\"` and `\"parentSessionId\"`, counting files and occurrences; the counting rule is a raw byte substring over the whole file, so a key nested anywhere would count.",
@@ -89940,7 +89940,7 @@
         {
           "path": "tests/cli/list/clear.rs",
           "snippet": "fn list_needs_the_wrapper_first_not_merely_present() {",
-          "lines": "204-204"
+          "lines": "204"
         }
       ],
       "instrument": "For every top-level transcript under the projects root, read lines until the first `type:\"user\"` record whose `isMeta` is not true and test whether its message content opens with `<command-name>` or `<command-message>` naming `clear`; report how many transcripts qualify and, for each, the wrapper's line number and the types of the lines above it. Confirm live by clearing a session and reading the first ten lines of the new transcript.",
@@ -90120,12 +90120,12 @@
         {
           "path": "src/commands/live/tail.rs",
           "snippet": "pub(crate) fn last_checkpoint(path: &Path) -> Result<Option<CheckpointTail>> {",
-          "lines": "145-145"
+          "lines": "145"
         },
         {
           "path": "src/commands/live/verdict.rs",
           "snippet": "    pub(crate) fn attach_checkpoint(&mut self, cp: Option<CheckpointTail>) {",
-          "lines": "81-81"
+          "lines": "81"
         }
       ],
       "instrument": "Byte-search the shipped binary for the bare literal `cost-state`, read every occurrence and classify it; then word-boundary grep the builder and the recorder entry and read every call site. On disk, census every transcript under the projects root for lines whose parsed top-level `type` is `cost-state`, counting the transcripts, the lines, and how many are NOT the file's last non-blank line; for every ADJACENT pair of checkpoints in one file, report the top-level `type` of each line between them. The counting rule is one row per checkpoint LINE.",
@@ -90265,12 +90265,12 @@
         {
           "path": "src/commands/live/tasks.rs",
           "snippet": "pub(crate) fn tasks_report_with(",
-          "lines": "63-63"
+          "lines": "63"
         },
         {
           "path": "src/commands/live/tasks.rs",
           "snippet": "const TEAM_START_WINDOW_MS: i64 = 5000;",
-          "lines": "49-49"
+          "lines": "49"
         }
       ],
       "instrument": "Byte-search the shipped binary for the list-id resolver `function lA(){if(a.CLAUDE_CODE_TASK_LIST_ID)` and the team initializer `let i=t?.existingTeamName||p(),e=i??c(Q())`, and read the rename that follows the config write. On disk, read every `<claude-home>/sessions/*.json` row and every `<claude-home>/teams/*/config.json`, and for each row count the team configs whose `createdAt` is within five seconds of the row's `startedAt`; separately count how many team names equal `session-` plus the first eight characters of their own `leadSessionId`, and how many team names have a directory under `<claude-home>/tasks/`.",
@@ -90350,7 +90350,7 @@
         {
           "path": "src/commands/plan.rs",
           "snippet": "//! A `/clear` ENDS the binding and csift needs no code for it (claim PLAN-021). The",
-          "lines": "26-26"
+          "lines": "26"
         },
         {
           "path": "src/commands/plan.rs",
@@ -92007,6 +92007,227 @@
           "observed": "9,601 files scanned, 101 of them top-level. 7,810 transcripts carry at least one slug record. Distinct-value histogram: {1: 7810} - no transcript carries two. Change-point histogram: {1: 7810} - no transcript changes twice. Transitions: 7,810 absent-to-value, 0 value-to-value, 0 value-to-absent. First carrier's type: 7,767 user, 30 assistant, 7 attachment, 6 system. `plan_file_reference`: 14 transcripts, 14 of them also carrying a slug, 0 carrying none. A live transcript whose binding csift resolves at line 49 has its slug minted at line 39, so the mint precedes the binding attachment by 10 lines there.",
           "rule": "A transcript counts once. A carrier is a line whose decoded object has a non-empty string `slug` among its TOP-LEVEL keys; an empty string and a nested key both count as absent. A change point is a position in the file-ordered sequence of carrier and non-carrier KEY-BEARING lines where the value differs from the previous one; a line that does not decode is skipped and ends no run. A `plan_file_reference` transcript is one with at least one line whose decoded `attachment.type` equals that literal.",
           "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-108",
+      "area": "record-model",
+      "behavior": "Claude Code writes 22 distinct top-level `type` values to a session transcript: the four TRANSCRIPT types `user`, `assistant`, `system` and `attachment`, and 18 NON-TRANSCRIPT types - `last-prompt`, `mode`, `permission-mode`, `ai-title`, `agent-name`, `atis-latch`, `bridge-session`, `history-suppression`, `pr-link`, `frame-link`, `artifact-comment-monitor`, `artifact-autoreact-ledger`, `cost-state`, `fork-context-ref`, `continued-in`, `file-history-snapshot`, `file-history-delta` and `queue-operation` - none of which carries a `uuid` or a `message{}`. The split is the binary's own: one registration table maps each type to a RETENTION policy and names the four transcript types as such at 2.1.258, a second maps each to an APPEND policy, and one predicate tests membership of exactly those four. A line of any other type is registered but unrealized: 34 non-transcript types are registered and 18 appear in either measured corpus.",
+      "depends": "The `harness.bookkeeping` category is one leaf per non-transcript type (13 leaves over the 18, merging the pairs and triples that record one fact through two writers), and `model::inventory`'s top-level axis is exactly these 22 rows. A 19th non-transcript type would carry no leaf: `search` would not admit its lines and an addressed `show` would render it as an unmodeled unit naming the type - honest, and visibly incomplete, which is the point of the inventory.",
+      "code": [
+        {
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "18-40",
+          "snippet": "pub(crate) fn classify(line_type: &str) -> Option<Class> {\n    Some(match line_type {\n        \"last-prompt\" => Class::BookkeepingLastPrompt,\n        // Two line types, one leaf: the session's mode and its permission mode are\n        // the same fact recorded by two writers.\n        \"mode\" | \"permission-mode\" => Class::BookkeepingMode,\n        // The generated session title and the generated agent name, likewise.\n        \"ai-title\" | \"agent-name\" => Class::BookkeepingName,\n        \"atis-latch\" => Class::BookkeepingAtis,\n        \"bridge-session\" => Class::BookkeepingBridge,\n        \"history-suppression\" => Class::BookkeepingSuppression,\n        \"pr-link\" => Class::BookkeepingPrLink,\n        // The three artifact ledgers share one leaf: they record ids for the same\n        // artifact surface.\n        \"frame-link\" | \"artifact-comment-monitor\" | \"artifact-autoreact-ledger\" => {\n            Class::BookkeepingArtifact\n        }\n        // The per-prompt table and the per-write delta are one instrument.\n        \"file-history-snapshot\" | \"file-history-delta\" => Class::BookkeepingFileHistory,\n        \"cost-state\" => Class::BookkeepingCost,\n        \"fork-context-ref\" => Class::BookkeepingFork,\n        \"continued-in\" => Class::BookkeepingContinued,\n        \"queue-operation\" => Class::BookkeepingQueue,"
+        },
+        {
+          "path": "src/model/inventory/lines.rs",
+          "lines": "13-15",
+          "snippet": "pub(crate) const ROWS: &[Entry] = &[\n    // \u2500\u2500 the four transcript types: the leaf is decided deeper \u2500\u2500\n    e("
+        }
+      ],
+      "instrument": "Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript). Split each file on the byte 0x0A only; run one JSON parse per non-blank line; count a line that does not parse as unparsed and let it contribute to nothing. Collect the distinct values of the top-level `type` key over every parsed line and union them across the two corpora. On the binary side, byte-search the build for the literal `dts={user:\"transcript\"` (the retention table) and for `function zI(e){if(!Re(e))return!1;return e.type===\"user\"` (the transcript-membership predicate); each occurs once, and the table's keys are the registered set.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "16 registered non-transcript types appear in neither measured corpus; a corpus exercising each feature, or a per-type read of its writer, would raise the realized count."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "retention table",
+          "offset": 166050488,
+          "excerpt": "dts={user:\"transcript\",assistant:\"transcript\",system:\"transcript\",attachment:\"transcript\",progress:\"boundary-cleared\"",
+          "note": "Names the four transcript types and starts the registration of every other one."
+        },
+        {
+          "role": "gate",
+          "name": "append-policy table",
+          "offset": 166066498,
+          "excerpt": "vbr={user:\"dedup-transcript\"",
+          "note": "The second table over the same key set: how each type is appended."
+        },
+        {
+          "role": "gate",
+          "name": "transcript-membership predicate",
+          "offset": 166066234,
+          "excerpt": "function zI(e){if(!Re(e))return!1;return e.type===\"user\"||e.type===\"assistant\"||e.type===\"attachment\"||e.type===\"system\"}",
+          "note": "The four-way test that separates a transcript record from a bookkeeping line."
+        },
+        {
+          "role": "writer",
+          "name": "append invariant",
+          "offset": 166107726,
+          "excerpt": "appendEntry invariant: dedup-transcript policy on non-transcript type '${e.type}'",
+          "note": "The append path asserting the two tables agree - the writer that would fire if a non-transcript type took a transcript policy."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-15",
+          "verdict": "holds",
+          "instrument": "Ran the two-corpus top-level `type` census described above, then byte-compared the four producer excerpts at their recorded offsets in the 2.1.258 build.",
+          "observed": "The live projects root: 9,466 transcript files, 1,710,163 non-blank lines, 0 unparsed, 21 distinct top-level types. A snapshot corpus: 10,299 files, 2,312,350 lines, 0 unparsed, 15 distinct types. Union 22, equal to the inventory's top-level axis with no value on either side alone (`pr-link` is absent from the live root; seven types are absent from the snapshot). All four excerpts byte-exact at their offsets and each occurring exactly once in the build.",
+          "rule": "One observation per non-blank line; a file named journal.jsonl or elicitations.jsonl is excluded; a value counts once per corpus however many lines carry it.",
+          "note": "The claim lands with the taxonomy that reads it."
+        }
+      ]
+    },
+    {
+      "id": "REC-109",
+      "area": "record-model",
+      "behavior": "A `type:\"attachment\"` record carries its own kind in a payload `type` field, and the harness converts the record for the model through ONE table keyed on that value. A contiguous run of arms in that table returns an empty array - the payloads that convert to nothing - and an unknown value falls to a default that throws and returns empty. The converter's OUTPUT, when the whole conversion was text, is written back onto the attachment RECORD as a top-level `rendered` key (a sibling of `attachment`, never a key inside the payload); for `hook_success` its presence coincides with the converter's own gate on every measured record, while for a payload whose conversion mixes text and images it is absent although the record converts.",
+      "depends": "`model::classify::attachments` maps the payload type to a leaf and `model::inventory`'s attachment axis records the gate and the conversion per type, so `--count-by attachment` and `-t harness.context.*` speak the producer's own axis. `Record::delivery_override` reads BOTH facts: a payload type in the drop set is not delivered whatever its leaf says, and a `hook_success` is delivered exactly when the record carries `rendered`. Reading `rendered` off the payload instead of the record would find it on no line at all, and treating its absence as non-delivery would be wrong for every mixed conversion - which is why the test is narrowed to the one payload type where the coincidence was measured.",
+      "code": [
+        {
+          "path": "src/model/classify/attachments.rs",
+          "lines": "18-21",
+          "snippet": "pub(crate) fn classify(attachment_type: &str) -> Option<Class> {\n    Some(match attachment_type {\n        // \u2500\u2500 harness.hook.context: the one payload the model reads as injected text \u2500\u2500\n        \"hook_additional_context\" => Class::HookContext,"
+        },
+        {
+          "path": "src/model/delivery.rs",
+          "lines": "93-97",
+          "snippet": "    fn attachment_delivery(&self) -> Option<bool> {\n        let ty = self.attachment_type()?;\n        if NEVER_CONVERTS.contains(&ty.as_str()) {\n            return Some(false);\n        }"
+        },
+        {
+          "path": "src/model/inventory.rs",
+          "lines": "281-291",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
+        }
+      ],
+      "instrument": "Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript). Split each file on the byte 0x0A only; run one JSON parse per non-blank line; count a line that does not parse as unparsed and let it contribute to nothing. On every parsed line whose top-level `type` is `attachment`, collect the distinct values of `attachment.type`, and count separately the records whose TOP-LEVEL `rendered` key is present and non-null, bucketed by that payload type. On the binary side, byte-search for `already_read_file:()=>[],async_hook_response_batch:()=>[]` (the head of the drop-arm run), for `case\"hook_success\":if(e.hookEvent!==\"SessionStart\"` (the one arm that converts conditionally) and for `normalizeAttachmentForAPI\",Error(`Unknown attachment type:` (the default); each occurs once.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The live projects root shows one payload type the taxonomy models no leaf for; an addressed fetch renders it as an unmodeled unit until a leaf is assigned.",
+        "Two of the nine drop arms are absent from the 2.1.258 build and present at 2.1.268; csift carries the union, because a transcript can come from either build. A per-build read of the drop-arm run would date each arm."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "drop-arm run",
+          "offset": 166006355,
+          "excerpt": "already_read_file:()=>[],async_hook_response_batch:()=>[],batching_reminder_sent:()=>[],secondary_reminder_sent:()=>[],command_permissions:()=>[],edited_image_file:()=>[],hook_cancelled:()=>[],hook_error_during_execution:()=>[],hook_non_blocking_error:()=>[]",
+          "note": "The contiguous run of payload types whose conversion arm returns an empty array."
+        },
+        {
+          "role": "gate",
+          "name": "hook_success arm",
+          "offset": 166020234,
+          "excerpt": "case\"hook_success\":if(e.hookEvent!==\"SessionStart\"",
+          "note": "The one arm that converts on a condition rather than always or never."
+        },
+        {
+          "role": "writer",
+          "name": "unknown-type default",
+          "offset": 166027668,
+          "excerpt": "normalizeAttachmentForAPI\",Error(`Unknown attachment type: ${e.type}`)),[]}",
+          "note": "The default arm: an unregistered payload type converts to nothing, which is what makes the table the closed set."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-15",
+          "verdict": "holds",
+          "instrument": "Ran the two-corpus attachment-payload census described above, including the top-level `rendered` bucketing, then byte-compared the three producer excerpts at their recorded offsets in the 2.1.258 build.",
+          "observed": "The live projects root holds 45 distinct payload types and a snapshot corpus 28, union 46. No payload object carries a `rendered` key on any line of either corpus; 85,614 attachment RECORDS in the live root carry a non-null top-level one, and 0 do in the snapshot. Of 414,612 `hook_success` records in the live root, 14 carry it. All three excerpts byte-exact at their offsets, each occurring once.",
+          "rule": "One observation per attachment line; the payload type is `attachment.type` and the rendered test is the presence of a non-null TOP-LEVEL `rendered` key on the same line; a type counts once per corpus however many lines carry it.",
+          "note": "The claim lands with the inventory axis and the delivery arm that read it."
+        }
+      ]
+    },
+    {
+      "id": "CLS-033",
+      "area": "classification",
+      "behavior": "Eleven `subtype` values appear on `type:\"system\"` records: `compact_boundary`, `turn_duration`, `stop_hook_summary`, `away_summary`, `scheduled_task_fire`, `model_refusal_fallback`, `model_refusal_no_fallback`, `api_error`, `informational`, `agents_killed` and `local_command`. Nine of them are written by one contiguous factory in the binary, each arm building the same record shape around its own subtype and payload. Exactly ONE of the eleven is delivered to the model: a dedicated predicate tests `type===\"system\" && subtype===\"local_command\"`, and the request assembler's drop predicate skips every system record that predicate refuses.",
+      "depends": "`model::classify::system` maps each subtype to a leaf - the five `harness.system` event kinds, the three `harness.turn` telemetry leaves, `harness.schedule.event` and `harness.compaction.boundary` - and `Class::llm_visible` makes `harness.system.command` the one visible member of its category, which is the same fact the delivery predicate states. An unmodeled subtype yields NO leaf, so an addressed fetch renders it as an unmodeled unit naming the subtype rather than folding it into a catch-all that says nothing about which shape arrived.",
+      "code": [
+        {
+          "path": "src/model/classify/system.rs",
+          "lines": "15-31",
+          "snippet": "pub(crate) fn classify(subtype: &str) -> Option<Class> {\n    Some(match subtype {\n        \"compact_boundary\" => Class::CompactionBoundary,\n        // The three end-of-turn telemetry records.\n        \"turn_duration\" => Class::TurnDuration,\n        \"stop_hook_summary\" => Class::TurnStopHooks,\n        \"away_summary\" => Class::TurnRecap,\n        // The scheduler's own fire RECORD (the prompt it submits is a user record and\n        // takes `harness.schedule.fire`).\n        \"scheduled_task_fire\" => Class::ScheduleEvent,\n        // Two subtypes, one event kind: whether a fallback model was tried is a FIELD\n        // on the record, not a different event.\n        \"model_refusal_fallback\" | \"model_refusal_no_fallback\" => Class::SystemRefusal,\n        \"api_error\" => Class::SystemApiError,\n        \"informational\" => Class::SystemNotice,\n        \"agents_killed\" => Class::SystemKill,\n        \"local_command\" => Class::SystemCommand,"
+        },
+        {
+          "path": "src/model/inventory/subtypes.rs",
+          "lines": "11-12",
+          "snippet": "pub(crate) const ROWS: &[Entry] = &[\n    e("
+        }
+      ],
+      "instrument": "Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript). Split each file on the byte 0x0A only; run one JSON parse per non-blank line; count a line that does not parse as unparsed and let it contribute to nothing. On every parsed line whose top-level `type` is `system`, collect the distinct values of the top-level `subtype` key and union them across the two corpora. On the binary side, byte-search for `type:\"system\",subtype:\"scheduled_task_fire\",content:e,isMeta:!1` (the head of the factory run), for `type:\"system\",subtype:\"away_summary\",content:e,timestamp:` (an arm of the same run) and for `function UWt(e){return e.type===\"system\"&&e.subtype===\"local_command\"}` (the delivery predicate); each occurs once.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "One subtype the factory writes has no specimen in either corpus; a corpus exercising that feature would close it."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "system-record factory head",
+          "offset": 166030221,
+          "excerpt": "type:\"system\",subtype:\"scheduled_task_fire\",content:e,isMeta:!1,timestamp:new Date().toISOString(),uuid:n.uuid??oT(),taskId:n.task.id,cron:n.task.cron",
+          "note": "The first arm of the contiguous run that writes nine of the eleven subtypes."
+        },
+        {
+          "role": "writer",
+          "name": "away_summary arm",
+          "offset": 166031226,
+          "excerpt": "type:\"system\",subtype:\"away_summary\",content:e,timestamp:",
+          "note": "A second arm of the same run, showing the shape every arm builds."
+        },
+        {
+          "role": "gate",
+          "name": "local_command predicate",
+          "offset": 165947398,
+          "excerpt": "function UWt(e){return e.type===\"system\"&&e.subtype===\"local_command\"}",
+          "note": "The one-subtype test the request assembler consults."
+        },
+        {
+          "role": "gate",
+          "name": "request drop predicate",
+          "offset": 165953664,
+          "excerpt": "function LP(e){if(e.type===\"api_system\")return!1;return e.type===\"progress\"||e.type===\"system\"&&!UWt(e)",
+          "note": "Where that test is read: every system record it refuses is dropped from the request."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-15",
+          "verdict": "holds",
+          "instrument": "Ran the two-corpus `type:\"system\"` subtype census described above, then byte-compared the four producer excerpts at their recorded offsets in the 2.1.258 build.",
+          "observed": "The live projects root holds all 11 subtypes and a snapshot corpus 10 (it lacks `informational`); the union is 11 and equals the inventory's system axis exactly, with no value on either side alone. All four excerpts byte-exact at their offsets, each occurring once in the build.",
+          "rule": "One observation per `type:\"system\"` line; a subtype counts once per corpus however many lines carry it.",
+          "note": "The claim lands with the per-subtype mapping that replaced the catch-all leaf."
         }
       ]
     }

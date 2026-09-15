@@ -175,174 +175,177 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 ### @trap:<marker> — "which subagent am I?"
 **Scope: this is the subagent-only tool.** A running subagent cannot read its own id from env; the top-level thread already has `@main` (env-based, no race, always correct) — reach for `@trap` only when you cannot name yourself. Invent a fresh marker, put it literally IN the csift command; csift finds the transcript whose shell tool_use carries it (Bash — or Windows' separate `PowerShell` tool, same `command` field). Grammar (enforced): exactly 3 CamelCase words + exactly 4 non-trivial trailing digits, hand-invented, context-independent — shaped like `@trap:JollyShinyBrook4283`, which is a RESERVED example csift hard-rejects (invent your own; never script-generate or reuse). TIMING: a subagent's transcript flushes per content block, so its launching command is on disk at dispatch and a **first try resolves** — that is the whole design. Diagnostic: from the MAIN thread a first use normally misses instead (the main record is an async flush of the completed message landing ~1-3.4s after dispatch, and csift beats it) — a miss therefore means EITHER you are the main thread (use `@main`) OR your marker was not literal; in neither branch is retrying `@trap` the answer. When @trap does resolve to the main transcript, csift says so on stderr. One-shot means one marker per identity question, not one per attempt (a fresh marker restarts the race). UNIQUENESS is conversation-wide: in a team/multi-subagent setting the marker must be unique across ALL concurrently-running agents, not just your own retries — a marker that lands in two transcripts (e.g. relayed to a peer in a message) errors AMBIGUOUS, fail-loud, never a silent wrong match. `whoami @trap:<marker>` returns the full upstream ancestry chain.
 
-## Labels (`-t/--label` · `-T/--label-not`), dotted `role.class.sub`, 3 roles, 37 leaves
+## Labels (`-t/--label` · `-T/--label-not`), dotted `role.category.leaf`, 3 roles, 17 categories, 73 leaves
 
-Selector = dot-segment prefix, THREE forms (v0.9.4): a bare ROLE (`-t user`) = the role's **LLM-visible** leaves only — the conversation as the model receives/produces it; a GLOB (`-t 'user.*'`, quote it from the shell) = every leaf under the prefix, visibility ignored; an intermediate prefix (`-t agent.tool` = use+result, `-t harness.compaction` = summary+boundary) or a full leaf = its full set, a deliberate drill-down. No `-t` ⇒ all labels (drafts and boundaries stay searchable by default, with disclosure). `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
+**The selector law, in three sentences.** A selector is a leaf path, a CATEGORY (`agent.message`, `harness.turn`), a ROLE (`user`), or any of those plus `.*`; it matches a label when it is a dot-SEGMENT prefix of it. A bare ROLE or CATEGORY selects only the leaves the model receives - the coarse "show me the conversation" ask - while a GLOB or an exact LEAF reaches every record under all three narrowing axes (leaf visibility, per-record delivery, per-record survival). No `-t` means every label; `-T` excludes with the same grammar, and only a `-T` that cancels your `-t` is an error.
 
-```
-user     .message   genuine human prose (incl. slash-command args, rendered `/name args`)
-         .answer    AskUserQuestion answer (Q+options+answer unit)
-         .rejection plan/tool reject + typed instruction
-         .unsent    [not LLM-visible: outside `-t user`; reach via `-t user.unsent` or `-t 'user.*'`]
-                    a SUPERSEDED draft: sent, esc-recalled, edited, re-sent — the original
-                    stays on disk sharing the resend's parentUuid, OUTSIDE turn numbering,
-                    never counted as user.message. LIMITS: a recalled-then-ABANDONED
-                    message has no resend sibling and is undetectable; a QUEUED text
-                    edited before dispatch never becomes a user record at all (its
-                    queue-operation line is `.queued`, below)
-         .rewound   [not LLM-visible: outside `-t user`; reach via `-t user.rewound` or
-                    `-t 'user.*'`]
-                    a turn the conversation was REWOUND past: it was sent AND it drew a
-                    reply, and Claude Code's own parentUuid chain now threads around it,
-                    so neither it nor anything under it is in the surviving conversation.
-                    That reply is the whole discriminator against `.unsent`. OUTSIDE turn
-                    numbering; its diff line leads `rewound: the conversation continued
-                    from L<n> instead`. Everything else on the branch keeps its ordinary
-                    leaf and carries an `[abandoned]`/`[rewound]` marker
-         .queued    [not LLM-visible · GATED: parsed only under an explicit selector —
-                    `-t user.queued` / `-t 'user.*'`; never by a bare scan, `-t user`,
-                    or `--count-by label` without -t]
-                    the human's text as it sat in the input QUEUE: a queue-operation
-                    line with content — `[enqueue]` (typed while a turn ran), `[popAll]`
-                    (recalled to the input box), `[remove · <reason>]` (consumed:
-                    absorbed_mid_turn / delivered_to_agent). The label zone shows the
-                    event. A queued <task-notification> / peer message is NOT the human
-                    and carries no label; a content-less dequeue carries nothing. The
-                    queue line has NO join key (measured: 4-6 keys, no promptId/uuid),
-                    so `dispatched` is never asserted — a dispatched text simply also
-                    exists as a later user.message; match by text if you must
-agent    .message · .thinking (redacted → "[redacted thinking]") · .tool.use · .tool.result
-         .thinking.narration   an API-issued one-sentence SUMMARY of the reasoning beside it
-                               (tag hidden in the signature; renders "[narration summary]";
-                               NOT the model's reasoning — pure reasoning = -t agent.thinking
-                               -T agent.thinking.narration; excluded from verbatim replay)
-         .communication.{inbox,sent,signal}   peer msgs — rendered `from ⇨ to` (self = owner).
-                    THREE inbound framings, all `type:"user"` string records that look human
-                    and are not: `<teammate-message teammate_id=…>` (a teammate),
-                    `<agent-message from=…>` (an agent relay), and `<cross-session-message
-                    from="uds:…" from-name=… from-mode=…>` (another SESSION messaging this
-                    one; `isMeta`, `promptSource:"system"`, a top-level `origin.kind:"peer"`).
-                    Direction is the sender NAME where there is one (`from-name` / `origin
-                    .name`), not the socket address. Bodies render tag-stripped everywhere —
-                    search, show, verbatim and list agree. SO: the wrapper attributes are
-                    UNSEARCHABLE — `search 'teammate_id='` / `'from-name='` return 0, and
-                    `--raw` does NOT bring them back (it only prints the source line of a hit
-                    the matcher already made). Search the BODY; read the wrapper by ADDRESS
-                    (`csift show @<id> --line N --raw`, which needs no match). The
-                    `queue-operation` enqueue line that precedes a delivery is a RIDER, never
-                    `user.queued`, so `-t user.message` and `-t user` stay pure human
-         .communication.channel   a csift-channel DELIVERY: a message another lane (or a
-                    sender outside Claude Code) had a hook inject into this one. Rendered
-                    VERBATIM from its `[csift-channel v1 …]` envelope, direction from the
-                    header's `from=`. The ONE attachment leaf a default scan reaches (every
-                    other attachment keep is flag-gated); it also carries `harness.meta.hook`
-                    and leads it. Not from your user, not from the harness: see §THE CHANNEL
-harness  .notification.{workflow,monitor,subagent,background-command,task}  ← <task-notification>
-                    (.subagent also carries the harness's agents-stopped notice
-                    "N background agents were stopped by the user: …" — plain text,
-                    no XML, not the human, never a turn opener, renders
-                    "[subagent stopped] …"; .monitor = the Monitor tool's own
-                    pulses and termination notices ONLY — since v0.10.0 a
-                    `Background command "…"` pulse is always .background-command,
-                    whatever its quoted name says). Renders `[<kind> <task-id> <status>]
-                    <summary>`, and ONE pulse can close SEVERAL tasks — the next session
-                    start reconciling what the previous one left open — so the id slot
-                    lists EVERY task id, comma-joined, and ends with
-                    `(orphan reconciliation: shell|agent|workflow)` for Claude Code's own
-                    `__orphan_summary__:` scan marker, which names a kind, not a task, and
-                    never stands as an id. JSON hits: `task_ids` (array) + `orphan_kind`.
-         .compaction.{summary,boundary}   boundary is [not LLM-visible: outside `-t harness`;
-                    reach via `-t harness.compaction` or the full leaf] — a metrics-only
-                    system record. Its excerpt names every survivor field the record has:
-                    `[compaction boundary: trigger=… preTokens=… postTokens=… durationMs=…
-                    messagesSummarized=… cumulativeDroppedTokens=… preserved=<N uuids,
-                    M allUuids, anchor <first8>> segment=<head first8>..<tail first8>]`
-                    — `preserved`/`segment` are what the compaction KEPT (`uuids` is the
-                    on-disk subset, `allUuids` the in-memory superset, so an allUuids
-                    entry can resolve to no line). JSON adds `compact_metadata` verbatim
-                    (the full uuid lists) and `mode` on BOTH records: `compact` |
-                    `summarize-from-here` | `summarize-up-to-here`, null when unknown
-                    (the boundary takes its mode from the summary after it; the
-                    pairing is read before any window or cap, so addressing the
-                    boundary alone keeps it).
-                    A summary from a `/rewind` summarize renders a `[summarize <direction>]`
-                    label-zone tag
-         .command.{invocation,stdout} · .interrupt.{user,tool}
-         .schedule.wakeup · .meta.{hook,loop,attachment}
-         .schedule.fire   the PROMPT a scheduled task FIRES: a cron entry or a
-                    ScheduleWakeup timer comes due and Claude Code submits the armed
-                    text as its own isMeta record stamped promptSource "system". The
-                    text is VERBATIM what was armed - the fire path rewrites only the
-                    autonomous-loop sentinel - so there is no marker to match and this
-                    leaf keys on the record's FIELDS. Before it, a cron-fired prompt
-                    matched nothing and was excluded like any unmarked isMeta record:
-                    a whole project's scheduled work was unsearchable. A tick that DOES
-                    carry a loop marker keeps .schedule.wakeup / .meta.loop (arm order),
-                    and an inbound peer message, which carries the identical stamp, is
-                    refused by its relay framing and its `origin` object. The label zone
-                    names the instant it fired - [scheduled fire <when>], JSON
-                    scheduled_at - read off the system/scheduled_task_fire record the
-                    prompt is parented to; null when the transcript holds none, never a
-                    guessed time. DELIVERED, and it opens no turn
-         .resume.prompt   the repair PROMPT the resume LOADER appends when a transcript
-                    ends on a dangling user record (an esc-recalled draft never resent,
-                    any unanswered prompt): an isMeta user record reading "Continue from
-                    where you left off." The model receives it; the human never typed it,
-                    so it opens no turn. Named `harness.schedule.continuation` through
-                    v0.11.x — same records, new path; the old selector is a hard error
-                    naming this one. The predicate is isMeta AND a PREFIX test, because
-                    the text is the DEFAULT of an env-overridable getter (two
-                    Claude-Code-set respawn variants continue past the sentence). isMeta
-                    is the half that protects YOU: type the sentence at the start of a
-                    real prompt and your message stays `user.message` and opens its turn,
-                    because your record carries no isMeta. An operator-SET env prompt that
-                    does not begin with the sentence is undetectable, and csift claims
-                    nothing about that
-         .resume.placeholder   the stand-in reply spliced in after that prompt so the
-                    loaded conversation does not end unanswered: an assistant record with
-                    model `<synthetic>` reading "No response requested." — fabricated by
-                    the loader, never the model's text (that is why it is not
-                    `agent.message`). ONE writer produces it, gated only on the tail being
-                    a user record, while the prompt needs an interrupted-turn verdict — so
-                    it also lands ALONE after an interrupt marker or a slash wrapper. The
-                    label zone says `[paired]` when its parent is the prompt, `[unpaired]`
-                    otherwise (JSON `resume_paired`); both forms carry this leaf
-         .meta.turn-duration   [not LLM-visible · GATED] the end-of-turn telemetry record:
-                    `[turn duration: 1m 5s · durationMs=64911 messageCount=908
-                    pendingBackgroundAgentCount=2]` — the structured body behind the
-                    REPL's "Done in Ns" / "Waiting for N agents" lines (which never
-                    land on disk). Present fields only; a turn that straddled a resume
-                    gap reads as days, honestly. The pending counts cover background
-                    agents and workflows ONLY: a turn that ended with a background SHELL
-                    still running wrote no pending field at all (measured), so an EOT
-                    record is never evidence that the session is done — that is
-                    `csift status`
-         .meta.away-summary    [not LLM-visible · GATED] the model-generated recap shown
-                    when you return after 5+ minutes away (config-gated); verbatim text
-         .meta.stop-hooks      [not LLM-visible · GATED] the Stop-hook execution ledger:
-                    `[stop hooks: count=N errors=M prevented=false]` + one
-                    `command (Nms)` line per hook — which hooks ran, how long, whether
-                    one blocked the turn. NOT .meta.hook (that is text a hook INJECTED)
-         .meta.snapshot        [not LLM-visible · GATED] a file-history snapshot
-                    (`[file-history snapshot at <ts>: <path>@vN, …]`, every tracked
-                    path) or delta (`[file-history delta at <ts>: <path>@vN
-                    backup=<name>]`, one path's bump) — the v0.9.4 recover instrument,
-                    searchable: "when did settings.json's version jump?"
-         .meta.system          [not LLM-visible BY DEFAULT · GATED] every OTHER `type:system` subtype the
-                    harness writes for its own UI (v0.10.1): `informational` (the Remote
-                    Control disconnect warning after an account switch), `api_error`,
-                    `model_refusal_fallback`/`_no_fallback`, `agents_killed`, `local_command`,
-                    `scheduled_task_fire`, and any subtype a later build adds — rendered
-                    `[<subtype> <level>] <content>`; the compaction boundary keeps its own leaf.
-                    ONE subtype IS delivered: a `local_command` record is re-minted by the
-                    request assembler as a user message, so a bare `-t harness` surfaces it
-                    and admits these lines for that purpose (v0.11.1, claim CLS-026)
-```
-LLM-VISIBILITY (v0.9.4, extended v0.10.0/v0.10.1, made per-RECORD in v0.11.1, given its third axis in v0.12.0): a bare ROLE selector (`-t user` / `-t agent` / `-t harness`) selects what the model RECEIVED, and that is decided in THREE steps. **Step 1, the leaf default.** NINE leaves sit outside a bare role (`Class::llm_visible()` is false for exactly these), and they split by WHY, which is the reason this law has three steps at all. TWO are turn OPENERS the surviving conversation no longer reaches: `user.unsent` (a recalled draft) and `user.rewound` (a turn rewound past). Nothing about their line SHAPE excludes them - they are ordinary user records - so the instrument that excludes them is the survival axis of Step 3, and the honest wording is "not in the surviving conversation", never "the model never saw it" (CC's own `preservedMessages` accounting excludes every draft uuid, but a few drafts drew replies before the esc and every rewound turn did). The other SEVEN are non-message line types, and ONE instrument covers all of them: `harness.compaction.boundary` (no message field at all), the five v0.10.0 promoted leaves `user.queued` + `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot}`, and the v0.10.1 catch-all `harness.meta.system` - none of those line types carries a `message{}` field while every user/assistant record does, and CC's own source labels them REPL-render internals. **Step 2, the per-RECORD override** (v0.11.1, claim CLS-026). CC assembles its API request with ONE drop predicate, and that predicate disagrees with the leaf table in exactly THREE cases, so csift mirrors it per record. A `system`/`local_command` record - a slash command's own echo and its stdout - is RE-MINTED as a user message and IS sent, so `-t harness` surfaces it although its leaf is invisible (16 in this corpus). An `isVirtual` record and the `<synthetic>` API-error placeholder (`isApiErrorMessage` paired with that model, claim CLS-027) are NOT sent, so `-t agent` and `-t user` hide them although `agent.message` and `user.message` are visible leaves (118 placeholders in this corpus). A glob (`-t 'agent.*'`), an intermediate prefix and an exact leaf path reach EVERY record whatever the predicate says; an undelivered record then renders `[not delivered]` in the label zone, and every JSON hit carries `delivered` (the override, else the leaf default). Two instruments that do NOT decide visibility: parentUuid threading (a later user record names a turn_duration uuid as its parent - chain continuity, not delivery) and `preservedMessages` membership (a tail window listing these uuids at the same rate as messages). `-t user` still restores the 0.7-era contract ("what the human actually sent"): 0.9.2..0.9.3 briefly included drafts under it, which poisoned a real last-human-touch hook (a draft 12s before the real submit). `isMeta` is an AUTHORSHIP flag and `isVisibleInTranscriptOnly` a summary display flag - neither is a visibility instrument, and nothing on the request path reads either one. **Step 3, SURVIVAL** (v0.12.0). Delivery answers "was this record sent when it was written". Survival answers "is it still in the conversation at all", and it is the harness's second mechanism, not a second reading of the first: Claude Code rebuilds a session by walking `parentUuid` from ONE chosen leaf, and a record that walk no longer reaches is off the conversation however it was delivered. A bare role skips such a record; a glob, an intermediate prefix and an exact leaf reach it, marked `[abandoned]` / `[rewound]` / `[replay copy of L<n>]`. The three axes are independent: a record can be a visible leaf, delivered when it was written, and abandoned today. A `pre-cut` record is NOT skipped by this step - csift declines to narrow on a verdict it could not resolve. See SURVIVAL under search.
-Gated meta leaves: `harness.meta.hook` needs `search --additional-context` (or the superset `--attachments`); `harness.meta.attachment` (any OTHER attachment payload — edited_text_file, compact_file_reference, file snapshots …) needs `--attachments` or `--count-by attachment` — a default scan never parses attachment lines; an explicit `show --line/--uuid` address renders any of them flag-free.
-GATED PROMOTED LEAVES (v0.10.0, `harness.meta.system` added in v0.10.1): `user.queued` and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot,system}` need an EXPLICIT `-t` that reaches them — the full path, a glob (`-t 'user.*'`, `-t 'harness.*'`), or the `harness.meta` prefix. A bare scan, a `-T`-only filter and `--count-by label` without `-t` never parse those lines, and neither does a bare role - with ONE exception: a bare `-t harness` DOES admit the `type:"system"` lines, because one subtype under `harness.meta.system` is delivered (`local_command`, the step-2 rule above), and the per-record override then drops every other system record that admission parsed. The other five leaves keep the explicit-selector rule exactly (most queued content is a duplicate automation pulse; every promoted line is a non-message line), so the default surface stays the conversation and costs nothing extra. A zero-match run that parsed NO gated line says so on stderr (JSON summary `gated_leaves_unreached:true`) — that absence does not cover the gated lines. `show --line/--uuid` renders any of them flag-free; `--raw` still prints the bytes.
-Glyphs: `◂` user · `▸` agent · `⚙` harness · `·` sibling · `▹` tool use↔result pair (unreturned → `(no result — pending)`; orphan → `(use not in scope)`) · `⇨` comm direction. Turn boundary = genuine user ∨ AUQ answer ∨ typed rejection ∨ inbound peer message; slash-command wrappers, interrupts, `<local-command-stdout>`, compaction summaries never open a turn.
+Two consequences worth knowing before you guess a filter. `harness.bookkeeping` is the one category whose whole face is invisible: the bare form is accepted, matches nothing BY THE LAW, and says so on stderr with the remedy (`-t harness.bookkeeping.*`); JSON carries `empty_visible_face`. And a record can carry several leaves - it emits ONCE under the richest surviving view, `labels[]` is ordered richest-first, and the rendered view is simply the first entry your `-t`/`-T` leaves alive. Don't guess: run `--count-by label` to see what a scope actually holds.
 
+**GATE** below is what admits the line to a scan: `default scan` (a role-bearing line, already scanned), `explicit -t` (you must name the leaf, a category, or a glob reaching it - a bare scan never parses these lines), `-t or --attachments` (either names it or the wide flag admits every attachment line), `show address only` (csift models no leaf; `show --line N` renders it as `? unmodeled: <shape>`). **LLM sees** is the leaf default before the per-record delivery verdict. **human sees** is what the terminal renders; `?` means csift has not established it for that shape yet, and says so rather than guessing.
+
+### Identity - what each leaf IS
+
+| leaf | what | gate | LLM sees | human sees |
+|---|---|---|---|---|
+| `user.message` | the person's own message | default scan | yes | no / yes |
+| `user.answer` | the AskUserQuestion answer unit (the Q + options + answer) | default scan | yes | ? |
+| `user.rejection` | a tool rejected with a typed instruction: a tool_result carrier whose text carries the `To tell you how to proceed, the user said:` tail | default scan | yes | ? |
+| `user.unsent` | the esc-recalled draft left on disk: a `type:"user"` opener sharing its `parentUuid` with a LATER opener and carrying no assistant descendant | default scan | no | ? |
+| `user.rewound` | an ANSWERED opener the conversation was rewound past: the same shape as `Class::UserUnsent` WITH an assistant descendant | default scan | no | ? |
+| `user.queued` | the person's text while it sat in the input queue: a `type:"queue-operation"` line carrying the human's own `content` | explicit -t | no | ? |
+| `agent.message.plain` | the assistant's own text: a `type:"assistant"` record's `[{text}]` block(s) | default scan | yes | yes |
+| `agent.message.structured` | a schema-bound subagent's final structured answer: a `type:"attachment"` record whose payload `type` is `structured_output`, parented to the assistant record that produced it | -t or --attachments | yes | no |
+| `agent.thinking.summary` | the API-side summary of the reasoning (never the raw chain of thought): a `{type:"thinking", thinking, signature}` block whose signature tag reads `thinking` | default scan | yes | verbose |
+| `agent.thinking.narration` | the API's progress update between tool calls: the same block shape with the signature tag `narration` (the tag hides in the base64 `signature`; see `model/narration.rs`) | default scan | yes | ? |
+| `agent.thinking.omitted` | a thinking block the API returned with NO summary text: `{type:"thinking", thinking:"", signature:<non-empty>}` | default scan | no | ? |
+| `agent.thinking.redacted` | the API's safety-redacted ciphertext block, `{type:"redacted_thinking", data:<base64>}` | default scan | no | verbose |
+| `agent.tool.use` | a `type:"assistant"` record's `[{tool_use}]` block (incl. a pending elicitation sidecar marker) | default scan | yes | yes |
+| `agent.tool.result` | a `type:"user"` carrier's `[{tool_result}]` block plus its `toolUseResult` (incl. errored results) | default scan | yes | yes |
+| `agent.communication.inbox` | a received peer message, spawn prompt or subagent return | default scan | yes | ? |
+| `agent.communication.sent` | a sent peer message (`SendMessage`) or a spawn | default scan | yes | ? |
+| `agent.communication.signal` | a control/status comm (idle_notification, shutdown_*) | default scan | yes | ? |
+| `agent.communication.channel` | a csift-channel delivery: a `hook_additional_context` attachment whose FIRST content string opens with the envelope header `[csift-channel v1 …]` | default scan | yes | ? |
+| `harness.notification.workflow` | a `<task-notification>` for a dynamic/OMC workflow | default scan | yes | ? |
+| `harness.notification.monitor` | a monitor/cron cadence completion pulse | default scan | yes | ? |
+| `harness.notification.subagent` | a spawned-subagent completion pulse (named apart from the `agent` ROLE so the two never collide) | default scan | yes | ? |
+| `harness.notification.background-command` | a backgrounded shell command pulse | default scan | yes | ? |
+| `harness.notification.task` | any other / unclassified `<task-notification>` | default scan | yes | ? |
+| `harness.compaction.summary` | the `isCompactSummary` summary record | default scan | yes | ? |
+| `harness.compaction.boundary` | the `type:"system"` / `subtype:"compact_boundary"` metrics record | default scan | no | yes |
+| `harness.command.invocation` | a `<command-name>` / `<command-message>` slash wrapper | default scan | yes | ? |
+| `harness.command.stdout` | a `<local-command-stdout>…` local-command output | default scan | yes | ? |
+| `harness.command.caveat` | the caveat the slash-command EXECUTOR writes after a local command: an `isMeta` `type:"user"` record whose content opens `<local-command-caveat>` | default scan | yes | no |
+| `harness.interrupt.user` | `[Request interrupted by user]` | default scan | yes | ? |
+| `harness.interrupt.tool` | `[Request interrupted by user for tool use]` | default scan | yes | ? |
+| `harness.schedule.wakeup` | a fired `ScheduleWakeup` TIMER tick: the isMeta user record carrying one of the wakeup markers at content start | default scan | yes | no |
+| `harness.schedule.event` | the fire RECORD itself: `type:"system"`, `subtype:"scheduled_task_fire"`, whose `content` names the instant in a trailing parenthesis | explicit -t | no | yes |
+| `harness.schedule.fire` | the PROMPT the scheduler submits: an `isMeta` `type:"user"` record parented to a `Class::ScheduleEvent` record | default scan | yes | no |
+| `harness.schedule.tick` | the autonomous-loop DRIVER tick (`# Autonomous loop tick` / `Run the autonomous check` at content start), distinct from the fired timer above | default scan | yes | no |
+| `harness.resume.prompt` | the repair PROMPT the loader appends when a resumed transcript ends on a dangling user record: an `isMeta` `type:"user"` record whose text opens `Continue from where you left off.` | default scan | yes | no |
+| `harness.resume.placeholder` | the repair PLACEHOLDER spliced after that trailing user record: an assistant record with the `<synthetic>` model and exactly the placeholder text | default scan | yes | ? |
+| `harness.hook.context` | context a hook injected: a `type:"attachment"` record whose payload `type` is `hook_additional_context` (with `hookName`, `hookEvent` and a `content` string array) | explicit -t | yes | no |
+| `harness.hook.outcome` | a hook RUN's own record: a `type:"attachment"` whose payload `type` is one of the `hook_*` family (`hook_success`, `hook_blocking_error`, …) or `async_hook_response_batch` | -t or --attachments | no | ? / verbose |
+| `harness.hook.feedback` | the Stop hook's blocking feedback the model received: an `isMeta` `type:"user"` record whose content opens `Stop hook feedback:` | default scan | yes | no |
+| `harness.context.reminder` | a nudge the harness re-injects each turn: the reminder attachment payloads, plus the isMeta `<system-reminder>` injections that match no more specific template | -t or --attachments / default scan | yes | ? / no |
+| `harness.context.listing` | an inventory the harness injects (skills, agents, deferred tools) | -t or --attachments | yes | ? |
+| `harness.context.prompt` | a persisted system-prompt section (instructions, date, environment, model, session context) | -t or --attachments | yes | ? |
+| `harness.context.file` | file content the harness attached (a read, an edited snapshot, a compact file reference, nested memory, a plan file) | -t or --attachments | yes | ? |
+| `harness.context.mode` | a mode transition the harness recorded (plan mode and its exits/re-entries, auto mode, command permissions) | -t or --attachments | yes | ? |
+| `harness.context.ide` | IDE state the harness attached (the open file, the selection, diagnostics) | -t or --attachments | yes | ? |
+| `harness.context.task` | task/goal/memory state the harness attached, including a `queued_command` that is NOT the human's own text | -t or --attachments | yes | ? |
+| `harness.context.image` | an image the harness referenced into the conversation: the isMeta `[Image: …]` reference records and the image-only isMeta records | default scan | yes | yes |
+| `harness.context.skill` | a skill body preloaded into a subagent's opening array (an isMeta `type:"user"` record with array content) | default scan | yes | no |
+| `harness.enforce.structured-output` | the redo nudge that tells the model it must call the StructuredOutput tool | default scan | yes | no |
+| `harness.enforce.brief` | the brief-enforce redo nudge | default scan | yes | no |
+| `harness.enforce.handback` | the subagent hand-back redo nudge | default scan | yes | no |
+| `harness.enforce.retry` | a redo nudge that tells the model to re-issue a call: the malformed-tool-call nudge, and the edit-failed-retry notice (`EDIT_RETRY_MARKER`) | default scan | yes | no |
+| `harness.turn.duration` | the `type:"system"` / `subtype:"turn_duration"` end-of-turn telemetry record | explicit -t | no | ? |
+| `harness.turn.stop-hooks` | the `type:"system"` / `subtype:"stop_hook_summary"` ledger of the Stop hooks that ran at turn end | explicit -t | no | ? |
+| `harness.turn.recap` | the `type:"system"` / `subtype:"away_summary"` recap the harness generates when the operator returns after time away | explicit -t | no | ? |
+| `harness.system.refusal` | a `type:"system"` record with subtype `model_refusal_fallback` / `model_refusal_no_fallback` | explicit -t | no | no / verbose |
+| `harness.system.api-error` | a `type:"system"` record with subtype `api_error` | explicit -t | no | no |
+| `harness.system.notice` | a `type:"system"` record with subtype `informational` | explicit -t | no | verbose |
+| `harness.system.kill` | a `type:"system"` record with subtype `agents_killed` | explicit -t | no | yes |
+| `harness.system.command` | a `type:"system"` record with subtype `local_command`: the ONE system subtype the request assembler re-mints as a user message, so it is DELIVERED although it carries no `message{}` | explicit -t | yes | yes |
+| `harness.bookkeeping.last-prompt` | a `type:"last-prompt"` line (`leafUuid`, `explicit`, `lastPrompt`) | explicit -t | no | indirect |
+| `harness.bookkeeping.mode` | a `type:"mode"` or `type:"permission-mode"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.name` | a `type:"ai-title"` or `type:"agent-name"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.atis` | a `type:"atis-latch"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.bridge` | a `type:"bridge-session"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.suppression` | a `type:"history-suppression"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.pr-link` | a `type:"pr-link"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.artifact` | a `type:"frame-link"`, `type:"artifact-comment-monitor"` or `type:"artifact-autoreact-ledger"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.file-history` | a `type:"file-history-snapshot"` (the per-prompt tracked-file version table) or `type:"file-history-delta"` (one path's version bump) line: the instrument `recover` reads for external writes | explicit -t | no | indirect |
+| `harness.bookkeeping.cost` | a `type:"cost-state"` checkpoint line | explicit -t | no | indirect |
+| `harness.bookkeeping.fork` | a `type:"fork-context-ref"` line (`parentSessionId`, `parentLastUuid`) | explicit -t | no | indirect |
+| `harness.bookkeeping.continued` | a `type:"continued-in"` line naming the child a background handoff minted | explicit -t | no | indirect |
+| `harness.bookkeeping.queue` | a `type:"queue-operation"` line that is NOT the human's own content (a `dequeue`, or a harness rider) | explicit -t | no | yes |
+
+### Shape - where each leaf comes FROM on disk
+
+| leaf | on disk | grab the raw bytes |
+|---|---|---|
+| `user.message` | type:"user" · type:"user" isMeta:true template:human-relay | `csift show @<id> --line N --raw` |
+| `user.answer` | a tool_result carrier's toolUseResult answers/response, not its line type | `csift show @<id> --line N --raw` |
+| `user.rejection` | a tool_result carrier's typed-instruction tail, not its line type | `csift show @<id> --line N --raw` |
+| `user.unsent` | assigned at the scan layer from the DAG: an opener with a later sibling and no assistant descendant | `csift show @<id> --line N --raw` |
+| `user.rewound` | assigned at the scan layer from the DAG: the same shape WITH an assistant descendant | `csift show @<id> --line N --raw` |
+| `user.queued` | a queue-operation line whose CONTENT is the human's own text, not its line type | `csift show @<id> --line N --raw` |
+| `agent.message.plain` | message.content[] type:"text" | `csift show @<id> --line N --raw` |
+| `agent.message.structured` | type:"attachment" attachment.type:"structured_output" | `csift show @<id> --line N --raw` |
+| `agent.thinking.summary` | message.content[] type:"thinking" | `csift show @<id> --line N --raw` |
+| `agent.thinking.narration` | a thinking block whose base64 signature carries the narration tag | `csift show @<id> --line N --raw` |
+| `agent.thinking.omitted` | a thinking block whose own text is empty | `csift show @<id> --line N --raw` |
+| `agent.thinking.redacted` | message.content[] type:"redacted_thinking" | `csift show @<id> --line N --raw` |
+| `agent.tool.use` | message.content[] type:"tool_use" | `csift show @<id> --line N --raw` |
+| `agent.tool.result` | message.content[] type:"tool_result" | `csift show @<id> --line N --raw` |
+| `agent.communication.inbox` | a peer SECTION inside a record's text, a subagent opener, or a resolved spawn tool_result | `csift show @<id> --line N --raw` |
+| `agent.communication.sent` | a tool_use block naming SendMessage or a spawn tool | `csift show @<id> --line N --raw` |
+| `agent.communication.signal` | a SendMessage whose input type is a control kind, or a peer control payload | `csift show @<id> --line N --raw` |
+| `agent.communication.channel` | a hook_additional_context payload whose FIRST content string opens with the csift envelope header | `csift show @<id> --line N --raw` |
+| `harness.notification.workflow` | a <task-notification> section whose summary names a workflow | `csift show @<id> --line N --raw` |
+| `harness.notification.monitor` | a <task-notification> section whose summary opens Monitor/Scheduled/cron | `csift show @<id> --line N --raw` |
+| `harness.notification.subagent` | a <task-notification> section for a spawned agent, or the plain-text agents-stopped notice | `csift show @<id> --line N --raw` |
+| `harness.notification.background-command` | a <task-notification> section for a backgrounded shell command | `csift show @<id> --line N --raw` |
+| `harness.notification.task` | any other <task-notification> section | `csift show @<id> --line N --raw` |
+| `harness.compaction.summary` | a type:"user" record carrying the isCompactSummary FLAG, not a line type | `csift show @<id> --line N --raw` |
+| `harness.compaction.boundary` | type:"system" subtype:"compact_boundary" | `csift show @<id> --line N --raw` |
+| `harness.command.invocation` | a user record whose text opens with a slash-command wrapper tag | `csift show @<id> --line N --raw` |
+| `harness.command.stdout` | a user record whose text opens with <local-command-stdout> | `csift show @<id> --line N --raw` |
+| `harness.command.caveat` | type:"user" isMeta:true template:local-command-caveat | `csift show @<id> --line N --raw` |
+| `harness.interrupt.user` | a user record whose text is exactly the interrupt marker | `csift show @<id> --line N --raw` |
+| `harness.interrupt.tool` | a user record whose text is exactly the tool-interrupt marker | `csift show @<id> --line N --raw` |
+| `harness.schedule.wakeup` | type:"user" isMeta:true template:schedule-wakeup | `csift show @<id> --line N --raw` |
+| `harness.schedule.event` | type:"system" subtype:"scheduled_task_fire" | `csift show @<id> --line N --raw` |
+| `harness.schedule.fire` | type:"user" isMeta:true template:schedule-fire | `csift show @<id> --line N --raw` |
+| `harness.schedule.tick` | type:"user" isMeta:true template:schedule-tick | `csift show @<id> --line N --raw` |
+| `harness.resume.prompt` | type:"user" isMeta:true template:resume-prompt | `csift show @<id> --line N --raw` |
+| `harness.resume.placeholder` | an assistant record with the <synthetic> model and exactly the placeholder text | `csift show @<id> --line N --raw` |
+| `harness.hook.context` | type:"attachment" attachment.type:"hook_additional_context" | `csift show @<id> --line N --raw` |
+| `harness.hook.outcome` | type:"attachment" attachment.type:"hook_success" · "hook_blocking_error" · "hook_non_blocking_error" · "hook_cancelled" · "hook_stopped_continuation" · "hook_system_message" · "async_hook_response_batch" | `csift show @<id> --line N --raw` |
+| `harness.hook.feedback` | type:"user" isMeta:true template:stop-hook-feedback | `csift show @<id> --line N --raw` |
+| `harness.context.reminder` | type:"attachment" attachment.type:"total_tokens_reminder" · type:"attachment" attachment.type:"task_reminder" · type:"attachment" attachment.type:"silent_turn_reminder" · type:"attachment" attachment.type:"batching_reminder_sent" · type:"attachment" attachment.type:"ultrathink_effort" · type:"user" isMeta:true template:roster-reminder | `csift show @<id> --line N --raw` |
+| `harness.context.listing` | type:"attachment" attachment.type:"skill_listing" · "agent_listing_delta" · "deferred_tools_delta" · "deferred_tools_record" · "invoked_skills" | `csift show @<id> --line N --raw` |
+| `harness.context.prompt` | type:"attachment" attachment.type:"instructions" · "date" · "session_context" · "environment" · "model" · "prompt_snapshot" · "date_change" | `csift show @<id> --line N --raw` |
+| `harness.context.file` | type:"attachment" attachment.type:"file" · "edited_text_file" · "compact_file_reference" · "nested_memory" · "plan_file_reference" · "read_truncation_notice" · "bash_output_audience_note" | `csift show @<id> --line N --raw` |
+| `harness.context.mode` | type:"attachment" attachment.type:"plan_mode" · "plan_mode_exit" · "plan_mode_reentry" · "auto_mode" · "command_permissions" | `csift show @<id> --line N --raw` |
+| `harness.context.ide` | type:"attachment" attachment.type:"opened_file_in_ide" · "selected_lines_in_ide" · "diagnostics" | `csift show @<id> --line N --raw` |
+| `harness.context.task` | type:"attachment" attachment.type:"task_status" · "queued_command" · "workflow_keyword_request" · "goal_status" · "remote_session_change" · "relevant_memories" · "memory_update" · "thinking_stripped" | `csift show @<id> --line N --raw` |
+| `harness.context.image` | message.content[] type:"image" · type:"user" isMeta:true template:image-reference | `csift show @<id> --line N --raw` |
+| `harness.context.skill` | type:"user" isMeta:true template:skill-body | `csift show @<id> --line N --raw` |
+| `harness.enforce.structured-output` | type:"user" isMeta:true template:enforce-structured-output | `csift show @<id> --line N --raw` |
+| `harness.enforce.brief` | type:"user" isMeta:true template:enforce-brief | `csift show @<id> --line N --raw` |
+| `harness.enforce.handback` | type:"user" isMeta:true template:enforce-handback | `csift show @<id> --line N --raw` |
+| `harness.enforce.retry` | type:"user" isMeta:true template:enforce-retry | `csift show @<id> --line N --raw` |
+| `harness.turn.duration` | type:"system" subtype:"turn_duration" | `csift show @<id> --line N --raw` |
+| `harness.turn.stop-hooks` | type:"system" subtype:"stop_hook_summary" | `csift show @<id> --line N --raw` |
+| `harness.turn.recap` | type:"system" subtype:"away_summary" | `csift show @<id> --line N --raw` |
+| `harness.system.refusal` | type:"system" subtype:"model_refusal_fallback" · "model_refusal_no_fallback" | `csift show @<id> --line N --raw` |
+| `harness.system.api-error` | type:"system" subtype:"api_error" | `csift show @<id> --line N --raw` |
+| `harness.system.notice` | type:"system" subtype:"informational" | `csift show @<id> --line N --raw` |
+| `harness.system.kill` | type:"system" subtype:"agents_killed" | `csift show @<id> --line N --raw` |
+| `harness.system.command` | type:"system" subtype:"local_command" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.last-prompt` | type:"last-prompt" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.mode` | type:"mode" · "permission-mode" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.name` | type:"ai-title" · "agent-name" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.atis` | type:"atis-latch" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.bridge` | type:"bridge-session" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.suppression` | type:"history-suppression" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.pr-link` | type:"pr-link" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.artifact` | type:"frame-link" · "artifact-comment-monitor" · "artifact-autoreact-ledger" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.file-history` | type:"file-history-snapshot" · "file-history-delta" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.cost` | type:"cost-state" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.fork` | type:"fork-context-ref" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.continued` | type:"continued-in" | `csift show @<id> --line N --raw` |
+| `harness.bookkeeping.queue` | type:"queue-operation" | `csift show @<id> --line N --raw` |
+
+**Retired spellings are HARD ERRORS naming their successors** - `harness.meta` and every `harness.meta.*` path, the 0.6-era flat `thinking`/`tool`/`tool-response`, and `harness.schedule.continuation`. There is no alias and no forwarding arm; the error text names where those records went. `--additional-context` is retired the same way: the leaf it gated has a name, `-t harness.hook.context`. `--attachments` keeps its meaning (admit every attachment line for a pattern scan).
+
+**LLM-VISIBILITY is decided in THREE steps**, and a bare role or category consults all three. **Step 1, the leaf default** - the `LLM sees` column above; 28 of the 73 leaves are invisible, and they group by WHY: the two scan-layer user leaves (a recalled draft, a rewound turn) are ordinary user records the surviving conversation no longer threads through; `user.queued` and the whole `harness.bookkeeping` category are non-transcript lines with no `message{}` at all; the two textless thinking leaves carry a signature the model echoes back and no text it could read; the message-less `type:"system"` records (the compaction boundary, the scheduler's fire record, the three `harness.turn` telemetry leaves, four of the five `harness.system` event kinds) are written for the REPL's own banners; and `harness.hook.outcome` is a hook RUN's receipt, which the harness converts to nothing. `harness.system.command` is visible because its subtype is the ONE the request assembler re-mints as a user message, and `agent.message.structured` is visible because the MODEL produced that text. **Step 2, the per-RECORD delivery override**: Claude Code assembles its request with one drop predicate, and where that predicate disagrees with the leaf default csift mirrors it per record - a `system`/`local_command` record IS sent, an `isVirtual` record and the `<synthetic>` API-error placeholder are NOT, an attachment whose payload type the converter drops is NOT, and a `hook_success` IS exactly when it carries a rendered body. An undelivered record renders `[not delivered]` and every JSON hit carries `delivered`. **Step 3, SURVIVAL**: a record Claude Code's own `parentUuid` chain no longer reaches is off the conversation however it was delivered; a bare role or category skips it, a glob or an exact leaf reaches it marked `[abandoned]` / `[rewound]` / `[replay copy of L<n>]`. The three are independent - a visible leaf, delivered when written, abandoned today - and a `pre-cut` record is never skipped by step 3, because csift declines to narrow on a verdict it could not resolve.
+
+**The 1:1 law**: `show --line N` never hard-misses a parseable line. A shape csift models no leaf for renders `? unmodeled: <type[/subtype|/attachment.type]>` with the line's own top-level keys (JSON `label: null`, `labels: []`, `unmodeled`), so an unknown line is visibly unknown rather than absent. A SCAN never emits one - no census, count or `-t` result moves. A line that is not a JSON object at all is still a hard miss pointing at `--raw`.
+
+Glyphs: `◂` user · `▸` agent · `⚙` harness · `?` an unmodeled unit · `·` sibling · `▹` tool use↔result pair (unreturned → `(no result — pending)`; orphan → `(use not in scope)`) · `⇨` comm direction. Turn boundary = genuine user ∨ AUQ answer ∨ typed rejection ∨ inbound peer message; slash-command wrappers, interrupts, `<local-command-stdout>`, compaction summaries never open a turn.
 ---
 
 ## search — find round-trips

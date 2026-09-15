@@ -101,182 +101,121 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 37 leaves\n  \
-          A bare ROLE narrows on THREE axes, and only the FIRST is per-leaf. The other\n  \
-        two are Claude Code's own rules, read per RECORD, and they are independent: a\n  \
-        record can be a visible leaf, delivered when it was written, and abandoned today.\n  \
-          AXIS 1, LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only\n  \
-        the role's DELIVERED leaves - the conversation as the model receives/produces\n  \
-        it. Nine leaves are invisible and need naming or a glob: `user.unsent` and\n  \
-        `user.rewound` (neither is in the surviving conversation - see AXIS 3 below),\n  \
-        `harness.compaction.boundary` (a metrics-only system record: no message field\n  \
-        at all), and the six gated leaves below. The glob form `-t 'user.*'` selects\n  \
-        EVERY leaf under the prefix, visibility ignored; an intermediate prefix\n  \
-        (`-t harness.compaction`) or an exact leaf path is a deliberate drill-down\n  \
-        and keeps its full set. (`-t user` restores the 0.7\n  \
-        contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
-        last-human-touch consumer.)\n  \
-          AXIS 2, RECORD-LEVEL DELIVERY: a bare role decides per RECORD, not per leaf,\n  \
-        because Claude Code's request assembler runs one drop predicate and it disagrees\n  \
-        with the leaf table in exactly three cases - a `system`/`local_command` record (a\n  \
-        slash command's own echo and stdout) IS re-minted as a user message and sent,\n  \
-        so `-t harness` shows it although `harness.meta.system` is invisible; an\n  \
-        `isVirtual` record and the `<synthetic>` API-error placeholder are NOT sent, so\n  \
-        `-t agent` / `-t user` hide them although their leaves are visible. A glob, an\n  \
-        intermediate prefix and an exact leaf are unaffected and reach every record;\n  \
-        an undelivered one renders a `[not delivered]` marker in the label zone, and\n  \
-        JSON carries `delivered` on every hit.\n  \
-          AXIS 3, SURVIVAL (v0.12.0): Claude Code does not reconstruct a session by\n  \
-        reading its jsonl top to bottom. It loads every record into a uuid map (last\n  \
-        occurrence of a uuid wins), picks ONE leaf and walks `parentUuid` from it to the\n  \
-        head; only what that walk reaches is the conversation. csift mirrors that rule,\n  \
-        so a record it no longer reaches - a prompt recalled and re-typed, a turn the\n  \
-        operator REWOUND past, everything under one, an earlier copy of a record a\n  \
-        compaction re-anchor re-appended - is ABANDONED: outside turn numbering, skipped\n  \
-        by a bare role, and reached by a glob or an exact leaf with an `[abandoned]` /\n  \
-        `[rewound]` / `[replay copy of L<n>]` marker in the label zone. An abandoned\n  \
-        OPENER carries one leaf: `user.unsent` when nothing ever answered it,\n  \
-        `user.rewound` when something did. Above a compaction cut (and in any region\n  \
-        csift's own walk could not resolve) records are PRE-CUT: Claude Code drops\n  \
-        them, csift keeps reading them and every selector still reaches them - what the\n  \
-        model saw AT THE TIME is the question an archive answers. JSON carries\n  \
-        `survival` (live | pre-cut | abandoned), `abandoned_root_line` and\n  \
-        `replay_copy_of` per hit; the summary carries `abandoned_records`,\n  \
-        `rewound_turns`, `replay_copies`, `boundary_cut_line` and `leaf_source`, and the\n  \
-        text footer states every one of them.\n  \
-          GATED LEAVES (v0.10.0, +1 in v0.10.1): the six promoted non-record leaves -\n  \
-        `user.queued` and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot,\n  \
-        system}` - are scanned ONLY when an explicit -t reaches them (the full path, a\n  \
-        glob such as `-t 'user.*'` / `-t 'harness.*'`, or the `harness.meta` prefix), or\n  \
-        when a `csift show --line/--uuid` address names the line. A bare scan with no\n  \
-        -t, a bare role, and `--count-by label` without -t never parse those lines\n  \
-        (every one is a non-message line, and most queued content is a duplicate\n  \
-        automation pulse) - with ONE exception: a bare `-t harness` admits the system\n  \
-        lines so the delivered `local_command` records among them can be reached, and\n  \
-        the per-record rule then drops the rest. All six leaf DEFAULTS are\n  \
-        LLM-invisible: none carries a message field.\n  \
-        Their raw form is still `show --line N --raw`.\n  \
-          user     .message                genuine human prose (a slash command with typed\n                                   \
-        prose renders as `/name args`)\n           \
-        .answer                 an answered AskUserQuestion: question, options and\n                                   \
-        the picked answer as one unit\n           \
-        .rejection              a plan/tool rejection carrying the user's typed\n                                   \
-        instruction (+ a `[plan: …]` pointer when resolvable)\n           \
-        .unsent                 a SUPERSEDED draft: sent, esc-recalled, edited and\n                                   \
-        re-sent - the original stays on disk OUTSIDE turn\n                                   \
-        numbering (never counted as user.message; a queued\n                                   \
-        text edited before dispatch never becomes a record). A\n                                   \
-        rendered draft states its distance from the message that\n                                   \
-        replaced it - `differs from the sent message in N chars\n                                   \
-        (P% of the final)`: insertions plus deletions of a shortest\n                                   \
-        CHARACTER edit script, never a length difference, so P can\n                                   \
-        exceed 100 (JSON superseding_line, superseding_uuid,\n                                   \
-        diff_chars, diff_pct, diff_exact)\n           \
-        .rewound                a turn the conversation was REWOUND past: it WAS sent\n                                   \
-        and it drew a reply, and Claude Code's chain now threads\n                                   \
-        around it, so neither it nor anything under it is in the\n                                   \
-        surviving conversation. The discriminator against\n                                   \
-        `.unsent` is exactly that reply. Outside turn numbering;\n                                   \
-        its diff line leads `rewound: the conversation continued\n                                   \
-        from L<n> instead`\n           \
-        .queued                 the human's text as it sat in the input QUEUE (a\n                                   \
-        queue-operation line with content: enqueue, a popAll\n                                   \
-        recall, or a remove with its reason); the label zone\n                                   \
-        shows the operation. A queued automation pulse or\n                                   \
-        peer message is not the human and carries no label;\n                                   \
-        the queue line has no join key, so `dispatched` is\n                                   \
-        never asserted (GATED - see above)\n  \
-          agent    .message · .thinking    assistant prose · reasoning (a redacted block\n                                   \
-        renders \"[redacted thinking]\")\n           \
-        .thinking.narration     an API-issued one-sentence SUMMARY of the reasoning\n                                   \
-        beside it, never the reasoning (renders \"[narration\n                                   \
-        summary]\"; pure reasoning = -t agent.thinking\n                                   \
-        -T agent.thinking.narration)\n           \
-        .tool.use · .tool.result  tool traffic, paired by tool_use_id (the `▹` join)\n           \
-        .communication.{inbox,sent,signal}  peer messages, rendered `from ⇨ to`\n           \
-        .communication.channel  a csift-channel delivery: a message another lane (or a\n                                   \
-        sender outside Claude Code) had a hook inject into this\n                                   \
-        one. Rendered VERBATIM from its `[csift-channel v1 …]`\n                                   \
-        envelope, direction from the header's `from=`. The one\n                                   \
-        attachment leaf a DEFAULT scan sees\n  \
-          harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
-        .compaction.{summary,boundary}  a compaction's SUMMARY plus its metrics
-                                   \
-        record. The boundary excerpt names every survivor field
-                                   \
-        the record carries (trigger, preTokens, postTokens,
-                                   \
-        durationMs, messagesSummarized, cumulativeDroppedTokens,
-                                   \
-        preserved=<N uuids, M allUuids, anchor …>,
-                                   \
-        segment=<head>..<tail>); JSON adds `compact_metadata`
-                                   \
-        verbatim (the full uuid lists) and `mode` on BOTH records
-                                   \
-        - `compact` | `summarize-from-here` | `summarize-up-to-here`.
-                                   \
-        A `/rewind` summarize IS a compaction: the summary carries
-                                   \
-        `summarizeMetadata.direction` instead of
-                                   \
-        `isVisibleInTranscriptOnly` and renders a `[summarize
-                                   \
-        <direction>]` tag; the boundary learns its mode from the
-                                   \
-        summary that follows it (null when unpaired)
-           \
-        .command.{invocation,stdout}\n           \
-        .interrupt.{user,tool} · .schedule.wakeup · .meta.{hook,loop,attachment}\n           \
-        .schedule.fire          the PROMPT a scheduled task fires: the isMeta record\n                                   \
-        Claude Code submits on its own when a cron entry or a\n                                   \
-        ScheduleWakeup timer comes due, carrying promptSource\n                                   \
-        \"system\". The body is the armed text VERBATIM, so there\n                                   \
-        is no marker to match and a tick that DOES carry one\n                                   \
-        keeps its own leaf. The label zone names the instant\n                                   \
-        ([scheduled fire <when>], JSON scheduled_at) when the\n                                   \
-        transcript holds the scheduled_task_fire record it is\n                                   \
-        parented to; null when it does not\n           \
-        .resume.prompt          the repair PROMPT the resume LOADER appends when a\n                                   \
-        transcript ends on a dangling user record - an isMeta\n                                   \
-        record reading \"Continue from where you left off.\"\n                                   \
-        The model receives it, but the human never typed it, so\n                                   \
-        it opens no turn (named harness.schedule.continuation\n                                   \
-        through v0.11.x - same records, new path). The isMeta\n                                   \
-        flag is REQUIRED: a message you begin with that same\n                                   \
-        sentence carries none, so it stays user.message and\n                                   \
-        opens its turn\n           \
-        .resume.placeholder     the stand-in reply spliced in after that prompt so the\n                                   \
-        loaded conversation does not end unanswered: an\n                                   \
-        assistant record with the `<synthetic>` model reading\n                                   \
-        \"No response requested.\" - fabricated, never the model's\n                                   \
-        text. The label zone says `[paired]` when its parent is\n                                   \
-        the prompt, `[unpaired]` when the same splice landed\n                                   \
-        after some other trailing user record (JSON\n                                   \
-        resume_paired)\n           \
-        .meta.turn-duration     the end-of-turn telemetry record (durationMs,\n                                   \
-        messageCount, pendingBackgroundAgentCount,\n                                   \
-        pendingWorkflowCount) behind the REPL's \"Done in Ns\" /\n                                   \
-        \"Waiting for N agents\" lines (GATED)\n           \
-        .meta.away-summary      the model-generated recap shown on return after 5+\n                                   \
-        minutes away; never in the surviving conversation (GATED)\n           \
-        .meta.stop-hooks        the Stop-hook execution ledger: each hook command and\n                                   \
-        its duration, errors, preventedContinuation (GATED)\n           \
-        .meta.snapshot          a file-history snapshot (every tracked path@version) or\n                                   \
-        delta (one path's bump) - the v0.9.4 recover instrument,\n                                   \
-        now searchable by path and version (GATED)\n           \
-        .meta.system            every OTHER `type:system` subtype the harness writes for\n                                   \
-        its own UI (informational such as the Remote Control\n                                   \
-        disconnect warning, api_error, model_refusal_fallback,\n                                   \
-        model_refusal_no_fallback, agents_killed, local_command,\n                                   \
-        scheduled_task_fire, and any subtype a later build adds);\n                                   \
-        renders `[<subtype> <level>] <content>` (GATED, v0.10.1)\n  \
-          `-t agent` selects the whole role, `-t agent.tool` both tool leaves, a full path\n  \
-        just that leaf; `-T` excludes with the same grammar (a combination that excludes\n  \
-        everything it includes is a parse error, as is a selector typo, with suggestions).\n  \
-        A record carrying several labels prints ONCE, under its richest view (an AUQ answer\n  \
-        is `user.answer`, not `agent.tool.result`). Glyphs: ◂ user · ▸ agent · ⚙ harness ·\n  \
-        ▹ tool use↔result pairing · ⇨ message direction · · sibling.\n\n\
+        THE LABEL TAXONOMY (-t / -T select by dot-SEGMENT prefix): 3 roles, 17 categories,\n  \
+        73 leaves\n  \
+          A selector is a LEAF path, a CATEGORY (`agent.message`, `harness.turn`), a ROLE\n  \
+        (`user`), or any of those plus `.*`. A bare ROLE or CATEGORY selects only the\n  \
+        leaves the model RECEIVES - the coarse \"show me the conversation\" ask; a GLOB or\n  \
+        an exact LEAF reaches every record under all three narrowing axes below. No -t\n  \
+        means every label. `-T` excludes with the same grammar, and ONLY a -T that cancels\n  \
+        your -t is an error (a selector typo is a parse error naming the valid set).\n  \
+          `harness.bookkeeping` is the one category whose whole face is invisible: the\n  \
+        bare form is ACCEPTED, matches nothing by the law, and says so on stderr with the\n  \
+        remedy (`-t harness.bookkeeping.*`); JSON carries `empty_visible_face`.\n  \
+          RETIRED, each a hard error naming its successors: `harness.meta` and every\n  \
+        `harness.meta.*` path, the flat `thinking`/`tool`/`tool-response`, and\n  \
+        `harness.schedule.continuation`. `--additional-context` is retired too - the leaf\n  \
+        it gated has a name, `-t harness.hook.context`. There is no alias anywhere.\n  \
+          GATE words below: [scan] a role-bearing line a default scan already parses ·\n  \
+        [-t] you must name the leaf, its category or a glob reaching it · [-t/att]\n  \
+        either that or the wide `--attachments` flag, which admits every attachment line.\n  \
+        A gated leaf costs a query that cannot want it NOTHING (one gated memmem each).\n  \
+          user        .message [scan] the person\'s own prose (a slash command with typed\n                                   \
+        args renders `/name args`) · .answer [scan] an answered\n                                   \
+        AskUserQuestion as one Q+options+answer unit · .rejection\n                                   \
+        [scan] a tool rejection carrying the typed instruction (+ a\n                                   \
+        `[plan: …]` pointer) · .unsent [scan] a SUPERSEDED draft:\n                                   \
+        sent, esc-recalled, edited, re-sent, the original left on\n                                   \
+        disk OUTSIDE turn numbering, with its distance from the\n                                   \
+        message that replaced it · .rewound [scan] a turn that WAS\n                                   \
+        answered and the conversation was rewound past · .queued\n                                   \
+        [-t] the human\'s text while it sat in the input QUEUE\n  \
+          agent       .message.plain [scan] the assistant\'s own text ·\n                                   \
+        .message.structured [-t/att] a schema-bound subagent\'s\n                                   \
+        final structured answer · .thinking.summary [scan] the\n                                   \
+        API\'s summary of the reasoning, never the reasoning ·\n                                   \
+        .thinking.narration [scan] its one-sentence progress\n                                   \
+        update between tool calls · .thinking.omitted [scan] a\n                                   \
+        thinking block the API returned with NO summary text ·\n                                   \
+        .thinking.redacted [scan] its safety-redacted ciphertext ·\n                                   \
+        .tool.use · .tool.result [scan] tool traffic, paired by\n                                   \
+        tool_use_id (the `▹` join) ·\n                                   \
+        .communication.{inbox,sent,signal} [scan] peer messages,\n                                   \
+        rendered `from ⇨ to` · .communication.channel [scan] a\n                                   \
+        csift-channel delivery, rendered VERBATIM from its\n                                   \
+        `[csift-channel v1 …]` envelope - the ONE attachment leaf\n                                   \
+        a default scan sees\n  \
+          harness     .notification.{workflow,monitor,subagent,background-command,task}\n                                   \
+        [scan] `<task-notification>` completion pulses, rendered\n                                   \
+        `[<kind> <task-id>… <status>] <summary>` ·\n                                   \
+        .compaction.summary [scan] / .compaction.boundary [scan]\n                                   \
+        the summary plus its metrics record, both carrying `mode`\n                                   \
+        (compact | summarize-from-here | summarize-up-to-here) ·\n                                   \
+        .command.{invocation,stdout} [scan] the slash wrapper and\n                                   \
+        its output · .command.caveat [scan] the caveat the command\n                                   \
+        EXECUTOR writes after one · .interrupt.{user,tool} [scan] ·\n                                   \
+        .schedule.wakeup [scan] a fired timer tick ·\n                                   \
+        .schedule.event [-t] the scheduler\'s own fire RECORD ·\n                                   \
+        .schedule.fire [scan] the PROMPT it submits, recognised by\n                                   \
+        its parent link to that record, with the instant in the\n                                   \
+        label zone · .schedule.tick [scan] the autonomous-loop\n                                   \
+        driver tick · .resume.prompt [scan] the loader\'s repair\n                                   \
+        prompt · .resume.placeholder [scan] the stand-in reply it\n                                   \
+        splices after one ([paired]/[unpaired]) ·\n                                   \
+        .hook.context [-t] context a hook injected ·\n                                   \
+        .hook.outcome [-t/att] a hook RUN\'s own record ·\n                                   \
+        .hook.feedback [scan] a Stop hook\'s blocking feedback ·\n                                   \
+        .context.{reminder,listing,prompt,file,mode,ide,task}\n                                   \
+        [-t/att] what the harness attached to the turn ·\n                                   \
+        .context.{image,skill} [scan] its isMeta image references\n                                   \
+        and a subagent\'s preloaded skill body ·\n                                   \
+        .enforce.{structured-output,brief,handback,retry} [scan]\n                                   \
+        the redo nudges the harness sends back to the model ·\n                                   \
+        .turn.{duration,stop-hooks,recap} [-t] the end-of-turn\n                                   \
+        telemetry records · .system.{refusal,api-error,notice,\n                                   \
+        kill,command} [-t] the `type:system` event kinds, of which\n                                   \
+        only `.command` (a slash command\'s echo and stdout) is\n                                   \
+        re-minted for the model · .bookkeeping.{last-prompt,mode,\n                                   \
+        name,atis,bridge,suppression,pr-link,artifact,file-history,\n                                   \
+        cost,fork,continued,queue} [-t] the 18 non-transcript line\n                                   \
+        types: no uuid, no message, never in the model\'s context\n  \
+          A RENDERED DRAFT carries its distance from the message that replaced it:\n  \
+        `differs from the sent message in N chars (P% of the final)` - insertions plus\n  \
+        deletions of a shortest CHARACTER edit script, never a length difference, so P\n  \
+        can exceed 100. JSON: superseding_line, superseding_uuid and\n  \
+        diff_chars, diff_pct, diff_exact. A `.rewound` opener leads the same line with\n  \
+        `rewound: the conversation continued from L<n> instead`.\n  \
+          THREE NARROWING AXES, and only the FIRST is per-leaf. AXIS 1, LEAF VISIBILITY:\n  \
+        28 of the 73 leaves are outside a bare role or category - the two scan-layer user\n  \
+        leaves, `user.queued` and all 13 bookkeeping leaves (non-transcript lines with no\n  \
+        message field), the two textless thinking leaves, the message-less system records\n  \
+        (the compaction boundary, the fire record, the three turn leaves, four of the five\n  \
+        system event kinds), and `harness.hook.outcome`. AXIS 2, RECORD-LEVEL DELIVERY:\n  \
+        Claude Code\'s request assembler runs one drop predicate, and where it disagrees\n  \
+        with the leaf default csift mirrors it per record - a `system`/`local_command`\n  \
+        record IS sent, an `isVirtual` record and the `<synthetic>` API-error placeholder\n  \
+        are NOT, an attachment whose payload type the converter drops is NOT, and a\n  \
+        `hook_success` IS exactly when it carries a rendered body. An undelivered record\n  \
+        renders `[not delivered]`; JSON carries `delivered` on every hit. AXIS 3,\n  \
+        SURVIVAL: Claude Code rebuilds a session by walking `parentUuid` from ONE leaf, and\n  \
+        a record that walk no longer reaches is off the conversation however it was\n  \
+        delivered - marked `[abandoned]` / `[rewound]` / `[replay copy of L<n>]`, outside\n  \
+        turn numbering, reached by a glob or an exact leaf. A PRE-CUT record (above a\n  \
+        compaction cut) is never narrowed away: what the model saw AT THE TIME is the\n  \
+        question an archive answers. JSON carries `survival`, `abandoned_root_line` and\n  \
+        `replay_copy_of` per hit and the totals in the summary; the text footer states\n  \
+        every one of them.\n  \
+          THE 1:1 LAW: `csift show --line N` never hard-misses a PARSEABLE line. A shape\n  \
+        csift models no leaf for renders `? unmodeled: <type[/subtype|/attachment.type]>`\n  \
+        with the line\'s own top-level keys (JSON `label`:null, `labels`:[], `unmodeled`),\n  \
+        so an unknown line is visibly unknown rather than absent. A SCAN never emits one,\n  \
+        so no census, count or -t result moves. A line that is not a JSON object at all is\n  \
+        still a hard miss pointing at `--raw`.\n  \
+          A record carrying several labels prints ONCE, under its richest view (an AUQ\n  \
+        answer is `user.answer`, not `agent.tool.result`); `labels` is ordered\n  \
+        richest-first and the rendered view is the first entry your -t/-T leaves alive.\n  \
+        Glyphs: ◂ user · ▸ agent · ⚙ harness · ? an unmodeled unit · ▹ tool use↔result\n  \
+        pairing · ⇨ message direction · · sibling.\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \

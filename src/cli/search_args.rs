@@ -17,22 +17,21 @@ use super::*;
         pure filter; it matches every label-eligible record, so combine it with \
         `--label` / `--since` / `--turn` (a bare empty pattern with no other \
         filter warns that it will emit a lot).\n\n\
-        CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
-        record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
-        whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
-        user.message | user.answer | user.rejection | user.unsent | user.rewound | user.queued | \
-        agent.message | \
-        agent.thinking | agent.thinking.narration | agent.tool.use | agent.tool.result | \
-        agent.communication.{inbox,sent,signal,channel} | \
-        harness.notification.{workflow,monitor,subagent,background-command,task} | \
-        harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
-        harness.interrupt.{user,tool} | harness.schedule.{wakeup,fire} | \
-        harness.resume.{prompt,placeholder} | \
-        harness.meta.{hook,loop,attachment,turn-duration,away-summary,stop-hooks,snapshot,system}. \
-        With none given, EVERY label is eligible. `-T`/`--label-not` \
-        EXCLUDES with the same selector grammar (the rg -t/-T duality): the effective set is \
-        (-t selectors, or ALL) minus (-T selectors); a combination that excludes everything it \
-        includes is a hard error. The human turn is \
+        LABELS (`-t`, repeatable): a dotted `role.category.leaf` SELECTOR - 3 roles, 17 \
+        categories, 73 leaves. A selector matches a record label iff it is a dot-SEGMENT prefix \
+        of the label's path, so `-t agent.tool` covers use+result and `-t agent` the whole role. \
+        The categories: user | agent.{message,thinking,tool,communication} | \
+        harness.{notification,compaction,command,interrupt,schedule,resume,hook,context,enforce,\
+        turn,system,bookkeeping}; `csift search --help` lists every leaf under each. A bare ROLE \
+        or CATEGORY selects only the leaves the model RECEIVES; a GLOB (`-t 'user.*'`) or an \
+        exact LEAF reaches every record. With none given, EVERY label is eligible. `-T`/\
+        `--label-not` EXCLUDES with the same grammar (the rg -t/-T duality): the effective set \
+        is (-t selectors, or ALL) minus (-T selectors), and ONLY a -T that cancels your -t is a \
+        hard error. `harness.bookkeeping` is the one category whose whole face is invisible: \
+        the bare form is accepted, matches nothing by the law, and says so with the remedy. \
+        Every retired spelling is a hard error naming its successors - `harness.meta` and every \
+        `harness.meta.*` path, the flat `thinking`/`tool`/`tool-response`, \
+        `harness.schedule.continuation`. The human turn is \
         `user.message`; an AskUserQuestion answer is `user.answer` (the full Q+options+answer \
         unit); a plan-rejection-with-message is `user.rejection` (+ a [plan: …] pointer). An \
         inbound peer/teammate message is `agent.communication.inbox` (NOT `user`); a \
@@ -40,9 +39,9 @@ use super::*;
         tool named after harness machinery still classifies by ROLE: a `ScheduleWakeup` CALL \
         (arming a timer) is `agent.tool.use` like any other tool: `harness.schedule.wakeup` \
         is only the FIRED tick, the harness-injected marker-carrying wakeup prompt. A \
-        custom-prompt tick carries no marker at all: it lands under \
-        `harness.schedule.fire`, the prompt a scheduled task fires, keyed on the \
-        record's own isMeta + promptSource system stamp rather than on its text.\n\n\
+        custom-prompt tick carries no marker at all: it lands under `harness.schedule.fire`, \
+        the prompt a scheduled task fires, recognised by its parent link to the scheduler's \
+        own fire record rather than by its text.\n\n\
         AUTOMATION TRIGGERS: a `<task-notification>` (a background-command / workflow / \
         spawned-agent / monitor COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
         OPENS a turn like a human message but classifies under `harness.notification.<kind>` \
