@@ -12815,7 +12815,7 @@
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         }
       ],
-      "instrument": "`rg -c 'Stop hook feedback:' ~/.claude/projects/*/*.jsonl` then `csift search 'Stop hook feedback' -t harness.hook.feedback -c`, and confirm `-t user.message -c` on the same pattern is 0. Counting rule: one per raw occurrence for rg, one per record matching any of the three markers for csift.",
+      "instrument": "`rg -c 'Stop hook feedback:' --glob '*.jsonl' <the projects root>` summed over its per-file counts, then `csift search 'Stop hook feedback' -t harness.hook.feedback --count-by label` and the same pattern under `-t user.message`, which must be 0. Counting rule: `rg -c` counts matching LINES, not occurrences, so a line carrying the literal twice counts once; one record per classified record for csift. SCOPE matters as much as the rule - a `<root>/*/*.jsonl` glob reaches top-level transcripts only, while the recursive walk adds every subagent transcript, and the two differ by roughly a factor of three.",
       "located": {
         "claude_code": null,
         "csift": "0.4.0",
@@ -12852,6 +12852,16 @@
           "observed": "43 records classify harness.hook.feedback and 0 classify user.message; the caveat wrapper carries harness.command.caveat on 127 records and the edit-retry notice harness.enforce.retry on 2; a raw grep of the feedback literal returns 553 lines, the excess being records that QUOTE the marker rather than open with it, which is the content-start law working",
           "rule": "one per raw line for rg, one per classified record for csift, over every *.jsonl under the projects root",
           "note": "the three shapes shared one leaf while the taxonomy had one bag for them; they are split by producer now, which is what the claim's own sentence always described"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "re-ran the grep three ways over one projects root - the one-level `<root>/*/*.jsonl` glob with `rg -c`, the recursive walk with `rg -c`, and the recursive walk with `rg -o | wc -l` - then the csift censuses `search 'Stop hook feedback' -t harness.hook.feedback --count-by label`, the same pattern under `-t user.message`, and `search '' -t harness.command.caveat` and `-t harness.enforce.retry`",
+          "observed": "the one-level glob returns 174 matching lines, the recursive walk 574 matching lines and 1,152 occurrences; csift classifies 46 records harness.hook.feedback and 0 user.message for the same pattern, 187 records harness.command.caveat and 3 harness.enforce.retry. The three grep numbers measure three different things over the same bytes, and the gap between the grep and the leaf is records that QUOTE the marker rather than open with it, which is the content-start law working",
+          "rule": "`rg -c` counts matching LINES summed over files, `rg -o | wc -l` counts OCCURRENCES, and the one-level glob scopes to top-level transcripts while the recursive walk includes every subagent transcript; one record per classified record for every csift figure",
+          "note": "the preceding check recorded 553 for a command whose stated rule was occurrences; no scope reproduces that pairing. The numbers here name their command and their scope, and the corpus is live, so a later run moves them - the RELATION between them is what the claim rests on"
         }
       ],
       "attribution": "end-to-end",
@@ -49212,6 +49222,16 @@
           "observed": "the flagless census reports 28 leaves and not one of them is gated; the selector census reports 12 gated leaves over 32,102 records (bookkeeping.mode 10,161 \u00b7 name 7,357 \u00b7 last-prompt 5,120 \u00b7 queue 3,024 \u00b7 file-history 1,258 \u00b7 turn.duration 1,771 \u00b7 stop-hooks 1,755 \u00b7 recap 496 \u00b7 user.queued 676 \u00b7 schedule.event 456 \u00b7 system.api-error 27 \u00b7 system.command 1), every one absent from the first",
           "rule": "one census key per leaf that survives the active selector, one record per line admitted by the gate, over one transcript with its subagents excluded",
           "note": "the gated SET grew with the taxonomy: every non-transcript line type carries a leaf now, so the law covers the thirteen bookkeeping leaves, the three turn leaves, the five system leaves and the scheduler's fire record rather than the five leaves the claim was written for"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "re-ran `csift search '' <the 397 MiB top-level transcript> --no-subagents --count-by label` and counted its rows, then the same census under `-t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*' -t harness.schedule.event -t user.queued`, and checked each gated key against the flagless row set",
+          "observed": "the flagless census reports 29 leaf rows, not 28, and none of them is a gated leaf; the selector census reports the same 12 gated leaves over 32,102 records (bookkeeping.mode 10,161 / name 7,357 / last-prompt 5,120 / queue 3,024 / file-history 1,258, turn.duration 1,771 / stop-hooks 1,755 / recap 496, user.queued 676, schedule.event 456, system.api-error 27, system.command 1), every one absent from the flagless set",
+          "rule": "one census ROW per leaf that survives the active selector, counted off the command output itself; one record per line admitted by the gate; one transcript with its subagents excluded",
+          "note": "the preceding check said 28 leaves; the census prints 29. The gating conclusion is unaffected - it rests on the two sets being disjoint, which they are"
         }
       ],
       "attribution": "end-to-end",
@@ -83607,16 +83627,21 @@
     {
       "id": "MSG-075",
       "area": "messaging",
-      "behavior": "`commandMode`, not `origin.kind`, discriminates a queued pulse from a queued prompt: 2,495 records carry a `queued_command` attachment, 2,267 of them `task-notification` with no origin key at all, and 228 `prompt`, of which 140 human, 6 peer and 82 none.",
-      "depends": "csift's channel does not ride the queue at all, and its fact scan admits a line only when the raw bytes carry the envelope needle. A queued pulse replaying a delivery's text would therefore never be counted as the delivery, and no discriminator inside the queue attachment is needed to keep them apart. The prefilter also keeps the never-silent law: a line the needle rejects still gets the shape check, so corrupt bytes are counted rather than exempted.",
+      "behavior": "`commandMode`, not `origin.kind`, discriminates a queued pulse from a queued prompt, and the origin rides INSIDE the payload rather than on the record. The attachment constructor writes `origin` as a field of the `{type:\"queued_command\", ...}` object beside `commandMode`, so it lands at `attachment.origin`; a RECORD-level `origin` is a different shape entirely, the peer relay's (TURN-031). Measured over two projects roots, one count per raw line whose `type` is `attachment` and whose `attachment.type` is `queued_command`: 3,692 and 3,574 such lines, of which ZERO carry a top-level `origin` object and 219 and 217 carry `attachment.origin` - kinds human 162 / coordinator 49 / peer 8, and human 181 / peer 36. An earlier census over one root read 2,495 lines: 2,267 `task-notification` with no origin key at all and 228 `prompt`, of which 140 human, 6 peer and 82 none.",
+      "depends": "csift reads `attachment.origin.kind` to decide whether a `queued_command` line is the PERSON's own mid-turn steer (`user.message`) or the harness's own queued rider (`harness.context.task`) - the origin, not the payload type, is the discriminator, exactly as the queue LINE's content is. Reading the record-level field instead makes the arm unreachable on every real line, which is not a visible failure: the steer simply classifies as harness context and the person's words leave the `user` role altogether. csift's channel does not ride the queue at all, and its fact scan admits a line only when the raw bytes carry the envelope needle, so a queued pulse replaying a delivery's text is never counted as the delivery. The prefilter also keeps the never-silent law: a line the needle rejects still gets the shape check, so corrupt bytes are counted rather than exempted.",
       "code": [
         {
           "path": "src/commands/live/channel/reconcile.rs",
           "lines": "273-280",
           "snippet": "    let (hits, skipped) = scan_lines_parallel(&map[..], |line, line_no| {\n        if channel.find(line).is_none()\n            || id_needle.as_ref().is_some_and(|f| f.find(line).is_none())\n        {\n            // The never-silent law: a non-candidate line still gets the O(1) shape check,\n            // so corrupt bytes are counted rather than exempted by the prefilter.\n            return non_candidate_verdict(line);\n        }"
+        },
+        {
+          "path": "src/model/classify/attachments.rs",
+          "lines": "101-111",
+          "snippet": "    pub(crate) fn queued_command_is_human(&self) -> bool {\n        self.attachment_value()\n            .and_then(|v| v.as_object().and_then(|o| o.get(\"origin\")).cloned())\n            .and_then(|o| {\n                o.get(\"kind\")\n                    .and_then(serde_json::Value::as_str)\n                    .map(str::to_string)\n            })\n            .as_deref()\n            == Some(\"human\")\n    }"
         }
       ],
-      "instrument": "Census every record whose attachment type is `queued_command` and bucket it by `commandMode`, then by the presence and value of an origin key; cross-check the csift census against a raw parse of the same lines. Counting rule: one per record whose attachment type is `queued_command`.",
+      "instrument": "Walk every `*.jsonl` under a projects root; keep each line whose top-level `type` is `attachment` and whose `attachment.type` is `queued_command`, and bucket it by `commandMode` and by the presence and value of an origin key at BOTH locations - the record's own `origin` and the payload's `attachment.origin`. Then `csift search '' <target> -t user.message --count-by label` against `-t harness.context.task`: a human-origin line counts under the first and a rider under the second. Counting rule: one per raw line of that shape; a location counts only when the object is present there.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -83647,6 +83672,16 @@
           "observed": "Four hops read. The mode is stamped unconditionally from the queue entry's own field, while the origin is optional and is dropped from the serialized attachment when the enqueue carried none, which is why the census finds records with a mode and no origin key at all. A helper maps an origin kind to a mode string, giving the same two-valued distinction the census measured.",
           "rule": "verbatim byte reads at the named offsets; a count is occurrences of the fixed byte string over the whole binary",
           "note": "The leg is closed: the constructor that stamps the mode is read, and the optionality of the origin is read beside it, which is what makes the mode and not the origin the discriminator."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "walked every `*.jsonl` under two projects roots, kept each line whose top-level `type` is `attachment` and whose `attachment.type` is `queued_command`, and counted the origin object at BOTH locations - the record's own `origin` and the payload's `attachment.origin` - bucketing each by `kind`; then re-read the attachment constructor hop in the verified build to see which location it writes",
+          "observed": "3,692 and 3,574 lines of that shape; top-level `origin` present on 0 and 0; `attachment.origin` present on 219 and 217, kinds human 162 / coordinator 49 / peer 8 under the first root and human 181 / peer 36 under the second. The constructor writes `origin:N6(f.origin)` as a field of the `queued_command` object itself, so the payload location is the only one the producer can reach",
+          "rule": "one count per raw line whose top-level `type` is \"attachment\" and whose `attachment.type` is \"queued_command\"; a location counts only when an object is present there, and a kind counts once per line",
+          "note": "the claim text now states WHERE the origin lands. csift's human-steer arm read the record-level field, which no line of that shape carries, so it never fired on real data; it reads `attachment.origin.kind` now and the e2e pins the two populations apart"
         }
       ],
       "producer_chain": [
@@ -89579,13 +89614,18 @@
     {
       "id": "CLS-031",
       "area": "classification",
-      "behavior": "A scheduled task coming due lands THREE lines, in this order. (1) A `type:\"queue-operation\"` line whose `content` is the armed text. (2) A `type:\"system\"` record with `subtype:\"scheduled_task_fire\"` whose `content` names the instant in a trailing parenthesis - `Running scheduled task (<when>)` for a cron task, `Claude resuming /loop wakeup (<when>)` for a wakeup - both built by one formatter, `toLocaleString(\"en-US\", {month:\"short\", day:\"numeric\", hour:\"numeric\", minute:\"2-digit\"})` with the comma and the space before the meridiem removed and the meridiem lowercased. (3) A `type:\"user\"` record with `isMeta:true`, `promptSource:\"system\"`, `userType:\"external\"` and `parentUuid` equal to the fire record's `uuid`, whose message content is the armed text. A cron task's fire also carries `cron`, `prompt` and `taskId` on the system record and `scheduledTaskId` / `scheduledFireId` on the prompt record; a wakeup's carries neither set. `promptSource:\"system\"` is not specific to the scheduler: the submit path stamps it on EVERY `isMeta` submission through one ternary, and Claude Code's own reader calls the `isMeta` + `promptSource` pair a system-injected turn prompt while testing `isMeta` + NO `promptSource` for a human entry. Measured over every transcript under one projects root: 171 records carry the pair without an `origin` object, 170 of them are parented to a `scheduled_task_fire` record and all 170 of those name a readable instant; 465 fire records exist over 5 of the 80 top-level transcripts, 459 with the wakeup wording and 6 with the cron wording. Both counts are per raw record - a fire record being a JSON object whose top-level `type` is \"system\" and `subtype` \"scheduled_task_fire\", which is a narrower rule than the 7 files that carry the literal anywhere.",
-      "depends": "csift classifies the PROMPT `harness.schedule.fire` and joins its instant to the fire record by `parentUuid`, so a cron-fired prompt is searchable, censusable and dated; before the leaf it matched no marker and fell into the isMeta exclusion, invisible on every surface. The `queue-operation` line stays unlabeled (a harness rider, the same content-shape law `user.queued` applies) and the fire record has its own leaf, the gated `harness.schedule.event`, so a default scan gains no hit from the keep that reads the instant. An `origin` object refuses the leaf, because the harness stamps one on everything it did not submit itself and reads it back as the first test of its own foreign-input veto - without that guard a tagless cross-session delivery, which carries the identical pair, would read as a fire. If a build stops stamping `promptSource`, the leaf empties; if it stops writing the fire record, the instant goes null and the leaf holds.",
+      "behavior": "A scheduled task coming due lands THREE lines, in this order. (1) A `type:\"queue-operation\"` line whose `content` is the armed text. (2) A `type:\"system\"` record with `subtype:\"scheduled_task_fire\"` whose `content` names the instant in a trailing parenthesis - `Running scheduled task (<when>)` for a cron task, `Claude resuming /loop wakeup (<when>)` for a wakeup - both built by one formatter, `toLocaleString(\"en-US\", {month:\"short\", day:\"numeric\", hour:\"numeric\", minute:\"2-digit\"})` with the comma and the space before the meridiem removed and the meridiem lowercased. (3) A `type:\"user\"` record with `isMeta:true` whose `parentUuid` equals the fire record's `uuid` and whose message content is the armed text. That parent link is the only mark the producer leaves on the prompt itself: the submission object sets `isMeta` unconditionally, no field on the record names the scheduler, and the text is whatever the operator armed. `promptSource:\"system\"` rides such a prompt only from a build floor and is not the scheduler's: the submit path stamps it on EVERY `isMeta` submission through one ternary, and Claude Code's own reader calls the `isMeta` + `promptSource` pair a system-injected turn prompt while testing `isMeta` + NO `promptSource` for a human entry. A cron task's fire also carries `cron`, `prompt` and `taskId` on the system record and `scheduledTaskId` / `scheduledFireId` on the prompt record; a wakeup's carries neither set. Measured over two projects roots, one count per raw record: 465 and 504 fire records, and 464 and 502 prompts parented to one, every one of which names a readable instant - while only 170 and 164 of those prompts carry `promptSource`, every stamped one at version 2.1.177 or above and every unstamped one at 2.1.158 or 2.1.159, so the stamp arrived between those two builds and roughly two thirds of the population predates it.",
+      "depends": "csift classifies the PROMPT `harness.schedule.fire` by that STRUCTURAL link - an `isMeta` `type:\"user\"` record whose `parentUuid` names a `system`/`scheduled_task_fire` record in the same transcript - and joins the instant from the same parent, so a fired prompt is searchable, censusable and dated on every build, including the ones written before the `promptSource` stamp existed; before the leaf it matched no marker and fell into the isMeta exclusion, invisible on every surface. Reading the field instead would have been a text-free gate that still reached only a third of the prompts. The `queue-operation` line stays unlabeled (a harness rider, the same content-shape law `user.queued` applies) and the fire record has its own leaf, the gated `harness.schedule.event`, so a default scan gains no hit from the keep that reads the instant. Two guards refuse an inbound message from elsewhere, which shares the isMeta authorship flag: the relay FRAMING, through the same `is_peer_message` predicate `user.queued` uses, and the `origin` object the harness stamps on everything it did not submit itself and reads back as the first test of its own foreign-input veto. A prompt opening with a loop marker keeps its own leaf by ARM ORDER, which is the whole difference between the parented population and the leaf's census. If a build stops stamping `promptSource` the leaf is untouched, because no csift path reads that field; if it stops writing the fire record, the leaf and the instant go together, because the link IS the leaf.",
       "code": [
         {
           "path": "src/model/classify/injections.rs",
           "lines": "156-162",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "163-168",
+          "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/support.rs",
@@ -89601,14 +89641,9 @@
           "path": "src/model/taxonomy/paths.rs",
           "lines": "142",
           "snippet": "            Class::ScheduleFire => \"harness.schedule.fire\","
-        },
-        {
-          "path": "src/model/record.rs",
-          "lines": "140-141",
-          "snippet": "    #[serde(default, rename = \"promptSource\")]\n    pub prompt_source: Option<String>,"
         }
       ],
-      "instrument": "Over the projects root, count `type:\"user\"` records with `isMeta` true and `promptSource == \"system\"` and no `origin` key; for each, resolve `parentUuid` against the file's uuid map and check the parent is `type:\"system\"` with `subtype:\"scheduled_task_fire\"` and a `content` ending in `)`. Then `csift search '' --count-by label` and read the `harness.schedule.fire` row, and `csift search '' <a transcript with fires> -t harness.schedule.fire` for the `[scheduled fire <when>]` marker. Counting rule: one per raw record for the census, one per classified record for the csift rows.",
+      "instrument": "Over each projects root, walk every `*.jsonl`; per file collect the `uuid` of every `type:\"system\"` record with `subtype:\"scheduled_task_fire\"`, then count the `type:\"user\"` records with `isMeta` true whose `parentUuid` is one of them IN THAT SAME FILE. Report as a second number the subset that also carries `promptSource == \"system\"`, and the `version` field on each side. Then `csift search '' --count-by label` over the same root: the `harness.schedule.fire` row must equal the parented count minus the prompts whose text opens with one of the five loop markers, which the `harness.schedule.wakeup` and `harness.schedule.tick` arms take first. Finally `csift search '' <a transcript with fires> -t harness.schedule.fire` for the `[scheduled fire <when>]` marker. Counting rule: one per raw record for the census, one per classified record for the csift rows, a parent resolved through the file's own uuid map with the last occurrence winning.",
       "located": {
         "claude_code": "2.1.268",
         "csift": "0.12.2",
@@ -89620,7 +89655,8 @@
       "attribution": "end-to-end",
       "open_legs": [],
       "residue": [
-        "The corpus holds ONE record of the fire shape whose parent is a `turn_duration` record rather than a fire record; whether that build wrote no fire record or wrote one the chain no longer reaches is open, and it reads as a fire with a null instant either way."
+        "Three records of the `isMeta` + `promptSource` + no-`origin` shape are parented to something other than a fire record: one to a `turn_duration` record under the first projects root, one to a `turn_duration` and one to a `stop_hook_summary` under the second. Under the structural gate they carry no fire leaf, which is the correct reading - nothing on those records or in those files links them to a fire.",
+        "The verified build carries a prepender that wraps a prompt in a `[SCHEDULED TASK - AUTOMATED FIRING OF A CONFIGURED PROMPT]` frame, idempotent and refusing to wrap a text already carrying that frame or the background-task one. Neither projects root holds a user record carrying it (the 4 corpus lines carrying the literal are all `agent.tool.result` records quoting the binary), so whether the fire path reaches that prepender is a question for a build that writes one. The leaf would be unaffected either way, which is the point of keying on the link rather than the text."
       ],
       "producer_chain": [
         {
@@ -89656,14 +89692,14 @@
           "name": "the promptSource ternary on the submit path",
           "offset": 181584452,
           "excerpt": "Fo=po.isMeta||!Vw(kn)?\"system\":po.inputSource??De,jn=Qrt(po.uuid,po.verifiedSlackHumanTurn),Ko=await Nxe({input:po.value",
-          "note": "The stamp is not the scheduler's: ANY isMeta submission gets `promptSource:\"system\"` here, which is why the leaf needs the origin guard and the arm order rather than this field alone."
+          "note": "The stamp is not the scheduler's: ANY isMeta submission gets `promptSource:\"system\"` here, which is why the leaf reads the parent link rather than this field."
         },
         {
           "role": "writer",
           "name": "the scheduled-id stamp on the prompt record",
           "offset": 169781478,
           "excerpt": "let hn=pt.messages.filter((Ne)=>Ne.type===\"user\"),ot=hn.find((Ne)=>Ne.promptSource!==void 0)??hn[0];if(ot){if(ot.scheduledTaskId=lt,Ot!==void 0)ot.scheduledFireId=Ot}}if(Ec(\"query_process_user_input_base_end\"),dn===!0&&pt.messages",
-          "note": "The pass that finds the just-built user record BY its promptSource and writes the task and fire ids onto it - the harness using the same field csift keys on."
+          "note": "The pass that finds the just-built user record BY its promptSource and writes the task and fire ids onto it. The harness can key on that field because it is the one that wrote it a moment earlier; a reader of an archive cannot, because the field postdates most of what is on disk and every isMeta submission carries it."
         },
         {
           "role": "gate",
@@ -89693,6 +89729,16 @@
           "observed": "the parented prompt takes harness.schedule.fire; the unparented one does not; the peer message is refused by the relay framing and the origin object as before",
           "rule": "one observation per synthetic record classified through Record::classify with a per-file ScheduleFireIndex in hand",
           "note": "the GATE moved from the promptSource stamp to the parent link. promptSource is the submit path's stamp on every isMeta submission, not the scheduler's, and it has a version floor; the parent link is the only mark the producer leaves on the prompt itself and is available on every build"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "walked every `*.jsonl` under two projects roots, collected the `system`/`scheduled_task_fire` uuids per file and counted the `isMeta` `type:\"user\"` records parented to one, splitting on whether the record also carries `promptSource == \"system\"` and on its `version`; then `csift search '' --count-by label` over each root and a marker-prefix split of the same parented population",
+          "observed": "9,700 transcripts / 465 fire records / 464 parented prompts under the first root and 10,613 / 504 / 502 under the second; all 464 and all 502 name a readable instant and none carries an `origin` object. The `promptSource`-bearing subset is 170 and 164 - 163 of each at version 2.1.177, the rest at 2.1.207, 2.1.258 and 2.1.268 - while every unstamped prompt sits at 2.1.158 or 2.1.159, so counting the stamp misses 294 and 338 prompts. The label census reads harness.schedule.fire 461, harness.schedule.tick 2, harness.schedule.wakeup 1 and 489 / 8 / 6; the marker split of the parented population is 3 and 13, so 464 - 3 = 461 and 502 - 13 = 489 reconcile census to rows through arm order alone",
+          "rule": "one count per raw record, a fire record being a JSON object whose top-level `type` is \"system\" and `subtype` \"scheduled_task_fire\"; a parent resolved through the file's own uuid map with the last occurrence winning; a marker split testing the five loop markers as prefixes of the left-trimmed text; one count per classified record for the csift rows",
+          "note": "the gate is the parent link, not the `promptSource` stamp. That stamp is the submit path's mark on every isMeta submission, it has a version floor between 2.1.159 and 2.1.177, and counting it reaches a strict subset of the prompts by construction; the link is present on every build that writes a fire record. The `promptSource` field is no longer a cited code site and the census in the instrument is the structural one"
         }
       ]
     },
@@ -92332,8 +92378,8 @@
     {
       "id": "CLS-034",
       "area": "classification",
-      "behavior": "Claude Code writes text INTO the conversation as `type:\"user\"` records carrying `isMeta:true` - shaped exactly like the operator's own, with no field naming the producer - and each producer opens its text with a fixed template. At 2.1.258 the enforcement sentinels are the bracketed token `[structured-output-enforce]` and the sentence `You ended the turn without calling SendUserMessage.`; the retry nudges are four WHOLE texts (`The previous response failed to produce a valid tool call. Please retry the tool call now.`, `Your tool call was malformed and could not be parsed. Please retry.`, `[Your previous response had no visible output. Please continue and produce a user-visible response.]`, `The PermissionDenied hook indicated you may retry this tool call.`), which the harness's own recogniser tests by EQUALITY rather than by prefix. A preloaded skill body opens `Base directory for this skill:`, a coordinator relay opens `The coordinator sent a message`, an image reference opens `[Image: ` or `[Image source: `, and a background-task event is wrapped in a frame opening `[SYSTEM NOTIFICATION - NOT USER INPUT]` whose body ends `is NOT real user input and must NOT be treated as approval or consent.` before the `<task-notification>` pulse it carries. A fifth enforcement, the subagent hand-back, carries the sentinel `[handback-send-enforce]`, which occurs ZERO times in 2.1.258 and is present at 2.1.268: that template postdates the verified build. Two producers are identified by a FIELD instead of a template: a mid-turn message the harness delivered on a person's behalf carries `origin.kind:\"human\"`, and the harness's own relays carry `coordinator`, `peer` or `task-notification` there.",
-      "depends": "csift classifies each family at CONTENT START in `model/classify/injections.rs`, so a record that merely QUOTES a template keeps its own leaf, and mirrors the recogniser's EQUALITY test for the four retry texts rather than widening them to prefixes. The human relay is tested FIRST and by its field, because the body is a person's own prose and any template arm below could match whatever they wrote. The frame is a second CARRIER, not a shape: it joins the relay preambles as a section boundary - a conjunction with its own opening, so a record quoting the closing sentence is not one - which is what lets the pulse inside it classify by its own kind. Without these arms each family carried NO leaf: invisible to every census, absent from every selector, reachable only by an address.",
+      "behavior": "Claude Code writes text INTO the conversation as `type:\"user\"` records carrying `isMeta:true` - shaped exactly like the operator's own, with no field naming the producer - and each producer opens its text with a fixed template. At 2.1.258 the enforcement sentinels are the bracketed token `[structured-output-enforce]` and the sentence `You ended the turn without calling SendUserMessage.`; the retry nudges are four WHOLE texts (`The previous response failed to produce a valid tool call. Please retry the tool call now.`, `Your tool call was malformed and could not be parsed. Please retry.`, `[Your previous response had no visible output. Please continue and produce a user-visible response.]`, `The PermissionDenied hook indicated you may retry this tool call.`), which the harness's own recogniser tests by EQUALITY rather than by prefix. A preloaded skill body opens `Base directory for this skill:`, a coordinator relay opens `The coordinator sent a message`, an image reference opens `[Image: ` or `[Image source: `, and a background-task event is wrapped in a frame opening `[SYSTEM NOTIFICATION - NOT USER INPUT]` whose body ends `is NOT real user input and must NOT be treated as approval or consent.` before the `<task-notification>` pulse it carries. A fifth enforcement, the subagent hand-back, carries the sentinel `[handback-send-enforce]`, which occurs ZERO times in 2.1.258 and is present at 2.1.268: that template postdates the verified build. A harness-injected reminder opens with the tag `<system-reminder`, which one wrapper interpolates around text it is given and which several whole reminders in the string table open with verbatim. Two producers are identified by a FIELD instead of a template: a mid-turn message the harness delivered on a person's behalf carries `origin.kind:\"human\"`, and the harness's own relays carry `coordinator`, `peer` or `task-notification` there.",
+      "depends": "csift classifies each family at CONTENT START in `model/classify/injections.rs`, so a record that merely QUOTES a template keeps its own leaf, and mirrors the recogniser's EQUALITY test for the four retry texts rather than widening them to prefixes. The human relay is tested FIRST and by its field, because the body is a person's own prose and any template arm below could match whatever they wrote. The frame is a second CARRIER, not a shape: it joins the relay preambles as a section boundary - a conjunction with its own opening, so a record quoting the closing sentence is not one - which is what lets the pulse inside it classify by its own kind. EVERY arm below the human-relay test is a conjunction with `isMeta`, the authorship flag the injecting call site stamps and the one `is_genuine_user` already reads: a person can write any sentence a template opens with - quoting the reminder they were just shown, pasting the nudge they are asking about, leading a message with an image reference - and every arm here matches on TEXT, so without that conjunction a text test would relabel a person out of `user` while their message still opened its turn. The frame carrier takes the flag too. Without these arms each family carried NO leaf: invisible to every census, absent from every selector, reachable only by an address.",
       "code": [
         {
           "path": "src/model/classify/injections.rs",
@@ -92404,6 +92450,20 @@
           "offset": 76177756,
           "excerpt": "[SYSTEM NOTIFICATION - NOT USER INPUT]",
           "note": "The frame's opening; its builder prepends the whole envelope to the pulse, which is why the pulse is no longer at content start."
+        },
+        {
+          "role": "writer",
+          "name": "image reference prefixes",
+          "offset": 160711132,
+          "excerpt": "var J9t=\"[Image: \",wNe=\"[Image source: \";",
+          "note": "Both openings are declared together, which is why csift matches the pair rather than one of them: neither is a prefix of the other and a record carries whichever the builder chose."
+        },
+        {
+          "role": "writer",
+          "name": "system-reminder wrapper",
+          "offset": 162421384,
+          "excerpt": "function RJt(e){let n=AJt(e);if(!n)return\"\";return`<system-reminder>${n}</system-reminder>",
+          "note": "The one template in the build that interpolates into the tag pair; the other 65 occurrences of the opening tag are reader regexes, prose about the tag, and whole fixed reminders that carry it literally. csift tests the OPENING at content start, so both forms reach the leaf and a record quoting a reminder mid-prose does not."
         }
       ],
       "checks": [
@@ -92416,6 +92476,16 @@
           "observed": "six of the seven literals are present at the offsets recorded above and `[handback-send-enforce]` occurs zero times; the leaves census harness.context.reminder 6,931 \u00b7 harness.context.image 721 \u00b7 harness.command.caveat 127 \u00b7 harness.schedule.event 91 \u00b7 harness.context.skill 66 \u00b7 harness.hook.feedback 43 \u00b7 harness.enforce.structured-output 13 \u00b7 harness.enforce.retry 2 \u00b7 harness.enforce.brief 0 \u00b7 harness.enforce.handback 0",
           "rule": "one observation per classified record over every *.jsonl under the projects root; a zero is a family whose template has no specimen here, not one csift cannot classify",
           "note": "the two zero-count enforcements are the brief and hand-back forms, whose gates need a brief-enabled session and a subagent hand-back; the hand-back template is not in the verified build at all, and the unit cases cover both from their sentinels"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "byte-searched the verified build for the two template literals that had no recorded anchor - the image reference openings and the tag the reminder wrapper interpolates into - and read every occurrence of each with its surrounding bytes",
+          "observed": "`[Image: ` and `[Image source: ` occur twice each, once in the string table and once in the source region as one declaration `var J9t=\"[Image: \",wNe=\"[Image source: \";` at offset 160711132; `<system-reminder` occurs 66 times and exactly one of them interpolates into the tag pair, the wrapper at offset 162421384, the rest being reader regexes, prose about the tag and whole fixed reminders; `[handback-send-enforce]` still occurs zero times",
+          "rule": "one count per byte occurrence of the literal over the whole build; a hop counts as a writer when it produces the bytes, not when it reads or mentions them",
+          "note": "the two writers are anchored, so the producer chain now carries every template the arms read; the trigger and gate for each family stay open"
         }
       ]
     }
