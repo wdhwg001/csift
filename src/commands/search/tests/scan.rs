@@ -143,3 +143,66 @@ fn a_bookkeeping_needle_runs_only_for_the_leaf_its_bit_names() {
     assert!(line_is_transcript_candidate(COST_LINE.as_bytes(), &wide));
     assert!(line_is_transcript_candidate(MODE_LINE.as_bytes(), &wide));
 }
+
+/// The two attachment VIEW lines: each carries a leaf an ordinary query names, and each
+/// has its own bit.
+const QUEUED_COMMAND_LINE: &str = r#"{"type":"attachment","uuid":"v1","origin":{"kind":"human"},"attachment":{"type":"queued_command","command":"steer left"}}"#;
+const STRUCTURED_LINE: &str = r#"{"type":"attachment","uuid":"v2","attachment":{"type":"structured_output","content":["the answer"]}}"#;
+const FILE_ATTACHMENT_LINE: &str = r#"{"type":"attachment","uuid":"v3","attachment":{"type":"file","filePath":"/Users/dev/x.rs","content":"fn main(){}"}}"#;
+
+/// Naming ONE view leaf runs that leaf's needle and no other, and a query naming neither
+/// runs none - which is the whole point of the bits: `-t user` used to admit every
+/// attachment line in the transcript, at four times the cost of a flagless scan. A census
+/// cannot show this (a wrongly admitted line classifies to a leaf the filter drops), so
+/// the candidate predicate is where it is pinned.
+#[test]
+fn an_attachment_view_needle_runs_only_for_the_leaf_its_bit_names() {
+    let mask_for = |selector: &str| {
+        let mut a = args("");
+        a.labels = vec![selector.to_string()];
+        attachment_view_mask(&a, false)
+    };
+    let gates_for = |selector: &str| CandidateGates {
+        attachment_views: mask_for(selector),
+        ..CandidateGates::default()
+    };
+
+    let human = gates_for("user.message");
+    assert!(
+        human.attachment_views != 0,
+        "the selector sets its leaf's bit"
+    );
+    assert!(
+        line_is_transcript_candidate(QUEUED_COMMAND_LINE.as_bytes(), &human),
+        "the human's queued steer is admitted by its own needle"
+    );
+    assert!(
+        !line_is_transcript_candidate(STRUCTURED_LINE.as_bytes(), &human),
+        "the OTHER view's payload is not: its bit is clear"
+    );
+    assert!(
+        !line_is_transcript_candidate(FILE_ATTACHMENT_LINE.as_bytes(), &human),
+        "and an ordinary attachment line is not admitted at all - the coarse keep stays off"
+    );
+
+    let structured = gates_for("agent.message.structured");
+    assert!(line_is_transcript_candidate(
+        STRUCTURED_LINE.as_bytes(),
+        &structured
+    ));
+    assert!(!line_is_transcript_candidate(
+        QUEUED_COMMAND_LINE.as_bytes(),
+        &structured
+    ));
+    assert!(!line_is_transcript_candidate(
+        FILE_ATTACHMENT_LINE.as_bytes(),
+        &structured
+    ));
+
+    // A flagless scan sets no bit and admits none of the three.
+    let flagless = flagless_gates();
+    assert_eq!(flagless.attachment_views, 0);
+    for line in [QUEUED_COMMAND_LINE, STRUCTURED_LINE, FILE_ATTACHMENT_LINE] {
+        assert!(!line_is_transcript_candidate(line.as_bytes(), &flagless));
+    }
+}
