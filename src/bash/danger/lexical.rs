@@ -3,7 +3,7 @@
 //!
 //! The classifier is `hnt` at 2.1.258 @162773520, byte-identical at 2.1.142
 //! @192802095, 2.1.193 @205414799 (where it is named `Ywa`) and 2.1.207
-//! @219697578, and GONE from 2.1.261 on (the rewrite lives in `bash_danger_out`).
+//! @219697578, and GONE from 2.1.261 on (the rewrite lives in `bash/danger/out.rs`).
 //!
 //! It runs on the TOO-COMPLEX arm only (`Hno` @162867544 calls `$no` @162861871,
 //! which calls this). It is purely lexical: it never checks whether the variable is

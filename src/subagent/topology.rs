@@ -60,10 +60,10 @@ pub struct SubagentNode {
     /// call that is not a shell command at all.
     pub pending_reason: Option<String>,
     /// Which of the harness's two checkers would have decided, and under which
-    /// generation - the disclosure line from [`crate::bash_danger::Verdict`].
+    /// generation - the disclosure line from [`crate::bash::danger::Verdict`].
     pub pending_checker: Option<String>,
     pub pending_since_utc: Option<String>,
-    /// Files this subagent mutated (reuses the `files`/`bash_mutations` extractors over the
+    /// Files this subagent mutated (reuses the `files`/`bash::mutations` extractors over the
     /// node's own transcript). Each is `(path, op_label, is_create)`.
     pub files_changed: Vec<(String, String, bool)>,
     /// Fork provenance (a `/fork` child's head `fork-context-ref` record): the
@@ -114,7 +114,7 @@ pub(crate) fn pending_facts(pending: Option<&PendingToolUse>) -> PendingFacts {
     let Some(command) = p.command.as_deref() else {
         return facts;
     };
-    let verdict = crate::bash_danger::classify(command, p.version.as_deref());
+    let verdict = crate::bash::danger::classify(command, p.version.as_deref());
     facts.checker = Some(verdict.disclosure());
     facts.classification = Some(if verdict.blocks() {
         PendingClassification::EscalationBlocked

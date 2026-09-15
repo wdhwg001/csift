@@ -50,7 +50,7 @@
 //! is that class (the first adds U+0085 and drops U+FEFF), so the port is an
 //! explicit set, not a predicate.
 
-use crate::bash_danger_lexical::{
+use crate::bash::danger::lexical::{
     amp_to_semicolon, escapes_next, mask, mask_specials, open_quote, paren_fixpoint,
     resolve_dquote_escapes, strip_backticks, unmask, CLAUSE_SPLIT, ESCAPED_SPACE, KCT, REDIR_OP,
     REDIR_START, VCT,
@@ -554,5 +554,4 @@ fn holds_xargs_arguments(token: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "bash_danger_out_tests.rs"]
 mod tests;

@@ -73,7 +73,7 @@ pub(crate) enum EventKind {
     IntegrityError { kind: IntegrityKind, raw: String },
     /// A heuristic external mutation (Bash redirect/sed -i/tee/...). SOFT signal only.
     /// `path` is the RESOLVED spelling that matched `--file` (the operand joined to the
-    /// recording shell's cwd; see `bash_mutations::cwd`), `resolution` its class wire
+    /// recording shell's cwd; see `bash::mutations::cwd`), `resolution` its class wire
     /// spelling (`absolute`/`cwd-joined`/`cd-tracked`/`unresolved`).
     BashTouch {
         verb: String,
@@ -133,7 +133,7 @@ pub(crate) enum EventKind {
 
 /// The provenance of a [`EventKind::FullSnapshot`]. The `Bash*` variants are the
 /// v0.9.4 content anchors: deterministic bash reads/writes admitted by
-/// `bash_mutations::bash_anchor` plus the recover-side completeness gates.
+/// `bash::mutations::bash_anchor` plus the recover-side completeness gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SnapSource {
     Write,

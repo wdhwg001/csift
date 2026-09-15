@@ -151,8 +151,8 @@ pub(crate) fn command_argv(stmt: &str) -> Vec<String> {
             i += 1;
             continue;
         }
-        if crate::bash_danger_lexical::REDIR_START.is_match(w) {
-            if crate::bash_danger_lexical::REDIR_OP.is_match(w) {
+        if crate::bash::danger::lexical::REDIR_START.is_match(w) {
+            if crate::bash::danger::lexical::REDIR_OP.is_match(w) {
                 i += 1;
             }
             i += 1;
@@ -180,7 +180,7 @@ pub(crate) fn simple_commands(command: &str) -> Vec<String> {
             queue.push(inner);
         }
         let stripped = strip_substitutions(&text);
-        let Some(parts) = crate::bash_danger_shape::split_statements(&stripped) else {
+        let Some(parts) = crate::bash::danger::shape::split_statements(&stripped) else {
             out.push(stripped);
             continue;
         };
@@ -407,5 +407,4 @@ fn sentinel_for(name: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "bash_danger_argv_tests.rs"]
 mod tests;

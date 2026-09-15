@@ -99,17 +99,17 @@ pub(crate) fn bash_verb_is_create(verb: &str) -> bool {
 
 /// Build one bash-heuristic [`FileMutation`], resolving the operand against the
 /// recording shell's cwd (the record's own top-level `cwd` field; see
-/// [`crate::bash_mutations::cwd`] for the mechanism and the class semantics). The
+/// [`crate::bash::mutations::cwd`] for the mechanism and the class semantics). The
 /// RESOLVED path becomes the primary `path` so relative and absolute spellings of one
 /// file land in one bucket; the typed form is kept in `path_verbatim` when different.
 /// A class-marker pseudo-path (`git:add`) is never resolved and carries no class.
 pub(crate) fn bash_file_mutation(
-    bm: crate::bash_mutations::BashMutation,
+    bm: crate::bash::mutations::BashMutation,
     rec: &Record,
     command_errored: bool,
 ) -> FileMutation {
     let (resolved, class) = bm.resolve(rec.cwd.as_deref());
-    let marker = crate::bash_mutations::is_class_marker(&bm.path);
+    let marker = crate::bash::mutations::is_class_marker(&bm.path);
     let path_verbatim = (resolved != bm.path).then(|| bm.path.clone());
     FileMutation {
         path: resolved,

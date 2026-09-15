@@ -135,7 +135,7 @@ pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
         // so the lane's classification names the state the jsonl can confirm.
         if command
             .as_deref()
-            .is_some_and(|c| crate::bash_danger::classify(c, version.as_deref()).blocks())
+            .is_some_and(|c| crate::bash::danger::classify(c, version.as_deref()).blocks())
         {
             return Some(PendingToolUse {
                 tool_use_id: id.clone(),

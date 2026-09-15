@@ -1,5 +1,5 @@
 //! Per-turn Bash content-anchor extraction: pair each gated command shape
-//! (`bash_mutations::bash_anchor`) with its result carrier and emit first-class
+//! (`bash::mutations::bash_anchor`) with its result carrier and emit first-class
 //! content events.
 //!
 //! The lexical classifier decides WHAT a command shape means; this layer supplies
@@ -22,7 +22,7 @@
 //! and a self-inflicted boundary.
 
 use super::*;
-use crate::bash_mutations::{bash_anchors, parse_bash_mutations, AnchorCmd, BashMutation, CwdAt};
+use crate::bash::mutations::{bash_anchors, parse_bash_mutations, AnchorCmd, BashMutation, CwdAt};
 
 /// The outcome of one turn's bash-anchor pass.
 #[derive(Debug, Default)]
@@ -101,7 +101,7 @@ pub(crate) fn collect_turn_bash_anchors(
         // rewrite it and segment order is not replayed within one line).
         let resolved_rows: Vec<(String, String)> = parse_bash_mutations(bu.cmd)
             .into_iter()
-            .filter(|r| !crate::bash_mutations::is_class_marker(&r.path))
+            .filter(|r| !crate::bash::mutations::is_class_marker(&r.path))
             .map(|r| {
                 let (res, _) = r.resolve(bu.cwd);
                 (r.path, res)

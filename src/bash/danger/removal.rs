@@ -22,7 +22,7 @@
 //!   sentinels, except for the twenty variable names the decomposer resolves from
 //!   the real environment, which become a `NeedsFs` answer instead.
 
-use crate::bash_danger_argv::{
+use crate::bash::danger::argv::{
     any_statement_is_cd, command_argv, normalise_verb, positional_operands, simple_commands,
     CMDSUB_SENTINEL, ENV_MARKER, VAR_SENTINEL,
 };
@@ -316,5 +316,4 @@ fn ends_with_star_slash(b: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "bash_danger_removal_tests.rs"]
 mod tests;

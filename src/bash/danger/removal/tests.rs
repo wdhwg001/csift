@@ -3,11 +3,8 @@
 //! `classify`'s example table reaches these arms a whole command at a time. These
 //! cases run one layer below it: each disjunct of the unresolvable arm on its own
 //! operand, the critical-path test and the three node path helpers it is built on.
-//! Every case is read off the ported semantics in `bash_danger_removal.rs`, whose
+//! Every case is read off the ported semantics in `bash/danger/removal.rs`, whose
 //! doc comment names the arm and the harness offset it belongs to.
-//!
-//! Declared with an explicit `#[path]` because the module is a set of sibling
-//! files rather than a directory (see the note in `main.rs`).
 
 use super::*;
 

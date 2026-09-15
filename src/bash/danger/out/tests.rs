@@ -5,14 +5,11 @@
 //! and their private-use stand-ins, the token walk that replaced the clause head,
 //! the `find -exec` scan and its per-clause cap, the operand walk, and the
 //! nested-shell recursion. Each case is read off the ported semantics in
-//! `bash_danger_out.rs`, whose doc comment names the arm it belongs to.
-//!
-//! Declared with an explicit `#[path]` because the module is a set of sibling
-//! files rather than a directory (see the note in `main.rs`).
+//! `bash/danger/out.rs`, whose doc comment names the arm it belongs to.
 
 use super::*;
-use crate::bash_danger::{classify, Checker, Decision, Generation};
-use crate::bash_danger_lexical::{replace_plain_parens, shield};
+use crate::bash::danger::lexical::{replace_plain_parens, shield};
+use crate::bash::danger::{classify, Checker, Decision, Generation};
 
 /// The generation-3 decision for one command, with the checker that made it.
 fn gen3(command: &str) -> (Decision, Checker) {

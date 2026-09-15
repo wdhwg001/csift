@@ -4,9 +4,6 @@
 //! branch it takes, the arm that decides it and the byte offset of that arm in the
 //! 2.1.258 build, evaluated at all three generations. A row whose three columns
 //! differ is a generational fact, not a bug.
-//!
-//! This file is declared with an explicit `#[path]` because the module is a set of
-//! sibling files rather than a directory (see the note in `main.rs`).
 
 use super::*;
 
@@ -475,7 +472,7 @@ fn the_over_length_command_takes_the_parse_abort_branch() {
 
 #[test]
 fn the_lone_ampersand_rule_holds_at_both_string_edges() {
-    use crate::bash_danger_lexical::amp_to_semicolon;
+    use crate::bash::danger::lexical::amp_to_semicolon;
     // A lone `&` converts at EVERY position, the two edges included: at index 0
     // there is no previous byte to consult and at the end no next one.
     assert_eq!(amp_to_semicolon("a & b"), "a ; b");
@@ -492,7 +489,7 @@ fn the_lone_ampersand_rule_holds_at_both_string_edges() {
 
 #[test]
 fn a_group_at_the_string_start_is_a_plain_group() {
-    use crate::bash_danger_lexical::{remove_plain_groups, strip_paren_groups};
+    use crate::bash::danger::lexical::{remove_plain_groups, strip_paren_groups};
     // There is no byte before index 0, so the `$`-lookbehind cannot hold there.
     assert_eq!(remove_plain_groups("(a b) x"), "  x");
     // A `$`-preceded group is KEPT here; the other pass of the fixpoint owns it.
@@ -505,7 +502,7 @@ fn a_group_at_the_string_start_is_a_plain_group() {
 
 #[test]
 fn the_operand_walk_skips_a_redirect_and_its_separated_target() {
-    use crate::bash_danger_lexical::{hnt, scan_operands};
+    use crate::bash::danger::lexical::{hnt, scan_operands};
     // A BARE redirect operator consumes the next token, so a target-shaped word
     // belonging to the redirect is never read as the removal's operand.
     assert!(scan_operands(&[">", "$TMP/", "-f"]).is_none());
@@ -527,7 +524,7 @@ fn the_operand_walk_skips_a_redirect_and_its_separated_target() {
 
 #[test]
 fn the_lexical_guard_needs_both_a_dollar_and_a_removal_word() {
-    use crate::bash_danger_lexical::hnt;
+    use crate::bash::danger::lexical::hnt;
     assert!(hnt("rm -rf /tmp/build").is_none(), "no dollar");
     assert!(hnt("echo $HOME/x").is_none(), "no removal word");
     assert!(hnt("rm -rf $T/*").is_some(), "both present");

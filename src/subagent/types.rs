@@ -138,7 +138,7 @@ impl SubagentStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PendingClassification {
     /// The pending tool_use is a Bash command CC's classifier would HOIST for human approval even
-    /// under bypass-permissions (a dangerous `rm`/`rmdir`, see [`crate::bash_danger`]). Almost
+    /// under bypass-permissions (a dangerous `rm`/`rmdir`, see [`crate::bash::danger`]). Almost
     /// certainly waiting for a human to click "Yes", NOT dying. The high-value disambiguation.
     EscalationBlocked,
     /// A pending tool_use that is NOT a known-hoisted danger - a (possibly slow) tool still

@@ -6,9 +6,6 @@
 //! remainder to the structured checker. These cases pin each of those steps and the
 //! two bounds it carries. `classify`'s own tests pin what the verdicts look like
 //! once they reach the disclosure.
-//!
-//! Declared with an explicit `#[path]` because the module is a set of sibling
-//! files rather than a directory (see the note in `main.rs`).
 
 use super::*;
 
@@ -29,7 +26,7 @@ fn the_census_answers_with_the_step_that_asked() {
     assert_eq!(
         census("x && rm -rf /tmp", false),
         CensusVerdict::Structured {
-            tail: bash_danger_removal::TAIL_CRITICAL,
+            tail: removal::TAIL_CRITICAL,
             target: "/tmp".to_string(),
         }
     );
@@ -42,7 +39,7 @@ fn the_census_answers_with_the_step_that_asked() {
     assert_eq!(
         census("x && rm -rf /tmp/build && rm -rf /tmp", false),
         CensusVerdict::Structured {
-            tail: bash_danger_removal::TAIL_CRITICAL,
+            tail: removal::TAIL_CRITICAL,
             target: "/tmp".to_string(),
         }
     );
@@ -122,17 +119,16 @@ fn the_substitution_walk_stops_at_its_own_bound() {
 }
 
 // `resolve_dquote_escapes`, one transform of the shared text layer the fixpoint above
-// sits beside: it lives in `bash_danger_lexical`, which this census is a caller of.
-// Its cases are hosted here because `src/` sits at the 20-file structure cap, so that
-// layer has no `*_tests.rs` file of its own to take them and the two files that do
-// cover it are within a dozen lines of the 600-line cap.
+// sits beside: it lives in `bash/danger/lexical.rs`, which this census is a caller of.
+// Its cases are hosted here because that layer carries an inline `mod tests` block and
+// sits within a dozen lines of the 600-line cap, as do the two files that cover it.
 
 /// A `\$` resolves by what FOLLOWS the dollar: a name keeps a real `$`, and anything
 /// else leaves the stand-in, so a literal `$1` cannot read as a positional parameter.
 /// The braced form looks one character further on.
 #[test]
 fn an_escaped_dollar_resolves_by_what_names_a_variable() {
-    use crate::bash_danger_lexical::{resolve_dquote_escapes, KCT};
+    use crate::bash::danger::lexical::{resolve_dquote_escapes, KCT};
     assert_eq!(resolve_dquote_escapes("\\$D"), "$D");
     assert_eq!(resolve_dquote_escapes("\\${D}"), "${D}");
     assert_eq!(resolve_dquote_escapes("\\$0X"), format!("{KCT}0X"));
@@ -141,7 +137,7 @@ fn an_escaped_dollar_resolves_by_what_names_a_variable() {
 /// The other three replaces drop the backslash they carry.
 #[test]
 fn a_double_quoted_escape_drops_the_backslash_it_carries() {
-    use crate::bash_danger_lexical::resolve_dquote_escapes;
+    use crate::bash::danger::lexical::resolve_dquote_escapes;
     assert_eq!(resolve_dquote_escapes("a\\\"b"), "a\"b");
     assert_eq!(resolve_dquote_escapes("a\\\\b"), "a\\b");
     assert_eq!(resolve_dquote_escapes("a\\`b"), "a`b");

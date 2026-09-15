@@ -38,10 +38,17 @@
 //! cwd, realpaths both, and compares against the working-directory set - the
 //! verdict is `Unresolved`, never a guess in either direction.
 
-use crate::bash_danger_census::CensusVerdict;
-use crate::bash_danger_removal::OperandVerdict;
+mod argv;
+mod census;
+mod lexical;
+mod out;
+mod removal;
+mod shape;
 
-pub use crate::bash_danger_shape::Branch;
+use crate::bash::danger::census::CensusVerdict;
+use crate::bash::danger::removal::OperandVerdict;
+
+pub use crate::bash::danger::shape::Branch;
 
 /// The lexical classifier's reason tail @162862700, verbatim.
 pub const TAIL_POSSIBLY_EMPTY: &str = "on possibly-empty variable path";
@@ -152,7 +159,7 @@ impl Verdict {
 #[must_use]
 pub fn classify(command: &str, version: Option<&str>) -> Verdict {
     let (generation, generation_assumed) = generation_of(version);
-    let branch = crate::bash_danger_shape::branch_of(command);
+    let branch = crate::bash::danger::shape::branch_of(command);
     let build = |decision, checker, reason: String| Verdict {
         decision,
         immune: decision == Decision::Ask,
@@ -163,7 +170,7 @@ pub fn classify(command: &str, version: Option<&str>) -> Verdict {
         branch,
     };
     match branch {
-        Branch::Structured => match crate::bash_danger_removal::structured(command) {
+        Branch::Structured => match crate::bash::danger::removal::structured(command) {
             OperandVerdict::Ask { tail, target } => build(
                 Decision::Ask,
                 Checker::Structured,
@@ -190,11 +197,11 @@ pub fn classify(command: &str, version: Option<&str>) -> Verdict {
             if generation == Generation::Gen1 {
                 return build(Decision::Passthrough, Checker::Lexical, String::new());
             }
-            match crate::bash_danger_census::census(command, generation == Generation::Gen3) {
+            match crate::bash::danger::census::census(command, generation == Generation::Gen3) {
                 CensusVerdict::Bail { count } => build(
                     Decision::Ask,
                     Checker::Census,
-                    format!("{} ({count})", crate::bash_danger_census::TAIL_TOO_MANY),
+                    format!("{} ({count})", crate::bash::danger::census::TAIL_TOO_MANY),
                 ),
                 CensusVerdict::Lexical { verb, target } => {
                     let _ = verb;
@@ -203,7 +210,7 @@ pub fn classify(command: &str, version: Option<&str>) -> Verdict {
                         Checker::Census,
                         format!(
                             "{}: {target}",
-                            crate::bash_danger_census::TAIL_IN_SUBSTITUTION
+                            crate::bash::danger::census::TAIL_IN_SUBSTITUTION
                         ),
                     )
                 }
@@ -226,9 +233,9 @@ pub fn classify(command: &str, version: Option<&str>) -> Verdict {
 /// The lexical classifier of one generation.
 fn lexical_hit(command: &str, generation: Generation) -> Option<(&'static str, String)> {
     if generation == Generation::Gen3 {
-        crate::bash_danger_out::out(command).map(|h| (h.command, h.target))
+        crate::bash::danger::out::out(command).map(|h| (h.command, h.target))
     } else {
-        crate::bash_danger_lexical::hnt(command).map(|h| (h.command, h.target))
+        crate::bash::danger::lexical::hnt(command).map(|h| (h.command, h.target))
     }
 }
 
@@ -271,5 +278,4 @@ fn leading_number(s: &str) -> Option<u32> {
 }
 
 #[cfg(test)]
-#[path = "bash_danger_tests.rs"]
 mod tests;

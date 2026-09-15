@@ -358,11 +358,11 @@ pub(crate) fn collect_opaque_commands(
                 let cmd = input.get("command").and_then(serde_json::Value::as_str);
                 if name == "Bash" {
                     let Some(cmd) = cmd else { continue };
-                    for bm in crate::bash_mutations::parse_bash_mutations(cmd) {
+                    for bm in crate::bash::mutations::parse_bash_mutations(cmd) {
                         // `git:add`/`git:commit` mutate the index and refs, never
                         // tracked WORKTREE content, so they cannot rewrite the file
                         // being reconstructed; every other marker class can.
-                        if crate::bash_mutations::is_class_marker(&bm.path)
+                        if crate::bash::mutations::is_class_marker(&bm.path)
                             && !matches!(bm.path.as_str(), "git:add" | "git:commit")
                         {
                             out.push(OpaqueCommand {

@@ -5,9 +5,6 @@
 //! surviving operator flip from the shipped behavior: the verb normalisation that
 //! applies to two names and no others, the prefix peel's per-command token budget,
 //! the positional-operand rule's two stop conditions, and the cd flag.
-//!
-//! Declared with an explicit `#[path]` because the module is a set of sibling
-//! files rather than a directory (see the note in `main.rs`).
 
 use super::*;
 

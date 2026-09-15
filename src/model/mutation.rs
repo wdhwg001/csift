@@ -5,7 +5,7 @@ use super::*;
 /// A file-mutating operation kind, keyed off the tool that performed it. The
 /// structured tools (`Write`/`Edit`/`MultiEdit`/`NotebookEdit`) are AUTHORITATIVE -
 /// they name an exact `file_path`/`notebook_path`. `BashMutation` is HEURISTIC: it is
-/// parsed lexically from a Bash command string (see [`crate::bash_mutations`]), which
+/// parsed lexically from a Bash command string (see [`crate::bash::mutations`]), which
 /// cannot be a true shell parse, so it is labelled heuristic everywhere it surfaces.
 ///
 /// Write/Edit/NotebookEdit/MultiEdit are kept DISTINCT (not collapsed to "mutation")
@@ -94,7 +94,7 @@ pub struct FileMutation {
     /// when `path` is already the typed form. Structured tools never set it.
     pub path_verbatim: Option<String>,
     /// The bash resolution class wire string (`absolute` / `cwd-joined` / `cd-tracked`
-    /// / `unresolved`, see `bash_mutations`). `None` for structured tools and for
+    /// / `unresolved`, see `bash::mutations`). `None` for structured tools and for
     /// class-marker pseudo-paths (`git:add`), which are flags, not files.
     pub resolution: Option<&'static str>,
     /// True when the Bash command's tool_result carried `is_error`: part of the chain
@@ -214,7 +214,7 @@ impl Record {
 
     /// The Bash command string for a `Block::ToolUse { name: "Bash", .. }`
     /// (`input.command`). Returns `None` for any other record / a Bash tool_use with
-    /// no command. Feeds the heuristic parser in [`crate::bash_mutations`].
+    /// no command. Feeds the heuristic parser in [`crate::bash::mutations`].
     #[must_use]
     pub fn bash_command(&self) -> Option<&str> {
         let blocks = self.blocks()?;

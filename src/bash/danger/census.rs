@@ -14,9 +14,9 @@
 //!    with the literal token `__CMDSUB__`, capped at 16 iterations, and the
 //!    tokenised remainder is re-decomposed and handed to the structured checker.
 
-use crate::bash_danger_argv::substitution_bodies;
-use crate::bash_danger_lexical::{self, RM_WORD};
-use crate::bash_danger_removal::{self, OperandVerdict};
+use crate::bash::danger::argv::substitution_bodies;
+use crate::bash::danger::lexical::{self, RM_WORD};
+use crate::bash::danger::removal::{self, OperandVerdict};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -71,15 +71,15 @@ pub(crate) fn census(command: &str, gen3: bool) -> CensusVerdict {
         for stmt in statements_of(&text) {
             let inner = unwrap_group(stmt.trim());
             let hit = if gen3 {
-                crate::bash_danger_out::out(&inner).map(|h| (h.command, h.target))
+                crate::bash::danger::out::out(&inner).map(|h| (h.command, h.target))
             } else {
-                bash_danger_lexical::hnt(&inner).map(|h| (h.command, h.target))
+                lexical::hnt(&inner).map(|h| (h.command, h.target))
             };
             if let Some((verb, target)) = hit {
                 return CensusVerdict::Lexical { verb, target };
             }
             let tokenised = cmdsub_fixpoint(&inner);
-            match bash_danger_removal::structured(&tokenised) {
+            match removal::structured(&tokenised) {
                 OperandVerdict::Ask { tail, target } => {
                     return CensusVerdict::Structured { tail, target }
                 }
@@ -139,7 +139,7 @@ pub(crate) fn brace_command_body(text: &str, at: usize) -> Option<String> {
 /// `ep(text)` with csift's documented whole-string fallback, then the same clause
 /// split the classifier uses, so a `;`-separated body still yields its parts.
 pub(crate) fn statements_of(text: &str) -> Vec<String> {
-    match crate::bash_danger_shape::split_statements(text) {
+    match crate::bash::danger::shape::split_statements(text) {
         Some(parts) => parts.iter().map(|s| (*s).to_string()).collect(),
         None => vec![text.to_string()],
     }
@@ -166,14 +166,12 @@ pub(crate) fn unwrap_group(s: &str) -> String {
 /// The SECOND fixpoint @162864328: backticks first, unconditionally, then
 /// `$(...)` at most sixteen times.
 pub(crate) fn cmdsub_fixpoint(s: &str) -> String {
-    let mut b = bash_danger_lexical::BACKTICKS
-        .replace_all(s, CMDSUB_TOKEN)
-        .into_owned();
+    let mut b = lexical::BACKTICKS.replace_all(s, CMDSUB_TOKEN).into_owned();
     let mut prev = String::new();
     let mut z = 0usize;
     while prev != b && z < CMDSUB_FIXPOINT_ITERATIONS {
         prev.clone_from(&b);
-        b = bash_danger_lexical::DOLLAR_PAREN
+        b = lexical::DOLLAR_PAREN
             .replace_all(&b, CMDSUB_TOKEN)
             .into_owned();
         z += 1;
@@ -182,5 +180,4 @@ pub(crate) fn cmdsub_fixpoint(s: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "bash_danger_census_tests.rs"]
 mod tests;

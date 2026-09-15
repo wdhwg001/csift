@@ -5,6 +5,17 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.13.0] - unreleased
+
+### Changed
+
+- **The source tree is re-managed: the bash lexical layers under `src/bash/`.**
+  `src/` sat at both structure caps (20 counted direct `.rs` files, 16 subfolders),
+  which is a refactor gate rather than a number to raise. `bash_danger*.rs` and
+  `bash_mutations/` become `src/bash/danger.rs` + `src/bash/danger/` and
+  `src/bash/mutations.rs` + `src/bash/mutations/`. Every path is respelled at every
+  call site, with no alias and no forwarding shim. No behaviour change.
+
 ## [0.12.3] - 2026-09-13
 
 ### Added

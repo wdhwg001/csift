@@ -13,7 +13,7 @@
 //!   (`toolUseResult.type == "create"`) by `tool_use_id` within the turn (see
 //!   [`crate::model::Record::carrier_create_paths`]).
 //! - **Heuristic** - Bash file mutations, parsed lexically from `input.command` by
-//!   [`crate::bash_mutations`] (Bash carries no path field in its result). These are
+//!   [`crate::bash::mutations`] (Bash carries no path field in its result). These are
 //!   ALWAYS labelled `(heuristic)` and their `is_create` is itself a heuristic guess.
 //!
 //! ## Performance shape (the 200 MB+ contract)
@@ -39,7 +39,7 @@ use memchr::memmem;
 use rayon::prelude::*;
 use regex::Regex;
 
-use crate::bash_mutations::parse_bash_mutations;
+use crate::bash::mutations::parse_bash_mutations;
 use crate::cli::{FilesArgs, FilesDetail, OutputFormat};
 use crate::model::{ChainView, FileMutation, FileOp, Record};
 use crate::parse::mmap_bytes;

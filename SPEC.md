@@ -354,7 +354,7 @@ Most `system` records carry no §5 label and are skippable noise; the one EXCEPT
 
 The mechanisms `files`/`recover` build on. Extracted from the Claude Code binary and
 validated against real transcripts (18,185 commands for the cwd tracker; 577 hint
-attributions); the crate's implementation notes live at `bash_mutations::cwd` and
+attributions); the crate's implementation notes live at `bash::mutations::cwd` and
 `recover::carriers`.
 
 **The shell cwd.** Claude Code keeps NO long-lived shell: every Bash call spawns a
@@ -370,7 +370,7 @@ truthy = reset every call, silently. **ANCHOR LAW: read `cwd` off the TOOL_USE
 record, never the result record** (the post-command update is asynchronous; ~0.24% of
 result records lag). Consequence: no cross-command state machine is needed — each
 record carries its own spawn cwd, and only INTRA-command `cd`s need lexical tracking
-(`bash_mutations::cwd`; measured 99.967% ending-cwd accuracy, 99.65% agreement with
+(`bash::mutations::cwd`; measured 99.967% ending-cwd accuracy, 99.65% agreement with
 CC's own modified-file hints). Corpus shape of mutation targets: 19.75% typed
 absolute, 62.79% relative (84.21% of those resolve at the zero-inference `cwd-joined`
 class), 17.47% dynamic (`$VAR`/glob — never resolved).
@@ -589,6 +589,9 @@ classification.
 ---
 
 ## 6. Subcommand specifications
+
+> **v0.13.0 CHANGE LEDGER (no surface change so far; `csift 0.13.0`).**
+> ① **The source tree is re-managed.** `src/` stood at BOTH structure caps - 20 counted direct `.rs` files and 16 subfolders - and a cap that binds is a refactor gate, not a number to raise. The Bash LEXICAL layers move first, under one path-named root: `src/bash/danger.rs` + `src/bash/danger/{argv,census,lexical,out,removal,shape}.rs` (formerly the seven `src/bash_danger*.rs` files, which were siblings of the crate root precisely because a seventeenth subfolder would have failed the gate) and `src/bash/mutations.rs` + `src/bash/mutations/` (formerly `src/bash_mutations`). Every `crate::bash_danger*::` / `crate::bash_mutations::` path is respelled at every call site; no alias, no re-export and no forwarding shim is left behind. The five `bash_danger_*_tests.rs` files lose their `#[path]` attributes and become ordinary `tests` children of the modules that declare them. No logic line changes, and no output byte moves.
 
 > **v0.12.3 CHANGE LEDGER (non-breaking; one added JSON field; `verbatim`'s fold accounting; ported-checker fidelity; the session-lineage leftovers -- `csift 0.12.3`).**
 > ① **`body`, the newline-preserving companion of `excerpt`** (§8.2 carries the contract). A hit's `excerpt` is a match-CENTERED fragment and it is one line by contract - `match_excerpt` collapses every whitespace run to a single space - so a consumer reading it as the message loses every paragraph boundary and every table row, and that holds even under `--no-truncate`, where nothing was clipped. Measured on a synthetic table-bearing assistant record: the rendered body is 638 chars with 21 newlines and 72 `|`; `search --format json` reports an `excerpt` of 412 chars / 0 newlines / 47 `|` under the default cap and 636 / 0 / 72 under `--no-truncate`, and `show --line N --format json` reports the same 636 / 0 / 72 in its `text`. The flattening site is `search::match_excerpt` (`normalize_line` on both the head form and the match-centered window). `body` now carries that same rendered section text VERBATIM (638 / 21 / 72), per section on a multi-section record, on every `search` hit and sibling and on every `show` record row. It is non-null EXACTLY when the excerpt cap was lifted, read off the one budget: `search --no-truncate`, and `show`'s `--line`/`--uuid` address; NULL under the default cap, where the excerpt is a fragment anyway and a second full copy of every matched record would multiply a wide scan's stream for a consumer that did not ask for the body. `show --turn` selects records through the default cap (it is a window, not an address), so its rows report a capped `text` and a null `body` - and the §4 note that claimed `--turn` lifts the cap is corrected with it. `body` is the RENDERED form, so a source the shared opener renderer already flattened in the MODEL layer (`user.message` and the other `reconstructed_user_text` cases, via `flatten_content_text`) carries no newline there either; `--raw` stays the only path to the bytes. `excerpt`, `show`'s `text` and every text-mode byte are unchanged in both modes, pinned by a before/after comparison of the whole JSON stream with the new key removed. `verbatim --format json` flattens its unit `text` too (the same 636 / 0 / 72), but at a different layer: `Record::agent_text` normalizes in the model, and `verbatim`'s `full_chars` / `elided_chars` / `elided_lines` accounting and its dedup fingerprints are all computed from the normalized string - so a body there is a change to the unit pipeline rather than an added field, and it is not part of this item.

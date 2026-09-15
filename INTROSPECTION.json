@@ -6030,12 +6030,12 @@
       "depends": "csift's bash operand resolution needs NO cross-command state: it reads cwd off the carrying tool_use record, which is an assistant record and therefore one of the four stamped types, so files/recover join a relative operand against that record's own spawn directory at the zero-inference cwd-joined class, in a subagent lane exactly as in the main thread. A shared-shell model would attribute operands to the wrong directory, and an absent cwd would degrade every such row to unresolved. The domain limit costs csift nothing as written, because the records it anchors on are always stamped, but it is a trap for any future surface that expects a cwd on a queue-operation, file-history-snapshot or session-metadata line: those types carry none and never have.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "4-8",
           "snippet": "//! ## How Claude Code manages the Bash tool's cwd (verified against CC 2.1.237)\n//!\n//! Claude Code does NOT keep a long-lived shell. Every Bash tool call spawns a fresh\n//! shell whose starting directory is a TRACKED cwd, and that tracked value is stamped\n//! on every jsonl record as the top-level `cwd` field. Concretely:"
         },
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "31-32",
           "snippet": "//! - `CwdJoined`: a relative operand before any `cd`; joined to the record's own `cwd`\n//!   field. That value is data Claude Code wrote, so the join involves no inference."
         }
@@ -6044,7 +6044,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash_mutations/cwd.rs module doc; CHANGELOG 0.8.0; dev session 2026-08-22"
+        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash/mutations/cwd.rs module doc; CHANGELOG 0.8.0; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -6383,7 +6383,7 @@
       "depends": "csift can trust the record `cwd` as the shell's true spawn directory without replaying exit status; the lexical `cd` inference is applied only INSIDE one command and is labelled `cd-tracked`, so a `cd` that failed at runtime never silently relocates later operand resolution.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "10-12",
           "snippet": "//! - The runner appends `&& pwd -P >| <tmp>/claude-<id>-cwd` to the command and reads\n//!   the file back afterward. Because the read-back is `&&`-chained, a command that\n//!   exits non-zero, and any backgrounded command, never advances the tracked cwd."
         }
@@ -6392,7 +6392,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash_mutations/cwd.rs module doc; dev session 2026-08-22"
+        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash/mutations/cwd.rs module doc; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -6478,7 +6478,7 @@
       "depends": "csift never assumes the record `cwd` equals the project root: `list` deliberately reports a session's FIRST-seen `cwd` (last-seen could be a transient subdirectory) and `files` never treats a drifted cwd as a different project.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "13-14",
           "snippet": "//! - A `cd` into a SUBDIRECTORY of the project persists silently into later tool\n//!   calls; the tracked cwd (and so the record `cwd` field) follows it. A reset back"
         }
@@ -6487,7 +6487,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash_mutations/cwd.rs module doc; dev session 2026-08-22"
+        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash/mutations/cwd.rs module doc; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -6566,7 +6566,7 @@
       "depends": "The notice is the only visible trace that a reset happened; csift treats it as a positive marker only and never parses it to learn the directory - it reads the record's own `cwd` field.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "13-18",
           "snippet": "//! - A `cd` into a SUBDIRECTORY of the project persists silently into later tool\n//!   calls; the tracked cwd (and so the record `cwd` field) follows it. A reset back\n//!   to the original directory happens only when the shell ends OUTSIDE the original\n//!   cwd and the `/add-dir` set, and it prints \"Shell cwd was reset to <path>\" into\n//!   the tool result. With `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR` set truthy, the\n//!   reset happens on every call and silently."
         }
@@ -6575,7 +6575,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash_mutations/cwd.rs module doc; dev session 2026-08-22"
+        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash/mutations/cwd.rs module doc; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -6673,7 +6673,7 @@
       "depends": "csift resolves operands per record instead of predicting an ending cwd across calls, so a session run under this setting still resolves correctly; a tracker that carried a predicted cwd forward would be silently wrong for every such session, with no notice available to detect it.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "17-18",
           "snippet": "//!   the tool result. With `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR` set truthy, the\n//!   reset happens on every call and silently."
         }
@@ -6682,7 +6682,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": null,
-        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash_mutations/cwd.rs module doc; dev session 2026-08-22"
+        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash/mutations/cwd.rs module doc; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -6779,7 +6779,7 @@
       "depends": "csift reads the cwd field rather than parsing the notice, so a wording change costs nothing while a change to the cwd field would break every bash operand resolution. The PowerShell call site matters for a second reason: csift's bash-lexical layers deliberately do not run on PowerShell records, so on a Windows corpus the notice can appear on a record whose operands csift never resolves - the cwd field still carries the same value there.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "15-18",
           "snippet": "//!   to the original directory happens only when the shell ends OUTSIDE the original\n//!   cwd and the `/add-dir` set, and it prints \"Shell cwd was reset to <path>\" into\n//!   the tool result. With `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR` set truthy, the\n//!   reset happens on every call and silently."
         }
@@ -6788,7 +6788,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "src/bash_mutations/cwd.rs module doc; dev session 2026-08-22"
+        "source": "src/bash/mutations/cwd.rs module doc; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -6895,7 +6895,7 @@
       "depends": "csift's ANCHOR LAW reads `cwd` off the tool_use record everywhere (`files`, `recover`, stale-hint path resolution). The order invariant is what makes that the only safe anchor: the result record can already carry the directory the command's own `cd` left the shell in, so anchoring there would join a relative operand against the post-command directory - exactly the wrong one - silently, in about one shell call in 2,700 (0.0375 percent), with no error. The stale 'one operand in four hundred' figure came from a withdrawn 0.24 percent rate and is replaced.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "19-21",
           "snippet": "//! - ANCHOR LAW: read the `cwd` off the TOOL_USE record, not the result record. The\n//!   post-command cwd update is asynchronous and in about 0.24% of calls the result\n//!   record still carries the pre-command value."
         }
@@ -6904,7 +6904,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash_mutations/cwd.rs ANCHOR LAW; dev session 2026-08-22"
+        "source": "AGENTS.md section 3.11; SPEC.md section 4.9; src/bash/mutations/cwd.rs ANCHOR LAW; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -7104,7 +7104,7 @@
       "depends": "csift treats a backgrounded command as never advancing the tracked cwd, matching the harness; no csift surface parses the hint, so a rename is not load-bearing, but the underlying suppression is.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "10-12",
           "snippet": "//! - The runner appends `&& pwd -P >| <tmp>/claude-<id>-cwd` to the command and reads\n//!   the file back afterward. Because the read-back is `&&`-chained, a command that\n//!   exits non-zero, and any backgrounded command, never advances the tracked cwd."
         }
@@ -7482,7 +7482,7 @@
       "depends": "csift never infers exit status from the absence of that key; recover's content-anchor gates demand a positively clean result (non-error AND empty stderr) rather than trusting a missing field, which is right in both directions given how narrow the emitting subset is. The scoping matters for one csift surface: csift's bash-lexical layers deliberately do not run on PowerShell records, so a findstr or robocopy interpretation appearing on a Windows transcript is a second emitter's output rather than drift in the Bash table, and a future surface that enumerated the value set must enumerate both tables or say which tool it means.",
       "code": [
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "18-22",
           "snippet": "//!   whole command to a CLEAN result (exit ok AND empty stderr: a failing\n//!   cat/tee/echo always writes stderr, so a clean echo proves the write landed even\n//!   in a `;`/newline chain whose exit code only reflects the LAST command). The\n//!   anchor's own segment must also be free of substitutions/subshells, and no OTHER\n//!   part of the command may touch the same resolved path (`same_path_hits`)."
         }
@@ -7787,12 +7787,12 @@
       "depends": "csift's `recover` content anchors take a quoted-heredoc body as a full write anchor, and admit an unquoted delimiter only when the body is free of `$`, backticks and backslashes. If the harness ever normalized or truncated `input.command`, the anchor would fabricate file bytes. The `updatedInput` substitution bounds the anchor rather than breaking it: the anchor describes the command the model emitted, so a permission decision or hook that rewrites a Bash input for execution makes the anchor describe bytes that were never written.",
       "code": [
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "4-8",
           "snippet": "//! A small closed set of shell shapes carries DETERMINISTIC file content in the\n//! transcript itself: a quoted-delimiter heredoc's body is byte-verbatim in the\n//! tool_use input; `cat <file>` / `head -n N <file>` / `sed -n 'A,Bp' <file>` stdout\n//! (under the caller's completeness gate) IS the file window; `echo`/`printf` with\n//! purely literal arguments write known bytes; `truncate -s 0` writes the empty file."
         },
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "30-31",
           "snippet": "//! - An unquoted heredoc delimiter admits the body only when the body is free of\n//!   `$`, backticks, and backslashes (bash would expand them)."
         }
@@ -7928,7 +7928,7 @@
       "depends": "csift must recover a heredoc's consumer lexically from the recorded command string, because nothing else on disk carries it, and it admits a heredoc as a write anchor only when that consumer is cat or tee - a plain local file write - which excludes an interpreter heredoc (a script, not file content) and an ssh-fed heredoc (a remote filesystem), and enforces nesting depth 0 by construction. The measured rationale, over 23,936 heredoc openers in 22,086 Bash and PowerShell tool_use commands (one opener per << that is not <<<; consumer = the last recognized token on the opener's own logical line; unresolved lines bucketed as unrecognized, never dropped): python3 15,431, cat 5,607, bash 1,430, unrecognized 969, sh 205, python 155, tail 58, tee 17, ssh 6, and a long tail below ten. The interpreter heredoc is therefore the dominant non-file-content shape at 71.9 percent of openers and the remote-shell heredoc sits three orders of magnitude below it, against the roughly 16 percent ssh share the gate was originally written around; admitting nested or interpreter heredocs is the largest fabrication trap measured. The cat bucket is partly client-induced: three commit-message templates and three pull-request-body templates instruct exactly that idiom.",
       "code": [
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "26-29",
           "snippet": "//! - A heredoc anchors only when its CONSUMER is `cat` or `tee` (a plain local file\n//!   write). An interpreter heredoc (`python3 <<EOF`) is a SCRIPT, not file content,\n//!   and an `ssh`-fed heredoc writes on a REMOTE filesystem - the consumer gate\n//!   excludes both, which also enforces nesting depth 0 by construction."
         }
@@ -8451,12 +8451,12 @@
       "depends": "csift predicts the decision so `agents` can split a frozen lane's `pending_classification` into `escalation-blocked` - the one state the jsonl can positively confirm - versus `awaiting-execution`. Because both checkers produce the same immune ask, the prediction has to run the one the harness would have run: attributing a structured removal's verdict to the lexical classifier mispredicts both ways. Where the deciding arm reads the filesystem csift answers `Unresolved` and says so, rather than guessing in either direction.",
       "code": [
         {
-          "path": "src/bash_danger.rs",
+          "path": "src/bash/danger.rs",
           "lines": "12-17",
           "snippet": "//! TWO CHECKERS, ONE GATE (offsets into the 2.1.258 build). The Bash tool's\n//! permission path parses the command with tree-sitter and DECOMPOSES it. Only a\n//! `too-complex` parse reaches the LEXICAL classifier (`Hno` @162867544 calls\n//! `$no` @162861871, which calls `hnt` @162773520); a cleanly parsed removal is\n//! decided by the STRUCTURED checker `_9` @162770807, reached through `EPe`\n//! @162794175 and `Jon` @162790629."
         },
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "78-82",
           "snippet": "/// `hnt(command)` - the first dangerous `rm`/`rmdir` removal, or `None`.\n///\n/// csift's one standing deviation: the harness splits statements with tree-sitter\n/// (`ep` @162265300); csift processes the whole string as ONE statement, which is\n/// `ep`'s own documented fallback for unparseable or over-long input."
         }
@@ -8465,7 +8465,7 @@
       "located": {
         "claude_code": "2.1.193",
         "csift": "0.1.0",
-        "source": "AGENTS.md section 3.9; src/bash_danger.rs module doc"
+        "source": "AGENTS.md section 3.9; src/bash/danger.rs module doc"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -8572,21 +8572,21 @@
       "depends": "csift's `CLAUSE_HEAD` and `TARGET` are verbatim ports of those two, with the two lookaround-using preprocessing transforms hand-ported because the Rust regex crate has no lookaround. Drift here changes which frozen lanes csift calls escalation-blocked - and so does ADDING to them: a keyword skip the head does not have turns a loop body that the harness lets through into a predicted hoist.",
       "code": [
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "32-35",
           "snippet": "static CLAUSE_HEAD: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r\"^(?:[A-Za-z_][A-Za-z0-9_]*\\+?=[^\\s]*\\s+)*\\\\?(?:[^\\s=]*/)?(rm|rmdir)(?:\\s|$)\")\n        .expect(\"_to\")\n});"
         },
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "39-42",
           "snippet": "static TARGET: LazyLock<Regex> = LazyLock::new(|| {\n    Regex::new(r#\"^\"?\\$(?:\\{[A-Za-z_][A-Za-z0-9_]*\\}|[A-Za-z_][A-Za-z0-9_]*)\"?/(?:\\*|\\$|/|[\"']|$)\"#)\n        .expect(\"yto\")\n});"
         }
       ],
-      "instrument": "`strings` over the installed Claude Code binary for 2.1.258 grepping `rm|rmdir` surfaces the same two regex bodies; the port is pinned by the unit tests in `src/bash_danger.rs`. Counting rule: a command is dangerous when the head regex matches a clause and the target regex matches one of that clause's operands.",
+      "instrument": "`strings` over the installed Claude Code binary for 2.1.258 grepping `rm|rmdir` surfaces the same two regex bodies; the port is pinned by the unit tests in `src/bash/danger.rs`. Counting rule: a command is dangerous when the head regex matches a clause and the target regex matches one of that clause's operands.",
       "located": {
         "claude_code": "2.1.193",
         "csift": "0.7.0",
-        "source": "AGENTS.md section 3.9; src/bash_danger.rs module doc"
+        "source": "AGENTS.md section 3.9; src/bash/danger.rs module doc"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -8673,21 +8673,21 @@
       "depends": "csift's port always looped, so the divergence this claim recorded never existed and the in-code staleness note that carried it is removed. What the port really lacked was the census, the structured checker and the decomposition branch, and those are now claims of their own; the same lexical layers still deliberately do not run on Windows `PowerShell` records, where a pending lane classifies `awaiting-execution`.",
       "code": [
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "144-155",
           "snippet": "pub(crate) fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "54-61",
+          "path": "src/bash/danger.rs",
+          "lines": "61-68",
           "snippet": "pub enum Generation {\n    /// Before 2.1.208: decomposition branch plus the lexical classifier.\n    Gen1,\n    /// 2.1.208 through 2.1.260: adds the substitution census.\n    Gen2,\n    /// 2.1.261 and later: the rewritten lexical classifier.\n    Gen3,\n}"
         }
       ],
-      "instrument": "`strings` over the installed Claude Code binary for 2.1.258, reading the decompiled logic around `Dangerous rm operation` for the fixpoint strip loop and the substitution-count bail, then comparing against `src/bash_danger.rs`. Counting rule: command substitutions per command string versus the 64 threshold; presence or absence of the fixpoint loop on each side.",
+      "instrument": "`strings` over the installed Claude Code binary for 2.1.258, reading the decompiled logic around `Dangerous rm operation` for the fixpoint strip loop and the substitution-count bail, then comparing against `src/bash/danger.rs`. Counting rule: command substitutions per command string versus the 64 threshold; presence or absence of the fixpoint loop on each side.",
       "located": {
         "claude_code": "2.1.228",
         "csift": "0.7.4",
-        "source": "SPEC.md section 6 v0.7.4 ledger item 3; src/bash_danger.rs staleness note"
+        "source": "SPEC.md section 6 v0.7.4 ledger item 3; src/bash/danger.rs staleness note"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -9011,7 +9011,7 @@
       "depends": "csift's `recover` treats a gated bash `cat`/`head -n N`/`sed -n 'A,Bp'` stdout as a read anchor for the same reason the harness does, and its freshness reasoning assumes bash writes create staleness rather than clearing it.",
       "code": [
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "12-14",
           "snippet": "//! ADMISSION LAWS (each refusal falls back to today's behavior, never a wrong anchor):\n//! - A READ anchor demands a SINGLE simple segment: a compound command's stdout is a\n//!   concatenation nothing can attribute to one file."
         }
@@ -9086,7 +9086,7 @@
       "depends": "csift emits commands that mutate files they do not name as CLASS MARKERS (fmt:cargo, pkg:npm, extract:tar, interp:python, git:<sub>) that are never resolved, joined or path-matched, and recover counts them per window as opaque mutating activity so a window is never falsely reported clean; a formatter that DOES name operands emits ordinary path rows instead, and dry-run forms emit nothing. The rationale is that for a whole-tree formatter, a package manager, an archive extraction or a patch application the file set exists only in the external program's own discovery, the lockfile layout or the archive or diff contents, and the client recovers names for exactly one of those cases - the formatter subclass, and only for files it had already read - so fabricating names from the command text would break the precision contract. Measured: in one project's top-level sessions csift emits 4,442 mutation rows of which 1,217 are class markers (git 558, interp 358, fmt 255, extract 34, pkg 12), one marker per parsed mutating-class command segment; and the client's own modified-file hint sentence appears on 583 exchanges corpus-wide, one exchange per match of csift search \"you've previously read:\" -t agent.tool.result.",
       "code": [
         {
-          "path": "src/bash_mutations/classes.rs",
+          "path": "src/bash/mutations/classes.rs",
           "lines": "1-11",
           "snippet": "//! Mutating-CLASS markers: commands known to rewrite files without naming them.\n//!\n//! A formatter (`cargo fmt`), a package manager (`npm install`), an archive extraction\n//! (`tar -xf`), and a patch application all mutate real files whose names never appear\n//! in the command text: the file set comes from the tool's own discovery, the lockfile\n//! layout, or the archive/diff contents. No lexical parser can name those files, and\n//! fabricating names would break the precision contract. So these commands are\n//! reported as CLASS MARKERS in the `git:<sub>` style: a pseudo-path (`fmt:cargo`,\n//! `pkg:npm`, `extract:tar`) that flags WHAT KIND of mutation ran, deliberately not\n//! WHICH files. Markers are never resolved, joined, or matched against a `--file`;\n//! `recover` counts them per window as opaque mutating activity."
         }
@@ -9095,7 +9095,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "AGENTS.md section 3.11; src/bash_mutations/classes.rs module doc"
+        "source": "AGENTS.md section 3.11; src/bash/mutations/classes.rs module doc"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -9278,7 +9278,7 @@
       "depends": "csift's is_absolute_shell_path accepts all three shapes before deciding whether to join an operand to the record cwd; treating C:\\... as relative would join a Windows absolute path onto a cwd and fabricate a path in every files and recover row. The shape set csift must accept is fixed by the client's translator pair and by the absolutizer its path-taking tools call, which is where the predicate should be re-checked if it ever needs revisiting. Because the value in a structured field is whatever the model typed rather than a client-normalized string, the predicate must stay a pure shape test and must never assume a normalizer ran ahead of it.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "209-215",
           "snippet": "pub fn is_absolute_shell_path(p: &str) -> bool {\n    if p.starts_with('/') || p.starts_with(\"\\\\\\\\\") {\n        return true;\n    }\n    let b = p.as_bytes();\n    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'/' | b'\\\\')\n}"
         }
@@ -9488,12 +9488,12 @@
       "depends": "csift tracks a shell operand's directory per command lexically instead of simulating a shell: it models cd, pushd and chdir as a cd and popd as a restore this layer cannot know - the same four-builtin set the client's own permission path enumerates and the result schema names - and it recognises a backgrounded launch by the tool's run_in_background field rather than by a trailing &. The measured rationale, over 150,160 Bash and PowerShell commands (one command per tool_use block; segments split on top-level ;, &&, ||, |, & and newline outside quotes, escapes and heredoc bodies; the segment verb taken after stripping env assignments and the command/builtin/exec/env/nohup/time/sudo prefixes): 92,230 commands (61.4 percent) begin with cd <absolute>, only 9,636 (6.4 percent) cd to the directory the record's own cwd field already names, cd appears 100,981 times as a segment verb against exactly zero pushd, popd and chdir, 3,227 commands (2.15 percent) carry run_in_background true, and exactly zero end in a top-level &. The count of a cd inside a ( ) subshell is not a stable figure - variants of the rule disagree by about two orders of magnitude - so the shape is rare but any number for it must travel with its rule.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "111",
           "snippet": "    /// `cd`/`pushd`/`popd`. Call AFTER stamping the segment's mutations."
         },
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "130-132",
           "snippet": "            // `popd` restores a directory this layer does not model.\n            \"popd\" => self.set(CwdAt::Unknown),\n            \"cd\" | \"pushd\" | \"chdir\" => self.apply_cd(operands),"
         }
@@ -9632,7 +9632,7 @@
       "depends": "csift labels every resolved operand with an explicit `Resolution` class (`absolute`, `cwd-joined`, `cd-tracked`, `unresolved`) and keeps a dynamic operand VERBATIM rather than guessing; collapsing the classes would hide which `files`/`recover` rows involved inference.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "30-39",
           "snippet": "//! - `Absolute`: the operand was typed absolute; used as-is.\n//! - `CwdJoined`: a relative operand before any `cd`; joined to the record's own `cwd`\n//!   field. That value is data Claude Code wrote, so the join involves no inference.\n//! - `CdTracked`: a relative operand after one or more literal in-command `cd`s;\n//!   the join uses the lexically tracked directory. This is inference: a `cd` that\n//!   failed at runtime is invisible here. Measured against Claude Code's own\n//!   modified-file hints, this class resolves correctly in about 99.7% of cases.\n//! - `Unresolved`: the operand (or a `cd` on the way to it) carries `~`, `$VAR`, a\n//!   substitution, or the cwd is otherwise unknowable. The operand is kept VERBATIM\n//!   and callers must disclose it as unresolved, never treat it as a full path."
         }
@@ -9641,7 +9641,7 @@
       "located": {
         "claude_code": "2.1.237",
         "csift": "0.8.0",
-        "source": "SPEC.md section 4.9; src/bash_mutations/cwd.rs resolution classes; dev session 2026-08-22"
+        "source": "SPEC.md section 4.9; src/bash/mutations/cwd.rs resolution classes; dev session 2026-08-22"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -9707,7 +9707,7 @@
       "depends": "csift's bash content anchors deliberately exclude `sed -i`, `tail`, variable targets and interpreter/ssh heredocs; the anchor classifier admits `sed` only in the windowed-read idiom, so an in-place sed never reaches the anchor path at all. That exclusion is measured over the projects root: 249 of 150,391 shell tool_use blocks carry an in-place sed (303 invocations), 140 of those carry at least one fully literal `s/OLD/NEW/` whose two sides hold no regex metacharacter, and joining all 249 to their tool_result shows no post-edit bytes attributable to the sed - 40 of the 140 results contain the replacement string and 38 of those 40 commands chain a further reader (cat, head, grep, rg, diff, git show, awk, jq, wc or a windowed sed) after the edit. The mutation rate the heuristic lane exists for is a corpus statistic over commands the model chose rather than a harness behavior, and it is rule-sensitive: 8.51 percent of shell blocks under a strict lexical rule, 12.10 percent under csift's own classifier when class-marker rows (git:, interp:, pkg:, extract:, fmt:) count as mutations, and 19.99 percent under a generous rule adding package-manager, build and redirection shapes. The bash resolution work raised full-target attribution from 27.1 percent to a measured 77.0 percent ceiling; both figures are that work's own.",
       "code": [
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "1-10",
           "snippet": "//! Content-ANCHOR classification of one Bash command (the recover layer's v0.9.4\n//! \"bash reads are reads, bash writes are writes\" upgrade).\n//!\n//! A small closed set of shell shapes carries DETERMINISTIC file content in the\n//! transcript itself: a quoted-delimiter heredoc's body is byte-verbatim in the\n//! tool_use input; `cat <file>` / `head -n N <file>` / `sed -n 'A,Bp' <file>` stdout\n//! (under the caller's completeness gate) IS the file window; `echo`/`printf` with\n//! purely literal arguments write known bytes; `truncate -s 0` writes the empty file.\n//! Everything else stays in the boundary/heuristic lanes - correctness first, but\n//! honesty about the decidable subset is not surrender on it."
         }
@@ -10482,7 +10482,7 @@
       "depends": "csift models neither side: the lexical layers (the dangerous-rm escalation prediction and the operand attribution that reads `input.command`) run identically on a sandboxed and an unsandboxed command, and `--count-by tool` reports one `Bash` key regardless - so a call's recorded sandbox posture reaches a consumer only through the raw line (`csift show --raw`).",
       "code": [
         {
-          "path": "src/bash_mutations/entry.rs",
+          "path": "src/bash/mutations/entry.rs",
           "lines": "5-15",
           "snippet": "/// One heuristically-detected Bash file mutation. `verb` is from the fixed allowlist\n/// below (it is the lexical command/operator that touched the path), and `path` is the\n/// operand exactly as it appeared (quote-stripped, otherwise verbatim).\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct BashMutation {\n    pub path: String,\n    pub verb: &'static str,\n    /// The shell cwd in effect at this operand's segment (see [`cwd`] for the\n    /// tracked-cwd mechanism and the resolution classes built on it).\n    pub cwd_at: CwdAt,\n}"
         }
@@ -19809,7 +19809,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2160",
+          "lines": "2163",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -23018,7 +23018,7 @@
       "depends": "`recover` and `files` treat a gated bash read idiom as a real read anchor for the same reason the harness does; assuming only the Read tool seeds state under-counts legal Writes and over-reports integrity boundaries.",
       "code": [
         {
-          "path": "src/bash_mutations/anchors.rs",
+          "path": "src/bash/mutations/anchors.rs",
           "lines": "4-14",
           "snippet": "//! A small closed set of shell shapes carries DETERMINISTIC file content in the\n//! transcript itself: a quoted-delimiter heredoc's body is byte-verbatim in the\n//! tool_use input; `cat <file>` / `head -n N <file>` / `sed -n 'A,Bp' <file>` stdout\n//! (under the caller's completeness gate) IS the file window; `echo`/`printf` with\n//! purely literal arguments write known bytes; `truncate -s 0` writes the empty file.\n//! Everything else stays in the boundary/heuristic lanes - correctness first, but\n//! honesty about the decidable subset is not surrender on it.\n//!\n//! ADMISSION LAWS (each refusal falls back to today's behavior, never a wrong anchor):\n//! - A READ anchor demands a SINGLE simple segment: a compound command's stdout is a\n//!   concatenation nothing can attribute to one file."
         },
@@ -33842,7 +33842,7 @@
         {
           "path": "src/subagent/lifecycle.rs",
           "lines": "136-139",
-          "snippet": "        if command\n            .as_deref()\n            .is_some_and(|c| crate::bash_danger::classify(c, version.as_deref()).blocks())\n        {"
+          "snippet": "        if command\n            .as_deref()\n            .is_some_and(|c| crate::bash::danger::classify(c, version.as_deref()).blocks())\n        {"
         },
         {
           "path": "src/live/tail.rs",
@@ -75561,17 +75561,17 @@
       "depends": "csift's `is_absolute_shell_path` accepts all three shapes before deciding whether to join an operand to the carrying record's `cwd` (treating `C:\\...` as relative would fabricate a path in every `files`/`recover` row), and `join_shell_path` joins in the BASE's separator family - a Windows-family base with `\\`, a unix base with `/` - so host path semantics never leak into the analysis and a transcript from either platform is readable on either platform.",
       "code": [
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "206-215",
           "snippet": "/// True for a path the shell treats as absolute: unix-rooted, a Windows drive form\n/// (`C:\\` or `C:/`), or a UNC `\\\\server\\...` prefix.\n#[must_use]\npub fn is_absolute_shell_path(p: &str) -> bool {\n    if p.starts_with('/') || p.starts_with(\"\\\\\\\\\") {\n        return true;\n    }\n    let b = p.as_bytes();\n    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'/' | b'\\\\')\n}"
         },
         {
-          "path": "src/bash_mutations/cwd.rs",
+          "path": "src/bash/mutations/cwd.rs",
           "lines": "217-221",
           "snippet": "/// Join path fragments onto an absolute base and normalize `.`/`..` lexically, as pure\n/// string work in the BASE's separator family. Transcripts are analyzed on any host, so\n/// host `Path` semantics must never leak in: a Windows-family base joins with `\\` and\n/// converts `/` in the fragments; a unix base joins with `/`. `..` never pops past the\n/// root (the lexical-normalize convention used elsewhere in the crate)."
         }
       ],
-      "instrument": "The unit test `is_absolute_shell_path_covers_all_three_families` in `src/bash_mutations/tests/cwd.rs` pins the drive, UNC and unix families (and rejects a driveless `C:relative`); on a real Windows session, `csift files @<session> --format json` rows must carry drive-led paths with an explicit resolution class and no cwd-joined fabrication. Counting rule: one resolution class per mutation operand.",
+      "instrument": "The unit test `is_absolute_shell_path_covers_all_three_families` in `src/bash/mutations/tests/cwd.rs` pins the drive, UNC and unix families (and rejects a driveless `C:relative`); on a real Windows session, `csift files @<session> --format json` rows must carry drive-led paths with an explicit resolution class and no cwd-joined fabrication. Counting rule: one resolution class per mutation operand.",
       "located": {
         "claude_code": "2.1.228",
         "csift": "0.7.4",
@@ -77388,16 +77388,16 @@
           "snippet": "/// Only a SHELL call can carry a dangerous removal, and only the `Bash` tool runs\n/// POSIX syntax: Windows ships a separate `PowerShell` tool whose commands these\n/// lexical layers do not model, so such a lane is awaiting-execution with no\n/// predicted reason rather than a verdict drawn from the wrong grammar."
         },
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "144-155",
           "snippet": "pub(crate) fn strip_paren_groups(s: &str) -> String {\n    let mut n = s.to_string();\n    loop {\n        let prev = n.clone();\n        n = DOLLAR_PAREN.replace_all(&n, \" \").into_owned();\n        n = remove_plain_groups(&n);\n        if n == prev {\n            break;\n        }\n    }\n    n\n}"
         }
       ],
-      "instrument": "Run `strings` over the installed Claude Code binary, locate the classifier's command-substitution handling, and compare it against `src/bash_danger.rs`: the fixpoint strip loop and the 64-substitution bail are present in the binary and absent from the port. Counting rule: one comparison per classifier generation.",
+      "instrument": "Run `strings` over the installed Claude Code binary, locate the classifier's command-substitution handling, and compare it against `src/bash/danger.rs`: the fixpoint strip loop and the 64-substitution bail are present in the binary and absent from the port. Counting rule: one comparison per classifier generation.",
       "located": {
         "claude_code": "2.1.228",
         "csift": null,
-        "source": "src/bash_danger.rs header comment; AGENTS.md section 3.9"
+        "source": "src/bash/danger.rs header comment; AGENTS.md section 3.9"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -90415,17 +90415,17 @@
       "depends": "csift has no tree-sitter, so it decides the branch with a conservative shape test over a quote-aware statement split and DISCLOSES which path it took and why (`path: structured` / `path: lexical (too-complex: for_statement)` / `path: lexical (shape unknown)`). Getting the branch wrong is not cosmetic: the two checkers disagree on real shapes, so a frozen lane would be predicted from the wrong grammar in both directions. The seventh precheck is ported with its transform: testing `sf` against the raw command instead sends an ordinary quoted brace - a JSON fragment in an `echo`, a brace inside a single-quoted script - to the lexical classifier, which is the wrong grammar and, where that string also carries a removal word, the wrong decision.",
       "code": [
         {
-          "path": "src/bash_danger_shape.rs",
+          "path": "src/bash/danger/shape.rs",
           "lines": "22",
           "snippet": "pub(crate) const PARSE_LIMIT: usize = 10_000;"
         },
         {
-          "path": "src/bash_danger_shape.rs",
+          "path": "src/bash/danger/shape.rs",
           "lines": "224",
           "snippet": "pub(crate) fn branch_of(command: &str) -> Branch {"
         },
         {
-          "path": "src/bash_danger_shape.rs",
+          "path": "src/bash/danger/shape.rs",
           "lines": "188-189",
           "snippet": "pub(crate) fn mask_quoted_braces(command: &str) -> String {\n    if !command.contains('{') {"
         }
@@ -90550,12 +90550,12 @@
       "depends": "csift counts the same nodes with a hand scanner and reproduces the strictly-greater threshold and the rm-word conjunct, so a heavily substituted command predicts the same immune ask. Without it a frozen lane carrying such a command reads awaiting-execution while the harness is in fact holding it for a human.",
       "code": [
         {
-          "path": "src/bash_danger_census.rs",
+          "path": "src/bash/danger/census.rs",
           "lines": "25",
           "snippet": "const SUBSTITUTION_BAIL: usize = 64;"
         },
         {
-          "path": "src/bash_danger_census.rs",
+          "path": "src/bash/danger/census.rs",
           "lines": "59-60",
           "snippet": "    let subs = collect_substitutions(command);\n    if subs.len() > SUBSTITUTION_BAIL {"
         }
@@ -90634,12 +90634,12 @@
       "depends": "csift replays the same two loops, so a removal that only appears inside a substitution of a too-complex command reaches a verdict instead of being read as a plain passthrough. The distinct tail is carried verbatim, because the two tails answer different questions about where the removal was found.",
       "code": [
         {
-          "path": "src/bash_danger_census.rs",
+          "path": "src/bash/danger/census.rs",
           "lines": "35-36",
           "snippet": "pub(crate) const TAIL_IN_SUBSTITUTION: &str =\n    \"on possibly-empty variable path inside command substitution\";"
         },
         {
-          "path": "src/bash_danger_census.rs",
+          "path": "src/bash/danger/census.rs",
           "lines": "67-69",
           "snippet": "    let mut texts: Vec<String> = Vec::with_capacity(subs.len() + 1);\n    texts.push(command.to_string());\n    texts.extend(subs);"
         }
@@ -90705,12 +90705,12 @@
       "depends": "csift reproduces the token, the cap and the re-decomposition, so a removal that only becomes visible once its substitutions are tokenised still reaches the structured checker. The cap is part of the behavior: an unbounded loop here would answer differently on a pathological command.",
       "code": [
         {
-          "path": "src/bash_danger_census.rs",
+          "path": "src/bash/danger/census.rs",
           "lines": "27",
           "snippet": "const CMDSUB_FIXPOINT_ITERATIONS: usize = 16;"
         },
         {
-          "path": "src/bash_danger_census.rs",
+          "path": "src/bash/danger/census.rs",
           "lines": "168",
           "snippet": "fn cmdsub_fixpoint(s: &str) -> String {"
         }
@@ -90777,17 +90777,17 @@
       "depends": "csift ports the three decidable arms with their reason tails verbatim and answers `Unresolved` for the other two, which keeps a frozen lane at `awaiting-execution` with the reason named instead of a guess. The prefix set matters as much as the arms: widening it would invent removals the harness does not see.",
       "code": [
         {
-          "path": "src/bash_danger_removal.rs",
+          "path": "src/bash/danger/removal.rs",
           "lines": "56",
           "snippet": "pub(crate) const TAIL_UNRESOLVABLE: &str = \"on statically-unresolvable target\";"
         },
         {
-          "path": "src/bash_danger_removal.rs",
+          "path": "src/bash/danger/removal.rs",
           "lines": "93",
           "snippet": "fn removal_check(verb: &str, b: &str, argv_rest: &[String], cd_seen: bool) -> OperandVerdict {"
         },
         {
-          "path": "src/bash_danger_removal.rs",
+          "path": "src/bash/danger/removal.rs",
           "lines": "188",
           "snippet": "fn trailing_glob_fixpoint(u: &str) -> String {"
         }
@@ -90916,13 +90916,13 @@
       "depends": "csift's `escalation-blocked` means exactly \"an immune ask\", so the immunity table is the line between the one state the jsonl can positively confirm and a lane that is merely slow. A passthrough from the removal checker is NOT the same as \"the harness will run it\": the command may still meet the generic ask, which bypass removes.",
       "code": [
         {
-          "path": "src/bash_danger.rs",
-          "lines": "111-112",
+          "path": "src/bash/danger.rs",
+          "lines": "118-119",
           "snippet": "    /// True exactly for an ask: `dangerousRemoval` is bypass-immune.\n    pub immune: bool,"
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "127-129",
+          "path": "src/bash/danger.rs",
+          "lines": "134-136",
           "snippet": "    pub fn blocks(&self) -> bool {\n        self.decision == Decision::Ask && self.immune\n    }"
         }
       ],
@@ -90995,13 +90995,13 @@
       "depends": "csift predicts the removal decision without reading the receiver's permission rules, which is only sound because an allow cannot pre-empt it. A deny rule CAN pre-empt it, so a predicted ask is an upper bound on what the human sees, and csift says the prediction is of the removal decision rather than of the whole permission outcome.",
       "code": [
         {
-          "path": "src/bash_danger.rs",
+          "path": "src/bash/danger.rs",
           "lines": "22-23",
           "snippet": "//! and the no-rule-match ask are NOT immune, which is why a passthrough here is\n//! not the same thing as \"the harness will run it\"."
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "153",
+          "path": "src/bash/danger.rs",
+          "lines": "160",
           "snippet": "pub fn classify(command: &str, version: Option<&str>) -> Verdict {"
         }
       ],
@@ -91068,23 +91068,23 @@
       "depends": "csift keys the classifier on the `version` stamped on the record, so a lane recorded by a 2.1.261-or-later build is predicted by the rewritten classifier and an older lane by the old one. Running one generation's classifier over the other's transcript mispredicts in both directions, and the false positives the old port hand-patched are exactly what the token walk made real. The nested arm is where a slice would be wrong rather than merely coarse: handed the masked clause, the token walk sees one word carrying no whitespace, never reaches the removal verb, and a too-complex head carrying a nested removal reads as a passthrough where the harness asks. csift therefore rebuilds and unmasks the script exactly as `iLo` does, derives the positional allowance from the same tail, and ports the shield's guard, bail and outside-quote escape.",
       "code": [
         {
-          "path": "src/bash_danger_out.rs",
+          "path": "src/bash/danger/out.rs",
           "lines": "154",
           "snippet": "pub(crate) fn out(command: &str) -> Option<OutHit> {"
         },
         {
-          "path": "src/bash_danger_out.rs",
+          "path": "src/bash/danger/out.rs",
           "lines": "272",
           "snippet": "fn token_walk(clause: &str) -> Option<Invocation> {"
         },
         {
-          "path": "src/bash_danger_out.rs",
+          "path": "src/bash/danger/out.rs",
           "lines": "416",
           "snippet": "fn nested_shell(clause: &str, depth: usize, inherited_positional: bool) -> Option<OutHit> {"
         },
         {
-          "path": "src/bash_danger.rs",
-          "lines": "241",
+          "path": "src/bash/danger.rs",
+          "lines": "248",
           "snippet": "const REWRITE_FLOOR: (u32, u32, u32) = (2, 1, 261);"
         }
       ],
@@ -91209,12 +91209,12 @@
       "depends": "csift predicts a dangerous-removal ask for `rm`/`rmdir` and for nothing else, which is only correct because these shapes are unreachable from the shell tool. Adding them would invent escalation-blocked lanes the harness would have run.",
       "code": [
         {
-          "path": "src/bash_danger_removal.rs",
+          "path": "src/bash/danger/removal.rs",
           "lines": "70-72",
           "snippet": "        if verb != \"rm\" && verb != \"rmdir\" {\n            continue;\n        }"
         },
         {
-          "path": "src/bash_danger_argv.rs",
+          "path": "src/bash/danger/argv.rs",
           "lines": "61",
           "snippet": "pub(crate) fn normalise_verb(head: &str) -> &str {"
         }
@@ -91413,22 +91413,22 @@
       "depends": "csift's `mask` is that function and `out` calls it at the same two sites, so the rule decides the POSITIONAL ALLOWANCE - the flag the `$1`/`$@`/`$*`/`$!` target form is gated on - and nothing else. Reading an in-quote backslash as an ordinary character ends a double-quoted run at the first escaped quote and flips the quote state for the whole remainder of the command, in both directions: a function definition written INSIDE a quoted string is then read as a real one and retires the positional form, while a definition that genuinely FOLLOWS the string is blanked and retires nothing. Over the distinct Bash commands of one corpus the two readings disagree on the function-scan answer 165 times, 145 of them where the pair rule hides a definition the character rule revealed and 20 the other way, so a port keeping the character rule mispredicts in both directions on a build at or past the rewrite floor. No predicted verdict moves on that corpus, for two reasons that are properties of the corpus rather than of the rule: the generations before the rewrite never call a mask at all, and the three differing commands recorded at or past the floor carry no `$`, which the classifier's entry guard wants before the mask is read.",
       "code": [
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "380",
           "snippet": "pub(crate) fn mask(s: &str, blank: bool) -> String {"
         },
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "398-400",
           "snippet": "        if c == '\\\\' && escapes_next(&chars, i, quote) {\n            if blank && quote.is_some() {\n                out.push_str(\"  \");"
         },
         {
-          "path": "src/bash_danger_lexical.rs",
+          "path": "src/bash/danger/lexical.rs",
           "lines": "202",
           "snippet": "pub(crate) fn escapes_next(chars: &[char], i: usize, quote: Option<char>) -> bool {"
         },
         {
-          "path": "src/bash_danger_out.rs",
+          "path": "src/bash/danger/out.rs",
           "lines": "162-163",
           "snippet": "    let positional_ok =\n        !FUNCTION_SCAN.is_match(&mask(&cleaned, true)) && !has_set_dashdash(&cleaned);"
         }

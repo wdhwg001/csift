@@ -32,12 +32,12 @@ pub(crate) fn extract_from_tool_use_result(
     {
         if let Some((paths, _more)) = parse_stale_read_hint(hint) {
             for p in paths {
-                let resolved = if crate::bash_mutations::is_absolute_shell_path(&p) {
+                let resolved = if crate::bash::mutations::is_absolute_shell_path(&p) {
                     p
                 } else if let Some(cwd) =
-                    record_cwd.filter(|c| crate::bash_mutations::is_absolute_shell_path(c))
+                    record_cwd.filter(|c| crate::bash::mutations::is_absolute_shell_path(c))
                 {
-                    crate::bash_mutations::join_shell_path(cwd, &[&p])
+                    crate::bash::mutations::join_shell_path(cwd, &[&p])
                 } else {
                     p
                 };
