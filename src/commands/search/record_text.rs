@@ -132,9 +132,18 @@ pub(crate) fn record_text_emission(
             | Class::NotificationSubagent
             | Class::NotificationBackgroundCommand
             | Class::NotificationTask => rec.automation_label(),
-            Class::UserMessage | Class::UserUnsent | Class::UserRewound | Class::CommInbox => {
-                rec.reconstructed_user_text(Some(plan_index))
-            }
+            Class::UserMessage | Class::UserUnsent | Class::UserRewound | Class::CommInbox => rec
+                .reconstructed_user_text(Some(plan_index))
+                // The person's mid-turn STEER rides an attachment (`queued_command` whose
+                // payload `origin.kind` is `human`), and an attachment carries no
+                // `message{}` for the opener render to read - so without this the record
+                // classified `user.message` and then emitted nothing at all: no hit, no
+                // census key, no `-t user` result, reachable only by address. The payload
+                // JSON is the same verbatim text `agent.message.structured` renders for the
+                // model's own answer on the same line type, and it is a byte substring of
+                // the raw line, so the 7d/7f prefilter laws hold with no synth marker.
+                // Returns `None` on every non-attachment record, so nothing else moves.
+                .or_else(|| rec.attachment_payload_text()),
             // A csift-channel delivery renders the envelope chunk VERBATIM (header line +
             // body), never a rewrite: the header is the receipt a reader audits, and a
             // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth
@@ -161,7 +170,7 @@ pub(crate) fn record_text_emission(
 /// and rendered. `None` when there is no text anywhere.
 pub(crate) fn record_raw_text(rec: &Record, raw: Option<&str>) -> Option<String> {
     // Hook-injected additionalContext attachment: its joined content IS the record's text -
-    // both the searchable body under `--additional-context` and the `show`-addressed render.
+    // both the searchable body under `-t harness.hook.context` and the `show`-addressed render.
     if let Some(text) = rec.hook_additional_context_text() {
         return Some(text);
     }

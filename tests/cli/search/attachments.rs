@@ -325,3 +325,96 @@ fn image_bearing_rows_teach_extraction_once_and_in_input_form() {
         vh.stdout
     );
 }
+
+/// H2. A `queued_command` attachment whose PAYLOAD origin says `human` is the person's own
+/// mid-turn steer, so it carries `user.message` - and a label nothing can reach is not a
+/// label. Two independent failures put it out of reach and each is asserted here.
+///
+/// ONE: the arm read the record's TOP-LEVEL `origin`, which no `queued_command` line
+/// carries (0 of 3,692 and 0 of 3,574 over two projects roots, against 219 and 217 that
+/// carry `attachment.origin`), so on real data it never fired and every steer classified
+/// as harness context.
+///
+/// TWO: even when it fired, the leaf routes the render through `reconstructed_user_text`,
+/// which an attachment has no `message{}` for - so the record emitted NOTHING: no hit, no
+/// census key, no `-t user` result, reachable only by `show --line`. That is the same
+/// mechanism the peer-origin test above describes, reached from the other side.
+#[test]
+fn a_human_origin_queued_command_is_reachable_as_the_persons_message() {
+    let h = Home::new();
+    let sess = "5d4c3b2a-1e0f-4a98-8b7c-6d5e4f3a2b10";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-08T01:00:00.000Z","message":{"role":"user","content":"zzopener the turn"}}"#, "\n",
+            // the person types again WHILE the turn runs: the harness folds it in as an
+            // attachment, stamping its own provenance inside the payload
+            r#"{"type":"attachment","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-08T01:00:05.000Z","attachment":{"type":"queued_command","prompt":"zzsteer actually check the other branch","commandMode":"prompt","origin":{"kind":"human"},"timestamp":"2026-06-08T01:00:05.000Z"}}"#, "\n",
+            // the harness's OWN queued rider, same payload type, no origin at all
+            r#"{"type":"attachment","uuid":"a2","parentUuid":"a1","timestamp":"2026-06-08T01:00:06.000Z","attachment":{"type":"queued_command","prompt":"zzpulse <task-notification>...</task-notification>","commandMode":"task-notification"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"s1","parentUuid":"a2","timestamp":"2026-06-08T01:00:07.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzreply noted"}]}}"#, "\n",
+        ),
+    );
+
+    // Reachable by the leaf, by the bare role, and as a census key.
+    for sel in ["user.message", "user"] {
+        let out = h.run(&["search", "zzsteer", &at(sess), "-t", sel]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        assert!(
+            out.stdout.contains("zzsteer"),
+            "-t {sel} reaches the person's steer:\n{}\nstderr: {}",
+            out.stdout,
+            out.stderr
+        );
+    }
+    let census = h.run(&[
+        "search",
+        "",
+        &at(sess),
+        "-t",
+        "user.message",
+        "--count-by",
+        "label",
+    ]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        census.stdout.contains("2  user.message"),
+        "the opener and the steer both census under user.message:\n{}",
+        census.stdout
+    );
+
+    // The harness's own rider keeps the context leaf - the origin, not the payload type,
+    // is the discriminator.
+    let rider = h.run(&[
+        "search",
+        "zzpulse",
+        &at(sess),
+        "--attachments",
+        "--format",
+        "json",
+    ]);
+    assert!(rider.success, "stderr: {}", rider.stderr);
+    assert!(
+        rider.stdout.contains("harness.context.task") && !rider.stdout.contains("user.message"),
+        "a queued rider is harness context:\n{}",
+        rider.stdout
+    );
+
+    // And the DEMOTION does not swallow the steer: a scan that named the leaf keeps the
+    // record whole rather than reducing it to a chain-only spine row.
+    let raw = h.run(&[
+        "search",
+        "zzsteer",
+        &at(sess),
+        "-t",
+        "user.message",
+        "--format",
+        "json",
+    ]);
+    assert!(raw.success, "stderr: {}", raw.stderr);
+    assert!(
+        raw.stdout.contains("\"label\":\"user.message\""),
+        "the hit carries the leaf:\n{}",
+        raw.stdout
+    );
+}

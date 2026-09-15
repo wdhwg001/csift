@@ -56,8 +56,10 @@ pub(crate) enum Gate {
     Selector,
     /// The above, OR `--attachments` / the `--count-by attachment` axis.
     Attachments,
-    /// A `show` ADDRESS only: csift models no leaf here, so no selector can name it and
-    /// the address renders it as an unmodeled unit.
+    /// NO LEAF: no selector can name the shape, so an ADDRESS is the only thing that
+    /// emits it, as `? unmodeled: <shape>`. That is a statement about EMISSION, not about
+    /// parsing - a `document` block and an isMeta residue record ride lines a default
+    /// scan parses like any other; they simply produce no unit.
     Address,
 }
 
@@ -139,8 +141,19 @@ impl Entry {
         match self.shape {
             Shape::TopLevelType(t) => format!("type:\"{t}\""),
             Shape::SystemSubtype(s) => format!("type:\"system\" subtype:\"{s}\""),
+            // Two shapes whose on-disk mark is NOT the axis value alone, because the
+            // leaf is decided by a second field the reader has to be able to grep for.
+            Shape::AttachmentType(a @ "queued_command") => format!(
+                "type:\"attachment\" attachment.type:\"{a}\" (attachment.origin.kind \"human\" \
+                 = the person's own steer, `user.message`)"
+            ),
             Shape::AttachmentType(a) => format!("type:\"attachment\" attachment.type:\"{a}\""),
             Shape::Block(b) => format!("message.content[] type:\"{b}\""),
+            // The fired prompt carries no template at all: its text is whatever the
+            // operator armed, so the mark on disk is the PARENT LINK.
+            Shape::IsMetaFamily("schedule-fire") => {
+                "type:\"user\" isMeta:true, parentUuid -> a scheduled_task_fire record".to_string()
+            }
             Shape::IsMetaFamily(f) => format!("type:\"user\" isMeta:true template:{f}"),
         }
     }

@@ -1,4 +1,4 @@
-//! Axis 3: the payload `type` inside a `type:"attachment"` line - 49 values.
+//! Axis 3: the payload `type` inside a `type:"attachment"` line - 50 values.
 //!
 //! An attachment is the harness attaching something to the turn. Every row here is
 //! gated: a flagless scan never parses an attachment line, and the leaf is reached by an

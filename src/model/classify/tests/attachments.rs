@@ -83,14 +83,22 @@ fn every_payload_type_maps_to_its_leaf() {
 
 #[test]
 fn a_human_queued_command_is_the_persons_message() {
-    // The payload type says `queued_command` either way; the record's `origin` is what
-    // separates the person's own mid-turn steer from a harness rider.
-    let human = r#"{"type":"attachment","uuid":"q1","timestamp":"2026-06-07T05:00:00.000Z","origin":{"kind":"human"},"attachment":{"type":"queued_command","rendered":"run the sweep"}}"#;
+    // The payload type says `queued_command` either way; the PAYLOAD's `origin` is what
+    // separates the person's own mid-turn steer from a harness rider. The attachment
+    // constructor writes that field INSIDE the `{type:"queued_command", ...}` object,
+    // beside `commandMode`, so that is where it lands - measured over two projects roots,
+    // 0 of 3,692 and 0 of 3,574 such lines carry a top-level `origin` while 219 and 217
+    // carry `attachment.origin` (claim MSG-075).
+    let human = r#"{"type":"attachment","uuid":"q1","timestamp":"2026-06-07T05:00:00.000Z","attachment":{"type":"queued_command","prompt":"run the sweep","commandMode":"prompt","origin":{"kind":"human"}}}"#;
     assert_eq!(labels(human), vec![Class::UserMessage]);
-    let rider = r#"{"type":"attachment","uuid":"q2","timestamp":"2026-06-07T05:00:00.000Z","origin":{"kind":"peer"},"attachment":{"type":"queued_command"}}"#;
+    let rider = r#"{"type":"attachment","uuid":"q2","timestamp":"2026-06-07T05:00:00.000Z","attachment":{"type":"queued_command","commandMode":"prompt","origin":{"kind":"peer"}}}"#;
     assert_eq!(labels(rider), vec![Class::ContextTask]);
-    // No origin object at all is not the human either - the harness stamps one on
-    // everything it did not submit itself, so absence is not evidence of a person.
+    // The WRONG location, pinned as a negative: a record-level `origin` is the peer
+    // relay's shape, and reading it here made the arm unreachable on every real line.
+    let misplaced = r#"{"type":"attachment","uuid":"q3","timestamp":"2026-06-07T05:00:00.000Z","origin":{"kind":"human"},"attachment":{"type":"queued_command","commandMode":"prompt"}}"#;
+    assert_eq!(labels(misplaced), vec![Class::ContextTask]);
+    // No origin object at all is the ORDINARY case for a queued pulse - the harness
+    // forwards an origin only when a caller supplied one - so absence is not a person.
     assert_eq!(labels(&att("queued_command")), vec![Class::ContextTask]);
 }
 

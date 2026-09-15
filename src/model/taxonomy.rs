@@ -49,7 +49,8 @@ pub enum Class {
     // ── user (6) ──
     /// `user.message` - the person's own message. `type:"user"`, `role:"user"`, string
     /// or `[{text}]` content, no `isMeta` (a with-args slash wrapper is dual-labeled,
-    /// this leaf first).
+    /// this leaf first) - or, when the person typed again mid-turn, the `queued_command`
+    /// ATTACHMENT the harness folded in, whose payload `origin.kind` reads `human`.
     UserMessage,
     /// `user.answer` - the AskUserQuestion answer unit (the Q + options + answer). A
     /// `type:"user"` tool_result carrier with `toolUseResult.answers` / `.response`.
@@ -170,8 +171,9 @@ pub enum Class {
     /// parenthesis. No `message{}`: the banner is the human's, not the model's.
     ScheduleEvent,
     /// `harness.schedule.fire` - the PROMPT the scheduler submits: an `isMeta`
-    /// `type:"user"` record parented to a [`Class::ScheduleEvent`] record. Delivered;
-    /// it does not open a turn, because the operator did not type it.
+    /// `type:"user"` record whose `parentUuid` names the `system`/`scheduled_task_fire`
+    /// record above it. Its TEXT is whatever the operator armed, so the link is the whole
+    /// gate. Delivered; it does not open a turn, because the operator did not type it.
     ScheduleFire,
     /// `harness.schedule.tick` - the autonomous-loop DRIVER tick (`# Autonomous loop
     /// tick` / `Run the autonomous check` at content start), distinct from the fired
@@ -231,8 +233,10 @@ pub enum Class {
     /// `harness.context.image` - an image the harness referenced into the conversation:
     /// the isMeta `[Image: …]` reference records and the image-only isMeta records.
     ContextImage,
-    /// `harness.context.skill` - a skill body preloaded into a subagent's opening
-    /// array (an isMeta `type:"user"` record with array content).
+    /// `harness.context.skill` - an isMeta `type:"user"` record whose text OPENS with
+    /// `Base directory for this skill:`, the instruction body a spawn builder preloaded
+    /// rather than a skill anyone invoked this turn; on disk that body usually arrives
+    /// as the first text block of an array.
     ContextSkill,
 
     // ── harness.enforce (4) ──
