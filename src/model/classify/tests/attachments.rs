@@ -103,6 +103,28 @@ fn a_human_queued_command_is_the_persons_message() {
     // No origin object at all is the ORDINARY case for a queued pulse - the harness
     // forwards an origin only when a caller supplied one - so absence is not a person.
     assert_eq!(labels(&att("queued_command")), vec![Class::ContextTask]);
+
+    // The same question the SCAN asks, from the record side: which attachment VIEW is
+    // this, if any. The scan's default-on needle admits every `queued_command` line, so
+    // the demotion has to be able to tell the person's steer from the rider it also
+    // admitted - and from the model's own answer, which is the other view.
+    let rec = |line: &str| serde_json::from_str::<Record>(line).unwrap();
+    assert_eq!(
+        rec(human).attachment_view_leaf(),
+        Some(Class::UserMessage),
+        "the human steer is the user-message view"
+    );
+    assert_eq!(
+        rec(&att("structured_output")).attachment_view_leaf(),
+        Some(Class::AgentMessageStructured),
+        "a structured answer is the other view"
+    );
+    assert_eq!(
+        rec(rider).attachment_view_leaf(),
+        None,
+        "a queued rider is no view at all - the needle admitted it, the parse refuses it"
+    );
+    assert_eq!(rec(&att("file")).attachment_view_leaf(), None);
 }
 
 #[test]
