@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "466-469",
+          "lines": "472-475",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -3171,7 +3171,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "345-349",
+          "lines": "351-355",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3302,7 +3302,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "345-349",
+          "lines": "351-355",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3405,7 +3405,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "345-349",
+          "lines": "351-355",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
@@ -11535,7 +11535,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "290-293",
+          "lines": "296-299",
           "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span (P1c M3). When \u22651 section matches, that fully classifies the record."
         }
       ],
@@ -11648,7 +11648,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "345-349",
+          "lines": "351-355",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -14681,7 +14681,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "286-289",
+          "lines": "292-295",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            push_unique(out, Class::CompactionSummary);\n            return;\n        }"
         }
       ],
@@ -41163,7 +41163,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "240-244",
+          "lines": "246-250",
           "snippet": "                Block::Thinking { .. } | Block::RedactedThinking { .. } => {\n                    if let Some(c) = thinking::classify(b) {\n                        push_unique(out, c);\n                    }\n                }"
         }
       ],
@@ -41384,7 +41384,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "240-244",
+          "lines": "246-250",
           "snippet": "                Block::Thinking { .. } | Block::RedactedThinking { .. } => {\n                    if let Some(c) = thinking::classify(b) {\n                        push_unique(out, c);\n                    }\n                }"
         }
       ],
@@ -50037,7 +50037,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "200-205",
+          "lines": "206-211",
           "snippet": "        if !self.is_type(\"assistant\") && !self.is_type(\"user\") {\n            if let Some(c) = self.promoted_class() {\n                push_unique(&mut out, c);\n            }\n            return out;\n        }"
         },
         {
@@ -55362,7 +55362,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "350-355",
+          "lines": "356-361",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
@@ -57861,8 +57861,8 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "183-192",
-          "snippet": "        if self.is_type(\"attachment\") {\n            if let Some(ty) = self.attachment_type() {\n                if ty == \"queued_command\" && self.queued_command_is_human() {\n                    push_unique(&mut out, Class::UserMessage);\n                    return out;\n                }\n                if let Some(c) = attachments::classify(&ty) {\n                    push_unique(&mut out, c);\n                }\n            }"
+          "lines": "187-198",
+          "snippet": "        if self.is_type(\"attachment\") {\n            if let Some(payload) = self.attachment_value() {\n                if let Some(ty) = payload.get(\"type\").and_then(serde_json::Value::as_str) {\n                    if ty == \"queued_command\" && attachments::payload_origin_is_human(&payload) {\n                        push_unique(&mut out, Class::UserMessage);\n                        return out;\n                    }\n                    if let Some(c) = attachments::classify(ty) {\n                        push_unique(&mut out, c);\n                    }\n                }\n            }"
         }
       ],
       "instrument": "Seek `In.attachment.type===\"read_truncation_notice\"||In.attachment.type===\"session_context\"` in a `strings -a` dump of the 2.1.258 binary; a second site in the forked-agent recorder gates persistence on `xt.type===\"attachment\"&&xt.attachment.type===\"read_truncation_notice\"`. Corpus confirmation: at least one `read_truncation_notice` record exists inside a `subagents/agent-*.jsonl` file under ~/.claude/projects.",
@@ -66616,7 +66616,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "350-355",
+          "lines": "356-361",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
@@ -71600,7 +71600,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "321-324",
+          "lines": "327-330",
           "snippet": "        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {\n            push_unique(out, Class::CommandStdout);\n            return;\n        }"
         }
       ],
@@ -71928,7 +71928,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "325-336",
+          "lines": "331-342",
           "snippet": "        if is_slash_command_wrapper(s) {\n            // Prose typed after the slash command (`<command-args>`) IS genuine user\n            // input - and the RICHER view (richest-view law: the prose beats the\n            // wrapper), so it is pushed FIRST: the unfiltered record-text emission\n            // renders `/name args`, never the wrapper XML. An explicit\n            // `-t harness.command.invocation` still reaches the wrapper form.\n            if self.slash_command_args().is_some() {\n                push_unique(out, Class::UserMessage);\n            }\n            push_unique(out, Class::CommandInvocation);\n            return;\n        }"
         }
       ],
@@ -83637,8 +83637,8 @@
         },
         {
           "path": "src/model/classify/attachments.rs",
-          "lines": "101-111",
-          "snippet": "    pub(crate) fn queued_command_is_human(&self) -> bool {\n        self.attachment_value()\n            .and_then(|v| v.as_object().and_then(|o| o.get(\"origin\")).cloned())\n            .and_then(|o| {\n                o.get(\"kind\")\n                    .and_then(serde_json::Value::as_str)\n                    .map(str::to_string)\n            })\n            .as_deref()\n            == Some(\"human\")\n    }"
+          "lines": "102-108",
+          "snippet": "pub(crate) fn payload_origin_is_human(payload: &serde_json::Value) -> bool {\n    payload\n        .get(\"origin\")\n        .and_then(|o| o.get(\"kind\"))\n        .and_then(serde_json::Value::as_str)\n        == Some(\"human\")\n}"
         }
       ],
       "instrument": "Walk every `*.jsonl` under a projects root; keep each line whose top-level `type` is `attachment` and whose `attachment.type` is `queued_command`, and bucket it by `commandMode` and by the presence and value of an origin key at BOTH locations - the record's own `origin` and the payload's `attachment.origin`. Then `csift search '' <target> -t user.message --count-by label` against `-t harness.context.task`: a human-origin line counts under the first and a rider under the second. Counting rule: one per raw line of that shape; a location counts only when the object is present there.",
@@ -87748,7 +87748,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "212-214",
+          "lines": "218-220",
           "snippet": "            Some(\"assistant\") if self.is_resume_placeholder() => {\n                push_unique(&mut out, Class::ResumePlaceholder);\n            }"
         },
         {
@@ -89634,7 +89634,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "361-364",
+          "lines": "367-370",
           "snippet": "        if self.is_scheduled_fire_prompt(ctx) {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
         },
         {
@@ -89750,7 +89750,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "356-360",
+          "lines": "362-366",
           "snippet": "        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms\n        // by construction - the fired text is whatever the operator armed, so every marker\n        // above must get first refusal, and the two tick prompts that DO carry a marker keep\n        // their own leaves. Before this arm such a record matched nothing and fell straight\n        // into the isMeta exclusion below: unsearchable, and absent from every census."
         },
         {

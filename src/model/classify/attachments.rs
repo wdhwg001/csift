@@ -72,7 +72,7 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
 
         // ── harness.context.task: task / goal / memory state ──
         // `queued_command` lands here only when it is NOT the human's own steer; the
-        // caller tests `origin.kind` first (see [`Record::queued_command_is_human`]).
+        // caller tests the payload's `origin.kind` first (see [`payload_origin_is_human`]).
         "task_status"
         | "queued_command"
         | "workflow_keyword_request"
@@ -86,27 +86,23 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
     })
 }
 
-impl Record {
-    /// True when a `queued_command` attachment carries the HUMAN's own mid-turn steer:
-    /// the PAYLOAD's `origin` object says `kind:"human"`. The harness queues its own
-    /// riders through the same payload type, so the origin - not the type - is the
-    /// discriminator, exactly as the queue LINE's content is.
-    ///
-    /// INSIDE the payload, beside `commandMode`, never at the top level: over two
-    /// projects roots not one of 3,692 and 3,574 `queued_command` lines carries a
-    /// top-level `origin`, while 219 and 217 carry `attachment.origin`. A record-level
-    /// `origin` is the CROSS-SESSION shape (a `type:"user"` record, TURN-031); reading
-    /// that field here made the arm unreachable on every real line.
-    #[must_use]
-    pub(crate) fn queued_command_is_human(&self) -> bool {
-        self.attachment_value()
-            .and_then(|v| v.as_object().and_then(|o| o.get("origin")).cloned())
-            .and_then(|o| {
-                o.get("kind")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string)
-            })
-            .as_deref()
-            == Some("human")
-    }
+/// True when a `queued_command` PAYLOAD carries the HUMAN's own mid-turn steer: its
+/// `origin` object says `kind:"human"`. The harness queues its own riders through the
+/// same payload type, so the origin - not the type - is the discriminator, exactly as
+/// the queue LINE's content is.
+///
+/// The field sits INSIDE the payload, beside `commandMode`, never at the top level:
+/// over two projects roots not one of 3,692 and 3,574 `queued_command` lines carries a
+/// top-level `origin`, while 219 and 217 carry `attachment.origin`. A record-level
+/// `origin` is the CROSS-SESSION shape (a `type:"user"` record, TURN-031); reading that
+/// field here made the arm unreachable on every real line.
+///
+/// Takes the payload the caller already parsed, so the record is read once.
+#[must_use]
+pub(crate) fn payload_origin_is_human(payload: &serde_json::Value) -> bool {
+    payload
+        .get("origin")
+        .and_then(|o| o.get("kind"))
+        .and_then(serde_json::Value::as_str)
+        == Some("human")
 }

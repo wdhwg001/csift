@@ -74,6 +74,21 @@ surface change bumps the PATCH.
   attachment record, so the most ordinary selectors in the tool paid for lines they did not
   want: 236 ms against a flagless scan's 70 ms on an 89 MB attachment-heavy transcript.
   Each now has its own payload needle, and the three selectors run at flagless speed.
+- **The person's mid-turn steer reaches `-t user` again.** When someone types while a turn
+  is running, the harness folds the text in as a `queued_command` attachment and stamps its
+  provenance inside the payload, beside `commandMode`. csift read a record-level `origin`
+  that no line of that shape carries - 0 of 3,692 and 0 of 3,574 over two corpora, against
+  219 and 217 carrying `attachment.origin` - so the arm never fired and every steer
+  classified as harness context. It reads the payload now. The second half was quieter: the
+  leaf renders through the opener path, which an attachment has no `message{}` for, so even
+  when the arm did fire the record emitted nothing at all - no hit, no census key, no
+  `-t user` result, reachable only by an address. It renders its payload JSON, the same
+  verbatim form the model's own structured answer takes on that line type.
+- **`csift msg` prints a command that still runs.** Its lane listing recited the fact half
+  of its own join as `csift search '<id>' @<lane> --additional-context`, a flag this release
+  retires, so the one recipe a reader needs in order to check the channel without trusting
+  `msg` exited 1. It prints `-t harness.hook.context`, which is what the help has said all
+  along.
 - **`wait`'s activity census counts all four thinking leaves.** It named two of them one by
   one, so the leaf split silently dropped the other two from the count; it keys on the
   category now.
@@ -83,8 +98,8 @@ surface change bumps the PATCH.
   just before it, which is the only mark the producer leaves on the prompt itself. That fire
   record gets a leaf of its own, `harness.schedule.event`.
 - **A shape inventory backs the taxonomy** (`model::inventory`): one row per on-disk shape on
-  those five axes - 22 top-level types, 11 system subtypes, 49 attachment payload types, 8
-  block types, 15 isMeta template families - each naming its leaf, its gate, whether the
+  those five axes - 22 top-level types, 11 system subtypes, 50 attachment payload types, 8
+  block types, 17 isMeta template families - each naming its leaf, its gate, whether the
   harness converts it for the model and whether a person sees it. It is a record of the
   mapping rather than a second one: a unit test walks every row back through the family table
   that decides the leaf, and another asserts the shaped leaves and a hand-kept table of the

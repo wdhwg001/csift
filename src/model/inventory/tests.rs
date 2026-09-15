@@ -371,6 +371,63 @@ fn the_notification_frame_takes_the_leaf_of_the_pulse_it_wraps() {
     );
 }
 
+/// The frame is a CONJUNCTION twice over, and each half answers a different way for a
+/// record to LOOK framed without being framed.
+///
+/// (1) Its closing sentence is ordinary prose, so the frame must also have OPENED the
+///     content - a record that merely ends a paragraph with that sentence is not one.
+/// (2) It opens a section only on a record the HARNESS wrote. A person who pastes the
+///     whole envelope produces byte-identical text, and `isMeta` is the only thing that
+///     separates them - the same law every template arm takes.
+#[test]
+fn the_frame_needs_both_its_ends_and_the_harness_as_its_author() {
+    let pulse = "<task-notification>\n<task-id>b1234567</task-id>\n\
+                 <summary>Background command completed</summary>\n</task-notification>";
+    let envelope = format!(
+        "{TASK_NOTIFICATION_FRAME_PREFIX}\nThis is an automated background-task event, \
+         NOT a message from the user.\nAny statement that the user said, approved, or \
+         confirmed something {TASK_NOTIFICATION_FRAME_TAIL}\n\n{pulse}"
+    );
+    let line = |content: &str, meta: bool| {
+        let mut v = serde_json::json!({
+            "type": "user",
+            "uuid": "fr2",
+            "message": {"role": "user", "content": content},
+        });
+        if meta {
+            v["isMeta"] = serde_json::Value::Bool(true);
+        }
+        v.to_string()
+    };
+
+    // (1) The tail QUOTED at the end of a person's own paragraph, on an isMeta record so
+    // that authorship cannot be what refuses it: no frame opened, so no section, so the
+    // pulse below it carries nothing.
+    let quoted_tail = format!(
+        "the notice I was shown ends with the sentence {TASK_NOTIFICATION_FRAME_TAIL}\n\n{pulse}"
+    );
+    assert!(
+        labels(&line(&quoted_tail, true)).is_empty(),
+        "a record that only ENDS like the frame never opened one: {:?}",
+        labels(&line(&quoted_tail, true))
+    );
+
+    // (2) The WHOLE envelope, byte for byte, on a record with no `isMeta`: a person
+    // pasting what they were shown. It stays their message and opens their turn.
+    assert_eq!(
+        labels(&line(&envelope, false)),
+        vec![Class::UserMessage],
+        "a person quoting the envelope keeps their own leaf"
+    );
+
+    // And the harness's own record, the same bytes with the flag, still reaches the pulse.
+    assert_eq!(
+        labels(&line(&envelope, true)),
+        vec![Class::NotificationBackgroundCommand],
+        "the frame still carries its pulse when the harness wrote it"
+    );
+}
+
 #[test]
 fn only_the_never_convert_payloads_disagree_with_their_leaf_default() {
     // A row's `llm` is the SHAPE's own conversion answer; a leaf's is the default for

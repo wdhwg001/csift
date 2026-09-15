@@ -178,16 +178,22 @@ impl Record {
 
         // Every OTHER `type:"attachment"` record, by its payload's own `type` value
         // (`classify/attachments.rs`). A `queued_command` the HUMAN queued mid-turn is
-        // the person's message rather than harness context, and the record's `origin`
-        // - not its payload type - is what says so.
+        // the person's message rather than harness context, and the PAYLOAD's `origin`
+        // - not its type - is what says so.
+        //
+        // ONE parse answers both questions. Reading the type through `attachment_type()`
+        // and the origin through a second accessor would parse the same bytes twice, and
+        // a queued payload carries the operator's whole typed prompt.
         if self.is_type("attachment") {
-            if let Some(ty) = self.attachment_type() {
-                if ty == "queued_command" && self.queued_command_is_human() {
-                    push_unique(&mut out, Class::UserMessage);
-                    return out;
-                }
-                if let Some(c) = attachments::classify(&ty) {
-                    push_unique(&mut out, c);
+            if let Some(payload) = self.attachment_value() {
+                if let Some(ty) = payload.get("type").and_then(serde_json::Value::as_str) {
+                    if ty == "queued_command" && attachments::payload_origin_is_human(&payload) {
+                        push_unique(&mut out, Class::UserMessage);
+                        return out;
+                    }
+                    if let Some(c) = attachments::classify(ty) {
+                        push_unique(&mut out, c);
+                    }
                 }
             }
             return out;
