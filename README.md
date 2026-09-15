@@ -262,10 +262,10 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
-| end-to-end | 565 | 83.1% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| &nbsp;&nbsp;of which chain traced | 565 | 83.1% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
+| end-to-end | 562 | 82.6% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| &nbsp;&nbsp;of which chain traced | 562 | 82.6% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
 | &nbsp;&nbsp;of which audit-graded, chain not yet traced | 0 | 0.0% | graded end-to-end from the release-audit checks (writer offsets cited there) before the three-hop tracing existed; the next audit traces them |
-| specimen-only | 14 | 2.1% | observed on disk or live; the writer not traced (or traced only in part) (8 of them with a partly traced writer) |
+| specimen-only | 17 | 2.5% | observed on disk or live; the writer not traced (or traced only in part) (11 of them with a partly traced writer) |
 | producer-only | 74 | 10.9% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 12 | 1.8% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
@@ -274,7 +274,7 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
 
-`anchors byte-exact at Claude Code 2.1.258: 6,794 of 7,401 (elided 342, absent 183, prefix-only 82)`
+`anchors byte-exact at Claude Code 2.1.258: 6,795 of 7,402 (elided 342, absent 183, prefix-only 82)`
 
 An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates.
 <!-- ledger-tally:end -->

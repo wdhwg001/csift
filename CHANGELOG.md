@@ -41,12 +41,36 @@ surface change bumps the PATCH.
   the leaf of its own payload type rather than one catch-all, and a thinking block with no
   summary text (`agent.thinking.omitted`) or a `redacted_thinking` block
   (`agent.thinking.redacted`) takes its own leaf instead of both reading as plain reasoning.
+- **Every leaf the shape inventory records is one a record can carry.** The first pass at
+  the taxonomy advertised `harness.context.image`, `harness.context.skill` and the four
+  `harness.enforce.*` leaves in its tables while nothing in the classifier could produce
+  them, and its drift test walked three of the five axes, so the gap did not show. The
+  isMeta-template table carries an arm per row now, each keyed on the literal its producer
+  writes, plus two structural ones: a relayed message whose `origin.kind` says `human` is
+  the person's own, and the coordinator relay takes the same leaf as a peer's. The
+  `[SYSTEM NOTIFICATION - NOT USER INPUT]` envelope is treated as a carrier rather than a
+  shape, so the background-task pulse inside it classifies by its own kind instead of
+  vanishing. A `<system-reminder>` matching no more specific template lands under the
+  reminder leaf. An image-only record carries the leaf its text form carries, and the
+  `dynamic_skill` payload joins the listing family. The drift test covers all five axes
+  with a hand-written specimen per row.
 - **`show --line N` never hard-misses a parseable line.** A shape csift models no leaf for
   renders one unit reading `? unmodeled: <type[/subtype|/attachment.type]>` with a key=value
   excerpt of the line's own top-level keys, and JSON carries `unmodeled` beside a null `label`
   and an empty `labels`. Before this, every bookkeeping line type read as absent. A SCAN never
   emits such a unit, so no census, count or `-t` result moves, and a line that is not a JSON
   object at all is still a hard miss pointing at `--raw`.
+- **A message record with no text renders under an address instead of missing.** The 1:1
+  law reached the non-record line types but not the message lines: a `fallback` block, a
+  `document` block or an image with no caption produced no unit and the address bailed on
+  a line that is plainly there. Such a record renders now, and the unit names the axis its
+  leaf would have come from (`user/document`, `user/isMeta`). There is ONE unmodeled form:
+  `? (no label)` is gone, because it told a reader nothing a shape name does not. A record
+  that HAS a leaf and merely lacks text keeps its leaf, and an assistant turn the API
+  served from a fallback model takes `agent.message.plain` with an empty body.
+- **`wait`'s activity census counts all four thinking leaves.** It named two of them one by
+  one, so the leaf split silently dropped the other two from the count; it keys on the
+  category now.
 - **`harness.schedule.fire` changes its gate, not its meaning.** It keyed on
   `promptSource:"system"`, a stamp the submit path puts on every isMeta submission; it now
   keys on the parent link to the `system`/`scheduled_task_fire` record the scheduler wrote
