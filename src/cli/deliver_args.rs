@@ -94,7 +94,7 @@ fn parse_slot(s: &str) -> Result<u32, String> {
         turn from ending; every other outcome exits 0.\n\n\
         SEEING WHAT HAPPENED\n  \
           The ledger is intent, the receiver's own transcript is fact:\n  \
-          csift search '<message id>' @<lane> --additional-context\n\n\
+          csift search '<message id>' @<lane> -t harness.hook.context\n\n\
         SEE ALSO\n  \
           csift send @<lane> \"…\"      queue a message this hook will carry\n  \
           csift msg <ID>              intent joined to fact, one verdict, no guessing\n  \

@@ -327,6 +327,12 @@ fn wait_json_carries_activity_background_and_last() {
             f.write_all(
                 concat!(
                     r#"{"type":"user","uuid":"u2","parentUuid":"a2","timestamp":"2026-06-07T05:04:00.000Z","message":{"role":"user","content":"check the dev log"}}"#, "\n",
+                    // A thinking block the API returned with NO summary text, and a
+                    // redacted one: both are blocks the model produced, so the census
+                    // counts all four thinking leaves and not just the two named before
+                    // the leaf split.
+                    r#"{"type":"assistant","uuid":"a5","parentUuid":"u2","timestamp":"2026-06-07T05:04:02.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":"c2ln"}]}}"#, "\n",
+                    r#"{"type":"assistant","uuid":"a6","parentUuid":"u2","timestamp":"2026-06-07T05:04:03.000Z","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"AAAA"}]}}"#, "\n",
                     r#"{"type":"assistant","uuid":"a4","parentUuid":"u2","timestamp":"2026-06-07T05:04:01.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"thinking","thinking":"look"},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/x/dev.log"}}]}}"#, "\n",
                 )
                 .as_bytes(),
@@ -337,9 +343,12 @@ fn wait_json_carries_activity_background_and_last() {
     assert_eq!(code, Some(0), "{stdout}");
     let obj: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
     assert_eq!(obj["fired"], "tool:Read");
-    assert_eq!(obj["activity"]["records"], 2, "{stdout}");
+    assert_eq!(obj["activity"]["records"], 4, "{stdout}");
     assert_eq!(obj["activity"]["tools"]["Read"], 1, "{stdout}");
-    assert_eq!(obj["activity"]["thinking"], 1, "{stdout}");
+    assert_eq!(
+        obj["activity"]["thinking"], 3,
+        "the summary, the empty-text block and the redacted one all count:\n{stdout}"
+    );
     assert_eq!(obj["activity"]["user_prompts"], 1, "{stdout}");
     assert!(
         obj["at_exit"]

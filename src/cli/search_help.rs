@@ -48,7 +48,7 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         `#N` handle as the bare number. An image-bearing row is evidence, not a blank.\n  \
           search is also the FACT half of the csift channel: a delivered message lands in the \
         receiving lane as an attachment carrying its envelope, so `csift search '<message id>' \
-        @<lane> --additional-context` proves the text reached that lane's context. \
+        @<lane> -t harness.hook.context` proves the text reached that lane's context. \
         `csift msg <ID>` runs that same join and adds csift's own ledger beside it. The \
         delivery itself needs no flag: `agent.communication.channel` is the one attachment \
         leaf a DEFAULT scan sees.\n\n\

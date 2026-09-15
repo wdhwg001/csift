@@ -110,7 +110,7 @@ pub(crate) fn search_one_file(
     // sibling, which has no role marker. Same LABEL-only gate as the channel keep (a bare scan
     // is on, `-t user` / `-t agent.*` short-circuits) and, per C-40, a CONJUNCTION rather than
     // the bare literal - a payload can quote the word. The admitted lines are read for the
-    // instant and then DEMOTED below, so a default scan gains no `harness.meta.system` hit.
+    // instant and then DEMOTED below, so a default scan gains no `harness.schedule.event` hit.
     let needs_schedule_fire = args.label_filter().selected(Class::ScheduleFire.path());
     let gates = CandidateGates {
         compact_boundary: needs_compact_boundary,
@@ -276,10 +276,14 @@ pub(crate) fn search_one_file(
                     from_sidecar: false,
                     // A NON-ROLE line is one a gate admitted, and its content lives in
                     // fields the `Record` struct does not model - so the render and the
-                    // unmodeled unit need the bytes. A conversation record allocates
-                    // nothing.
-                    gated_raw: (!crate::parse::line_has_role_marker(line))
-                        .then(|| String::from_utf8_lossy(line).into_owned()),
+                    // unmodeled unit need the bytes. An ADDRESSED line keeps them too,
+                    // whatever its role marker: the 1:1 law's key=value body is read off
+                    // the raw line, and a text-less message record has nothing else to
+                    // render. An ordinary conversation record on an ordinary scan
+                    // allocates nothing.
+                    gated_raw: (!crate::parse::line_has_role_marker(line)
+                        || address.is_some_and(|a| a.lines.contains(&line_no)))
+                    .then(|| String::from_utf8_lossy(line).into_owned()),
                 }),
                 Ok(None) => crate::parse::SplitVerdict::Ignore,
                 Err(_) => crate::parse::SplitVerdict::Skip,
@@ -293,7 +297,7 @@ pub(crate) fn search_one_file(
     // scan it admits any payload that merely mentions the word. Both attachment leaves keep
     // their own flag (the gated-leaves law): such a record surfaces on a default scan only as
     // a delivery (its first content string opens with the header), never as bare
-    // `harness.hook.context` or `harness.meta.attachment`.
+    // `harness.hook.context` or one of the `harness.context.*` payload leaves.
     //
     // DEMOTE it, never delete it. The SURVIVAL AXIS walks `parentUuid` THROUGH attachment
     // records - a prompt submitted after a SessionStart hook is parented to that hook's
@@ -329,7 +333,7 @@ pub(crate) fn search_one_file(
     } else {
         crate::model::ScheduleFireIndex::default()
     };
-    // The fire line's own leaf is the GATED `harness.meta.system`, so a scan that cannot reach
+    // The fire line's own leaf is the GATED `harness.schedule.event`, so a scan that cannot reach
     // that leaf must not start emitting it just because this keep parsed the line. Demote, never
     // delete, for the same reason the attachment keep does: the chain walks `parentUuid` THROUGH
     // these records - a fired prompt's parent IS one - so removing a node would break the walk

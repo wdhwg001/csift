@@ -6,27 +6,38 @@
 
 use super::*;
 
-/// The ONE unit an ADDRESSED record with no modeled leaf renders (see the refetch-law note in
-/// [`collect_turn_hits`]): the record under an EMPTY label ([`Hit::class`] is `None`), so a
-/// reader sees what csift has rather than a bail.
+/// The ONE unit an ADDRESSED record renders when the ordinary passes produced nothing
+/// (see the refetch-law note in [`collect_turn_hits`]) - the 1:1 law's whole mechanism.
 ///
-/// The 1:1 law says an address never hard-misses a PARSEABLE line, so the unit has two
-/// bodies. A record with text renders that text, exactly as before. A record with NONE -
-/// a line type csift models no leaf for, a subtype a later build added - renders a
-/// key=value excerpt of its own top-level keys instead, and the unit NAMES its shape
-/// ([`HitFact::Unmodeled`]) so the reader learns what the line IS. The excerpt is
-/// fabricated, which is safe here and only here: an address needs no match, so no
-/// prefilter or whole-file gate is reasoning about this text.
+/// TWO records reach it, and they are not the same record. One carries NO leaf: an isMeta
+/// template csift models none of, a block shape it has never seen, a line type a later
+/// build added. It renders under an EMPTY label with its shape NAMED
+/// ([`HitFact::Unmodeled`]), so the reader learns what the line is instead of that csift
+/// had nothing to say. The other carries a leaf and simply has no TEXT - a `fallback`
+/// block, an image with no caption - and it keeps its leaf; losing the label there would
+/// be the mislabeling the unit exists to avoid, in the other direction.
+///
+/// Either way the BODY falls back to a key=value excerpt of the line's own top-level keys
+/// when the record renders no text. That excerpt is fabricated, which is safe here and
+/// only here: an address needs no match, so no prefilter and no whole-file gate is
+/// reasoning about this text.
 ///
 /// `None` only when the line is no record at all (no text, no keys) - the address then
 /// stays a miss, which is the honest answer.
-pub(crate) fn unlabeled_hit(
+pub(crate) fn addressed_unit(
     rec: &Record,
     raw: Option<&str>,
+    ctx: &ClassifyCtx,
     matcher: &Matcher,
     excerpt_max: usize,
 ) -> Option<Hit> {
-    let shape = unmodeled_shape(rec);
+    let labels = rec.classify(ctx);
+    let class = labels.first().copied();
+    let shape = if class.is_none() {
+        unmodeled_shape(rec, raw)
+    } else {
+        None
+    };
     let text = match record_raw_text(rec, raw) {
         Some(t) => t,
         None => top_level_key_excerpt(raw)?,
@@ -34,8 +45,8 @@ pub(crate) fn unlabeled_hit(
     let span = matcher.locate(&text)?;
     let (excerpt, truncated) = match_excerpt(&text, span, excerpt_max);
     Some(Hit {
-        class: None,
-        labels: Vec::new(),
+        class,
+        labels: labels.iter().map(|c| c.path()).collect(),
         excerpt,
         body: uncapped_body(&text, excerpt_max),
         timestamp_utc: rec.timestamp.clone(),
@@ -85,8 +96,18 @@ pub(crate) fn unlabeled_hit(
 /// Naming the shape is what makes the unit useful: `? unmodeled: system/some_new_subtype`
 /// tells a reader exactly which build-side shape csift has not caught up with, which
 /// `? (no label)` never did.
-pub(crate) fn unmodeled_shape(rec: &Record) -> Option<String> {
+pub(crate) fn unmodeled_shape(rec: &Record, raw: Option<&str>) -> Option<String> {
     let ty = rec.r#type.as_deref()?;
+    // A ROLE-BEARING record with no leaf. Its type is modeled and says nothing, so the
+    // shape is the BLOCK it carries - the axis its leaf would have been decided on -
+    // and, when it carries no distinguishing block, the authorship flag that makes it
+    // the harness's own text rather than the operator's.
+    if ty == "user" || ty == "assistant" {
+        if let Some(b) = distinguishing_block_type(raw) {
+            return Some(format!("{ty}/{b}"));
+        }
+        return rec.is_meta.unwrap_or(false).then(|| format!("{ty}/isMeta"));
+    }
     // A record whose type IS modeled but whose own leaf is decided deeper: name the
     // deeper value, which is the part csift did not model.
     if ty == "system" {
@@ -104,8 +125,24 @@ pub(crate) fn unmodeled_shape(rec: &Record) -> Option<String> {
         };
     }
     // Any other top-level type with no leaf of its own.
-    (crate::model::bookkeeping_leaf(ty).is_none() && ty != "user" && ty != "assistant")
-        .then(|| ty.to_string())
+    (crate::model::bookkeeping_leaf(ty).is_none()).then(|| ty.to_string())
+}
+
+/// The `type` of the first content block that is not `text`, read off the RAW line rather
+/// than the parsed record: the block model folds every shape it does not know into one
+/// tolerant arm, so the parsed form cannot tell a `document` from a `fallback`, and the
+/// whole point of the unit is to name the value csift has not caught up with. `None` when
+/// there is no raw line, no block array, or nothing but text blocks - a record of text
+/// alone already had its leaf decided elsewhere.
+fn distinguishing_block_type(raw: Option<&str>) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(raw?).ok()?;
+    v.get("message")?
+        .get("content")?
+        .as_array()?
+        .iter()
+        .filter_map(|b| b.get("type")?.as_str())
+        .find(|t| *t != "text")
+        .map(str::to_string)
 }
 
 /// A key=value excerpt of a line's own top-level keys, for a record that carries no

@@ -1,11 +1,13 @@
-//! Axis 5: the isMeta-USER TEMPLATE families - 13 named templates, the human relay, and
+//! Axis 5: the isMeta-USER TEMPLATE families - 15 named templates, the human relay, and
 //! the residue arm.
 //!
 //! These are the shapes with no field to key on: the harness writes text into the
 //! conversation as if the operator had typed it, and only the text says which producer
-//! wrote it. The families csift already recognises are in `model/classify/injections.rs`;
-//! the rest are rows here with no leaf yet, which is exactly what makes this table an
-//! extension point rather than a claim of completeness.
+//! wrote it. Every row is DETECTED in `model/classify/injections.rs` - the drift test
+//! beside this table builds one synthetic line per row and requires the leaf back - with
+//! two exceptions that are themselves rows: the frame, whose leaf is decided by the pulse
+//! it wraps, and the RESIDUE arm, which is the honest name for a template csift models
+//! none of and reaches only through an address.
 //!
 //! All ride `type:"user"` lines, so a flagless scan already keeps them.
 
@@ -103,6 +105,24 @@ pub(crate) const ROWS: &[Entry] = &[
         Gate::Default,
         true,
         Human::Never,
+    ),
+    e(
+        Shape::IsMetaFamily("coordinator-relay"),
+        Some(Class::CommInbox),
+        Gate::Default,
+        true,
+        Human::Always,
+    ),
+    e(
+        // The leaf is decided DEEPER, on the pulse the frame wraps: the inner
+        // `<task-notification>`'s own kind picks one of the five notification leaves, so
+        // no single leaf belongs in this row (the four transcript top-level types are the
+        // other rows shaped this way, and the drift test names both cases by hand).
+        Shape::IsMetaFamily("task-notification-frame"),
+        None,
+        Gate::Default,
+        true,
+        Human::Always,
     ),
     e(
         Shape::IsMetaFamily("human-relay"),

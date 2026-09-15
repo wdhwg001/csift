@@ -126,7 +126,8 @@ pub struct ShowArgs {
     /// `42..` = turn 42 → the end). Fetches every user and assistant record of the named
     /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn
     /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong
-    /// to no turn fetch: address them by `--line`/`--uuid`, or `search -t harness.meta`.
+    /// to no turn fetch: address them by `--line`/`--uuid`, or name their leaf -
+    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`.
     /// The turn numbering matches the `·t<N>` in `search`'s exchange headers exactly.
     /// Mutually exclusive with `--line`/`--uuid` (pick ONE addressing mode).
     #[arg(

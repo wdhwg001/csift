@@ -148,6 +148,16 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Unstated,
     ),
     e(
+        // One corpus specimen (c1: 1 record over 9,484 files; c2: 0 over 10,299), and its
+        // payload is names plus a directory - `skillDir`, `skillNames`, `displayPath` -
+        // rather than a body, so it lists what is available like its four neighbours.
+        Shape::AttachmentType("dynamic_skill"),
+        Some(Class::ContextListing),
+        Gate::Attachments,
+        true,
+        Human::Unstated,
+    ),
+    e(
         Shape::AttachmentType("invoked_skills"),
         Some(Class::ContextListing),
         Gate::Attachments,

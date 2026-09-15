@@ -49,8 +49,11 @@ impl Activity {
                         }
                     }
                 }
-                crate::model::Class::AgentThinkingSummary
-                | crate::model::Class::AgentThinkingNarration => self.thinking += 1,
+                // Every `agent.thinking` leaf, by CATEGORY: a block with no summary text
+                // and a redacted one are blocks the model produced, and a census of what
+                // landed while `wait` waited counts them like the other two. Naming the
+                // leaves one by one is what let the split drop two of them silently.
+                c if c.category() == "agent.thinking" => self.thinking += 1,
                 crate::model::Class::AgentMessagePlain => self.agent_messages += 1,
                 crate::model::Class::UserMessage => self.user_prompts += 1,
                 c if c.path().starts_with("harness.notification") => self.notifications += 1,

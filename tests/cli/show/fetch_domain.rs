@@ -34,8 +34,9 @@ fn an_addressed_record_with_no_modeled_leaf_renders_instead_of_bailing() {
         out.stderr
     );
     assert!(
-        out.stdout.contains("(no label)"),
-        "the empty label is named, never borrowed from a neighbouring leaf:\n{}",
+        out.stdout.contains("? unmodeled: user/isMeta"),
+        "the unit NAMES what the line is - a harness-authored template csift models \
+         none of - instead of borrowing a neighbouring leaf:\n{}",
         out.stdout
     );
     assert!(
@@ -158,8 +159,8 @@ fn a_tagless_peer_record_is_unlabeled_and_still_addressable() {
         shown.stderr
     );
     assert!(
-        shown.stdout.contains("(no label)"),
-        "as an honest unlabeled unit:\n{}",
+        shown.stdout.contains("? unmodeled: user/isMeta"),
+        "as an honest unmodeled unit naming its shape:\n{}",
         shown.stdout
     );
     assert!(
@@ -247,4 +248,115 @@ fn a_line_that_is_not_a_record_at_all_stays_a_hard_miss() {
         raw.stderr
     );
     assert!(raw.stdout.contains("lastProm"), "{}", raw.stdout);
+}
+
+/// The 1:1 law over ROLE-BEARING records: a message line with no renderable text used to
+/// hard-miss under an address, because the fallback had neither text nor raw bytes to
+/// build a unit from. Each shape below names the axis its leaf would have been decided
+/// on, so a reader learns what the line IS.
+#[test]
+fn a_textless_message_record_renders_its_shape_under_an_address() {
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-0000000000fe";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzshapes open"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"fallback","model":"claude-x"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a1","isMeta":true,"timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBOR"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u3","parentUuid":"u2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"JVBER"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u4","parentUuid":"u3","isMeta":true,"timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"user","content":"zzresidue a template nobody models"}}"#, "\n",
+        ),
+    );
+
+    // The fallback-only assistant record is still the assistant's TURN: it carries the
+    // plain message leaf with an empty body, so it is a labeled unit and not an
+    // unmodeled one. Naming the fallback in the render belongs to the family lane.
+    let fb = h.run(&["show", &at(sess), "--line", "2"]);
+    assert!(fb.success, "stderr: {}", fb.stderr);
+    assert!(
+        fb.stdout.contains("agent.message.plain"),
+        "a fallback-served turn keeps the assistant's leaf:\n{}",
+        fb.stdout
+    );
+    assert!(
+        !fb.stdout.contains("unmodeled"),
+        "and is not an unmodeled unit:\n{}",
+        fb.stdout
+    );
+
+    // An image-only record carries the leaf its text form carries.
+    let img = h.run(&["show", &at(sess), "--line", "3"]);
+    assert!(img.success, "stderr: {}", img.stderr);
+    assert!(
+        img.stdout.contains("harness.context.image"),
+        "an image-only record is the attached image:\n{}",
+        img.stdout
+    );
+
+    // A `document` block is a shape csift models nothing for: the unit names the BLOCK,
+    // which is the axis the leaf would have come from.
+    let doc = h.run(&["show", &at(sess), "--line", "4"]);
+    assert!(doc.success, "stderr: {}", doc.stderr);
+    assert!(
+        doc.stdout.contains("? unmodeled: user/document"),
+        "the block names the shape:\n{}",
+        doc.stdout
+    );
+
+    // And the residue isMeta template names the authorship flag that makes it the
+    // harness's own text rather than the operator's.
+    let res = h.run(&["show", &at(sess), "--line", "5"]);
+    assert!(res.success, "stderr: {}", res.stderr);
+    assert!(
+        res.stdout.contains("? unmodeled: user/isMeta"),
+        "the residue names its authorship:\n{}",
+        res.stdout
+    );
+    assert!(
+        res.stdout.contains("zzresidue a template nobody models"),
+        "carrying the record's own text:\n{}",
+        res.stdout
+    );
+
+    // A SCAN still sees none of the two unmodeled units.
+    let scan = h.run(&["search", "zzshapes|zzresidue", &at(sess)]);
+    assert!(scan.success, "stderr: {}", scan.stderr);
+    assert!(
+        !scan.stdout.contains("unmodeled"),
+        "a scan never emits an unmodeled unit:\n{}",
+        scan.stdout
+    );
+}
+
+/// The JSON side of the same law: a textless record with a LEAF keeps its label, and one
+/// without names its shape under a null label.
+#[test]
+fn the_shape_and_the_leaf_both_reach_json() {
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-0000000000fb";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzjson open"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":[{"type":"document","source":{}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"fallback","model":"claude-x"}]}}"#, "\n",
+        ),
+    );
+    let row = |line: &str| -> serde_json::Value {
+        let out = h.run(&["show", &at(sess), "--line", line, "--format", "json"]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        out.stdout
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .find(|v| v["kind"] == "record")
+            .expect("the record row")
+    };
+    let doc = row("2");
+    assert_eq!(doc["label"], serde_json::Value::Null, "{doc}");
+    assert_eq!(doc["labels"], serde_json::json!([]), "{doc}");
+    assert_eq!(doc["unmodeled"], "user/document", "{doc}");
+    let fb = row("3");
+    assert_eq!(fb["label"], "agent.message.plain", "{fb}");
+    assert_eq!(fb["unmodeled"], serde_json::Value::Null, "{fb}");
 }

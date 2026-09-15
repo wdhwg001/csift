@@ -250,13 +250,13 @@ pub(crate) fn run_rendered(
     }
     if !misses.is_empty() {
         bail!(
-            "no such record(s): {} — an explicit address renders message lines \
-             (role:user/role:assistant, superseded drafts included), attachment lines, and \
-             the promoted non-record lines (a queue-operation with text, turn_duration, \
-             away_summary, stop_hook_summary, file-history-snapshot/-delta, and every \
-             other system subtype such as informational or api_error); session-state \
-             cache lines (last-prompt, mode, ai-title, …), a content-less queue dequeue \
-             and torn lines are inspectable with `--raw`",
+            "no such record(s): {} — an address renders EVERY parseable line of the \
+             transcript: message lines (superseded drafts included), attachment lines, \
+             system lines of every subtype, and the non-record bookkeeping lines \
+             (last-prompt, mode, queue-operation, file-history, cost-state, …). A shape \
+             csift models no leaf for renders as `? unmodeled: <shape>` rather than a \
+             miss, so this address named a line the file does not have, or a line that \
+             is not a JSON object at all — `--raw` reads a torn line",
             misses.join(", ")
         );
     }

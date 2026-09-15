@@ -96,12 +96,20 @@ fn an_attachment_the_flagless_scan_cannot_search_still_carries_the_chain() {
     );
     let census = h.run(&["search", "", &at(SSESS), "--count-by", "label"]);
     assert!(census.success, "stderr: {}", census.stderr);
-    assert!(
-        !census.stdout.contains("harness.meta.attachment")
-            && !census.stdout.contains("harness.hook.context"),
-        "no attachment leaf reaches a flagless census:\n{}",
-        census.stdout
-    );
+    // Every LIVE attachment-carried leaf, by name: the first half of this pair used to
+    // assert the absence of a retired spelling, which no build could ever produce.
+    for leaf in [
+        "harness.hook.context",
+        "harness.hook.outcome",
+        "harness.context.",
+        "agent.message.structured",
+    ] {
+        assert!(
+            !census.stdout.contains(leaf),
+            "no attachment leaf reaches a flagless census, and {leaf} did:\n{}",
+            census.stdout
+        );
+    }
     // The TURN axis says the same thing from the other side: the demoted line joins no
     // turn key, and the two live turns keep the record counts they had.
     let by_turn = h.run(&[

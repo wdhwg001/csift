@@ -173,15 +173,15 @@ pub(crate) fn rows() -> impl Iterator<Item = &'static Entry> {
     INVENTORY.iter().copied().flatten()
 }
 
-/// The leaves that have NO shape row, each with the reason. Read by the partition
-/// drift test and by SPEC section 5, which prints the reasons beside the table - the
-/// binary itself never needs it (`#[allow(dead_code)]` for the same reason as
-/// [`Entry`]'s documentation columns).
-#[allow(dead_code)]
 /// The leaves that have NO shape row, each with the reason. A leaf lands here when its
 /// discriminator is not a line-level field: a SECTION inside a record's text, a fact the
 /// surrounding DAG carries, or a tool the record names. The drift test asserts this table
 /// and the shaped leaves partition [`Class::ALL`] exactly, so neither can grow silently.
+///
+/// Read by that test and by SPEC section 5, which prints the reasons beside the table;
+/// the binary itself never needs it, hence the allow, for the same reason as [`Entry`]'s
+/// documentation columns.
+#[allow(dead_code)]
 pub(crate) const UNSHAPED: &[(Class, &str)] = &[
     (
         Class::UserAnswer,
@@ -206,10 +206,6 @@ pub(crate) const UNSHAPED: &[(Class, &str)] = &[
     (
         Class::AgentThinkingOmitted,
         "a thinking block whose own text is empty",
-    ),
-    (
-        Class::CommInbox,
-        "a peer SECTION inside a record's text, a subagent opener, or a resolved spawn tool_result",
     ),
     (
         Class::CommSent,

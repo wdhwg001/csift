@@ -151,13 +151,38 @@ fn classify_injection_template_variants() {
 }
 
 #[test]
-fn classify_ismeta_image_record_is_excluded() {
-    // G2: an isMeta "[Image: source:…]" pseudo-record is EXCLUDED (no label), never
-    // mislabeled user.message.
-    let r = parse(
-        r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"[Image: source: /Users/x/.claude/image-cache/abc.png]"}}"#,
+fn classify_ismeta_image_record_takes_the_context_image_leaf() {
+    // An isMeta `[Image: …]` pseudo-record is the harness's stand-in for a pasted or
+    // attached image. It was EXCLUDED while the taxonomy had no leaf to put it under -
+    // better silent than mislabeled `user.message` - and `harness.context.image` is that
+    // leaf. Both openings the builder writes land on it.
+    for content in [
+        "[Image: source: /Users/dev/.claude/image-cache/abc.png]",
+        "[Image source: /Users/dev/.claude/image-cache/abc.png]",
+        "[Image: 1024x768]",
+    ] {
+        let line = serde_json::json!({
+            "type": "user",
+            "isMeta": true,
+            "message": {"role": "user", "content": content},
+        })
+        .to_string();
+        let r = parse(&line);
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::ContextImage],
+            "{content}"
+        );
+    }
+    // A record merely QUOTING the reference mid-prose keeps its own leaf: the arm is
+    // content-start anchored like every other template.
+    let quoting = parse(
+        r#"{"type":"user","message":{"role":"user","content":"the harness writes [Image: 1024x768] for a paste"}}"#,
     );
-    assert!(r.classify(&ClassifyCtx::top_level()).is_empty());
+    assert_eq!(
+        quoting.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
+    );
 }
 
 // ── G1: a notification carrying a <result> is ALSO an inbound report (child ⇨ parent) ──
@@ -410,11 +435,21 @@ fn classify_unmodeled_records_are_empty() {
     // A line type csift models no leaf for stays empty.
     let unknown = parse(r#"{"type":"some-future-line","leafUuid":"x"}"#);
     assert!(unknown.classify(&ClassifyCtx::top_level()).is_empty());
-    // An image-only user record (no text, no tool_result) → empty.
+    // An image-only user record (no text, no tool_result) carries the same leaf its text
+    // form does - the image reached the model either way.
     let img = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
     );
-    assert!(img.classify(&ClassifyCtx::top_level()).is_empty());
+    assert_eq!(
+        img.classify(&ClassifyCtx::top_level()),
+        vec![Class::ContextImage]
+    );
+    // A textless block record that carries no image still carries nothing, which is what
+    // sends it to the unmodeled unit under an address.
+    let doc = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"document","source":{}}]}}"#,
+    );
+    assert!(doc.classify(&ClassifyCtx::top_level()).is_empty());
 }
 
 #[test]

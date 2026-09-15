@@ -134,6 +134,12 @@ pub(crate) fn is_section_boundary(prefix: &str) -> bool {
     let t = prefix.trim_end();
     t.is_empty()
         || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))
+        // The background-task event FRAME is a preamble like the relay ones: it wraps a
+        // real pulse in a warning envelope, so the pulse that follows it opens a section.
+        // A CONJUNCTION, for the C-40 reason: the frame's closing sentence is ordinary
+        // prose a record could quote, so the frame must also have OPENED the content.
+        || (t.ends_with(TASK_NOTIFICATION_FRAME_TAIL)
+            && t.trim_start().starts_with(TASK_NOTIFICATION_FRAME_PREFIX))
         || t.ends_with(TASK_NOTIFICATION_CLOSE)
         || t.ends_with(TEAMMATE_MESSAGE_CLOSE)
         || t.ends_with(AGENT_MESSAGE_CLOSE)
@@ -259,6 +265,15 @@ pub(crate) fn peer_section_body(section: &str) -> &str {
 }
 
 impl Record {
+    /// The `kind` of this record's top-level `origin` object, whatever it is. Claude Code
+    /// stamps `origin` on every user record it SUBMITTED rather than took from the
+    /// operator's own client, and the kind says which door it came through - `peer`,
+    /// `coordinator`, `task-notification` or `human`. Read it when the question is which
+    /// door; [`Record::peer_origin`] is the narrower read for the peer door alone.
+    pub(crate) fn origin_kind(&self) -> Option<&str> {
+        self.origin.as_ref()?.as_object()?.get("kind")?.as_str()
+    }
+
     /// The top-level `origin` object of an inbound PEER record (C-30), when it carries one:
     /// Claude Code stamps `{kind:"peer", from, verifiedPeerPid, msg_id?, name?, fromMode?,
     /// body?, …}` on every user record it mints for a session-to-session message. `None` for a

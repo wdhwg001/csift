@@ -76,7 +76,13 @@ pub(crate) fn collect_turn_hits(
         // that is plainly there. Emit ONE unlabeled unit instead. Only an ADDRESS reaches
         // this: a scan still sees nothing, so no census, count or `-t` result moves.
         if address.is_some() && hits.len() == before {
-            if let Some(hit) = unlabeled_hit(rec, kept.gated_raw.as_deref(), matcher, excerpt_max) {
+            if let Some(hit) = addressed_unit(
+                rec,
+                kept.gated_raw.as_deref(),
+                &env.ctx_for(kept),
+                matcher,
+                excerpt_max,
+            ) {
                 hits.push(hit);
             }
         }

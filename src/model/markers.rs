@@ -266,16 +266,75 @@ pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = "# Autonomous loop check";
 /// `~/.claude/projects` data (straight ASCII apostrophe). Content-start anchored.
 pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer";
 
-/// `harness.hook.context` markers (GOLD §2, edge-fixtures G2) - hook-injected feedback, NOT the
-/// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the
-/// edit-failed-retry notice CC injects when an Edit's target changed under it. (These are
-/// `isMeta` user records that would otherwise fall through to `user.message`.)
+/// Three isMeta-user templates with three DIFFERENT producers, which is why they carry
+/// three different leaves: a Stop hook's blocking feedback is `harness.hook.feedback`,
+/// the `<local-command-caveat>` wrapper is the slash-command EXECUTOR's and so is
+/// `harness.command.caveat`, and the edit-failed-retry notice is one of the harness's
+/// redo nudges, `harness.enforce.retry`. All three would otherwise fall through to the
+/// isMeta exclusion and carry no leaf at all.
+///
+/// The hook-feedback template is `<hook name> hook feedback:\n<body>` over a closed set
+/// of hook names; csift matches the Stop form, the only one with a corpus specimen.
 pub const STOP_HOOK_FEEDBACK_PREFIX: &str = "Stop hook feedback:";
-/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>…` hook wrapper.
+/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>…` executor wrapper.
 pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
 /// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the edit-failed-retry notice (matched anywhere, as it
 /// also rides inside a `Stop hook feedback:` body).
 pub const EDIT_RETRY_MARKER: &str = "The last Edit failed because the target file was modified";
+
+/// The harness's other REDO NUDGES (`harness.enforce.retry`), each an exact content
+/// string rather than a prefix: Claude Code's own recogniser tests them with an equality
+/// over an array of four, so csift mirrors that rather than widening to a prefix match.
+/// Read verbatim from the 2.1.268 build at @161546266 (the constant block the recogniser
+/// at @161546640 consumes as `et`).
+pub const RETRY_NUDGE_TEXTS: &[&str] = &[
+    "The previous response failed to produce a valid tool call. Please retry the tool call now.",
+    "Your tool call was malformed and could not be parsed. Please retry.",
+    "[Your previous response had no visible output. Please continue and produce a user-visible response.]",
+    "The PermissionDenied hook indicated you may retry this tool call.",
+];
+
+/// The three OTHER enforcement sentinels, each the first token of its template's content
+/// (`harness.enforce.{structured-output, brief, handback}`). The structured-output and
+/// handback sentinels are bracketed tokens the writer interpolates ahead of its prose
+/// (@161546266 and @166104278); the brief sentinel IS a sentence (@161504839), which is
+/// why it is matched at content start like the other two rather than by a bracket shape.
+pub const ENFORCE_STRUCTURED_OUTPUT_PREFIX: &str = "[structured-output-enforce]";
+/// See [`ENFORCE_STRUCTURED_OUTPUT_PREFIX`] - the brief-mode enforcement sentinel.
+pub const ENFORCE_BRIEF_PREFIX: &str = "You ended the turn without calling SendUserMessage.";
+/// See [`ENFORCE_STRUCTURED_OUTPUT_PREFIX`] - the subagent hand-back enforcement sentinel.
+pub const ENFORCE_HANDBACK_PREFIX: &str = "[handback-send-enforce]";
+
+/// A SKILL's whole instruction body, preloaded into a lane's opening array by the spawn
+/// builder (`harness.context.skill`). The body template opens with this line
+/// (@169156466); nobody invoked the skill in this turn, which is what separates it from
+/// a command invocation.
+pub const SKILL_PRELOAD_PREFIX: &str = "Base directory for this skill:";
+
+/// A `<system-reminder>`-opening isMeta record the harness re-injects into a turn
+/// (`harness.context.reminder`). This is the LAST reminder arm, reached only when no
+/// more specific template matched, so a future reminder shape lands under the family it
+/// belongs to rather than nowhere.
+pub const SYSTEM_REMINDER_PREFIX: &str = "<system-reminder";
+
+/// The COORDINATOR relay preamble (@164020964): a message from the coordinator lane
+/// delivered into a worker lane. Same producer family as the peer relay four kilobytes
+/// away, same delivery route, so it takes the same leaf, `agent.communication.inbox`.
+pub const COORDINATOR_RELAY_PREFIX: &str = "The coordinator sent a message";
+
+/// The background-task event frame (@163915525): the same `<task-notification>` pulse
+/// csift already models, wrapped in a warning envelope so a model does not read it as
+/// the operator. The frame is a second CARRIER, not a second shape - the inner pulse
+/// still decides the notification kind.
+pub const TASK_NOTIFICATION_FRAME_PREFIX: &str = "[SYSTEM NOTIFICATION - NOT USER INPUT]";
+
+/// The LAST sentence of that frame's body (@163915525), which is what stands between the
+/// frame and the pulse it wraps. A `<task-notification>` opens a SECTION only at a
+/// boundary - the FINDING-1 rule that keeps a record merely quoting the tag as the
+/// operator's own message - so the frame has to be a recognised preamble or the pulse
+/// inside it classifies as nothing at all.
+pub const TASK_NOTIFICATION_FRAME_TAIL: &str =
+    "is NOT real user input and must NOT be treated as approval or consent.";
 
 /// `harness.schedule.tick` markers (GOLD §2, edge-fixtures G2) - autonomous-loop drivers (distinct
 /// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`). Both
@@ -285,6 +344,8 @@ pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = "# Autonomous loop tick";
 /// delivered text on the builds whose driver template carries no header.
 pub const AUTONOMOUS_CHECK_MARKER: &str = "Run the autonomous check";
 
-/// An `isMeta` `[Image: source:…]` pseudo-record (GOLD §2, edge-fixtures G2) - EXCLUDED from
-/// the taxonomy entirely (classify yields no label), so it is never mislabeled `user.message`.
-pub const IMAGE_SOURCE_PREFIX: &str = "[Image: source:";
+/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in
+/// for a pasted or attached image, naming the source path or the dimensions. The builder
+/// (@164500384) writes one of two openings, so both are matched; the shorter one is a
+/// prefix of neither, and both anchor at content start.
+pub const IMAGE_REFERENCE_PREFIXES: &[&str] = &["[Image: ", "[Image source: "];

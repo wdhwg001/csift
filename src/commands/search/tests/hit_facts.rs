@@ -12,16 +12,16 @@ use super::*;
 fn a_modeled_shape_has_no_unmodeled_value_on_any_axis() {
     let modeled_subtype =
         rec(r#"{"type":"system","subtype":"api_error","uuid":"s1","content":"boom"}"#);
-    assert_eq!(unmodeled_shape(&modeled_subtype), None);
+    assert_eq!(unmodeled_shape(&modeled_subtype, None), None);
     let modeled_payload = rec(
         r#"{"type":"attachment","uuid":"a1","attachment":{"type":"hook_additional_context","content":["x"]}}"#,
     );
-    assert_eq!(unmodeled_shape(&modeled_payload), None);
+    assert_eq!(unmodeled_shape(&modeled_payload, None), None);
     let modeled_line = rec(r#"{"type":"cost-state","sessionId":"s","totalCostUSD":1.0}"#);
-    assert_eq!(unmodeled_shape(&modeled_line), None);
+    assert_eq!(unmodeled_shape(&modeled_line, None), None);
     // The two transcript types are never unmodeled either: their leaf is decided deeper.
     let user = rec(r#"{"type":"user","uuid":"u1","message":{"role":"user","content":"hi"}}"#);
-    assert_eq!(unmodeled_shape(&user), None);
+    assert_eq!(unmodeled_shape(&user, None), None);
 }
 
 /// And an UNmodeled shape names the value on the axis that decides it - the deeper one
@@ -31,21 +31,24 @@ fn a_modeled_shape_has_no_unmodeled_value_on_any_axis() {
 fn an_unmodeled_shape_names_the_axis_that_decides_it() {
     let subtype = rec(r#"{"type":"system","subtype":"some_future_subtype","uuid":"s2"}"#);
     assert_eq!(
-        unmodeled_shape(&subtype).as_deref(),
+        unmodeled_shape(&subtype, None).as_deref(),
         Some("system/some_future_subtype")
     );
     let payload =
         rec(r#"{"type":"attachment","uuid":"a2","attachment":{"type":"some_future_payload"}}"#);
     assert_eq!(
-        unmodeled_shape(&payload).as_deref(),
+        unmodeled_shape(&payload, None).as_deref(),
         Some("attachment/some_future_payload")
     );
     let line = rec(r#"{"type":"future-thing","uuid":"f1","note":"x"}"#);
-    assert_eq!(unmodeled_shape(&line).as_deref(), Some("future-thing"));
+    assert_eq!(
+        unmodeled_shape(&line, None).as_deref(),
+        Some("future-thing")
+    );
     // A system line with no subtype at all, and a typeless line: no value to name.
     assert_eq!(
-        unmodeled_shape(&rec(r#"{"type":"system","uuid":"s3"}"#)),
+        unmodeled_shape(&rec(r#"{"type":"system","uuid":"s3"}"#), None),
         None
     );
-    assert_eq!(unmodeled_shape(&rec(r#"{"uuid":"n1"}"#)), None);
+    assert_eq!(unmodeled_shape(&rec(r#"{"uuid":"n1"}"#), None), None);
 }

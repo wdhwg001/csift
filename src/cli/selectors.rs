@@ -286,14 +286,16 @@ fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
         "harness.schedule.continuation" => ("pre-v0.12.0 name", "harness.resume.prompt"),
         "harness.meta" => (
             "pre-v0.13.0 catch-all category",
-            "harness.hook.* · harness.command.caveat · harness.schedule.tick · \
-             harness.context.* · harness.turn.* · harness.system.* · \
-             harness.bookkeeping.* · agent.message.structured",
+            "harness.hook.* · harness.command.caveat · harness.enforce.retry · \
+             harness.schedule.tick · harness.schedule.event · harness.context.* · \
+             harness.turn.* · harness.system.* · harness.bookkeeping.* · \
+             agent.message.structured",
         ),
         "harness.meta.hook" => (
             "pre-v0.13.0 name",
             "harness.hook.context (hook-injected text) · harness.hook.feedback (a Stop \
-             hook's blocking feedback) · harness.command.caveat (<local-command-caveat>)",
+             hook's blocking feedback) · harness.command.caveat (<local-command-caveat>) \
+             · harness.enforce.retry (the edit-failed-retry nudge)",
         ),
         "harness.meta.loop" => ("pre-v0.13.0 name", "harness.schedule.tick"),
         "harness.meta.attachment" => (

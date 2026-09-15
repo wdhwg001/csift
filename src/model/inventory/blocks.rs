@@ -1,10 +1,9 @@
 //! Axis 4: the `type` of a content block inside `message.content[]` - 8 values.
 //!
 //! Blocks ride user and assistant lines, which a flagless scan already keeps, so the
-//! gate here is always the default one. Two of the eight carry no leaf: `document` is a
-//! shape csift has never modeled, and `fallback` - the block an assistant record carries
-//! when the API served the turn from a fallback model - is a MARKER on the record rather
-//! than a leaf of its own.
+//! gate here is always the default one. ONE of the eight carries no leaf: `document` is a
+//! shape csift has never modeled, so a record whose only block is one renders as an
+//! unmodeled unit under an address and as nothing at all on a scan.
 
 use super::*;
 
@@ -62,10 +61,14 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Unstated,
     ),
     e(
+        // The API served the turn from a fallback model and wrote this block in place of
+        // the text. The turn still reached the conversation, so the record carries the
+        // plain message leaf with an EMPTY body; the marker naming the fallback is a
+        // family lane's, and the human column stays unstated until that render exists.
         Shape::Block("fallback"),
-        None,
-        Gate::Address,
-        false,
-        Human::Never,
+        Some(Class::AgentMessagePlain),
+        Gate::Default,
+        true,
+        Human::Unstated,
     ),
 ];

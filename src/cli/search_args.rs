@@ -335,9 +335,10 @@ pub struct SearchArgs {
     /// Also scan EVERY `type:"attachment"` record: the harness sidecar payloads (hook
     /// context, edited-file snapshots, compact file references, file snapshots, …) a
     /// default scan never parses (they are the bulk of a transcript's bytes and echo files
-    /// wholesale). A SUPERSET of --additional-context: a hook payload still surfaces under
-    /// `harness.hook.context`; every other payload surfaces under `harness.meta.attachment`
-    /// with its VERBATIM payload JSON as the matchable text. `--count-by attachment`
+    /// wholesale). It EQUALS naming every attachment-carried leaf with `.*`, and the
+    /// narrow ask needs no flag at all - a hook payload is `-t harness.hook.context`,
+    /// an injected payload is `-t 'harness.context.*'`, and each renders with its
+    /// VERBATIM payload JSON as the matchable text. `--count-by attachment`
     /// implies this gate; an explicit `show --line`/`--uuid` address always renders an
     /// addressed attachment record, flag or not.
     #[arg(long)]
@@ -436,7 +437,7 @@ impl SearchArgs {
     }
 
     /// The v0.10.0 gated-leaf rule: a promoted non-record leaf is scanned ONLY when an
-    /// EXPLICIT `-t` selector reaches it (the full path, a glob, or the `harness.meta`
+    /// EXPLICIT `-t` selector reaches it (the full path, a glob, or the CATEGORY
     /// prefix). A bare scan with no `-t` admits every label elsewhere but never parses
     /// these lines: most queued content is a duplicate automation pulse and every
     /// promoted line is a non-message line, so the default surface stays the

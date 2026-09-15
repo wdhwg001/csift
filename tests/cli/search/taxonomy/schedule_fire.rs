@@ -125,13 +125,33 @@ fn the_label_census_counts_the_new_leaf_and_leaves_the_tick_leaves_alone() {
     // order, not a second predicate - and the skill's instruction record joins neither.
     assert_eq!(row("harness.schedule.wakeup"), Some(1), "{}", out.stdout);
     assert_eq!(row("harness.schedule.tick"), Some(1), "{}", out.stdout);
-    // The `scheduled_task_fire` lines the instant was read from stay GATED under
-    // `harness.meta.system`: a default scan gains no hit from the keep that parsed them.
+    // The `scheduled_task_fire` lines the instant was read from stay GATED under their
+    // own leaf: a default scan gains no hit from the keep that parsed them. The leaf has
+    // to be the LIVE one - asserting the absence of a retired spelling would pass on any
+    // build, including one where the records leaked under their real name.
     assert_eq!(
-        row("harness.meta.system"),
+        row("harness.schedule.event"),
         None,
         "the fire records stay gated:\n{}",
         out.stdout
+    );
+    // And naming the leaf reaches them, so the absence above is a GATE and not a gap.
+    let named = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "harness.schedule.event",
+        "--count-by",
+        "label",
+        "--format",
+        "json",
+    ]);
+    assert!(named.success, "stderr: {}", named.stderr);
+    assert!(
+        named.stdout.contains("harness.schedule.event"),
+        "the fire records are reachable by their own selector:\n{}",
+        named.stdout
     );
 }
 

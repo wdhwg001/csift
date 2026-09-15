@@ -41,6 +41,7 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
 
         // ── harness.context.listing: an inventory the harness injects ──
         "skill_listing"
+        | "dynamic_skill"
         | "agent_listing_delta"
         | "deferred_tools_delta"
         | "deferred_tools_record"

@@ -18,7 +18,7 @@ use super::*;
         Keeping the two apart is the whole point: a ledger with no matching record is \
         INTENT-ONLY (the hook printed into a process that crashed, or the write has not \
         flushed yet), never a delivery. The fact half is exactly \
-        `csift search '<ID>' @<lane> --additional-context`; `msg` runs that join for you and \
+        `csift search '<ID>' @<lane> -t harness.hook.context`; `msg` runs that join for you and \
         adds the ledger side.\n\n\
         VERDICTS (a closed set)\n  \
           DELIVERED     at least one emit AND a transcript record carrying the id\n  \
@@ -50,7 +50,7 @@ use super::*;
         verdict but DELIVERED and an acked delivery. Summary: {kind:\"summary\", messages, \
         skipped_lines}.\n\n\
         THE FACT HALF ON ITS OWN\n  \
-          `csift search '<ID>' @<lane> --additional-context` is the transcript side of the \
+          `csift search '<ID>' @<lane> -t harness.hook.context` is the transcript side of the \
         join, and `msg` runs exactly that. The flag is harmless but not needed here: a \
         csift-channel delivery is the ONE attachment payload a DEFAULT scan already parses, \
         under the leaf `agent.communication.channel`, rendered verbatim from its envelope.\n\n\

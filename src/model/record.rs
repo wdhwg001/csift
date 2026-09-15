@@ -156,7 +156,7 @@ pub struct Record {
     pub subtype: Option<String>,
 
     /// `system` record severity (`"warning"` on the Remote Control disconnect notice,
-    /// `"info"` elsewhere); rides the `harness.meta.system` excerpt head (v0.10.1).
+    /// `"info"` elsewhere); rides the `harness.system.*` excerpt head (v0.10.1).
     #[serde(default)]
     pub level: Option<String>,
 

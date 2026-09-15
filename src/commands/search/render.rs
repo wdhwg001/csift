@@ -31,9 +31,13 @@ pub(crate) fn render_label(h: &Hit) -> String {
                 HitFact::Unmodeled(s) => s.as_str(),
             })
             .next();
+        // ONE unmodeled form. A leafless unit always names its shape - the block it
+        // carries, its subtype, its payload type, or the isMeta flag that makes the text
+        // the harness's own - and the bare word is the floor for a line whose own `type`
+        // key is missing, the only case with no value left to name.
         return match shape {
             Some(s) => format!("unmodeled: {s}"),
-            None => "(no label)".to_string(),
+            None => "unmodeled".to_string(),
         };
     };
     // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).

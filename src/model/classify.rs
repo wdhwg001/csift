@@ -260,6 +260,15 @@ impl Record {
                 _ => {}
             }
         }
+        // A record whose blocks produced NO leaf is still the assistant's turn: the
+        // `fallback` block the API writes when it served the turn from a fallback model
+        // is the whole content, and the inventory records it as a MARKER on the record
+        // rather than a leaf of its own. The turn reached the conversation, so it takes
+        // the plain message leaf with an empty body; naming the fallback in the render is
+        // a family lane's work, not the engine's.
+        if out.is_empty() && !blocks.is_empty() {
+            push_unique(out, Class::AgentMessagePlain);
+        }
     }
 
     /// Classify a `user` record (GOLD §2/§3): compaction summary (by the `isCompactSummary`
@@ -325,11 +334,6 @@ impl Record {
         // content-start anchoring; `None` means the text matched no template csift models.
         if let Some(c) = injections::classify(self, s) {
             push_unique(out, c);
-            return;
-        }
-        // isMeta "[Image: source:…]" pseudo-record: EXCLUDED - emit no label rather than
-        // mislabel it user.message.
-        if s.starts_with(IMAGE_SOURCE_PREFIX) {
             return;
         }
         // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.
@@ -402,7 +406,15 @@ impl Record {
             .collect::<Vec<_>>()
             .join("\n");
         if joined.trim().is_empty() {
-            return; // image-only / empty → nothing in the taxonomy
+            // harness.context.image: the record carries IMAGE blocks and no text - the
+            // block form of the same attached image the `[Image: …]` reference names in
+            // text form, and the inventory's `Block("image")` row is where that leaf is
+            // recorded. Any other textless block record (a `document`, a bare `fallback`)
+            // still carries nothing, which is what sends it to the unmodeled unit.
+            if blocks.iter().any(|b| matches!(b, Block::Image { .. })) {
+                push_unique(out, Class::ContextImage);
+            }
+            return;
         }
         self.classify_user_string(ctx, &joined, out);
     }

@@ -474,7 +474,7 @@ fn set_strength(set: &[String]) -> (usize, std::cmp::Reverse<usize>) {
 /// - `turn_duration` / `stop_hook_summary` / `file-history-` (v0.10.0, only under an
 ///   explicit selector reaching the leaf) - the promoted renders fabricate
 ///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
-/// - `"subtype"` (v0.10.1, only under a selector reaching `harness.meta.system`) - the
+/// - `"subtype"` (v0.10.1, only under a selector reaching `harness.system.*`) - the
 ///   catch-all render fabricates the `[<subtype> <level>]` head.
 /// - Under `--resolve-persisted`: `persistedOutputPath` / `Full output saved to:` -
 ///   the matched text is EXTERNAL file content, absent from the transcript bytes by
