@@ -407,7 +407,7 @@ pub fn system_line_leaves() -> Vec<Class> {
 pub fn attachment_leaves() -> Vec<Class> {
     let narrow: Vec<Class> = attachment_view_needles()
         .into_iter()
-        .map(|(_, c, _)| c)
+        .map(|(_, c)| c)
         .collect();
     let mut out: Vec<Class> = Vec::new();
     for r in crate::model::rows() {
@@ -433,26 +433,26 @@ pub fn attachment_leaves() -> Vec<Class> {
 /// `agent.message.structured` is the model's own answer, so a bare `-t user` or `-t agent`
 /// reaches one. That is exactly why they cannot ride the coarse keep.
 ///
-/// The third element is the GATE, and BOTH entries take the v0.11.0 channel keep's rule:
-/// a scan that does not EXCLUDE the leaf admits the needle, so a flagless scan reaches it
-/// (`-t user` / `-t harness` still short-circuit before the memmem). A flagless scan is a
-/// SUPERSET of `-t user` and of `-t agent`, so a leaf the narrower query reaches and the
-/// wider one does not is not a cost decision - it is the selector law broken. Both leaves
-/// here are words someone owned: the person's own mid-turn steer, and the model's own
-/// structured answer. `false` would mean the gated-leaf rule, an EXPLICIT `-t` reaching
-/// the leaf; no entry takes it today.
+/// BOTH take the v0.11.0 channel keep's GATE - a scan that does not EXCLUDE the leaf
+/// admits the needle, so a flagless scan reaches it while `-t user` / `-t harness` still
+/// short-circuit before the memmem. That is the selector law rather than a budget: a
+/// flagless scan is a SUPERSET of `-t user` and of `-t agent`, so a leaf the narrower
+/// query reaches and the wider one does not is the law broken. What the two have in
+/// common is that both are words someone OWNED - the person's own mid-turn steer and the
+/// model's own structured answer - which is the same reason the channel keep is default-on.
 ///
 /// The needle only ADMITS the line; the parse decides the leaf. A `queued_command` whose
 /// payload `origin.kind` is not `human` stays `harness.context.task` behind that leaf's
-/// own gate, so a default scan gains the two views and no machinery.
+/// own gate, so a default scan gains the two views and no machinery. Every OTHER
+/// attachment leaf keeps the coarse keep, so a flagless scan parses none of them.
 ///
 /// `agent.communication.channel` is absent on purpose: it already has its own default-on
 /// needle (the envelope header), a stronger discriminator than its payload type.
 #[must_use]
-pub fn attachment_view_needles() -> Vec<(&'static str, Class, bool)> {
+pub fn attachment_view_needles() -> Vec<(&'static str, Class)> {
     vec![
-        ("\"queued_command\"", Class::UserMessage, true),
-        ("\"structured_output\"", Class::AgentMessageStructured, true),
+        ("\"queued_command\"", Class::UserMessage),
+        ("\"structured_output\"", Class::AgentMessageStructured),
     ]
 }
 

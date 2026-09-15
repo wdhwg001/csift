@@ -92,20 +92,14 @@ pub(crate) struct CandidateGates {
 /// group off the flagless path.
 pub(crate) fn attachment_view_mask(args: &SearchArgs, addressed: bool) -> u32 {
     let mut mask = 0u32;
-    for (i, (_, leaf, default_on)) in crate::cli::attachment_view_needles().iter().enumerate() {
-        // Each entry names its own gate ([`crate::cli::attachment_view_needles`]).
-        // DEFAULT-ON takes the channel keep's rule - the label set does not EXCLUDE the
-        // leaf - because a flagless scan is a SUPERSET of `-t user` and of `-t agent`, and
-        // neither the person's own message nor the model's own answer can be reachable
-        // only from the narrower query. The other arm is the gated-leaf rule, an EXPLICIT
-        // `-t` reaching the leaf - the same `reaches_gated` predicate every other gated
-        // leaf answers to - and it is kept for a needle that ever needs it.
-        let on = if *default_on {
-            args.label_filter().selected(leaf.path())
-        } else {
-            args.reaches_gated(*leaf)
-        };
-        if addressed || on {
+    for (i, (_, leaf)) in crate::cli::attachment_view_needles().iter().enumerate() {
+        // The CHANNEL keep's gate: on unless the label set EXCLUDES the leaf. A flagless
+        // scan is a SUPERSET of `-t user` and of `-t agent`, so neither the person's own
+        // message nor the model's own answer can be reachable only from the narrower
+        // query - while `-t harness` still short-circuits before the memmem. Every OTHER
+        // attachment leaf keeps `reaches_gated`, the gated-leaf rule, through the coarse
+        // keep above.
+        if addressed || args.label_filter().selected(leaf.path()) {
             mask |= 1 << i;
         }
     }
@@ -120,7 +114,7 @@ pub(crate) fn record_view_bit(rec: &Record) -> Option<u32> {
     let leaf = rec.attachment_view_leaf()?;
     crate::cli::attachment_view_needles()
         .iter()
-        .position(|(_, c, _)| *c == leaf)
+        .position(|(_, c)| *c == leaf)
         .map(|i| 1u32 << i)
 }
 
@@ -131,7 +125,7 @@ static VIEW_FINDERS: std::sync::LazyLock<Vec<memmem::Finder<'static>>> =
     std::sync::LazyLock::new(|| {
         crate::cli::attachment_view_needles()
             .into_iter()
-            .map(|(n, _, _)| memmem::Finder::new(n.as_bytes()))
+            .map(|(n, _)| memmem::Finder::new(n.as_bytes()))
             .collect()
     });
 
