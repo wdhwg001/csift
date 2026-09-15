@@ -125,6 +125,10 @@ fn a_human_queued_command_is_the_persons_message() {
         "a queued rider is no view at all - the needle admitted it, the parse refuses it"
     );
     assert_eq!(rec(&att("file")).attachment_view_leaf(), None);
+    // And an ordinary conversation record, which the demotion walks past on every
+    // scan: the predicate answers on the LINE TYPE first, before any payload read.
+    let user = r#"{"type":"user","uuid":"v1","message":{"role":"user","content":"hi"}}"#;
+    assert_eq!(rec(user).attachment_view_leaf(), None);
 }
 
 #[test]
