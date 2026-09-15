@@ -152,8 +152,14 @@ fn every_visible_leaf_specimen_emits_exactly_one_hit() {
             hits.iter().map(|h| h.class).collect::<Vec<_>>()
         );
     }
-    assert!(
-        swept >= 15,
-        "the sweep should cover the template and block specimens, covered {swept}"
+    // EXACT, like every other drift guard here: 22 specimen rows (8 block, 14 template),
+    // of which 2 take the `visible.is_empty()` arm above - the `document` block, which
+    // carries no leaf at all, and `redacted_thinking`, whose leaf is invisible by
+    // construction - and 2 are the exemptions named above, leaving 18. A `>=` bound would
+    // pass while a row quietly stopped being swept, which is the drift this guard exists
+    // to catch; a family lane that ADDS a specimen updates the number and says which row.
+    assert_eq!(
+        swept, 18,
+        "every specimen carrying a visible leaf is swept, minus the two named exemptions"
     );
 }

@@ -193,7 +193,7 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `user.unsent` | the esc-recalled draft left on disk: a `type:"user"` opener sharing its `parentUuid` with a LATER opener and carrying no assistant descendant | default scan | no | ? |
 | `user.rewound` | an ANSWERED opener the conversation was rewound past: the same shape as `Class::UserUnsent` WITH an assistant descendant | default scan | no | ? |
 | `user.queued` | the person's text while it sat in the input queue: a `type:"queue-operation"` line carrying the human's own `content` | explicit -t | no | ? |
-| `agent.message.plain` | the assistant's own text: a `type:"assistant"` record's `[{text}]` block(s) | default scan | yes | ? / yes |
+| `agent.message.plain` | the assistant's own text: a `type:"assistant"` record's `[{text}]` block(s), and a turn the API served from a FALLBACK model, which carries this leaf with no body - the leaf records that the turn happened, and with no text there is nothing for a scan to match or a census to count | default scan | yes | ? / yes |
 | `agent.message.structured` | a schema-bound subagent's final structured answer: a `type:"attachment"` record whose payload `type` is `structured_output`, parented to the assistant record that produced it | default scan (own needle) | yes | no |
 | `agent.thinking.summary` | the API-side summary of the reasoning (never the raw chain of thought): a `{type:"thinking", thinking, signature}` block whose signature tag reads `thinking` | default scan | yes | verbose |
 | `agent.thinking.narration` | the API's progress update between tool calls: the same block shape with the signature tag `narration` (the tag hides in the base64 `signature`; see `model/narration.rs`) | default scan | yes | ? |
@@ -233,7 +233,7 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `harness.context.mode` | a mode transition the harness recorded (plan mode and its exits/re-entries, auto mode, command permissions) | -t or --attachments | yes | ? |
 | `harness.context.ide` | IDE state the harness attached (the open file, the selection, diagnostics) | -t or --attachments | yes | ? |
 | `harness.context.task` | task/goal/memory state the harness attached, including a `queued_command` that is NOT the human's own text | -t or --attachments / default scan (own needle) | yes | ? |
-| `harness.context.image` | an image the harness referenced into the conversation: the isMeta `[Image: …]` reference records and the image-only isMeta records | default scan | yes | yes |
+| `harness.context.image` | an image the harness referenced into the conversation: the isMeta `[Image: …]` reference records and the image-only isMeta records. The image-ONLY form is a picture with no text: the line is parsed and `show --line` renders it whole, but a pattern scan has nothing to match and a census counts no hit for it - `csift image` is the surface that lists and extracts it | default scan | yes | yes |
 | `harness.context.skill` | an isMeta `type:"user"` record whose text OPENS with `Base directory for this skill:`, the instruction body a spawn builder preloaded rather than a skill anyone invoked this turn; on disk that body usually arrives as the first text block of an array | default scan | yes | no |
 | `harness.enforce.structured-output` | the redo nudge that tells the model it must call the StructuredOutput tool | default scan | yes | no |
 | `harness.enforce.brief` | the brief-enforce redo nudge | default scan | yes | no |
@@ -271,7 +271,7 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `user.unsent` | assigned at the scan layer from the DAG: an opener with a later sibling and no assistant descendant | `csift show @<id> --line N --raw` |
 | `user.rewound` | assigned at the scan layer from the DAG: the same shape WITH an assistant descendant | `csift show @<id> --line N --raw` |
 | `user.queued` | a queue-operation line whose CONTENT is the human's own text, not its line type | `csift show @<id> --line N --raw` |
-| `agent.message.plain` | message.content[] type:"text" · "fallback" | `csift show @<id> --line N --raw` |
+| `agent.message.plain` | message.content[] type:"text" · "fallback" (a fallback-served turn has NO text section: it renders in full under an address and contributes no hit to a pattern scan or a census) | `csift show @<id> --line N --raw` |
 | `agent.message.structured` | type:"attachment" attachment.type:"structured_output" | `csift show @<id> --line N --raw` |
 | `agent.thinking.summary` | message.content[] type:"thinking" | `csift show @<id> --line N --raw` |
 | `agent.thinking.narration` | a thinking block whose base64 signature carries the narration tag | `csift show @<id> --line N --raw` |
@@ -311,7 +311,7 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `harness.context.mode` | type:"attachment" attachment.type:"plan_mode" · "plan_mode_exit" · "plan_mode_reentry" · "auto_mode" · "command_permissions" | `csift show @<id> --line N --raw` |
 | `harness.context.ide` | type:"attachment" attachment.type:"opened_file_in_ide" · "selected_lines_in_ide" · "diagnostics" | `csift show @<id> --line N --raw` |
 | `harness.context.task` | type:"attachment" attachment.type:"task_status" · type:"attachment" attachment.type:"queued_command" (attachment.origin.kind "human" = the person's own steer, `user.message`) · "workflow_keyword_request" · "goal_status" · "remote_session_change" · "relevant_memories" · "memory_update" · "thinking_stripped" | `csift show @<id> --line N --raw` |
-| `harness.context.image` | message.content[] type:"image" on an image-ONLY `type:"user"` record (the `[Image: ` reference is its text form); beside TEXT it rides that record's own leaf · type:"user" isMeta:true template:image-reference | `csift show @<id> --line N --raw` |
+| `harness.context.image` | message.content[] type:"image" on an image-ONLY `type:"user"` record (the `[Image: ` reference is its text form); beside TEXT it rides that record's own leaf · type:"user" isMeta:true template:image-reference. The image-only form has NO text section, so it renders in full under an address and contributes no hit to a pattern scan or a census; `csift image` reads the bytes | `csift show @<id> --line N --raw` |
 | `harness.context.skill` | type:"user" isMeta:true template:skill-body | `csift show @<id> --line N --raw` |
 | `harness.enforce.structured-output` | type:"user" isMeta:true template:enforce-structured-output | `csift show @<id> --line N --raw` |
 | `harness.enforce.brief` | type:"user" isMeta:true template:enforce-brief | `csift show @<id> --line N --raw` |
