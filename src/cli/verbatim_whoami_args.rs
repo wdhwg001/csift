@@ -298,8 +298,8 @@ pub struct VerbatimArgs {
     /// output). `rich` keeps the last always + the first by position privilege + each
     /// non-droppable middle, only on a long run (over the mode's run threshold).
     /// `all` keeps every agent message.
-    #[arg(long = "agent-msgs", value_enum, default_value_t = crate::turns::AgentMsgMode::Longest)]
-    pub agent_msgs: crate::turns::AgentMsgMode,
+    #[arg(long = "agent-msgs", value_enum, default_value_t = crate::commands::turns::AgentMsgMode::Longest)]
+    pub agent_msgs: crate::commands::turns::AgentMsgMode,
 
     /// Convenience threshold bundle, applied BEFORE the individual flags (so an explicit
     /// flag overrides the profile). `heavy` = maximal fidelity (threshold 4, rich-min 200,
@@ -308,7 +308,7 @@ pub struct VerbatimArgs {
     /// mode stays the default `longest` (with the profile's thresholds); add `--agent-msgs
     /// rich` to also switch the keep-set.
     #[arg(long = "profile", value_enum)]
-    pub profile: Option<crate::turns::Profile>,
+    pub profile: Option<crate::commands::turns::Profile>,
 
     /// Inclusive turn-index range in the shared grammar: `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) - 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
@@ -393,12 +393,12 @@ impl VerbatimArgs {
         self.include_subagents && !self.no_subagents
     }
 
-    /// Resolve the agent-message policy into a [`crate::turns::RichnessCfg`]. The
+    /// Resolve the agent-message policy into a [`crate::commands::turns::RichnessCfg`]. The
     /// per-knob tuning flags are GONE (0-backcompat surface diet): `--profile` bundles are
     /// the only tuning: `heavy` (4/200/140) / `light` (8/360/240) / none (6/280/200).
     #[must_use]
-    pub fn richness_cfg(&self) -> crate::turns::RichnessCfg {
-        use crate::turns::{Profile, RichnessCfg};
+    pub fn richness_cfg(&self) -> crate::commands::turns::RichnessCfg {
+        use crate::commands::turns::{Profile, RichnessCfg};
         let (run_threshold, rich_min_chars, declaration_max_chars) = match self.profile {
             Some(Profile::Heavy) => (4, 200, 140),
             Some(Profile::Light) => (8, 360, 240),

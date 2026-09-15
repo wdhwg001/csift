@@ -1,0 +1,344 @@
+//! `whoami` subcommand - identify the CALLING Claude Code session, false-positive-safe.
+//!
+//! ## Detection (verified empirically inside a live Claude Code Bash tool, 2026-06-07)
+//!
+//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.
+//! It was confirmed to equal exactly the session's own jsonl filename:
+//!
+//! ```text
+//! CLAUDE_CODE_SESSION_ID=0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+//!   -> ~/.claude/projects/<encoded>/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl
+//! ```
+//!
+//! This is a **definitive** signal: per-session, version-independent, survives
+//! bash nesting, zero false positives. It is the primary signal; when it is absent
+//! we fall back to the `CODEX_COMPANION_SESSION_ID` alias (set by the Codex companion
+//! plugin) before giving up.
+//!
+//! When NEITHER var is set (e.g. invoked outside Claude Code/Codex, or a future
+//! CC build that drops it) we DO NOT GUESS - multiple CC sessions may run
+//! concurrently with different binaries, and most-recent-mtime is a false-positive
+//! trap. We error with actionable guidance instead. It is acceptable for whoami to
+//! often say "ambiguous, pass `@<uuid>`".
+
+//! ## Reach (v0.11.0)
+//!
+//! Identity is half the question a lane actually has: the other half is who is above it, what
+//! is live around it, and whether a message would arrive. Those sections are built by
+//! [`crate::commands::live::channel`], which owns the readers the send path uses, and printed AFTER the
+//! identity output, which is unchanged. This file keeps the resolution and the envelope.
+
+use std::path::PathBuf;
+
+use anyhow::{bail, Result};
+use serde_json::json;
+
+use crate::cli::{OutputFormat, WhoamiArgs};
+use crate::commands::live::channel;
+use crate::path;
+
+/// Primary env var Claude Code sets per session (verified 2026-06-07): its value
+/// equals the calling session's own jsonl basename, exactly.
+const SESSION_ID_ENV: &str = "CLAUDE_CODE_SESSION_ID";
+
+/// Secondary alias mirrored by the Codex companion plugin. Accepted only when the
+/// canonical var is absent (SPEC §6.3 - prefer the canonical var).
+const SESSION_ID_ENV_ALIAS: &str = "CODEX_COMPANION_SESSION_ID";
+
+/// The guidance shown when no definitive signal exists. Kept as a const so the
+/// message stays identical across call sites (and is unit-asserted).
+pub const AMBIGUOUS_GUIDANCE: &str = "cannot identify the calling session: \
+CLAUDE_CODE_SESSION_ID is not set (old Claude Code build, or running outside Claude \
+Code). Do NOT trust most-recent-mtime — many sessions may be live at once. Pass an \
+explicit `@<uuid>` target: your id is the basename of your own transcript jsonl, \
+or grep a unique recent line you wrote to disambiguate.";
+
+/// Read the definitive session id from the environment, if present and non-empty.
+/// Matches the EXACT canonical var name first (never a loose `/session/i` regex -
+/// `SECURITYSESSIONID` is a false-positive trap), then the Codex alias.
+#[must_use]
+pub fn detect_session_id() -> Option<String> {
+    if let Ok(v) = std::env::var(SESSION_ID_ENV) {
+        if !v.trim().is_empty() {
+            return Some(v.trim().to_string());
+        }
+    }
+    if let Ok(v) = std::env::var(SESSION_ID_ENV_ALIAS) {
+        if !v.trim().is_empty() {
+            return Some(v.trim().to_string());
+        }
+    }
+    None
+}
+
+/// The resolved identity of the calling session.
+#[derive(Debug, Clone)]
+pub struct WhoAmI {
+    pub session_id: String,
+    /// Absolute path to the session's jsonl, if we could locate it on disk.
+    pub path: Option<PathBuf>,
+}
+
+/// Entry point for `csift whoami`. With no target (or `@main`), identify the calling session from
+/// the environment; with `@trap:<marker>`, resolve which SUBAGENT the caller is (env-independent);
+/// with an `@<agent-id>` / `@<Name>@<Team>` target, answer for THAT lane. `--to` and `--peers` are
+/// terminal reach modes that ask about other lanes instead of this one.
+pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
+    if args.peers {
+        return channel::run_peers(args.format);
+    }
+    if let Some(to) = args.to.as_deref() {
+        return channel::run_reach_to(to, args.format);
+    }
+    match args.self_target.as_deref() {
+        None | Some("@main") => run_whoami_env(args),
+        Some(t) if t.starts_with("@trap:") => {
+            run_whoami_trap(t.strip_prefix("@trap:").unwrap_or(""), args)
+        }
+        Some(t) if is_lane_target(t) => run_whoami_lane(t, args),
+        Some(other) => bail!(
+            "whoami accepts no target except `@trap:<marker>` (which SUBAGENT am I?), `@main` \
+             (the calling top-level session — the default), or a LANE id `@<agent-id>` / \
+             `@<Name>@<Team>` (answer for that lane). Got `{other}`. A session uuid is not a \
+             whoami question: to inspect a DIFFERENT session, use `csift list @<uuid>` / \
+             `csift agents @<uuid>`."
+        ),
+    }
+}
+
+/// True for the two lane id forms `whoami` now answers for: the transcript form (a bare `a…`
+/// agent id or a name-embedded teammate id) and a teammate's routing form `Name@Team`. A session
+/// uuid is deliberately NOT one: `whoami` answers about a lane, and the session forms already
+/// have `list` / `agents`.
+fn is_lane_target(token: &str) -> bool {
+    let Some(id) = token.strip_prefix('@') else {
+        return false;
+    };
+    path::is_subagent_id(id) || path::is_teammate_routing_id(id)
+}
+
+/// `whoami` (env form): the calling session id from `$CLAUDE_CODE_SESSION_ID` + its jsonl path.
+fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
+    let Some(session_id) = detect_session_id() else {
+        // Outside Claude Code there is no lane to name, and guessing one is the documented
+        // trap - so the channel answer (what a non-lane CAN do) goes to stdout and the
+        // identity question still fails loudly.
+        channel::external_answer(args.format)?;
+        bail!("{AMBIGUOUS_GUIDANCE}");
+    };
+
+    let path = locate_transcript(&session_id);
+
+    // C-16 lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC
+    // hands a subagent its parent's id), so env-only resolution cannot know whether the
+    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null.
+    eprintln!(
+        "csift: note: resolved via env ($CLAUDE_CODE_SESSION_ID), which names the TOP-LEVEL \
+         session in every lane - from a subagent this is the PARENT's id, not yours. Lane \
+         fields are null under env-only resolution; a first-try `whoami @trap:<marker>` hit \
+         proves your true lane."
+    );
+
+    let me = WhoAmI { session_id, path };
+    match args.format {
+        OutputFormat::Text => render_text(&me),
+        OutputFormat::Json => render_json_head(&me)?,
+    }
+    // The environment named the top-level session, not necessarily the CALLER, so the sections
+    // answer for that lane and say the identification was assumed.
+    let counts = match &me.path {
+        Some(p) => Some(sections_for(p, false, "env", args.format)?),
+        None => None,
+    };
+    finish_json(args.format, 1, counts)
+}
+
+/// Print the reach sections for one resolved lane.
+fn sections_for(
+    path: &std::path::Path,
+    exact: bool,
+    via: &'static str,
+    format: OutputFormat,
+) -> Result<(usize, usize)> {
+    channel::emit_lane_sections(
+        &channel::LaneRef {
+            path: path.to_path_buf(),
+            exact,
+            via,
+        },
+        format,
+    )
+}
+
+/// `whoami @<agent-id>` / `whoami @<Name>@<Team>`: answer for THAT lane. There is no identity
+/// row here - the `self` section carries the id in both forms, which is the answer the target
+/// form was asked for.
+fn run_whoami_lane(token: &str, args: &WhoamiArgs) -> Result<()> {
+    let path = channel::resolve_lane(token)?;
+    if matches!(args.format, OutputFormat::Json) {
+        println!("{}", crate::text::envelope_header("whoami", json!({})));
+    }
+    let counts = sections_for(&path, true, "target", args.format)?;
+    finish_json(args.format, 0, Some(counts))
+}
+
+/// Close a JSON stream with the shared summary. A text run prints nothing here.
+fn finish_json(
+    format: OutputFormat,
+    identities: usize,
+    counts: Option<(usize, usize)>,
+) -> Result<()> {
+    if !matches!(format, OutputFormat::Json) {
+        return Ok(());
+    }
+    let (live, others) = counts.unwrap_or((0, 0));
+    println!(
+        "{}",
+        crate::text::envelope_summary(json!({
+            "identities": identities,
+            "live_child_lanes": live,
+            "other_live_lanes": others,
+        }))
+    );
+    Ok(())
+}
+
+/// `whoami @trap:<marker>`: resolve the caller's UPSTREAM ancestry chain from the unique literal
+/// marker it embedded in THIS very command, and report it self → ancestors → top-level root. This
+/// is the walk-UP mirror of `agents` (walk-DOWN): a subagent learns its own bare hex AND the whole
+/// re-feedable lineage above it. Env-independent - reliable for a built-in Task AND a workflow
+/// subagent (whose env id is the PARENT, not itself).
+fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
+    let chain = path::resolve_trap_who(marker)?;
+    match args.format {
+        OutputFormat::Text => {
+            // chain[0] = self (the marker carrier); chain.last() = the top-level root.
+            for (i, n) in chain.iter().enumerate() {
+                let role = if n.is_subagent { "subagent" } else { "session" };
+                let annot = match (i, n.is_subagent, n.depth) {
+                    (0, true, Some(d)) => format!("  <- you (subagent, depth {d})"),
+                    (0, true, None) => "  <- you (subagent)".to_string(),
+                    (0, false, _) => "  <- you (top-level session, not a subagent)".to_string(),
+                    (_, true, Some(d)) => format!("  ^ parent subagent (depth {d})"),
+                    (_, true, None) => "  ^ parent subagent".to_string(),
+                    (_, false, _) => "  ^ top-level root".to_string(),
+                };
+                println!("{role:8} {}{annot}", n.session_id);
+            }
+            // The self transcript path - the most useful "where am I".
+            match chain.first().and_then(|n| n.path.as_ref()) {
+                Some(p) => println!("path     {}", p.display()),
+                None => println!("path     <transcript not found under projects root>"),
+            }
+        }
+        OutputFormat::Json => {
+            // envelope v2: one kind:"identity" row per ancestry node, self first (depth 0)
+            // → top-level root last. The former single `{chain:[…]}` wrapper is gone -
+            // the SAME stream shape as the env form, just more rows.
+            println!("{}", crate::text::envelope_header("whoami", json!({})));
+            for n in &chain {
+                let obj = json!({
+                    "kind": "identity",
+                    "session_id": n.session_id,
+                    "is_subagent": n.is_subagent,
+                    "parent_session_id": n.parent_session_id,
+                    "depth": n.depth,
+                    "path": n.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+                });
+                println!("{}", serde_json::to_string(&obj)?);
+            }
+        }
+    }
+    // @trap resolved the CALLER's own lane from a marker it carried, so the sections here are
+    // exact - the one form in which they are.
+    let counts = match chain.first().and_then(|n| n.path.as_ref()) {
+        Some(p) => Some(sections_for(p, true, "trap", args.format)?),
+        None => None,
+    };
+    finish_json(args.format, chain.len(), counts)
+}
+
+/// Locate `<id>.jsonl` under the projects root. First try the current cwd's encoded
+/// dir (the common case - a session's cwd is its start cwd); if that misses, scan
+/// every project dir for a file named `<id>.jsonl`. Returns `None` if not found -
+/// the id is still authoritative (it came from the env var); the path is a bonus.
+fn locate_transcript(session_id: &str) -> Option<PathBuf> {
+    let root = path::projects_root().ok()?;
+    let filename = format!("{session_id}.jsonl");
+
+    // Fast path: encode $PWD and look there first.
+    if let Ok(cwd) = std::env::current_dir() {
+        let dir = root.join(path::encode_cwd(&cwd));
+        let candidate = dir.join(&filename);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    // Fallback: scan every project dir for the file (cheap - a stat per dir).
+    let dirs = path::all_project_dirs().ok()?;
+    for pd in dirs {
+        let candidate = pd.dir.join(&filename);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+// ── Rendering ──
+
+fn render_text(me: &WhoAmI) {
+    println!("session  {}", me.session_id);
+    println!("lane     unknown from env alone (a subagent sees its parent's id here)");
+    // The path is ALWAYS printed (it is the useful bit); a not-found note when it can't be located.
+    match &me.path {
+        Some(p) => println!("path     {}", p.display()),
+        None => println!("path     <not found under projects root for the current cwd>"),
+    }
+}
+
+/// The env form's JSON head: the envelope header and the one identity row. The summary is
+/// printed by [`finish_json`] once the reach sections have had their turn.
+fn render_json_head(me: &WhoAmI) -> Result<()> {
+    println!("{}", crate::text::envelope_header("whoami", json!({})));
+    let obj = json!({
+        "kind": "identity",
+        "session_id": me.session_id,
+        // Lane-honest nulls: env-only resolution cannot distinguish the top-level caller
+        // from a subagent handed its parent's id. Unknown is stated, never fabricated.
+        "is_subagent": serde_json::Value::Null,
+        "parent_session_id": serde_json::Value::Null,
+        "depth": serde_json::Value::Null,
+        "path": me.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+    });
+    println!("{}", serde_json::to_string(&obj)?);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guidance_mentions_session_target_and_no_mtime() {
+        assert!(AMBIGUOUS_GUIDANCE.contains("@<uuid>"));
+        assert!(AMBIGUOUS_GUIDANCE.contains("mtime"));
+        assert!(AMBIGUOUS_GUIDANCE.contains("CLAUDE_CODE_SESSION_ID"));
+    }
+
+    #[test]
+    fn exact_env_name_is_canonical_not_a_loose_regex() {
+        // The constant must be the EXACT name - a loose /session/i match would
+        // false-positive on SECURITYSESSIONID (macOS login session).
+        assert_eq!(SESSION_ID_ENV, "CLAUDE_CODE_SESSION_ID");
+        assert_ne!(SESSION_ID_ENV, "SECURITYSESSIONID");
+    }
+
+    #[test]
+    fn detect_trims_and_blank_is_none() {
+        // We avoid mutating process env in threaded tests; assert the trim/blank
+        // contract directly (the env read is integration-tested separately).
+        assert!("   ".trim().is_empty());
+    }
+}

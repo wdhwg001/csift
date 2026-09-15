@@ -5,29 +5,17 @@
 //! args, dispatch to a subcommand handler, map errors to a process exit code. All real
 //! work lives in the modules.
 
-mod agents;
 mod bash;
 mod chardiff;
 mod cli;
-mod elicitation;
-mod files;
-mod image;
-mod live;
+mod commands;
 mod model;
 mod parse;
 mod path;
-mod plan;
-mod recover;
-mod search;
-mod session;
-mod show;
-mod stats;
 mod subagent;
 mod text;
 mod time_window;
 mod timez;
-mod turns;
-mod whoami;
 
 use std::process::ExitCode;
 
@@ -66,22 +54,22 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Command::List(args) => session::run_list(&args),
-        Command::Search(args) => search::run_search(&args),
-        Command::Show(args) => show::run_show(&args),
-        Command::Stats(args) => stats::run_stats(&args),
-        Command::Whoami(args) => whoami::run_whoami(&args),
-        Command::Agents(args) => agents::run_agents(&args),
-        Command::Files(args) => files::run_files(&args),
-        Command::Recover(args) => recover::run_recover(&args),
-        Command::Plan(args) => plan::run_plan(&args),
-        Command::Verbatim(args) => turns::run_verbatim(&args),
-        Command::Image(args) => image::run_image(&args),
-        Command::Status(args) => live::run_status(&args),
-        Command::Wait(args) => live::run_wait(&args),
-        Command::Send(args) => live::channel::run_send(&args),
-        Command::Msg(args) => live::channel::run_msg(&args),
-        Command::Ack(args) => live::channel::run_ack(&args),
+        Command::List(args) => commands::session::run_list(&args),
+        Command::Search(args) => commands::search::run_search(&args),
+        Command::Show(args) => commands::show::run_show(&args),
+        Command::Stats(args) => commands::stats::run_stats(&args),
+        Command::Whoami(args) => commands::whoami::run_whoami(&args),
+        Command::Agents(args) => commands::agents::run_agents(&args),
+        Command::Files(args) => commands::files::run_files(&args),
+        Command::Recover(args) => commands::recover::run_recover(&args),
+        Command::Plan(args) => commands::plan::run_plan(&args),
+        Command::Verbatim(args) => commands::turns::run_verbatim(&args),
+        Command::Image(args) => commands::image::run_image(&args),
+        Command::Status(args) => commands::live::run_status(&args),
+        Command::Wait(args) => commands::live::run_wait(&args),
+        Command::Send(args) => commands::live::channel::run_send(&args),
+        Command::Msg(args) => commands::live::channel::run_msg(&args),
+        Command::Ack(args) => commands::live::channel::run_ack(&args),
         // The hidden rename tombstone (cli.rs): always the pointed error, never a run.
         Command::Turns(_) => anyhow::bail!(
             "`csift turns` was RENAMED to `csift verbatim` in v0.5 — same command, same \
@@ -89,6 +77,6 @@ fn run(cli: Cli) -> Result<()> {
              as `csift verbatim …`. To simply READ a session's recent turns (no compaction \
              involved), that is `csift show <target> --turn -3..`."
         ),
-        Command::Deliver(args) => live::channel::run_deliver(&args),
+        Command::Deliver(args) => commands::live::channel::run_deliver(&args),
     }
 }

@@ -9,12 +9,15 @@ surface change bumps the PATCH.
 
 ### Changed
 
-- **The source tree is re-managed: the bash lexical layers under `src/bash/`.**
-  `src/` sat at both structure caps (20 counted direct `.rs` files, 16 subfolders),
-  which is a refactor gate rather than a number to raise. `bash_danger*.rs` and
-  `bash_mutations/` become `src/bash/danger.rs` + `src/bash/danger/` and
-  `src/bash/mutations.rs` + `src/bash/mutations/`. Every path is respelled at every
-  call site, with no alias and no forwarding shim. No behaviour change.
+- **The source tree is re-managed: command modules under `src/commands/`, the bash
+  lexical layers under `src/bash/`.** `src/` sat at both structure caps (20 counted
+  direct `.rs` files, 16 subfolders), which is a refactor gate rather than a number to
+  raise. `bash_danger*.rs` and `bash_mutations/` become `src/bash/danger.rs` +
+  `src/bash/danger/` and `src/bash/mutations.rs` + `src/bash/mutations/`; the thirteen
+  subcommand families move under `src/commands/`, leaving the crate root to the base
+  layer they build on (`cli`, `model`, `parse`, `path`, `subagent`, `bash`, `chardiff`,
+  `text`, `time_window`, `timez`). Every path is respelled at every call site, with no
+  alias and no forwarding shim. No behaviour change.
 
 ## [0.12.3] - 2026-09-13
 

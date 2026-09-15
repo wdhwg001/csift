@@ -448,7 +448,7 @@ pub(crate) fn node_files_changed(path: &Path) -> Result<Vec<(String, String, boo
             records.push(rec);
         }
     })?;
-    let muts = crate::files::mutations_in_records(&records);
+    let muts = crate::commands::files::mutations_in_records(&records);
     let mut seen = std::collections::BTreeSet::new();
     let mut out = Vec::new();
     for m in muts {

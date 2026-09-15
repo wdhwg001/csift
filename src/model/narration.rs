@@ -28,7 +28,7 @@ pub(crate) fn thinking_signature_tag(signature: Option<&str>) -> Option<String> 
     if sig.is_empty() {
         return None;
     }
-    let bytes = crate::image::decode_base64(sig)?;
+    let bytes = crate::commands::image::decode_base64(sig)?;
     let f2 = last_len_delimited(&bytes, 2)?;
     let f1 = last_len_delimited(f2, 1)?;
     let f8 = last_len_delimited(f1, 8)?;
