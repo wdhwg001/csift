@@ -257,16 +257,22 @@ impl Record {
                     }
                 }
                 Block::ToolResult { .. } => push_unique(out, Class::AgentToolResult),
+                // A block row is a statement about the BLOCK, so an image carries its
+                // leaf whichever role's line it rides.
+                Block::Image { .. } => push_unique(out, Class::ContextImage),
                 _ => {}
             }
         }
-        // A record whose blocks produced NO leaf is still the assistant's turn: the
-        // `fallback` block the API writes when it served the turn from a fallback model
-        // is the whole content, and the inventory records it as a MARKER on the record
-        // rather than a leaf of its own. The turn reached the conversation, so it takes
+        // The `fallback` block - what the API writes in place of the text when it served
+        // the turn from a fallback model - is the assistant's TURN, so the record takes
         // the plain message leaf with an empty body; naming the fallback in the render is
         // a family lane's work, not the engine's.
-        if out.is_empty() && !blocks.is_empty() {
+        //
+        // The test is the BLOCK, never "nothing else matched". A blanket arm answers for
+        // every OTHER leafless shape an assistant record can carry - a `document` block,
+        // which the inventory gives no leaf, and a whitespace-only text block - and
+        // silently overrides those rows.
+        if out.is_empty() && blocks.iter().any(|b| matches!(b, Block::Fallback { .. })) {
             push_unique(out, Class::AgentMessagePlain);
         }
     }
@@ -286,7 +292,7 @@ impl Record {
         // their labels, with notification precedence over a peer tag quoted inside a
         // notification span (P1c M3). When ≥1 section matches, that fully classifies the record.
         if let Some(raw) = self.raw_message_text() {
-            if classify_batched_sections(&raw, out) {
+            if classify_batched_sections(&raw, self.is_meta.unwrap_or(false), out) {
                 return;
             }
         }
@@ -444,6 +450,7 @@ impl Record {
             &raw,
             TASK_NOTIFICATION_PREFIX,
             TASK_NOTIFICATION_CLOSE,
+            self.is_meta.unwrap_or(false),
             |offset, section| {
                 let kind =
                     AutomationKind::from_summary(extract_xml_tag(section, "summary").as_deref());

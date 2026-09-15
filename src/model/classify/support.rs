@@ -166,7 +166,7 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
 ///
 /// Returns `true` iff ≥1 section matched (the caller's classification is then complete); `false`
 /// leaves the record to the plain marker/prose classifier.
-pub(crate) fn classify_batched_sections(raw: &str, out: &mut Vec<Class>) -> bool {
+pub(crate) fn classify_batched_sections(raw: &str, framed: bool, out: &mut Vec<Class>) -> bool {
     let mut matched = false;
     // (a) <task-notification> sections - classify each, recording its byte span to mask the
     //     peer scan against tags quoted inside it.
@@ -175,6 +175,7 @@ pub(crate) fn classify_batched_sections(raw: &str, out: &mut Vec<Class>) -> bool
         raw,
         TASK_NOTIFICATION_PREFIX,
         TASK_NOTIFICATION_CLOSE,
+        framed,
         |offset, section| {
             let kind = AutomationKind::from_summary(extract_xml_tag(section, "summary").as_deref());
             push_unique(out, notification_class(kind));

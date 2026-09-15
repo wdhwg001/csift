@@ -20,7 +20,8 @@ use super::*;
 ///
 /// Order is load-bearing and mirrors the producers. The HUMAN relay comes first: it is
 /// a real person's message that the harness merely delivered, so no template arm may
-/// reach it. The resume loader's repair prompt is tested through its own `isMeta` gate
+/// reach it. Then the `isMeta` guard, because every arm after it matches on TEXT and a
+/// person can write any of those sentences. The resume loader's repair prompt is tested through its own `isMeta` gate
 /// (a human message that merely OPENS with the sentence keeps `user.message`). The FIRED
 /// timer tick is tested before the loop DRIVER tick, because `check` is not `tick` and
 /// the driver prefix would otherwise swallow it. The `<system-reminder>` arm is LAST of
@@ -35,12 +36,21 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
     if rec.origin_kind().is_some_and(|k| k == "human") {
         return Some(Class::UserMessage);
     }
+    // EVERY ARM BELOW MATCHES ON TEXT, AND `isMeta` IS WHAT PROTECTS A PERSON. A human can
+    // write any sentence a template opens with - quote the reminder they were just shown,
+    // paste the retry nudge they are asking about, open a message with `[Image: …]` - and
+    // without this guard that message is relabelled out of `user` while it still opens its
+    // turn. `isMeta` is the authorship flag the injecting call site stamps; Claude Code's
+    // own recogniser tests it for the same reason, and the map's shape rows all read
+    // `type:"user" isMeta:true template:<x>`. The two STRUCTURAL arms are above this line
+    // because they read a field rather than the prose.
+    if !rec.is_meta.unwrap_or(false) {
+        return None;
+    }
     // harness.resume.prompt: the LOADER's repair prompt for a resumed transcript that
-    // ended on a dangling user record. The isMeta half is what protects a human who
-    // happens to START a real message with this sentence; Claude Code's own recogniser
-    // tests isMeta too, and this arm and `is_resume_prompt` must agree on the set for
-    // the pairing index.
-    if rec.is_meta.unwrap_or(false) && s.trim_start().starts_with(RESUME_PROMPT_MARKER) {
+    // ended on a dangling user record. This arm and `is_resume_prompt` must agree on the
+    // set for the pairing index.
+    if s.trim_start().starts_with(RESUME_PROMPT_MARKER) {
         return Some(Class::ResumePrompt);
     }
     // All the marker arms anchor at CONTENT START: the harness injects the whole

@@ -210,3 +210,100 @@ fn a_bare_role_and_a_bare_category_narrow_the_same_way() {
         cat.stdout
     );
 }
+
+/// A PERSON can write any sentence a harness template opens with - quoting the reminder
+/// they were just shown, pasting the nudge they are asking about, opening a message with
+/// an image reference. Every template arm matches on TEXT, so `isMeta` (the authorship
+/// flag the injecting call site stamps) is the only thing that separates the two
+/// populations, and losing it relabels a person out of `user` while their message still
+/// opens its turn.
+#[test]
+fn a_human_message_opening_with_a_template_stays_the_persons_own() {
+    let h = Home::new();
+    let sess = "6b5a4c3d-2e1f-4a09-8b7c-6d5e4f3a2b1c";
+    let openers = [
+        "[Image: 1024x768] what do you make of this?",
+        "<system-reminder>quoting the one I was just shown</system-reminder> is that normal?",
+        "Base directory for this skill: which one does it pick?",
+        "Your tool call was malformed and could not be parsed. Please retry.",
+        "The coordinator sent a message - did you see it?",
+        "You ended the turn without calling SendUserMessage. why?",
+        "[structured-output-enforce] what does this bracket mean?",
+    ];
+    let mut lines = String::new();
+    for (i, text) in openers.iter().enumerate() {
+        let user = serde_json::json!({
+            "type": "user", "uuid": format!("u{i}"),
+            "timestamp": format!("2026-06-07T05:0{i}:00.000Z"),
+            "message": {"role": "user", "content": text},
+        });
+        let asst = serde_json::json!({
+            "type": "assistant", "uuid": format!("a{i}"), "parentUuid": format!("u{i}"),
+            "timestamp": format!("2026-06-07T05:0{i}:01.000Z"),
+            "message": {"role": "assistant", "content": [{"type": "text", "text": "zzhuman noted"}]},
+        });
+        lines.push_str(&format!("{user}\n{asst}\n"));
+    }
+    h.write(&format!("{ENC}/{sess}.jsonl"), &lines);
+
+    let out = h.run(&[
+        "search",
+        "",
+        &at(sess),
+        "-t",
+        "user.message",
+        "--count-by",
+        "label",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains(&format!("{}  user.message", openers.len())),
+        "all {} human openers keep the person's leaf:\n{}",
+        openers.len(),
+        out.stdout
+    );
+    // And they are turns, which is the other half of the failure: a record cannot both
+    // open a numbered turn and be classified as the harness's own text.
+    let turns = h.run(&["search", "", &at(sess), "--count-by", "turn"]);
+    assert!(turns.success, "stderr: {}", turns.stderr);
+    assert_eq!(
+        turns
+            .stdout
+            .lines()
+            .filter(|l| l.trim().starts_with(char::is_numeric))
+            .count(),
+        openers.len(),
+        "each opener numbers its own turn:\n{}",
+        turns.stdout
+    );
+}
+
+/// The same law over a record whose blocks are JOINED before the text arms see them: a
+/// person's turn whose first block is an injected reminder they pasted and whose second
+/// is their own prose is still their turn.
+#[test]
+fn a_joined_block_turn_opening_with_a_template_stays_the_persons_own() {
+    let h = Home::new();
+    let sess = "7c6b5a4d-3e2f-4b1a-9c8d-7e6f5a4b3c2e";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>the one I was shown</system-reminder>"},{"type":"text","text":"zzjoined and here is my actual question"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzjoined noted"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "zzjoined and here",
+        &at(sess),
+        "-t",
+        "user.message",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("user.message"),
+        "the person's prose keeps its leaf even when a pasted reminder leads the blocks:\n{}",
+        out.stdout
+    );
+}

@@ -113,6 +113,7 @@ pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
         content,
         TEAMMATE_MESSAGE_OPEN,
         TEAMMATE_MESSAGE_CLOSE,
+        false,
         |_, section| {
             out.push(TeammateMessage {
                 teammate_id: extract_xml_attr(section, "teammate_id"),
@@ -134,16 +135,25 @@ pub(crate) fn is_section_boundary(prefix: &str) -> bool {
     let t = prefix.trim_end();
     t.is_empty()
         || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))
-        // The background-task event FRAME is a preamble like the relay ones: it wraps a
-        // real pulse in a warning envelope, so the pulse that follows it opens a section.
-        // A CONJUNCTION, for the C-40 reason: the frame's closing sentence is ordinary
-        // prose a record could quote, so the frame must also have OPENED the content.
-        || (t.ends_with(TASK_NOTIFICATION_FRAME_TAIL)
-            && t.trim_start().starts_with(TASK_NOTIFICATION_FRAME_PREFIX))
         || t.ends_with(TASK_NOTIFICATION_CLOSE)
         || t.ends_with(TEAMMATE_MESSAGE_CLOSE)
         || t.ends_with(AGENT_MESSAGE_CLOSE)
         || t.ends_with(CROSS_SESSION_MESSAGE_CLOSE)
+}
+
+/// True when `prefix` is the background-task event FRAME: the harness wraps a real pulse
+/// in a warning envelope, so the pulse that follows it opens a section exactly as one
+/// after a relay preamble does.
+///
+/// A CONJUNCTION, for the C-40 reason - the frame's closing sentence is ordinary prose a
+/// record could quote, so the frame must also have OPENED the content - and the CALLER
+/// must additionally know the record is `isMeta`, because a person quoting the whole
+/// envelope produces this very text and is not the harness.
+#[must_use]
+pub(crate) fn is_frame_boundary(prefix: &str) -> bool {
+    let t = prefix.trim_end();
+    t.ends_with(TASK_NOTIFICATION_FRAME_TAIL)
+        && t.trim_start().starts_with(TASK_NOTIFICATION_FRAME_PREFIX)
 }
 
 /// Invoke `emit(offset, section)` for each BOUNDARY-anchored `<open …>…</close>` section in
@@ -158,12 +168,19 @@ pub(crate) fn scan_tag_sections<F: FnMut(usize, &str)>(
     content: &str,
     open: &str,
     close: &str,
+    framed: bool,
     mut emit: F,
 ) {
     let mut idx = 0;
     while let Some(rel) = content[idx..].find(open) {
         let start = idx + rel;
-        if !is_section_boundary(&content[..start]) {
+        // A section opens after an ordinary boundary, or - only on a record the harness
+        // itself wrote - after the background-task FRAME, which is a preamble like the
+        // relay ones. The `framed` half is the caller's isMeta answer, because a person
+        // quoting the whole envelope produces the same bytes.
+        let prefix = &content[..start];
+        let opens = is_section_boundary(prefix) || (framed && is_frame_boundary(prefix));
+        if !opens {
             // A tag QUOTED mid-prose - not a section start; step past it and keep scanning.
             idx = start + open.len();
             continue;
@@ -208,6 +225,7 @@ pub(crate) fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
         content,
         TEAMMATE_MESSAGE_OPEN,
         TEAMMATE_MESSAGE_CLOSE,
+        false,
         |offset, section| {
             out.push(PeerSection {
                 from: extract_xml_attr(section, "teammate_id"),
@@ -221,6 +239,7 @@ pub(crate) fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
         content,
         AGENT_MESSAGE_OPEN,
         AGENT_MESSAGE_CLOSE,
+        false,
         |offset, section| {
             out.push(PeerSection {
                 from: extract_xml_attr(section, "from"),
@@ -234,6 +253,7 @@ pub(crate) fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
         content,
         CROSS_SESSION_MESSAGE_OPEN,
         CROSS_SESSION_MESSAGE_CLOSE,
+        false,
         |offset, section| {
             out.push(PeerSection {
                 from: cross_session_sender(section),

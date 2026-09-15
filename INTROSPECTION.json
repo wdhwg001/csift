@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "459-462",
+          "lines": "466-469",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -3171,7 +3171,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "339-343",
+          "lines": "345-349",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3302,7 +3302,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "339-343",
+          "lines": "345-349",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3405,7 +3405,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "339-343",
+          "lines": "345-349",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
@@ -11530,12 +11530,12 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "133",
+          "lines": "134",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "284-287",
+          "lines": "290-293",
           "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span (P1c M3). When \u22651 section matches, that fully classifies the record."
         }
       ],
@@ -11648,7 +11648,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "339-343",
+          "lines": "345-349",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -12208,7 +12208,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "409-412",
+          "lines": "429-432",
           "snippet": "pub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {\n    let Some(input) = input else {\n        return false;\n    };"
         }
       ],
@@ -12311,12 +12311,12 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "402-404",
+          "lines": "422-424",
           "snippet": "pub(crate) fn is_spawn_tool_name(name: &str) -> bool {\n    matches!(name, \"Task\" | \"Agent\" | \"Workflow\")\n}"
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "444-446",
+          "lines": "464-466",
           "snippet": "pub(crate) fn spawn_target_name(input: Option<&serde_json::Value>) -> Option<String> {\n    let input = input?;\n    for key in [\"name\", \"subagent_type\"] {"
         }
       ],
@@ -12614,12 +12614,12 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "51-56",
+          "lines": "61-66",
           "snippet": "    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "93-97",
+          "lines": "103-107",
           "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
@@ -12711,7 +12711,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "49-56",
+          "lines": "59-66",
           "snippet": "    let at_start = s.trim_start();\n    // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick.\n    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         }
       ],
@@ -12978,7 +12978,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "99-103",
+          "lines": "109-113",
           "snippet": "    if IMAGE_REFERENCE_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::ContextImage);"
         }
       ],
@@ -14671,7 +14671,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "280-283",
+          "lines": "286-289",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            push_unique(out, Class::CompactionSummary);\n            return;\n        }"
         }
       ],
@@ -55342,7 +55342,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "344-349",
+          "lines": "350-355",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
@@ -66596,7 +66596,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "344-349",
+          "lines": "350-355",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
@@ -67475,7 +67475,7 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "402-404",
+          "lines": "422-424",
           "snippet": "pub(crate) fn is_spawn_tool_name(name: &str) -> bool {\n    matches!(name, \"Task\" | \"Agent\" | \"Workflow\")\n}"
         },
         {
@@ -68116,7 +68116,7 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "406-409",
+          "lines": "426-429",
           "snippet": "/// True when a `SendMessage` `input` is a control SIGNAL rather than a prose message (GOLD\n/// \u00a73): the top-level `type` (or a nested `message.type`) is present and is NOT `message`/\n/// `direct` (e.g. `shutdown_request`/`shutdown_response`/\u2026). Absent type \u21d2 a plain message.\npub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {"
         }
       ],
@@ -71580,7 +71580,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "315-318",
+          "lines": "321-324",
           "snippet": "        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {\n            push_unique(out, Class::CommandStdout);\n            return;\n        }"
         }
       ],
@@ -71908,7 +71908,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "319-330",
+          "lines": "325-336",
           "snippet": "        if is_slash_command_wrapper(s) {\n            // Prose typed after the slash command (`<command-args>`) IS genuine user\n            // input - and the RICHER view (richest-view law: the prose beats the\n            // wrapper), so it is pushed FIRST: the unfiltered record-text emission\n            // renders `/name args`, never the wrapper XML. An explicit\n            // `-t harness.command.invocation` still reaches the wrapper form.\n            if self.slash_command_args().is_some() {\n                push_unique(out, Class::UserMessage);\n            }\n            push_unique(out, Class::CommandInvocation);\n            return;\n        }"
         }
       ],
@@ -73185,8 +73185,8 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "133-147",
-          "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {\n    let t = prefix.trim_end();\n    t.is_empty()\n        || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))\n        // The background-task event FRAME is a preamble like the relay ones: it wraps a\n        // real pulse in a warning envelope, so the pulse that follows it opens a section.\n        // A CONJUNCTION, for the C-40 reason: the frame's closing sentence is ordinary\n        // prose a record could quote, so the frame must also have OPENED the content.\n        || (t.ends_with(TASK_NOTIFICATION_FRAME_TAIL)\n            && t.trim_start().starts_with(TASK_NOTIFICATION_FRAME_PREFIX))\n        || t.ends_with(TASK_NOTIFICATION_CLOSE)\n        || t.ends_with(TEAMMATE_MESSAGE_CLOSE)\n        || t.ends_with(AGENT_MESSAGE_CLOSE)\n        || t.ends_with(CROSS_SESSION_MESSAGE_CLOSE)\n}"
+          "lines": "134-142",
+          "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {\n    let t = prefix.trim_end();\n    t.is_empty()\n        || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))\n        || t.ends_with(TASK_NOTIFICATION_CLOSE)\n        || t.ends_with(TEAMMATE_MESSAGE_CLOSE)\n        || t.ends_with(AGENT_MESSAGE_CLOSE)\n        || t.ends_with(CROSS_SESSION_MESSAGE_CLOSE)\n}"
         }
       ],
       "instrument": "`rg -c '<agent-message ' ~/.claude/projects/*/*.jsonl`, then `csift search '<agent-message from=' --count-by label` and `--raw | jq -r .isMeta | sort | uniq -c`. Counting rule: one per record carrying the open tag at a section boundary.",
@@ -73415,7 +73415,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "133",
+          "lines": "134",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {"
         },
         {
@@ -87606,12 +87606,12 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "182-184",
+          "lines": "199-201",
           "snippet": "pub(crate) fn cross_session_sender(section: &str) -> Option<String> {\n    extract_xml_attr(section, \"from-name\").or_else(|| extract_xml_attr(section, \"from\"))\n}"
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "282-286",
+          "lines": "302-306",
           "snippet": "    pub(crate) fn peer_origin(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {\n        let obj = self.origin.as_ref()?.as_object()?;\n        let peer = obj.get(\"kind\").and_then(serde_json::Value::as_str) == Some(\"peer\");\n        peer.then_some(obj)\n    }"
         },
         {
@@ -89584,7 +89584,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "146-152",
+          "lines": "156-162",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
@@ -89594,7 +89594,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "355-358",
+          "lines": "361-364",
           "snippet": "        if self.is_scheduled_fire_prompt(ctx) {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
         },
         {
@@ -89704,7 +89704,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "350-354",
+          "lines": "356-360",
           "snippet": "        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms\n        // by construction - the fired text is whatever the operator armed, so every marker\n        // above must get first refusal, and the two tick prompts that DO carry a marker keep\n        // their own leaves. Before this arm such a record matched nothing and fell straight\n        // into the isMeta exclusion below: unsearchable, and absent from every census."
         },
         {
@@ -92337,7 +92337,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "74-77",
+          "lines": "84-87",
           "snippet": "    // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the\n    // four texts, because Claude Code's own recogniser tests them that way - these are\n    // whole messages, not prefixes of a longer body.\n    if RETRY_NUDGE_TEXTS.contains(&at_start) {"
         },
         {

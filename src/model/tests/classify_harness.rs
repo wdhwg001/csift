@@ -142,11 +142,21 @@ fn classify_injection_template_variants() {
     // it to the failed call's own result rather than writing a standalone prompt): a
     // redo nudge, so it sits in the enforce family.
     let edit = parse(
-        r#"{"type":"user","message":{"role":"user","content":"The last Edit failed because the target file was modified since it was read."}}"#,
+        r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"The last Edit failed because the target file was modified since it was read."}}"#,
     );
     assert_eq!(
         edit.classify(&ClassifyCtx::top_level()),
         vec![Class::EnforceRetry]
+    );
+    // The same words with NO isMeta are a person asking about the notice, and they keep
+    // the person's leaf: every template arm reads text, so the authorship flag is what
+    // separates the two populations.
+    let asking = parse(
+        r#"{"type":"user","message":{"role":"user","content":"The last Edit failed because the target file was modified since it was read."}}"#,
+    );
+    assert_eq!(
+        asking.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
     );
 }
 

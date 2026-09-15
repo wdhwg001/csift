@@ -486,6 +486,16 @@ pub enum Block {
         #[serde(default)]
         source: Option<serde_json::Value>,
     },
+    /// A `fallback` block - what the API writes in place of the text when it served the
+    /// turn from a fallback model. The record is still the assistant's TURN, so it takes
+    /// the plain message leaf with an empty body; the variant exists because every other
+    /// unmodeled block type parses to [`Block::Unknown`], and a leaf that keys on
+    /// "nothing else matched" would answer for `document` and for a whitespace-only text
+    /// block as well.
+    Fallback {
+        #[serde(default)]
+        model: Option<String>,
+    },
     /// Any block type not modeled above - never a parse failure.
     #[serde(other)]
     Unknown,

@@ -160,6 +160,20 @@ const BLOCK_SPECIMENS: &[(&str, &str)] = &[
     ),
 ];
 
+/// The block types that ride BOTH roles, with the ASSISTANT specimen for each. A row is a
+/// statement about the block, not about the line it rides, so a leaf that held on `user`
+/// and was overridden on `assistant` is drift the single-specimen table could not see.
+const BLOCK_SPECIMENS_ASSISTANT: &[(&str, &str)] = &[
+    (
+        "image",
+        r#"{"type":"assistant","uuid":"c1","message":{"role":"assistant","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBOR"}}]}}"#,
+    ),
+    (
+        "document",
+        r#"{"type":"assistant","uuid":"c2","message":{"role":"assistant","content":[{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"JVBER"}}]}}"#,
+    ),
+];
+
 /// One hand-written jsonl line per `Shape::IsMetaFamily` row. Each carries the template's
 /// own opening text (or, for the two structural families, the FIELD that decides it).
 const TEMPLATE_SPECIMENS: &[(&str, &str)] = &[
@@ -249,6 +263,39 @@ fn every_block_row_is_reachable_through_the_engine() {
             .filter(|r| matches!(r.shape, Shape::Block(_)))
             .count(),
         "a block row has no specimen, or a specimen names no row"
+    );
+}
+
+/// The same rows on the OTHER role. An assistant record whose only block carries no leaf
+/// must carry none - it renders as an unmodeled unit under an address - and one whose
+/// block DOES carry a leaf must carry that leaf and not the assistant's own.
+#[test]
+fn a_block_row_holds_on_the_assistant_role_too() {
+    for (value, line) in BLOCK_SPECIMENS_ASSISTANT {
+        let row = rows()
+            .find(|r| matches!(r.shape, Shape::Block(b) if b == *value))
+            .unwrap_or_else(|| panic!("{value} names no block row"));
+        let got = labels(line);
+        match row.leaf {
+            Some(leaf) => assert_eq!(
+                got,
+                vec![leaf],
+                "an assistant record whose only block is {value} carries {}",
+                leaf.path()
+            ),
+            None => assert!(
+                got.is_empty(),
+                "an assistant record whose only block is {value} carries no leaf - got {got:?}"
+            ),
+        }
+    }
+    // And the one block that IS the assistant's turn still is: a whitespace-only text
+    // block is not, which is the other shape a blanket arm answered for.
+    let blank = r#"{"type":"assistant","uuid":"c3","message":{"role":"assistant","content":[{"type":"text","text":"   "}]}}"#;
+    assert!(
+        labels(blank).is_empty(),
+        "a whitespace-only text block is no message: {:?}",
+        labels(blank)
     );
 }
 

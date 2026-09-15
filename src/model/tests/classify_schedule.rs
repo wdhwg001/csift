@@ -17,11 +17,19 @@ fn classify_meta_loop_variants() {
         vec![Class::ScheduleTick]
     );
     let check = parse(
-        r#"{"type":"user","message":{"role":"user","content":"Run the autonomous check and continue."}}"#,
+        r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"Run the autonomous check and continue."}}"#,
     );
     assert_eq!(
         check.classify(&ClassifyCtx::top_level()),
         vec![Class::ScheduleTick]
+    );
+    // And a person who types that sentence keeps their own leaf.
+    let typed = parse(
+        r#"{"type":"user","message":{"role":"user","content":"Run the autonomous check and continue."}}"#,
+    );
+    assert_eq!(
+        typed.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
     );
     // The schedule.wakeup sentinel stays its OWN class (not folded into meta.loop).
     let wake = parse(
