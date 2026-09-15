@@ -7,11 +7,11 @@
 //! loader's resume repair pair), and [`direction`] (who was talking to whom,
 //! a separate question from which leaves a record carries).
 
-pub(crate) mod channel;
-pub(crate) mod direction;
-pub(crate) mod promoted;
-pub(crate) mod resume;
-pub(crate) mod support;
+pub(super) mod channel;
+pub(super) mod direction;
+pub(super) mod promoted;
+pub(super) mod resume;
+pub(super) mod support;
 
 use super::*;
 
