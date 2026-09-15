@@ -19,8 +19,8 @@ surface change bumps the PATCH.
   `text`, `time_window`, `timez`); and the four `model/classify_*.rs` siblings become
   `model/classify/{support,promoted,channel,resume}.rs` under the engine that uses them,
   with `Record::direction` moved verbatim into a fifth child so the engine stays under
-  the 600-line cap. Every path is respelled at every call site, with no alias and no
-  forwarding shim. No behaviour change.
+  the 600-line cap, and the engine's cases nested to match. Every path is respelled at
+  every call site, with no alias and no forwarding shim. No behaviour change.
 
 ## [0.12.3] - 2026-09-13
 
