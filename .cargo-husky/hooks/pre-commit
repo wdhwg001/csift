@@ -14,9 +14,11 @@ set -euo pipefail
 #    with a sibling `name/` dir) belongs to its directory and does not count
 #    against the parent folder.
 # 3. No folder with more than 16 direct subfolders. (Raised 15 -> 16 at v0.9.0:
-#    src/ grows one directory per command family by design - a flat architecture,
-#    not nesting sprawl, which the depth rule still guards. src/ sits AT the cap
-#    now; the next command module must consolidate an existing dir first.)
+#    a flat architecture is the design, not nesting sprawl, which the depth rule
+#    still guards.)
+# A CAP THAT BINDS IS A REFACTOR GATE. Re-manage the layout - group a family
+# under a path-named root, split a file along a seam that means something. Never
+# raise a cap, never squeeze a file in, never force a merge that reads wrong.
 # 4. No more than 5 subfolder levels below src/ or tests/ (those roots count 0).
 # 5. No `mod.rs` anywhere: module roots are path-named (`src/<m>.rs` beside
 #    `src/<m>/`). Clippy's `mod_module_files` enforces the same rule in-build.
