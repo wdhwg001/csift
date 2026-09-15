@@ -90,9 +90,13 @@ surface change bumps the PATCH.
   that was the selector law broken rather than a cost saved. It takes the same gate the
   csift-channel delivery keep has had since 0.11.0: on unless your `-t` excludes
   `user.message`, which keeps `-t harness` paying nothing. The parse still decides - only
-  a payload whose own `origin.kind` reads `human` becomes `user.message`, every other
-  `queued_command` stays `harness.context.task` behind its own gate, and the model's
-  `structured_output` answer keeps its explicit selector.
+  a payload whose own `origin.kind` reads `human` becomes `user.message`, and every other
+  `queued_command` stays `harness.context.task` behind its own gate. The model's own
+  `structured_output` answer takes the same gate for the same reason: `-t agent` reaches
+  `agent.message.structured`, so a flagless scan cannot miss it. Those two leaves are the
+  only attachment-carried exceptions - both are words someone owned, a person's or the
+  model's - and the coarse keep is untouched, so a flagless scan still parses no other
+  attachment payload.
 - **`csift msg` prints a command that still runs.** Its lane listing recited the fact half
   of its own join as `csift search '<id>' @<lane> --additional-context`, a flag this release
   retires, so the one recipe a reader needs in order to check the channel without trusting

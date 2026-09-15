@@ -202,26 +202,22 @@ fn an_attachment_view_needle_runs_only_for_the_leaf_its_bit_names() {
         &structured
     ));
 
-    // A FLAGLESS scan admits the DEFAULT-ON needle and nothing else. A flagless scan is a
-    // superset of `-t user`, so the leaf `-t user` reaches cannot be one it misses - the
-    // channel keep is default-on for the same reason. The other needle keeps the gated-leaf
-    // rule, so the model's structured answer and every ordinary attachment line stay out.
+    // A FLAGLESS scan admits BOTH view needles and nothing else. It is a superset of
+    // `-t user` and of `-t agent`, so neither leaf those queries reach can be one it
+    // misses - the channel keep is default-on for the same reason. The COARSE keep stays
+    // off, so an ordinary attachment line is still never parsed.
     let flagless = flagless_gates();
-    assert!(
-        flagless.attachment_views & 1 != 0,
-        "the human-steer needle is default-on"
+    assert_eq!(
+        flagless.attachment_views, 0b11,
+        "both view needles are default-on"
     );
-    assert!(
-        flagless.attachment_views & 2 == 0,
-        "the structured-answer needle still wants its selector"
-    );
-    assert!(line_is_transcript_candidate(
-        QUEUED_COMMAND_LINE.as_bytes(),
-        &flagless
-    ));
-    for line in [STRUCTURED_LINE, FILE_ATTACHMENT_LINE] {
-        assert!(!line_is_transcript_candidate(line.as_bytes(), &flagless));
+    for line in [QUEUED_COMMAND_LINE, STRUCTURED_LINE] {
+        assert!(line_is_transcript_candidate(line.as_bytes(), &flagless));
     }
+    assert!(
+        !line_is_transcript_candidate(FILE_ATTACHMENT_LINE.as_bytes(), &flagless),
+        "an ordinary attachment line is not admitted by either needle"
+    );
 
     // A selector that EXCLUDES the leaf closes the default-on needle again, which is what
     // makes it a gate rather than an always-on cost: `-t harness` short-circuits before
@@ -236,6 +232,10 @@ fn an_attachment_view_needle_runs_only_for_the_leaf_its_bit_names() {
         harness_gates.attachment_views, 0,
         "a selector that cannot reach either view runs neither needle"
     );
+    assert!(!line_is_transcript_candidate(
+        STRUCTURED_LINE.as_bytes(),
+        &harness_gates
+    ));
     assert!(!line_is_transcript_candidate(
         QUEUED_COMMAND_LINE.as_bytes(),
         &harness_gates

@@ -394,17 +394,20 @@ fn a_view_leaf_reaches_its_records_without_opening_the_whole_attachment_gate() {
         vec!["agent.message.structured".to_string()],
         "and the structured answer reaches its own records alone"
     );
-    // A FLAGLESS scan still parses no attachment line at all: the view needles are
-    // explicit-selector gates like every other gated leaf.
+    // A FLAGLESS scan parses the two VIEW lines and no other attachment line. Both view
+    // leaves are words someone OWNED - the person's own mid-turn steer and the model's own
+    // structured answer - and a flagless scan is a superset of the `-t user` / `-t agent`
+    // queries that reach them, so it cannot miss what they find. Every other attachment
+    // leaf stays behind its gate, which is what keeps the coarse keep off.
     let flagless = census_keys(&h, &[]);
-    for absent in [
-        "harness.context.",
-        "harness.hook.",
-        "agent.message.structured",
-    ] {
+    assert!(
+        flagless.iter().any(|k| k == "agent.message.structured"),
+        "a flagless scan reaches the model's own structured answer: {flagless:?}"
+    );
+    for absent in ["harness.context.", "harness.hook."] {
         assert!(
             !flagless.iter().any(|k| k.starts_with(absent)),
-            "a flagless scan reaches no attachment leaf ({absent}): {flagless:?}"
+            "and no OTHER attachment leaf ({absent}): {flagless:?}"
         );
     }
 }

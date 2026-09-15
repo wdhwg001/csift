@@ -95,10 +95,11 @@ pub(crate) fn attachment_view_mask(args: &SearchArgs, addressed: bool) -> u32 {
     for (i, (_, leaf, default_on)) in crate::cli::attachment_view_needles().iter().enumerate() {
         // Each entry names its own gate ([`crate::cli::attachment_view_needles`]).
         // DEFAULT-ON takes the channel keep's rule - the label set does not EXCLUDE the
-        // leaf - because a flagless scan is a superset of `-t user` and the person's own
-        // message cannot be reachable only from the narrower query. The other takes the
-        // gated-leaf rule, an EXPLICIT `-t` reaching the leaf, which is the same
-        // `reaches_gated` predicate every other gated leaf answers to.
+        // leaf - because a flagless scan is a SUPERSET of `-t user` and of `-t agent`, and
+        // neither the person's own message nor the model's own answer can be reachable
+        // only from the narrower query. The other arm is the gated-leaf rule, an EXPLICIT
+        // `-t` reaching the leaf - the same `reaches_gated` predicate every other gated
+        // leaf answers to - and it is kept for a needle that ever needs it.
         let on = if *default_on {
             args.label_filter().selected(leaf.path())
         } else {

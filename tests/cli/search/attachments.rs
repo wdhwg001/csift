@@ -452,3 +452,68 @@ fn a_human_origin_queued_command_is_reachable_as_the_persons_message() {
         rider.stdout
     );
 }
+
+/// I2, the twin of the case above on the other side of the conversation. A schema-bound
+/// subagent's final answer rides a `structured_output` ATTACHMENT, and `agent.message.
+/// structured` is LLM-visible because the MODEL produced the text. A flagless scan is a
+/// superset of `-t agent`, so a leaf that query reaches cannot be one a bare
+/// `csift search` misses - the same law, the same gate, the same needle shape.
+#[test]
+fn a_structured_answer_is_reachable_from_a_flagless_scan() {
+    let h = Home::new();
+    let sess = "4c3b2a19-0e1f-4a87-8b6c-5d4e3f2a1b09";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-09T01:00:00.000Z","message":{"role":"user","content":"zzask for the verdict"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"s1","parentUuid":"u1","timestamp":"2026-06-09T01:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzreply working on it"}]}}"#, "\n",
+            // the schema-bound answer the harness attached, parented to the record that produced it
+            r#"{"type":"attachment","uuid":"a1","parentUuid":"s1","timestamp":"2026-06-09T01:00:02.000Z","attachment":{"type":"structured_output","content":["zzverdict the region queue is throttled"]}}"#, "\n",
+            // an ORDINARY attachment on the same chain: the coarse keep stays off, so this
+            // one is still invisible to a flagless scan.
+            r#"{"type":"attachment","uuid":"a2","parentUuid":"a1","timestamp":"2026-06-09T01:00:03.000Z","attachment":{"type":"edited_text_file","filePath":"/tmp/zzfile.rs","snippet":"zzsnippet fn main() {}"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"s2","parentUuid":"a2","timestamp":"2026-06-09T01:00:04.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzreply done"}]}}"#, "\n",
+        ),
+    );
+
+    let flagless = h.run(&["search", "zzverdict", &at(sess)]);
+    assert!(flagless.success, "stderr: {}", flagless.stderr);
+    assert!(
+        flagless.stdout.contains("zzverdict")
+            && flagless.stdout.contains("agent.message.structured"),
+        "a flagless search reaches the model's own answer:\n{}\nstderr: {}",
+        flagless.stdout,
+        flagless.stderr
+    );
+    let census = h.run(&["search", "", &at(sess), "--count-by", "label"]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        census.stdout.contains("agent.message.structured"),
+        "and the flagless census carries the leaf:\n{}",
+        census.stdout
+    );
+
+    // The coarse keep is untouched: an ordinary attachment payload stays behind its gate,
+    // so the flagless scan gained the model's words and no machinery.
+    let ordinary = h.run(&["search", "zzsnippet", &at(sess)]);
+    assert!(ordinary.success, "stderr: {}", ordinary.stderr);
+    assert!(
+        !ordinary.stdout.contains("zzsnippet"),
+        "an ordinary attachment is still not parsed flaglessly:\n{}",
+        ordinary.stdout
+    );
+    // ...and naming its leaf still finds it, so nothing was lost.
+    let named = h.run(&[
+        "search",
+        "zzsnippet",
+        &at(sess),
+        "-t",
+        "harness.context.file",
+    ]);
+    assert!(named.success, "stderr: {}", named.stderr);
+    assert!(
+        named.stdout.contains("zzsnippet"),
+        "naming the leaf still reaches it:\n{}",
+        named.stdout
+    );
+}
