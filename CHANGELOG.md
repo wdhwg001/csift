@@ -68,6 +68,12 @@ surface change bumps the PATCH.
   `? (no label)` is gone, because it told a reader nothing a shape name does not. A record
   that HAS a leaf and merely lacks text keeps its leaf, and an assistant turn the API
   served from a fallback model takes `agent.message.plain` with an empty body.
+- **`-t user` and `-t agent` no longer parse every attachment line.** Two leaves an
+  attachment carries as a second view rather than as its kind - the human's mid-turn steer
+  and the model's structured answer - sat in the set that turns on the keep admitting every
+  attachment record, so the most ordinary selectors in the tool paid for lines they did not
+  want: 236 ms against a flagless scan's 70 ms on an 89 MB attachment-heavy transcript.
+  Each now has its own payload needle, and the three selectors run at flagless speed.
 - **`wait`'s activity census counts all four thinking leaves.** It named two of them one by
   one, so the leaf split silently dropped the other two from the count; it keys on the
   category now.
