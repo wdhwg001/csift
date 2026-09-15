@@ -364,3 +364,47 @@ fn an_unmodeled_attachment_payload_names_the_payload_type() {
         js.stdout
     );
 }
+
+#[test]
+fn a_view_leaf_reaches_its_records_without_opening_the_whole_attachment_gate() {
+    // Two leaves an ATTACHMENT carries that an ordinary query names: the human's mid-turn
+    // steer (`user.message` through a `queued_command` payload whose origin says human)
+    // and the model's structured answer. Each has its own payload needle, so naming it
+    // must reach its own records and NOT admit every attachment line in the file - which
+    // is what `-t user` used to do, at four times the cost of a flagless scan.
+    let h = shapes_home();
+    let user = census_keys(&h, &["-t", "user.message"]);
+    assert!(
+        user.contains(&"user.message".to_string()),
+        "the human's queued steer is reachable by its own leaf: {user:?}"
+    );
+    for absent in [
+        "harness.context.",
+        "harness.hook.",
+        "agent.message.structured",
+    ] {
+        assert!(
+            !user.iter().any(|k| k.starts_with(absent)),
+            "-t user.message must not admit other attachment leaves ({absent}): {user:?}"
+        );
+    }
+    let structured = census_keys(&h, &["-t", "agent.message.structured"]);
+    assert_eq!(
+        structured,
+        vec!["agent.message.structured".to_string()],
+        "and the structured answer reaches its own records alone"
+    );
+    // A FLAGLESS scan still parses no attachment line at all: the view needles are
+    // explicit-selector gates like every other gated leaf.
+    let flagless = census_keys(&h, &[]);
+    for absent in [
+        "harness.context.",
+        "harness.hook.",
+        "agent.message.structured",
+    ] {
+        assert!(
+            !flagless.iter().any(|k| k.starts_with(absent)),
+            "a flagless scan reaches no attachment leaf ({absent}): {flagless:?}"
+        );
+    }
+}

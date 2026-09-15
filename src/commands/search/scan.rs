@@ -121,6 +121,10 @@ pub(crate) fn search_one_file(
         // the harness's own queue row, and only its CONTENT says which - so either
         // selector has to admit the line.
         queued: reach(Class::UserQueued) || reach(Class::BookkeepingQueue),
+        // The two leaves an attachment carries that an ORDINARY query names - the human's
+        // mid-turn steer and the model's structured answer - each behind its own needle,
+        // so neither turns the coarse attachment keep on.
+        attachment_views: attachment_view_mask(args, address.is_some()),
         snapshot: reach(Class::BookkeepingFileHistory),
         // v0.13.0: the 15 remaining non-transcript line types, one needle each behind
         // its own leaf's gate (the bitmask below). The whole group short-circuits on a
@@ -297,7 +301,9 @@ pub(crate) fn search_one_file(
     // scan it admits any payload that merely mentions the word. Both attachment leaves keep
     // their own flag (the gated-leaves law): such a record surfaces on a default scan only as
     // a delivery (its first content string opens with the header), never as bare
-    // `harness.hook.context` or one of the `harness.context.*` payload leaves.
+    // `harness.hook.context` or one of the `harness.context.*` payload leaves. A scan that
+    // named one of the per-VIEW leaves is not such a scan: it asked for those records by
+    // name, so the demotion stands down for it exactly as it does for the two flags.
     //
     // DEMOTE it, never delete it. The SURVIVAL AXIS walks `parentUuid` THROUGH attachment
     // records - a prompt submitted after a SessionStart hook is parented to that hook's
@@ -307,7 +313,8 @@ pub(crate) fn search_one_file(
     // the spine row the non-candidate arm would have produced for the same line, so it is
     // invisible to every emission pass and visible to the chain. An address or either
     // attachment flag admits it whole, as before.
-    if !gates.hook_context && !gates.attachments && address.is_none() {
+    if !gates.hook_context && !gates.attachments && gates.attachment_views == 0 && address.is_none()
+    {
         let mut demoted: Vec<crate::parse::SpineRow> = Vec::new();
         records.retain(|k| {
             let gated_attachment = k.rec.hook_additional_context_text().is_some()

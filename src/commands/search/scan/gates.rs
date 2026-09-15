@@ -64,6 +64,12 @@ pub(crate) struct CandidateGates {
     pub(crate) channel: bool,
     /// v0.10.0 (explicit selector or address): `queue-operation` lines.
     pub(crate) queued: bool,
+    /// v0.13.0: one bit per [`crate::cli::attachment_view_needles`] entry, set when that
+    /// entry's leaf is reached by a selector (or by an address). Zero on a query that
+    /// names neither, which short-circuits the whole group - and never turns the COARSE
+    /// attachment keep on, which is the point: `-t user` and `-t agent` both reach one of
+    /// these leaves and used to parse every attachment line in the transcript.
+    pub(crate) attachment_views: u32,
     /// v0.10.0: `file-history-snapshot` + `file-history-delta` lines.
     pub(crate) snapshot: bool,
     /// v0.10.1, widened at v0.13.0: EVERY `type:"system"` subtype but the compaction
@@ -79,6 +85,42 @@ pub(crate) struct CandidateGates {
     /// v0.13.0: one bit per [`BOOKKEEPING_NEEDLES`] entry (`bookkeeping_mask`). Zero on a
     /// default scan, which short-circuits the whole group.
     pub(crate) bookkeeping: u32,
+}
+
+/// One bit per [`crate::cli::attachment_view_needles`] entry, set when a selector reaches
+/// that entry's leaf. Zero on every query that names neither, which is what keeps the
+/// group off the flagless path.
+pub(crate) fn attachment_view_mask(args: &SearchArgs, addressed: bool) -> u32 {
+    let mut mask = 0u32;
+    for (i, (_, leaf)) in crate::cli::attachment_view_needles().iter().enumerate() {
+        // An EXPLICIT selector, never a flagless scan: these are attachment lines, and the
+        // gated-leaf law is that a scan with no `-t` parses none of them. `reaches_gated`
+        // is the same predicate the other gated leaves take, so the three answers cannot
+        // drift apart.
+        if addressed || args.reaches_gated(*leaf) {
+            mask |= 1 << i;
+        }
+    }
+    mask
+}
+
+/// The per-VIEW needles: one quoted payload value each, tested only when a selector
+/// reaches that leaf. Built from the one table so the needle and the leaf it admits
+/// cannot drift ([`crate::cli::attachment_view_needles`]).
+static VIEW_FINDERS: std::sync::LazyLock<Vec<memmem::Finder<'static>>> =
+    std::sync::LazyLock::new(|| {
+        crate::cli::attachment_view_needles()
+            .into_iter()
+            .map(|(n, _)| memmem::Finder::new(n.as_bytes()))
+            .collect()
+    });
+
+/// The per-view keeps: only the needles whose bit is set.
+fn view_hit(line: &[u8], mask: u32) -> bool {
+    VIEW_FINDERS
+        .iter()
+        .enumerate()
+        .any(|(i, f)| mask & (1 << i) != 0 && f.find(line).is_some())
 }
 
 /// The bookkeeping keeps: run ONLY the needles whose bit is set, so a selector naming
@@ -184,6 +226,9 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         || (gates.channel && CHANNEL_FINDER.find(line).is_some())
         // v0.10.0 promoted lines, each behind its own explicit-selector gate.
         || (gates.queued && QUEUED_FINDER.find(line).is_some())
+        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a
+        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.
+        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))
         || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
         || (gates.system && SUBTYPE_FINDER.find(line).is_some())
         // v0.12.2: the `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a

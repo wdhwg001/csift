@@ -393,24 +393,54 @@ pub fn system_line_leaves() -> Vec<Class> {
     out
 }
 
-/// Every leaf a `type:"attachment"` line can carry - the label side of the attachment
-/// keep, derived from the inventory's attachment axis plus the two leaves an attachment
-/// reaches without being its payload type: a csift-channel delivery (the FIRST content
-/// string of a `hook_additional_context` payload) and the human's own mid-turn steer (a
-/// `queued_command` whose `origin` says so).
+/// Every leaf whose only carrier is an attachment PAYLOAD TYPE - the label side of the
+/// COARSE attachment keep, derived from the inventory's attachment axis.
+///
+/// Two leaves an attachment can also reach are deliberately NOT here: a csift-channel
+/// delivery and the human's own mid-turn steer are second views of a payload whose type
+/// carries another leaf, so a selector naming either of them would otherwise turn the
+/// coarse keep on and parse every attachment line in the transcript - which is what
+/// `-t user` and `-t agent` did. Each has its own VALUE needle instead
+/// ([`attachment_view_needles`]), so naming it costs one memmem over the lines that carry
+/// that payload.
 #[must_use]
 pub fn attachment_leaves() -> Vec<Class> {
-    let mut out = vec![Class::CommChannel, Class::UserMessage];
+    let narrow: Vec<Class> = attachment_view_needles()
+        .into_iter()
+        .map(|(_, c)| c)
+        .collect();
+    let mut out: Vec<Class> = Vec::new();
     for r in crate::model::rows() {
         if matches!(r.shape, crate::model::Shape::AttachmentType(_)) {
             if let Some(c) = r.leaf {
-                if !out.contains(&c) {
+                if !out.contains(&c) && !narrow.contains(&c) {
                     out.push(c);
                 }
             }
         }
     }
     out
+}
+
+/// The attachment-carried leaves that need NO coarse keep: each is reached through a
+/// SINGLE payload type, so one quoted VALUE needle admits exactly its lines. A selector
+/// naming one costs a single memmem over the file instead of a parse of every attachment
+/// line, and the R13 law holds because each needle is a quoted value token rather than a
+/// key-and-value pair.
+///
+/// Both entries are leaves an ordinary query names: `user.message` is the human's own
+/// message (an attachment carries it when the harness delivered a mid-turn steer) and
+/// `agent.message.structured` is the model's own answer, so a bare `-t user` or `-t agent`
+/// reaches one. That is exactly why they cannot ride the coarse keep.
+///
+/// `agent.communication.channel` is absent on purpose: it already has its own default-on
+/// needle (the envelope header), a stronger discriminator than its payload type.
+#[must_use]
+pub fn attachment_view_needles() -> Vec<(&'static str, Class)> {
+    vec![
+        ("\"queued_command\"", Class::UserMessage),
+        ("\"structured_output\"", Class::AgentMessageStructured),
+    ]
 }
 
 impl SearchArgs {
@@ -496,11 +526,16 @@ impl SearchArgs {
         !gated_leaves().into_iter().any(|c| self.scans_gated(c))
     }
 
-    /// True when the scan keeps `type:"attachment"` lines at all: an explicit `-t`
-    /// reaching any attachment-carried leaf, or the `--attachments` flag (and the
-    /// `--count-by attachment` axis, which cannot be answered without it). The flag is
-    /// the WIDE form - it admits every attachment line for a pattern scan - and a
-    /// selector is the narrow one, which is what replaced `--additional-context`.
+    /// True when the scan keeps EVERY `type:"attachment"` line: the `--attachments` flag
+    /// (and the `--count-by attachment` axis, which cannot be answered without it), or an
+    /// explicit `-t` reaching a leaf whose only carrier is an attachment payload type.
+    /// The flag is the WIDE form and a selector naming such a leaf is the narrow one,
+    /// which is what replaced the retired flag.
+    ///
+    /// The two leaves an attachment reaches as a second VIEW are not in that set and do
+    /// not turn this on: they carry their own needles, so `-t user` and `-t agent` cost
+    /// one memmem each over the lines that carry the payload instead of a parse of every
+    /// attachment line in the file.
     #[must_use]
     pub fn scans_attachment_lines(&self) -> bool {
         let leaves = attachment_leaves();
