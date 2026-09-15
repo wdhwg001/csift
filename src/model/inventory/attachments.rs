@@ -1,11 +1,15 @@
 //! Axis 3: the payload `type` inside a `type:"attachment"` line - 50 values.
 //!
-//! An attachment is the harness attaching something to the turn. Every row here is
-//! gated: a flagless scan never parses an attachment line, and the leaf is reached by an
-//! explicit selector or by `--attachments`. The ONE exception is not a payload type at
-//! all: a `hook_additional_context` payload whose FIRST content string opens with the
-//! csift envelope header leads with `agent.communication.channel`, which a default scan
-//! does reach - a message addressed at this lane is not machinery.
+//! An attachment is the harness attaching something to the turn. Almost every row here
+//! is gated: a flagless scan parses no attachment line, and the leaf is reached by an
+//! explicit selector or by `--attachments`. THREE exceptions reach a default scan, and
+//! what they have in common is that each is words someone OWNED rather than machinery -
+//! a `hook_additional_context` payload whose FIRST content string opens with the csift
+//! envelope header (`agent.communication.channel`, a message addressed at this lane), a
+//! `queued_command` payload whose own `origin.kind` reads `human` (`user.message`, the
+//! person's mid-turn steer) and a `structured_output` payload (`agent.message
+//! .structured`, the model's own final answer). The first is detected by the envelope
+//! literal; the other two carry `Gate::DefaultNeedle` and their own value needles.
 //!
 //! `llm` here is the leaf default. Nine payload types never convert to model-visible
 //! content at all (the harness's own drop arms), and one - `hook_success` - converts

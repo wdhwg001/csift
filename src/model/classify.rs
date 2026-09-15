@@ -169,7 +169,7 @@ impl Record {
         // Hook-injected additionalContext (a `type:"attachment"` record): the injected
         // text the model reads - `harness.hook.context`, LED by
         // `agent.communication.channel` when that text is a csift-channel delivery. The
-        // channel view is the ONE attachment leaf a default scan reaches; the record
+        // channel view is one of THREE attachment leaves a default scan reaches; the record
         // never opens a turn either way.
         if self.hook_additional_context_text().is_some() {
             self.push_hook_classes(&mut out);

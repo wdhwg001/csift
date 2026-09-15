@@ -50,8 +50,14 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         receiving lane as an attachment carrying its envelope, so `csift search '<message id>' \
         @<lane> -t harness.hook.context` proves the text reached that lane's context. \
         `csift msg <ID>` runs that same join and adds csift's own ledger beside it. The \
-        delivery itself needs no flag: `agent.communication.channel` is the one attachment \
-        leaf a DEFAULT scan sees.\n\n\
+        delivery itself needs no flag: `agent.communication.channel` is one of THREE \
+        attachment leaves a DEFAULT scan sees, the other two being the person's own \
+        mid-turn steer (`user.message`, a `queued_command` payload whose own \
+        `origin.kind` reads `human`) and the model's own final answer \
+        (`agent.message.structured`, a `structured_output` payload). Each has its own \
+        value needle, so naming it costs one memmem rather than a parse of every \
+        attachment line, and only a `-t` that EXCLUDES the leaf turns its needle off. \
+        Every OTHER attachment leaf still needs `-t` or `--attachments`.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
           `-c`/`--count-only` prints just the integer EXCHANGE total: matched round-trips, \
         the ripgrep `-c` idiom, honoring every filter (per-RECORD counts are `--count-by`). \
@@ -118,7 +124,11 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         it gated has a name, `-t harness.hook.context`. There is no alias anywhere.\n  \
           GATE words below: [scan] a role-bearing line a default scan already parses ·\n  \
         [-t] you must name the leaf, its category or a glob reaching it · [-t/att]\n  \
-        either that or the wide `--attachments` flag, which admits every attachment line.\n  \
+        either that or the wide `--attachments` flag, which admits every attachment line ·\n  \
+        [scan/needle] an attachment leaf a DEFAULT scan reaches through its own value\n  \
+        needle, which only a `-t` excluding that leaf turns off: the three are words\n  \
+        someone owned - a csift-channel delivery, the person's mid-turn steer, the\n  \
+        model's structured answer.\n  \
         A gated leaf costs a query that cannot want it NOTHING (one gated memmem each).\n  \
           user        .message [scan] the person\'s own prose (a slash command with typed\n                                   \
         args renders `/name args`) · .answer [scan] an answered\n                                   \
@@ -143,8 +153,8 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         .communication.{inbox,sent,signal} [scan] peer messages,\n                                   \
         rendered `from ⇨ to` · .communication.channel [scan] a\n                                   \
         csift-channel delivery, rendered VERBATIM from its\n                                   \
-        `[csift-channel v1 …]` envelope - the ONE attachment leaf\n                                   \
-        a default scan sees\n  \
+        `[csift-channel v1 …]` envelope - one of the three\n                                   \
+        [scan/needle] attachment leaves\n  \
           harness     .notification.{workflow,monitor,subagent,background-command,task}\n                                   \
         [scan] `<task-notification>` completion pulses, rendered\n                                   \
         `[<kind> <task-id>… <status>] <summary>` ·\n                                   \
