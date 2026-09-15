@@ -39,6 +39,10 @@ mod delivery;
 mod exchange;
 mod grouping;
 mod inventory;
+/// The specimen LINES the test suites read, re-exported so the emission sweep in
+/// `commands::search` and the taxonomy drift tests read ONE copy of them.
+#[cfg(test)]
+pub(crate) use inventory::specimens;
 mod markers;
 mod mutation;
 mod narration;

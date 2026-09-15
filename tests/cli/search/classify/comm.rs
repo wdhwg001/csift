@@ -316,3 +316,54 @@ fn search_subagent_scope_spawn_lookup_resolves_in_subagent_spawn_and_return() {
         inbox.stdout
     );
 }
+
+/// K2: a COORDINATOR relay is a delivered message, so an ordinary scan finds it. It is an
+/// isMeta record - the harness wrote it into the conversation - so it opens no turn, and
+/// the opener render answers nothing for it; it is no attachment either. The record
+/// therefore classified `agent.communication.inbox` and emitted NOTHING: `show --line`
+/// rendered it, a census read zero, and `-t agent.communication.inbox` found none of the
+/// 141 such records across 89 files of one projects root. Its own text IS the message,
+/// exactly as a peer relay's is.
+#[test]
+fn a_coordinator_relay_is_found_by_an_ordinary_scan() {
+    let h = Home::new();
+    let sess = "6e5d4c3b-2a19-4087-9654-3210fedcba98";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-13T01:00:00.000Z","message":{"role":"user","content":"zzopen the lane"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","parentUuid":"u1","isMeta":true,"timestamp":"2026-06-13T01:00:01.000Z","message":{"role":"user","content":"The coordinator sent a message while you were working:\nzzrelay hold the release until the audit lands"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"c1","timestamp":"2026-06-13T01:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzreply understood"}]}}"#, "\n",
+        ),
+    );
+
+    // A FLAGLESS scan matches the relay's own text.
+    let out = h.run(&["search", "zzrelay hold the release", &at(sess)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("zzrelay hold the release")
+            && out.stdout.contains("agent.communication.inbox"),
+        "a flagless scan finds the relay:\n{}\nstderr: {}",
+        out.stdout,
+        out.stderr
+    );
+
+    // ...and the census carries the key, which is what a reader asking "did anything
+    // arrive in this lane" actually runs.
+    let census = h.run(&["search", "", &at(sess), "--count-by", "label"]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        census.stdout.contains("1  agent.communication.inbox"),
+        "the census counts it once:\n{}",
+        census.stdout
+    );
+
+    // The leaf's own selector reaches it too.
+    let named = h.run(&["search", "", &at(sess), "-t", "agent.communication.inbox"]);
+    assert!(named.success, "stderr: {}", named.stderr);
+    assert!(
+        named.stdout.contains("zzrelay hold the release"),
+        "naming the leaf reaches it:\n{}",
+        named.stdout
+    );
+}

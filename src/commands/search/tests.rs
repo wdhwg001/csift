@@ -122,6 +122,7 @@ fn kept_fixture(lines: &[&str], matcher: &Matcher) -> Vec<Kept> {
         .collect()
 }
 
+mod emission;
 mod exchange;
 mod hit_facts;
 mod hits;

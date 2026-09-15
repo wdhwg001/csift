@@ -104,6 +104,23 @@ surface change bumps the PATCH.
   scan (251.0 ms against 73.3 ms) and `-t harness.context.file` reads 359.5 ms. Forty
   payload types cannot each carry a needle; the two that do are the two an ordinary
   conversation query names.
+- **A relayed message reaches an ordinary scan, and every other leaf is now swept for the
+  same defect.** A coordinator's relay carries `agent.communication.inbox`, and the record
+  it rides is one the harness wrote into the conversation: isMeta, so it opens no turn.
+  The arm rendered through the opener path, which answers nothing for a record that opens
+  none, and the relay is no attachment either - so the record carried a delivered message
+  and emitted nothing at all: no hit, no census key, nothing under
+  `-t agent.communication.inbox`. 141 such records across 89 files of one projects root
+  (57 across 49 of a second) were reachable only by `csift show --line`. The arm falls
+  back to the record's own text, which is what the peer relay beside it has always done.
+  That makes twice in this release that a leaf was reachable only by an address, so the
+  pin is a SWEEP rather than a third one-off: for every specimen in the shape inventory, a
+  flagless scan must emit exactly one hit for each record carrying a leaf the model
+  receives. Two specimens have no text to emit and are named in the test with their
+  reasons - an image-only record is a picture, and an assistant turn the API served from a
+  fallback model wrote no text - keyed on the specimen and never on the leaf, since
+  `agent.message.plain` is the ordinary assistant message and exempting the leaf would
+  exempt the whole population the sweep exists to guard.
 - **`csift msg` prints a command that still runs.** Its lane listing recited the fact half
   of its own join as `csift search '<id>' @<lane> --additional-context`, a flag this release
   retires, so the one recipe a reader needs in order to check the channel without trusting

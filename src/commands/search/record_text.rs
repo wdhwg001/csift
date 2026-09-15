@@ -143,7 +143,14 @@ pub(crate) fn record_text_emission(
                 // model's own answer on the same line type, and it is a byte substring of
                 // the raw line, so the 7d/7f prefilter laws hold with no synth marker.
                 // Returns `None` on every non-attachment record, so nothing else moves.
-                .or_else(|| rec.attachment_payload_text()),
+                .or_else(|| rec.attachment_payload_text())
+                // The COORDINATOR relay is the same defect on a third carrier: an isMeta
+                // record carrying `agent.communication.inbox` opens no turn, so the
+                // opener render answers None, and it is no attachment either - so the
+                // record classified as a delivered message and emitted NOTHING. 141 such
+                // records over 89 files of one projects root reached a census as zero.
+                // Its own text is the message, exactly as a peer relay's is.
+                .or_else(|| record_raw_text(rec, raw)),
             // A csift-channel delivery renders the envelope chunk VERBATIM (header line +
             // body), never a rewrite: the header is the receipt a reader audits, and a
             // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth

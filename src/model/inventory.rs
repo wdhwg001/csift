@@ -21,6 +21,10 @@
 mod attachments;
 mod blocks;
 mod lines;
+/// The specimen LINES the tests read, in one copy: two suites ask different questions of
+/// the same records (do they classify to their row, and does one record emit one hit).
+#[cfg(test)]
+pub(crate) mod specimens;
 mod subtypes;
 mod templates;
 
