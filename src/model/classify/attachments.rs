@@ -86,13 +86,14 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
     })
 }
 
-/// The attachment VIEW leaf this record carries, if any: the two leaves an ordinary query
-/// names that ride a payload whose TYPE carries a different leaf. One parse, and the
-/// origin is read for the queued case exactly as [`Record::classify`] reads it - so the
-/// scan's keep and the engine's answer cannot disagree about which records are views.
-///
-/// `None` for every other record, including every ordinary attachment line.
 impl Record {
+    /// The attachment VIEW leaf this record carries, if any: the two leaves an ordinary
+    /// query names that ride a payload whose TYPE carries a different leaf. One parse,
+    /// and the origin is read for the queued case exactly as [`Record::classify`] reads
+    /// it - so the scan's keep and the engine's answer cannot disagree about which
+    /// records are views.
+    ///
+    /// `None` for every other record, including every ordinary attachment line.
     #[must_use]
     pub(crate) fn attachment_view_leaf(&self) -> Option<Class> {
         if !self.is_type("attachment") {

@@ -263,9 +263,17 @@ impl Record {
                     }
                 }
                 Block::ToolResult { .. } => push_unique(out, Class::AgentToolResult),
-                // A block row is a statement about the BLOCK, so an image carries its
-                // leaf whichever role's line it rides.
-                Block::Image { .. } => push_unique(out, Class::ContextImage),
+                // An IMAGE block on an ASSISTANT record carries no leaf. `harness.context
+                // .image` is a SHAPE the harness writes - the isMeta image-only user
+                // record, and the `[Image: ` reference in its text form - not a property
+                // of the block wherever it lands. Giving the block its own leaf made a
+                // text+image turn emit TWO hits with the harness view first, while
+                // `labels[]` ordered richest-first put the plain message first: the
+                // emission order and the label order disagreeing about one record. The
+                // corpus has no subject for it either - an image block rides an assistant
+                // record 0 times over two projects roots - so an assistant record with
+                // text stays `agent.message.plain`, and an image-ONLY one is an unmodeled
+                // unit under an address.
                 _ => {}
             }
         }
@@ -418,11 +426,15 @@ impl Record {
             .collect::<Vec<_>>()
             .join("\n");
         if joined.trim().is_empty() {
-            // harness.context.image: the record carries IMAGE blocks and no text - the
-            // block form of the same attached image the `[Image: …]` reference names in
-            // text form, and the inventory's `Block("image")` row is where that leaf is
-            // recorded. Any other textless block record (a `document`, a bare `fallback`)
-            // still carries nothing, which is what sends it to the unmodeled unit.
+            // harness.context.image: an image-ONLY `type:"user"` record - the block form
+            // of the attached image the `[Image: ` reference names in text form, and the
+            // shape the inventory's `Block("image")` row records. Measured over two
+            // projects roots, every such record is isMeta (94 and 75) and every
+            // non-isMeta record carrying an image carries the person's text beside it
+            // (802 and 539), which is why the leaf is a statement about THIS shape and
+            // not about an image block wherever it lands. Any other textless block
+            // record (a `document`, a bare `fallback`) still carries nothing, which is
+            // what sends it to the unmodeled unit.
             if blocks.iter().any(|b| matches!(b, Block::Image { .. })) {
                 push_unique(out, Class::ContextImage);
             }

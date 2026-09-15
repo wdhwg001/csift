@@ -56,6 +56,14 @@ pub(crate) enum Gate {
     Selector,
     /// The above, OR `--attachments` / the `--count-by attachment` axis.
     Attachments,
+    /// A FLAGLESS scan parses and emits it, through this leaf's OWN value needle rather
+    /// than through the coarse attachment keep - so naming the leaf costs one memmem over
+    /// the lines carrying that payload instead of a parse of every attachment line, and a
+    /// selector that EXCLUDES the leaf turns the needle off. Two shapes take it, and what
+    /// they have in common is why: both are words someone OWNED - the person's own
+    /// mid-turn steer and the model's own structured answer - so a scan that asks for the
+    /// conversation has to reach them ([`crate::cli::attachment_view_needles`]).
+    DefaultNeedle,
     /// NO LEAF: no selector can name the shape, so an ADDRESS is the only thing that
     /// emits it, as `? unmodeled: <shape>`. That is a statement about EMISSION, not about
     /// parsing - a `document` block and an isMeta residue record ride lines a default
@@ -148,6 +156,15 @@ impl Entry {
                  = the person's own steer, `user.message`)"
             ),
             Shape::AttachmentType(a) => format!("type:\"attachment\" attachment.type:\"{a}\""),
+            // The image row is a SHAPE, not a block property: the leaf belongs to the
+            // image-ONLY user record the harness writes (always isMeta in the corpus),
+            // and the same attachment reaches a reader as the `[Image: ` text reference.
+            // An image block beside TEXT rides the person's own message and adds no leaf.
+            Shape::Block(b @ "image") => format!(
+                "message.content[] type:\"{b}\" on an image-ONLY `type:\"user\"` record \
+                 (the `[Image: ` reference is its text form); beside TEXT it rides that \
+                 record's own leaf"
+            ),
             Shape::Block(b) => format!("message.content[] type:\"{b}\""),
             // The fired prompt carries no template at all: its text is whatever the
             // operator armed, so the mark on disk is the PARENT LINK.

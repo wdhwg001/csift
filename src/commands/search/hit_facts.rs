@@ -136,13 +136,22 @@ pub(crate) fn unmodeled_shape(rec: &Record, raw: Option<&str>) -> Option<String>
 /// alone already had its leaf decided elsewhere.
 fn distinguishing_block_type(raw: Option<&str>) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(raw?).ok()?;
-    v.get("message")?
+    let types: Vec<&str> = v
+        .get("message")?
         .get("content")?
         .as_array()?
         .iter()
         .filter_map(|b| b.get("type")?.as_str())
-        .find(|t| *t != "text")
-        .map(str::to_string)
+        .collect();
+    // The DISTINGUISHING type is the one that is not the ordinary `text`. When every
+    // block IS text - a whitespace-only assistant turn - `text` IS the answer: the unit
+    // reads `? unmodeled: assistant/text` rather than a bare `? unmodeled` with no shape
+    // at all, which tells a reader nothing about the line they addressed.
+    types
+        .iter()
+        .find(|t| **t != "text")
+        .or_else(|| types.first())
+        .map(|t| (*t).to_string())
 }
 
 /// A key=value excerpt of a line's own top-level keys, for a record that carries no

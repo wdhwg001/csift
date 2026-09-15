@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "472-475",
+          "lines": "484-487",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -3171,7 +3171,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "351-355",
+          "lines": "359-363",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3302,7 +3302,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "351-355",
+          "lines": "359-363",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3405,7 +3405,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "351-355",
+          "lines": "359-363",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
@@ -11535,7 +11535,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "296-299",
+          "lines": "304-307",
           "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span (P1c M3). When \u22651 section matches, that fully classifies the record."
         }
       ],
@@ -11648,7 +11648,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "351-355",
+          "lines": "359-363",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -13220,7 +13220,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "173-174",
+          "lines": "176-177",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13307,7 +13307,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "179-180",
+          "lines": "182-183",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13434,7 +13434,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "235",
+          "lines": "238",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13566,7 +13566,7 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "175-178",
+          "lines": "178-181",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13640,8 +13640,8 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "242-246",
-          "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a\n        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.\n        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
+          "lines": "245",
+          "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         }
       ],
       "instrument": "`csift search '' <project-dir> --count-by label` (no `-t`) must show no promoted leaf, while `csift search '' <project-dir> -t 'harness.*' --count-by label` must show them. Counting rule: one record per line admitted by the gate.",
@@ -14427,7 +14427,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "73",
+          "lines": "74",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14681,7 +14681,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "292-295",
+          "lines": "300-303",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            push_unique(out, Class::CompactionSummary);\n            return;\n        }"
         }
       ],
@@ -14803,7 +14803,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "226-228",
+          "lines": "229-231",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -22244,7 +22244,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "193-194",
+          "lines": "196-197",
           "snippet": "    static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"file-history-\"));"
         }
       ],
@@ -48484,8 +48484,8 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "242-246",
-          "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a\n        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.\n        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
+          "lines": "245",
+          "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         }
       ],
       "instrument": "`rg -NI '\"subtype\":\"stop_hook_summary\"' ~/.claude/projects -g '*.jsonl'` into a JSON reader for a key-set and value census; counting rule = one observation per matching line, and one per ARRAY ELEMENT for the `hookInfos` total. `csift search '' <target> -t harness.turn.stop-hooks --max-count 2` must print the fabricated head plus the command lines.",
@@ -48817,8 +48817,8 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "242-246",
-          "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit, so a\n        // bare `-t user` or `-t agent` never turns the coarse attachment keep on.\n        || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
+          "lines": "245",
+          "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         },
         {
           "path": "src/cli/show_stats_args.rs",
@@ -50976,7 +50976,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "161-164",
+          "lines": "164-167",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -52276,7 +52276,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "156-161",
+          "lines": "159-164",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -53832,12 +53832,12 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "156-161",
+          "lines": "159-164",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "179-180",
+          "lines": "182-183",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53937,7 +53937,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "173-174",
+          "lines": "176-177",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
@@ -55362,7 +55362,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "356-361",
+          "lines": "364-369",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
@@ -56187,7 +56187,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "195-201",
+          "lines": "198-204",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -66616,7 +66616,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "356-361",
+          "lines": "364-369",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
@@ -70654,7 +70654,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "201",
+          "lines": "204",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -71600,7 +71600,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "327-330",
+          "lines": "335-338",
           "snippet": "        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {\n            push_unique(out, Class::CommandStdout);\n            return;\n        }"
         }
       ],
@@ -71928,7 +71928,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "331-342",
+          "lines": "339-350",
           "snippet": "        if is_slash_command_wrapper(s) {\n            // Prose typed after the slash command (`<command-args>`) IS genuine user\n            // input - and the RICHER view (richest-view law: the prose beats the\n            // wrapper), so it is pushed FIRST: the unfiltered record-text emission\n            // renders `/name args`, never the wrapper XML. An explicit\n            // `-t harness.command.invocation` still reaches the wrapper form.\n            if self.slash_command_args().is_some() {\n                push_unique(out, Class::UserMessage);\n            }\n            push_unique(out, Class::CommandInvocation);\n            return;\n        }"
         }
       ],
@@ -79965,7 +79965,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "236-240",
+          "lines": "239-243",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -83637,7 +83637,7 @@
         },
         {
           "path": "src/model/classify/attachments.rs",
-          "lines": "123-129",
+          "lines": "124-130",
           "snippet": "pub(crate) fn payload_origin_is_human(payload: &serde_json::Value) -> bool {\n    payload\n        .get(\"origin\")\n        .and_then(|o| o.get(\"kind\"))\n        .and_then(serde_json::Value::as_str)\n        == Some(\"human\")\n}"
         }
       ],
@@ -87418,7 +87418,7 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "200-201",
+          "lines": "203-204",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
@@ -88945,7 +88945,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "169-172",
+          "lines": "178-181",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -89634,7 +89634,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "367-370",
+          "lines": "375-378",
           "snippet": "        if self.is_scheduled_fire_prompt(ctx) {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
         },
         {
@@ -89750,7 +89750,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "362-366",
+          "lines": "370-374",
           "snippet": "        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms\n        // by construction - the fired text is whatever the operator armed, so every marker\n        // above must get first refusal, and the two tick prompts that DO carry a marker keep\n        // their own leaves. Before this arm such a record matched nothing and fell straight\n        // into the isMeta exclusion below: unsearchable, and absent from every census."
         },
         {
@@ -92222,7 +92222,7 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "290-300",
+          "lines": "307-317",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
         }
       ],

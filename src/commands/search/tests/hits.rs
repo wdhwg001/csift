@@ -523,3 +523,77 @@ fn redacted_thinking_respects_the_label_filter() {
     );
     assert!(hits.is_empty(), "{hits:?}");
 }
+
+/// J2/J7: one record, one hit. The taxonomy's own table (`model::inventory::tests::
+/// the_image_leaf_follows_the_shape_not_the_block`) asserts the LABELS for these shapes;
+/// this asserts what the emission does with them, because the two can disagree: the
+/// text+image assistant turn carried one leaf and emitted TWO hits, the record-text lane
+/// and the per-block lane each answering for the same record, with the harness view
+/// printed first while `labels[]` ordered richest-first put the message first.
+///
+/// The filter is wide open, which is what a flagless scan runs, and the pattern matches
+/// every body, so a second lane cannot hide behind a narrow match.
+#[test]
+fn one_record_emits_one_hit_for_every_image_shape() {
+    // Shape, line, expected hit count. Kept beside the taxonomy table deliberately: that
+    // one is about leaves, this one about emission, and a fixture shared across two
+    // #[cfg(test)] modules would couple test files the layout keeps independent.
+    const SHAPES: &[(&str, &str, usize)] = &[
+        // ZERO, and not because the leaf is missing: this record CARRIES
+        // `harness.context.image` (the taxonomy table asserts it) and renders in full
+        // under `show --line`, with its leaf, a key=value body and the `csift image`
+        // pointer. A pattern SCAN emits nothing because the record has no text SECTION to
+        // match or excerpt - the ordinary textless-record rule - and `csift image` is the
+        // surface that reads what it does carry.
+        (
+            "isMeta image-only user",
+            r#"{"type":"user","uuid":"e1","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"zzimg"}}]},"isMeta":true}"#,
+            0,
+        ),
+        (
+            "non-isMeta user text+image",
+            r#"{"type":"user","uuid":"e2","message":{"role":"user","content":[{"type":"text","text":"zzbody what do you make of this"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"zzimg"}}]}}"#,
+            1,
+        ),
+        (
+            "assistant text+image",
+            r#"{"type":"assistant","uuid":"e3","message":{"role":"assistant","content":[{"type":"text","text":"zzbody here is the chart"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"zzimg"}}]}}"#,
+            1,
+        ),
+        (
+            "assistant image-only",
+            r#"{"type":"assistant","uuid":"e4","message":{"role":"assistant","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"zzimg"}}]}}"#,
+            0,
+        ),
+        (
+            "assistant document-only",
+            r#"{"type":"assistant","uuid":"e5","message":{"role":"assistant","content":[{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"zzimg"}}]}}"#,
+            0,
+        ),
+    ];
+
+    for (name, line, want) in SHAPES {
+        let r = rec(line);
+        let m = build_matcher(&args("")).unwrap();
+        let mut hits = Vec::new();
+        collect_record_hits(
+            &r,
+            None,
+            None,
+            LabelFilter::all(),
+            &m,
+            false,
+            EXCERPT_MAX,
+            &PlanIndex::default(),
+            &HashMap::new(),
+            &ClassifyCtx::top_level(),
+            &mut hits,
+        );
+        assert_eq!(
+            hits.len(),
+            *want,
+            "{name} should emit {want} hit(s), got {:?}",
+            hits.iter().map(|h| h.class).collect::<Vec<_>>()
+        );
+    }
+}

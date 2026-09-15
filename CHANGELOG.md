@@ -96,7 +96,14 @@ surface change bumps the PATCH.
   `agent.message.structured`, so a flagless scan cannot miss it. Those two leaves are the
   only attachment-carried exceptions - both are words someone owned, a person's or the
   model's - and the coarse keep is untouched, so a flagless scan still parses no other
-  attachment payload.
+  attachment payload. The coarse keep being untouched cuts both ways, and the cost is
+  worth knowing: a selector reaching an attachment leaf that has NO needle of its own
+  still parses every attachment line, and a bare `-t harness` reaches those leaves, so
+  it pays that. Measured on an 85 MB transcript of 150,000 `file` attachment lines,
+  21 interleaved reps with a pattern that matches: `-t harness` reads 3.4x a flagless
+  scan (251.0 ms against 73.3 ms) and `-t harness.context.file` reads 359.5 ms. Forty
+  payload types cannot each carry a needle; the two that do are the two an ordinary
+  conversation query names.
 - **`csift msg` prints a command that still runs.** Its lane listing recited the fact half
   of its own join as `csift search '<id>' @<lane> --additional-context`, a flag this release
   retires, so the one recipe a reader needs in order to check the channel without trusting

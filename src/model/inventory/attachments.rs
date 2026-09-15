@@ -78,7 +78,7 @@ pub(crate) const ROWS: &[Entry] = &[
     e(
         Shape::AttachmentType("structured_output"),
         Some(Class::AgentMessageStructured),
-        Gate::Attachments,
+        Gate::DefaultNeedle,
         false,
         Human::Never,
     ),
@@ -330,10 +330,14 @@ pub(crate) const ROWS: &[Entry] = &[
         true,
         Human::Unstated,
     ),
+    // The one row whose GATE and LEAF answer to different questions: the needle is
+    // default-on because the payload can be the PERSON's own mid-turn steer
+    // (`attachment.origin.kind` = "human", which classifies `user.message`), and the
+    // row's own leaf is what the REST of them carry.
     e(
         Shape::AttachmentType("queued_command"),
         Some(Class::ContextTask),
-        Gate::Attachments,
+        Gate::DefaultNeedle,
         true,
         Human::Unstated,
     ),
