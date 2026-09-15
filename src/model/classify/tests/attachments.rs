@@ -77,8 +77,11 @@ fn every_payload_type_maps_to_its_leaf() {
     // leaf for stays unlabeled rather than borrowing a neighbour's.
     assert_eq!(attachments::classify("some_future_payload"), None);
     assert!(labels(&att("some_future_payload")).is_empty());
-    // An attachment record with no payload type at all is tolerated the same way.
+    // An attachment record with no payload type at all is tolerated the same way, and so
+    // is one carrying NO payload object: the branch parses the payload once and both
+    // absences have to fall through it rather than reaching for a field that is not there.
     assert!(labels(r#"{"type":"attachment","uuid":"a2","attachment":{}}"#).is_empty());
+    assert!(labels(r#"{"type":"attachment","uuid":"a3"}"#).is_empty());
 }
 
 #[test]
