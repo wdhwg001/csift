@@ -46,6 +46,16 @@ surface change bumps the PATCH.
   nothing about printed it. Every `headers` member is now elided at every depth, `<elided>`
   in its place so a reader learns the set is there, and `--raw` stays the one way to the
   bytes.
+- **Two more payload types are marked as never reaching the model, and a result set moves
+  with them.** The harness's conversion table drops `goal_status` and
+  `async_hook_response_batch` outright; csift's `NEVER_CONVERTS` list had neither, so it
+  reported both as delivered. They are in it now, and the consequence is visible on three
+  surfaces. Measured on a `goal_status` attachment: `search -t harness.context` used to
+  return it and now returns nothing, with the empty-result probe naming
+  `harness.context.task` as where it went (the bare category face shows only what the model
+  received; the leaf's own `-t` still returns it); the hit's JSON `delivered` reads `false`
+  where it read `true`; and the rendered label zone gains `[not delivered]`. A query written
+  against the bare face has to name the leaf instead.
 - **A record's width is a number now, and it is written down.** The amendment gave `Record`
   a second conversion key and a memo holding both parsed conversions, and the memo held its
   payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
