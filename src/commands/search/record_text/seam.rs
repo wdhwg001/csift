@@ -18,31 +18,79 @@ use super::*;
 /// below, and a family that has nothing to say about a record answers `None` on one
 /// compare.
 ///
-/// The dispatch key is the leaf's CATEGORY. Two categories are shared by two families -
-/// `harness.hook` (`.context` and `.outcome` are attachment payloads, `.feedback` is an
-/// isMeta injection) and `harness.schedule` (`.event` is the scheduler's own
-/// `type:"system"` record, the other three are the prompts it injected) - so both
-/// families are offered the record in a fixed order and each refuses what is not its
-/// own. A category no family owns never calls anything.
+/// Which families are offered a record, and in which order, is [`render_families`]; at
+/// most one of their answers is ever used, which `find_map` makes structural rather than
+/// a rule somebody has to keep.
 pub(crate) fn family_render(
     rec: &Record,
     raw: Option<&str>,
     class: Class,
     ctx: &ClassifyCtx,
 ) -> Option<String> {
-    match class.category() {
-        "harness.bookkeeping" => bookkeeping::render(rec, raw, class, ctx),
-        "agent.message" | "harness.context" => attachments::render(rec, raw, class, ctx),
-        "harness.hook" => attachments::render(rec, raw, class, ctx)
-            .or_else(|| injections::render(rec, raw, class, ctx)),
-        "harness.system" => system::render(rec, raw, class, ctx),
-        "harness.schedule" => system::render(rec, raw, class, ctx)
-            .or_else(|| injections::render(rec, raw, class, ctx)),
-        "agent.thinking" => thinking::render(rec, raw, class, ctx),
-        "harness.command" | "harness.enforce" | "harness.notification" => {
-            injections::render(rec, raw, class, ctx)
+    render_families(class).iter().find_map(|f| match f {
+        RenderFamily::Bookkeeping => bookkeeping::render(rec, raw, class, ctx),
+        RenderFamily::Attachments => attachments::render(rec, raw, class, ctx),
+        RenderFamily::Injections => injections::render(rec, raw, class, ctx),
+        RenderFamily::System => system::render(rec, raw, class, ctx),
+        RenderFamily::Thinking => thinking::render(rec, raw, class, ctx),
+    })
+}
+
+/// The five families that have a record-level render. `keys` is deliberately absent: its
+/// facts are keys a record exposes, never what a line SAYS, so it has nothing to render.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RenderFamily {
+    Bookkeeping,
+    Attachments,
+    Injections,
+    System,
+    Thinking,
+}
+
+impl RenderFamily {
+    /// The family's own word, for the drift table a person reads. `cfg(test)` because
+    /// that table is the only reader a word has: the dispatch matches on the variant,
+    /// which costs nothing, and a string the binary never compares would be a name with
+    /// no use rather than a name waiting for one.
+    #[cfg(test)]
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            RenderFamily::Bookkeeping => "bookkeeping",
+            RenderFamily::Attachments => "attachments",
+            RenderFamily::Injections => "injections",
+            RenderFamily::System => "system",
+            RenderFamily::Thinking => "thinking",
         }
-        _ => None,
+    }
+}
+
+/// THE DISPATCH TABLE of the render seam, as DATA: which families are offered a leaf's
+/// record, in order. EMPTY means the engine's own generic arms render that leaf.
+///
+/// A table rather than a `match` inside [`family_render`] because it is a CONTRACT six
+/// lanes work against, and a contract a test can only re-derive is a contract nothing
+/// checks. The drift test walks every leaf through this and pins the answer, so a family
+/// that starts rendering a leaf it did not before has to say so.
+///
+/// The key is the leaf's CATEGORY, and TWO categories are shared by two families -
+/// `harness.hook` (`.context` and `.outcome` are attachment payloads, `.feedback` is an
+/// isMeta injection) and `harness.schedule` (`.event` is the scheduler's own
+/// `type:"system"` record, the other three are the prompts it injected). There the ORDER
+/// is the fact: the payload family goes first, because an attachment and a scheduler
+/// record are what they are whichever leaf a caller asked for, while an injection is
+/// decided by its text.
+pub(crate) fn render_families(class: Class) -> &'static [RenderFamily] {
+    match class.category() {
+        "harness.bookkeeping" => &[RenderFamily::Bookkeeping],
+        "agent.message" | "harness.context" => &[RenderFamily::Attachments],
+        "harness.hook" => &[RenderFamily::Attachments, RenderFamily::Injections],
+        "harness.system" => &[RenderFamily::System],
+        "harness.schedule" => &[RenderFamily::System, RenderFamily::Injections],
+        "agent.thinking" => &[RenderFamily::Thinking],
+        "harness.command" | "harness.enforce" | "harness.notification" => {
+            &[RenderFamily::Injections]
+        }
+        _ => &[],
     }
 }
 

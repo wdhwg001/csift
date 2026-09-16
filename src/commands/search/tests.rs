@@ -144,3 +144,4 @@ mod record_text;
 mod render;
 mod rows;
 mod scan;
+mod seam;
