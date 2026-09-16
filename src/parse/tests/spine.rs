@@ -378,6 +378,35 @@ fn a_spine_row_stays_far_narrower_than_a_record() {
     );
 }
 
+/// A RECORD's own width, at an exact number, because every parsed line of every scan pays
+/// it and nothing else in the crate notices when it moves.
+///
+/// The loose bound above guards the ROW; this guards the record, and the two failures it
+/// is here to catch are different. A field added to `Record` widens every record in the
+/// vector - the C-41 measurement is what this costs - and the widening is almost always
+/// unintended: a memo holding its payload inline rather than behind a pointer, a small
+/// struct inlined where an `Option<Box<_>>` would do. So the number is written down, and
+/// changing it is a deliberate act with a measurement behind it rather than a side effect
+/// somebody reads about later.
+///
+/// The figure is platform-dependent in principle; it is asserted on the 64-bit targets the
+/// project builds for, and a port that moves it updates the number with its reason.
+#[test]
+fn a_record_is_exactly_as_wide_as_it_is_written_down_to_be() {
+    assert_eq!(
+        std::mem::size_of::<SpineRow>(),
+        72,
+        "the spine row's width moved; AGENTS section 3.3 quotes this number"
+    );
+    assert_eq!(
+        std::mem::size_of::<Record>(),
+        1368,
+        "`Record`'s width moved - a field was added or a payload inlined; measure it, \
+         say why the new width is worth paying on every parsed line, and update this \
+         number and the one AGENTS section 3.3 quotes"
+    );
+}
+
 #[test]
 fn a_duplicate_top_level_key_parts_the_two_entries_and_the_census_says_malformed() {
     // The ONE shape where they legitimately differ, asserted rather than assumed. serde's

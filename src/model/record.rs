@@ -274,8 +274,16 @@ pub struct Record {
     /// asked for by the delivery override and by a family's facts. Holds the PAIR, so the
     /// second key costs nothing on the overwhelming majority of records that lack it.
     /// `serde(skip)` - derived from the two fields above, never read off a line.
+    ///
+    /// BOXED, and `Record`'s width is why. Every parsed line of every scan pays
+    /// `size_of::<Record>()`, so a memo that stores its payload INLINE widens the record
+    /// for a field almost no record uses - the C-41 lesson, which narrowed a spine row to
+    /// 72 bytes for exactly this reason. Behind a pointer the field costs 16 bytes
+    /// whatever the payload grows to, and the box is allocated only for a record that
+    /// actually carries a conversion. `None` means it carries neither key, which is why
+    /// [`Record::converted_text`] answers `Option`: the common case allocates nothing.
     #[serde(skip)]
-    pub conversion_parsed: std::sync::OnceLock<ConversionText>,
+    pub conversion_parsed: std::sync::OnceLock<Option<Box<ConversionText>>>,
 
     /// `file-history-snapshot` payload (a top-level sibling). Carries
     /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.

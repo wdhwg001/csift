@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "322-329",
+          "lines": "330-337",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7197,7 +7197,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "451-453",
+          "lines": "459-461",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9969,7 +9969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "438-444",
+          "lines": "446-452",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -13126,7 +13126,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "496",
+          "lines": "504",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -13215,7 +13215,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "439-447",
+          "lines": "450-458",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -13302,7 +13302,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "409-412",
+          "lines": "420-423",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -13429,7 +13429,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "425-430",
+          "lines": "436-441",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -18954,7 +18954,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "366-369",
+          "lines": "374-377",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20096,7 +20096,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "355-359",
+          "lines": "363-367",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -21192,7 +21192,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "438-444",
+          "lines": "449-455",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -22014,7 +22014,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "280-288",
+          "lines": "288-296",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22134,7 +22134,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "283-286",
+          "lines": "291-294",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22229,7 +22229,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "290-298",
+          "lines": "298-306",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -35303,7 +35303,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "451-452",
+          "lines": "459-460",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -36649,7 +36649,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "283-286",
+          "lines": "291-294",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -45885,7 +45885,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "300-304",
+          "lines": "308-312",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46137,7 +46137,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "306-310",
+          "lines": "314-318",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -47055,7 +47055,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "322-325",
+          "lines": "330-333",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48609,7 +48609,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "340-346",
+          "lines": "348-354",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -51065,12 +51065,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "415-420",
+          "lines": "423-428",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "426-429",
+          "lines": "434-437",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51197,12 +51197,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "426-429",
+          "lines": "434-437",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "415-420",
+          "lines": "423-428",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52903,7 +52903,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "406-408",
+          "lines": "414-416",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53154,12 +53154,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "490",
+          "lines": "498",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "512-517",
+          "lines": "520-525",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53266,7 +53266,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "512-517",
+          "lines": "520-525",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53355,7 +53355,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "496-498",
+          "lines": "504-506",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53640,7 +53640,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "451-452",
+          "lines": "459-460",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53747,7 +53747,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "409-413",
+          "lines": "420-424",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -53922,17 +53922,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "431-438",
+          "lines": "442-449",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[\u2026],\u2026}` - the context a SessionStart /\n    /// UserPromptSubmit / \u2026 hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "439-446",
+          "lines": "450-457",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "451-455",
+          "lines": "462-466",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -54034,7 +54034,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "392-397",
+          "lines": "400-405",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54132,7 +54132,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "399-403",
+          "lines": "407-411",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -60185,7 +60185,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "445-450",
+          "lines": "453-458",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -65327,7 +65327,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "415-420",
+          "lines": "423-428",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65492,7 +65492,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "426-429",
+          "lines": "434-437",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -92901,8 +92901,8 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "398-403",
-          "snippet": "pub fn converted_text(&self) -> &ConversionText {\n        self.conversion_parsed.get_or_init(|| ConversionText {\n            rendered: conversion_text(self.rendered.as_deref()),\n            human_turn: conversion_text(self.rendered_in_human_turn.as_deref()),\n        })\n    }"
+          "lines": "401-405",
+          "snippet": "pub fn converted_text(&self) -> Option<&ConversionText> {\n        self.conversion_parsed\n            .get_or_init(|| {\n                let rendered = conversion_text(self.rendered.as_deref());\n                let human_turn = conversion_text(self.rendered_in_human_turn.as_deref());"
         },
         {
           "path": "src/model/tests/predicates.rs",

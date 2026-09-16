@@ -389,17 +389,28 @@ impl Record {
     /// produced no text is the same answer as no conversion.
     ///
     /// Costs NOTHING on a record carrying neither key: both `?`-guards return before any
-    /// parse, which is every record of every non-converting payload type.
+    /// parse, which is every record of every non-converting payload type, and the memo
+    /// then holds `None` rather than a boxed pair of nothings - so such a record pays no
+    /// allocation either. `None` from this accessor means exactly that: the record
+    /// carries no conversion at all.
     // The ordinary "no caller yet" allow (AGENTS section 4): the attachment family is
     // what reads this, and the amendment lands it so the family does not have to widen
     // `Record`. The allow goes with the family.
     #[allow(dead_code)]
     #[must_use]
-    pub fn converted_text(&self) -> &ConversionText {
-        self.conversion_parsed.get_or_init(|| ConversionText {
-            rendered: conversion_text(self.rendered.as_deref()),
-            human_turn: conversion_text(self.rendered_in_human_turn.as_deref()),
-        })
+    pub fn converted_text(&self) -> Option<&ConversionText> {
+        self.conversion_parsed
+            .get_or_init(|| {
+                let rendered = conversion_text(self.rendered.as_deref());
+                let human_turn = conversion_text(self.rendered_in_human_turn.as_deref());
+                (rendered.is_some() || human_turn.is_some()).then(|| {
+                    Box::new(ConversionText {
+                        rendered,
+                        human_turn,
+                    })
+                })
+            })
+            .as_deref()
     }
 
     /// The attachment payload's own `type` value (`hook_additional_context`,

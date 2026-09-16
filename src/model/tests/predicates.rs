@@ -304,7 +304,9 @@ fn both_conversions_come_back_and_neither_is_chosen() {
             "rendered":[{"content":"the machine form"}],
             "renderedInHumanTurn":[{"content":"the human-turn form"}]}"#,
     );
-    let c = r.converted_text();
+    let c = r
+        .converted_text()
+        .expect("the record carries both conversions");
     assert_eq!(c.rendered.as_deref(), Some("the machine form"));
     assert_eq!(c.human_turn.as_deref(), Some("the human-turn form"));
 }
@@ -318,14 +320,15 @@ fn a_record_with_one_conversion_answers_none_for_the_other() {
         r#"{"type":"attachment","uuid":"a2","attachment":{"type":"file"},
             "rendered":[{"content":"only one"}]}"#,
     );
-    let c = r.converted_text();
+    let c = r
+        .converted_text()
+        .expect("the record carries one conversion");
     assert_eq!(c.rendered.as_deref(), Some("only one"));
     assert_eq!(c.human_turn, None);
-    // And a record with NEITHER key answers nothing twice.
+    // And a record with NEITHER key answers nothing at all - the memo holds `None` and
+    // allocates no pair of nothings, which is every record of every non-converting type.
     let bare = parse(r#"{"type":"attachment","uuid":"a3","attachment":{"type":"file"}}"#);
-    let c = bare.converted_text();
-    assert_eq!(c.rendered, None);
-    assert_eq!(c.human_turn, None);
+    assert!(bare.converted_text().is_none());
 }
 
 /// A conversion is an ARRAY of messages: several entries JOIN with a newline, and a
@@ -343,7 +346,7 @@ fn a_conversion_joins_its_entries_and_reads_both_content_shapes() {
                         {"content":42}]}"#,
     );
     assert_eq!(
-        r.converted_text().rendered.as_deref(),
+        r.converted_text().and_then(|c| c.rendered.as_deref()),
         Some("first\nsecond\nthird"),
         "entries join, blocks join, and a value that is neither carries no text"
     );
@@ -359,7 +362,13 @@ fn a_conversion_that_produced_no_text_reads_as_absent() {
         r#"{"type":"attachment","uuid":"a6","rendered":[{"content":[]}]}"#,
         r#"{"type":"attachment","uuid":"a7","rendered":"not an array"}"#,
     ] {
-        assert_eq!(parse(line).converted_text().rendered, None, "{line}");
+        assert_eq!(
+            parse(line)
+                .converted_text()
+                .and_then(|c| c.rendered.clone()),
+            None,
+            "{line}"
+        );
     }
 }
 
@@ -376,8 +385,8 @@ fn both_conversions_are_parsed_once_and_remembered() {
             "rendered":[{"content":"machine"}],
             "renderedInHumanTurn":[{"content":"human"}]}"#,
     );
-    let first = r.converted_text();
-    let second = r.converted_text();
+    let first = r.converted_text().expect("both conversions are there");
+    let second = r.converted_text().expect("and still there");
     assert!(
         std::ptr::eq(first, second),
         "the second call re-parsed instead of reading the memo"
