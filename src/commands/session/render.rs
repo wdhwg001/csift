@@ -88,6 +88,19 @@ pub(crate) fn render_text(
         if !s.session_kind.is_empty() {
             println!("  lane     {}", lane_line(s));
         }
+        // The one lineage link a RECORD states about itself: a line whose snake-case
+        // `session_id` names a different session than its own `sessionId` was minted
+        // elsewhere and hydrated into this file through the bridge. Stated, so the row
+        // carries no inference wording - and a SET, because one transcript can hold runs
+        // from more than one session.
+        if !s.minted_elsewhere.is_empty() {
+            let names: Vec<&str> = s.minted_elsewhere.iter().map(|o| first8(o)).collect();
+            println!(
+                "  minted   a record here names {} as the session it was minted in \
+                 (hydrated through the bridge; `sessionId` stays this transcript)",
+                names.join(", ")
+            );
+        }
         print_preview("first ◂", s.first_user.as_ref());
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
@@ -278,6 +291,14 @@ pub(crate) fn render_json(
             "session_kind_first_line": s.session_kind_first_line,
             "session_kind_last_line": s.session_kind_last_line,
             "lineage_scanned": s.lineage_scanned,
+            // The SIBLING sessions a record of this transcript names as the one it was
+            // minted in (the snake-case `session_id` against the line's own `sessionId`).
+            // An ARRAY with its count beside it, because one transcript can hold runs
+            // hydrated from more than one session; empty for every transcript no bridge
+            // hydrated into, and empty without `--lineage`, which `lineage_scanned`
+            // separates from "scanned and found none".
+            "minted_elsewhere": s.minted_elsewhere,
+            "minted_elsewhere_count": s.minted_elsewhere.len(),
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

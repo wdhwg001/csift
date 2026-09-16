@@ -113,6 +113,19 @@ pub struct SessionSummary {
     /// True when a whole-file lineage pass produced the two fields above - so a consumer can
     /// tell "no span, not asked for" from "no span, no carrier".
     pub lineage_scanned: bool,
+    /// The SIBLING sessions a record of this transcript names as the session it was MINTED
+    /// in: the snake-case `session_id` the Remote Control bridge carries through its event
+    /// envelope, on a line whose own `sessionId` is this transcript. A SET, sorted, because
+    /// one transcript can hold runs hydrated from more than one session and a first-wins
+    /// scalar would drop the rest in silence.
+    ///
+    /// EMPTY without `--lineage`, like the `session_kind` SPAN and for the same measured
+    /// reason: a hydrated run sits wherever the bridge put it, and of the two disagreeing
+    /// files measured on one projects root, one file's run starts below the head window -
+    /// so a window read reports nothing for it, and reporting half an answer by default
+    /// would be worse than naming the flag. `lineage_scanned` separates "not asked for"
+    /// from "no carrier".
+    pub minted_elsewhere: Vec<String>,
 }
 
 /// A short, timestamped preview of one message for the `list` view.

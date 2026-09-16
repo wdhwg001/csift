@@ -15999,12 +15999,12 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "293-300",
+          "lines": "306-313",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "306-317",
+          "lines": "319-330",
           "snippet": "    for line in mmap.split(|&b| b == b'\\n') {\n        if TS.find(line).is_none() {\n            continue;\n        }\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if rec.timestamp.is_some() {\n                let hit = rec.is_compact_boundary();\n                return Ok(hit\n                    .then(|| rec.uuid.clone().unwrap_or_default())\n                    .filter(|u| !u.is_empty()));\n            }\n        }"
         }
       ],
@@ -16110,7 +16110,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "296-299",
+          "lines": "309-312",
           "snippet": "/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -16288,7 +16288,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "322-330",
+          "lines": "335-343",
           "snippet": "/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary\n/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own\n/// uuid differs; a co-clone's head probe returns the same boundary uuid and is\n/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY\n/// when a clone was detected.\npub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -16518,7 +16518,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "293-299",
+          "lines": "306-312",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -38633,7 +38633,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "327-330",
+          "lines": "340-343",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -64369,7 +64369,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "327-329",
+          "lines": "340-342",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());"
         }
       ],
@@ -90077,7 +90077,7 @@
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn cleared_line(s: &SessionSummary) -> String {",
-          "lines": "128"
+          "lines": "141"
         },
         {
           "path": "src/commands/session/rows.rs",
@@ -91947,17 +91947,17 @@
         {
           "path": "src/parse/lineage.rs",
           "snippet": "pub(crate) fn lineage_fields(line: &[u8]) -> Option<LineageFields> {",
-          "lines": "81"
+          "lines": "112"
         },
         {
           "path": "src/commands/session/summarize.rs",
           "snippet": "pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {",
-          "lines": "259"
+          "lines": "267"
         },
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn lane_line(s: &SessionSummary) -> String {",
-          "lines": "168"
+          "lines": "181"
         }
       ],
       "instrument": "Corpus: over every `*.jsonl` under the projects root, read each file as BYTES, split on `\\n` only, and count the lines whose `json.loads` yields a dict with `sessionKind` as a TOP-LEVEL key; report the total, the distinct values, the breakdown by the object's `type`, the number of files, the `version` histogram of the counted lines, and per file the first and last carrier's 1-based index among non-blank lines over that file's non-blank total - a file whose carrier count equals its non-blank total carries the key on every line, and one where it does not is the mixed shape the span exists for. Binary: in the build named by `verified_claude_code`, byte-count `sessionKind`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_SESSION_KIND:\"bg\"`, `sessionKind:Ij()` and `sessionKind:void 0`, and read every occurrence of the first two, sorting them into string-table entries, the one stamp, the one merge, the strippers, the readers and the telemetry sink. Version floor: byte-count `CLAUDE_CODE_SESSION_KIND:\"bg\"` in each cached native build.",
@@ -96164,6 +96164,49 @@
           "verdict": "holds",
           "instrument": "Corpus: over each root count the lines carrying `userFeedback` top-level, with the `type` breakdown, the value shape, the set of sibling top-level keys beginning `tool`, and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
           "observed": "Root 1: 5 carriers, every one `type:\"user\"` with a string value; the sibling `tool*` key set is `toolDenialKind,toolUseResult` on 5 of 5; carrier versions 2.1.220 and 2.1.259. Root 2: 4 carriers, same type and value shape, the same sibling key set on 4 of 4, carrier version 2.1.220. No carrier on either root has `userFeedback` nested inside `toolUseResult`.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-151",
+      "area": "record-model",
+      "behavior": "A record can name TWO session ids under two spellings. The local transcript writer spreads a per-process stamp AFTER the caller's own record and that stamp names `sessionId` and nothing else, so the camel id always reads as the session doing the appending, while a SNAKE-case `session_id` the record arrived with survives untouched. The snake key is common - 542,069 and 553,382 carrier lines over two projects roots, on the four record-bearing types (`assistant`, `attachment`, `system`, `user`) and on no bookkeeping line type - and it AGREES with the line's own `sessionId` on almost all of them. It disagrees on 494 lines of one root, sitting in 2 files, and in both the id it names is a sibling `*.jsonl` in the same project directory; the other root carries no disagreement at all, and its only 2 lines with a snake id and no camel one carry no `type` either.",
+      "depends": "csift reports the DISAGREEING ids as `session_id_names` on a `list` row, as a SET with its count, because one transcript can hold runs hydrated from more than one session and a first-wins scalar would drop the rest silently. It is answered by the whole-file `--lineage` pass only, and the row says so without the flag - the same rule `session_kind`'s SPAN follows, and for the same measured reason: of the two disagreeing files, one file's run starts below the head window, so a window read reports nothing for it and reporting half an answer by default would be worse than naming the flag. It is the one lineage link a RECORD states about itself, so the row carries no inference wording.",
+      "code": [
+        {
+          "path": "src/parse/lineage.rs",
+          "snippet": "    pub(crate) fn minted_elsewhere(&self) -> Option<&str> {",
+          "lines": "60"
+        },
+        {
+          "path": "src/commands/session/summarize.rs",
+          "snippet": "    pub(crate) minted_elsewhere: std::collections::BTreeSet<String>,",
+          "lines": "254"
+        }
+      ],
+      "instrument": "Corpus: over each root count the lines carrying a snake-case `session_id` top-level, with the `type` breakdown; split them by whether the line also carries a STRING `sessionId` and whether the two values are equal; for each file holding a disagreement report the number of disagreeing lines, the number of distinct named ids, and for each named id whether `<id>.jsonl` exists in the same directory. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: the per-record stamp that rewrites `sessionId` is read at this build (claim REC-107's writer hop), but the envelope that writes the SNAKE key is not among this build's `session_id:` sites - every one of them there is a logging or telemetry field. Byte-search the build for the hydration path that appends a foreign payload into a local transcript."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root count the lines carrying a snake-case `session_id` top-level, with the `type` breakdown; split them by whether the line also carries a STRING `sessionId` and whether the two values are equal; for each file holding a disagreement report the number of disagreeing lines, the number of distinct named ids, and for each named id whether `<id>.jsonl` exists in the same directory. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 542,069 carriers - assistant 117,523, attachment 364,049, user 55,659, system 4,838, and no other type. Equal to the line's own `sessionId` on 541,575 and unequal on 494; the 494 sit in 2 files, 455 lines in one and 39 in the other, each naming exactly 1 distinct id, and both named ids exist as `<id>.jsonl` in the same project directory. Root 2: 553,382 carriers - attachment 381,975, assistant 114,897, user 53,543, system 2,965, and 2 lines carrying no `type` at all; 553,380 equal, 0 unequal, and the 2 remaining lines carry a snake id with no string `sessionId` to compare against.",
           "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
           "note": ""
         }

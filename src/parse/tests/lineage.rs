@@ -143,3 +143,52 @@ fn the_slug_and_the_timestamp_ride_the_same_walk() {
     assert!(line_has_slug_key(br#"{"type":"user","slug":"x"}"#));
     assert!(!line_has_slug_key(br#"{"type":"user","sessionKind":"bg"}"#));
 }
+
+/// The MINTED-IN pair: a record names the session its object came from under the snake
+/// spelling and the session whose file it now sits in under the camel one. The walk reads
+/// both so the comparison can be made on the line itself.
+#[test]
+fn a_minted_id_is_a_link_only_where_it_points_somewhere_else() {
+    let own = "1a2b3c4d-5e6f-4708-9a1b-2c3d4e5f6071";
+    let other = "22222222-2222-4333-8444-555555555511";
+
+    let hydrated = lineage_fields(
+        format!(r#"{{"type":"user","session_id":"{other}","sessionId":"{own}"}}"#).as_bytes(),
+    )
+    .expect("an object");
+    assert_eq!(hydrated.minted_elsewhere(), Some(other));
+    assert!(
+        !hydrated.no_session_lineage(),
+        "a disagreeing pair IS a session-lineage answer"
+    );
+
+    let agreeing = lineage_fields(
+        format!(r#"{{"type":"user","session_id":"{own}","sessionId":"{own}"}}"#).as_bytes(),
+    )
+    .expect("an object");
+    assert_eq!(
+        agreeing.minted_elsewhere(),
+        None,
+        "a pointer to this very file points nowhere"
+    );
+    assert!(agreeing.no_session_lineage());
+
+    // Either half alone says nothing: with no camel id there is nothing to compare against.
+    let snake_only =
+        lineage_fields(format!(r#"{{"type":"user","session_id":"{other}"}}"#).as_bytes())
+            .expect("an object");
+    assert_eq!(snake_only.minted_elsewhere(), None);
+    assert!(snake_only.no_session_lineage());
+}
+
+/// The prefilter admits the snake key, and refuses a line carrying none of the three.
+#[test]
+fn the_lineage_prefilter_admits_the_minted_key() {
+    assert!(line_has_lineage_key(
+        br#"{"type":"user","session_id":"x","sessionId":"y"}"#
+    ));
+    assert!(
+        !line_has_lineage_key(br#"{"type":"user","sessionId":"y","slug":"quiet-harbor-relay"}"#),
+        "the camel key alone is not a lineage needle: every record carries it"
+    );
+}

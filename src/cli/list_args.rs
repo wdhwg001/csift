@@ -44,7 +44,7 @@ use super::*;
         skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar, \
         minted_by, cleared_from, cleared_from_distance_ms, cleared_from_candidates, \
         continued_in, session_kind, session_kind_first_line, session_kind_last_line, \
-        lineage_scanned}, then \
+        lineage_scanned, minted_elsewhere, minted_elsewhere_count}, then \
         a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
         the re-feedable owning uuid (= session_id for a top-level row); never re-feed a \
@@ -92,6 +92,20 @@ use super::*;
         the first and last carrier's jsonl line and the row reads `lane  bg on \
         L<a>..L<b>`; without it both are null, the row says the span needs the flag, and \
         `lineage_scanned` tells a consumer which of the two it is looking at.\n\n\
+        MINTED ELSEWHERE (`minted_elsewhere`, text row `minted`) - a STATED fact\n  \
+          A record carries TWO session ids under two spellings. The local writer stamps \
+        `sessionId` on everything it appends and never touches a snake-case \
+        `session_id`, which belongs to the Remote Control bridge's event envelope - so \
+        the two agree on every record this session minted and differ exactly on a record \
+        hydrated here from another session's stream. Where they differ, \
+        `minted_elsewhere` reports the session the record OBJECT was minted in, as a SET \
+        with `minted_elsewhere_count` beside it: one transcript can hold runs from more \
+        than one session, and a single value would drop the rest in silence. It is the \
+        fourth lineage link a row can carry and the only one a RECORD states about \
+        itself, so the row carries no inference wording. It needs `--lineage`, like the \
+        `session_kind` span: a hydrated run sits wherever the bridge put it, and on the \
+        measured specimens one file's run starts below the head window - so a window \
+        read would be right on one file and silently empty on the next.\n\n\
         SKIPPED_LINES SEMANTICS (window census, NOT a whole-file verdict)\n  \
           `list` reads only the head/tail lines it needs (the §7 fast-overview contract; it \
         never scans the middle of a transcript), so its `skipped_lines` counts malformed lines \
@@ -175,12 +189,14 @@ pub struct ListArgs {
     pub subagents: bool,
 
     /// Answer the session-lineage fields over the WHOLE file instead of the head/tail
-    /// windows. `list` is a head/tail reader by contract, so two lineage answers are
+    /// windows. `list` is a head/tail reader by contract, so three lineage answers are
     /// window-bounded without this: the background-lane stamp's SPAN
     /// (`session_kind_first_line` / `session_kind_last_line`, null without the flag - a
     /// lane handed back to the foreground stops carrying the key mid-file, and no window
-    /// can see where) and `continued_in` (a handoff line a later `--resume` of the parent
-    /// pushed above the tail window). The pass is ONE depth-1 key walk per file that never
+    /// can see where), `continued_in` (a handoff line a later `--resume` of the parent
+    /// pushed above the tail window), and `minted_elsewhere` (a run of records hydrated
+    /// from another session, sitting anywhere between the two windows). The pass is ONE
+    /// depth-1 key walk per file that never
     /// parses a payload, so it adds nothing to `skipped_lines`, whose meaning stays "the
     /// head/tail lines read"; the whole-file corruption census is still `csift stats`.
     #[arg(long = "lineage")]

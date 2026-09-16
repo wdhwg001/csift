@@ -233,6 +233,10 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
         session_kind_first_line: lineage.first_line,
         session_kind_last_line: lineage.last_line,
         lineage_scanned: lineage.scanned,
+        // The whole-file pass is the ONLY read: a hydrated run can sit anywhere between the
+        // two windows, so a window answer would be right on one file and silently empty on
+        // the next. `lineage_scanned` says which of the two a consumer is looking at.
+        minted_elsewhere: lineage.minted_elsewhere.into_iter().collect(),
     })
 }
 
@@ -244,15 +248,19 @@ pub(crate) struct LineageScan {
     pub(crate) first_line: Option<usize>,
     pub(crate) last_line: Option<usize>,
     pub(crate) continued_in: Option<String>,
+    /// Every DISTINCT sibling session a record of this file names as the one it was minted
+    /// in. A set rather than a first-wins scalar: one transcript can hold runs hydrated
+    /// from more than one session, and dropping the rest would be a silent truncation.
+    pub(crate) minted_elsewhere: std::collections::BTreeSet<String>,
     pub(crate) scanned: bool,
 }
 
-/// The `list --lineage` pass: ONE walk over every line of the file, lifting the two
-/// top-level lineage fields without parsing a single payload (`parse::lineage_fields`).
+/// The `list --lineage` pass: ONE walk over every line of the file, lifting the top-level
+/// lineage fields without parsing a single payload (`parse::lineage_fields`).
 ///
-/// The byte prefilter means the walk itself runs only on the lines carrying one of the two
-/// quoted keys, so a transcript with no background lane and no handoff pays the newline
-/// scan and two memmem passes and nothing else. The walk cannot fail the way a parse can -
+/// The byte prefilter means the walk itself runs only on the lines carrying one of the
+/// three quoted keys, so a transcript with no background lane, no handoff and no bridged
+/// record pays the newline scan and three memmem passes and nothing else. The walk cannot fail the way a parse can -
 /// a torn line carries no top-level key - which is exactly why this pass contributes no
 /// malformed count: `list`'s `skipped_lines` keeps meaning the head/tail lines it read
 /// (R12), and `stats` stays the whole-file census authority.
@@ -277,6 +285,11 @@ pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {
         }
         // 1-based, the coordinate every csift surface addresses a line by.
         let n = line_no + 1;
+        // Asked FIRST: the minted id is a comparison across two of the walk's own fields,
+        // so it has to be read while both are still in hand.
+        if let Some(other) = f.minted_elsewhere() {
+            out.minted_elsewhere.insert(other.to_string());
+        }
         if let Some(kind) = f.session_kind {
             out.kinds.insert(kind);
             out.first_line.get_or_insert(n);
