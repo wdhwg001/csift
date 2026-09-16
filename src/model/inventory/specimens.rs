@@ -41,7 +41,7 @@ pub(crate) const BLOCK_SPECIMENS: &[(&str, &str)] = &[
     ),
     (
         "fallback",
-        r#"{"type":"assistant","uuid":"b8","message":{"role":"assistant","content":[{"type":"fallback","model":"claude-x"}]}}"#,
+        r#"{"type":"assistant","uuid":"b8","message":{"role":"assistant","model":"model-b","content":[{"type":"fallback","from":{"model":"model-a"},"to":{"model":"model-b"}}]}}"#,
     ),
 ];
 

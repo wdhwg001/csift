@@ -582,7 +582,7 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | Block | `tool_result` | `agent.tool.result` | default scan | yes | yes |
 | Block | `image` | `harness.context.image` | default scan | yes | no |
 | Block | `document` | (deeper axis / unmodeled) | show address only | no | (unstated) |
-| Block | `fallback` | `agent.message.plain` | default scan | yes | (unstated) |
+| Block | `fallback` | `agent.message.plain` | default scan | yes | no |
 | IsMetaFamily | `local-command-caveat` | `harness.command.caveat` | default scan | yes | no |
 | IsMetaFamily | `stop-hook-feedback` | `harness.hook.feedback` | default scan | yes | no |
 | IsMetaFamily | `resume-prompt` | `harness.resume.prompt` | default scan | yes | no |

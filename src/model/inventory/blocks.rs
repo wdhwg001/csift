@@ -68,12 +68,14 @@ pub(crate) const ROWS: &[Entry] = &[
     e(
         // The API served the turn from a fallback model and wrote this block in place of
         // the text. The turn still reached the conversation, so the record carries the
-        // plain message leaf with an EMPTY body; the marker naming the fallback is a
-        // family lane's, and the human column stays unstated until that render exists.
+        // plain message leaf; the block itself renders NOTHING to a person - of the 13
+        // `==="fallback"` comparisons in the shipped build, none sits inside the transcript
+        // renderer's byte range and its content-block dispatch names no such arm (claim
+        // CLS-049). csift names it instead, in the label zone.
         Shape::Block("fallback"),
         Some(Class::AgentMessagePlain),
         Gate::Default,
         true,
-        Human::Unstated,
+        Human::Never,
     ),
 ];

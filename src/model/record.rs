@@ -536,13 +536,35 @@ pub enum Block {
     /// unmodeled block type parses to [`Block::Unknown`], and a leaf that keys on
     /// "nothing else matched" would answer for `document` and for a whitespace-only text
     /// block as well.
+    ///
+    /// TWO SIDES, not one model. The block's key set is exactly {from, to, type} on 48 of
+    /// 48 specimens over one projects root and 53 of 53 over another, with `from` and `to`
+    /// each exactly `{model}` and a flat `model` key on none of them (claim CLS-060). It
+    /// is modeled that way because `from.model` is the ONLY place the pre-fallback model
+    /// survives: every other record of the same API message already names the model that
+    /// answered, so a shape carrying one id would carry the wrong one.
     Fallback {
+        /// The model the turn was asked of.
         #[serde(default)]
-        model: Option<String>,
+        from: Option<FallbackSide>,
+        /// The model that served it.
+        #[serde(default)]
+        to: Option<FallbackSide>,
     },
     /// Any block type not modeled above - never a parse failure.
     #[serde(other)]
     Unknown,
+}
+
+/// One side of a [`Block::Fallback`] - the object the API writes under `from` and under
+/// `to`, whose only key is the model id. Its own struct rather than a bare string because
+/// that is the shape on the wire, and a model that flattened it would silently accept a
+/// line the API never writes.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct FallbackSide {
+    /// The model id.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// The provenance value every csift elicitation-sidecar record carries in its `csift`

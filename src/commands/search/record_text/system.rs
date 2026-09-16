@@ -35,6 +35,7 @@
 use super::*;
 
 mod edges;
+mod fallback;
 mod heads;
 
 /// What a `type:"system"` event line says - the family's half of the render seam.
@@ -115,10 +116,25 @@ pub(crate) enum Fact {
         /// `prompt`, cut at [`PROMPT_MAX`].
         prompt: Option<String>,
     },
+    /// The two model ids of an assistant turn the API served from a FALLBACK model. The
+    /// odd one out here: its record is an assistant message rather than a `type:"system"`
+    /// line, and its record carries no head of its own to put the ids in - so the ids
+    /// reach the label zone through a [`Marker`] beside this fact rather than through
+    /// [`Fact::label_zone`] (see [`fallback`]).
+    Fallback {
+        /// `to.model` - the model that answered.
+        served_by: String,
+        /// `from.model` - the model the turn was asked of.
+        fell_back_from: String,
+    },
 }
 
 impl Fact {
-    /// The label-zone tag this fact adds: none, for every variant. See the enum doc.
+    /// The label-zone tag this fact adds: NONE, for every variant. The three event
+    /// variants carry values that are already in the rendered head, so a tag would print
+    /// the same field twice on the one line a reader scans; the fallback turn has no head
+    /// of its own, and its ids reach the label zone through the [`Marker`] pushed beside
+    /// it - the other extension point, and the one meant for a word rather than a value.
     pub(crate) fn label_zone(&self) -> Option<String> {
         None
     }
@@ -166,6 +182,13 @@ impl Fact {
                 put("cron", cron.clone().map(Into::into));
                 put("prompt", prompt.clone().map(Into::into));
             }
+            Fact::Fallback {
+                served_by,
+                fell_back_from,
+            } => {
+                put("served_by", Some(serde_json::json!(served_by)));
+                put("fell_back_from", Some(serde_json::json!(fell_back_from)));
+            }
         }
         out
     }
@@ -174,16 +197,24 @@ impl Fact {
 /// The system family's per-unit facts and edges - the one entry
 /// [`crate::commands::search::family_facts`] dispatches to.
 ///
-/// Every record that is not a `type:"system"` line of one of the six leaves leaves on one
-/// compare, which is what keeps the stamping site free for the conversation records that
-/// make up almost every scanned unit. No marker: this family says what it has to say in
-/// the rendered head.
+/// TWO record shapes reach it and they are not related: a `type:"system"` EVENT record,
+/// whose exposed keys and provenance edge come off the source line, and an ASSISTANT
+/// record carrying a `fallback` block, whose two model ids exist nowhere else. Every other
+/// record leaves on two `type` compares, which is what keeps the stamping site free for
+/// the conversation records that make up almost every scanned unit.
 pub(crate) fn facts(
     rec: &Record,
     raw: Option<&str>,
     _section: &Section<'_>,
     ctx: &ClassifyCtx,
 ) -> (Vec<HitFact>, Vec<Marker>) {
+    // A turn the API served from a fallback model. Per RECORD rather than per block: the
+    // fact is about the whole turn, so a record that fell back AND spoke carries it on
+    // each of its text units. The ids come off the parsed block, so this answers the same
+    // on a scan (no source line) as under an address (one) - see the module doc there.
+    if rec.is_type("assistant") {
+        return fallback::notes(rec);
+    }
     if !rec.is_type("system") {
         return (Vec::new(), Vec::new());
     }

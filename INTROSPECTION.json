@@ -95288,7 +95288,7 @@
         },
         {
           "path": "src/commands/search/record_text/system.rs",
-          "lines": "219",
+          "lines": "250",
           "snippet": "        Class::SystemApiError => {"
         }
       ],
@@ -95529,6 +95529,83 @@
           "observed": "19 comparisons over 18 distinct names in the span: 15 `de.subtype` arms over 14 names inside the component, plus `J.subtype` against compact_boundary (180063189), microcompact_boundary (180063484), read_divider (180063817) and local_command (180064018). 92 writer literals over 48 distinct names in the whole build. Three arm names have no writer literal: thinking, microcompact_boundary, read_divider - each byte-counts 0 as `subtype:\"<name>\"`.",
           "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
           "note": "New claim. The arm set is the whole system-handling span rather than the component alone: reading `de.subtype` by itself names 14 and misses the four the dispatch compares."
+        }
+      ]
+    },
+    {
+      "id": "CLS-060",
+      "area": "classification",
+      "behavior": "The API can serve an assistant turn from a DIFFERENT model and says so with a content block the client re-mints rather than fabricates. One writer builds it - `fut` returns `{type:\"fallback\",from:{model:e.fromModel},to:{model:e.model}}` - from a parsed `content_block_start` event whose `content_block.type` is `fallback`, and the streaming arm assigns that copy into the block array by index. The feature rides a named beta: the request layer interns `server-side-fallback-2026-06-01` under the handle `server_side_fallback`, beside a second `server-side-fallback-2026-07-01` for the category form. The `serverRefusalFallback` flag beside the mint is a TELEMETRY field (`armed:`) on the event emitted after the assignment, not a gate on it. On disk the block's key set is EXACTLY {from, to, type} - `from` and `to` each exactly {model}, a flat `model` key on 0 of 48 and 0 of 53 - and every block is the record's SOLE block at index 0 on a `type:\"assistant\"` record whose own `message.model` equals `to.model`: 48 of 48 on the live root and 53 of 53 on the older snapshot, zero exceptions on every one of those properties. Every OTHER record sharing the block's `message.id` and carrying a `message.model` names the SERVING model too - 133 of 133 and 144 of 144 - so the pre-fallback model survives on the `from` side and nowhere else. The turn therefore carries NO text: the fallback block is what the API wrote in place of it. A `model_refusal_fallback` banner sits below the block on a parentUuid walk for 47 of 48 blocks and 52 of 53, and on every pair that resolves the two agree exactly - the block's `from.model` equals the banner's `originalModel` and its `to.model` equals the banner's `fallbackModel`, 47 of 47 and 52 of 52. For the one block per root with no banner descendant, the block is the only trace of the switch in its transcript.",
+      "depends": "csift models the block as `Block::Fallback { from, to }` - two sides, not one id - because `from.model` is the only place the pre-fallback model survives, so a flattened shape would carry the wrong one. It reads both off the PARSED BLOCK rather than off the source line, which is what makes the fact answer the same on a scan and under an address: a scan hands a family no source line for a role-bearing record, so a marker read off the line would appear under `show --line` and vanish under `search`. The unit carries the label-zone marker `[served by <to.model>, fell back from <from.model>]` plus JSON `served_by` / `fell_back_from`; a block naming only one side yields no marker at all, since half of it would name the wrong model. The record's BODY is the 1:1 law's key=value excerpt, and a flagless scan emits nothing for such a record - the emission sweep exempts it by specimen with that reason. The banner PAIRING is what makes the two renders agree: the refusal leaf names the same two models under the harness's own key words, so a reader who fetches the banner from the block, or the block from the banner, reads one story twice rather than two.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "lines": "546",
+          "snippet": "    Fallback {"
+        },
+        {
+          "path": "src/commands/search/record_text/system/fallback.rs",
+          "lines": "34",
+          "snippet": "pub(crate) fn fallback_block_models(rec: &Record) -> Option<(String, String)> {"
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `function fut(e){return{type:\"fallback\",from:{model:e.fromModel},to:{model:e.model}}}` (one occurrence), for `function put(e){if(typeof e!==\"object\"` (the parse gate, whose body refuses any `content_block.type` other than `fallback`), for `km[Hs.index]=fut(Hs)` (the streaming assignment, one occurrence) and for `server-side-fallback-2026-06-01` (FIVE occurrences at this build - the bare prefix `server-side-fallback` counts 13 and also covers the `-2026-07-01` beta, so count the full literal; the interning one reads `mx=me(\"server_side_fallback\",...)`). Version floor: byte-count `{type:\"fallback\",from:{model:` in each native build under the builds directory. Corpus: over each projects root, for every parsed record walk `message.content[]` and keep each block whose `type` is `fallback`; per block record the block's key set, `from`'s and `to`'s key sets, whether the carrying record's `type` is `assistant`, whether the block is the only block and sits at index 0, whether `message.model` equals `to.model`, whether a flat `model` key is present, and - over every OTHER record sharing that `message.id` and carrying a `message.model` - whether that model equals `to.model`. Then, per file holding at least one such block, walk `parentUuid` upward (cycle-guarded, uuid map = last line carrying a uuid) from every `type:\"system\"` `subtype:\"model_refusal_fallback\"` record to the nearest assistant record carrying a fallback block, and compare that block's `from.model` against the banner's `originalModel` and its `to.model` against the banner's `fallbackModel`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots and the verified build"
+      },
+      "first_seen_claude_code": "2.1.176",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the content_block parse gate",
+          "offset": 164571672,
+          "excerpt": "function put(e){if(typeof e!==\"object\"",
+          "note": "refuses any content_block whose type is not `fallback`, so only that shape reaches the mint"
+        },
+        {
+          "role": "writer",
+          "name": "fut, the block mint",
+          "offset": 164571290,
+          "excerpt": "function fut(e){return{type:\"fallback\",from:{model:e.fromModel},to:{model:e.model}}}",
+          "note": "the two-sided shape, built fresh from the wire event's two model fields"
+        },
+        {
+          "role": "trigger",
+          "name": "the streaming assignment",
+          "offset": 165437613,
+          "excerpt": "km[Hs.index]=fut(Hs)",
+          "note": "puts the minted block into the block array by index; the `serverRefusalFallback` flag beside it rides the telemetry event's `armed:` field, not this assignment"
+        },
+        {
+          "role": "gate",
+          "name": "the beta interning",
+          "offset": 158416053,
+          "excerpt": "mx=me(\"server_side_fallback\"",
+          "note": "the handle the request layer sends the beta under"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "{type:\"fallback\",from:{model:",
+        "lowest_present": "2.1.176",
+        "highest_absent": "2.1.168",
+        "ladder": "Byte-counted over every native build in the builds directory: 0 at 1.0.60, 2.0.0, 2.0.30, 2.1.23, 2.1.100, 2.1.124, 2.1.139, 2.1.142, 2.1.143, 2.1.144, 2.1.145, 2.1.150, 2.1.152, 2.1.160 and 2.1.168; 2 at 2.1.176 and at every later build held, through 2.1.268. The beta literal moves independently over the same ladder (17 from 2.1.176 to 2.1.240, 34 at 2.1.243 and 2.1.245, 8 from 2.1.246 to 2.1.250, 5 from 2.1.251 on), which is why the block's own literal rather than the beta's dates the shape."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Read the four producer hops in the verified build at the anchors above; ran the two-root block census and the banner pairing walk; byte-counted the block literal across every native build held.",
+          "observed": "48 and 53 blocks. Key set {from, to, type} on 48 of 48 and 53 of 53; `from` and `to` each {model} on all; a flat `model` key on 0 and 0; sole block at index 0 on all; carried by a `type:\"assistant\"` record on all; `message.model` equal to `to.model` on all. Same-`message.id` siblings carrying a model: 133 of 133 and 144 of 144 equal to `to.model`. Banner descendants: 47 of 48 and 52 of 53 blocks have one, and both models agree on 47 of 47 and 52 of 52 resolved pairs. The full beta literal counts 5 in this build; the block's own literal is absent at 2.1.168 and present at 2.1.176.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line. One observation per BLOCK whose `type` is `fallback`, found by walking `message.content[]`. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed. Binary counts are byte counts of the literal over the whole executable.",
+          "note": "New claim; the two-sided `Block::Fallback`, the marker and the two keys land with it. The inventory's block specimen carried a flat `model` key that the corpus shows on no line, and it is corrected in the same change."
         }
       ]
     }
