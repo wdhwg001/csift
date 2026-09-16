@@ -174,12 +174,10 @@ pub(crate) fn render_json(
                 "compact_metadata": crate::commands::search::compact_metadata_json(h),
             });
             // The EXTENSION POINT, same law as `search`'s hit rows: every `HitFact`
-            // projects its own key, so a fact a family adds reaches `show` with no edit
-            // here. Appended after the fixed keys, only when the hit carries a fact.
-            for f in &h.facts {
-                let (key, value) = f.json();
-                row[key] = value;
-            }
+            // projects its own key(s), so a fact a family adds reaches `show` with no
+            // edit here. Appended after the fixed keys, only when the hit carries a
+            // fact, and folded by the SAME `attach_facts` rule the hit rows use.
+            crate::commands::search::attach_facts(&mut row, &h.facts);
             println!("{}", serde_json::to_string(&row)?);
         }
     }

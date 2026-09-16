@@ -8,6 +8,48 @@
 
 use super::*;
 
+/// The `harness.bookkeeping` family's own facts.
+///
+/// UNINHABITED at the skeleton amendment apart from the pin below - the family lane adds
+/// its variants HERE and nowhere else: one enum per family is what keeps
+/// `types/facts.rs` out of every family's way, and what stops two families minting one
+/// idea twice.
+///
+/// An EDGE to another record is never a variant here. Edges are SHARED on [`HitFact`]
+/// itself, because several families carry them and a reader has to read every one the
+/// same way; a family builds one through the shared helper instead of describing the
+/// shape again.
+#[derive(Debug, Clone)]
+pub(crate) enum Fact {
+    /// The DELEGATION PIN. Each of [`HitFact`]'s six family arms forwards `label_zone`
+    /// and `json` to its family's own enum, and a forward nothing ever takes is a
+    /// forward that can be deleted with every test still passing - which is exactly the
+    /// state six uninhabited enums leave the crate in. This variant is the one inhabited
+    /// value in the whole set, so a unit test can watch a family fact cross both
+    /// projections. The family lane adds its real variants BESIDE it and leaves it
+    /// alone.
+    #[cfg(test)]
+    Probe(&'static str),
+}
+
+impl Fact {
+    /// The label-zone tag this fact adds, if any.
+    pub(crate) fn label_zone(&self) -> Option<String> {
+        match *self {
+            #[cfg(test)]
+            Fact::Probe(head) => Some(head.to_string()),
+        }
+    }
+
+    /// The JSON key(s) and value(s) this fact adds to its hit object.
+    pub(crate) fn json(&self) -> Vec<(&'static str, serde_json::Value)> {
+        match *self {
+            #[cfg(test)]
+            Fact::Probe(head) => vec![("bookkeeping_probe", serde_json::json!(head))],
+        }
+    }
+}
+
 /// The `harness.bookkeeping` family's per-unit facts and markers.
 ///
 /// Called for EVERY emitted unit through [`crate::commands::search::family_facts`], so

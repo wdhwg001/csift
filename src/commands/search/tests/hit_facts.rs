@@ -93,9 +93,13 @@ fn fact_projections(hits: &[Hit]) -> Vec<Vec<String>> {
             h.facts
                 .iter()
                 .map(|f| {
-                    let (key, value) = f.json();
+                    let keys: Vec<String> = f
+                        .json()
+                        .into_iter()
+                        .map(|(key, value)| format!("{key}={value}"))
+                        .collect();
                     let zone = f.label_zone().unwrap_or_else(|| "-".to_string());
-                    format!("{zone} | {key}={value}")
+                    format!("{zone} | {}", keys.join(" "))
                 })
                 .collect()
         })

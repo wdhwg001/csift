@@ -158,13 +158,12 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "refetch": refetch_json(session_id, h),
         "refetch_uuid": refetch_uuid_json(session_id, h),
     });
-    // The EXTENSION POINT: every `HitFact` projects its own key, so a family adds a
+    // The EXTENSION POINT: every `HitFact` projects its own key(s), so a family adds a
     // variant and the wire shape follows with no edit here. Appended after the fixed
     // keys and only when the hit carries a fact, so the default stream is unchanged.
-    for f in &h.facts {
-        let (key, value) = f.json();
-        obj[key] = value;
-    }
+    // The merge rule is `attach_facts`, shared with `show`'s record rows so the two
+    // surfaces can never fold one fact two different ways.
+    attach_facts(&mut obj, &h.facts);
     obj
 }
 

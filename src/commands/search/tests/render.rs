@@ -437,7 +437,8 @@ fn a_marker_and_a_fact_each_project_themselves() {
     let fact = HitFact::Unmodeled("system/progress".to_string());
     // The shape IS the label for an unmodeled unit, so it adds no second label-zone tag.
     assert!(fact.label_zone().is_none());
-    let (key, value) = fact.json();
-    assert_eq!(key, "unmodeled");
-    assert_eq!(value, serde_json::json!("system/progress"));
+    assert_eq!(
+        fact.json(),
+        vec![("unmodeled", serde_json::json!("system/progress"))]
+    );
 }

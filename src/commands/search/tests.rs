@@ -136,6 +136,7 @@ fn kept_fixture(lines: &[&str], matcher: &Matcher) -> Vec<Kept> {
 
 mod emission;
 mod exchange;
+mod facts;
 mod hit_facts;
 mod hits;
 mod matcher;

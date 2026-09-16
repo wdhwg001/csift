@@ -1,4 +1,12 @@
 //! Search output types: Pairing / Hit / Exchange / SearchOutcome.
+//!
+//! A PAIRED ROOT: the row shapes live here and the two EXTENSION POINTS a hit carries
+//! live in `types/facts.rs`, because those are what the six taxonomy families grow into
+//! and this file is what every other surface reads.
+
+mod facts;
+
+pub(crate) use facts::*;
 
 use super::*;
 
@@ -97,118 +105,6 @@ pub struct CompactionHit {
     /// renders its own word in the `[summarize <direction>]` tag. `None` on a boundary hit and on
     /// an ordinary compaction summary.
     pub direction: Option<String>,
-}
-
-/// A display-only note in a hit's LABEL ZONE: a `[head]` or `[head detail]` tag after
-/// the leaf path, rendered in PUSH ORDER after the specific markers `render_label`
-/// already knows about.
-///
-/// The EXTENSION POINT for a family that needs to say one more thing about a record
-/// without a second leaf and without a new `Hit` field. Display-only by construction:
-/// the text is fabricated, so it is never matchable and needs no synthesized-marker
-/// registration - a family that wants MATCHABLE text renders it into the body instead.
-#[derive(Debug, Clone)]
-pub struct Marker {
-    /// The fixed word, e.g. `not delivered`.
-    pub head: &'static str,
-    /// The variable part, when there is one: `[head detail]`.
-    pub detail: Option<String>,
-}
-
-impl Marker {
-    /// A marker with no detail.
-    pub(crate) fn plain(head: &'static str) -> Self {
-        Marker { head, detail: None }
-    }
-
-    /// The rendered `[head]` / `[head detail]` form.
-    #[must_use]
-    pub(crate) fn render(&self) -> String {
-        match &self.detail {
-            Some(d) => format!("[{} {d}]", self.head),
-            None => format!("[{}]", self.head),
-        }
-    }
-}
-
-/// WHICH UNIT of a record the engine is emitting, handed to the one stamping site so a
-/// family can answer per unit rather than per record.
-///
-/// Two axes, independent by construction. `class` is the leaf the unit is going out
-/// under - `None` for the addressed unit of a record csift models no leaf for. `block` is
-/// the content block the unit came from, when it came from one: a record-level unit (the
-/// record text, the answered-AUQ dual, the elicitation marker) carries `None`, and a
-/// multi-block record hands each block in turn, because a per-block fact - the length of
-/// a thinking block's signature, say - is the BLOCK's and not the record's.
-// The THIRD of the three allows AGENTS section 4 names by hand - beside the tolerant
-// `model::Record` fields and the `model::inventory` documentation surface - and, like
-// them, a surface that exists before its readers do rather than rot. It is a fact about
-// WHERE the readers live rather than about the fields. Both
-// are written by the emission engine on every unit and read by the family `facts()`
-// bodies in `record_text/`, which ship as stubs at the skeleton amendment and are filled
-// one family at a time. Without the allow the amendment cannot land the parameter the
-// families are being given, which is the whole seam.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Section<'a> {
-    /// The leaf this unit is emitted under; `None` on an unmodeled addressed unit.
-    pub(crate) class: Option<Class>,
-    /// The content block this unit came from, or `None` for a record-level unit.
-    pub(crate) block: Option<&'a Block>,
-}
-
-impl Section<'_> {
-    /// The record-level unit: a section of the record's own text, with no block behind it.
-    pub(crate) fn record(class: Option<Class>) -> Self {
-        Section { class, block: None }
-    }
-}
-
-/// A per-record FACT a hit carries beside its label: something true of the record that
-/// is not a leaf and not a marker word - a shape csift models no leaf for, a join a
-/// family resolved, a key the record exposes.
-///
-/// Each variant projects ITSELF, which is what makes this an extension point: a family
-/// adds a variant plus its two arms and every surface follows, because `render_label`
-/// consults [`HitFact::label_zone`] and `render_json` appends [`HitFact::json`].
-#[derive(Debug, Clone)]
-pub enum HitFact {
-    /// The record's on-disk SHAPE, when csift models no leaf for it: the top-level
-    /// `type`, plus the `subtype` or the attachment payload `type` where the shape
-    /// splits on one. Produced ONLY under an explicit address (a scan never emits an
-    /// unmodeled unit), and it is what the label renders in place of a leaf path.
-    Unmodeled(String),
-    /// The test-only sentinel `record_text::probe` pushes on a fixture record, so a unit
-    /// test can observe a FACT crossing the stamping site and not only a [`Marker`]. The
-    /// two travel on different fields and are merged by different lines, so a suite that
-    /// reads markers alone leaves half the seam unpinned. `#[cfg(test)]`, like the arm
-    /// that produces it: the built binary carries neither.
-    #[cfg(test)]
-    Probe(&'static str),
-}
-
-impl HitFact {
-    /// The label-zone tag this fact adds, if any. `None` when the fact is carried in
-    /// the label itself or in JSON alone.
-    #[must_use]
-    pub(crate) fn label_zone(&self) -> Option<String> {
-        match self {
-            // The shape IS the label for an unmodeled unit, so it adds no second tag.
-            HitFact::Unmodeled(_) => None,
-            #[cfg(test)]
-            HitFact::Probe(head) => Some((*head).to_string()),
-        }
-    }
-
-    /// The JSON key and value this fact adds to its hit object.
-    #[must_use]
-    pub(crate) fn json(&self) -> (&'static str, serde_json::Value) {
-        match self {
-            HitFact::Unmodeled(shape) => ("unmodeled", serde_json::json!(shape)),
-            #[cfg(test)]
-            HitFact::Probe(head) => ("family_probe", serde_json::json!(head)),
-        }
-    }
 }
 
 /// A single label-tagged hit inside an exchange.

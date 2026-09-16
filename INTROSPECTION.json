@@ -13131,7 +13131,7 @@
         },
         {
           "path": "src/commands/search/types.rs",
-          "lines": "17",
+          "lines": "25",
           "snippet": "pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = \"[redacted thinking]\";"
         }
       ],
@@ -53360,7 +53360,7 @@
         },
         {
           "path": "src/commands/search/types.rs",
-          "lines": "17",
+          "lines": "25",
           "snippet": "pub(crate) const REDACTED_THINKING_PLACEHOLDER"
         },
         {
