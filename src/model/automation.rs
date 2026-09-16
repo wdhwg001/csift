@@ -239,23 +239,20 @@ fn normalize_collapse(s: &str, mut on_newline: impl FnMut(u32)) -> String {
 }
 
 // ============================================================================
-// role.class.sub classification engine (GOLD plan §2–§6) - ADDITIVE, P1.
+// Two SHAPES this file's readers keep running into, kept here because this is where the
+// automation pulse and the taxonomy meet.
 //
-// This is the NEW taxonomy core, testable in isolation. It is NOT yet wired into any
-// consumer (the legacy `cli::Category` + `-t` selector still drive output); P2 cuts the
-// surfaces over to [`Record::classify`] and removes the old enum. Until then the new
-// items carry a targeted `#[allow(dead_code)]` (the binary never calls them yet).
-//
-// GOLD GAPS surfaced during P1 (reported upstream, not silently absorbed):
-//   - `harness.schedule.wakeup`: the FIRED autonomous-loop / `ScheduleWakeup` timer tick is
-//     detected via its fixed markers ([`SCHEDULE_WAKEUP_MARKER`] sentinel +
-//     [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] / [`SCHEDULE_WAKEUP_TIMER_MARKER`], P1c M2a). A
-//     GENERIC cron/monitor tick's injected prompt is still operator-authored free text with no
-//     universal marker; such an isMeta tick that matches no marker is EXCLUDED (P1c M2b: an
-//     isMeta record is never `user.message`), not mislabeled. The `ScheduleWakeup` *tool_use*
-//     (the agent ARMING a wakeup) is classified `agent.tool.use`, not the harness tick.
-//   - `agent.thinking` covers BOTH [`Block::Thinking`] and [`Block::RedactedThinking`] (the
-//     encrypted/opaque thinking form). The latter is UNATTESTED in the current corpus (oracle
-//     B3/G7) so it is exercised by a SYNTHETIC fixture; it carries no readable text, so the
-//     render surfaces a `[redacted thinking]` placeholder while still classifying `agent.thinking`.
+//   - A GENERIC cron or monitor tick's injected prompt is operator-authored free text
+//     with no universal marker, so an isMeta tick matching none of the recognised ones is
+//     EXCLUDED rather than mislabeled: an isMeta record is never `user.message`. The
+//     FIRED autonomous-loop / `ScheduleWakeup` tick IS detected, by its own markers
+//     ([`SCHEDULE_WAKEUP_MARKER`] plus [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] /
+//     [`SCHEDULE_WAKEUP_TIMER_MARKER`]); the `ScheduleWakeup` *tool_use* - the agent
+//     ARMING a wakeup - is `agent.tool.use`, not a harness tick.
+//   - The four `agent.thinking.*` leaves split on the BLOCK's own shape, and two of them
+//     carry no readable text: a [`Block::RedactedThinking`] holds opaque ciphertext and an
+//     omitted block holds nothing. What a thinking unit's body IS belongs to the thinking
+//     FAMILY, not to this engine and not to the block loop
+//     (`commands/search/record_text/thinking.rs::block_body`), which is where the
+//     redacted placeholder lives.
 // ============================================================================

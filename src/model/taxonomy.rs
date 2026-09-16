@@ -203,8 +203,12 @@ pub enum Class {
     /// `hook_blocking_error`, …) or `async_hook_response_batch`. Not delivered, except
     /// a `hook_success` that carries a rendered body.
     HookOutcome,
-    /// `harness.hook.feedback` - the Stop hook's blocking feedback the model received:
-    /// an `isMeta` `type:"user"` record whose content opens `Stop hook feedback:`.
+    /// `harness.hook.feedback` - a BLOCKING HOOK's feedback the model received: an
+    /// `isMeta` `type:"user"` record whose content opens `<Name> hook feedback:`. ONE
+    /// builder writes four such prefixes from one name array - `Stop`, `TeammateIdle`,
+    /// `TaskCreated`, `TaskCompleted` - assembled at runtime, which is why no whole
+    /// prefix appears as a literal in the build (claim CLS-016). csift's own detector
+    /// reaches the `Stop` spelling today; the leaf is the whole family.
     HookFeedback,
 
     // ── harness.context (9) ──

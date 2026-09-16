@@ -20399,7 +20399,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "266-279",
+          "lines": "270-283",
           "snippet": "    // \u2500\u2500 harness.system (5) \u2500\u2500\n    /// `harness.system.refusal` - a `type:\"system\"` record with subtype\n    /// `model_refusal_fallback` / `model_refusal_no_fallback`.\n    SystemRefusal,\n    /// `harness.system.api-error` - a `type:\"system\"` record with subtype `api_error`.\n    SystemApiError,\n    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,\n    /// `harness.system.kill` - a `type:\"system\"` record with subtype `agents_killed`.\n    SystemKill,\n    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         }
       ],
@@ -48218,7 +48218,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "262-264",
+          "lines": "266-268",
           "snippet": "    /// `harness.turn.recap` - the `type:\"system\"` / `subtype:\"away_summary\"` recap the\n    /// harness generates when the operator returns after time away. No `message{}`.\n    TurnRecap,"
         }
       ],
@@ -48696,7 +48696,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "259-261",
+          "lines": "263-265",
           "snippet": "    /// `harness.turn.stop-hooks` - the `type:\"system\"` / `subtype:\"stop_hook_summary\"`\n    /// ledger of the Stop hooks that ran at turn end. No `message{}`.\n    TurnStopHooks,"
         },
         {
@@ -87237,7 +87237,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "276-279",
+          "lines": "280-283",
           "snippet": "    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         },
         {
@@ -87500,7 +87500,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "272-273",
+          "lines": "276-277",
           "snippet": "    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,"
         }
       ],

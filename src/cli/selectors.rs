@@ -293,8 +293,8 @@ fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
         ),
         "harness.meta.hook" => (
             "pre-v0.13.0 name",
-            "harness.hook.context (hook-injected text) · harness.hook.feedback (a Stop \
-             hook's blocking feedback) · harness.command.caveat (<local-command-caveat>) \
+            "harness.hook.context (hook-injected text) · harness.hook.feedback (a \
+             blocking hook's feedback) · harness.command.caveat (<local-command-caveat>) \
              · harness.enforce.retry (the edit-failed-retry nudge)",
         ),
         "harness.meta.loop" => ("pre-v0.13.0 name", "harness.schedule.tick"),
