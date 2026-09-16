@@ -254,6 +254,30 @@ surface change bumps the PATCH.
   with `Record::direction` moved verbatim into a fifth child so the engine stays under
   the 600-line cap, and the engine's cases nested to match. Every path is respelled at
   every call site, with no alias and no forwarding shim. No behaviour change.
+- **The isMeta INJECTION family says what each record was written FOR.** The harness writes
+  text into a turn shaped exactly like the operator's own message, and until now the label
+  said who wrote it and nothing said what it answers. Most units of the family now carry
+  one `for` edge (JSON `for`): `redoes` the assistant turn an enforce nudge sends the model
+  back to, `blocked` the turn a hook's feedback stopped, `fires` the scheduler event a fired
+  prompt came from, `reports` the tool_use a notification frame's pulse names, and
+  `attached_to` the record everything else was injected under. The line is resolved through
+  the chain's own uuid map, so an edge is an address rather than a uuid to go searching for;
+  a key that resolves to no line keeps the id and says so, and a record naming no such key
+  renders its REASON rather than dropping the edge. The two inbound relays are the case that
+  needs the reason: a coordinator relay and a peer relay carry one leaf, so the arm reads
+  `origin.kind` and each answers for its own shape - the coordinator's origin carries only
+  its kind, the peer's names the lane that sent it (`[peer lane <id>]`, JSON
+  `peer_sender_task_id`).
+- **A person's message the harness relayed is marked.** A message delivered into a running
+  lane is the person's own prose and takes `user.message` like any other, so on every
+  surface it was byte-identical to one they typed - while, being isMeta, it opens no turn.
+  It renders `[relayed]` and carries the JSON twin `relayed`, because a marker is
+  display-only and a machine consumer could otherwise not tell the two apart at all.
+- **`harness.hook.feedback` reaches every blocking-hook name.** One formatter writes the
+  template over a closed four-name table and csift matched only the name the corpus happens
+  to hold, so the first time a TeammateIdle, TaskCreated or TaskCompleted hook blocks, its
+  feedback would have landed in the isMeta residue - no leaf, no census key, reachable only
+  by an address.
 
 ### Fixed
 
@@ -266,6 +290,17 @@ surface change bumps the PATCH.
   the consequence is stated rather than met: with nothing rendered, a pattern scan reaches
   neither leaf - use an empty pattern plus an exact `-t`, `--count-by label`, or a `show`
   address, and `--raw` for a redacted block's ciphertext.
+
+- **Three isMeta template arms could be claimed by a record that QUOTED them.** The
+  marker law says every such arm tests the text after one left trim, and the hook-feedback
+  and `<local-command-caveat>` arms tested the untrimmed string while the edit-failed-retry
+  notice tested `contains` - which on that path can only reach a record quoting the notice.
+  All three anchor now. Measured over two projects roots the emitted leaf moves for no
+  record, so this closes a hole rather than changing a count.
+- **A textless image record printed the head of a base64 payload.** An isMeta record whose
+  content is image blocks and no text renders nothing, so `show --line` on one fell through
+  to the key=value excerpt of its own top-level keys. It renders its block counts instead:
+  `[context image-only: N image block(s), M document block(s)]`, JSON `image_only`.
 - **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
   the one place csift proves a negative, and it was re-rendering without the line - so for
   a record whose text lives in fields the record model does not carry, it could prove a
