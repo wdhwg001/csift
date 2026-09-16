@@ -9,14 +9,15 @@
 //! section 1): every marker word, JSON key and render form the family ships is named
 //! here too.
 //!
-//! The concatenation is byte-joined, so a section opens with its own separator (a blank
-//! line after the JSON schema paragraph) and closes with one, because the shared closing
-//! notes follow it.
+//! The concatenation is byte-joined, so a section brings its OWN separator and closes
+//! without one: `"\n\n"`, the head line at column zero, `"\n  "`, the body. That is the
+//! shape every head on this page has, and the region sits after the JSON schema block and
+//! its closing notes rather than inside them - a render law is not a subsection of the
+//! JSON schema.
 
 /// This family's `search --help` section. See the module doc.
-pub(crate) const SECTION: &str = "\n\n  \
-     BOOKKEEPING RENDER\n    \
-       A `harness.bookkeeping` unit renders its key=value HEAD and then the line's own \
+pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n  \
+     A `harness.bookkeeping` unit renders its key=value HEAD and then the line's own \
      VERBATIM JSON as the body, so every key and every full uuid on the line stays \
      matchable and not only the few a head names; twelve of the thirteen leaves have no \
-     head yet and render the line alone.\n\n ";
+     head yet and render the line alone.";

@@ -256,34 +256,82 @@ use crate::cli::show_keys::{k, record_row_keys, Family, FAMILY_ORDER, RECORD_KEY
 /// the assembler's own between them.
 ///
 /// The point of the split is that a family lane edits ONE file and cannot disturb the
-/// shared body, so what has to hold is the FRAME: the intro leads, the closing notes
-/// close, and the six family sections sit between them in order. A family filling its
-/// section changes the middle and nothing else, which is why the middle is compared as a
-/// join rather than pinned to a literal that would go stale the first time a lane wrote
-/// a sentence.
+/// shared body, so what has to hold is the FRAME: the intro leads, its closing notes end
+/// the JSON schema block, and the six family REGIONS follow as the tail, in family order.
+/// A family filling its section changes the tail and nothing else, which is why the tail
+/// is compared as a join rather than pinned to a literal that would go stale the first
+/// time a lane wrote a sentence.
 #[test]
 fn the_search_help_body_is_its_sections_joined_in_order() {
     let body = SEARCH_AFTER_HELP.as_str();
-    assert_eq!(body, crate::cli::search_help::SECTIONS.concat());
-    let intro = crate::cli::search_help::SECTIONS[0];
-    let outro = crate::cli::search_help::SECTIONS[7];
-    assert!(body.starts_with(intro), "the shared body no longer leads");
-    assert!(body.ends_with(outro), "the closing notes no longer close");
-    let middle = &body[intro.len()..body.len() - outro.len()];
-    assert_eq!(middle, crate::cli::search_help::SECTIONS[1..7].concat());
+    assert_eq!(body, crate::cli::search_help::sections().concat());
+    let intro = crate::cli::search_help::SHARED[0];
+    let outro = crate::cli::search_help::SHARED[1];
+    let shared = format!("{intro}{outro}");
+    assert!(
+        body.starts_with(&shared),
+        "the shared body no longer leads, or its closing notes no longer end it"
+    );
+    assert_eq!(
+        &body[shared.len()..],
+        crate::cli::search_help::FAMILY_SECTIONS.concat(),
+        "the family regions are the tail, in family order, and nothing else"
+    );
     // The seam the split had to get right. A line continuation strips the NEXT line's
     // leading whitespace inside ONE literal and cannot strip across two, so the eight
     // spaces the continuation used to eat are dropped at the split instead; getting that
     // wrong inserts them into the rendered help and nothing else complains. The ONE
-    // separating space then belongs to the OUTRO rather than to the intro's tail: a
-    // family section lands BETWEEN two sentences, and a space left at the intro's end
-    // would trail the JSON paragraph on every run where the six sections are empty.
+    // separating space belongs to the OUTRO rather than to the intro's tail: a space left
+    // at the intro's end would trail the JSON paragraph on every run.
     assert!(
         !intro.ends_with(' '),
         "the seam left a trailing space on the shared body"
     );
     assert!(outro.starts_with(' '), "the seam lost the separating space");
     assert!(!outro.starts_with("  "), "the seam gained a literal indent");
+
+    // The REGION shape every family writes, and the reason it can be checked rather than
+    // reviewed: a head at column 0 reads as a page section, a head at indent 2 reads as a
+    // subsection of whatever block came before it - which is exactly what the first
+    // filled section did under the JSON schema head.
+    for (i, section) in crate::cli::search_help::FAMILY_SECTIONS.iter().enumerate() {
+        if section.is_empty() {
+            continue;
+        }
+        assert!(
+            section.starts_with("\n\n"),
+            "family {i}: a region opens with its own blank-line separator"
+        );
+        let head = section[2..].lines().next().unwrap_or_default();
+        assert!(
+            !head.is_empty() && !head.starts_with(' '),
+            "family {i}: the head line sits at column 0, not indented: {head:?}"
+        );
+        assert!(
+            section[2 + head.len()..].starts_with("\n  ")
+                && !section[2 + head.len()..].starts_with("\n   "),
+            "family {i}: the body is indented two, like every other section's"
+        );
+        assert!(
+            !section.ends_with(' ') && !section.ends_with('\n'),
+            "family {i}: a region closes with its last word - the NEXT one separates itself"
+        );
+    }
+    // And an EMPTY family renders NOTHING: no head, no blank line. The count of column-0
+    // lines in the tail is exactly the number of families that wrote something, so a
+    // section shipping empty can never leave a bare heading on the page.
+    let filled = crate::cli::search_help::FAMILY_SECTIONS
+        .iter()
+        .filter(|s| !s.is_empty())
+        .count();
+    let tail_heads = body[shared.len()..]
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with(' '))
+        .count();
+    assert_eq!(
+        tail_heads, filled,
+        "one column-0 head per FILLED family region, and none for an empty one"
+    );
 }
 
 /// `show --help`'s record-row key list is BUILT from the key table, not typed into the
