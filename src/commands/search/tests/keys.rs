@@ -298,6 +298,10 @@ fn a_tool_result_without_the_offset_carries_no_range() {
         r#"{"type":"user","uuid":"u-8","toolUseResult":{"type":"parts","file":{"count":1,"filePath":"/Users/dev/docs/report.pdf"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[
             {"type":"text","text":"PDF pages extracted: 1 page(s) from /Users/dev/docs/report.pdf (1KB)"},
             {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"aGk="}}]}]}}"#,
+        // A result naming an offset but carrying no page element after the leading text:
+        // a range with no pages is no range, never one whose end sits below its start.
+        r#"{"type":"user","uuid":"u-9","toolUseResult":{"type":"parts","firstPage":5,"file":{"count":0,"filePath":"/Users/dev/docs/report.pdf"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[
+            {"type":"text","text":"PDF pages extracted: 0 page(s) from /Users/dev/docs/report.pdf (1KB)"}]}]}}"#,
     ] {
         let (zones, json) = projections(line, Some(Class::AgentToolResult));
         assert!(zones.is_empty(), "{zones:?}");

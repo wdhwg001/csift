@@ -408,6 +408,17 @@ fn the_whole_pdf_document_block_is_not_listed() {
     assert!(record_images(&r, false).is_empty());
 }
 
+/// A `parts` result whose content array holds ONLY the leading text maps no page, so the
+/// reader answers `None` rather than a zero-page range. The distinction is not academic:
+/// a zero-page range's `last` sits one BELOW its `first`, which the tool-result unit would
+/// print as `[pdf pages 5-4 of report.pdf]`.
+#[test]
+fn a_parts_result_with_no_page_element_maps_no_page() {
+    let r = parts_record(parts_tur(5, 0), "");
+    assert!(record_pdf_pages(&r).is_none());
+    assert!(record_images(&r, false).is_empty());
+}
+
 /// The position-to-page map at both ends, and the basename split.
 #[test]
 fn page_at_boundaries_and_basename_separators() {
