@@ -297,10 +297,13 @@ surface change bumps the PATCH.
   notice tested `contains` - which on that path can only reach a record quoting the notice.
   All three anchor now. Measured over two projects roots the emitted leaf moves for no
   record, so this closes a hole rather than changing a count.
-- **A textless image record printed the head of a base64 payload.** An isMeta record whose
-  content is image blocks and no text renders nothing, so `show --line` on one fell through
-  to the key=value excerpt of its own top-level keys. It renders its block counts instead:
-  `[context image-only: N image block(s), M document block(s)]`, JSON `image_only`.
+- **A textless image record said nothing about what it was.** An isMeta record whose
+  content is image blocks and no text renders no text, so `show --line` on one answered
+  with the key=value excerpt of its own top-level keys and nothing else - the head of a
+  base64 payload among the values. It now carries its block counts in the label zone
+  beside that excerpt: `[context image-only: N image block(s), M document block(s)]`,
+  JSON `image_only`. The excerpt stays: it is the line's own keys, rendered by the path
+  every textless address takes.
 - **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
   the one place csift proves a negative, and it was re-rendering without the line - so for
   a record whose text lives in fields the record model does not carry, it could prove a
