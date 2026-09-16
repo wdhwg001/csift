@@ -11,6 +11,10 @@ fn a_pattern_matching_only_a_fabricated_word_survives_the_whole_file_gate() {
         (r"originalModel=model-alpha", "harness.system.refusal"),
         (r"fallbackModel=none", "harness.system.refusal"),
         (r"\[api-error status=529", "harness.system.api-error"),
+        // The error KIND, which the head fabricates as `type=<kind>` while the line
+        // stores it as `"type":"overloaded_error"` - one word per fabricated head is the
+        // rule, and this head fabricates three.
+        (r"type=overloaded_error", "harness.system.api-error"),
         (r"retry 3/20", "harness.system.api-error"),
         (r"\[notice warning\]", "harness.system.notice"),
         (r"\[kill\]", "harness.system.kill"),
