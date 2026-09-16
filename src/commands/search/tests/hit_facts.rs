@@ -51,6 +51,15 @@ fn an_unmodeled_shape_names_the_axis_that_decides_it() {
         None
     );
     assert_eq!(unmodeled_shape(&rec(r#"{"uuid":"n1"}"#), None), None);
+    // On a ROLE-bearing record the shape is the DISTINGUISHING block - the one that is
+    // not the ordinary `text`. A record whose text block comes FIRST still names the
+    // other one: `assistant/text` would tell a reader nothing about the line they
+    // addressed, which is the whole reason the unit names a shape at all.
+    let mixed = r#"{"type":"assistant","uuid":"m1","message":{"role":"assistant","content":[{"type":"text","text":"x"},{"type":"fallback","from":{"model":"a"},"to":{"model":"b"}}]}}"#;
+    assert_eq!(
+        unmodeled_shape(&rec(mixed), Some(mixed)).as_deref(),
+        Some("assistant/fallback")
+    );
 }
 
 // ── The ONE stamping site, read back from BOTH hit-construction sites ──
@@ -200,4 +209,34 @@ fn a_record_no_family_owns_carries_neither_extension_point() {
     assert_eq!(hits.len(), 1);
     assert!(hits[0].markers.is_empty());
     assert!(hits[0].facts.is_empty());
+}
+
+/// The replay pointer renders the SURVIVOR's physical line, and a jsonl line number is
+/// 1-based - so a map answering ZERO is answering "I have no line", not "line 0". The
+/// guard that drops it is the difference between `replay copy of L42` and a pointer at a
+/// line no address can ever fetch.
+#[test]
+fn a_replay_pointer_at_a_line_that_cannot_exist_is_dropped() {
+    // A re-anchored block lands twice with its uuids preserved, so the EARLIER line is
+    // the copy and the later one is the survivor (the loader's map keeps the last).
+    let lines = [
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first"}}"#,
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"first"}}"#,
+    ];
+    let records: Vec<Record> = lines.iter().map(|l| rec(l)).collect();
+    let chain = crate::model::Chain::build(&records, None);
+    assert_eq!(chain.replay_of(0), Some(1), "the earlier line is the copy");
+
+    let mut hits = scanned(lines[0]);
+    let real: HashMap<usize, usize> = [(1usize, 42usize)].into_iter().collect();
+    backfill_survival(&mut hits, &chain, 0, &real);
+    assert_eq!(hits[0].replay_copy_of, Some(42));
+
+    let mut hits = scanned(lines[0]);
+    let impossible: HashMap<usize, usize> = [(1usize, 0usize)].into_iter().collect();
+    backfill_survival(&mut hits, &chain, 0, &impossible);
+    assert_eq!(
+        hits[0].replay_copy_of, None,
+        "L0 addresses nothing - the pointer is dropped, never rendered"
+    );
 }
