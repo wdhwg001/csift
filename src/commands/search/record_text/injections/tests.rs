@@ -72,6 +72,19 @@ fn a_record_without_the_authorship_flag_gets_nothing() {
         "a teammate relay is not this family's: {}",
         zone(&out)
     );
+    // The case that needs BOTH compares to be an AND of two requirements rather than a
+    // refusal of records failing both: a person's OWN typed message can carry an `origin`
+    // whose kind is `human` WITHOUT the authorship flag - 3,095 such records in one
+    // projects root and 1,977 in another. It is not relayed, it is theirs, and marking it
+    // would say the harness delivered a message the person typed here.
+    let typed = r#"{"type":"user","uuid":"h1","parentUuid":"parent-1","origin":{"kind":"human"},"message":{"role":"user","content":"ship it"}}"#;
+    let out = run(typed, Some(Class::UserMessage));
+    assert!(
+        out.0.is_empty() && out.1.is_empty(),
+        "a typed message with a human origin is not a relay: {} {:?}",
+        zone(&out),
+        out.1.iter().map(Marker::render).collect::<Vec<_>>()
+    );
 }
 
 /// Each leaf names its OWN relation, so a reader learns what the injection was for rather
