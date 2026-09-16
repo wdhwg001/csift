@@ -47,7 +47,8 @@ pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.sch
      it there. \
      PROVENANCE: a leaf that NAMES another record carries a `for` fact, rendered \
      `[for: <kind> L<n>]` when this transcript holds the named record, `[for: <kind> \
-     <id8> (not in this file)]` when it does not, and `[for: <kind> unknown (<reason>)]` \
+     <id> (not in this file)]` when it does not - a uuid cut to its eight-character \
+     handle, any other id whole - and `[for: <kind> unknown (<reason>)]` \
      when the record names none - the kinds are `refused` (a refusal's \
      `refusedUserMessageUuid`, basis key), `wraps` (a delivered command's `parentUuid`, \
      basis position - a run of local commands chains stdout to stdout, so the link names \

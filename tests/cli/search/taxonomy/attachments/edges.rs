@@ -8,7 +8,8 @@ fn every_attachment_unit_says_which_record_it_is_for() {
     // Two `for` edges and a producer on every unit, each read from a key the line carries.
     // The parent RESOLVES to a line, which is an address a reader can fetch; the payload's
     // tool-call id is a wire id no line of this transcript carries, so the edge keeps the
-    // id and says where it is not.
+    // id WHOLE and says where it is not - a synthetic hook id is not a uuid, and the
+    // eight-character handle would leave `hook-bb0`, which names nothing.
     let h = attachment_home();
     let out = h.run(&["search", "zzatt", &at_sess(), "--attachments"]);
     assert!(out.success, "stderr {}", out.stderr);
@@ -18,7 +19,7 @@ fn every_attachment_unit_says_which_record_it_is_for() {
         "the injected context hangs from the person's message, resolved to its line:\n{ctx}"
     );
     assert!(
-        ctx.contains("[for: for_tool_use hook-bb0 (not in this file)]"),
+        ctx.contains("[for: for_tool_use hook-bb000000 (not in this file)]"),
         "and answers for a tool call no line here carries:\n{ctx}"
     );
     let run = line_with(&out.stdout, "zzatt stdout reef ok");

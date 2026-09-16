@@ -138,7 +138,10 @@ fn the_edgeless_leaves_carry_no_edge() {
 #[test]
 fn an_unresolved_parent_keeps_the_id_and_drops_the_line() {
     let out = run(&meta("m1", "elsewhere", "x"), Some(Class::CommandCaveat));
-    assert_eq!(zone(&out), "[for: attached_to elsewher (not in this file)]");
+    assert_eq!(
+        zone(&out),
+        "[for: attached_to elsewhere (not in this file)]"
+    );
     let edge = &wire(&out)["for"][0];
     assert_eq!(edge["target"]["uuid"], "elsewhere");
     assert!(edge["target"]["line"].is_null());

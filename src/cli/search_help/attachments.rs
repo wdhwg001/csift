@@ -36,9 +36,10 @@ pub(crate) const SECTION: &str =
      PROVENANCE, three facts on every attachment unit. Two are `for` edges in the shared \
      form: `attached_to` from the record's own `parentUuid` and `for_tool_use` from the \
      payload's inner `toolUseID`, rendering `[for: <kind> L<line>]` when the target is a \
-     line of this transcript, `[for: <kind> <first8> (not in this file)]` for an id no \
-     line here carries (which a tool-call id always is - it is a wire id, never a record \
-     uuid), and `[for: <kind> unknown (<reason>)]` when the line names nothing at all. \
+     line of this transcript, `[for: <kind> <id> (not in this file)]` for an id no line \
+     here carries (which a tool-call id always is - it is a wire id, never a record \
+     uuid, so it prints WHOLE: only a uuid-shaped target is cut to its eight-character \
+     handle), and `[for: <kind> unknown (<reason>)]` when the line names nothing at all. \
      Both fold into the ONE JSON `for` array, each entry `{kind,basis,target,reason}` with \
      the WHOLE uuid under `target.uuid` (what `show --uuid` takes) beside `target.line`. \
      The third is `[produced_by <command>]` from a hook run's own `command`, JSON \

@@ -130,13 +130,27 @@ impl ForTarget {
         if let Some(line) = self.line {
             return format!("[for: {kind} L{line}]");
         }
-        // No line: name the id, cut to the eight-character handle the compaction excerpt
-        // already prints, and prefix the SESSION when the target is in another
+        // No line: name the id, and prefix the SESSION when the target is in another
         // transcript - a bare handle is not addressable from the text surface, and the
         // JSON carries the session either way.
+        //
+        // THE CUT IS FOR A UUID AND FOR NOTHING ELSE. Eight characters is the handle the
+        // compaction excerpt already prints, and it works there because a uuid's first
+        // eight hex digits identify it: the other 28 are the same shape. A WIRE id is not
+        // that. `hook-bb000000` cuts to `hook-bb0`, which is the word `hook` and three
+        // digits; `toolu_01zzreef` cuts to `toolu_01`, which is the word `toolu` and the
+        // version prefix every one of them carries. Both cuts throw away the whole
+        // distinguishing tail and keep only the part that is constant across the
+        // population, so the handle names nothing - which is worse than long.
         let id = self.uuid.as_deref().map_or_else(
             || "unknown".to_string(),
-            |u| u.chars().take(8).collect::<String>(),
+            |u| {
+                if crate::path::is_uuid(u) {
+                    u.chars().take(8).collect::<String>()
+                } else {
+                    u.to_string()
+                }
+            },
         );
         let id = match self.session.as_deref() {
             Some(s) => format!("@{s} {id}"),

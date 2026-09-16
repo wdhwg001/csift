@@ -124,6 +124,14 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **A `for` edge cuts a uuid to its handle and prints every other id whole.** The label
+  zone cut an unresolved target to eight characters whatever it was. That is right for a
+  uuid - the first eight hex digits identify one and the compaction excerpt has printed
+  that handle for versions - and wrong for a wire id, whose head is the part they all
+  share: `hook-bb000000` became `hook-bb0` and `toolu_01zzreef` became `toolu_01`, keeping
+  the constant prefix and throwing away the whole distinguishing tail. The cut now applies
+  only to a uuid-shaped target. JSON is unchanged: `target.uuid` always carried the id
+  whole.
 - **An attachment unit renders the text the model received.** BREAKING: the body of a
   `harness.hook.context` unit, and of every attachment unit whose record carries a
   persisted conversion, is now that converted text rather than the joined content or the

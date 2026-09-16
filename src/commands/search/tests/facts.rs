@@ -124,8 +124,8 @@ fn an_unresolved_edge_keeps_the_id_and_says_the_line_is_elsewhere() {
     );
     assert_eq!(
         fact.label_zone().as_deref(),
-        Some("[for: attached_to abcdef01 (not in this file)]"),
-        "the id is cut to the eight-character handle, and the note says why there is no line"
+        Some("[for: attached_to abcdef0123456789 (not in this file)]"),
+        "a non-uuid id prints whole, and the note says why there is no line"
     );
     assert_eq!(
         fact.json(),
@@ -250,7 +250,10 @@ fn an_unresolved_target_renders_what_it_has_and_no_more() {
             line: None,
         })
         .as_deref(),
-        Some("[for: closes @11111111-2222-4333-8444-555555555555 abcdef01 (not in this file)]")
+        Some(
+            "[for: closes @11111111-2222-4333-8444-555555555555 abcdef0123456789 \
+             (not in this file)]"
+        )
     );
     assert_eq!(
         zone(ForTarget {
@@ -258,8 +261,50 @@ fn an_unresolved_target_renders_what_it_has_and_no_more() {
             ..ForTarget::default()
         })
         .as_deref(),
-        Some("[for: closes abcdef01]"),
+        Some("[for: closes abcdef0123456789]"),
         "no note, no parenthesis"
+    );
+}
+
+/// The EIGHT-CHARACTER CUT is for a uuid and for nothing else.
+///
+/// It works on a uuid because the first eight hex digits identify one: the other 28 are
+/// the same shape, and the compaction excerpt has printed that handle for versions. A
+/// WIRE id is the opposite shape - its head is the constant part. `hook-bb000000` cut to
+/// eight is `hook-bb0`, and `toolu_01zzreef` is `toolu_01`, which is the tool prefix
+/// every one of them carries: the cut throws away the whole distinguishing tail and keeps
+/// what does not distinguish. Both shapes reach this render through a real edge (the
+/// injections family's `attached_to` on a notification frame's `<tool-use-id>`, and the
+/// attachment family's `for_tool_use`), so the two are pinned beside a uuid rather than
+/// left to whichever family happens to notice.
+#[test]
+fn only_a_uuid_shaped_target_is_cut_to_its_handle() {
+    let zone = |uuid: &str| {
+        HitFact::For {
+            kind: "for_tool_use",
+            basis: Basis::Key,
+            target: ForTarget {
+                uuid: Some(uuid.to_string()),
+                note: Some("not in this file".to_string()),
+                ..ForTarget::default()
+            },
+        }
+        .label_zone()
+    };
+    assert_eq!(
+        zone("11111111-2222-4333-8444-555555555555").as_deref(),
+        Some("[for: for_tool_use 11111111 (not in this file)]"),
+        "a uuid keeps the handle it has always printed"
+    );
+    assert_eq!(
+        zone("hook-bb000000").as_deref(),
+        Some("[for: for_tool_use hook-bb000000 (not in this file)]"),
+        "a synthetic hook id prints whole: `hook-bb0` names nothing"
+    );
+    assert_eq!(
+        zone("toolu_01zzreef").as_deref(),
+        Some("[for: for_tool_use toolu_01zzreef (not in this file)]"),
+        "a tool-call id prints whole: `toolu_01` is the prefix they all share"
     );
 }
 
