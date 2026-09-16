@@ -8,6 +8,21 @@
 
 use super::*;
 
+/// What a `harness.bookkeeping` LINE says - the family's half of the render seam.
+///
+/// Called by [`super::family_render`] for every unit whose leaf sits in this family's
+/// category, BEFORE the engine's generic arms; `None` falls through to them. A STUB at
+/// the render seam: the composition this family owns still lives in `record_text.rs`
+/// and moves here in its own commit.
+pub(crate) fn render(
+    _rec: &Record,
+    _raw: Option<&str>,
+    _class: Class,
+    _ctx: &ClassifyCtx,
+) -> Option<String> {
+    None
+}
+
 /// The `harness.bookkeeping` family's own facts.
 ///
 /// UNINHABITED at the skeleton amendment apart from the pin below - the family lane adds

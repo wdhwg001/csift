@@ -217,7 +217,10 @@ impl Matcher {
         // match" for text the emission would have produced, and the whole-file gate then
         // prunes a file whose only hit lies in that head. That is the section 7 silent-drop
         // landmine, on the one path that is allowed to prove a negative.
-        if let Some(t) = record_raw_text(rec, raw) {
+        // NO class: the gate re-renders a LINE, not a view of one, so the seam reads the
+        // line's own leaf - which is exactly what every shape with a fabricated head
+        // (the bookkeeping key=value view, a system event's head) is rendered under.
+        if let Some(t) = record_raw_text(rec, raw, None, &ctx) {
             if self.locate(&t).is_some() {
                 return true;
             }

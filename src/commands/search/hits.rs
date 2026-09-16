@@ -362,7 +362,9 @@ pub(crate) fn collect_record_hits(
         rec.record_text_sections(ctx)
     };
     if sections.is_empty() {
-        if let Some((class, text)) = record_text_emission(rec, raw, &labels, filter, plan_index) {
+        if let Some((class, text)) =
+            record_text_emission(rec, raw, &labels, filter, plan_index, ctx)
+        {
             let dir = if is_comm_class(class) {
                 direction.clone()
             } else {

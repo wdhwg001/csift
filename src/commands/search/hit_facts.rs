@@ -90,7 +90,7 @@ pub(crate) fn addressed_unit(
     } else {
         None
     };
-    let text = match record_raw_text(rec, raw) {
+    let text = match record_raw_text(rec, raw, class, ctx) {
         Some(t) => t,
         None => top_level_key_excerpt(raw)?,
     };

@@ -233,6 +233,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         &labels,
         LabelFilter::all(),
         &PlanIndex::default(),
+        &ClassifyCtx::top_level(),
     )
     .expect("a channel delivery emits");
     assert_eq!(class, Class::CommChannel, "the message view is the richest");
@@ -244,8 +245,15 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
     // joined content, exactly as every other hook context renders.
     let include = vec!["harness.hook.context".to_string()];
     let hook_only = LabelFilter::new(&include, &[]);
-    let (class, text) = record_text_emission(&rec, None, &labels, hook_only, &PlanIndex::default())
-        .expect("hook view");
+    let (class, text) = record_text_emission(
+        &rec,
+        None,
+        &labels,
+        hook_only,
+        &PlanIndex::default(),
+        &ClassifyCtx::top_level(),
+    )
+    .expect("hook view");
     assert_eq!(class, Class::HookContext);
     assert!(
         text.ends_with("\na second block"),

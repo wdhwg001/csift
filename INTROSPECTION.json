@@ -14340,7 +14340,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "515-518",
+          "lines": "518-521",
           "snippet": "    // v0.10.0 promoted lines whose render FABRICATES text (key=value excerpts): the\n    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
@@ -15032,7 +15032,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "509-514",
+          "lines": "512-517",
           "snippet": "    if args\n        .label_filter()\n        .selected(Class::CompactionBoundary.path())\n    {\n        verifiable.push(b\"compact_boundary\");\n    }"
         }
       ],
@@ -17384,7 +17384,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "506",
+          "lines": "509",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
@@ -17394,7 +17394,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "499-508",
+          "lines": "502-511",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -37076,7 +37076,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "506",
+          "lines": "509",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         }
       ],
@@ -43270,7 +43270,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "554-556",
+          "lines": "557-559",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
@@ -46951,7 +46951,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "519-521",
+          "lines": "522-524",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
@@ -48701,7 +48701,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "519-526",
+          "lines": "522-529",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
@@ -55994,12 +55994,12 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "350-354",
+          "lines": "353-357",
           "snippet": "    // A char that JSON escapes inside a string does not survive verbatim in the raw\n    // line bytes the prefilter scans - emitting a literal for it causes false\n    // negatives. `\\` is already excluded via META above; guard `\"`, control chars,\n    // and DEL here.\n    if pattern.chars().any(json_escapes_in_string) {"
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "551-553",
+          "lines": "554-556",
           "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, any C0 control char (`< 0x20`), or DEL.\n/// (`\\` is handled separately as a regex metacharacter.)"
         }
       ],
@@ -56081,7 +56081,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "383-394",
+          "lines": "467-478",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],
@@ -56275,7 +56275,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "538-542",
+          "lines": "541-545",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -64823,7 +64823,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "559-565",
+          "lines": "562-568",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -65243,7 +65243,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "554-556",
+          "lines": "557-559",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],
@@ -72042,7 +72042,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "499-508",
+          "lines": "502-511",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -72620,7 +72620,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "537-538",
+          "lines": "540-541",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         }
       ],
@@ -80212,7 +80212,7 @@
         },
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "224-228",
+          "lines": "290-294",
           "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.hook.context` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
         }
       ],

@@ -8,6 +8,22 @@
 
 use super::*;
 
+/// What an `agent.thinking` RECORD says - the family's half of the record-level render
+/// seam.
+///
+/// EMPTY, and structurally so: every thinking leaf is decided on a content BLOCK, so a
+/// thinking unit never renders at the record level at all. The family's real render is
+/// [`block_body`], which the block loop calls. This arm exists so the seam has one shape
+/// for all five rendering families rather than five minus one.
+pub(crate) fn render(
+    _rec: &Record,
+    _raw: Option<&str>,
+    _class: Class,
+    _ctx: &ClassifyCtx,
+) -> Option<String> {
+    None
+}
+
 /// The thinking family's own facts.
 ///
 /// UNINHABITED at the skeleton amendment - the family lane adds its variants HERE and

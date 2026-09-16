@@ -19,7 +19,7 @@ fn promoted_text_is_verbatim_for_queued_and_recap() {
         Some("check the widget build")
     );
     assert_eq!(
-        record_raw_text(&q, None).as_deref(),
+        record_raw_text(&q, None, None, &ClassifyCtx::top_level()).as_deref(),
         Some("check the widget build")
     );
     let a = rec(
@@ -30,13 +30,16 @@ fn promoted_text_is_verbatim_for_queued_and_recap() {
         Some("Two checks finished.")
     );
     assert_eq!(
-        record_raw_text(&a, None).as_deref(),
+        record_raw_text(&a, None, None, &ClassifyCtx::top_level()).as_deref(),
         Some("Two checks finished.")
     );
     // A non-promoted record is untouched by the promoted path.
     let u = rec(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
     assert_eq!(promoted_record_text(&u), None);
-    assert_eq!(record_raw_text(&u, None).as_deref(), Some("hi"));
+    assert_eq!(
+        record_raw_text(&u, None, None, &ClassifyCtx::top_level()).as_deref(),
+        Some("hi")
+    );
 }
 
 #[test]
@@ -312,7 +315,8 @@ fn a_windowed_excerpt_keeps_its_quarter_of_context_and_counts_only_real_remainde
 #[test]
 fn a_bookkeeping_line_renders_its_head_over_its_own_bytes() {
     let line = r#"{"type":"file-history-delta","messageId":"msg-88ff","trackingPath":"/a/f.txt","backup":{"backupFileName":"f.txt@v4","version":4},"timestamp":"2026-06-07T05:01:00.000Z"}"#;
-    let text = record_raw_text(&rec(line), Some(line)).expect("a bookkeeping line renders");
+    let text = record_raw_text(&rec(line), Some(line), None, &ClassifyCtx::top_level())
+        .expect("a bookkeeping line renders");
     let (head, body) = text
         .split_once('\n')
         .expect("head and body, newline between");
@@ -333,7 +337,7 @@ fn a_bookkeeping_line_renders_its_head_over_its_own_bytes() {
 fn a_bookkeeping_line_with_no_head_renders_the_line_alone() {
     let line = r#"{"type":"cost-state","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","totalCostUSD":1.5}"#;
     assert_eq!(
-        record_raw_text(&rec(line), Some(line)).as_deref(),
+        record_raw_text(&rec(line), Some(line), None, &ClassifyCtx::top_level()).as_deref(),
         Some(line)
     );
 }
@@ -344,7 +348,8 @@ fn a_bookkeeping_line_with_no_head_renders_the_line_alone() {
 #[test]
 fn a_bookkeeping_line_without_its_bytes_renders_the_head_alone() {
     let line = r#"{"type":"file-history-delta","messageId":"m","trackingPath":"/a/f.txt","backup":{"version":4},"timestamp":"2026-06-07T05:01:00.000Z"}"#;
-    let text = record_raw_text(&rec(line), None).expect("the head survives on its own");
+    let text = record_raw_text(&rec(line), None, None, &ClassifyCtx::top_level())
+        .expect("the head survives on its own");
     assert!(!text.contains('\n'));
     assert!(text.starts_with("[file-history delta at "));
 }

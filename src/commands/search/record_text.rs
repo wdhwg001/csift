@@ -28,6 +28,71 @@ pub(crate) mod probe;
 
 use super::*;
 
+/// THE RENDER SEAM: the family that owns a line's leaf decides what that line SAYS.
+///
+/// A family owns one classify file and one render file. Before this, its renders lived
+/// in the shared chain instead - `record_raw_text`'s arms and `promoted.rs`'s per-leaf
+/// match - so a family lane changing a body had to edit a file five other lanes were
+/// editing at the same time. This dispatch is what moved those decisions into the
+/// family files: `Some` wins, `None` falls through to the engine's own generic arms
+/// below, and a family that has nothing to say about a record answers `None` on one
+/// compare.
+///
+/// The dispatch key is the leaf's CATEGORY. Two categories are shared by two families -
+/// `harness.hook` (`.context` and `.outcome` are attachment payloads, `.feedback` is an
+/// isMeta injection) and `harness.schedule` (`.event` is the scheduler's own
+/// `type:"system"` record, the other three are the prompts it injected) - so both
+/// families are offered the record in a fixed order and each refuses what is not its
+/// own. A category no family owns never calls anything.
+pub(crate) fn family_render(
+    rec: &Record,
+    raw: Option<&str>,
+    class: Class,
+    ctx: &ClassifyCtx,
+) -> Option<String> {
+    match class.category() {
+        "harness.bookkeeping" => bookkeeping::render(rec, raw, class, ctx),
+        "agent.message" | "harness.context" => attachments::render(rec, raw, class, ctx),
+        "harness.hook" => attachments::render(rec, raw, class, ctx)
+            .or_else(|| injections::render(rec, raw, class, ctx)),
+        "harness.system" => system::render(rec, raw, class, ctx),
+        "harness.schedule" => system::render(rec, raw, class, ctx)
+            .or_else(|| injections::render(rec, raw, class, ctx)),
+        "agent.thinking" => thinking::render(rec, raw, class, ctx),
+        "harness.command" | "harness.enforce" | "harness.notification" => {
+            injections::render(rec, raw, class, ctx)
+        }
+        _ => None,
+    }
+}
+
+/// The leaf the RENDER SEAM dispatches on for a LINE, independent of which view a caller
+/// is emitting.
+///
+/// The line's own leaf comes first and the caller's class is only the fallback, and that
+/// order is what makes the seam behaviour-identical: `record_raw_text` answers "what does
+/// this line say", which is a property of the line, so a `hook_additional_context`
+/// attachment renders its joined content whether the caller asked for
+/// `harness.hook.context` or for the `agent.communication.channel` view of the same
+/// record. A NON-TRANSCRIPT line's leaf is decided by its own top-level type (or a
+/// `type:"system"` subtype), which is [`Record::promoted_class`]; an ATTACHMENT's by its
+/// payload type. Everything else - the isMeta injections above all - has no leaf of its
+/// own to read, and there the caller's class is the only answer there is.
+///
+/// `None` from both leaves the engine's generic arms to answer, which is what every
+/// conversation record gets.
+fn render_leaf(rec: &Record) -> Option<Class> {
+    if rec.is_type("attachment") {
+        // A payload type csift models NO leaf for reaches no family, and falls to the
+        // engine's verbatim-payload arm - the honest body for a shape csift has not
+        // caught up with, and the one an address renders.
+        return rec
+            .attachment_type()
+            .and_then(|t| crate::model::attachment_leaf(&t));
+    }
+    rec.promoted_class()
+}
+
 /// Build the ONE `for` EDGE fact from a uuid a record names - the only place the
 /// uuid-to-line lookup happens, so every family's edge resolves and renders alike.
 ///
@@ -191,6 +256,7 @@ pub(crate) fn record_text_emission(
     labels: &[Class],
     filter: LabelFilter<'_>,
     plan_index: &PlanIndex,
+    ctx: &ClassifyCtx,
 ) -> Option<(Class, String)> {
     for &c in labels {
         if !is_record_text_class(c) || !filter.selected(c.path()) {
@@ -220,7 +286,7 @@ pub(crate) fn record_text_emission(
                 // record classified as a delivered message and emitted NOTHING. 141 such
                 // records over 89 files of one projects root reached a census as zero.
                 // Its own text is the message, exactly as a peer relay's is.
-                .or_else(|| record_raw_text(rec, raw)),
+                .or_else(|| record_raw_text(rec, raw, Some(c), ctx)),
             // A csift-channel delivery renders the envelope chunk VERBATIM (header line +
             // body), never a rewrite: the header is the receipt a reader audits, and a
             // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth
@@ -230,8 +296,8 @@ pub(crate) fn record_text_emission(
             // teammate record (it flattens the content), with the raw text as the fallback.
             Class::CommSignal => rec
                 .reconstructed_user_text(Some(plan_index))
-                .or_else(|| record_raw_text(rec, raw)),
-            _ => record_raw_text(rec, raw),
+                .or_else(|| record_raw_text(rec, raw, Some(c), ctx)),
+            _ => record_raw_text(rec, raw, Some(c), ctx),
         };
         if let Some(text) = text {
             return Some((c, text));
@@ -245,7 +311,25 @@ pub(crate) fn record_text_emission(
 /// `type:"system"` record - e.g. the `compact_boundary` metrics record) it falls back (D7) to the
 /// top-level `content` plus a readable `compactMetadata` excerpt, so the boundary is BOTH matchable
 /// and rendered. `None` when there is no text anywhere.
-pub(crate) fn record_raw_text(rec: &Record, raw: Option<&str>) -> Option<String> {
+/// `class` is the leaf the CALLER is emitting under, when it holds one; it only stands in
+/// for a line whose own type names none (an isMeta injection). `None` is for the caller
+/// that genuinely has no view - the section 7f gate's re-render - and makes the seam read
+/// the line alone, which is all it ever reads for the non-transcript shapes.
+pub(crate) fn record_raw_text(
+    rec: &Record,
+    raw: Option<&str>,
+    class: Option<Class>,
+    ctx: &ClassifyCtx,
+) -> Option<String> {
+    // THE RENDER SEAM, first: the family that owns this line's leaf answers, and a `Some`
+    // wins. The LINE's own leaf leads and the caller's class is only the fallback, so a
+    // line renders the same text under every view of it.
+    if let Some(text) = render_leaf(rec)
+        .or(class)
+        .and_then(|c| family_render(rec, raw, c, ctx))
+    {
+        return Some(text);
+    }
     // Hook-injected additionalContext attachment: its joined content IS the record's text -
     // both the searchable body under `-t harness.hook.context` and the `show`-addressed render.
     if let Some(text) = rec.hook_additional_context_text() {

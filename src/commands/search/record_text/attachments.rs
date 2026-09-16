@@ -8,6 +8,21 @@
 
 use super::*;
 
+/// What an ATTACHMENT line says - the family's half of the render seam.
+///
+/// Called by [`super::family_render`] for every unit whose leaf sits in one of this
+/// family's categories, BEFORE the engine's generic arms; `None` falls through to them.
+/// A STUB at the render seam: the two arms this family owns still live in
+/// `record_text.rs` and move here in their own commit.
+pub(crate) fn render(
+    _rec: &Record,
+    _raw: Option<&str>,
+    _class: Class,
+    _ctx: &ClassifyCtx,
+) -> Option<String> {
+    None
+}
+
 /// The attachment family's own facts.
 ///
 /// UNINHABITED at the skeleton amendment - the family lane adds its variants HERE and

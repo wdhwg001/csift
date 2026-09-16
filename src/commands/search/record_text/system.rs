@@ -13,6 +13,22 @@
 
 use super::*;
 
+/// What a `type:"system"` event line says - the family's half of the render seam.
+///
+/// Called by [`super::family_render`] for every unit whose leaf sits in `harness.system`
+/// or `harness.schedule`, BEFORE the engine's generic arms; `None` falls through to them,
+/// which is also how a `harness.schedule` leaf that is NOT the scheduler's own record
+/// reaches the injection family behind this one. A STUB at the render seam: the six arms
+/// this family owns still live in `promoted.rs` and move here in their own commit.
+pub(crate) fn render(
+    _rec: &Record,
+    _raw: Option<&str>,
+    _class: Class,
+    _ctx: &ClassifyCtx,
+) -> Option<String> {
+    None
+}
+
 /// The system family's own facts.
 ///
 /// UNINHABITED at the skeleton amendment - the family lane adds its variants HERE and

@@ -8,6 +8,28 @@
 
 use super::*;
 
+/// What an isMeta INJECTION says - the family's half of the render seam.
+///
+/// Called by [`super::family_render`] for every unit whose leaf sits in one of this
+/// family's categories, and BEHIND the two families it shares a category with
+/// (`harness.hook`, `harness.schedule`), so an attachment or a scheduler record answers
+/// first and this sees only what they refused. `None` falls through to the engine's
+/// generic arms.
+///
+/// EMPTY at the render seam, and not because the move was skipped: an isMeta injection is
+/// a `type:"user"` record whose text is its own `message.content`, so today it renders
+/// through the same generic arm every conversation record does. There is no per-family
+/// arm in the shared chain to move. The family lane fills this when it gives a template
+/// a head of its own.
+pub(crate) fn render(
+    _rec: &Record,
+    _raw: Option<&str>,
+    _class: Class,
+    _ctx: &ClassifyCtx,
+) -> Option<String> {
+    None
+}
+
 /// The isMeta-injection family's own facts.
 ///
 /// UNINHABITED at the skeleton amendment - the family lane adds its variants HERE and
