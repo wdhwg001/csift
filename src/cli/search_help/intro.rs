@@ -203,8 +203,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
           A RENDERED DRAFT carries its distance from the message that replaced it:\n  \
         `differs from the sent message in N chars (P% of the final)` - insertions plus\n  \
         deletions of a shortest CHARACTER edit script, never a length difference, so P\n  \
-        can exceed 100. JSON: superseding_line, superseding_uuid and\n  \
-        diff_chars, diff_pct, diff_exact. A `.rewound` opener leads the same line with\n  \
+        can exceed 100. JSON: `superseding_line`, `superseding_uuid` and\n  \
+        `diff_chars`, `diff_pct`, `diff_exact`. A `.rewound` opener leads the same line\n  \
+        with\n  \
         `rewound: the conversation continued from L<n> instead`.\n  \
           THREE NARROWING AXES, and only the FIRST is per-leaf. AXIS 1, LEAF VISIBILITY:\n  \
         28 of the 73 leaves are outside a bare role or category - the two scan-layer user\n  \
@@ -250,8 +251,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
-        labels:[…], line, uuid, excerpt, body, tool_name, pairing, \
-        from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, \
+        labels:[…], line, uuid, excerpt, body, tool_name, tool_use_id, pairing, \
+        from, to, ts_utc, ts_local, source (\"elicitation-sidecar\" | null), \
+        queue_operation, queue_reason, resume_paired, \
         denial_kind, image_ids, \
         survival, abandoned_root_line, replay_copy_of, mode, compact_metadata, \
         for:[{kind,basis,target:{line,uuid,session,note},reason}], \

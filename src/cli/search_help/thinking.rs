@@ -35,10 +35,10 @@ pub(crate) const SECTION: &str = "\n\nTHINKING LEAVES (agent.thinking, agent.mes
      is marked [thinking removed by the client], so those three words never read as the \
      assistant speaking. Both markers are display-only and ride search and show; \
      `verbatim` replays the record's own text unmarked.\n  \
-     Two per-hit JSON keys come with them. signature_len is the character length of a \
+     Two per-hit JSON keys come with them. `signature_len` is the character length of a \
      thinking block's own signature, and it is NULL when the block carries no signature \
      field at all - absent and empty are different shapes, and the salvage discriminator \
      rests on exactly that difference; a redacted_thinking block has no signature field, \
-     so it carries no signature_len. thinking_text_absent is true on an \
+     so it carries no `signature_len`. `thinking_text_absent` is true on an \
      agent.thinking.omitted unit alone, so a consumer can tell an API that sent no \
      summary text from an excerpt that merely rendered empty.";

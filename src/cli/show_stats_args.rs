@@ -36,10 +36,10 @@ const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
         deletions of a shortest CHARACTER edit script, never a length difference, so P can \
         exceed 100 when the draft was the longer text; a rewound turn leads with `rewound: \
         the conversation continued from L<n> instead`. JSON record rows add \
-        superseding_line, superseding_uuid, diff_chars, diff_pct and diff_exact (false \
-        when a bound stopped the walk, in which case both numbers read \"more than\") - all \
-        five null on any other row - plus survival (live | pre-cut | abandoned), \
-        abandoned_root_line and replay_copy_of on every row.\n\n\
+        `superseding_line`, `superseding_uuid`, `diff_chars`, `diff_pct` and `diff_exact` \
+        (false when a bound stopped the walk, in which case both numbers read \"more \
+        than\") - all five null on any other row - plus `survival` (live | pre-cut | \
+        abandoned), `abandoned_root_line` and `replay_copy_of` on every row.\n\n\
         A SHAPE CSIFT MODELS NO LEAF FOR\n  \
           An address never hard-misses a PARSEABLE line. A record whose shape carries no leaf \
         - an isMeta pseudo-turn matching no template, a text-less block record (a NON-isMeta \

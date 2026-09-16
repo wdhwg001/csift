@@ -224,8 +224,8 @@ fn search_help_mentions_regex_dialect_boundaries() {
 fn help_pins_the_unsent_diff_line_in_both_manuals() {
     let h = Home::new();
     for (cmd, keys) in [
-        ("search", "diff_chars, diff_pct, diff_exact"),
-        ("show", "diff_chars, diff_pct and diff_exact"),
+        ("search", "`diff_chars`, `diff_pct`, `diff_exact`"),
+        ("show", "`diff_chars`, `diff_pct` and `diff_exact`"),
     ] {
         let out = h.run(&[cmd, "--help"]);
         assert!(out.success, "{cmd} --help: {}", out.stderr);
@@ -247,7 +247,9 @@ fn help_pins_the_unsent_diff_line_in_both_manuals() {
             out.stdout
         );
         assert!(
-            out.stdout.contains("superseding_line, superseding_uuid") && out.stdout.contains(keys),
+            out.stdout
+                .contains("`superseding_line`, `superseding_uuid`")
+                && out.stdout.contains(keys),
             "{cmd} --help names the JSON keys:\n{}",
             out.stdout
         );

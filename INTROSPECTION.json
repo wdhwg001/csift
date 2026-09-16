@@ -49893,7 +49893,7 @@
         },
         {
           "path": "src/cli/search_help/intro.rs",
-          "lines": "210-212",
+          "lines": "211-213",
           "snippet": "        28 of the 73 leaves are outside a bare role or category - the two scan-layer user\\n  \\\n        leaves, `user.queued` and all 13 bookkeeping leaves (non-transcript lines with no\\n  \\\n        message field), the two textless thinking leaves, the message-less system records\\n  \\"
         }
       ],
