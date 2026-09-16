@@ -93093,7 +93093,7 @@
       "id": "CLS-046",
       "area": "classification",
       "behavior": "A COORDINATOR relay is an isMeta `type:\"user\"` record whose content opens the preamble `The coordinator sent a message` and whose top-level `origin` object carries the single key `kind` with the value `coordinator`. The object has no sender field, and that is structural rather than incidental: of the 22 occurrences of the quoted value `\"coordinator\"` in the executable, exactly THREE construct an origin object and all three build the one-key form - the module-level constant `rl={kind:\"coordinator\"}`, the else-branch of the send path's ternary (whose other branch builds the PEER form `{kind:\"peer\", from, senderTaskId, name?, body?}` when a sender task id and address are both known), and a NARROWING normalizer whose `coordinator` case returns `{kind:e.kind}`, discarding every other key an origin arrived with. So a relay that reached this arm is by construction one with no sender to name, and the normalizer would strip one even if some future branch supplied it. The other 19 occurrences are the session MODE string, the ingress GATE class and their readers, a schema declaration and a system-prompt sentence - none of them an origin object. Over one projects root the two detectors - the preamble and `origin.kind` - name exactly the SAME 147 records across 91 files, with zero carrying only one of them, and all 147 are `isMeta`. The same `origin` object carries three other kinds in that corpus (`task-notification` 3,567, `human` 3,081, `peer` 55).",
-      "depends": "`Record::direction` renders `coordinator \u21e8 self` on such a record. Every other `agent.communication.*` leaf renders an arrow, so without this arm the relay was the one inbound message whose hit said nothing about where it came from - and it carries `agent.communication.inbox` like any other. The FROM is the literal word rather than a read of some field, because the producer shows there is no field: a csift that invented an id there would be inventing it. The arm keys on the VALUE `coordinator`, never on the presence of `origin`, because the same key carries three other kinds and an arm keyed on presence would put a coordinator arrow on 6,703 records that are not relays. It runs LAST in the direction chain, so nothing that already resolves a direction is touched.",
+      "depends": "`Record::direction` renders `coordinator \u21e8 self` on such a record. Every other `agent.communication.*` leaf renders an arrow, so without this arm the relay was the one inbound message whose hit said nothing about where it came from - and it carries `agent.communication.inbox` like any other. The FROM is the literal word rather than a read of some field, because the producer shows there is no field: a csift that invented an id there would be inventing it. The arm keys on the VALUE `coordinator`, never on the presence of `origin`, because the same key carries three other kinds and an arm keyed on presence would put a coordinator arrow on 6,703 records that are not relays. It runs LAST in the direction chain, so nothing that already resolves a direction is touched. The injection family reads the same key for a second purpose: an isMeta relay's `replies_to` edge is an honest empty on BOTH shapes, and the arm keys on `origin.kind` rather than on the leaf so the two reasons cannot be swapped - the coordinator's origin carries only its kind, while a peer relay's names the lane that sent it (`senderTaskId`) and never a message it answers. A leaf-keyed arm would print the coordinator's reason on every isMeta peer record.",
       "code": [
         {
           "path": "src/model/classify/direction.rs",
@@ -93294,6 +93294,16 @@
           "observed": "22 occurrences. THREE construct an origin object: the send path's ternary else-branch, the module-level constant, and a narrowing normalizer at 162964388 whose `coordinator` case returns `{kind:e.kind}` - a single-key object that discards every other key. The remaining 19 are 9 occurrences of the session MODE string, 4 of the ingress GATE class and its readers, 2 origin predicates, 1 relay-preamble dispatch, 1 agent-set selector pair, 1 schema declaration and 1 system-prompt sentence. No construction carries a sender field.",
           "rule": "An occurrence is a byte match of the quoted value anywhere in the executable. A CONSTRUCTION is an occurrence that builds an object whose `kind` is or becomes `coordinator`; everything else is classified by what it does with the value.",
           "note": "The previous enumeration used the `kind:\"coordinator\"` needle, which matches a literal key-value pair and therefore could not reach the normalizer that writes `{kind:e.kind}`. The third construction strengthens the conclusion rather than moving it: it produces the single-key form and would strip a sender field if one ever arrived."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Over each projects root, walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` carrying a top-level `origin` OBJECT, and tally them by (`origin.kind`, whether `isMeta` is truthy), recording the sorted KEY SET of the origin object within each bucket.",
+          "observed": "Root one: coordinator 149, every one isMeta and every one with the key set {kind}; peer 55, every one isMeta, key sets {from,kind,senderTaskId} 26, {body,from,kind,name,senderTaskId} 24, {from,kind,verifiedPeerPid} 3, {from,kind,selfSent,verifiedPeerPid} 1 and {body,from,fromMode,kind,msg_id,name,verifiedPeerPid} 1 - so 50 of 55 carry a sending lane and 1 of 55 a message id; human 3,096 (1 isMeta); task-notification 3,581 (35 isMeta). Root two: coordinator 57, all isMeta, all {kind}; peer 109, all isMeta, {from,kind,senderTaskId} 77 and {body,from,kind,name,senderTaskId} 32, so 109 of 109 carry a sending lane and none a message id; human 1,978 (1 isMeta); task-notification 3,324 (0 isMeta).",
+          "rule": "One count per RECORD, a record being a b'\\n'-delimited line under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and a top-level `origin` that is an object; the key set is the sorted key list of that object. The two roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
+          "note": "The coordinator one-key form holds at a larger record count than the claim first stated, the corpus being live. The peer form is added because the injection family's relay arm now has to tell the two apart: both are isMeta inbound records under one leaf, so only the origin separates them."
         }
       ]
     },
@@ -94688,6 +94698,118 @@
           "observed": "The recogniser occurs once and reads, in order, `Jar.some((d)=>o.startsWith(d))`, `Zar.includes(o)` and `Dcn.some((d)=>o.startsWith(`${d}${m$t}`))`. The constant block reads `m$t=` with the separator ` hook feedback:` plus a newline and `Dcn=[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]`, with `Lcn=\"\"`; the four `Zar` texts are byte-identical to `markers::RETRY_NUDGE_TEXTS` and the four `Dcn` names are byte-identical to the four entries of `injections::HOOK_FEEDBACK_PREFIXES` minus the shared ` hook feedback:` tail. `[handback-send-enforce]` occurs 0 times at 2.1.258. `jvt(` occurs 4 times: the definition, one consumer, and a different three-parameter function plus its own call site. Corpus, one count per isMeta user record: root one 3,713 records with 46 opening `Stop hook feedback:` and 0 for each of the other three names; root two 1,825 records with 35 and 0 / 0 / 0.",
           "rule": "Build occurrences are byte-literal searches over the whole executable. One count per RECORD for the corpus figures, a record being a b'\\n'-delimited line of a `*.jsonl` file under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`; a record counts under a prefix when its left-trimmed flattened text starts with it. The two roots overlap in the sessions they hold, so each is reported as its own root rather than as an independent sample.",
           "note": "The three siblings of the hook-name table have no corpus specimen in either root and are derived from the table; the separator difference (the producer's carries the newline, csift's prefixes stop at the colon) is the one place csift is deliberately wider, pinned by `the_feedback_prefixes_stop_at_the_colon`."
+        }
+      ]
+    },
+    {
+      "id": "CLS-049",
+      "area": "classification",
+      "behavior": "Every record Claude Code appends takes its `parentUuid` from the running TAIL of the transcript, written by one append path: `let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,...}`, where `_e` is the tail uuid the loop carries and `me` is the compaction-boundary flag that nulls it. A `type:\"user\"` record carrying `sourceToolAssistantUUID` overrides the tail with that uuid when the session's own message set holds it, and telemetry fires when it does not (`tengu_phantom_parent_write`) or when a record would parent itself (`tengu_chain_self_reference_write`). Nothing on that path reads `isMeta`, so an INJECTED record is parented exactly like a typed one: the record above it in the conversation is the one it was written under. Measured over two projects roots, one count per isMeta user record bucketed by the template csift's arm order assigns it: root one, of 3,180 bucketed records 3,179 carry a `parentUuid` and all 3,179 name a uuid some line of the SAME file carries - the one exception being a `<local-command-caveat>` record with no parent key at all, the first record of its transcript; root two, 1,218 bucketed records, 1,218 with a parent, 1,218 resolving in-file. The notification FRAME carries a second key instead: its wrapped pulse names the tool_use it reports on in a `<tool-use-id>` tag - 30 of 35 frame carriers in root one, and root two holds no frame carrier at all.",
+      "depends": "The injection family's `for` edges are read from those two keys and from nothing else. `attached_to` / `redoes` / `blocked` / `fires` are the `parentUuid` with the in-file LINE resolved through the chain's own uuid map, and `reports` is the pulse's `<tool-use-id>`, which is a tool_use id rather than a record uuid and therefore renders with no line - a shape the render keeps distinct from a key that is absent. The three answers must stay distinct on every surface: a resolved edge, a key that resolves to no line of this file (a wire id, another session's record, a line a pre-boundary deletion removed) and a record that names no such key at all, which renders `unknown (<reason>)` rather than vanishing. If a build stopped parenting injected records from the tail, every edge in this family would point at the wrong record while still looking resolved, which is why the claim pins the writer rather than the observed rate.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/injections.rs",
+          "lines": "242-244",
+          "snippet": "fn parent_edge(kind: &'static str, rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), ctx)\n}"
+        },
+        {
+          "path": "src/commands/search/record_text/injections.rs",
+          "lines": "253-258",
+          "snippet": "fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    let id = rec\n        .raw_message_text()\n        .and_then(|s| extract_xml_tag(&s, \"tool-use-id\"));\n    super::for_edge(\"reports\", Basis::Key, id.as_deref(), ctx)\n}"
+        },
+        {
+          "path": "src/commands/search/record_text/seam.rs",
+          "lines": "245-249",
+          "snippet": "    let line = ctx.line_of_uuid(uuid);\n    HitFact::For {\n        kind,\n        basis,\n        target: ForTarget {"
+        }
+      ],
+      "instrument": "Byte-search the 2.1.258 build for `let ke={parentUuid:me?null:_e,logicalParentUuid:` (one occurrence) and read 300 bytes back to recover the loop that computes `_e` and the two telemetry calls. Corpus side, over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`; for each file collect the set of `uuid` values on its lines, then keep the objects with `type == \"user\"` and truthy `isMeta`, flatten the text the way the model layer does, and bucket each record by the FIRST template of csift's arm order its left-trimmed text opens with - plus the two buckets the arm order decides on the content SHAPE rather than on text, a textless image-only record and a textless document-only one. Per bucket count the records carrying a `parentUuid` and the subset whose parent is in that file's uuid set; a record no bucket claims is the residue and is counted apart. For the frame bucket, additionally count the records whose text matches `<tool-use-id>([^<]*)</tool-use-id>`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the append loop that carries the tail uuid",
+          "offset": 166105082,
+          "excerpt": "for(let fe of e){let me=Hu(fe),_e=F;if(fe.type===\"user\"&&\"sourceToolAssistantUUID\"in fe&&fe.sourceToolAssistantUUID){",
+          "note": "one pass over the records being appended; `_e` starts at the running tail and `me` marks a compaction boundary, whose parent is nulled"
+        },
+        {
+          "role": "gate",
+          "name": "the sourceToolAssistantUUID override and its two telemetry calls",
+          "offset": 166105233,
+          "excerpt": "if(z===null||z.has(we))_e=we;else s(\"tengu_phantom_parent_write\",{})}if(_e===fe.uuid)s(\"tengu_chain_self_reference_write\",{});",
+          "note": "the ONE condition that moves a record's parent off the tail, and the two shapes the harness reports rather than writes"
+        },
+        {
+          "role": "writer",
+          "name": "the appended record's own field set",
+          "offset": 166105359,
+          "excerpt": "let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};",
+          "note": "the bytes: `parentUuid` from the tail unless the boundary flag nulls it, and no test of `isMeta` anywhere on the path"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The bucket census above, run over both projects roots, reporting per bucket the record count, the count carrying a `parentUuid` and the count whose parent is a uuid on some line of the same file; plus the frame bucket's `<tool-use-id>` count.",
+          "observed": "Root one: 9,611 files, 3,713 isMeta user records, 3,180 bucketed and 533 residue; 3,179 of the 3,180 carry a parentUuid and all 3,179 resolve in-file, the single exception being one of the 191 `<local-command-caveat>` records. 35 frame carriers, 30 of them naming a `<tool-use-id>`. Root two: 10,330 files, 1,825 records, 1,218 bucketed and 607 residue; 1,218 with a parent and 1,218 resolving; no frame carrier at all.",
+          "rule": "One count per RECORD, a record being a b'\\n'-delimited line of a `*.jsonl` file under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`. A record falls in exactly one bucket, the first of csift's arm order it matches. resolves-in-file compares the record's `parentUuid` against the set of `uuid` values on the lines of its OWN file. The two roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
+          "note": "The bucket list is the arm order in full, so the enforce-retry and resume-prompt rows are counted where a partial list left them out, and the stated total equals the sum of the buckets."
+        }
+      ]
+    },
+    {
+      "id": "CLS-050",
+      "area": "classification",
+      "behavior": "An image the operator attached reaches the transcript in TWO shapes, and one of them carries no text at all: an `isMeta` `type:\"user\"` record whose `message.content` is an array of `image` blocks and nothing else. Measured over two projects roots, one count per isMeta user record: root one holds 3,713 such records of which 97 carry no `text` block - 94 with image blocks only, 3 with `document` blocks only, 0 with both; root two holds 1,825 of which 78 are textless - 75 image-only, 3 document-only, 0 both. The other shape is the `[Image: ` / `[Image source: ` REFERENCE, which is prose and carries its text like any other record (claim CLS-017): 836 and 556 records.",
+      "depends": "csift gives the textless block shape the same leaf as the reference (`harness.context.image`, the inventory's `Block(\"image\")` row) and renders its BLOCK COUNTS in the label zone, because there is no text for any other render to show. Without the counts a `show --line` address on one falls through to the key=value excerpt of the record's own top-level keys and prints the head of a base64 payload, which tells a reader nothing about what the record is. The counts are a label-zone FACT rather than the unit's text on purpose: a fabricated body reachable on a scan would need a synthesized-marker registration to keep the section 7 prefilter and whole-file-gate laws sound, and a picture holds nothing for a pattern to match anyway - which is also why this specimen is one of the two the emission law exempts by name. The `document` count is rendered beside the image count because the parsed block model folds every type it does not name into one tolerant arm, so the distinction exists only on the source line; a document-ONLY record carries no leaf at all, which the shape inventory's `Block(\"document\")` row records.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/injections.rs",
+          "lines": "270",
+          "snippet": "fn image_only_blocks(rec: &Record, raw: Option<&str>) -> Option<(usize, usize)> {"
+        },
+        {
+          "path": "src/commands/search/record_text/injections.rs",
+          "lines": "87-89",
+          "snippet": "            Fact::ImageOnly { images, documents } => Some(format!(\n                \"[context image-only: {images} image block(s), {documents} document block(s)]\"\n            )),"
+        }
+      ],
+      "instrument": "Over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` and truthy `isMeta`, and split them by whether `message.content` yields any `text` (a string content, or an array holding at least one `{type:\"text\"}` block). For the textless ones, count the blocks by their `type` and bucket the record as image-only, document-only or both. Separately count the records whose left-trimmed text opens with `[Image: ` or `[Image source: `.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The TRIGGER and GATE for the textless block shape: which submission path pushes an image block array with no text block beside it, and under which condition. Instrument: read the three call sites of the image-reference builder claim CLS-017 enumerates and follow the one that pushes blocks rather than a reference string."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` and truthy `isMeta`, and split them by whether `message.content` yields any text (a string content, or an array holding at least one `{type:\"text\"}` block). For the textless ones, count the blocks by their `type` and bucket the record as image-only, document-only or both. Separately count the records whose left-trimmed text opens with `[Image: ` or `[Image source: `.",
+          "observed": "Root one: 3,713 isMeta user records, 97 textless - 94 image-only, 3 document-only, 0 carrying both kinds - and 836 opening with an image reference. Root two: 1,825 records, 78 textless - 75 image-only, 3 document-only, 0 both - and 556 references.",
+          "rule": "One count per RECORD, a record being a b'\\n'-delimited line under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`; a textless record counts once in exactly one shape bucket. The two roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
+          "note": "The block counts now render in the label zone, so an address on such a record no longer falls through to the key=value excerpt alone."
         }
       ]
     }
