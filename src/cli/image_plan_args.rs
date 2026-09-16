@@ -53,9 +53,8 @@ use super::*;
         JSON SCHEMA (per --format json)\n  \
           Envelope: header → listing rows → summary. Listing rows: {kind:\"image\", handle \
         (the display `#N` / locator), seq, id, line, img_index, session_id, is_subagent, \
-        parent_session_id, source_kind, media_type, b64_len, est_bytes, url, `page`, \
-        `pdf_path`, record_uuid, \
-        survival, ts_utc, ts_local} (`survival` is live | pre-cut | abandoned - the carrying \
+        parent_session_id, source_kind, media_type, b64_len, est_bytes, url, page, \
+        pdf_path, record_uuid, survival, ts_utc, ts_local} (`survival` is live | pre-cut | abandoned - the carrying \
         record's place in the surviving conversation; an abandoned image is listed and \
         extractable like any other. `page` is the DOCUMENT page number when the image is a \
         PDF page and null for every other image, `pdf_path` the document it came from, \
