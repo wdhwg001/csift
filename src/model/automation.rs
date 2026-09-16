@@ -251,8 +251,9 @@ fn normalize_collapse(s: &str, mut on_newline: impl FnMut(u32)) -> String {
 //     ARMING a wakeup - is `agent.tool.use`, not a harness tick.
 //   - The four `agent.thinking.*` leaves split on the BLOCK's own shape, and two of them
 //     carry no readable text: a [`Block::RedactedThinking`] holds opaque ciphertext and an
-//     omitted block holds nothing. What a thinking unit's body IS belongs to the thinking
-//     FAMILY, not to this engine and not to the block loop
-//     (`commands/search/record_text/thinking.rs::block_body`), which is where the
-//     redacted placeholder lives.
+//     omitted block holds nothing. Their bodies are EMPTY and what they are rides the
+//     label zone, where a fabricated tag is display-only and no prefilter reasons about
+//     it. What a thinking unit's body IS belongs to the thinking FAMILY, not to this
+//     engine and not to the block loop
+//     (`commands/search/record_text/thinking.rs::block_body`).
 // ============================================================================

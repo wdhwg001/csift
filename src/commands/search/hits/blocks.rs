@@ -25,9 +25,10 @@ pub(crate) type EmitHit<'a> = dyn FnMut(
     ) + 'a;
 
 /// The block loop of [`collect_record_hits`]: one emission per selected block-bearing unit -
-/// thinking (incl. the opaque redacted placeholder), assistant text, tool_use (richest comm
-/// view first), tool_result (inbox > plain result; the user-facing dual, when SELECTED, was
-/// already emitted as the richest view and suppresses the duplicate).
+/// thinking (the four leaves, two of which render an EMPTY body and say what they are in
+/// the label zone instead), assistant text, tool_use (richest comm view first), tool_result
+/// (inbox > plain result; the user-facing dual, when SELECTED, was already emitted as the
+/// richest view and suppresses the duplicate).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_block_hits(
     rec: &Record,

@@ -183,7 +183,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         splices after one ([paired]/[unpaired]) ·\n                                   \
         .hook.context [-t] context a hook injected ·\n                                   \
         .hook.outcome [-t/att] a hook RUN\'s own record ·\n                                   \
-        .hook.feedback [scan] a Stop hook\'s blocking feedback ·\n                                   \
+        .hook.feedback [scan] a blocking hook\'s feedback, over the four \n                                   \
+        names one formatter writes (Stop, TeammateIdle, TaskCreated, \n                                   \
+        TaskCompleted) ·\n                                   \
         .context.{reminder,listing,prompt,file,mode,ide,task}\n                                   \
         [-t/att] what the harness attached to the turn ·\n                                   \
         .context.{image,skill} [scan] its isMeta image references\n                                   \
