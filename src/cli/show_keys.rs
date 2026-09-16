@@ -120,6 +120,34 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         Family::Attachments,
         "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
     ),
+    // The SYSTEM family's per-event keys, in the order each leaf emits them, each present
+    // only when the line carried it. `error` carries the failure's type and message ONLY -
+    // an `api_error` line's `error.headers` reaches no rendered or JSON path, and `--raw`
+    // is the way to those bytes.
+    k(Family::System, "retried"),
+    k(Family::System, "original_model"),
+    k(Family::System, "fallback_model"),
+    k(Family::System, "category"),
+    k(Family::System, "status"),
+    k(Family::System, "retry_attempt"),
+    k(Family::System, "max_retries"),
+    k(Family::System, "retry_in_ms"),
+    k(
+        Family::System,
+        "error (type and message only; never headers)",
+    ),
+    k(Family::System, "task_id"),
+    k(Family::System, "cron"),
+    k(Family::System, "prompt (cut at 200 chars)"),
+    k(Family::System, "served_by"),
+    k(Family::System, "fell_back_from"),
+    // Spelled with slashes inside PARENTHESES: the rendered list is comma-separated and is
+    // read back by trimming its outer braces, so a comma inside one key would read as
+    // three more keys and a closing brace at the end would be trimmed away.
+    k(
+        Family::System,
+        "for:[…] (kind/basis/target/reason per edge)",
+    ),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.
