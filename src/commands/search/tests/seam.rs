@@ -191,6 +191,155 @@ fn a_block_this_family_does_not_own_has_no_body() {
     );
 }
 
+/// ONE SPECIMEN PER LEAF of the two SHARED categories, and the family that answers for
+/// each - the table the drift rows above cannot hold, because the answer is a property of
+/// the RECORD rather than of the leaf.
+///
+/// `harness.hook` and `harness.schedule` are the only categories two families are offered,
+/// and there first-Some-wins is a TIE-BREAK, not a fallback chain. A record belongs to one
+/// family; a second family answering behind the first means both believe they own it, and
+/// then the winner is a table order and the loser's text vanishes with no trace on any
+/// surface. So the law is AT MOST ONE, and the column records which one it is today.
+///
+/// `None` is the honest current state for four of the seven, not a gap: an isMeta
+/// injection's text is its own `message.content`, which the engine's generic arms already
+/// join, and the routing exists so the family lane can give a template a head of its own
+/// without touching the shared chain. Those rows flip to `injections` when it does, and
+/// this table is where that gets said.
+/// The rows are in `Class::ALL` order, which is what the totality check compares against.
+const SHARED_CATEGORY_SPECIMENS: &[(Class, &str, Option<&str>)] = &[
+    (
+        Class::ScheduleWakeup,
+        "{\"type\":\"user\",\"uuid\":\"s5\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"# Autonomous loop check\\n\\nthe armed body\"}}",
+        None,
+    ),
+    (
+        Class::ScheduleEvent,
+        r#"{"type":"system","uuid":"s4","subtype":"scheduled_task_fire","content":"Running scheduled task (every day at 09:00)"}"#,
+        Some("system"),
+    ),
+    (
+        // The one leaf whose CLASSIFY needs a per-file index (`ClassifyCtx::
+        // schedule_fires` joins it to the fire record it is parented to). The seam takes
+        // the class it is handed, so the render question is answerable here regardless.
+        Class::ScheduleFire,
+        r#"{"type":"user","uuid":"s7","parentUuid":"s4","isMeta":true,"message":{"role":"user","content":"the operator armed this text"}}"#,
+        None,
+    ),
+    (
+        Class::ScheduleTick,
+        "{\"type\":\"user\",\"uuid\":\"s6\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"# Autonomous loop tick\\n\\nthe driver body\"}}",
+        None,
+    ),
+    (
+        Class::HookContext,
+        r#"{"type":"attachment","uuid":"s1","attachment":{"type":"hook_additional_context","content":["a hook said this"]}}"#,
+        Some("attachments"),
+    ),
+    (
+        Class::HookOutcome,
+        r#"{"type":"attachment","uuid":"s2","attachment":{"type":"hook_success","hookName":"Stop"}}"#,
+        Some("attachments"),
+    ),
+    (
+        Class::HookFeedback,
+        "{\"type\":\"user\",\"uuid\":\"s3\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"Stop hook feedback:\\n- keep going\"}}",
+        None,
+    ),
+];
+
+/// The sweep: the table is total over the two shared categories, and each specimen is
+/// answered by AT MOST one family - the one the table names.
+#[test]
+fn exactly_one_family_answers_for_every_leaf_of_a_shared_category() {
+    use crate::commands::search::record_text::{render_families, RenderFamily};
+    let ctx = ClassifyCtx::top_level();
+    // Total, in both directions: every leaf of a two-family category has a row, and no
+    // row names a leaf whose category is not shared.
+    let shared: Vec<Class> = Class::ALL
+        .iter()
+        .copied()
+        .filter(|c| render_families(*c).len() > 1)
+        .collect();
+    let listed: Vec<Class> = SHARED_CATEGORY_SPECIMENS.iter().map(|(c, ..)| *c).collect();
+    assert_eq!(
+        shared, listed,
+        "a leaf of a shared category has no specimen, or a row names an unshared leaf"
+    );
+
+    for (class, line, want) in SHARED_CATEGORY_SPECIMENS {
+        let r = rec(line);
+        let answered: Vec<&str> = render_families(*class)
+            .iter()
+            .filter(|f| {
+                let got = match f {
+                    RenderFamily::Attachments => {
+                        crate::commands::search::record_text::attachments::render(
+                            &r,
+                            Some(line),
+                            *class,
+                            &ctx,
+                        )
+                    }
+                    RenderFamily::Injections => {
+                        crate::commands::search::record_text::injections::render(
+                            &r,
+                            Some(line),
+                            *class,
+                            &ctx,
+                        )
+                    }
+                    RenderFamily::System => crate::commands::search::record_text::system::render(
+                        &r,
+                        Some(line),
+                        *class,
+                        &ctx,
+                    ),
+                    other => panic!("{:?} is not offered a shared category", other),
+                };
+                got.is_some()
+            })
+            .map(|f| f.name())
+            .collect();
+        assert!(
+            answered.len() <= 1,
+            "{}: {answered:?} both answer - two families claim one record, and the seam \
+             discards the loser in silence",
+            class.path()
+        );
+        assert_eq!(
+            answered.first().copied(),
+            *want,
+            "{} is answered by a different family than the table names",
+            class.path()
+        );
+    }
+}
+
+/// A SECOND family answering behind the first trips the seam's own assertion, by name.
+///
+/// The sweep above can only walk the specimens somebody wrote down; this one manufactures
+/// the shape - an attachment record the injections probe also answers for - so the rule is
+/// under the whole debug test suite rather than under seven rows. In release the
+/// short-circuit stands and the first answer wins.
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "a shadowed render")]
+fn a_second_family_answering_behind_the_first_is_a_bug() {
+    use crate::commands::search::record_text::{family_render, probe};
+    let line = format!(
+        r#"{{"type":"attachment","uuid":"s8","sessionId":"{}","attachment":{{"type":"hook_additional_context","content":["a hook said this"]}}}}"#,
+        probe::SENTINEL_RENDER_SESSION
+    );
+    let r = rec(&line);
+    let _ = family_render(
+        &r,
+        Some(&line),
+        Class::HookContext,
+        &ClassifyCtx::top_level(),
+    );
+}
+
 /// A FAMILY REFUSES A RECORD THAT IS NOT ITS OWN, and the dispatch does not do it for it.
 ///
 /// The seam reads `render_leaf(rec).or(class)`: a record with no leaf of its own arrives

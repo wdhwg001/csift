@@ -18,22 +18,62 @@ use super::*;
 /// below, and a family that has nothing to say about a record answers `None` on one
 /// compare.
 ///
-/// Which families are offered a record, and in which order, is [`render_families`]; at
-/// most one of their answers is ever used, which `find_map` makes structural rather than
-/// a rule somebody has to keep.
+/// Which families are offered a record, and in which order, is [`render_families`]. Two
+/// categories name two families, and there FIRST-SOME-WINS is a tie-break, never a
+/// fallback chain: a record belongs to one family, and a SECOND family answering behind
+/// the first means two families both believe they own it. The winner is arbitrary, the
+/// loser's text is discarded in silence, and which one that is depends on a table order
+/// nobody reading the output can see - so it is a bug, and this says so.
+///
+/// Release keeps the short-circuit: the first answer wins and the families behind it are
+/// never asked. A DEBUG build asks them all and trips `debug_assert!` on a shadowed
+/// answer, which is what puts the rule under the whole test suite rather than under the
+/// two specimens a sweep can hold. The seam test sweeps the shared categories besides.
 pub(crate) fn family_render(
     rec: &Record,
     raw: Option<&str>,
     class: Class,
     ctx: &ClassifyCtx,
 ) -> Option<String> {
-    render_families(class).iter().find_map(|f| match f {
+    let families = render_families(class);
+    let mut answer: Option<(RenderFamily, String)> = None;
+    for &f in families {
+        if answer.is_some() && !cfg!(debug_assertions) {
+            break;
+        }
+        let Some(text) = render_one(f, rec, raw, class, ctx) else {
+            continue;
+        };
+        match &answer {
+            None => answer = Some((f, text)),
+            Some((first, _)) => debug_assert!(
+                false,
+                "{}: {f:?} answers behind {first:?} - a shadowed render is two families \
+                 claiming one record, not a fallback",
+                class.path()
+            ),
+        }
+    }
+    answer.map(|(_, text)| text)
+}
+
+/// One family's render, by variant. Split out of [`family_render`] so the dispatch arm
+/// list is read once and the shadowing rule above reads as the rule rather than as part
+/// of a `match`.
+fn render_one(
+    family: RenderFamily,
+    rec: &Record,
+    raw: Option<&str>,
+    class: Class,
+    ctx: &ClassifyCtx,
+) -> Option<String> {
+    match family {
         RenderFamily::Bookkeeping => bookkeeping::render(rec, raw, class, ctx),
         RenderFamily::Attachments => attachments::render(rec, raw, class, ctx),
         RenderFamily::Injections => injections::render(rec, raw, class, ctx),
         RenderFamily::System => system::render(rec, raw, class, ctx),
         RenderFamily::Thinking => thinking::render(rec, raw, class, ctx),
-    })
+    }
 }
 
 /// The five families that have a record-level render. `keys` is deliberately absent: its
