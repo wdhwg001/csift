@@ -18,15 +18,48 @@ use super::*;
 /// Called by [`super::family_render`] for every unit whose leaf sits in `harness.system`
 /// or `harness.schedule`, BEFORE the engine's generic arms; `None` falls through to them,
 /// which is also how a `harness.schedule` leaf that is NOT the scheduler's own record
-/// reaches the injection family behind this one. A STUB at the render seam: the six arms
-/// this family owns still live in `promoted.rs` and move here in their own commit.
+/// reaches the injection family behind this one.
+///
+/// `[<subtype> <level>] <content>`: the head is FABRICATED, so it is covered by the
+/// `"subtype"` synth marker (`matcher::synth_marker_finders`) and the whole-file gate
+/// re-renders it from the source line; the body is the record's own `content` - a string
+/// on every measured shape (informational, agents_killed, local_command), the compact
+/// JSON of whatever else a subtype carries otherwise.
+///
+/// The six leaves this answers for are the ones a `type:"system"` line's SUBTYPE decides
+/// and this family owns. Every other system subtype - `compact_boundary` above all - has
+/// its leaf in another category, so the seam never offers it here and it keeps the
+/// render it always had.
 pub(crate) fn render(
-    _rec: &Record,
+    rec: &Record,
     _raw: Option<&str>,
     _class: Class,
     _ctx: &ClassifyCtx,
 ) -> Option<String> {
-    None
+    match rec.promoted_class()? {
+        Class::ScheduleEvent
+        | Class::SystemRefusal
+        | Class::SystemApiError
+        | Class::SystemNotice
+        | Class::SystemKill
+        | Class::SystemCommand => {}
+        _ => return None,
+    }
+    let subtype = rec.subtype.as_deref().unwrap_or("system");
+    let head = match rec.level.as_deref() {
+        Some(level) if !level.is_empty() => format!("[{subtype} {level}]"),
+        _ => format!("[{subtype}]"),
+    };
+    let body = match rec.content.as_ref() {
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    };
+    Some(if body.is_empty() {
+        head
+    } else {
+        format!("{head} {body}")
+    })
 }
 
 /// The system family's own facts.

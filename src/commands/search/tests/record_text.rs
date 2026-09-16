@@ -112,14 +112,24 @@ fn snapshot_and_delta_excerpts_name_paths_and_versions() {
     assert_eq!(promoted_record_text(&none), None);
 }
 
+/// The six `type:"system"` EVENT leaves render `[<subtype> <level>] <content>`, and the
+/// renderer that decides it is the SYSTEM FAMILY's, not the promoted one.
+///
+/// Before the render seam these four shapes were pinned against `promoted_record_text`;
+/// the arm moved into `record_text/system.rs` and the assertions moved with it, byte for
+/// byte. The last three cases are what the move makes statable: the promoted renderer now
+/// answers NOTHING for these leaves, so the render has exactly one owner rather than two,
+/// and the family refuses a system subtype whose leaf belongs to another category.
 #[test]
-fn meta_system_renders_subtype_level_and_content() {
+fn a_system_event_renders_its_subtype_level_and_content() {
+    let ctx = ClassifyCtx::top_level();
+    let render = |r: &Record| system::render(r, None, Class::SystemNotice, &ctx);
     // String content with a level: the Remote Control disconnect shape.
     let info = rec(
         r#"{"type":"system","subtype":"informational","level":"warning","uuid":"i","timestamp":"t","content":"Remote Control disconnected - run /remote-control"}"#,
     );
     assert_eq!(
-        promoted_record_text(&info).as_deref(),
+        render(&info).as_deref(),
         Some("[informational warning] Remote Control disconnected - run /remote-control")
     );
     // No level: the head is the bare subtype; a non-string content renders as its JSON.
@@ -127,19 +137,26 @@ fn meta_system_renders_subtype_level_and_content() {
         r#"{"type":"system","subtype":"agents_killed","uuid":"k","timestamp":"t","content":{"count":2}}"#,
     );
     assert_eq!(
-        promoted_record_text(&killed).as_deref(),
+        render(&killed).as_deref(),
         Some(r#"[agents_killed] {"count":2}"#)
     );
     // No content at all: the head alone (still a searchable, addressable record).
     let bare = rec(r#"{"type":"system","subtype":"api_error","uuid":"e","timestamp":"t"}"#);
-    assert_eq!(promoted_record_text(&bare).as_deref(), Some("[api_error]"));
+    assert_eq!(render(&bare).as_deref(), Some("[api_error]"));
     // An empty level string is treated as absent.
     let empty = rec(
         r#"{"type":"system","subtype":"local_command","level":"","uuid":"l","timestamp":"t","content":"ran"}"#,
     );
+    assert_eq!(render(&empty).as_deref(), Some("[local_command] ran"));
+    assert_eq!(promoted_record_text(&info), None);
+    assert_eq!(promoted_record_text(&killed), None);
+    let boundary = rec(
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b","timestamp":"t","content":"Conversation compacted"}"#,
+    );
     assert_eq!(
-        promoted_record_text(&empty).as_deref(),
-        Some("[local_command] ran")
+        render(&boundary),
+        None,
+        "a compaction boundary's leaf is in another category - the family refuses it"
     );
 }
 

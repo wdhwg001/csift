@@ -106,32 +106,11 @@ pub(crate) fn promoted_record_text(rec: &Record) -> Option<String> {
             Some(lines.join("\n"))
         }
         Class::BookkeepingFileHistory => snapshot_record_text(rec),
-        Class::ScheduleEvent
-        | Class::SystemRefusal
-        | Class::SystemApiError
-        | Class::SystemNotice
-        | Class::SystemKill
-        | Class::SystemCommand => {
-            // `[<subtype> <level>] <content>`: the head is fabricated (a synth marker
-            // covers it), the body is the record's own `content` - a string on every
-            // measured shape (informational, agents_killed, local_command), the compact
-            // JSON of whatever else a subtype carries otherwise.
-            let subtype = rec.subtype.as_deref().unwrap_or("system");
-            let head = match rec.level.as_deref() {
-                Some(level) if !level.is_empty() => format!("[{subtype} {level}]"),
-                _ => format!("[{subtype}]"),
-            };
-            let body = match rec.content.as_ref() {
-                Some(serde_json::Value::String(s)) => s.clone(),
-                Some(other) => other.to_string(),
-                None => String::new(),
-            };
-            Some(if body.is_empty() {
-                head
-            } else {
-                format!("{head} {body}")
-            })
-        }
+        // The six `type:"system"` EVENT leaves are not here: their render is the system
+        // family's (`record_text/system.rs`), reached through the render seam before this
+        // renderer is consulted at all. What is left is the TURN family's three closers
+        // plus the person's own queued text, which are the shapes this renderer still
+        // decides.
         _ => None,
     }
 }

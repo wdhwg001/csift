@@ -14798,7 +14798,7 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "190-191",
+          "lines": "169-170",
           "snippet": "/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a\n/// legacy boundary carrying just the four scalars renders byte-for-byte as before:"
         },
         {
@@ -21924,12 +21924,12 @@
       "code": [
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "139-142",
+          "lines": "118-121",
           "snippet": "/// The `harness.bookkeeping.file-history` excerpt for a `file-history-snapshot` (every tracked\n/// path with its version, sorted) or a `file-history-delta` (the one path). The\n/// snapshot line has no top-level timestamp; the nested one rides the excerpt.\nfn snapshot_record_text(rec: &Record) -> Option<String> {"
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "159-164",
+          "lines": "138-143",
           "snippet": "    }\n    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
         }
       ],
@@ -22239,7 +22239,7 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "146-150",
+          "lines": "125-129",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");"
         },
         {
@@ -49031,7 +49031,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "146-158",
+          "lines": "125-137",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let name = backup\n            .and_then(|b| b.get(\"backupFileName\"))\n            .and_then(serde_json::Value::as_str)\n            .map(|n| format!(\" backup={n}\"))\n            .unwrap_or_default();\n        return Some(format!(\n            \"[file-history delta at {at}: {path}@v{version}{name}]\"\n        ));"
         },
         {
@@ -49819,7 +49819,7 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "200-202",
+          "lines": "179-181",
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();"
         },
         {
@@ -54809,7 +54809,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "160-164",
+          "lines": "139-143",
           "snippet": "    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
         }
       ],
@@ -70648,8 +70648,8 @@
           "snippet": "        \"model_refusal_fallback\" | \"model_refusal_no_fallback\" => Class::SystemRefusal,\n        \"api_error\" => Class::SystemApiError,\n        \"informational\" => Class::SystemNotice,\n        \"agents_killed\" => Class::SystemKill,\n        \"local_command\" => Class::SystemCommand,\n        _ => return None,"
         },
         {
-          "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "119",
+          "path": "src/commands/search/record_text/system.rs",
+          "lines": "48",
           "snippet": "let subtype = rec.subtype.as_deref().unwrap_or(\"system\");"
         },
         {
@@ -88844,7 +88844,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "203-210",
+          "lines": "182-189",
           "snippet": "    for key in [\n        \"trigger\",\n        \"preTokens\",\n        \"postTokens\",\n        \"durationMs\",\n        \"messagesSummarized\",\n        \"cumulativeDroppedTokens\",\n    ] {"
         },
         {
