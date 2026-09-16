@@ -92518,6 +92518,70 @@
           "note": "the family's specimen leg, measured for the arm that reads it. The leaf was already assigned and the records were reachable only by an address until the render arm fell back to the record's own text; the classification itself is unchanged"
         }
       ]
+    },
+    {
+      "id": "CLS-036",
+      "area": "classification",
+      "behavior": "An `isMeta` `type:\"user\"` record is never shown in the transcript unless its `origin.kind` is one of five. The gate is `function hhn(e,n){if(e.type!==\"user\")return!0;if(e.isMeta){if(LH(e.origin))return!0;return!1}...}` (166033049), and `function LH(e,n){let r=typeof n===\"boolean\"?n:!0;if(e?.kind===\"channel\")return!0;...}` (166032778) accepts `channel`, `observer`, `observer-activity`, `slack-ping` and `peer`, the peer arm answering true whenever its second parameter is omitted - which the gate's one call site omits. `hhn(` occurs at exactly two offsets, the definition and ONE consumer (180551315). The gate's own second parameter reaches only the `isVisibleInTranscriptOnly` branch, so no display mode can reveal an isMeta record. Measured over two projects roots, one count per record: of 3,630 and 1,825 isMeta user records, 55 and 109 carry an accepted `origin.kind` (every one of them `peer`) and 3,575 and 1,716 carry one the gate refuses - `coordinator` 143 and 57, `task-notification` 27 and 0, `human` 1 and 1 - or no `origin` at all (3,404 and 1,658).",
+      "depends": "The shape inventory's HUMAN column reads `never` for every isMeta template row and for the image BLOCK row, because the gate is per RECORD and no template writes an accepted `origin.kind`. Four rows read `always` before the gate was read - the image reference, the image block, the coordinator relay and the notification frame - and the same gate refuses all four; the notification case is the sharp one, since the identical pulse on a NON-isMeta record IS shown, so the frame is what hides it. SPEC section 5 renders that column and SKILL's identity table carries it, so a wrong value there tells a reader a record they never saw was on their screen.",
+      "code": [
+        {
+          "path": "src/model/inventory/templates.rs",
+          "lines": "119-123",
+          "snippet": "        Shape::IsMetaFamily(\"coordinator-relay\"),\n        Some(Class::CommInbox),\n        Gate::Default,\n        true,\n        Human::Never,"
+        },
+        {
+          "path": "src/model/inventory/blocks.rs",
+          "lines": "55-59",
+          "snippet": "        Shape::Block(\"image\"),\n        Some(Class::ContextImage),\n        Gate::Default,\n        true,\n        Human::Never,"
+        }
+      ],
+      "instrument": "Byte-search the build for `function hhn(e,n){if(e.type!==\"user\")return!0;` and for `function LH(e,n){let r=typeof n===\"boolean\"?n:!0;if(e?.kind===\"channel\")return!0;` (one occurrence each), then count `hhn(` over the whole file and read each occurrence to separate the definition from its consumers; read 420 bytes forward from LH to recover the five accepted kinds. Corpus side, over each projects root: walk every `*.jsonl` file except `journal.jsonl`, keep the b'\\n'-delimited lines carrying b'isMeta', parse them, keep the objects with `type == \"user\"` and truthy `isMeta`, and bucket by `origin.kind` with an absent `origin` counted as its own bucket; the rendered set is the records whose kind is one of the five the gate accepts.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "the shipped binary's transcript render filter, read at 2.1.258"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the transcript render filter's one call site",
+          "offset": 180551315,
+          "excerpt": "hhn(jQo,dd),Sl[54]=d",
+          "note": "the single consumer of the gate; the second parameter is a screen discriminator and never reaches the isMeta branch"
+        },
+        {
+          "role": "gate",
+          "name": "the accepted origin kinds",
+          "offset": 166032778,
+          "excerpt": "function LH(e,n){let r=typeof n===\"boolean\"?n:!0;if(e?.kind===\"channel\")return!0;if(e?.kind===\"observer\")return!0;if(e?.",
+          "note": "the five kinds, and the peer arm that answers true when its optional second parameter is omitted"
+        },
+        {
+          "role": "writer",
+          "name": "the isMeta branch of the render gate",
+          "offset": 166033049,
+          "excerpt": "function hhn(e,n){if(e.type!==\"user\")return!0;if(e.isMeta){if(LH(e.origin))return!0;return!1}if(",
+          "note": "the branch itself: an isMeta user record is shown only when its origin is accepted"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Read bytes[offset .. offset+len(excerpt)] at 180551315, 166032778 and 166033049 in the 2.1.258 executable and compared each to the recorded excerpt; counted `hhn(` over the whole file; read 420 bytes forward from LH. Then the isMeta origin census described in the instrument field over both projects roots.",
+          "observed": "All three excerpts byte-exact; `hhn(` occurs twice (the definition and one consumer). The read-forward window shows the five accepted kinds in order channel, observer, observer-activity, slack-ping, peer, the peer arm taking `senderTaskId !== undefined` or the defaulted second parameter. Census: root one, 9,556 files, 3,630 isMeta user records, 55 accepted (all `peer`), 3,575 refused - no origin 3,404, coordinator 143, task-notification 27, human 1. Root two, 10,330 files, 1,825 records, 109 accepted (all `peer`), 1,716 refused - no origin 1,658, coordinator 57, human 1.",
+          "rule": "One count per isMeta `type:\"user\" `record, bucketed by `origin.kind` with an absent `origin` as its own bucket; accepted means the kind is one of the five the gate takes. Binary counts are byte occurrences over the whole executable.",
+          "note": "Four inventory rows move from `always` to `never`: the image reference template, the image block, the coordinator relay and the notification frame. The two corpus roots overlap in the sessions they hold, so the two counts are not independent samples; each is reported as its own root."
+        }
+      ]
     }
   ]
 }

@@ -201,7 +201,7 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `agent.thinking.redacted` | the API's safety-redacted ciphertext block, `{type:"redacted_thinking", data:<base64>}` | default scan | no | verbose |
 | `agent.tool.use` | a `type:"assistant"` record's `[{tool_use}]` block (incl. a pending elicitation sidecar marker) | default scan | yes | yes |
 | `agent.tool.result` | a `type:"user"` carrier's `[{tool_result}]` block plus its `toolUseResult` (incl. errored results) | default scan | yes | yes |
-| `agent.communication.inbox` | a received peer message, spawn prompt or subagent return | default scan | yes | yes |
+| `agent.communication.inbox` | a received peer message, spawn prompt or subagent return. The human column splits by SHAPE: a peer relay and a subagent return are on the person's screen, while the COORDINATOR relay is an isMeta record the transcript render refuses - that one reached the model and no person | default scan | yes | no / yes |
 | `agent.communication.sent` | a sent peer message (`SendMessage`) or a spawn | default scan | yes | ? |
 | `agent.communication.signal` | a control/status comm (idle_notification, shutdown_*) | default scan | yes | ? |
 | `agent.communication.channel` | a csift-channel delivery: a `hook_additional_context` attachment whose FIRST content string opens with the envelope header `[csift-channel v1 …]` | default scan | yes | ? |
@@ -233,7 +233,7 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `harness.context.mode` | a mode transition the harness recorded (plan mode and its exits/re-entries, auto mode, command permissions) | -t or --attachments | yes | ? |
 | `harness.context.ide` | IDE state the harness attached (the open file, the selection, diagnostics) | -t or --attachments | yes | ? |
 | `harness.context.task` | task/goal/memory state the harness attached, including a `queued_command` that is NOT the human's own text | -t or --attachments / default scan (own needle) | yes | ? |
-| `harness.context.image` | an image the harness referenced into the conversation: the isMeta `[Image: …]` reference records and the image-only isMeta records. The image-ONLY form is a picture with no text: the line is parsed and `show --line` renders it whole, but a pattern scan has nothing to match and a census counts no hit for it - `csift image` is the surface that lists and extracts it | default scan | yes | yes |
+| `harness.context.image` | an image the harness referenced into the conversation: the isMeta `[Image: …]` reference records and the image-only isMeta records. The image-ONLY form is a picture with no text: the line is parsed and `show --line` renders it whole, but a pattern scan has nothing to match and a census counts no hit for it - `csift image` is the surface that lists and extracts it. BOTH forms are isMeta records the transcript render refuses, so the person never saw the record this leaf names | default scan | yes | no |
 | `harness.context.skill` | an isMeta `type:"user"` record whose text OPENS with `Base directory for this skill:`, the instruction body a spawn builder preloaded rather than a skill anyone invoked this turn; on disk that body usually arrives as the first text block of an array | default scan | yes | no |
 | `harness.enforce.structured-output` | the redo nudge that tells the model it must call the StructuredOutput tool | default scan | yes | no |
 | `harness.enforce.brief` | the brief-enforce redo nudge | default scan | yes | no |

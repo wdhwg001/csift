@@ -47,11 +47,16 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Always,
     ),
     e(
+        // The leaf on this row is the image-ONLY `type:"user"` record (see `disk`), and
+        // every one of those in the corpus carries `isMeta`, which the transcript render
+        // gate refuses (claim CLS-036) - so the person never saw the record csift labels
+        // here. An image beside TEXT is a different row: it rides the person's own
+        // message, which they did see.
         Shape::Block("image"),
         Some(Class::ContextImage),
         Gate::Default,
         true,
-        Human::Always,
+        Human::Never,
     ),
     e(
         Shape::Block("document"),

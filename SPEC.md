@@ -580,7 +580,7 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | Block | `redacted_thinking` | `agent.thinking.redacted` | default scan | no | verbose |
 | Block | `tool_use` | `agent.tool.use` | default scan | yes | yes |
 | Block | `tool_result` | `agent.tool.result` | default scan | yes | yes |
-| Block | `image` | `harness.context.image` | default scan | yes | yes |
+| Block | `image` | `harness.context.image` | default scan | yes | no |
 | Block | `document` | (deeper axis / unmodeled) | show address only | no | (unstated) |
 | Block | `fallback` | `agent.message.plain` | default scan | yes | (unstated) |
 | IsMetaFamily | `local-command-caveat` | `harness.command.caveat` | default scan | yes | no |
@@ -590,14 +590,14 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | IsMetaFamily | `schedule-tick` | `harness.schedule.tick` | default scan | yes | no |
 | IsMetaFamily | `schedule-fire` | `harness.schedule.fire` | default scan | yes | no |
 | IsMetaFamily | `roster-reminder` | `harness.context.reminder` | default scan | yes | no |
-| IsMetaFamily | `image-reference` | `harness.context.image` | default scan | yes | yes |
+| IsMetaFamily | `image-reference` | `harness.context.image` | default scan | yes | no |
 | IsMetaFamily | `skill-body` | `harness.context.skill` | default scan | yes | no |
 | IsMetaFamily | `enforce-structured-output` | `harness.enforce.structured-output` | default scan | yes | no |
 | IsMetaFamily | `enforce-brief` | `harness.enforce.brief` | default scan | yes | no |
 | IsMetaFamily | `enforce-handback` | `harness.enforce.handback` | default scan | yes | no |
 | IsMetaFamily | `enforce-retry` | `harness.enforce.retry` | default scan | yes | no |
-| IsMetaFamily | `coordinator-relay` | `agent.communication.inbox` | default scan | yes | yes |
-| IsMetaFamily | `task-notification-frame` | (deeper axis / unmodeled) | default scan | yes | yes |
+| IsMetaFamily | `coordinator-relay` | `agent.communication.inbox` | default scan | yes | no |
+| IsMetaFamily | `task-notification-frame` | (deeper axis / unmodeled) | default scan | yes | no |
 | IsMetaFamily | `human-relay` | `user.message` | default scan | yes | no |
 | IsMetaFamily | `residue` | (deeper axis / unmodeled) | show address only | yes | no |
 

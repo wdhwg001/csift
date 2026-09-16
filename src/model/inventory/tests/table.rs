@@ -113,3 +113,94 @@ fn every_row_agrees_with_the_classify_family_table_it_records() {
         }
     }
 }
+
+// ── The RENDERED table: SPEC section 5 and this inventory are one answer ──
+
+/// How the rendered SPEC table spells each axis.
+fn spec_kind(s: Shape) -> &'static str {
+    match s {
+        Shape::TopLevelType(_) => "TopLevelType",
+        Shape::SystemSubtype(_) => "SystemSubtype",
+        Shape::AttachmentType(_) => "AttachmentType",
+        Shape::Block(_) => "Block",
+        Shape::IsMetaFamily(_) => "IsMetaFamily",
+    }
+}
+
+/// How the rendered SPEC table spells each gate.
+fn spec_gate(g: Gate) -> &'static str {
+    match g {
+        Gate::Default => "default scan",
+        Gate::Selector => "explicit -t",
+        Gate::Attachments => "-t or --attachments",
+        Gate::DefaultNeedle => "default scan (own needle)",
+        Gate::Address => "show address only",
+    }
+}
+
+/// How the rendered SPEC table spells each human verdict. `Never` renders `no` rather
+/// than the enum's word, because the column asks "does a person see this".
+fn spec_human(h: Human) -> &'static str {
+    match h {
+        Human::Always => "yes",
+        Human::Verbose => "verbose",
+        Human::Indirect => "indirect",
+        Human::Never => "no",
+        Human::Unstated => "(unstated)",
+    }
+}
+
+/// One inventory row as the SPEC table prints it.
+fn spec_row(r: &Entry) -> String {
+    let leaf = match r.leaf {
+        Some(c) => format!("`{}`", c.path()),
+        None => "(deeper axis / unmodeled)".to_string(),
+    };
+    format!(
+        "| {} | `{}` | {leaf} | {} | {} | {} |",
+        spec_kind(r.shape),
+        r.value(),
+        spec_gate(r.gate),
+        if r.llm { "yes" } else { "no" },
+        spec_human(r.human)
+    )
+}
+
+/// SPEC section 5's inventory table IS this table, row for row and column for column.
+///
+/// The table is documentation of a mapping, not a second mapping, so a hand-edited cell
+/// is a lie about csift rather than a stale doc - the sharpest case being the HUMAN
+/// column, where a wrong value tells a reader that a record they never saw was on their
+/// screen. Comparing the rendered form (rather than a count, or the leaf alone) is what
+/// makes every column load-bearing: gate, LLM and human each fail here on their own.
+#[test]
+fn the_spec_inventory_table_is_this_table() {
+    let spec = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SPEC.md"))
+        .expect("SPEC.md at the repo root");
+    let printed: Vec<&str> = spec
+        .lines()
+        .map(str::trim_end)
+        .filter(|l| {
+            [
+                "TopLevelType",
+                "SystemSubtype",
+                "AttachmentType",
+                "Block",
+                "IsMetaFamily",
+            ]
+            .iter()
+            .any(|k| l.starts_with(&format!("| {k} |")))
+        })
+        .collect();
+    let want: Vec<String> = rows().map(spec_row).collect();
+    assert_eq!(
+        printed.len(),
+        want.len(),
+        "SPEC renders {} inventory rows, the table holds {}",
+        printed.len(),
+        want.len()
+    );
+    for (got, want) in printed.iter().zip(&want) {
+        assert_eq!(got, want, "SPEC row disagrees with the inventory");
+    }
+}

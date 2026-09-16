@@ -65,11 +65,16 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Never,
     ),
     e(
+        // The HUMAN column of every isMeta-user row is decided by ONE gate, and it is
+        // not per template: the transcript render refuses an `isMeta` `type:"user"`
+        // record unless its `origin.kind` is one of five (`channel`, `observer`,
+        // `observer-activity`, `slack-ping`, `peer`), and no template here writes any of
+        // them (claim CLS-036).
         Shape::IsMetaFamily("image-reference"),
         Some(Class::ContextImage),
         Gate::Default,
         true,
-        Human::Always,
+        Human::Never,
     ),
     e(
         Shape::IsMetaFamily("skill-body"),
@@ -107,22 +112,29 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Never,
     ),
     e(
+        // `origin.kind` reads `coordinator` here, which the render gate does not accept -
+        // unlike the PEER relay's `peer`, which it does. The two relays are written by
+        // the same formatter family and reach the model alike; only the person's view
+        // differs.
         Shape::IsMetaFamily("coordinator-relay"),
         Some(Class::CommInbox),
         Gate::Default,
         true,
-        Human::Always,
+        Human::Never,
     ),
     e(
         // The leaf is decided DEEPER, on the pulse the frame wraps: the inner
         // `<task-notification>`'s own kind picks one of the five notification leaves, so
         // no single leaf belongs in this row (the four transcript top-level types are the
         // other rows shaped this way, and the drift test names both cases by hand).
+        // Its `origin.kind` reads `task-notification`, which the render gate refuses, so
+        // the FRAMED pulse is hidden while the same pulse on a non-isMeta record is
+        // shown: the frame is what makes it invisible, not the notification.
         Shape::IsMetaFamily("task-notification-frame"),
         None,
         Gate::Default,
         true,
-        Human::Always,
+        Human::Never,
     ),
     e(
         Shape::IsMetaFamily("human-relay"),
