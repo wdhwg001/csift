@@ -28,6 +28,28 @@ surface change bumps the PATCH.
 - **A uuid a record NAMES resolves to that record's line.** `ClassifyCtx::line_of_uuid` is
   backed by the chain's own uuid map rather than a second index, so an edge can render an
   address; a caller with no row space gets an honest absence instead of a guessed line.
+- **A taxonomy family decides what its own lines SAY.** The facts seam had no render twin,
+  so a body was still decided in the shared chain. `family_render` dispatches by the leaf's
+  category to the family that owns it, ahead of the engine's generic arms, and four renders
+  moved into their families: the two attachment bodies, the bookkeeping head-and-body
+  composition, the six `type:"system"` event heads, and a thinking block's body. Not one
+  rendered byte moved - 122 of 122 corpus-derived commands compare byte-identical against a
+  build of the base commit, with the golden baseline and the whole suite beside them.
+- **One `for` edge, built one way.** Four families point at other records, and three had
+  each invented a different fact for it. There is now one: `for: <kind> L<n>` when this
+  transcript carries the uuid, the id with `(not in this file)` when it does not, and
+  `unknown (<reason>)` when the record names nothing - never a silently absent edge. Several
+  edges on one hit accumulate under the one `for` key instead of overwriting one another.
+- **A `headers` member reaches no rendered surface.** An `api_error` record carries the
+  failed request's whole HTTP response header set - a session cookie and an organization id
+  among 18 names - and the key=value excerpt csift falls back to for a line it models
+  nothing about printed it. Every `headers` member is now elided at every depth, `<elided>`
+  in its place so a reader learns the set is there, and `--raw` stays the one way to the
+  bytes.
+- **A coordinator relay says where it came from.** Every other inbound message renders a
+  `from => to` arrow; this one rendered none. It now reads `coordinator => self`, and the
+  from is the literal word because the record carries no sender field: the harness builds
+  that origin object in two places and both build the one-key form.
 
 - **The `-t` label taxonomy is 17 categories over 73 leaves, split by producer.** The old
   38-leaf space had one bag in it: `harness.meta` pooled hook-injected text, a hook run's own
@@ -186,6 +208,22 @@ surface change bumps the PATCH.
   isMeta user records, which the transcript render refuses unless their origin is one of
   five kinds none of them writes. SPEC's inventory table and SKILL's identity cells follow,
   and a drift test now compares the two row for row.
+- **Three more of those rows, and two payload types the harness drops.** `atis-latch` and
+  `fork-context-ref` read `indirect` and `queue-operation` read `yes`; reading every
+  occurrence of the three type literals in the shipped binary finds no reader that renders
+  any of them, so all three read `no`. Separately, `goal_status` and
+  `async_hook_response_batch` were missing from the never-convert set, and `goal_status`
+  carries a leaf that is otherwise visible - so csift reported such a record as delivered
+  where the converter drops it.
+- **The image-only arm tests authorship like every other injection arm.** A leaf saying the
+  harness wrote a record decided that from block shape alone. It now requires `isMeta`, the
+  conjunction the rest of the family already takes; all 94 such records carry the flag, so
+  what it decides is the shape that has yet to appear. A record without it renders
+  `? unmodeled: user/image` under an address.
+- **Three doc surfaces said things the code does not.** `harness.hook.feedback` was
+  described as the Stop hook's, where one builder writes four prefixes (`Stop`,
+  `TeammateIdle`, `TaskCreated`, `TaskCompleted`); and `model/automation.rs` carried a
+  comment block written before the taxonomy was wired into anything.
 
 ### Performance
 
