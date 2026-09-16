@@ -6,6 +6,58 @@
 
 use super::*;
 
+/// The ONE STAMPING SITE: everything the six taxonomy families have to say about the
+/// unit being emitted, gathered in a fixed order.
+///
+/// A family owns one classify file and one render file and nothing else, so it needs a
+/// seam in the emission engine to hang a [`Marker`] or a [`HitFact`] on. Without a shared
+/// seam each family cuts its own, in the same three shared files, and the six cuts do not
+/// compose. This is that seam: `hits.rs` calls it once per emitted unit and
+/// [`addressed_unit`] calls it once for the unit an address renders, so a record fetched
+/// by `show --line` carries exactly what the same record carries under `search`.
+///
+/// Order is fixed and is the order of the map's own families. It matters only for the
+/// label zone, where markers render in push order.
+///
+/// COST on a unit no family owns: six calls that each compare one field and return two
+/// `Vec::new()`, which allocate nothing, plus two extends of nothing. The gate belongs
+/// inside each family (it knows what its own records look like); this function does not
+/// pre-filter, because a pre-filter here would be a seventh place that has to know every
+/// family's shape.
+pub(crate) fn family_facts(
+    rec: &Record,
+    raw: Option<&str>,
+    section: &Section<'_>,
+    ctx: &ClassifyCtx,
+) -> (Vec<HitFact>, Vec<Marker>) {
+    fn merge(out: &mut (Vec<HitFact>, Vec<Marker>), add: (Vec<HitFact>, Vec<Marker>)) {
+        out.0.extend(add.0);
+        out.1.extend(add.1);
+    }
+    let mut out: (Vec<HitFact>, Vec<Marker>) = (Vec::new(), Vec::new());
+    merge(
+        &mut out,
+        record_text::bookkeeping::facts(rec, raw, section, ctx),
+    );
+    merge(
+        &mut out,
+        record_text::attachments::facts(rec, raw, section, ctx),
+    );
+    merge(
+        &mut out,
+        record_text::injections::facts(rec, raw, section, ctx),
+    );
+    merge(&mut out, record_text::system::facts(rec, raw, section, ctx));
+    merge(
+        &mut out,
+        record_text::thinking::facts(rec, raw, section, ctx),
+    );
+    merge(&mut out, record_text::keys::facts(rec, raw, section, ctx));
+    #[cfg(test)]
+    merge(&mut out, record_text::probe::facts(rec, raw, section, ctx));
+    out
+}
+
 /// The ONE unit an ADDRESSED record renders when the ordinary passes produced nothing
 /// (see the refetch-law note in [`collect_turn_hits`]) - the 1:1 law's whole mechanism.
 ///
@@ -44,6 +96,13 @@ pub(crate) fn addressed_unit(
     };
     let span = matcher.locate(&text)?;
     let (excerpt, truncated) = match_excerpt(&text, span, excerpt_max);
+    // The SECOND call of the one stamping site. An address renders the record it names,
+    // so it has to render what a scan would have rendered: a family fact that only ever
+    // reached a scanned unit would make `show --line N` disagree with the `search` hit
+    // it was copied from. The unit carries no block, and it carries the leaf when it has
+    // one (this unit is emitted both for a record with no leaf and for one whose leaf
+    // simply has no text).
+    let (family, markers) = family_facts(rec, raw, &Section::record(class), ctx);
     Some(Hit {
         class,
         labels: labels.iter().map(|c| c.path()).collect(),
@@ -79,11 +138,16 @@ pub(crate) fn addressed_unit(
         // An unlabeled unit carries no leaf, so it is never the fired prompt.
         scheduled_at: None,
         truncated,
-        markers: Vec::new(),
+        markers,
         // The shape csift models no leaf for. An address is the only way here, and
         // naming the shape is the whole point of the unit: a reader learns WHAT the
-        // line is rather than that csift had nothing to say.
-        facts: shape.into_iter().map(HitFact::Unmodeled).collect(),
+        // line is rather than that csift had nothing to say. The family facts follow it,
+        // so `render_label` still finds the shape wherever the list grows.
+        facts: shape
+            .into_iter()
+            .map(HitFact::Unmodeled)
+            .chain(family)
+            .collect(),
     })
 }
 

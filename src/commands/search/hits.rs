@@ -2,6 +2,10 @@
 
 use super::*;
 
+mod blocks;
+
+pub(crate) use blocks::*;
+
 // Internal pipeline function: the arg list grew as `tool_names` (tool-response naming) and
 // `address` (--line/--uuid selector) were threaded through the per-turn scan. Bundling into a
 // struct would only relocate the same fields without simplifying the data flow.
@@ -282,9 +286,22 @@ pub(crate) fn collect_record_hits(
                     dir: Option<(String, String)>,
                     tuid: Option<String>,
                     result_err: Option<bool>,
-                    notif: crate::model::TaskIds| {
+                    notif: crate::model::TaskIds,
+                    block: Option<&Block>| {
         if let Some(span) = matcher.locate(text) {
             let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
+            // The ONE stamping site, per UNIT rather than per record: `block` is what
+            // makes a per-block fact possible, and it is why this sits inside the
+            // emission closure instead of beside the record-level facts above.
+            let (facts, markers) = family_facts(
+                rec,
+                raw,
+                &Section {
+                    class: Some(class),
+                    block,
+                },
+                ctx,
+            );
             hits.push(Hit {
                 class: Some(class),
                 labels: label_paths.clone(),
@@ -317,10 +334,11 @@ pub(crate) fn collect_record_hits(
                 compaction: compaction.clone(),
                 scheduled_at: scheduled_at.clone(),
                 truncated,
-                // The extension points start empty: `push_markers` fills what the
-                // engine itself knows, and a family adds its own beside it.
-                markers: Vec::new(),
-                facts: Vec::new(),
+                // The EXTENSION POINTS, filled by the one stamping site above: the
+                // engine's own label-zone markers are computed by `render_label`, and
+                // everything here came from a family.
+                markers,
+                facts,
             });
         }
     };
@@ -355,6 +373,7 @@ pub(crate) fn collect_record_hits(
                 None,
                 None,
                 crate::model::TaskIds::default(),
+                None,
             );
         }
     } else {
@@ -373,7 +392,7 @@ pub(crate) fn collect_record_hits(
             } else {
                 None
             };
-            emit(class, &text, None, dir, None, None, task_ids);
+            emit(class, &text, None, dir, None, None, task_ids, None);
         }
     }
 
@@ -400,6 +419,7 @@ pub(crate) fn collect_record_hits(
                 None,
                 None,
                 crate::model::TaskIds::default(),
+                None,
             );
         }
     }
@@ -423,6 +443,7 @@ pub(crate) fn collect_record_hits(
                 None,
                 None,
                 crate::model::TaskIds::default(),
+                None,
             );
         }
     }
@@ -438,7 +459,7 @@ pub(crate) fn collect_record_hits(
         tool_names,
         // A BLOCK never carries notification task ids - those are a record-SECTION fact - so
         // the block sink keeps its own shape and this adapter supplies the empty set.
-        &mut |class, text, tool_name, dir, tuid, result_err| {
+        &mut |class, text, tool_name, dir, tuid, result_err, block| {
             emit(
                 class,
                 text,
@@ -447,138 +468,8 @@ pub(crate) fn collect_record_hits(
                 tuid,
                 result_err,
                 crate::model::TaskIds::default(),
+                block,
             );
         },
     );
-}
-
-/// The hit-emission sink shared by [`collect_record_hits`] and its block loop:
-/// (class, text, tool_name, direction, tool_use_id).
-type EmitHit<'a> = dyn FnMut(Class, &str, Option<String>, Option<(String, String)>, Option<String>, Option<bool>)
-    + 'a;
-
-/// The block loop of [`collect_record_hits`]: one emission per selected block-bearing unit -
-/// thinking (incl. the opaque redacted placeholder), assistant text, tool_use (richest comm
-/// view first), tool_result (inbox > plain result; the user-facing dual, when SELECTED, was
-/// already emitted as the richest view and suppresses the duplicate).
-#[allow(clippy::too_many_arguments)]
-fn collect_block_hits(
-    rec: &Record,
-    labels: &[Class],
-    filter: LabelFilter<'_>,
-    user_dual: Option<Class>,
-    direction: &Option<(String, String)>,
-    resolve_persisted: bool,
-    tool_names: &HashMap<String, String>,
-    emit: &mut EmitHit<'_>,
-) {
-    let sel = |c: Class| filter.selected(c.path());
-    let has = |c: Class| labels.contains(&c);
-    if let Some(blocks) = rec.blocks() {
-        for block in blocks {
-            match block {
-                Block::Thinking { .. } | Block::RedactedThinking { .. } => {
-                    // The four thinking leaves split on the BLOCK's own shape
-                    // (`model/classify/thinking.rs`): the signature tag for a narration
-                    // summary, the absent text for the two leaves that carry none.
-                    // Adjacency is never consulted, and a mixed multi-block record splits
-                    // per BLOCK.
-                    let Some(class) = crate::model::thinking_block_leaf(block) else {
-                        continue;
-                    };
-                    if !has(class) || !sel(class) {
-                        continue;
-                    }
-                    // Redacted reasoning is opaque ciphertext with no readable text at all,
-                    // so it surfaces a placeholder rather than the blob; every other
-                    // thinking block surfaces its own text, empty included.
-                    let text = match block {
-                        Block::Thinking { thinking, .. } => thinking.as_str(),
-                        _ => REDACTED_THINKING_PLACEHOLDER,
-                    };
-                    emit(class, text, None, None, None, None);
-                }
-                Block::Text { text }
-                    if rec.is_type("assistant")
-                        && has(Class::AgentMessagePlain)
-                        && sel(Class::AgentMessagePlain) =>
-                {
-                    // Only assistant `text` blocks are the agent message; a user `text` block is
-                    // a record-text unit (handled above), never agent.message.
-                    emit(Class::AgentMessagePlain, text, None, None, None, None);
-                }
-                Block::ToolUse { id, name, input } => {
-                    // Richest-selected for this tool_use: comm (sent/signal) > agent.tool.use.
-                    let comm = tool_use_comm_class(name.as_deref(), input.as_ref());
-                    let class = match comm {
-                        Some(cc) if has(cc) && sel(cc) => Some(cc),
-                        _ if has(Class::AgentToolUse) && sel(Class::AgentToolUse) => {
-                            Some(Class::AgentToolUse)
-                        }
-                        _ => None,
-                    };
-                    if let Some(class) = class {
-                        let rendered = render_tool_use(name.as_deref(), input.as_ref());
-                        let dir = if is_comm_class(class) {
-                            direction.clone()
-                        } else {
-                            None
-                        };
-                        emit(class, &rendered, name.clone(), dir, id.clone(), None);
-                    }
-                }
-                Block::ToolResult {
-                    content: Some(c),
-                    tool_use_id,
-                    is_error,
-                    ..
-                } => {
-                    // C-13: every result hit states its error side explicitly - an absent
-                    // field IS a clean result on the wire, so it maps to false, never null
-                    // (pairing answers "did a result come back"; this answers "was it good").
-                    let result_errored = is_error.unwrap_or(false);
-                    // The user-facing dual was SELECTED + emitted as the richest view (§3 Q4) → skip
-                    // the agent.tool.result duplicate. (When the dual is present but NOT selected -
-                    // e.g. `-t agent.tool.result` alone - `user_dual` is None, so the plain result
-                    // still surfaces and the answer is never lost.)
-                    if user_dual.is_some() {
-                        continue;
-                    }
-                    // Richest-selected: agent.communication.inbox (subagent return) > tool.result.
-                    let class = if has(Class::CommInbox) && sel(Class::CommInbox) {
-                        Class::CommInbox
-                    } else if has(Class::AgentToolResult) && sel(Class::AgentToolResult) {
-                        Class::AgentToolResult
-                    } else {
-                        continue;
-                    };
-                    let mut text = tool_result_content_text(c);
-                    // §4.6: when asked, replace the inline persisted-output pointer with the real
-                    // file content (matching runs against the resolved text).
-                    if resolve_persisted {
-                        if let Some(path) = rec.persisted_output_path() {
-                            text = resolve_persisted_text(&path, &text);
-                        }
-                    }
-                    let name = tool_use_id
-                        .as_deref()
-                        .and_then(|id| tool_names.get(id).cloned());
-                    let dir = if class == Class::CommInbox {
-                        direction.clone()
-                    } else {
-                        None
-                    };
-                    emit(
-                        class,
-                        &text,
-                        name,
-                        dir,
-                        tool_use_id.clone(),
-                        Some(result_errored),
-                    );
-                }
-                _ => {}
-            }
-        }
-    }
 }

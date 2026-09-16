@@ -52,3 +52,102 @@ fn an_unmodeled_shape_names_the_axis_that_decides_it() {
     );
     assert_eq!(unmodeled_shape(&rec(r#"{"uuid":"n1"}"#), None), None);
 }
+
+// ── The ONE stamping site, read back from BOTH hit-construction sites ──
+//
+// Every real family ships here as a stub returning nothing, so what has to be pinned is
+// not a family's answer but the wiring: that `family_facts` runs on a scanned unit AND on
+// an addressed one, and that the per-unit `Section` reaches it with both halves filled.
+// The test-only probe arm (`record_text::probe`) is what makes that observable.
+
+use crate::commands::search::record_text::probe;
+
+/// The marker heads on the units this record produced, in push order per unit.
+fn marker_heads(hits: &[Hit]) -> Vec<Vec<&'static str>> {
+    hits.iter()
+        .map(|h| h.markers.iter().map(|m| m.head).collect())
+        .collect()
+}
+
+/// Emit every unit of one fixture record through the scan-side construction site.
+fn scanned(line: &str) -> Vec<Hit> {
+    let mut hits = Vec::new();
+    let record = rec(line);
+    collect_record_hits(
+        &record,
+        Some(line),
+        None,
+        LabelFilter::all(),
+        &Matcher::pure(),
+        false,
+        EXCERPT_MAX,
+        &PlanIndex::default(),
+        &HashMap::new(),
+        &ClassifyCtx::top_level(),
+        &mut hits,
+    );
+    hits
+}
+
+/// A SCANNED unit carries what its family said. This is the site the six family lanes
+/// each cut for themselves; one cut, read back through the probe.
+#[test]
+fn the_scan_site_stamps_every_unit_a_record_produced() {
+    let hits = scanned(
+        r#"{"type":"assistant","uuid":"a1","sessionId":"family-facts-probe","message":{"role":"assistant","content":[{"type":"thinking","thinking":"t","signature":"s"},{"type":"text","text":"hello"}]}}"#,
+    );
+    // Two blocks, two units, and BOTH carry the probe's per-unit answer - a site that
+    // stamped the record once would leave the second unit empty.
+    assert_eq!(
+        marker_heads(&hits),
+        vec![
+            vec![probe::SENTINEL_MARKER, probe::SENTINEL_BLOCK_MARKER],
+            vec![probe::SENTINEL_MARKER, probe::SENTINEL_BLOCK_MARKER],
+        ]
+    );
+}
+
+/// A RECORD-LEVEL unit reaches the same site, and its `Section` says it came from no
+/// block - which is exactly the distinction a per-block family fact rests on.
+#[test]
+fn a_record_level_unit_is_stamped_without_a_block() {
+    let hits = scanned(
+        r#"{"type":"user","uuid":"u1","sessionId":"family-facts-probe","message":{"role":"user","content":"hello"}}"#,
+    );
+    assert_eq!(marker_heads(&hits), vec![vec![probe::SENTINEL_MARKER]]);
+}
+
+/// And the ADDRESSED unit reaches it too. Without this call a `show --line N` render
+/// would silently drop a fact the same record carries under `search`, which is the whole
+/// reason the site is called at two places rather than one.
+#[test]
+fn the_address_site_stamps_the_unmodeled_unit() {
+    let line = r#"{"type":"future-thing","uuid":"f1","sessionId":"family-facts-probe","note":"x"}"#;
+    let hit = addressed_unit(
+        &rec(line),
+        Some(line),
+        &ClassifyCtx::top_level(),
+        &Matcher::pure(),
+        EXCERPT_MAX,
+    )
+    .expect("a parseable line always renders one unit");
+    assert_eq!(
+        hit.markers.iter().map(|m| m.head).collect::<Vec<_>>(),
+        vec![probe::SENTINEL_MARKER, probe::SENTINEL_LEAFLESS_MARKER]
+    );
+    // The shape fact still leads the list, so `render_label` reads it as the label.
+    assert_eq!(render_label(&hit), "unmodeled: future-thing");
+}
+
+/// A record no family owns costs an empty answer, never a fabricated one: the probe is
+/// keyed on a sentinel and every real family stub returns nothing, so an ordinary record
+/// leaves both extension points empty.
+#[test]
+fn a_record_no_family_owns_carries_neither_extension_point() {
+    let hits = scanned(
+        r#"{"type":"user","uuid":"u2","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","message":{"role":"user","content":"hello"}}"#,
+    );
+    assert_eq!(hits.len(), 1);
+    assert!(hits[0].markers.is_empty());
+    assert!(hits[0].facts.is_empty());
+}

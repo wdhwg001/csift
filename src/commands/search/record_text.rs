@@ -7,6 +7,25 @@ mod promoted;
 
 pub(crate) use promoted::*;
 
+// The six FAMILY modules the one stamping site ([`crate::commands::search::family_facts`])
+// dispatches to, in that fixed order. Each owns its family's renders, markers and facts;
+// they are declared (not glob-re-exported) because every one of them answers the same
+// entry name `facts`, and six globs carrying one name would make it ambiguous at this
+// root.
+pub(crate) mod attachments;
+pub(crate) mod bookkeeping;
+pub(crate) mod injections;
+pub(crate) mod keys;
+pub(crate) mod system;
+pub(crate) mod thinking;
+
+/// A seventh dispatch arm that exists only under `cfg(test)` (see the module doc there):
+/// a stub returning empty vectors cannot demonstrate that the site is reached, so the
+/// probe answers on a fixture sentinel and the unit tests read it back from both
+/// hit-construction sites. Never compiled into the binary.
+#[cfg(test)]
+pub(crate) mod probe;
+
 use super::*;
 
 /// True for the four `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).

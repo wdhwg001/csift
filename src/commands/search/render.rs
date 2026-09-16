@@ -24,13 +24,16 @@ pub(crate) fn render_label(h: &Hit) -> String {
     // the record carries one, so a reader learns what the line is rather than only that
     // csift had nothing to say about it.
     let Some(class) = h.class else {
-        let shape = h
-            .facts
-            .iter()
-            .map(|f| match f {
-                HitFact::Unmodeled(s) => s.as_str(),
-            })
-            .next();
+        // FIND the shape rather than reading the first fact: a family's facts ride the
+        // same list, and the shape can sit anywhere in it. The catch-all arm is
+        // deliberate - every OTHER fact projects itself through `HitFact::label_zone`,
+        // so only the shape replaces a label, and a family adding a variant adds no arm
+        // here.
+        let shape = h.facts.iter().find_map(|f| match f {
+            HitFact::Unmodeled(s) => Some(s.as_str()),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        });
         // ONE unmodeled form. A leafless unit always names its shape - the block it
         // carries, its subtype, its payload type, or the isMeta flag that makes the text
         // the harness's own - and the bare word is the floor for a line whose own `type`

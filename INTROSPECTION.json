@@ -41157,8 +41157,8 @@
           "snippet": "//! Classification is by SIGNATURE ONLY - a narration block can lack a reasoning sibling\n//! entirely (~4% measured), so adjacency is never a shortcut. Signatures reach 200K+"
         },
         {
-          "path": "src/commands/search/hits.rs",
-          "lines": "484-486",
+          "path": "src/commands/search/hits/blocks.rs",
+          "lines": "51-53",
           "snippet": "                    // Adjacency is never consulted, and a mixed multi-block record splits\n                    // per BLOCK.\n                    let Some(class) = crate::model::thinking_block_leaf(block) else {"
         },
         {
@@ -41259,7 +41259,7 @@
       "code": [
         {
           "path": "src/commands/search/render.rs",
-          "lines": "106-109",
+          "lines": "109-112",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -46338,12 +46338,12 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "228-238",
+          "lines": "232-242",
           "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "111-119",
+          "lines": "114-122",
           "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -55471,7 +55471,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "191-199",
+          "lines": "195-203",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -55486,7 +55486,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "338-342",
+          "lines": "356-360",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -56081,7 +56081,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "274-285",
+          "lines": "293-304",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],
@@ -74451,7 +74451,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "196-199",
+          "lines": "200-203",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -80212,7 +80212,7 @@
         },
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "154-158",
+          "lines": "173-177",
           "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.hook.context` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
         }
       ],
@@ -86707,7 +86707,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "191-199",
+          "lines": "195-203",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -87141,7 +87141,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "55-61",
+          "lines": "58-64",
           "snippet": "    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's\n    // own marker and the engine's own come out in the same shape.\n    let nd = if h.delivery == Some(false) {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    } else {\n        String::new()\n    };"
         }
       ],
@@ -88650,7 +88650,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "57-61",
+          "lines": "61-65",
           "snippet": "        let filter = filter.with_survival(chain.survival(idx).selectable());\n        collect_record_hits(\n            rec,\n            kept.gated_raw.as_deref(),\n            chain.opener_class(idx),"
         }
       ],
@@ -88945,7 +88945,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "178-181",
+          "lines": "242-245",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -91412,7 +91412,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "73-76",
+          "lines": "76-79",
           "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
         }
       ],

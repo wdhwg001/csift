@@ -131,6 +131,37 @@ impl Marker {
     }
 }
 
+/// WHICH UNIT of a record the engine is emitting, handed to the one stamping site so a
+/// family can answer per unit rather than per record.
+///
+/// Two axes, independent by construction. `class` is the leaf the unit is going out
+/// under - `None` for the addressed unit of a record csift models no leaf for. `block` is
+/// the content block the unit came from, when it came from one: a record-level unit (the
+/// record text, the answered-AUQ dual, the elicitation marker) carries `None`, and a
+/// multi-block record hands each block in turn, because a per-block fact - the length of
+/// a thinking block's signature, say - is the BLOCK's and not the record's.
+// The THIRD targeted `dead_code` allow in the crate (AGENTS section 4 lists the other
+// two), and it is a fact about WHERE the readers live rather than about the fields. Both
+// are written by the emission engine on every unit and read by the family `facts()`
+// bodies in `record_text/`, which ship as stubs at the skeleton amendment and are filled
+// one family at a time. Without the allow the amendment cannot land the parameter the
+// families are being given, which is the whole seam.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Section<'a> {
+    /// The leaf this unit is emitted under; `None` on an unmodeled addressed unit.
+    pub(crate) class: Option<Class>,
+    /// The content block this unit came from, or `None` for a record-level unit.
+    pub(crate) block: Option<&'a Block>,
+}
+
+impl Section<'_> {
+    /// The record-level unit: a section of the record's own text, with no block behind it.
+    pub(crate) fn record(class: Option<Class>) -> Self {
+        Section { class, block: None }
+    }
+}
+
 /// A per-record FACT a hit carries beside its label: something true of the record that
 /// is not a leaf and not a marker word - a shape csift models no leaf for, a join a
 /// family resolved, a key the record exposes.
