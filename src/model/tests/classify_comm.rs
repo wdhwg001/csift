@@ -328,6 +328,35 @@ fn classify_agent_message_no_from_degrades_to_peer_direction() {
     );
 }
 
+/// The subagent-opener arm needs BOTH halves of its conjunction, and the one it was
+/// never asked about is `is_subagent`.
+///
+/// `parent ⇨ self` says a PARENT spawned this transcript and seeded it with a prompt.
+/// A top-level transcript has no parent, so its first opener is the person opening a
+/// conversation and carries no direction at all - and `ctx.parent_id` is `None` there, so
+/// an arm that fired anyway would render the literal `parent ⇨ self` on a human's first
+/// message. P2 sets `is_transcript_opener` positionally and only for a subagent, so the
+/// combination does not arise on disk; the arm is a pure function and the assertion costs
+/// one fixture.
+#[test]
+fn a_top_level_first_opener_is_nobodys_spawn_seed() {
+    let r =
+        parse(r#"{"type":"user","uuid":"u1","message":{"role":"user","content":"open the lane"}}"#);
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.is_transcript_opener = true;
+    assert_eq!(r.direction(&ctx), None, "no parent, so no parent arrow");
+    // And with the other half set too, the arm fires and names the parent.
+    ctx.is_subagent = true;
+    ctx.parent_id = Some("a1b2c3d4-0000-4000-8000-000000000002");
+    assert_eq!(
+        r.direction(&ctx),
+        Some((
+            "a1b2c3d4-0000-4000-8000-000000000002".to_string(),
+            "self".to_string()
+        ))
+    );
+}
+
 /// A COORDINATOR relay renders `coordinator ⇨ self` - the one inbound leaf that said
 /// nothing about where its message came from.
 ///

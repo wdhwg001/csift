@@ -92949,7 +92949,7 @@
         },
         {
           "path": "src/model/tests/classify_comm.rs",
-          "lines": "339",
+          "lines": "368",
           "snippet": "fn a_coordinator_relay_renders_its_arrow() {"
         }
       ],
