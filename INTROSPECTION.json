@@ -15965,12 +15965,12 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "478-485",
+          "lines": "293-300",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "491-502",
+          "lines": "306-317",
           "snippet": "    for line in mmap.split(|&b| b == b'\\n') {\n        if TS.find(line).is_none() {\n            continue;\n        }\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if rec.timestamp.is_some() {\n                let hit = rec.is_compact_boundary();\n                return Ok(hit\n                    .then(|| rec.uuid.clone().unwrap_or_default())\n                    .filter(|u| !u.is_empty()));\n            }\n        }"
         }
       ],
@@ -16076,7 +16076,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "481-484",
+          "lines": "296-299",
           "snippet": "/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -16254,7 +16254,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "507-515",
+          "lines": "322-330",
           "snippet": "/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary\n/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own\n/// uuid differs; a co-clone's head probe returns the same boundary uuid and is\n/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY\n/// when a clone was detected.\npub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -16484,7 +16484,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "478-484",
+          "lines": "293-299",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -38393,7 +38393,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "136-141",
+          "lines": "144-149",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -38599,7 +38599,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "512-515",
+          "lines": "327-330",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -42668,7 +42668,7 @@
         },
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "72-77",
+          "lines": "80-85",
           "snippet": "            if let Some(text) = preview_text(rec) {\n                // Capture identity off the first user record (it carries cwd / version /\n                // gitBranch / sessionId in real data).\n                cwd = rec.cwd.clone();\n                version = rec.version.clone();\n                git_branch = rec.git_branch.clone();"
         }
       ],
@@ -43161,7 +43161,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "136-141",
+          "lines": "144-149",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -52752,7 +52752,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "195-201",
+          "lines": "203-209",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),\n        git_branch: git_branch_last.clone().or_else(|| git_branch.clone()),\n        git_branch_first: git_branch.or(git_branch_last),"
         }
       ],
@@ -56457,7 +56457,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "195-199",
+          "lines": "203-207",
           "snippet": "        // The base fields are LAST-seen (what the session is on NOW); the head\n        // capture becomes the *_first pair. Either window can be empty - fall back\n        // to the other so a one-record session reports the same value everywhere.\n        version: version_last.clone().or_else(|| version.clone()),\n        version_first: version.or(version_last),"
         }
       ],
@@ -64270,7 +64270,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "512-514",
+          "lines": "327-329",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());"
         }
       ],
@@ -64554,7 +64554,7 @@
         },
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "45-46",
+          "lines": "53-54",
           "snippet": "    let (head_skipped, head_consumed) =\n        head_records_prefiltered(path, line_is_list_candidate, |rec| {"
         }
       ],
@@ -66084,7 +66084,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "136-141",
+          "lines": "144-149",
           "snippet": "    // Prefer the filename-derived id; cross-check with the data id (\u00a72.4 spirit).\n    let session_id = if session_id.is_empty() {\n        data_session_id.unwrap_or_default()\n    } else {\n        session_id\n    };"
         },
         {
@@ -89867,9 +89867,9 @@
       "depends": "csift joins a cleared session to its predecessor through the checkpoint the saver wrote, and that join is only sound because the saver runs BEFORE the id swap: the checkpoint carries the old id, sits in the old file, and its close instant is the last instant of the old session. If a build moved the saver after the regeneration the checkpoint would carry the new id and land in the new file, and the join would silently point the wrong way. The SessionEnd/SessionStart pair with their `clear` reason and source is what a hook-based instrument would key on, and the separately minted `conversation_reset` uuid is why csift never treats an SDK frame's id as a session id.",
       "code": [
         {
-          "path": "src/commands/session/summarize.rs",
+          "path": "src/commands/session/summarize/clear.rs",
           "snippet": "pub(crate) fn cleared_from_origin(path: &Path, wrapper_ts: &str) -> ClearJoin {",
-          "lines": "390"
+          "lines": "117"
         },
         {
           "path": "src/commands/session/rows.rs",
@@ -90046,7 +90046,7 @@
         {
           "path": "src/commands/session/summarize.rs",
           "snippet": "                saw_first_user_record = true;",
-          "lines": "59"
+          "lines": "67"
         },
         {
           "path": "tests/cli/list/clear.rs",
@@ -90087,9 +90087,9 @@
       "depends": "csift reads `startTime + totalDuration` off such a line and nothing else: it is the only instant the line carries, and it is what the `/clear` join compares against the wrapper's timestamp. The missing `uuid` and `timestamp` are why a checkpoint is addressed by LINE and never by uuid, and why the line is not a chain node. If the schema gained an instant field or renamed either number, the join would go silent rather than wrong, because csift requires both numbers and rejects a line of any other type.",
       "code": [
         {
-          "path": "src/commands/session/summarize.rs",
+          "path": "src/commands/session/summarize/clear.rs",
           "snippet": "pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {",
-          "lines": "468"
+          "lines": "195"
         },
         {
           "path": "src/commands/session/tests.rs",
@@ -90165,14 +90165,14 @@
       "depends": "This is the whole `cleared_from` join: csift compares the wrapper record's timestamp against `startTime + totalDuration` of every cost-state line of every sibling transcript in the same project directory, keeps the smallest distance inside a 2,000 ms window, and reports a tie between two different files instead of picking one. The 2,000 ms window is an order of magnitude above the measured 164 ms and two orders below the nearest competitor, so it separates the real predecessor from its neighbours. A file mtime or the time adjacency of ordinary records would not: two busy sessions share those.",
       "code": [
         {
-          "path": "src/commands/session/summarize.rs",
+          "path": "src/commands/session/summarize/clear.rs",
           "snippet": "pub(crate) const CLEAR_JOIN_WINDOW_MS: i64 = 2000;",
-          "lines": "361"
+          "lines": "88"
         },
         {
-          "path": "src/commands/session/summarize.rs",
+          "path": "src/commands/session/summarize/clear.rs",
           "snippet": "fn nearest_checkpoint_close(sib: &Path, t_wrapper: i64) -> Option<(i64, i64)> {",
-          "lines": "439"
+          "lines": "166"
         }
       ],
       "instrument": "Find every top-level transcript whose first non-isMeta user record is a `clear` slash wrapper. For each, read the wrapper's timestamp as epoch milliseconds and, over every sibling `.jsonl` in the same directory, every `cost-state` line's `startTime + totalDuration`; print the signed difference for each candidate line. The counting rule is one row per candidate LINE, not per file, so a file with several checkpoints contributes several rows.",
@@ -91654,7 +91654,7 @@
         {
           "path": "src/commands/session/summarize.rs",
           "snippet": "        continued_in: lineage\n            .continued_in\n            .or(continued_in_tail)\n            .or(continued_in_head),",
-          "lines": "218-221"
+          "lines": "226-229"
         },
         {
           "path": "tests/cli/list/handoff.rs",
@@ -91828,7 +91828,7 @@
         {
           "path": "src/commands/session/summarize.rs",
           "snippet": "pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {",
-          "lines": "251"
+          "lines": "259"
         },
         {
           "path": "src/commands/session/render.rs",
