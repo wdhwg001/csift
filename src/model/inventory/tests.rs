@@ -6,5 +6,6 @@
 use super::*;
 
 mod columns;
+mod skill;
 mod specimens;
 mod table;
