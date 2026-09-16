@@ -56,14 +56,16 @@ pub(crate) fn collect_block_hits(
                     if !has(class) || !sel(class) {
                         continue;
                     }
-                    // Redacted reasoning is opaque ciphertext with no readable text at all,
-                    // so it surfaces a placeholder rather than the blob; every other
-                    // thinking block surfaces its own text, empty included.
-                    let text = match block {
-                        Block::Thinking { thinking, .. } => thinking.as_str(),
-                        _ => REDACTED_THINKING_PLACEHOLDER,
+                    // The BODY is the thinking family's call, not the loop's: what a
+                    // thinking unit's text IS belongs with the four leaves that split on
+                    // the block's own shape. `None` is a block shape the family does not
+                    // own, and nothing is emitted for it rather than a fabricated body -
+                    // unreachable today, since `thinking_block_leaf` already refused
+                    // everything but these two above.
+                    let Some(text) = record_text::thinking::block_body(block) else {
+                        continue;
                     };
-                    emit(class, text, None, None, None, None, Some(block));
+                    emit(class, &text, None, None, None, None, Some(block));
                 }
                 Block::Text { text }
                     if rec.is_type("assistant")

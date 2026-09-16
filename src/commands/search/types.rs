@@ -18,12 +18,6 @@ use super::*;
 /// is a dense at-a-glance identity index. The difference is intentional.
 pub(crate) const EXCERPT_MAX: usize = 400;
 
-/// Render stand-in for a `redacted_thinking` block (GOLD §2 / oracle B3): the block carries
-/// only an opaque/encrypted `data` payload (no readable text), so it surfaces this placeholder
-/// while still classifying `agent.thinking` - so `-t agent.thinking` finds it without dumping
-/// the opaque blob.
-pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = "[redacted thinking]";
-
 /// The `agent.tool.use ▹ agent.tool.result` pairing state of a tool hit (GOLD §7), joined by
 /// `tool_use_id` across the transcript. Drives the render (`▹` / `(no result - pending)` /
 /// `(use not in scope)`). `None` on a non-tool hit.

@@ -6,6 +6,8 @@
 //! A STUB at the skeleton amendment: the dispatch is wired here, the family's own
 //! semantics are not. The body below is what the family lane replaces.
 
+use std::borrow::Cow;
+
 use super::*;
 
 /// What an `agent.thinking` RECORD says - the family's half of the record-level render
@@ -22,6 +24,32 @@ pub(crate) fn render(
     _ctx: &ClassifyCtx,
 ) -> Option<String> {
     None
+}
+
+/// Render stand-in for a `redacted_thinking` block (GOLD §2 / oracle B3): the block carries
+/// only an opaque/encrypted `data` payload (no readable text), so it surfaces this placeholder
+/// while still classifying `agent.thinking` - so `-t agent.thinking` finds it without dumping
+/// the opaque blob.
+pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = "[redacted thinking]";
+
+/// What ONE thinking BLOCK says - the family's half of the per-block render seam.
+///
+/// The block loop calls this instead of deciding the body itself, so what a thinking
+/// unit's text IS becomes this family's to change. `None` means a block shape this
+/// family does not own, and the block loop emits nothing for it rather than a fabricated
+/// body; today it cannot be reached, because `thinking_block_leaf` already refused
+/// everything but these two before the loop gets here.
+///
+/// A `Cow` because one arm borrows the block's own text and the other borrows a
+/// constant: the body of a redacted block is opaque ciphertext with no readable text at
+/// all, so it surfaces a placeholder rather than the blob, while every other thinking
+/// block surfaces its own text, empty included.
+pub(crate) fn block_body(block: &Block) -> Option<Cow<'_, str>> {
+    match block {
+        Block::Thinking { thinking, .. } => Some(Cow::Borrowed(thinking.as_str())),
+        Block::RedactedThinking { .. } => Some(Cow::Borrowed(REDACTED_THINKING_PLACEHOLDER)),
+        _ => None,
+    }
 }
 
 /// The thinking family's own facts.

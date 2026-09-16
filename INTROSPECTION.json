@@ -13130,8 +13130,8 @@
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
-          "path": "src/commands/search/types.rs",
-          "lines": "25",
+          "path": "src/commands/search/record_text/thinking.rs",
+          "lines": "33",
           "snippet": "pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = \"[redacted thinking]\";"
         }
       ],
@@ -53359,8 +53359,8 @@
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
-          "path": "src/commands/search/types.rs",
-          "lines": "25",
+          "path": "src/commands/search/record_text/thinking.rs",
+          "lines": "33",
           "snippet": "pub(crate) const REDACTED_THINKING_PLACEHOLDER"
         },
         {
