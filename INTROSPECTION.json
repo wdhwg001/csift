@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2326",
+          "lines": "2327",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -43324,8 +43324,8 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "408-410",
-          "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
+          "lines": "418-420",
+          "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || c == '\\\\' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
           "path": "src/path/home.rs",
@@ -56093,13 +56093,13 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "294-298",
-          "snippet": "    // A char that JSON escapes inside a string does not survive verbatim in the raw\n    // line bytes the prefilter scans - emitting a literal for it causes false\n    // negatives. `\\` is already excluded via META above; guard `\"`, control chars,\n    // and DEL here.\n    if pattern.chars().any(json_escapes_in_string) {"
+          "lines": "294-299",
+          "snippet": "    // A char that JSON escapes inside a string does not survive verbatim in the raw\n    // line bytes the prefilter scans - emitting a literal for it causes false\n    // negatives. The backslash is already excluded via META above, being a regex\n    // metacharacter; the predicate counts it too, for the `hir_needles` walk, where the\n    // metacharacter is gone and only the literal run is left.\n    if pattern.chars().any(json_escapes_in_string) {"
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "405-407",
-          "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, any C0 control char (`< 0x20`), or DEL.\n/// (`\\` is handled separately as a regex metacharacter.)"
+          "lines": "406-407",
+          "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, `\\`, any C0 control char (`< 0x20`), or DEL."
         }
       ],
       "instrument": "Compare `csift search 'hello world' @<session> -c` against `csift search 'hello\\s+world' @<session> -c` on a transcript whose text carries a newline between the words; the counts must agree with a `jq -r '.message.content[]?.text' <file> | grep -c` baseline. Counting rule: matched records with and without the whitespace in the pattern.",
@@ -64922,7 +64922,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "413-419",
+          "lines": "423-429",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -65342,8 +65342,8 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "408-410",
-          "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
+          "lines": "418-420",
+          "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || c == '\\\\' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],
       "instrument": "Python over a size-filtered random sample: per line take `raw[:4000]`, count the line if any byte >= 0x80, and separately count it if `re.search(rb'\\\\u00[89a-fA-F][0-9a-fA-F]|\\\\u0[1-9a-fA-F][0-9a-fA-F]{2}|\\\\u[1-9a-fA-F][0-9a-fA-F]{3}', head)` matches; for each escape hit check whether the raw bytes contain `\\\\\\\\u` (a literal backslash-u in content) and exclude it. Counting rule: one observation per line, prefix-bounded at 4,000 bytes.",
@@ -94922,7 +94922,7 @@
       "id": "REC-110",
       "area": "record-model",
       "behavior": "The text a converted attachment record carries back on its top-level `rendered` key is the text the model received, and its shape is fixed. The value is an ARRAY of messages, each carrying its text under `content`; over one projects root, counted one JSON parse per non-blank line of every `*.jsonl`, 101,551 attachment lines carry the key, every value is an array, and every one of the 101,705 entries under them holds `content` as a STRING - no entry on that root holds the block-array form the writer also admits. The joined text of all 101,551 opens with `<system-reminder>`. The key rides 30 distinct payload types, led by `total_tokens_reminder` at 77,472, `task_reminder` at 5,063 and `skill_listing` at 2,165. `hook_success` is not among the leaders and is the narrow case: 15 of that root's 429,041 `hook_success` lines carry the key at all, against 90 whose payload `content` is non-empty. A second projects root, on builds below the key's floor, carries it on 0 of its 845,866 attachment lines.",
-      "depends": "`record_text::attachments::attachment_body` renders that text as an attachment unit's BODY, ahead of any field of the payload, and marks the unit `[rendered]` (JSON `body_source`) so a reader knows which of the record's two copies of itself is on screen; a record with no conversion falls to a payload field and then to the verbatim payload JSON, marked `[payload]`. The array-of-messages shape is what the join walks, and the string `content` is the arm every measured entry takes - the block-array arm stays because the writer admits it, and an entry of any other shape contributes nothing rather than crashing. The `<system-reminder>` head is why the body is worth preferring: the payload holds the strings a hook wrote, the conversion holds what the model actually read. THE SECTION 7 CONSEQUENCE, and it is the whole soundness argument: the persisted value is a JSON STRING, so the DECODED body is NOT a byte substring of its own line - a conversion that opens `<system-reminder>` and runs on past a newline stores that newline as `\\n`. What keeps the 7d literal prefilter and the 7f whole-file gate sound over it is the NEEDLE law rather than a substring: `matcher::required_needles` derives a needle only from a run the safety predicate admits - no whitespace, no `\"`, no control character, no DEL - and such a run appears verbatim inside the raw line's JSON string, so a needle present in the decoded text is present in the raw bytes. That is the same property every decoded `message.content` render at this seam already rests on, and it is why no synthesized-marker registration is added for the converted body. THE PREDICATE COUNTS ONE CHARACTER TOO FEW: `matcher::json_escapes_in_string` does not count a BACKSLASH, so a needle carrying one is emitted while the raw line stores it as `\\\\` and the prefilter drops a match the render would have shown. That is a property of the predicate and therefore of EVERY decoded render, not of the converted body - the identical drop reproduces on a plain `user.message` whose own text carries a backslash run - and counting the backslash in that predicate splits such a run exactly as a quote already splits it, closing it for all of them at once.",
+      "depends": "`record_text::attachments::attachment_body` renders that text as an attachment unit's BODY, ahead of any field of the payload, and marks the unit `[rendered]` (JSON `body_source`) so a reader knows which of the record's two copies of itself is on screen; a record with no conversion falls to a payload field and then to the verbatim payload JSON, marked `[payload]`. The array-of-messages shape is what the join walks, and the string `content` is the arm every measured entry takes - the block-array arm stays because the writer admits it, and an entry of any other shape contributes nothing rather than crashing. The `<system-reminder>` head is why the body is worth preferring: the payload holds the strings a hook wrote, the conversion holds what the model actually read. THE SECTION 7 CONSEQUENCE, and it is the whole soundness argument: the persisted value is a JSON STRING, so the DECODED body is NOT a byte substring of its own line - a conversion that opens `<system-reminder>` and runs on past a newline stores that newline as `\\n`. What keeps the 7d literal prefilter and the 7f whole-file gate sound over it is the NEEDLE law rather than a substring: `matcher::required_needles` derives a needle only from a run the safety predicate admits - no whitespace, no `\"`, no control character, no DEL - and such a run appears verbatim inside the raw line's JSON string, so a needle present in the decoded text is present in the raw bytes. That is the same property every decoded `message.content` render at this seam already rests on, and it is why no synthesized-marker registration is added for the converted body. THE PREDICATE COUNTS THE BACKSLASH, and for the same reason it counts the quote: a raw line stores a backslash doubled, so a needle carrying one occurs nowhere in the bytes the prefilter scans. It did not, for one release, and the gap was a property of the predicate and therefore of EVERY decoded render rather than of the converted body - the identical drop reproduced on a plain `user.message` whose own text carries a backslash run. Counting it splits such a run exactly as a quote already splits it, so `C:\\\\Users\\\\dev` derives the needle `Users`, which is in the raw bytes.",
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
@@ -94991,6 +94991,16 @@
           "observed": "`show --line 2` prints `[rendered]  L2  <system-reminder> zzbsPATHC:\\Users\\devzz end </system-reminder>`. On the converted body, `search 'zzbsPATHC:\\\\Users\\\\devzz' --attachments` returns 0 matches at exit 0 with `no matching exchanges`, while `search 'zzbsPATHC:.Users.devzz' --attachments` returns 1 exchange on that same record and `search 'zzbsPATHC' --attachments` returns 1. On the plain user record the same pair answers 0 and 1. The predicate reads `c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'` and the literal run splits only on whitespace and that predicate, so the 22-character needle carrying two backslashes is emitted whole while the raw line stores each backslash as two bytes; the metachar form contributes the sub-run `zzbsPATHC:`, which is present in the raw bytes.",
           "rule": "One synthetic transcript of two records, no corpus line; a search counts as a match when it prints a hit row for the addressed line, and as a definitive absence when it prints `no matching exchanges` at exit 0; the two patterns of a pair describe the SAME rendered text and differ only in whether the needle the prefilter derives carries a backslash.",
           "note": "The soundness statement in `depends` guaranteed a needle's verbatim presence in the raw line without naming the character the safety predicate does not count. The measurement bounds it: the guarantee holds for every needle the predicate admits, and a backslash-bearing needle is outside it, dropped by the 7d prefilter on a converted body and on an ordinary decoded message alike. Nothing about the `rendered` shape this claim measures moves; the statement now carries its exception and names `matcher::json_escapes_in_string` as what closes it."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "Re-ran the conversion census over one projects root (one JSON parse per non-blank line of every *.jsonl, subagents included, journal.jsonl and elicitations.jsonl excluded), counting attachment lines carrying a top-level `rendered`, the shape of every entry under it, and separately the `queued_command` lines whose payload `origin.kind` is `human`. Then ran the two-record synthetic pair the depends text describes through the built binary: one `user.message` and one converted `total_tokens_reminder`, each carrying a drive-letter path, searched twice - once with the backslashes in the pattern, once with them replaced by `.` - and compared the exchange counts.",
+          "observed": "9,613 files scanned; 164 human-origin `queued_command` lines, 20 of them carrying a top-level `rendered` and 0 carrying `renderedInHumanTurn`. On the synthetic pair all four searches now report 1 exchange: the backslash-carrying patterns matched where they previously reported a definitive absence over text `show --line` had rendered.",
+          "rule": "One parse per non-blank line; a line counts once whatever its payload size. A search counts as matching when its stdout does not carry `no matching exchanges`; the two patterns of a pair describe the same rendered text and differ only in whether the needle the prefilter derives carries a backslash.",
+          "note": "The conversion behaviour is unchanged. What moved is csift's side of the soundness argument: `matcher::json_escapes_in_string` now counts the backslash, so a run carrying one splits into needles that do occur verbatim in the raw line, and the prefilter no longer proves absence over a body csift renders. The depends text's closing paragraph is rewritten from a stated gap to the rule as it now stands."
         }
       ]
     },
@@ -96236,7 +96246,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2904"
+          "lines": "2905"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

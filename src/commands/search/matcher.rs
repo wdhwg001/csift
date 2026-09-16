@@ -293,8 +293,9 @@ pub(crate) fn required_literal(pattern: &str) -> Option<Vec<u8>> {
     }
     // A char that JSON escapes inside a string does not survive verbatim in the raw
     // line bytes the prefilter scans - emitting a literal for it causes false
-    // negatives. `\` is already excluded via META above; guard `"`, control chars,
-    // and DEL here.
+    // negatives. The backslash is already excluded via META above, being a regex
+    // metacharacter; the predicate counts it too, for the `hir_needles` walk, where the
+    // metacharacter is gone and only the literal run is left.
     if pattern.chars().any(json_escapes_in_string) {
         return None;
     }
@@ -403,10 +404,19 @@ fn set_strength(set: &[String]) -> (usize, std::cmp::Reverse<usize>) {
 }
 
 /// True when `c` is escaped inside a JSON string literal (so it never appears
-/// verbatim in the raw line bytes): `"`, any C0 control char (`< 0x20`), or DEL.
-/// (`\` is handled separately as a regex metacharacter.)
+/// verbatim in the raw line bytes): `"`, `\`, any C0 control char (`< 0x20`), or DEL.
+///
+/// THE BACKSLASH IS HERE FOR THE SAME REASON THE QUOTE IS, and it was missing for a
+/// release. `required_literal` never emitted one - a backslash is a regex metacharacter,
+/// so a whole-pattern literal carrying one was rejected before reaching this predicate -
+/// but `hir_needles` walks a PARSED pattern, where the metacharacter is gone and the
+/// literal run reads `C:\Users\dev`. That run was emitted whole as a needle while the
+/// raw line stores it as `C:\\Users\\dev`, so the 7d line prefilter and the 7f whole-file
+/// gate both proved absence over text csift itself renders. Counting it here SPLITS such
+/// a run exactly as a quote already splits it: the needle becomes `Users`, which does
+/// occur verbatim in the raw bytes, and the gate stays sound and stays cheap.
 pub(crate) fn json_escapes_in_string(c: char) -> bool {
-    c == '"' || (c as u32) < 0x20 || c == '\u{7f}'
+    c == '"' || c == '\\' || (c as u32) < 0x20 || c == '\u{7f}'
 }
 
 /// Entry point for `csift search`.

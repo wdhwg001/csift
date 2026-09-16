@@ -124,6 +124,12 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **A pattern carrying a backslash matches the text csift renders.** The needle safety
+  predicate counted the double quote, the control characters and DEL but not the
+  backslash, which a raw jsonl line stores doubled - so `search 'C:\\Users\\dev'` reported a
+  definitive absence over text `show --line` put on screen, on an attachment's converted
+  body and on a plain user message alike. The predicate counts it now, which splits such a
+  run into needles that do occur in the raw bytes.
 - **The person's mid-turn steer renders the text the model received.** BREAKING: a
   `queued_command` steer whose record carries a persisted conversion now shows that
   conversion and reads `[rendered]`, where it showed the payload JSON and read `[payload]`.
@@ -175,11 +181,7 @@ surface change bumps the PATCH.
   `[context <payload type>]`, `[structured]`, `[mid-turn]`. A record carrying a
   conversion is searchable by the converted text and no longer by the payload text it
   replaced; `--raw` does not recover the difference (the backfill runs after the match
-  phase), so the way to the bytes is `csift show @<id> --line N --raw`. One matching
-  caveat comes with that and it is crate-wide rather than new: a pattern whose prefilter
-  needle carries a BACKSLASH matches no decoded text, because the raw line stores the
-  backslash doubled - true of an ordinary message before this and of a converted body now
-  - so match around it (`C:.Users.dev`) rather than through it. A
+  phase), so the way to the bytes is `csift show @<id> --line N --raw`. A
   `queued_command` carrying a SECOND conversion for a human turn keeps the ordinary one
   as its body and reports the difference (`[human-turn render differs]`, JSON
   `human_turn_render_differs`), because which copy the model received depends on the turn

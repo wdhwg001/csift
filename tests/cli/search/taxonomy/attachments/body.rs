@@ -98,21 +98,21 @@ fn the_persons_mid_turn_steer_renders_the_text_the_model_received() {
 }
 
 #[test]
-fn a_backslash_in_a_needle_is_the_one_hole_the_needle_law_does_not_cover() {
-    // THIS PINS A GAP, NOT A GUARANTEE. A converted body is DECODED text, and the section 7
-    // prefilters stay sound over it because a needle `matcher::required_needles` derives
-    // carries no whitespace and no JSON-escaped character, and such a run sits verbatim
-    // inside the raw line's JSON string. `matcher::json_escapes_in_string` counts the double
-    // quote, the control characters and DEL - NOT the backslash - so a needle carrying one is
-    // emitted while the raw line stores that backslash doubled, and the line prefilter drops
-    // the match although the render puts the text on screen.
+fn a_backslash_in_a_needle_matches_the_text_it_is_rendered_from() {
+    // A converted body is DECODED text, and the section 7 prefilters stay sound over it
+    // because a needle `matcher::required_needles` derives carries no whitespace and no
+    // JSON-escaped character, and such a run sits verbatim inside the raw line's JSON
+    // string. The BACKSLASH is one of those characters: a raw line stores it doubled, so a
+    // needle carrying one occurs nowhere in the bytes the prefilter scans.
     //
-    // The SECOND pair is what says whose gap it is: the identical drop happens on a plain
-    // `user.message`, which no attachment code touches, so it is closed in the shared
-    // predicate rather than in this family.
+    // `matcher::json_escapes_in_string` did not count it, so a needle carrying a backslash
+    // was emitted and the line prefilter proved absence over text csift had just put on
+    // screen. It counts it now, which SPLITS such a run exactly as a quote already splits
+    // it - `C:\Users\dev` derives the needle `Users`, which is in the raw bytes.
     //
-    // WHEN THAT PREDICATE COUNTS THE BACKSLASH THIS TEST FAILS AND MUST BE REWRITTEN: both
-    // `false` rows below become matches, and this comment becomes history.
+    // BOTH PAIRS MATCH, and the second pair is why the predicate is where the fix went:
+    // the identical drop happened on a plain `user.message`, which no attachment code
+    // touches.
     let h = Home::new();
     let lines = [
         r#"{"type":"user","uuid":"aa000000-0000-4000-8000-000000000001","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzbs plain zzuserC:\\Users\\devzz end"}}"#,
@@ -132,12 +132,14 @@ fn a_backslash_in_a_needle_is_the_one_hole_the_needle_law_does_not_cover() {
         shown.stdout
     );
 
-    // (pattern, does it reach the attachment view, does it match today)
-    for (pattern, attachments, matches) in [
-        (r"zzconvC:\\Users\\devzz", true, false),
-        (r"zzconvC:.Users.devzz", true, true),
-        (r"zzuserC:\\Users\\devzz", false, false),
-        (r"zzuserC:.Users.devzz", false, true),
+    // (pattern, does it reach the attachment view). The two patterns of each pair
+    // describe the SAME rendered text and differ only in whether the needle the prefilter
+    // derives carries a backslash, so both of each pair must answer alike.
+    for (pattern, attachments) in [
+        (r"zzconvC:\\Users\\devzz", true),
+        (r"zzconvC:.Users.devzz", true),
+        (r"zzuserC:\\Users\\devzz", false),
+        (r"zzuserC:.Users.devzz", false),
     ] {
         let mut argv = vec!["search", pattern, target];
         if attachments {
@@ -149,17 +151,9 @@ fn a_backslash_in_a_needle_is_the_one_hole_the_needle_law_does_not_cover() {
             "a zero-match search is a definitive absence at exit 0: {}",
             out.stderr
         );
-        assert_eq!(
+        assert!(
             !out.stdout.contains("no matching exchanges"),
-            matches,
-            "{pattern:?} should {}: the two patterns of a pair describe the SAME rendered \
-             text and differ only in whether the needle the prefilter derives carries a \
-             backslash\n{}",
-            if matches {
-                "match"
-            } else {
-                "be dropped by the prefilter"
-            },
+            "{pattern:?} should match the body csift renders for that record\n{}",
             out.stdout
         );
     }

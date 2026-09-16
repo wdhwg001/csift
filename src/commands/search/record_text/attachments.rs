@@ -26,15 +26,15 @@
 //! synthesized-marker registration. It is the same property every decoded
 //! `message.content` render at this seam already rests on.
 //!
-//! THE PREDICATE COUNTS ONE CHARACTER TOO FEW, and the gap is stated rather than papered
-//! over: `matcher::json_escapes_in_string` does not count a BACKSLASH, so a needle carrying
-//! one is emitted while the raw line stores it as `\\`, and the prefilter drops a match the
-//! render would have shown. It is a property of the PREDICATE and so of every decoded
-//! render, not of this body - the identical drop reproduces on a plain `user.message` whose
-//! own text carries a backslash run - and counting the backslash there splits such a run
-//! exactly as a quote already splits it, closing it for every decoded render at once.
-//! `matcher.rs` is not this family's file; the behaviour as it stands is pinned by
-//! `a_backslash_in_a_needle_is_the_one_hole_the_needle_law_does_not_cover`.
+//! The BACKSLASH is one of those characters, and it took a release to become one: the
+//! predicate counted the quote, the control characters and DEL but not the backslash, so a
+//! needle carrying one was emitted while the raw line stored it as `\\` and the prefilter
+//! proved absence over a body this family had just rendered. It was a property of the
+//! PREDICATE and so of every decoded render rather than of this body - the identical drop
+//! reproduced on a plain `user.message` whose own text carries a backslash run - and
+//! counting it splits such a run exactly as a quote already splits it, which closed it for
+//! every decoded render at once. Pinned by
+//! `a_backslash_in_a_needle_matches_the_text_it_is_rendered_from`.
 //!
 //! The label-zone markers are fabricated and therefore display-only, which is exactly what
 //! [`Marker`] is for.
