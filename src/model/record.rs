@@ -20,13 +20,16 @@ use super::*;
 
 /// A single parsed jsonl line. Unknown top-level fields are ignored by serde.
 ///
-/// Several fields below are deserialized for completeness of the documented record
-/// model (SPEC §3.2) and to keep parsing tolerant, but are not (yet) read by any
-/// handler - e.g. `parent_uuid` (the §6.4 round-trip reconstruction keys on file
-/// order + genuine-user delimiting, not the uuid tree), `is_sidechain`,
-/// `is_visible_in_transcript_only`, `subtype`, `content`. They are part of the
-/// data contract, intentionally retained, hence the targeted allow rather than
-/// deleting SPEC-mandated shape.
+/// Every field below is read by some handler EXCEPT two, and each of the two is kept for
+/// a stated reason rather than for completeness. `is_visible_in_transcript_only` is the
+/// compaction summary's either/or SECOND key, and claim CMP-001 rests on it: the writer
+/// sets it or `summarizeMetadata`, never both and never neither, so a reader that dropped
+/// it would have no way to tell an ordinary compaction from a `/rewind` summarize whose
+/// metadata a later build stopped writing. `rewound` (on the `last-prompt` line) is the
+/// sibling of `explicit`, which the chain DOES read as a leaf gate, and `parse::SpineRow`
+/// lifts both - keeping one half and dropping the other would break the one-shape contract
+/// `ChainNode` holds a full record and a narrow spine row to. The targeted allow is for
+/// those two, not a licence to add a third.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Record {

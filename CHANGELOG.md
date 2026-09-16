@@ -94,6 +94,25 @@ surface change bumps the PATCH.
 - **`search --help` and `show --help` carry the family's surface**: a SYSTEM LEAVES region
   naming every render form, marker word, `for` kind and per-hit key, and fifteen key rows on the
   `show` record-row table.
+
+
+- **The exposed keys: what a record says about the CALL behind it.** Claude Code stamps a
+  record with which agent definition, skill, plugin and MCP tool the request ran under,
+  which API request and which content block of its response it is, why the call failed,
+  what a person typed refusing a tool, which scheduled task submitted the prompt and which
+  hook run closed it. csift parsed none of it, so a reader who wanted any of it fell back
+  to `--raw`. Every one of them now rides every `search` hit and every `show` record row as
+  JSON - `attribution`, `request_id`, `api_block_index`, `tool_ends_turn`, `user_feedback`,
+  `api_failure`, `interrupted_message_id`, `hook_run_id`, `scheduled_task_id`,
+  `scheduled_fire_id` - and four of them render a label-zone tag: `[via skill X]`,
+  `[ends turn]`, `[feedback: ...]` and the api-failure headline. An address carries exactly
+  what a scan does. A missing key means this record does not say, never no.
+- **The session a record was minted in, where that is not the session holding it.**
+  A record carries two session ids under two spellings, and they disagree exactly when a
+  record was hydrated here from another session's stream. `csift list --lineage` reports
+  those ids as `minted_elsewhere` with a count beside them, text row `minted`. It is the
+  fourth lineage link a row can carry and the only one a record states about itself, so it
+  carries no inference wording.
 ### Changed
 
 - **An attachment unit renders the text the model received.** BREAKING: the body of a

@@ -148,6 +148,26 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         Family::System,
         "for:[…] (kind/basis/target/reason per edge)",
     ),
+    // The EXPOSED KEYS: facts a record states about the CALL behind it. Each is absent
+    // from a record that does not name it - the absence rule is read at key level.
+    k(
+        Family::Keys,
+        "attribution:{agent skill plugin mcp_server mcp_tool}",
+    ),
+    k(Family::Keys, "request_id"),
+    k(Family::Keys, "api_block_index"),
+    k(Family::Keys, "tool_ends_turn"),
+    k(Family::Keys, "user_feedback"),
+    k(
+        Family::Keys,
+        "api_failure:{error status quota{limit_type resets_at} truncated_after_output \
+         aborted_mid_stream}",
+    ),
+    k(Family::Keys, "interrupted_message_id"),
+    k(Family::Keys, "hook_run_id"),
+    k(Family::Keys, "scheduled_task_id"),
+    k(Family::Keys, "scheduled_fire_id"),
+    k(Family::Keys, "for:[{kind basis target reason}]"),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.
