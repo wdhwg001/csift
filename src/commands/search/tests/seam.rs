@@ -133,6 +133,64 @@ fn the_exposed_keys_family_owns_no_render() {
     assert_eq!(distinct.len(), five.len(), "an unknown family is routed to");
 }
 
+/// The TWO renders that stay empty answer `None` for a record of their own family, which
+/// is the difference between "this family has nothing to render" and "this family has not
+/// been wired up".
+///
+/// A thinking leaf is decided on a content BLOCK, so a thinking unit never reaches the
+/// record-level seam at all - `block_body` is the family's real render. An isMeta
+/// injection's text is its own `message.content`, which the engine already joins. Both
+/// are stated at their functions and both are pinned here, because an empty render that
+/// nobody calls looks exactly like one somebody forgot.
+#[test]
+fn the_two_empty_renders_answer_nothing_for_their_own_records() {
+    use crate::commands::search::record_text::{injections, thinking};
+    let ctx = ClassifyCtx::top_level();
+    let think = rec(
+        r#"{"type":"assistant","uuid":"t1","message":{"role":"assistant","content":[{"type":"thinking","thinking":"weighing it up","signature":"c2ln"}]}}"#,
+    );
+    assert_eq!(
+        thinking::render(&think, None, Class::AgentThinkingSummary, &ctx),
+        None
+    );
+    let nudge = rec(
+        r#"{"type":"user","uuid":"i1","isMeta":true,"message":{"role":"user","content":"[structured-output-enforce] call the tool"}}"#,
+    );
+    assert_eq!(
+        injections::render(&nudge, None, Class::EnforceStructuredOutput, &ctx),
+        None
+    );
+}
+
+/// A thinking BLOCK's body is the family's, and the family answers only for the two block
+/// kinds it owns: anything else is `None`, and the block loop emits nothing rather than a
+/// fabricated body.
+///
+/// `thinking_block_leaf` already refuses everything but those two before the loop reaches
+/// the arm, so the `None` cannot be produced in production today. It is pinned anyway,
+/// because what it decides is what happens to a block shape a LATER build adds - and
+/// "skipped" and "emitted with somebody else's text" are very different answers.
+#[test]
+fn a_block_this_family_does_not_own_has_no_body() {
+    use crate::commands::search::record_text::thinking;
+    assert_eq!(
+        thinking::block_body(&Block::Text {
+            text: "an assistant message".to_string()
+        })
+        .as_deref(),
+        None
+    );
+    assert_eq!(
+        thinking::block_body(&Block::Thinking {
+            thinking: "weighing it up".to_string(),
+            signature: None,
+        })
+        .as_deref(),
+        Some("weighing it up"),
+        "and it does own a thinking block"
+    );
+}
+
 /// ONE leaf is rendered by a family that DELEGATES to the engine's promoted renderer, and
 /// it is the only one: `harness.bookkeeping.file-history` builds its head from fields
 /// `Record` models rather than from the raw line, so the family composes the promoted

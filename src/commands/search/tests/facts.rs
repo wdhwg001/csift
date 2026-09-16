@@ -214,6 +214,55 @@ fn an_edge_built_without_a_row_space_renders_the_id_not_a_line() {
     );
 }
 
+/// The THREE remaining shapes of an unresolved target, each of which a family can build
+/// even though `for_edge` never produces them itself.
+///
+/// A target named only by POSITION carries no uuid at all and renders `unknown` in the id
+/// slot - which is not the same tag as `ForUnknown`'s, and must not be, because "the
+/// record points somewhere csift cannot name" and "the record points nowhere" are
+/// different facts. A target in ANOTHER transcript prints its session, because an
+/// eight-character handle with no session is not an address a reader can use. And a
+/// target with neither line nor note prints the id alone rather than an empty
+/// parenthesis.
+#[test]
+fn an_unresolved_target_renders_what_it_has_and_no_more() {
+    let zone = |t: ForTarget| {
+        HitFact::For {
+            kind: "closes",
+            basis: Basis::Position,
+            target: t,
+        }
+        .label_zone()
+    };
+    assert_eq!(
+        zone(ForTarget {
+            note: Some("the parent link names no record".to_string()),
+            ..ForTarget::default()
+        })
+        .as_deref(),
+        Some("[for: closes unknown (the parent link names no record)]")
+    );
+    assert_eq!(
+        zone(ForTarget {
+            uuid: Some("abcdef0123456789".to_string()),
+            session: Some("11111111-2222-4333-8444-555555555555".to_string()),
+            note: Some("not in this file".to_string()),
+            line: None,
+        })
+        .as_deref(),
+        Some("[for: closes @11111111-2222-4333-8444-555555555555 abcdef01 (not in this file)]")
+    );
+    assert_eq!(
+        zone(ForTarget {
+            uuid: Some("abcdef0123456789".to_string()),
+            ..ForTarget::default()
+        })
+        .as_deref(),
+        Some("[for: closes abcdef01]"),
+        "no note, no parenthesis"
+    );
+}
+
 /// The three BASIS words are the closed set a consumer filters on, so they are pinned
 /// here rather than left to whatever each family happens to spell.
 #[test]
