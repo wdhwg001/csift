@@ -42,6 +42,19 @@ surface change bumps the PATCH.
   spell it one way. `show --format json` gains four record-row keys with it: `for`,
   `continued_in`, `checkpoint_closes_at` and `checkpoint_join`.
 
+
+- **A thinking block says what it is, and which of the two wrote it.** Four label-zone
+  markers: `[no summary text]` on `agent.thinking.omitted` and `[redacted thinking]` on
+  `agent.thinking.redacted`, the API's own textless answers; `[cancelled stream salvage]`
+  on the one client-minted thinking shape, which keeps `agent.thinking.summary` and stays
+  delivered; and `[thinking removed by the client]` on an `agent.message.plain` block whose
+  whole trimmed text is `[Thinking removed]`, so those three words never read as the
+  assistant speaking.
+- **Two per-hit JSON keys on every thinking block unit.** `signature_len` is the character
+  length of the block's own `signature` - `0` when the field is present and empty, `null`
+  when the block carries no such field, because absent and empty are different shapes and
+  the salvage discriminator rests on exactly that one. `thinking_text_absent` rides
+  `agent.thinking.omitted` alone. Both are named in `search --help` and `show --help`.
 ### Changed
 
 - **One stamping site for every taxonomy family, and one place each edits.** The extension
@@ -244,6 +257,15 @@ surface change bumps the PATCH.
 
 ### Fixed
 
+- **The two textless thinking leaves rendered a body they do not have.** An
+  `agent.thinking.redacted` unit printed the fabricated words `[redacted thinking]` as its
+  text - matchable text with no substring behind it in the raw line, which the literal
+  prefilter and the whole-file gate both reason about and which the law admits only through
+  a registered marker. An `agent.thinking.omitted` unit whose `thinking` field was
+  whitespace printed a run of spaces while promising none. Both bodies are EMPTY now, and
+  the consequence is stated rather than met: with nothing rendered, a pattern scan reaches
+  neither leaf - use an empty pattern plus an exact `-t`, `--count-by label`, or a `show`
+  address, and `--raw` for a redacted block's ciphertext.
 - **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
   the one place csift proves a negative, and it was re-rendering without the line - so for
   a record whose text lives in fields the record model does not carry, it could prove a
