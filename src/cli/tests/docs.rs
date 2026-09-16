@@ -470,10 +470,18 @@ fn the_show_record_keys_render_from_their_table() {
 
     let rendered = record_row_keys();
     assert!(rendered.starts_with('{') && rendered.ends_with('}'));
+    // Strip EXACTLY ONE brace at each end. `trim_matches` strips every occurrence, so a
+    // row whose own rendered form ENDS in `}` - any object-valued key - lost its closing
+    // brace together with the list's when it sat LAST, and its name then matched no table
+    // row. That is a property of the parse and not of the table, so it is fixed here
+    // rather than by ordering the table around it; `an_object_valued_key_parses_last`
+    // below is the pin.
+    let unwrap_list = |s: &str| -> String { s[1..s.len() - 1].to_string() };
+    let body = unwrap_list(&rendered);
     // EVERY row exactly once: the family blocks partition the table, so the rendered
     // list is as long as the table and no name is repeated. A grouping that put a row in
     // more than one block, or dropped a block, changes this count and nothing else.
-    let names: Vec<&str> = rendered.trim_matches(['{', '}']).split(", ").collect();
+    let names: Vec<&str> = body.split(", ").collect();
     assert_eq!(names.len(), RECORD_KEYS.len());
     let mut sorted = names.clone();
     sorted.sort_unstable();
@@ -502,7 +510,7 @@ fn the_show_record_keys_render_from_their_table() {
             .expect("every family is in the render order")
     };
     let mut last = 0usize;
-    for name in rendered.trim_matches(['{', '}']).split(", ") {
+    for name in body.split(", ") {
         let row = RECORD_KEYS
             .iter()
             .find(|r| r.rendered == name)
@@ -511,4 +519,38 @@ fn the_show_record_keys_render_from_their_table() {
         assert!(at >= last, "{name} printed outside its family block");
         last = at;
     }
+}
+
+/// An OBJECT-VALUED key renders and parses back wherever it sits, LAST included. The
+/// rendered list is `{a, b, c}` and such a row's own form ends in `}`, so a parse that
+/// trims every trailing brace swallows the row's along with the list's and the last name
+/// matches no table row - which is what happened, as a panic inside the walk above, the
+/// moment an object-valued key was appended at the end of a family block. The table's
+/// real order is not what this pins: the list is rebuilt here with the object-valued row
+/// moved last, so the parse is tested against the shape whatever the table does.
+#[test]
+fn an_object_valued_key_parses_last() {
+    let object_valued: Vec<&str> = RECORD_KEYS
+        .iter()
+        .map(|r| r.rendered)
+        .filter(|r| r.ends_with('}'))
+        .collect();
+    assert!(
+        !object_valued.is_empty(),
+        "the shape this pins has to exist in the table"
+    );
+    let mut names: Vec<&str> = RECORD_KEYS
+        .iter()
+        .map(|r| r.rendered)
+        .filter(|r| !r.ends_with('}'))
+        .collect();
+    names.extend(object_valued.iter().copied());
+    let rendered = format!("{{{}}}", names.join(", "));
+    let parsed: Vec<&str> = rendered[1..rendered.len() - 1].split(", ").collect();
+    assert_eq!(parsed, names, "one brace off each end, never every brace");
+    assert_eq!(
+        parsed.last(),
+        object_valued.last(),
+        "the last name survives whole"
+    );
 }

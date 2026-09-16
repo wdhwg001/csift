@@ -144,9 +144,11 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         "api_failure:{error status quota{limit_type resets_at} truncated_after_output \
          aborted_mid_stream}",
     ),
-    // Beside the other object-valued key rather than after the scalars: the rendered list
-    // is re-parsed by splitting on ", ", and a row whose form ENDS in `}` cannot sit last
-    // there (the outer brace and the row's own would be stripped together).
+    // The two OBJECT-VALUED keys of this family sit together, ahead of the scalar joins,
+    // so a reader meets the shapes first and the ids after. Position is a choice now and
+    // nothing more: a row whose form ends in `}` once could not sit LAST, because the
+    // rendered list was re-parsed by trimming every brace off both ends
+    // (`cli::tests::docs::an_object_valued_key_parses_last` is the pin).
     k(Family::Keys, "pdf_pages:{first last count path}"),
     k(Family::Keys, "interrupted_message_id"),
     k(Family::Keys, "hook_run_id"),
