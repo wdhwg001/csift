@@ -204,11 +204,16 @@ pub enum Class {
     /// a `hook_success` that carries a rendered body.
     HookOutcome,
     /// `harness.hook.feedback` - a BLOCKING HOOK's feedback the model received: an
-    /// `isMeta` `type:"user"` record whose content opens `<Name> hook feedback:`. ONE
-    /// builder writes four such prefixes from one name array - `Stop`, `TeammateIdle`,
-    /// `TaskCreated`, `TaskCompleted` - assembled at runtime, which is why no whole
-    /// prefix appears as a literal in the build (claim CLS-016). csift's own detector
-    /// reaches the `Stop` spelling today; the leaf is the whole family.
+    /// `isMeta` `type:"user"` record whose content opens `<Name> hook feedback:` and
+    /// then a NEWLINE. ONE builder joins three pieces - a hook name, the shared suffix
+    /// ` hook feedback:\n`, and the feedback body - and four callers hand it the four
+    /// names `Stop`, `TeammateIdle`, `TaskCreated`, `TaskCompleted`, so the ASSEMBLED
+    /// prefix is a literal at no offset in the build while the suffix and the names are
+    /// separate ones. `Stop hook feedback:` IS in the build three times, and none of the
+    /// three is that writer: two are the TUI's own summary and row, both continuing with
+    /// a SPACE, and the third is the interned copy of that same string (claim CLS-048).
+    /// csift matches the prefix WITHOUT the newline, so a body that continues any other
+    /// way still classifies; only the `Stop` name has a corpus specimen.
     HookFeedback,
 
     // ── harness.context (9) ──

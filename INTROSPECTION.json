@@ -20399,7 +20399,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "270-283",
+          "lines": "275-288",
           "snippet": "    // \u2500\u2500 harness.system (5) \u2500\u2500\n    /// `harness.system.refusal` - a `type:\"system\"` record with subtype\n    /// `model_refusal_fallback` / `model_refusal_no_fallback`.\n    SystemRefusal,\n    /// `harness.system.api-error` - a `type:\"system\"` record with subtype `api_error`.\n    SystemApiError,\n    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,\n    /// `harness.system.kill` - a `type:\"system\"` record with subtype `agents_killed`.\n    SystemKill,\n    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         }
       ],
@@ -48218,7 +48218,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "266-268",
+          "lines": "271-273",
           "snippet": "    /// `harness.turn.recap` - the `type:\"system\"` / `subtype:\"away_summary\"` recap the\n    /// harness generates when the operator returns after time away. No `message{}`.\n    TurnRecap,"
         }
       ],
@@ -48696,7 +48696,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "263-265",
+          "lines": "268-270",
           "snippet": "    /// `harness.turn.stop-hooks` - the `type:\"system\"` / `subtype:\"stop_hook_summary\"`\n    /// ledger of the Stop hooks that ran at turn end. No `message{}`.\n    TurnStopHooks,"
         },
         {
@@ -87237,7 +87237,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "280-283",
+          "lines": "285-288",
           "snippet": "    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         },
         {
@@ -87500,7 +87500,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "276-277",
+          "lines": "281-282",
           "snippet": "    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,"
         }
       ],
@@ -93054,6 +93054,147 @@
           "observed": "Three buckets and no others: 669 records carrying `tool_result` with `isMeta` false, 94 carrying `image` with `isMeta` true, 3 carrying `document` with `isMeta` true. Zero image-only records without the flag; zero document-only records without it.",
           "rule": "A record counts when its `type` is `user` and its `message.content` is an array in which the concatenation of every `text` block's `text` is blank after trimming. Its bucket is the sorted set of block `type` values other than `text`, paired with the truthiness of the record's `isMeta`.",
           "note": "The zero on the non-isMeta side is what makes the conjunction free: it changes no corpus record and closes a hole that block shape alone left open, which is exactly what the other injection arms already do with the same test."
+        }
+      ]
+    },
+    {
+      "id": "CLS-048",
+      "area": "classification",
+      "behavior": "A blocking hook's feedback text is ASSEMBLED, never written as one literal. At Claude Code 2.1.258 one builder `eee(e,n)` @161464086 returns `${name}${suffix}${body}` with the suffix a variable of its own, `m$t` = ` hook feedback:` plus a newline @161464001, and four sibling functions call it with the four hook names, one literal each - `Stop` @165848388, `TeammateIdle` @165848439, `TaskCreated` @165848498, `TaskCompleted` @165848556 - the same four the name array `Dcn` @161464028 holds for the harness's own recogniser @161464911 and byte-scanner needle set @172794405. So the assembled prefix `Stop hook feedback:` + newline occurs in the build at NO offset, while the suffix and each name occur separately. The literal `Stop hook feedback:` DOES occur, three times, and none of the three is that writer: the TUI's turn summary template `Stop hook feedback: ${E}` @179877882 and the TUI row component @180034963, both continuing with a SPACE rather than a newline, and the interned copy of that same string in the constant pool @71657624. Corpus: over 9,797 transcripts under one projects root, 988 lines carry the substring `hook feedback:` anywhere, and 46 records in 14 files have a string `message.content` OPENING with `<name> hook feedback:` - all 46 under the name `Stop`, and all 46 with a NEWLINE as the next character. No record opens with any of the other three names.",
+      "depends": "csift classifies `harness.hook.feedback` on the prefix `Stop hook feedback:` WITHOUT the newline, anchored at content start. Matching the prefix rather than the assembled form is what makes the leaf robust to the suffix moving, and dropping the newline from the test is what keeps a body that continues some other way classified rather than silently unlabelled. The wider fact matters to the DOC surfaces, not to the code: taxonomy.rs and SKILL state the on-disk shape so a reader can cross-check a record against the jsonl, and the previous wording said no whole prefix appeared as a literal in the build, which is false of `Stop hook feedback:` and true only of the assembled form with its newline.",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "281-283",
+          "snippet": "/// The hook-feedback template is `<hook name> hook feedback:\\n<body>` over a closed set\n/// of hook names; csift matches the Stop form, the only one with a corpus specimen.\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";"
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "68-70",
+          "snippet": "if s.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {\n        return Some(Class::HookFeedback);\n    }"
+        },
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "212-217",
+          "snippet": "/// separate ones. `Stop hook feedback:` IS in the build three times, and none of the\n    /// three is that writer: two are the TUI's own summary and row, both continuing with\n    /// a SPACE, and the third is the interned copy of that same string (claim CLS-048).\n    /// csift matches the prefix WITHOUT the newline, so a body that continues any other\n    /// way still classifies; only the `Stop` name has a corpus specimen.\n    HookFeedback,"
+        }
+      ],
+      "instrument": "BINARY: byte-search the shipped build for `Stop hook feedback:` (3 occurrences), for the same string followed by a newline (0), for the suffix ` hook feedback:` (5), and for the array literal `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]` (1); then read each occurrence's surrounding bytes and give it a verdict. Counting rule: occurrences of the byte sequence, not lines - a minified bundle is one line. CORPUS: walk every `*.jsonl` under one projects root, keep lines carrying the substring `hook feedback:`, parse each and keep records whose `message.content` is a STRING that STARTS WITH `<name> hook feedback:` for one of the four names, then count by name and by the single character that follows the colon. Counting rule: one per RECORD, prefix-anchored at content start, so a body quoting the phrase mid-prose is excluded - which is most of them, and the gap between 988 lines and 46 records is exactly that.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.13.0",
+        "source": "src/model/markers.rs; AGENTS.md section 3.3a"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The identifier `eee` is reused for an unrelated UI helper in another bundle chunk (5 occurrences), so locating the builder by name alone reads the wrong chunk; locate it by the suffix variable instead."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the four per-name callers",
+          "offset": 165848388,
+          "excerpt": "function O5e(e){return eee(\"Stop\",e.blockingError)}",
+          "note": "One function per hook name, each passing its name as a literal and the hook's blocking error as the body. The other three sit immediately after it: `TeammateIdle` @165848439, `TaskCreated` @165848498, `TaskCompleted` @165848556."
+        },
+        {
+          "role": "gate",
+          "name": "the name array and the shared suffix",
+          "offset": 161464001,
+          "excerpt": "var m$t=` hook feedback:\n`,Dcn=[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"];",
+          "note": "The suffix carries the leading space and the trailing newline; the array holds the closed set of names. Both are separate literals, which is why no assembled prefix is one."
+        },
+        {
+          "role": "writer",
+          "name": "the join",
+          "offset": 161464086,
+          "excerpt": "function eee(e,n){return`${e}${m$t}${n}`}",
+          "note": "The whole of the text a feedback record carries: name, suffix, body, with nothing between them."
+        },
+        {
+          "role": "gate",
+          "name": "the harness's own recogniser",
+          "offset": 161464911,
+          "excerpt": "return Dcn.some((d)=>o.startsWith(`${d}${m$t}`))",
+          "note": "Claude Code recognises its own feedback records by rebuilding each prefix from the same two pieces and testing the content start - the same shape csift's prefix test mirrors."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the TUI turn summary template",
+          "offset": 179877882,
+          "excerpt": ".map((E)=>`Stop hook feedback: ${E}`)",
+          "verdict": "A screen row, not a record: it continues with a SPACE and its output is joined into a rendered line, never into `message.content`."
+        },
+        {
+          "site": "the TUI feedback row component",
+          "offset": 180034963,
+          "excerpt": "\"Stop hook feedback: \",kZ]},`feedback-${bZ}`)",
+          "verdict": "The same screen text as a component child, again with a trailing SPACE. Not a writer."
+        },
+        {
+          "site": "the constant pool",
+          "offset": 71657624,
+          "excerpt": "Stop hook feedback: ",
+          "verdict": "The interned copy of the TUI string, in the binary's string table rather than in code. Not a writer, and carries the trailing SPACE like the two above."
+        },
+        {
+          "site": "the name array, declaration",
+          "offset": 161464028,
+          "excerpt": "Dcn=[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]",
+          "verdict": "The closed set of names the builder is called with."
+        },
+        {
+          "site": "the name array, the recogniser",
+          "offset": 161464911,
+          "excerpt": "return Dcn.some((d)=>o.startsWith(`${d}${m$t}`))",
+          "verdict": "Reads the array to recognise a record it wrote; rebuilds the prefix rather than testing a literal."
+        },
+        {
+          "site": "the name array, the byte-scanner needle set",
+          "offset": 172794405,
+          "excerpt": "mn=[...Dcn.map((e)=>`${e}${m$t}`)",
+          "verdict": "Builds one needle per name for a raw-bytes scan, which is a third reader of the same two pieces and no fourth writer."
+        },
+        {
+          "site": "the name array, chunk export list",
+          "offset": 166235234,
+          "excerpt": "Dcn",
+          "verdict": "A bundle export name list, not code."
+        },
+        {
+          "site": "the name array, chunk import list",
+          "offset": 172791679,
+          "excerpt": "Dcn",
+          "verdict": "A bundle import name list, not code."
+        },
+        {
+          "site": "the name array, constant pool",
+          "offset": 72406832,
+          "excerpt": "Dcn",
+          "verdict": "The interned identifier in the binary's string table."
+        },
+        {
+          "site": "the name array, symbol table",
+          "offset": 79875025,
+          "excerpt": "Dcn",
+          "verdict": "The identifier in a symbol name list."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "python byte-search over the shipped build for `Stop hook feedback:`, the same plus a newline, ` hook feedback:`, `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]`, `eee(` and `Dcn`, reading every occurrence's surrounding bytes; then a python walk of every *.jsonl under one projects root counting records whose string `message.content` starts with `<name> hook feedback:` for each of the four names, and the single character following the colon.",
+          "observed": "Build: `Stop hook feedback:` 3 at 71657624 / 179877893 / 180034964, all three continuing with a SPACE; `Stop hook feedback:` + newline 0; ` hook feedback:` 5, of which the declaration at 161464010 is the only suffix literal; the four-name array 1 at 161464036 (its `Dcn=` at 161464028); `eee(` 10, of which 1 is the definition, 4 are the per-name callers at 165848411 / 165848462 / 165848521 / 165848579 and 5 are an unrelated UI helper in another chunk; `Dcn` 7, of which 3 are code (declaration, recogniser, needle set) and 4 are name lists or interned identifiers. Corpus: 9,797 files walked, 988 lines carrying the substring anywhere, 46 records in 14 files opening with a name prefix, 46 of 46 under `Stop`, 46 of 46 followed by a newline, 0 under the other three names.",
+          "rule": "Build: occurrences of a byte sequence, not lines (the bundle is one line). Corpus: one per RECORD, the prefix anchored at content start over a STRING `message.content`; a record quoting the phrase mid-prose is not counted, which is the whole of the gap between 988 and 46.",
+          "note": "Splits the producer fact out of CLS-016, which pins the three isMeta marker SHAPES and their corpus censuses. The clause it replaces said no whole prefix appeared as a literal in the build; that is true of the assembled form with its newline and false of `Stop hook feedback:`, which occurs three times as the TUI's own text."
         }
       ]
     }
