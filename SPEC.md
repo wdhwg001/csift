@@ -2796,17 +2796,22 @@ build over the whole DAG, and both are what the answer is made of. An early stop
 key walk is impossible (REC-104, above), and a reverse scan from the line end lands within
 one percent of the forward walk on every shape.
 
-### 7h. The v0.13.0 taxonomy: what the whole rewrite costs a scan
+### 7h. The v0.13.0 taxonomy: the INTEGRATION pass measured, the whole rewrite pending
 
-**The question and the instrument.** The taxonomy rewrite touches the classify engine, the
-render seam, the candidate gates and the emission path, which is most of what a scan
-executes - so "does a bare scan still cost what it did" is not answerable by reading the
-diff. It is answered by a ROTATED INTERLEAVED A/B over a corpus of real invocations: 60
-command shapes drawn from actual LLM use of csift, each run against a TINY transcript and
-against a COMPACTED one, 21 timed repetitions per cell with the arm order reversed on odd
-reps so neither arm owns the warm half, medians of those 21, and an untimed comparison pass
-that byte-compares the two arms' stdout. Arm A is a build of the commit the six family
-branches were picked onto; arm B is this tip. 122 (row, size) pairs.
+**What this section measures, and what it does not.** The taxonomy rewrite landed as six
+family branches picked onto one commit, and then an integration pass on top of that commit.
+The A/B below has arm A at the POST-PICK commit, so what it measures is the INTEGRATION
+pass - the shared-engine changes, the render fixes and the docs of this one lane - and not
+the rewrite as a whole. The rewrite's own cost against the last release is a separate
+measurement, still to be run; its shape is named at the end of this section. Read every
+number here as "what the integration pass cost on top of the picked taxonomy", which is the
+question it can answer.
+
+**The instrument.** A ROTATED INTERLEAVED A/B over a corpus of real invocations: 60 command
+shapes drawn from actual LLM use of csift, each run against a TINY transcript and against a
+COMPACTED one, 21 timed repetitions per cell with the arm order reversed on odd reps so
+neither arm owns the warm half, medians of those 21, and an untimed comparison pass that
+byte-compares the two arms' stdout. 122 (row, size) pairs.
 
 **The control band, and what it is made of.** The same driver ran with A = B = this tip, on
 the same host in the same session, so every ratio it produces is the host's own noise. Over
@@ -2819,11 +2824,14 @@ consumers. The DRIFT term alone, 4.58%, is the tighter reading for a directional
 because it is the only one that measures two medians against each other.
 
 **The result: nothing is outside the band, and the default path is well inside the drift
-term.** Of 122 pairs, ZERO sit outside 13.75%. Of the 48 default-path pairs - the 24 rows
-whose invocation names no `-t` and takes no gated leaf - the worst is `B06/compacted` at
+term.** Of 122 pairs, ZERO sit outside 13.75%. The DEFAULT-PATH set is the driver's own
+`default_path` column, 24 ids curated as the invocations a reader runs without naming a
+label - 48 pairs over the two size classes that ran, and not the wider set a text rule like
+"names no `-t`" would collect. Of those 48 the worst is `B06/compacted` at
 1.0372, then `H07/compacted` 1.0369, `B03/compacted` 0.9634, `B04/tiny` 1.0327; every one
-is under the 4.58% same-binary drift, in both directions. A taxonomy change does not
-justify a slower bare scan and did not produce one.
+is under the 4.58% same-binary drift, in both directions. So the integration pass did not
+make a bare scan slower - which is the narrower of the two statements a reader might want
+here, and the one the arms support.
 
 **The GATED rows, which is where a cost would show.** `D04` and `D05` are the census and
 the selector under a gated leaf - the paths that now parse lines a flagless scan never
@@ -2846,10 +2854,18 @@ is `show --line 1..200 --format json`, which gained `queue_operation` and `queue
 transcripts) was not run. The tiny-and-compacted pair alone took hours of wall on this
 host, and the band it produced is 13.75% wide for load reasons rather than code reasons -
 a third class measured on a host that had grown busier still would buy less information per
-hour than it cost. What it would have added is the same 24 default rows at a file size
-where a per-record cost has room to show; the per-record widths that could carry such a
-cost are pinned exactly instead (`size_of::<Record>()` 1,376 and `size_of::<SpineRow>()`
-72, both unchanged by this version).
+hour than it cost. The per-record widths a size-dependent cost would have to travel through
+are pinned exactly instead (`size_of::<Record>()` 1,376 and `size_of::<SpineRow>()` 72,
+both unchanged by this version).
+
+**PENDING: the whole rewrite, against the last release.** What this section's title used to
+claim is a different run, and it has not been made. Its shape: arm A the INSTALLED 0.12.3,
+arm B this tip, the same rotated interleaved driver at the same 21 reps, over all THREE
+size classes - tiny, compacted, and the 38-row LANDMARK class this pass skipped - on an
+IDLE host, so the control band is narrow enough to carry a directional claim about a
+rewrite rather than about one pass over it. Until that runs, csift states no whole-rewrite
+cost: the numbers above bound the integration pass and nothing wider, and the absence
+should be read as an absence rather than as a null result.
 
 ---
 
