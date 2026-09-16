@@ -306,6 +306,54 @@ fn a_headers_member_is_elided_at_every_depth() {
     assert!(out.contains("headersSeen=3"), "{out}");
 }
 
+/// A `data` member is elided the same way, and for a different reason with the same
+/// answer: not secrecy, but the per-value CUT.
+///
+/// Two on-disk shapes carry one and both are opaque blobs - a `{type:"base64"}` image or
+/// document source, and a `redacted_thinking` block's ciphertext. Their head identifies
+/// nothing, and the cut is 80 characters, so the blob swallows the whole budget and the
+/// sibling keys that DO identify the shape never print. This asserts exactly that trade:
+/// with the blob elided, `media_type` reaches the excerpt.
+#[test]
+fn a_data_blob_is_elided_so_the_keys_that_identify_the_shape_can_print() {
+    let excerpt = |line: &str| {
+        addressed_unit(
+            &rec(line),
+            Some(line),
+            &ClassifyCtx::top_level(),
+            &Matcher::pure(),
+            EXCERPT_MAX,
+        )
+        .expect("a parseable line renders one unit")
+        .excerpt
+    };
+    // An image-only NON-isMeta user record: the one image shape csift models no leaf for.
+    // The payload is longer than the 80-character per-value cut, which is the whole point.
+    let payload = "A".repeat(200);
+    let line = format!(
+        r#"{{"type":"user","uuid":"i1","message":{{"role":"user","content":[{{"type":"image","source":{{"type":"base64","media_type":"image/png","data":"{payload}"}}}}]}}}}"#
+    );
+    let out = excerpt(&line);
+    assert!(
+        !out.contains("AAAAAAAAAA"),
+        "the blob's head is noise and must not print: {out}"
+    );
+    assert!(out.contains(r#""data":"<elided>""#), "{out}");
+    assert!(
+        out.contains("image/png"),
+        "and the key that identifies the shape now fits in the cut: {out}"
+    );
+
+    // A SHORT `data` member goes too - the rule is the name, not the length, so it can
+    // neither be evaded by a small blob nor need a threshold nobody measured.
+    let short = r#"{"type":"zz-unmodeled","uuid":"i2","data":"zzblob","note":"zzkeepme"}"#;
+    let out = excerpt(short);
+    assert!(
+        out.contains("data=<elided>") && out.contains("zzkeepme"),
+        "{out}"
+    );
+}
+
 /// The replay pointer renders the SURVIVOR's physical line, and a jsonl line number is
 /// 1-based - so a map answering ZERO is answering "I have no line", not "line 0". The
 /// guard that drops it is the difference between `replay copy of L42` and a pointer at a

@@ -124,6 +124,11 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **An unmodeled unit's excerpt elides an opaque `data` blob.** The key=value excerpt cuts
+  each value at 80 characters, so a base64 image source or a `redacted_thinking`
+  ciphertext swallowed the whole budget and the sibling keys that say what the shape is -
+  `media_type`, the block's own `type` - never printed. `data` is now elided by name at
+  every depth, as `headers` already was, and those keys print in its place.
 - **A pattern carrying a backslash matches the text csift renders.** The needle safety
   predicate counted the double quote, the control characters and DEL but not the
   backslash, which a raw jsonl line stores doubled - so `search 'C:\\Users\\dev'` reported a

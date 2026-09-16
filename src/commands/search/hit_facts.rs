@@ -234,29 +234,44 @@ fn distinguishing_block_type(raw: Option<&str>) -> Option<String> {
         .map(|t| (*t).to_string())
 }
 
-/// What a `headers` member renders as, everywhere and always: nothing.
+/// What an elided member renders as, everywhere and always: nothing.
 pub(crate) const HEADERS_ELIDED: &str = "<elided>";
 
-/// Replace every `headers` member of a value, at any depth, with [`HEADERS_ELIDED`].
+/// The member names the unmodeled excerpt replaces with [`HEADERS_ELIDED`], at any depth.
 ///
-/// An HTTP RESPONSE HEADER SET is the one thing a rendered transcript view must not
-/// carry. A `type:"system"` record of the `api_error` shape holds the whole set inside
-/// its `error` object, and the measured set carries a session cookie, an organization id
-/// and two request trace ids; csift output is pasted into reports, into chats and into
-/// other models' contexts, so a header set that reaches a rendered surface has left the
-/// machine it was on. `--raw` prints the source line and says so, which is what an escape
-/// hatch is for.
+/// `headers` is the SECRECY one, and it is the section 4 invariant. An HTTP RESPONSE
+/// HEADER SET is the one thing a rendered transcript view must not carry: a
+/// `type:"system"` record of the `api_error` shape holds the whole set inside its `error`
+/// object, and the measured set carries a session cookie, an organization id and two
+/// request trace ids. csift output is pasted into reports, into chats and into other
+/// models' contexts, so a header set that reaches a rendered surface has left the machine
+/// it was on. `--raw` prints the source line and says so, which is what an escape hatch
+/// is for.
+///
+/// `data` is the INFORMATION one, and it is a different argument with the same answer.
+/// Two on-disk shapes carry a `data` member and both are opaque blobs: a `{type:"base64"}`
+/// image or document source, and a `redacted_thinking` block's ciphertext. Their HEAD
+/// identifies nothing - it is neither the picture nor an id - while the per-value cut is
+/// 80 characters, so the blob swallows the whole budget and the SIBLING keys that do
+/// identify the shape never print. Measured on a 1,222-character payload: the `message`
+/// member rendered 80 characters of base64 and neither `media_type` nor the block's own
+/// `type` reached the screen. Eliding it is what lets them.
+const ELIDED_MEMBERS: [&str; 2] = ["headers", "data"];
+
+/// Replace every [`ELIDED_MEMBERS`] member of a value, at any depth, with
+/// [`HEADERS_ELIDED`].
 ///
 /// This is the UNMODELED unit's own guard, and it is deliberately blunt: the excerpt is a
 /// shape preview for a line csift models nothing about, so it cannot know which `headers`
-/// is the dangerous one and elides every one of them. A family that renders a known shape
-/// names the fields it wants instead, which is the same law from the other side.
+/// is the dangerous one, or which `data` is the opaque one, and elides every one of them.
+/// A family that renders a known shape names the fields it wants instead, which is the
+/// same law from the other side.
 fn elide_headers(v: &serde_json::Value) -> serde_json::Value {
     match v {
         serde_json::Value::Object(map) => serde_json::Value::Object(
             map.iter()
                 .map(|(k, val)| {
-                    let val = if k == "headers" {
+                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {
                         serde_json::json!(HEADERS_ELIDED)
                     } else {
                         elide_headers(val)
@@ -285,7 +300,7 @@ fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
         .iter()
         .map(|(k, v)| {
             let rendered = match v {
-                _ if k == "headers" => HEADERS_ELIDED.to_string(),
+                _ if ELIDED_MEMBERS.contains(&k.as_str()) => HEADERS_ELIDED.to_string(),
                 serde_json::Value::String(s) => s.clone(),
                 other => elide_headers(other).to_string(),
             };

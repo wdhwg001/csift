@@ -141,12 +141,17 @@ fn the_image_only_counts_are_added_beside_the_key_value_excerpt() {
             "the counts lead the excerpt rather than replacing it ({key}):\n{line}"
         );
     }
-    // Including the image payload itself: the block's base64 `data` is a value of the
-    // `message` key, so it reaches the excerpt like any other. The fixture's payload is
-    // short enough to survive the excerpt's own 80-char per-value budget whole.
+    // The image PAYLOAD is not among them, and its siblings are. The block's base64
+    // `data` reaches the excerpt as a value of the `message` key like any other, and it
+    // is elided by name: a blob's head identifies nothing while the per-value budget is
+    // 80 characters, so printing it costs the keys that DO say what the shape is.
     assert!(
-        line.contains(r#""data":"iVBORw0KGgo=""#),
-        "the base64 payload is still part of the body:\n{line}"
+        line.contains(r#""data":"<elided>""#) && !line.contains("iVBORw0KGgo="),
+        "the base64 payload is elided, not printed:\n{line}"
+    );
+    assert!(
+        line.contains("image/png"),
+        "and the key that identifies the shape prints in its place:\n{line}"
     );
     // A machine reader gets both halves too, and from the one address: the counts as
     // their own key, the excerpt as the unit's text.
@@ -156,7 +161,7 @@ fn the_image_only_counts_are_added_beside_the_key_value_excerpt() {
     assert_eq!(rows[0]["image_only"]["images"], 1, "{}", rows[0]);
     let text = rows[0]["text"].as_str().unwrap_or_default();
     assert!(
-        text.contains("isMeta=true") && text.contains(r#""data":"iVBORw0KGgo=""#),
+        text.contains("isMeta=true") && text.contains(r#""data":"<elided>""#),
         "the JSON text is the same key=value excerpt:\n{}",
         rows[0]
     );
