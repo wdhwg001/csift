@@ -40,6 +40,20 @@ const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
         when a bound stopped the walk, in which case both numbers read \"more than\") - all \
         five null on any other row - plus survival (live | pre-cut | abandoned), \
         abandoned_root_line and replay_copy_of on every row.\n\n\
+        A SHAPE CSIFT MODELS NO LEAF FOR\n  \
+          An address never hard-misses a PARSEABLE line. A record whose shape carries no leaf \
+        - an isMeta pseudo-turn matching no template, a text-less block record (a NON-isMeta \
+        image-only user record reads `? unmodeled: user/image`; the isMeta one is \
+        `harness.context.image`), an attachment payload type or a system subtype no table names \
+        - comes back as ONE unit reading `? unmodeled: <type[/subtype|/attachment.type]>` with \
+        a key=value excerpt of the line's own top-level keys as its body (JSON `label`:null, \
+        `labels`:[], `unmodeled`). A line that is not a JSON object at all is still a hard miss \
+        pointing at `--raw`.\n  \
+          That excerpt is the one rendered path that walks a line's values without knowing what \
+        they are, so a `headers` member is ELIDED at EVERY depth, by exact name, and prints as \
+        `<elided>`: a `type:\"system\"` `api_error` line carries the failed request's whole HTTP \
+        response header set inside its `error` object, and `--raw` is the one path that prints \
+        it.\n\n\
         RAW MODE\n  \
           `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
         torn line: that is the point). It is mutually exclusive with `--format json` (raw \

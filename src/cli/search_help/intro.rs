@@ -157,7 +157,10 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         .tool.use · .tool.result [scan] tool traffic, paired by\n                                   \
         tool_use_id (the `▹` join) ·\n                                   \
         .communication.{inbox,sent,signal} [scan] peer messages,\n                                   \
-        rendered `from ⇨ to` · .communication.channel [scan] a\n                                   \
+        rendered `from ⇨ to` - a COORDINATOR relay reads\n                                   \
+        `coordinator ⇨ self`, the literal word, because its\n                                   \
+        origin object names a kind and no sender ·\n                                   \
+        .communication.channel [scan] a\n                                   \
         csift-channel delivery, rendered VERBATIM from its\n                                   \
         `[csift-channel v1 …]` envelope - one of the three\n                                   \
         [scan/needle] attachment leaves\n  \
@@ -224,7 +227,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
           THE 1:1 LAW: `csift show --line N` never hard-misses a PARSEABLE line. A shape\n  \
         csift models no leaf for renders `? unmodeled: <type[/subtype|/attachment.type]>`\n  \
         with the line\'s own top-level keys (JSON `label`:null, `labels`:[], `unmodeled`),\n  \
-        so an unknown line is visibly unknown rather than absent. A SCAN never emits one,\n  \
+        so an unknown line is visibly unknown rather than absent. In that excerpt a\n  \
+        `headers` member is ELIDED at every depth and prints as `<elided>`; `--raw` is\n  \
+        the one path that prints an HTTP response header set. A SCAN never emits one,\n  \
         so no census, count or -t result moves. A line that is not a JSON object at all is\n  \
         still a hard miss pointing at `--raw`.\n  \
           A record carrying several labels prints ONCE, under its richest view (an AUQ\n  \
