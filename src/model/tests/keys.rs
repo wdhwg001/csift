@@ -30,6 +30,34 @@ fn every_exposed_key_decodes_to_its_own_field() {
     assert_eq!(bare.api_block_index, None);
 }
 
+/// ONE key is enough. The gate on the attribution object is ANY of the five, not all of
+/// them, and a record naming a single one is the ordinary main-lane shape rather than an
+/// edge case: measured over two projects roots, 3,082 and 3,178 records carry a skill,
+/// plugin or MCP attribution with no `attributionAgent` beside it.
+#[test]
+fn any_one_attribution_key_is_enough_to_carry_the_object() {
+    for (key, read) in [
+        ("attributionAgent", "agent"),
+        ("attributionSkill", "skill"),
+        ("attributionPlugin", "plugin"),
+        ("attributionMcpServer", "mcp_server"),
+        ("attributionMcpTool", "mcp_tool"),
+    ] {
+        let line = format!(r#"{{"type":"assistant","uuid":"a-11","{key}":"only-one"}}"#);
+        let a = parse(&line)
+            .attribution()
+            .unwrap_or_else(|| panic!("{key} alone carries the object"));
+        let member = match read {
+            "agent" => &a.agent,
+            "skill" => &a.skill,
+            "plugin" => &a.plugin,
+            "mcp_server" => &a.mcp_server,
+            _ => &a.mcp_tool,
+        };
+        assert_eq!(member.as_deref(), Some("only-one"), "{key}");
+    }
+}
+
 /// The precedence is a STATEMENT about which layer a reader is shown, so it is asserted
 /// layer by layer rather than once on the full set: a skill outranks the plugin that owns
 /// it, the plugin outranks the MCP pair, and the SERVER is the stable half of that pair.
