@@ -94433,6 +94433,49 @@
           "note": "The version span is what closes the writer leg: the earliest observed record sits at 2.1.156, above the literal's 2.1.152 floor, so no observed record predates the flag being passed. The strip's guard is stated as the bytes read rather than as an unconditional destructure, which is what the 0-lines-on-disk specimen actually supports. The enumeration is what closes the claim's 'exactly one' half."
         }
       ]
+    },
+    {
+      "id": "CLS-038",
+      "area": "classification",
+      "behavior": "One writer produces every resume repair PLACEHOLDER, and it is not the writer of the repair PROMPT, so the two are not always a pair. The loader appends the prompt only when its tail classifier reads the dangling tail as an interrupted turn, while the placeholder splice fires whenever the last non-system record is a user record. On disk the appended prompt is the placeholder's `parentUuid` when both were written, so the pairing is observable from a transcript alone; an unpaired placeholder is parented to whatever user record ended the file - an interrupt marker, a slash-command wrapper, or a `<local-command-stdout>` echo. Measured over two projects roots, the PROMPT count equals the PAIRED count exactly in each, so every prompt the splice wrote is followed by a placeholder while the reverse does not hold.",
+      "depends": "csift keeps ONE leaf `harness.resume.placeholder` for both forms - both are the same loader text and both are sent to the model - and carries whether a placeholder closes a pair as a per-hit FACT (`resume_paired`, the `[paired]`/`[unpaired]` label-zone marker and JSON `resume_paired`) rather than splitting the leaf in two. Splitting would put the same sentence under two labels and make a census of the loader's repair depend on which record happened to end the file; the fact answers the question without moving the label. The verdict is `None` rather than `false` when no prompt index was built, so an unindexed read never fabricates an unpaired verdict.",
+      "code": [
+        {
+          "path": "src/model/classify/resume.rs",
+          "lines": "122",
+          "snippet": "    pub fn resume_paired(&self, ctx: &ClassifyCtx) -> Option<bool> {"
+        },
+        {
+          "path": "src/commands/search/hits.rs",
+          "lines": "221",
+          "snippet": "    let resume_paired = rec.resume_paired(ctx);"
+        }
+      ],
+      "instrument": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, json.loads each non-blank segment. A PLACEHOLDER is a record with type `assistant`, `isApiErrorMessage` not true, `message.model` equal to the `<synthetic>` sentinel and a single-text content exactly `No response requested.` (a bare string, or one lone text block). A PROMPT is a record with type `user`, `isMeta` true, not `isCompactSummary`, whose textual body - the bare string, or the first text block with non-whitespace content, and no tool_result block present - starts with `Continue from where you left off.` after a left trim. PAIRED means the placeholder's `parentUuid` is a prompt uuid IN THE SAME FILE; an unpaired placeholder is bucketed by the shape of the record its `parentUuid` names. One observation per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "TAXONOMY_MAP_v2 harness.resume row"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Neither writer is read: the tail classifier that gates the prompt and the splice that inserts the placeholder are named from the loader's own behavior and from the pairing the corpus shows, not located at byte offsets. Reading the function that emits the `No response requested.` literal and the branch above it closes the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "One corpus pass per projects root over every *.jsonl except journal.jsonl / elicitations.jsonl, counting placeholders and prompts by the predicates above, joining each placeholder's `parentUuid` against the prompt uuids of its OWN file, and bucketing every unpaired placeholder by the shape of the record that parent names.",
+          "observed": "First root: 19 placeholders, 8 prompts, 8 paired; the 11 unpaired are parented to an interrupt marker (9), a `<local-command-stdout>` record (1) and a slash-command wrapper (1). Second root: 34 placeholders, 18 prompts, 18 paired; the 16 unpaired are parented to an interrupt marker (11), a slash-command wrapper (4) and a `<local-command-stdout>` record (1). In BOTH roots the prompt count equals the paired count exactly, and no placeholder is parented to a record its own file does not hold. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second.",
+          "rule": "One observation per record; the pairing join is per FILE, so a prompt uuid from another transcript can never pair; the unpaired buckets are decided by the parent record's own content head, tested at content start after a left trim.",
+          "note": "The equality in both roots is what makes the one-leaf-plus-a-fact shape right: the placeholder is the common form and the prompt is the gated one, so the pairing is a property of the tail the loader found, not of the placeholder."
+        }
+      ]
     }
   ]
 }
