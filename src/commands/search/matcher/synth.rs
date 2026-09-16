@@ -146,6 +146,12 @@ impl Matcher {
 ///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
 /// - `"subtype"` (v0.10.1, only under a selector reaching `harness.system.*`) - the
 ///   catch-all render fabricates the `[<subtype> <level>]` head.
+/// - the sixteen BOOKKEEPING line-type values (only under a selector reaching that
+///   leaf) - the family render fabricates a `[<line type> key=value ...]` head from the
+///   line's own fields. COST: at most sixteen extra memmem scans per line the literal
+///   prefilter rejects, and only for a query that named a `harness.bookkeeping` leaf; a
+///   default scan runs none of them, because each needle's gate is the one that admits
+///   the line in the first place.
 /// - Under `--resolve-persisted`: `persistedOutputPath` / `Full output saved to:` -
 ///   the matched text is EXTERNAL file content, absent from the transcript bytes by
 ///   definition.
@@ -193,6 +199,25 @@ pub(crate) fn synth_marker_finders(
     // gate would let the whole-file gate prune a file whose only hit is in that head.
     if args.scans_system_lines() {
         verifiable.push(br#""subtype""#);
+    }
+    // The BOOKKEEPING family's key=value heads (`[cost-state totalCostUSD=...]`), one
+    // needle per line type, taken from the SAME table the candidate gate uses so the two
+    // sets cannot drift: a marker set narrower than the gate lets the whole-file gate
+    // prune a file whose only hit lies in a head, which is the section 7 silent drop on
+    // the one path allowed to prove a negative. The needle IS the quoted type value,
+    // which is what admits the line, so each one runs exactly when its own leaf is
+    // scanned and a default scan runs none of them. `file-history-` above already covers
+    // that leaf's two line types.
+    for (needle, leaf) in crate::commands::search::BOOKKEEPING_NEEDLES {
+        if args.scans_gated(leaf) {
+            verifiable.push(needle.as_bytes());
+        }
+    }
+    // The queue line's head is the same shape, and its leaf is not in that table: ONE
+    // needle admits `queue-operation` for two leaves, and only `harness.bookkeeping.queue`
+    // fabricates anything - the person's own queued text renders verbatim.
+    if args.reaches_gated(Class::BookkeepingQueue) {
+        verifiable.push(br#""queue-operation""#);
     }
     // CONSERVATIVE (needs cross-record / external data - force the full scan).
     let mut conservative: Vec<&[u8]> = vec![b"To tell you how to proceed"];

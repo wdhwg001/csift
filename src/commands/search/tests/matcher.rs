@@ -354,10 +354,18 @@ const MARKER_CASES: &[MarkerCase] = &[
 /// where it does move one it may only ADD matches.
 ///
 /// The set under test is the REGISTERED one, read back out of `synth_marker_finders`
-/// rather than retyped: twelve verifiable needles, seven unconditional and five behind a
-/// selector reaching their leaf. A needle added without a case here fails this test by
-/// name instead of slipping through, which is the point - the earlier version of this
-/// test enumerated four of the twelve and stated a universal it could not have checked.
+/// rather than retyped: twelve hand-written verifiable needles, seven unconditional and
+/// five behind a selector reaching their leaf, then the BOOKKEEPING group. A needle added
+/// without a case here fails this test by name instead of slipping through, which is the
+/// point - the earlier version of this test enumerated four of the twelve and stated a
+/// universal it could not have checked.
+///
+/// The bookkeeping group is checked against the TABLE it is generated from rather than
+/// case by case, because one render builds all of them: sixteen needles, each the quoted
+/// line-type value that also admits its own leaf as a scan candidate, so a needle can only
+/// go missing by the table losing an entry. The worked case that exercises the stage-2
+/// re-render of such a head is `a_fabricated_bookkeeping_head_survives_the_whole_file_gate`
+/// in the family's own test file.
 ///
 /// ELEVEN of the twelve render from the record's own fields, so the extra argument is
 /// inert and the two verdicts are EQUAL. The twelfth is `file-history-`, and it is a
@@ -384,15 +392,23 @@ fn stage_two_answers_every_registered_marker_the_same_or_wider_with_the_line() {
         .iter()
         .map(|f| String::from_utf8_lossy(f.needle()).into_owned())
         .collect();
-    assert_eq!(
-        registered.len(),
-        12,
-        "the verifiable needle set moved - every needle needs a case below: {registered:?}"
-    );
     let covered: Vec<&str> = MARKER_CASES.iter().map(|c| c.needle).collect();
+    let (hand_written, bookkeeping) = registered.split_at(covered.len());
     assert_eq!(
-        registered, covered,
+        hand_written, covered,
         "a registered needle has no case, or the cases drifted out of registration order"
+    );
+    // The BOOKKEEPING group, in registration order: the candidate-gate table, then the
+    // queue line's own needle (one needle, two leaves, and only the harness half
+    // fabricates a head).
+    let expected: Vec<String> = crate::commands::search::BOOKKEEPING_NEEDLES
+        .iter()
+        .map(|(n, _)| (*n).to_string())
+        .chain(std::iter::once(r#""queue-operation""#.to_string()))
+        .collect();
+    assert_eq!(
+        bookkeeping, expected,
+        "the bookkeeping marker set drifted from the candidate-gate table it is built from"
     );
 
     for case in MARKER_CASES {
