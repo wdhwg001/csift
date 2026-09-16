@@ -130,4 +130,7 @@ fn a_line_less_record_resolves_to_no_line_at_all() {
     let lookup = RowLines::new(index, &rows);
     // The index DOES know the record (it is chain-admitted); the line is what is absent.
     assert_eq!(lookup.line_of_uuid("u0"), None);
+    // The lookup's own debug form reports the two sizes it joined, which is the only
+    // thing a reader can check about a borrowed index: one uuid, one row.
+    assert_eq!(format!("{lookup:?}"), "RowLines { uuids: 1, rows: 1 }");
 }

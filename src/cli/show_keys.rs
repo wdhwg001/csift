@@ -67,7 +67,7 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.
-const fn k(family: Family, rendered: &'static str) -> RecordKey {
+pub(crate) const fn k(family: Family, rendered: &'static str) -> RecordKey {
     RecordKey { family, rendered }
 }
 

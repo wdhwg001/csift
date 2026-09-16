@@ -248,7 +248,7 @@ fn docs_do_not_resurrect_removed_tokens() {
     }
 }
 
-use crate::cli::show_keys::{record_row_keys, Family, FAMILY_ORDER, RECORD_KEYS};
+use crate::cli::show_keys::{k, record_row_keys, Family, FAMILY_ORDER, RECORD_KEYS};
 
 // ── The per-family HELP sections ──
 
@@ -286,6 +286,10 @@ fn the_search_help_body_is_its_sections_joined_in_order() {
 /// sentence - so a family adds a key to that row by adding a table row.
 #[test]
 fn the_show_record_keys_render_from_their_table() {
+    // The row constructor keeps what it is given, in the column order the table reads.
+    let row = k(Family::Keys, "probe_key");
+    assert_eq!((row.family, row.rendered), (Family::Keys, "probe_key"));
+
     let rendered = record_row_keys();
     assert!(rendered.starts_with('{') && rendered.ends_with('}'));
     for key in RECORD_KEYS {
