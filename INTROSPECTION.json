@@ -92626,7 +92626,7 @@
     {
       "id": "CLS-036",
       "area": "classification",
-      "behavior": "An `isMeta` `type:\"user\"` record is never shown in the transcript unless its `origin.kind` is one of five. The gate is `function hhn(e,n){if(e.type!==\"user\")return!0;if(e.isMeta){if(LH(e.origin))return!0;return!1}...}` (166033049), and `function LH(e,n){let r=typeof n===\"boolean\"?n:!0;if(e?.kind===\"channel\")return!0;...}` (166032778) accepts `channel`, `observer`, `observer-activity`, `slack-ping` and `peer`, the peer arm answering true whenever its second parameter is omitted - which the gate's one call site omits. `hhn(` occurs at exactly two offsets, the definition and ONE consumer (180551315). The gate's own second parameter reaches only the `isVisibleInTranscriptOnly` branch, so no display mode can reveal an isMeta record. Measured over two projects roots, one count per record: of 3,630 and 1,825 isMeta user records, 55 and 109 carry an accepted `origin.kind` (every one of them `peer`) and 3,575 and 1,716 carry one the gate refuses - `coordinator` 143 and 57, `task-notification` 27 and 0, `human` 1 and 1 - or no `origin` at all (3,404 and 1,658).",
+      "behavior": "An `isMeta` `type:\"user\"` record is dropped from the list the TRANSCRIPT renders unless its `origin.kind` is one of five. The gate is `function hhn(e,n){if(e.type!==\"user\")return!0;if(e.isMeta){if(LH(e.origin))return!0;return!1}...}` (166033049) and the accepted kinds are `function LH(e,n){let r=typeof n===\"boolean\"?n:!0;if(e?.kind===\"channel\")return!0;...}` (166032778): `channel`, `observer`, `observer-activity`, `slack-ping` and `peer`, the peer arm answering true whenever LH's OPTIONAL SECOND parameter is omitted. That omission is `hhn`'s own call `LH(e.origin)` at 166033111, not the gate's consumer: the consumer passes two arguments, `CJ=(jQo)=>hhn(jQo,dd)` at 180551305. `hhn(` occurs at exactly two offsets, the definition and that ONE consumer, which installs the gate as the third filter of the array the transcript renders (`_J=lhn(uQe.filter(UHt).filter(jHt).filter(CJ),cQe)` at 180551362) - so a record the gate refuses is in no rendered list, and `hhn`'s own second parameter reaches only the `isVisibleInTranscriptOnly` branch, never the isMeta one. Measured over two projects roots, one count per record: of 3,713 and 1,825 isMeta user records, 55 and 109 carry an accepted `origin.kind` (every one of them `peer`) and the rest carry one the gate refuses - `coordinator` 149 and 57, `task-notification` 35 and 0, `human` 1 and 1 - or no `origin` object at all (3,473 and 1,658).",
       "depends": "The shape inventory's HUMAN column reads `never` for every isMeta template row and for the image BLOCK row, because the gate is per RECORD and no template writes an accepted `origin.kind`. Four rows read `always` before the gate was read - the image reference, the image block, the coordinator relay and the notification frame - and the same gate refuses all four; the notification case is the sharp one, since the identical pulse on a NON-isMeta record IS shown, so the frame is what hides it. SPEC section 5 renders that column and SKILL's identity table carries it, so a wrong value there tells a reader a record they never saw was on their screen.",
       "code": [
         {
@@ -92655,23 +92655,30 @@
         {
           "role": "trigger",
           "name": "the transcript render filter's one call site",
-          "offset": 180551315,
-          "excerpt": "hhn(jQo,dd),Sl[54]=d",
-          "note": "the single consumer of the gate; the second parameter is a screen discriminator and never reaches the isMeta branch"
+          "offset": 180551305,
+          "excerpt": "CJ=(jQo)=>hhn(jQo,dd)",
+          "note": "the single consumer of the gate; it passes TWO arguments, and the second is a screen discriminator that never reaches the isMeta branch"
+        },
+        {
+          "role": "gate",
+          "name": "the isMeta branch of the render gate",
+          "offset": 166033049,
+          "excerpt": "function hhn(e,n){if(e.type!==\"user\")return!0;if(e.isMeta){if(LH(e.origin))return!0;return!1}",
+          "note": "the branch itself: an isMeta user record is kept only when its origin is accepted, and this is the call that omits LH's second parameter"
         },
         {
           "role": "gate",
           "name": "the accepted origin kinds",
           "offset": 166032778,
-          "excerpt": "function LH(e,n){let r=typeof n===\"boolean\"?n:!0;if(e?.kind===\"channel\")return!0;if(e?.kind===\"observer\")return!0;if(e?.",
+          "excerpt": "function LH(e,n){let r=typeof n===\"boolean\"?n:!0;",
           "note": "the five kinds, and the peer arm that answers true when its optional second parameter is omitted"
         },
         {
           "role": "writer",
-          "name": "the isMeta branch of the render gate",
-          "offset": 166033049,
-          "excerpt": "function hhn(e,n){if(e.type!==\"user\")return!0;if(e.isMeta){if(LH(e.origin))return!0;return!1}if(",
-          "note": "the branch itself: an isMeta user record is shown only when its origin is accepted"
+          "name": "the rendered message array the gate filters",
+          "offset": 180551362,
+          "excerpt": "_J=lhn(uQe.filter(UHt).filter(jHt).filter(CJ),cQe)",
+          "note": "what BECOMES the transcript: the gate is the third filter of this array, so a refused record is in no list the renderer walks. This is the writer for a claim whose subject is what a person sees - there is no byte written for the record that is dropped, and this expression is where the dropping becomes the output"
         }
       ],
       "checks": [
@@ -92684,7 +92691,34 @@
           "observed": "All three excerpts byte-exact; `hhn(` occurs twice (the definition and one consumer). The read-forward window shows the five accepted kinds in order channel, observer, observer-activity, slack-ping, peer, the peer arm taking `senderTaskId !== undefined` or the defaulted second parameter. Census: root one, 9,556 files, 3,630 isMeta user records, 55 accepted (all `peer`), 3,575 refused - no origin 3,404, coordinator 143, task-notification 27, human 1. Root two, 10,330 files, 1,825 records, 109 accepted (all `peer`), 1,716 refused - no origin 1,658, coordinator 57, human 1.",
           "rule": "One count per isMeta `type:\"user\" `record, bucketed by `origin.kind` with an absent `origin` as its own bucket; accepted means the kind is one of the five the gate takes. Binary counts are byte occurrences over the whole executable.",
           "note": "Four inventory rows move from `always` to `never`: the image reference template, the image block, the coordinator relay and the notification frame. The two corpus roots overlap in the sessions they hold, so the two counts are not independent samples; each is reported as its own root."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-search the shipped build for `hhn(` (expect two offsets: the definition and one consumer), read 320 bytes back from the consumer to recover the filter chain it installs, and search for `LH(e.origin)` and `function LH(`. Corpus side, per projects root, walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` and truthy `isMeta`, and split them by `origin.kind` against the five accepted values.",
+          "observed": "`hhn(` at 166033058 and 180551315, `function hhn(` once at 166033049; the consumer reads `CJ=(jQo)=>hhn(jQo,dd)` at 180551305 feeding `_J=lhn(uQe.filter(UHt).filter(jHt).filter(CJ),cQe)` at 180551362. `LH(e.origin)` occurs twice (166033111 inside the gate, 180228655 in a different filter) and `function LH(` twice, the second at 178560548 being an unrelated string hash. Corpus: root one 3,713 isMeta user records - peer 55, coordinator 149, task-notification 35, human 1, no origin 3,473; root two 1,825 - peer 109, coordinator 57, human 1, no origin 1,658.",
+          "rule": "Binary counts are occurrences of the byte sequence, not lines - a minified bundle is one line. Corpus counts are one per RECORD, a record being a b'\\n'-delimited line under the projects root (`journal.jsonl` excluded) parsing to an object with `type == \"user\"` and truthy `isMeta`. The two roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
+          "note": "Two corrections. The omitted second parameter is LH's, on the gate's OWN call, and the gate's consumer passes two arguments - the claim had attributed the omission to the consumer and stated two different coordinator counts in one field. And the hop labelled writer was the gate's own branch, which writes no bytes; the writer is the filter chain that builds the rendered array, where a refused record stops being output."
         }
+      ],
+      "enumeration": [
+        {
+          "site": "the definition",
+          "offset": 166033049,
+          "excerpt": "function hhn(e,n){",
+          "verdict": "the gate itself; nothing else defines it, so every use of it is the one consumer below"
+        },
+        {
+          "site": "the one consumer",
+          "offset": 180551315,
+          "excerpt": "hhn(jQo,dd)",
+          "verdict": "the only call: the third filter of the array the transcript renders. Two occurrences of `hhn(` in the whole build, and this is the second"
+        }
+      ],
+      "residue": [
+        "The accepted-kinds predicate has TEN other call sites that pass an origin (162030509, 180228655, 180516935, 180545787, 180545918, 180546535, 180546661, 181623608, 181624303 and 175693557), each in a DIFFERENT filter - the queued-command path, the summary counters, the resume walk. They are outside this claim, whose negative is closed over `hhn` alone; a claim about what those filters do is its own. Note also that a SECOND function named LH exists (178560548, a string hash), so a bare count of `LH(` mixes the two."
       ]
     },
     {
