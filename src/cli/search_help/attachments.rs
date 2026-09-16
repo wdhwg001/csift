@@ -53,6 +53,11 @@ pub(crate) const SECTION: &str =
      converted text, not by the payload text it replaced, and `--raw` does not recover the \
      difference (the raw backfill runs after the match phase); the way to the bytes is an \
      address - `csift show @<id> --line N --raw`. The decoded body is searchable by an \
-     ordinary pattern: a needle the prefilter can use carries no whitespace and no \
-     JSON-escaped character, and such a run sits verbatim inside the raw line's JSON \
-     string, so the line prefilter and the whole-file gate see what the render does.";
+     ordinary pattern: a needle the prefilter can use carries no whitespace, no double \
+     quote, no control character and no DEL, and such a run sits verbatim inside the raw \
+     line's JSON string, so the line prefilter and the whole-file gate see what the render \
+     does. ONE character is outside that list and it is a real gap: a pattern whose needle \
+     carries a BACKSLASH matches nothing, because the line stores it doubled. That is true \
+     of every decoded text csift renders, an ordinary message included, rather than of \
+     this body alone - so until the predicate counts it, match around the backslash \
+     (`C:.Users.dev`, or any run that does not contain one).";

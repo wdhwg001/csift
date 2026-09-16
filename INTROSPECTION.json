@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2316",
+          "lines": "2314",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -94902,11 +94902,11 @@
       "id": "REC-110",
       "area": "record-model",
       "behavior": "The text a converted attachment record carries back on its top-level `rendered` key is the text the model received, and its shape is fixed. The value is an ARRAY of messages, each carrying its text under `content`; over one projects root, counted one JSON parse per non-blank line of every `*.jsonl`, 101,551 attachment lines carry the key, every value is an array, and every one of the 101,705 entries under them holds `content` as a STRING - no entry on that root holds the block-array form the writer also admits. The joined text of all 101,551 opens with `<system-reminder>`. The key rides 30 distinct payload types, led by `total_tokens_reminder` at 77,472, `task_reminder` at 5,063 and `skill_listing` at 2,165. `hook_success` is not among the leaders and is the narrow case: 15 of that root's 429,041 `hook_success` lines carry the key at all, against 90 whose payload `content` is non-empty. A second projects root, on builds below the key's floor, carries it on 0 of its 845,866 attachment lines.",
-      "depends": "`record_text::attachments::attachment_body` renders that text as an attachment unit's BODY, ahead of any field of the payload, and marks the unit `[rendered]` (JSON `body_source`) so a reader knows which of the record's two copies of itself is on screen; a record with no conversion falls to a payload field and then to the verbatim payload JSON, marked `[payload]`. The array-of-messages shape is what the join walks, and the string `content` is the arm every measured entry takes - the block-array arm stays because the writer admits it, and an entry of any other shape contributes nothing rather than crashing. The `<system-reminder>` head is why the body is worth preferring: the payload holds the strings a hook wrote, the conversion holds what the model actually read. THE SECTION 7 CONSEQUENCE, and it is the whole soundness argument: the persisted value is a JSON STRING, so the DECODED body is NOT a byte substring of its own line - a conversion that opens `<system-reminder>` and runs on past a newline stores that newline as `\\n`. What keeps the 7d literal prefilter and the 7f whole-file gate sound over it is the NEEDLE law rather than a substring: `matcher::required_needles` derives a needle only from a run carrying no whitespace and no JSON-escaped character, and such a run appears verbatim inside the raw line's JSON string, so a needle present in the decoded text is present in the raw bytes. That is the same reading every decoded `message.content` render at this seam already rests on, and it is why no synthesized-marker registration is added for the converted body.",
+      "depends": "`record_text::attachments::attachment_body` renders that text as an attachment unit's BODY, ahead of any field of the payload, and marks the unit `[rendered]` (JSON `body_source`) so a reader knows which of the record's two copies of itself is on screen; a record with no conversion falls to a payload field and then to the verbatim payload JSON, marked `[payload]`. The array-of-messages shape is what the join walks, and the string `content` is the arm every measured entry takes - the block-array arm stays because the writer admits it, and an entry of any other shape contributes nothing rather than crashing. The `<system-reminder>` head is why the body is worth preferring: the payload holds the strings a hook wrote, the conversion holds what the model actually read. THE SECTION 7 CONSEQUENCE, and it is the whole soundness argument: the persisted value is a JSON STRING, so the DECODED body is NOT a byte substring of its own line - a conversion that opens `<system-reminder>` and runs on past a newline stores that newline as `\\n`. What keeps the 7d literal prefilter and the 7f whole-file gate sound over it is the NEEDLE law rather than a substring: `matcher::required_needles` derives a needle only from a run the safety predicate admits - no whitespace, no `\"`, no control character, no DEL - and such a run appears verbatim inside the raw line's JSON string, so a needle present in the decoded text is present in the raw bytes. That is the same property every decoded `message.content` render at this seam already rests on, and it is why no synthesized-marker registration is added for the converted body. THE PREDICATE COUNTS ONE CHARACTER TOO FEW: `matcher::json_escapes_in_string` does not count a BACKSLASH, so a needle carrying one is emitted while the raw line stores it as `\\\\` and the prefilter drops a match the render would have shown. That is a property of the predicate and therefore of EVERY decoded render, not of the converted body - the identical drop reproduces on a plain `user.message` whose own text carries a backslash run - and counting the backslash in that predicate splits such a run exactly as a quote already splits it, closing it for all of them at once.",
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "90-96",
+          "lines": "102-108",
           "snippet": "pub(crate) fn attachment_body(rec: &Record) -> Option<(String, &'static str)> {\n    if !rec.is_type(\"attachment\") {\n        return None;\n    }\n    if let Some(text) = rec.converted_text().and_then(|c| c.rendered.clone()) {\n        return Some((text, BODY_RENDERED));\n    }"
         },
         {
@@ -94961,6 +94961,16 @@
           "observed": "Root one: 9,611 files, 1,782,516 lines, 0 unparsed, 664,769 attachment lines over 45 payload types. `rendered` on 101,551 lines across 30 payload types (total_tokens_reminder 77,472, task_reminder 5,063, skill_listing 2,165, instructions 2,037, date 2,028); every value an array; 101,705 entries, 101,705 of them with a string `content` and 0 of any other shape; 101,551 of 101,551 joined texts open `<system-reminder>`. hook_success: 429,041 lines, 15 with `rendered`, 90 with a non-empty payload `content`. Root two: 845,866 attachment lines over 28 payload types, 0 carrying `rendered`. Ladder: 0 hits in each of 1.0.60 through 2.1.258 (60 builds), 4 at 2.1.259, 5 at 2.1.268.",
           "rule": "One JSON parse per non-blank line; a line contributes exactly one outcome per tally; an entry is counted once per conversion array it sits in; a joined text is the `\\n`-join of the string `content` values in array order; `hook_success` content counts as non-empty when the value is truthy.",
           "note": "The `hook_success` figures refute the shape the round's brief carried, which had the `rendered` presence coinciding exactly with a non-empty payload content: here 15 lines carry the conversion and 90 carry content, so the two populations are not equal on this root and the coincidence REC-109 records for that payload type is the narrower statement. csift reads the `rendered` presence and not the content, so no behaviour rests on the refuted form."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Wrote a two-record synthetic transcript under an isolated claude-home: a `user` record whose message text is `zzbsUSERC:\\Users\\devzz end`, and an attachment of payload type `total_tokens_reminder` whose single `rendered` entry reads `<system-reminder>\\nzzbsPATHC:\\Users\\devzz end\\n</system-reminder>`. Rendered line 2 with `show --line 2`, then ran four searches over that transcript - the backslash-bearing pattern and a metachar-split pattern of the SAME rendered text, once against the converted body under `--attachments` and once against the plain user message with no flag - and read `matcher::json_escapes_in_string` together with the literal-run split in `matcher::hir_needles` for the mechanism.",
+          "observed": "`show --line 2` prints `[rendered]  L2  <system-reminder> zzbsPATHC:\\Users\\devzz end </system-reminder>`. On the converted body, `search 'zzbsPATHC:\\\\Users\\\\devzz' --attachments` returns 0 matches at exit 0 with `no matching exchanges`, while `search 'zzbsPATHC:.Users.devzz' --attachments` returns 1 exchange on that same record and `search 'zzbsPATHC' --attachments` returns 1. On the plain user record the same pair answers 0 and 1. The predicate reads `c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'` and the literal run splits only on whitespace and that predicate, so the 22-character needle carrying two backslashes is emitted whole while the raw line stores each backslash as two bytes; the metachar form contributes the sub-run `zzbsPATHC:`, which is present in the raw bytes.",
+          "rule": "One synthetic transcript of two records, no corpus line; a search counts as a match when it prints a hit row for the addressed line, and as a definitive absence when it prints `no matching exchanges` at exit 0; the two patterns of a pair describe the SAME rendered text and differ only in whether the needle the prefilter derives carries a backslash.",
+          "note": "The soundness statement in `depends` guaranteed a needle's verbatim presence in the raw line without naming the character the safety predicate does not count. The measurement bounds it: the guarantee holds for every needle the predicate admits, and a backslash-bearing needle is outside it, dropped by the 7d prefilter on a converted body and on an ordinary decoded message alike. Nothing about the `rendered` shape this claim measures moves; the statement now carries its exception and names `matcher::json_escapes_in_string` as what closes it."
         }
       ]
     },
@@ -94972,7 +94982,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "366",
+          "lines": "378",
           "snippet": "    let attached_to = super::for_edge(\"attached_to\", Basis::Key, rec.parent_uuid.as_deref(), ctx);"
         },
         {
@@ -95016,12 +95026,12 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "372-377",
+          "lines": "384-389",
           "snippet": "    let for_tool_use = super::for_edge(\n        \"for_tool_use\",\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        ctx,\n    );"
         },
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "350-352",
+          "lines": "362-364",
           "snippet": "fn payload_str<'a>(rec: &'a Record, key: &str) -> Option<&'a str> {\n    rec.attachment_value()?.get(key)?.as_str()\n}"
         },
         {

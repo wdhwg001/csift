@@ -19,13 +19,25 @@
 //! is NOT a byte substring of the line that stores it - every measured conversion opens
 //! `<system-reminder>` and runs on past a newline, which the raw bytes carry as `\n`. What
 //! IS guaranteed is what the prefilter actually extracts: `matcher::required_needles`
-//! derives a needle only from a run with no whitespace and no JSON-escaped character (the
-//! R13 predicate), and such a run appears VERBATIM inside the raw line's JSON string - so a
-//! needle present in the converted text is present in the raw bytes, and the 7d line
-//! prefilter and the 7f whole-file gate keep their meaning with no synthesized-marker
-//! registration. It is the same reading every decoded `message.content` render at this seam
-//! already rests on. The label-zone markers are fabricated and therefore display-only,
-//! which is exactly what [`Marker`] is for.
+//! derives a needle only from a run the R13 safety predicate admits - no whitespace, no
+//! `"`, no control character, no DEL - and such a run occurs VERBATIM inside the raw line's
+//! JSON string, so a needle present in the converted text is present in the raw bytes and
+//! the 7d line prefilter and the 7f whole-file gate keep their meaning with no
+//! synthesized-marker registration. It is the same property every decoded
+//! `message.content` render at this seam already rests on.
+//!
+//! THE PREDICATE COUNTS ONE CHARACTER TOO FEW, and the gap is stated rather than papered
+//! over: `matcher::json_escapes_in_string` does not count a BACKSLASH, so a needle carrying
+//! one is emitted while the raw line stores it as `\\`, and the prefilter drops a match the
+//! render would have shown. It is a property of the PREDICATE and so of every decoded
+//! render, not of this body - the identical drop reproduces on a plain `user.message` whose
+//! own text carries a backslash run - and counting the backslash there splits such a run
+//! exactly as a quote already splits it, closing it for every decoded render at once.
+//! `matcher.rs` is not this family's file; the behaviour as it stands is pinned by
+//! `a_backslash_in_a_needle_is_the_one_hole_the_needle_law_does_not_cover`.
+//!
+//! The label-zone markers are fabricated and therefore display-only, which is exactly what
+//! [`Marker`] is for.
 
 use super::*;
 

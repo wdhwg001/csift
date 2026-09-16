@@ -66,7 +66,11 @@ surface change bumps the PATCH.
   `[context <payload type>]`, `[structured]`, `[mid-turn]`. A record carrying a
   conversion is searchable by the converted text and no longer by the payload text it
   replaced; `--raw` does not recover the difference (the backfill runs after the match
-  phase), so the way to the bytes is `csift show @<id> --line N --raw`. A
+  phase), so the way to the bytes is `csift show @<id> --line N --raw`. One matching
+  caveat comes with that and it is crate-wide rather than new: a pattern whose prefilter
+  needle carries a BACKSLASH matches no decoded text, because the raw line stores the
+  backslash doubled - true of an ordinary message before this and of a converted body now
+  - so match around it (`C:.Users.dev`) rather than through it. A
   `queued_command` carrying a SECOND conversion for a human turn keeps the ordinary one
   as its body and reports the difference (`[human-turn render differs]`, JSON
   `human_turn_render_differs`), because which copy the model received depends on the turn
