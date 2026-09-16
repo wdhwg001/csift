@@ -327,3 +327,55 @@ fn classify_agent_message_no_from_degrades_to_peer_direction() {
         Some(("peer".to_string(), "self".to_string()))
     );
 }
+
+/// A COORDINATOR relay renders `coordinator ⇨ self` - the one inbound leaf that said
+/// nothing about where its message came from.
+///
+/// The FROM is the literal word because the record carries no sender to read: over one
+/// projects root all 147 coordinator relays carry an `origin` object whose key set is
+/// exactly `{kind}`. Inventing an id from that would be inventing it, so the arrow names
+/// the lane the harness itself names.
+#[test]
+fn a_coordinator_relay_renders_its_arrow() {
+    let r = parse(
+        r#"{"type":"user","uuid":"c1","isMeta":true,"origin":{"kind":"coordinator"},"message":{"role":"user","content":"The coordinator sent a message while you were working:\nhold the release"}}"#,
+    );
+    assert_eq!(
+        r.classify(&ClassifyCtx::top_level()),
+        vec![Class::CommInbox],
+        "the leaf is unchanged - this arm adds the arrow, not a label"
+    );
+    assert_eq!(
+        r.direction(&ClassifyCtx::top_level()),
+        Some(("coordinator".to_string(), "self".to_string()))
+    );
+    // The `self` side is the transcript owner wherever one is known, like every other
+    // comm direction.
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.owner_id = Some("a1b2c3d4-0000-4000-8000-000000000001");
+    assert_eq!(
+        r.direction(&ctx),
+        Some((
+            "coordinator".to_string(),
+            "a1b2c3d4-0000-4000-8000-000000000001".to_string()
+        ))
+    );
+}
+
+/// Another `origin.kind` is NOT a coordinator relay, and the arm says so on the value
+/// rather than on the presence of the key: the same `origin` object carries `human`,
+/// `peer` and `task-notification` (3,081, 55 and 3,567 records over one projects root),
+/// and an arm keyed on the key alone would put a coordinator arrow on every one of them.
+#[test]
+fn another_origin_kind_gets_no_coordinator_arrow() {
+    for kind in ["human", "task-notification", "observer"] {
+        let line = format!(
+            r#"{{"type":"user","uuid":"o1","isMeta":true,"origin":{{"kind":"{kind}"}},"message":{{"role":"user","content":"plain text with no relay framing"}}}}"#
+        );
+        assert_eq!(
+            parse(&line).direction(&ClassifyCtx::top_level()),
+            None,
+            "{kind}"
+        );
+    }
+}

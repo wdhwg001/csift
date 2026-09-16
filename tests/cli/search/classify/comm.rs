@@ -332,7 +332,7 @@ fn a_coordinator_relay_is_found_by_an_ordinary_scan() {
         &format!("{ENC}/{sess}.jsonl"),
         concat!(
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-13T01:00:00.000Z","message":{"role":"user","content":"zzopen the lane"}}"#, "\n",
-            r#"{"type":"user","uuid":"c1","parentUuid":"u1","isMeta":true,"timestamp":"2026-06-13T01:00:01.000Z","message":{"role":"user","content":"The coordinator sent a message while you were working:\nzzrelay hold the release until the audit lands"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","parentUuid":"u1","isMeta":true,"origin":{"kind":"coordinator"},"timestamp":"2026-06-13T01:00:01.000Z","message":{"role":"user","content":"The coordinator sent a message while you were working:\nzzrelay hold the release until the audit lands"}}"#, "\n",
             r#"{"type":"assistant","uuid":"a1","parentUuid":"c1","timestamp":"2026-06-13T01:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzreply understood"}]}}"#, "\n",
         ),
     );
@@ -366,4 +366,32 @@ fn a_coordinator_relay_is_found_by_an_ordinary_scan() {
         "naming the leaf reaches it:\n{}",
         named.stdout
     );
+
+    // And the hit says where the message came FROM. Every other comm leaf renders an
+    // arrow; without this one the relay was the only inbound message whose hit said
+    // nothing about its sender. The fixture carries the `origin` object all 147 corpus
+    // relays carry, which is what the arrow is read off.
+    assert!(
+        named.stdout.contains("coordinator ⇨ self"),
+        "the relay renders its direction:\n{}",
+        named.stdout
+    );
+    let json = h.run(&[
+        "search",
+        "",
+        &at(sess),
+        "-t",
+        "agent.communication.inbox",
+        "--format",
+        "json",
+    ]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let hit = json
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find_map(|v| v["hits"].as_array().and_then(|a| a.first().cloned()))
+        .expect("the relay's hit");
+    assert_eq!(hit["from"], "coordinator", "{hit}");
+    assert_eq!(hit["to"], "self", "{hit}");
 }

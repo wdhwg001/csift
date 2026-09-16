@@ -98,5 +98,27 @@ impl Record {
         }
 
         self.csift_channel_direction(ctx)
+            .or_else(|| self.coordinator_direction(ctx))
+    }
+
+    /// The COORDINATOR relay's direction: `coordinator ⇨ self`.
+    ///
+    /// Its leaf is `agent.communication.inbox` like any other inbound message, and every
+    /// other comm leaf renders an arrow, so without this one the relay is the one inbound
+    /// message whose hit says nothing about where it came from.
+    ///
+    /// The FROM is the literal word and not a read of some sender field, because there is
+    /// no sender field to read: measured over one projects root, every one of the 147
+    /// coordinator relays carries an `origin` object whose key set is exactly `{kind}`,
+    /// and all 147 are `isMeta`. A relay that later gains a sender key would be a
+    /// different shape and would need a different arm; inventing an id from this one
+    /// would be inventing it (claim CLS-046).
+    fn coordinator_direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {
+        (self.origin_kind()? == "coordinator").then(|| {
+            (
+                "coordinator".to_string(),
+                ctx.owner_id.unwrap_or("self").to_string(),
+            )
+        })
     }
 }

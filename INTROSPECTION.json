@@ -92935,6 +92935,84 @@
           "note": "That the two texts differ on every record that has both is what decides the csift behaviour: the pair is reported and neither is chosen, because the record does not say which turn it was replayed into. The narrowness of the second key's carrier set - one payload type - is recorded as an observation about this corpus, not as a rule: nothing read here says the writer is limited to it."
         }
       ]
+    },
+    {
+      "id": "CLS-046",
+      "area": "classification",
+      "behavior": "A COORDINATOR relay is an isMeta `type:\"user\"` record whose content opens the preamble `The coordinator sent a message` and whose top-level `origin` object carries the single key `kind` with the value `coordinator`. The object has no sender field, and that is structural rather than incidental: the executable constructs it in exactly TWO places and both build the one-key form - the module-level constant `rl={kind:\"coordinator\"}`, and the else-branch of the send path's ternary, whose other branch builds the PEER form `{kind:\"peer\", from, senderTaskId, name?, body?}` when a sender task id and address are both known. So a relay that reached this arm is by construction one with no sender to name. Over one projects root the two detectors - the preamble and `origin.kind` - name exactly the SAME 147 records across 91 files, with zero carrying only one of them, and all 147 are `isMeta`. The same `origin` object carries three other kinds in that corpus (`task-notification` 3,567, `human` 3,081, `peer` 55).",
+      "depends": "`Record::direction` renders `coordinator \u21e8 self` on such a record. Every other `agent.communication.*` leaf renders an arrow, so without this arm the relay was the one inbound message whose hit said nothing about where it came from - and it carries `agent.communication.inbox` like any other. The FROM is the literal word rather than a read of some field, because the producer shows there is no field: a csift that invented an id there would be inventing it. The arm keys on the VALUE `coordinator`, never on the presence of `origin`, because the same key carries three other kinds and an arm keyed on presence would put a coordinator arrow on 6,703 records that are not relays. It runs LAST in the direction chain, so nothing that already resolves a direction is touched.",
+      "code": [
+        {
+          "path": "src/model/classify/direction.rs",
+          "lines": "116-122",
+          "snippet": "fn coordinator_direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {\n        (self.origin_kind()? == \"coordinator\").then(|| {\n            (\n                \"coordinator\".to_string(),\n                ctx.owner_id.unwrap_or(\"self\").to_string(),\n            )\n        })"
+        },
+        {
+          "path": "src/model/tests/classify_comm.rs",
+          "lines": "339",
+          "snippet": "fn a_coordinator_relay_renders_its_arrow() {"
+        }
+      ],
+      "instrument": "In the shipped executable, byte-find `kind:\"coordinator\"` and read EVERY occurrence: each is a construction of the origin object, and the claim's negative closes only when all of them build the same key set. Then byte-find the preamble literal `The coordinator sent a message` for the writer. On disk, over every `*.jsonl` under one projects root, parse each line carrying `\"origin\"`, take the records whose top-level `origin.kind` is `coordinator`, and tally their `origin` key SETS, their `isMeta` values and their files; separately count records whose `message.content` string starts with the preamble, and cross-tabulate the two detectors.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the injected-turn framing dispatch",
+          "offset": 166046626,
+          "excerpt": "case\"coordinator\":return XJn(e);",
+          "note": "the arm that frames an injected turn whose origin kind is coordinator - the entry that turns the message into the text the record carries"
+        },
+        {
+          "role": "gate",
+          "name": "the send path's origin ternary",
+          "offset": 175782460,
+          "excerpt": "de=d!==void 0&&N!==void 0?{kind:\"peer\",from:N,senderTaskId:d,",
+          "note": "the branch that decides: a known sender task id and address build the PEER origin with its sender fields, and everything else falls to the one-key coordinator form"
+        },
+        {
+          "role": "writer",
+          "name": "the relay preamble literal",
+          "offset": 160143614,
+          "excerpt": "var kt=\"The coordinator sent a message\"",
+          "note": "the preamble the record's own content opens with, which is the other half of what identifies a relay on disk"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the send path's origin ternary, else-branch",
+          "offset": 175782562,
+          "excerpt": "{kind:\"coordinator\"}",
+          "verdict": "builds the object with the single key `kind`"
+        },
+        {
+          "site": "the module-level origin constant",
+          "offset": 179124617,
+          "excerpt": "rl={kind:\"coordinator\"}",
+          "verdict": "builds the same one-key object; with the ternary these are both occurrences of the construction"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-found `kind:\"coordinator\"` and `The coordinator sent a message` over the whole executable and read every occurrence with context; then walked every `*.jsonl` under one projects root, parsed the lines carrying `\"origin\"` and cross-tabulated the preamble detector against `origin.kind`, tallying key sets, `isMeta` and files.",
+          "observed": "`kind:\"coordinator\"` occurs twice - the send path's ternary else-branch at 175782563 and the module constant at 179124619 - and both build the one-key object; the ternary's other branch builds the peer form with `from` and `senderTaskId`. The preamble literal occurs twice, once as an interned name and once as the constant at 160143615. On disk: 147 coordinator-relay records over 91 files, ONE origin key set `{kind}` on all 147, `isMeta` true on all 147; preamble-and-origin 147, preamble-only 0, origin-only 0. Other `origin.kind` values: task-notification 3,567, human 3,081, peer 55.",
+          "rule": "An occurrence is a byte match of the literal anywhere in the executable. A record counts as a coordinator relay when its top-level `origin.kind` is `coordinator`; a key set is the sorted tuple of the `origin` object's own keys; the preamble detector is a `starts_with` on the left-trimmed `message.content` string.",
+          "note": "The two detectors agreeing on all 147 with no record on either side alone is why the direction arm can key on `origin.kind` while the leaf keys on the framing: they are one population at this build, and a divergence would show up as a nonzero count in either of the two other columns."
+        }
+      ]
     }
   ]
 }
