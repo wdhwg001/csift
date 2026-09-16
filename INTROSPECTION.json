@@ -94986,8 +94986,8 @@
           "snippet": "    let attached_to = super::for_edge(\"attached_to\", Basis::Key, rec.parent_uuid.as_deref(), ctx);"
         },
         {
-          "path": "tests/cli/search/taxonomy/attachments.rs",
-          "lines": "307",
+          "path": "tests/cli/search/taxonomy/attachments/edges.rs",
+          "lines": "7",
           "snippet": "fn every_attachment_unit_says_which_record_it_is_for() {"
         }
       ],
@@ -95084,8 +95084,8 @@
           "snippet": "        if ty == \"hook_success\" {"
         },
         {
-          "path": "tests/cli/search/taxonomy/attachments.rs",
-          "lines": "247",
+          "path": "tests/cli/search/taxonomy/attachments/labels.rs",
+          "lines": "106",
           "snippet": "fn delivery_reads_the_converters_own_answer_per_record() {"
         }
       ],
