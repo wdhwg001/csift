@@ -64,8 +64,11 @@ surface change bumps the PATCH.
   reads `[refusal <subtype>] originalModel=... fallbackModel=...|none apiRefusalCategory=...`
   (the `none` is printed rather than elided, because the absence of a second model is what
   separates the two subtypes; with no source line to read the head stops at the subtype rather
-  than reporting a key it never looked at), `api-error` reads `[api-error status=... retry N/M
-  in Xms]` plus the error's own type and message, `notice` reads `[notice <level>]`, `kill`
+  than reporting a key it never looked at), `api-error` reads `[api-error status=... type=<kind>
+  retry N/M in Xms]` plus the failure's own wording, each read where its own shape puts
+  it (a connection failure keeps the wording in `error.message` and names no kind; an HTTP
+  failure names the kind in `error.type` and buries the wording two hops down, inside the
+  response body it kept), `notice` reads `[notice <level>]`, `kill`
   reads `[kill]` (the record carries no payload on disk), `command` reads `[command]`, and the
   scheduler's `harness.schedule.event` reads `[scheduled <when>] task=... cron=... prompt=...`.
   Every one of those fields also rides JSON as its own key - `retried`, `original_model`,
@@ -386,9 +389,12 @@ surface change bumps the PATCH.
   included. The render names the status and the retry counters, the JSON `error` fact carries
   the error's `type` and `message` and nothing else, and `--raw` prints the source line and is
   the one documented way to the bytes.
-- **What an `api_error` says failed is searchable.** The record carries no `content` key at
-  all, so the error's own type and message are rendered as its body; without them the statement
-  of the failure was in the output under no pattern that could reach it.
+- **What an `api_error` says failed is searchable, on BOTH observed shapes.** The record
+  carries no `content` key at all, so the failure's kind rides the head and its wording is the
+  body; without them the statement of the failure was in the output under no pattern that
+  could reach it. Neither shape carries both at one level: the header-bearing HTTP shape keeps
+  the wording two hops down inside the response body it received, so reading one level printed
+  the kind and dropped the sentence.
 - **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
   the one place csift proves a negative, and it was re-rendering without the line - so for
   a record whose text lives in fields the record model does not carry, it could prove a
