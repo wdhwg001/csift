@@ -14339,8 +14339,8 @@
       "depends": "csift registers each line's own type/subtype bytes (`turn_duration`, `stop_hook_summary`, `file-history-`) as VERIFIABLE synthesized-text markers, active only under the explicit selector that admits the line; without a marker the whole-file prefilter gate would silently drop matches against those fabricated excerpts. The queued and away-summary leaves render VERBATIM content and need no marker.",
       "code": [
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "549-552",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "175-178",
           "snippet": "    // v0.10.0 promoted lines whose render FABRICATES text (key=value excerpts): the\n    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
@@ -15031,8 +15031,8 @@
           "snippet": "/// Combines the top-level `content` string (`\"Conversation compacted \u2026\"`) with a readable\n/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE\n/// what each compaction clipped. `None` when neither is present (no fabricated text).\npub(crate) fn system_record_text(rec: &Record) -> Option<String> {"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "543-548",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "169-174",
           "snippet": "    if args\n        .label_filter()\n        .selected(Class::CompactionBoundary.path())\n    {\n        verifiable.push(b\"compact_boundary\");\n    }"
         }
       ],
@@ -17383,8 +17383,8 @@
           "snippet": "#[must_use]\npub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "540",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "166",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
@@ -17393,8 +17393,8 @@
           "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "533-542",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "159-168",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -37075,8 +37075,8 @@
       "depends": "csift derives search prefilter needles NECESSITY-ONLY and applies a per-needle safety predicate (whitespace-free, JSON-escape-free, at least 3 bytes), plus a marker list for the small closed set of render paths that fabricate text not present verbatim in the raw line; a needle failing the predicate would silently drop real matches, which is the one place the no-silent-truncation contract actually bites. csift's escape-worthy set (src/commands/search/matcher.rs) counts DEL as escapable, which is a conservative SUPERSET of the encoder's real set: on the 49 corpus lines that carry a raw DEL it forgoes a prefilter needle it could have used, and it never drops a match, so the correction costs a fast path and changes no result.",
       "code": [
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "540",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "166",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         }
       ],
@@ -43270,7 +43270,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "588-590",
+          "lines": "408-410",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
@@ -46950,8 +46950,8 @@
           "snippet": "        Class::TurnDuration => {\n            let mut fields: Vec<String> = Vec::new();\n            let ms = Record::u64_field(rec.duration_ms.as_ref());\n            if let Some(ms) = ms {\n                fields.push(format!(\"{} \u00b7 durationMs={ms}\", fmt_ms(ms)));\n            }"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "553-555",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "179-181",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
@@ -48700,8 +48700,8 @@
           "snippet": "    /// `harness.turn.stop-hooks` - the `type:\"system\"` / `subtype:\"stop_hook_summary\"`\n    /// ledger of the Stop hooks that ran at turn end. No `message{}`.\n    TurnStopHooks,"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "553-560",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "179-186",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
@@ -55994,12 +55994,12 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "384-388",
+          "lines": "294-298",
           "snippet": "    // A char that JSON escapes inside a string does not survive verbatim in the raw\n    // line bytes the prefilter scans - emitting a literal for it causes false\n    // negatives. `\\` is already excluded via META above; guard `\"`, control chars,\n    // and DEL here.\n    if pattern.chars().any(json_escapes_in_string) {"
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "585-587",
+          "lines": "405-407",
           "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, any C0 control char (`< 0x20`), or DEL.\n/// (`\\` is handled separately as a regex metacharacter.)"
         }
       ],
@@ -56274,8 +56274,8 @@
       "depends": "csift registers both as CONSERVATIVE synth markers that force a full scan when `--resolve-persisted` is on, because the byte prefilter would otherwise silently drop every match that lives only in the external file - the exact silent-truncation class the prefilter laws exist to prevent.",
       "code": [
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "572-576",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "198-202",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -64823,7 +64823,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "593-599",
+          "lines": "413-419",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -65243,7 +65243,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "588-590",
+          "lines": "408-410",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],
@@ -72041,8 +72041,8 @@
           "snippet": "#[must_use]\npub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "533-542",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "159-168",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -72619,8 +72619,8 @@
           "snippet": "    /// True when this record is a tool-use rejection carrying a typed user instruction\n    /// (\u00a74.2.4) and so should open a turn. A rejection without a typed message is NOT a\n    /// boundary (see [`Record::plan_rejection_message`]).\n    #[must_use]\n    pub fn is_plan_rejection_boundary(&self) -> bool {\n        self.plan_rejection_message().is_some()\n    }"
         },
         {
-          "path": "src/commands/search/matcher.rs",
-          "lines": "571-572",
+          "path": "src/commands/search/matcher/synth.rs",
+          "lines": "197-198",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         }
       ],
