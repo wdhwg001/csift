@@ -25,16 +25,20 @@ surface change bumps the PATCH.
   line type's own quoted value is registered as a synthesized-text marker under the same
   predicate that admits the line - without it, four of five head-only patterns on a
   21-line fixture read 0 instead of 1, and a default scan arms none of them.
-- **Five bookkeeping line types now say what they are FOR.** Three name a record and ride
-  the shared provenance edge: `last-prompt` -> `leaf` (its `leafUuid`), a file-history line
-  -> `versions` (its `messageId`), `fork-context-ref` -> `forked_from` (the record the
-  forked agent's prefix was cut at, with the parent session beside it, because that record
-  lives in another file). The other two name no record - `continued-in` names a whole
-  transcript, `cost-state` an instant - so they are the family's own facts:
-  `[continued in @<session>]` with JSON `continued_in`, and `[checkpoint closes <instant>]`
-  with JSON `checkpoint_closes_at` and `checkpoint_join`, the `startTime + totalDuration`
-  sum `list` joins a cleared session on as `cleared_from`. Each renders its honest empty
-  when the key it reads is absent, rather than dropping the field.
+- **Five bookkeeping line types now say what they are FOR.** Four ride the shared
+  provenance edge: `last-prompt` -> `leaf` (its `leafUuid`), a file-history line ->
+  `versions` (its `messageId`), `fork-context-ref` -> `forked_from` (the record the forked
+  agent's prefix was cut at, with the parent session beside it, because that record lives
+  in another file), and `continued-in` -> `continued_in`, which names a whole TRANSCRIPT
+  and no record in it - the edge builder's session-only answer, rendering
+  `[for: continued_in @<session>]`, an `@` target you can feed straight back to csift. The
+  fifth names an INSTANT, which no target shape can carry without putting a timestamp in a
+  field documented as the target record's uuid, so `cost-state` stays the family's own
+  fact: `[checkpoint closes <instant>]` with JSON `checkpoint_closes_at` and
+  `checkpoint_join`, the `startTime + totalDuration` sum `list` joins a cleared session on
+  as `cleared_from`. Each renders its honest empty when the key it reads is absent, rather
+  than dropping the field. A `fork-context-ref` naming a parent session but no cut record
+  renders that session for the same reason.
 - **`[not delivered]` on every bookkeeping unit.** JSON `delivered` has always read false
   for all thirteen leaves while the text surface said nothing, because the engine prints
   that marker only for a record carrying a per-record delivery override and a bookkeeping
@@ -135,12 +139,6 @@ surface change bumps the PATCH.
   definitive absence over text `show --line` put on screen, on an attachment's converted
   body and on a plain user message alike. The predicate counts it now, which splits such a
   run into needles that do occur in the raw bytes.
-- **The person's mid-turn steer renders the text the model received.** BREAKING: a
-  `queued_command` steer whose record carries a persisted conversion now shows that
-  conversion and reads `[rendered]`, where it showed the payload JSON and read `[payload]`.
-  Its `user.message` unit tried the verbatim payload before the render seam, so this one
-  view disagreed with an address on the same line. Measured: 20 of the 164 human-origin
-  `queued_command` lines on one projects root carry a conversion.
 - **The `for` array is named once on each help surface.** Four families each listed the
   shared provenance key in `show --help`'s record-row table under their own block, spelled
   four different ways, so a consumer reading that enumeration read four keys; it is one
@@ -160,15 +158,6 @@ surface change bumps the PATCH.
   them from the label zone, so `show --line N` and `show --line N --format json`
   disagreed about the same record. The label zone now renders the shape in place of the
   leaf path and the facts after it, exactly as a labelled unit does.
-- **A `for` edge can name a whole transcript.** BREAKING: `continued-in`'s relation moves
-  from the `continued_in` JSON key into the shared `for` array, where every other relation
-  already lives, and its label zone reads `[for: continued_in @<session>]` instead of
-  `[continued in @<session>]`. The shared edge builder now takes the session beside the
-  uuid, so a target that is a whole file and no record in it is a RESOLVED edge rather
-  than an honest empty - `@<session>` is an address a reader feeds back to csift. A
-  `fork-context-ref` that names a parent session but no cut record renders that session
-  for the same reason. `cost-state` stays a family fact: its target is an instant, not a
-  record or a file.
 - **A `for` edge cuts a uuid to its handle and prints every other id whole.** The label
   zone cut an unresolved target to eight characters whatever it was. That is right for a
   uuid - the first eight hex digits identify one and the compaction excerpt has printed
@@ -322,8 +311,12 @@ surface change bumps the PATCH.
   classified as harness context. It reads the payload now. The second half was quieter: the
   leaf renders through the opener path, which an attachment has no `message{}` for, so even
   when the arm did fire the record emitted nothing at all - no hit, no census key, no
-  `-t user` result, reachable only by an address. It renders its payload JSON, the same
-  verbatim form the model's own structured answer takes on that line type.
+  `-t user` result, reachable only by an address. It falls through to the render seam now,
+  so it takes the attachment family's ordinary body rule like every other view of that
+  line: the conversion the harness persisted when the record carries one, marked
+  `[rendered]`, and the verbatim payload JSON otherwise. Measured over one projects root,
+  one parse per non-blank line: 20 of the 164 human-origin `queued_command` lines carry a
+  conversion.
 - **A flagless scan reaches the person's mid-turn steer too.** The needle that admits a
   `queued_command` line was gated on an explicit selector, so `-t user` found the steer
   and a bare `csift search` did not - and a flagless scan is a superset of `-t user`, so
@@ -493,10 +486,14 @@ surface change bumps the PATCH.
   conjunction the rest of the family already takes; all 94 such records carry the flag, so
   what it decides is the shape that has yet to appear. A record without it renders
   `? unmodeled: user/image` under an address.
-- **Three doc surfaces said things the code does not.** `harness.hook.feedback` was
-  described as the Stop hook's, where one builder writes four prefixes (`Stop`,
-  `TeammateIdle`, `TaskCreated`, `TaskCompleted`); and `model/automation.rs` carried a
-  comment block written before the taxonomy was wired into anything.
+- **Doc surfaces that said things the code does not.** Two facts, each stated in more than
+  one place. `harness.hook.feedback` was described as the Stop hook's, where one builder
+  writes four prefixes (`Stop`, `TeammateIdle`, `TaskCreated`, `TaskCompleted`) - corrected
+  in the classify arm's own doc, in `search --help`'s leaf list and in the SPEC taxonomy
+  clause. And a redacted thinking block was described as a PLACEHOLDER, in
+  `model/automation.rs` and in the block loop's module doc: it renders an empty body, and
+  what it is rides the label zone as a marker, which is what keeps the fabricated word out
+  of matchable text.
 
 ### Performance
 

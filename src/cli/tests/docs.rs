@@ -334,6 +334,98 @@ fn the_search_help_body_is_its_sections_joined_in_order() {
     );
 }
 
+/// `search --help`'s leaf list IS `Class::ALL` - every leaf named once, and nothing named
+/// that is not one.
+///
+/// The list is the LLM's own index of the selector space, and it is hand-written prose in
+/// a brace-collapsed shorthand (`.communication.{inbox,sent,signal}`), so nothing derived
+/// it and nothing checked it. A leaf missing from it is a selector a reader will not find;
+/// a leaf named there and absent from the enum is a selector that hard-errors when they
+/// try it.
+///
+/// The parse is the shorthand's own rule: the region runs from the `user` role line to
+/// the paragraph after it, each ROLE opens a block, and inside a block every `.`-led
+/// fragment is a path under that role, with a brace group standing for one fragment per
+/// member.
+#[test]
+fn the_search_help_leaf_list_is_the_class_set() {
+    use crate::model::Class;
+
+    let body = SEARCH_AFTER_HELP.as_str();
+    let start = body
+        .find("  user        .message")
+        .expect("the leaf list opens with the user role");
+    let end = body[start..]
+        .find("A RENDERED DRAFT")
+        .expect("the leaf list is followed by the draft paragraph")
+        + start;
+    // The region wraps mid-fragment, so it is read as one run of words.
+    let region: String = body[start..end]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // THREE blocks, opened by the role word standing alone before its first fragment.
+    // `agent` and `harness` occur in the prose too, so the opener is the whole `<role> .`
+    // - a role word followed by a space and the dot of its first fragment.
+    let agent_at = region.find("agent .").expect("the agent block opens");
+    let harness_at = region.find("harness .").expect("the harness block opens");
+    let blocks = [
+        ("user", &region[..agent_at]),
+        ("agent", &region[agent_at..harness_at]),
+        ("harness", &region[harness_at..]),
+    ];
+
+    let mut found: Vec<String> = Vec::new();
+    for (role, block) in blocks {
+        // A FRAGMENT opens at a dot that follows a space - an inner dot continues one -
+        // and runs to the first character that is neither a path character nor part of a
+        // brace group.
+        let bytes = block.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] != b'.' || (i > 0 && bytes[i - 1] != b' ') {
+                i += 1;
+                continue;
+            }
+            let mut j = i + 1;
+            let mut brace = false;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'{' => brace = true,
+                    b'}' => {
+                        j += 1;
+                        break;
+                    }
+                    _ if brace => {}
+                    b'a'..=b'z' | b'.' | b'-' => {}
+                    _ => break,
+                }
+                j += 1;
+            }
+            let frag = block[i..j].trim_end_matches('.');
+            i = j;
+            if let Some((head, members)) = frag.split_once(".{") {
+                for m in members.trim_end_matches('}').split(',') {
+                    found.push(format!("{role}{head}.{}", m.trim()));
+                }
+            } else if frag.contains('.') && frag.len() > 1 {
+                found.push(format!("{role}{frag}"));
+            }
+        }
+    }
+
+    let mut want: Vec<String> = Class::ALL.iter().map(|c| c.path().to_string()).collect();
+    // The list names a leaf once, so a duplicate is a drift of its own; sorting both sides
+    // makes the assertion a SET comparison with the duplicate still visible.
+    found.sort();
+    want.sort();
+    assert_eq!(
+        found, want,
+        "`search --help`'s leaf list has drifted from Class::ALL"
+    );
+}
+
 /// The PROVENANCE edge is ONE key and one row, owned by no family.
 ///
 /// Four families build edges and every one of them folds into the same array through
