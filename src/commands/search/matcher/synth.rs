@@ -144,8 +144,11 @@ impl Matcher {
 /// - `turn_duration` / `stop_hook_summary` / `file-history-` (v0.10.0, only under an
 ///   explicit selector reaching the leaf) - the promoted renders fabricate
 ///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
-/// - `"subtype"` (v0.10.1, only under a selector reaching `harness.system.*`) - the
-///   catch-all render fabricates the `[<subtype> <level>]` head.
+/// - `"subtype"` (only under a selector that scans `type:"system"` lines) - the system
+///   family fabricates a head per EVENT KIND (`[refusal <subtype>] originalModel=…`,
+///   `[api-error status=… retry N/M in Xms]`, `[notice <level>]`, `[kill]`, `[command]`,
+///   `[scheduled <when>] task=… cron=… prompt=…`), and not one of those words is a byte
+///   substring of the line.
 /// - the sixteen BOOKKEEPING line-type values (only under a selector reaching that
 ///   leaf) - the family render fabricates a `[<line type> key=value ...]` head from the
 ///   line's own fields. COST: at most sixteen extra memmem scans per line the literal
@@ -191,12 +194,13 @@ pub(crate) fn synth_marker_finders(
     if args.reaches_gated(Class::BookkeepingFileHistory) {
         verifiable.push(b"file-history-");
     }
-    // v0.10.1 catch-all system subtypes: the render fabricates the `[<subtype> <level>]`
-    // head, so the key-only `"subtype"` needle (the same needle that admits the line)
-    // marks it for stage-2 re-rendering. The predicate is `scans_system_lines`, NOT
-    // `reaches_gated`: a bare `harness` role selector admits these lines too (for the
-    // delivered `local_command` records), and a marker set narrower than the candidate
-    // gate would let the whole-file gate prune a file whose only hit is in that head.
+    // The `type:"system"` event lines: the system family fabricates a head per EVENT
+    // KIND and its `key=` words, none of them a byte substring of the line, so the
+    // key-only `"subtype"` needle (the same needle that admits the line) marks it for
+    // stage-2 re-rendering. The predicate is `scans_system_lines`, NOT `reaches_gated`:
+    // a bare `harness` role selector admits these lines too (for the delivered
+    // `local_command` records), and a marker set narrower than the candidate gate would
+    // let the whole-file gate prune a file whose only hit is in that head.
     if args.scans_system_lines() {
         verifiable.push(br#""subtype""#);
     }

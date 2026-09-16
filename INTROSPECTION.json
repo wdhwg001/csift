@@ -14374,7 +14374,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "181-184",
+          "lines": "184-187",
           "snippet": "    // v0.10.0 promoted lines whose render FABRICATES text (key=value excerpts): the\n    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
@@ -15066,7 +15066,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "175-180",
+          "lines": "178-183",
           "snippet": "    if args\n        .label_filter()\n        .selected(Class::CompactionBoundary.path())\n    {\n        verifiable.push(b\"compact_boundary\");\n    }"
         }
       ],
@@ -17418,7 +17418,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "172",
+          "lines": "175",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
@@ -17428,7 +17428,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "165-174",
+          "lines": "168-177",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -37110,7 +37110,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "172",
+          "lines": "175",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         }
       ],
@@ -47005,7 +47005,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "185-187",
+          "lines": "188-190",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
@@ -48755,7 +48755,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "185-192",
+          "lines": "188-195",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
@@ -56374,7 +56374,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "223-227",
+          "lines": "227-231",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -72151,7 +72151,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "165-174",
+          "lines": "168-177",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -72729,7 +72729,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "222-223",
+          "lines": "226-227",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         }
       ],
@@ -95288,7 +95288,7 @@
         },
         {
           "path": "src/commands/search/record_text/system.rs",
-          "lines": "250",
+          "lines": "262",
           "snippet": "        Class::SystemApiError => {"
         }
       ],

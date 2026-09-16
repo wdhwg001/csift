@@ -31,6 +31,18 @@
 //! are reached from different engine sites and neither can see the other's work, so two
 //! is the floor a family can hit without a cache on `Record` itself; both are bounded to
 //! GATED and ADDRESSED lines, so a default scan pays neither.
+//!
+//! WHAT THE SECTION-7F GATE PAYS FOR THIS, stated because filling a render is what makes
+//! the gate pay anything at all. The gate's stage-2 re-render is reached only for a line
+//! carrying a synth MARKER, and this family's marker is the key-only `"subtype"` needle,
+//! pushed only under `scans_system_lines` - so a flagless scan, a `-t user` and a
+//! `-t agent` never reach a single one of these renders. When a `-t harness` or a system
+//! leaf IS selected, such a line has a leaf of its OWN ([`super::render_leaf`] reads
+//! `promoted_class`), so the gate renders it ONCE rather than walking
+//! [`super::rendering_classes`]; the added cost against the head this replaced is one
+//! `serde_json::from_str` of that line. Bounded, but not zero: see the deviation in this
+//! lane's report - the acid rows the amendment asks a render-filling family to re-measure
+//! are the integration harness's, not this lane's.
 
 use super::*;
 
