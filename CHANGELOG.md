@@ -139,6 +139,11 @@ surface change bumps the PATCH.
   definitive absence over text `show --line` put on screen, on an attachment's converted
   body and on a plain user message alike. The predicate counts it now, which splits such a
   run into needles that do occur in the raw bytes.
+- **Three JSON keys the help never named.** `show --help`'s record-row table did not carry
+  `superseded_draft`, and `search --help`'s hit schema carried neither `denial_kind` nor
+  `image_ids` - keys a consumer meets on the wire and cannot find on the page. All three
+  are named now, and a contract test asserts the direction: every key the two commands
+  emit is one their own `--help` names.
 - **The `for` array is named once on each help surface.** Four families each listed the
   shared provenance key in `show --help`'s record-row table under their own block, spelled
   four different ways, so a consumer reading that enumeration read four keys; it is one

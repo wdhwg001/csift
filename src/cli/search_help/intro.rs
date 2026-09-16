@@ -245,6 +245,7 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
         labels:[…], line, uuid, excerpt, body, tool_name, pairing, \
         from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, \
+        denial_kind, image_ids, \
         survival, abandoned_root_line, replay_copy_of, mode, compact_metadata, \
         for:[{kind,basis,target:{line,uuid,session,note},reason}], \
         refetch, refetch_uuid}, …]}: \
@@ -259,6 +260,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         bytes), `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
         when the hit is `agent.communication.*`, `refetch` is the ready-to-run `csift show` \
+        `denial_kind` the harness's own reason a rejected call never ran (null off a \
+        rejection's tool_result), `image_ids` the extractable `#N` / `L<line>i<n>` ids the \
+        record carries (an empty array when none), \
         `for` the record's PROVENANCE edges - one array however many relations a unit \
         carries, each `{kind, basis, target, reason}`, present only on a unit that \
         carries one, `refetch` is the ready-to-run `csift show` \

@@ -44,6 +44,7 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Shared, "is_subagent"),
     k(Family::Shared, "parent_session_id"),
     k(Family::Shared, "turn_index"),
+    k(Family::Shared, "superseded_draft"),
     k(Family::Shared, "line (null for a sidecar-merged record)"),
     k(Family::Shared, "uuid"),
     k(Family::Shared, "label"),
