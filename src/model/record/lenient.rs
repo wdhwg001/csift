@@ -21,6 +21,12 @@
 //! round-trip: the exposed keys arrive through the `#[serde(flatten)]` map, where their
 //! values are already buffered, and building a second tree per key to throw most of it
 //! away would pay twice for the same bytes.
+//!
+//! NO visitor here carries `visit_some` / `visit_none`, and that is a statement rather than
+//! an omission: JSON has no `Option`, so `serde_json` never calls them, and the flattened
+//! map these keys arrive through buffers a JSON null as a UNIT. An arm with no caller is a
+//! guard about nothing. Every shape a value can actually take is pinned, one row per shape,
+//! by the decoder table in `model::tests::keys`.
 
 use super::keys::QuotaSummary;
 use serde::de::{IgnoredAny, MapAccess, SeqAccess, Visitor};
@@ -77,17 +83,6 @@ impl<'de> Visitor<'de> for StrOrNone {
         Ok(None)
     }
 
-    fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-        Ok(None)
-    }
-
-    fn visit_some<D: serde::Deserializer<'de>>(
-        self,
-        de: D,
-    ) -> std::result::Result<Self::Value, D::Error> {
-        de.deserialize_any(self)
-    }
-
     fn visit_map<A: MapAccess<'de>>(self, map: A) -> std::result::Result<Self::Value, A::Error> {
         skip_map(map)?;
         Ok(None)
@@ -135,17 +130,6 @@ impl<'de> Visitor<'de> for UintOrNone {
         Ok(None)
     }
 
-    fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-        Ok(None)
-    }
-
-    fn visit_some<D: serde::Deserializer<'de>>(
-        self,
-        de: D,
-    ) -> std::result::Result<Self::Value, D::Error> {
-        de.deserialize_any(self)
-    }
-
     fn visit_map<A: MapAccess<'de>>(self, map: A) -> std::result::Result<Self::Value, A::Error> {
         skip_map(map)?;
         Ok(None)
@@ -190,17 +174,6 @@ impl<'de> Visitor<'de> for BoolOrNone {
 
     fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
         Ok(None)
-    }
-
-    fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-        Ok(None)
-    }
-
-    fn visit_some<D: serde::Deserializer<'de>>(
-        self,
-        de: D,
-    ) -> std::result::Result<Self::Value, D::Error> {
-        de.deserialize_any(self)
     }
 
     fn visit_map<A: MapAccess<'de>>(self, map: A) -> std::result::Result<Self::Value, A::Error> {
@@ -253,17 +226,6 @@ impl<'de> Visitor<'de> for QuotaOrNone {
 
     fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
         Ok(None)
-    }
-
-    fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-        Ok(None)
-    }
-
-    fn visit_some<D: serde::Deserializer<'de>>(
-        self,
-        de: D,
-    ) -> std::result::Result<Self::Value, D::Error> {
-        de.deserialize_any(self)
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> std::result::Result<Self::Value, A::Error> {

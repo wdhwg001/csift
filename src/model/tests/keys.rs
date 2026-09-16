@@ -316,3 +316,72 @@ fn an_unexpected_type_reads_as_an_absent_key() {
         "a negative is not a status"
     );
 }
+
+/// EVERY JSON type, through every decoder, read off the field.
+///
+/// The decoders accept one type each and answer `None` for all the others, and that is a
+/// per-TYPE statement rather than a per-key one: serde dispatches a JSON value by its own
+/// shape, so each shape is its own arm and each arm is its own way to lose a record. The
+/// table feeds one key per decoder every shape a JSON value can take - a plain string, a
+/// string carrying an escape (a different arm: the value is owned rather than borrowed), a
+/// non-negative integer, a negative one, a float, a boolean, null, an array and an object -
+/// and asserts the value the documented rule gives.
+#[test]
+fn every_json_shape_reaches_every_decoder_and_only_its_own_type_decodes() {
+    // (the JSON value as written, what each decoder makes of it)
+    //                      value        str        u32      bool     quota-object
+    let table: &[(&str, bool, bool, bool, bool)] = &[
+        (r#""ok""#, true, false, false, false),
+        (r#""a\nb""#, true, false, false, false),
+        ("7", false, true, false, false),
+        ("-7", false, false, false, false),
+        ("1.5", false, false, false, false),
+        ("true", false, false, true, false),
+        ("null", false, false, false, false),
+        ("[1,2]", false, false, false, false),
+        (r#"{"k":1}"#, false, false, false, true),
+    ];
+    for (value, want_str, want_u32, want_bool, want_quota) in table {
+        let r = parse(&format!(
+            r#"{{"type":"assistant","uuid":"a-30","requestId":{value},"apiBlockIndex":{value},"toolEndsTurn":{value},"quotaLimits":{value},"attributionAgent":"anchor"}}"#
+        ));
+        let k = r
+            .exposed_keys()
+            .unwrap_or_else(|| panic!("the anchor key carries the box: {value}"));
+        assert_eq!(k.request_id.is_some(), *want_str, "string_only on {value}");
+        assert_eq!(
+            k.api_block_index.is_some(),
+            *want_u32,
+            "u32_only on {value}"
+        );
+        assert_eq!(
+            k.tool_ends_turn.is_some(),
+            *want_bool,
+            "bool_only on {value}"
+        );
+        assert_eq!(
+            k.quota_limits.is_some(),
+            *want_quota,
+            "quota_only on {value}"
+        );
+        // Whatever the odd key did, the record itself parsed and kept its other fields.
+        assert_eq!(k.attribution_agent.as_deref(), Some("anchor"), "{value}");
+    }
+
+    // The two decoded values, not just their presence: an escape survives, and the number
+    // is the number rather than a coincidence of ordering.
+    let esc = parse(r#"{"type":"assistant","uuid":"a-31","requestId":"a\nb","apiBlockIndex":7}"#);
+    let k = esc.exposed_keys().expect("both keys");
+    assert_eq!(k.request_id.as_deref(), Some("a\nb"));
+    assert_eq!(k.api_block_index, Some(7));
+
+    // The quota object's OWN members take the same table one level down.
+    let q = parse(
+        r#"{"type":"assistant","uuid":"a-32","quotaLimits":{"rateLimitType":"weekly","resetsAt":1790000003}}"#,
+    )
+    .exposed_keys()
+    .and_then(|k| k.quota_limits.as_deref().cloned())
+    .expect("the object decodes");
+    assert_eq!(q.limit_type.as_deref(), Some("weekly"));
+    assert_eq!(q.resets_at, Some(1790000003));
+}

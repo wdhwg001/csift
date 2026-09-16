@@ -95977,7 +95977,7 @@
         {
           "path": "src/model/record/lenient.rs",
           "snippet": "pub(super) fn string_only<'de, D>(de: D) -> std::result::Result<Option<Box<str>>, D::Error>",
-          "lines": "284"
+          "lines": "246"
         }
       ],
       "instrument": "Corpus: over each root count the `error` carriers top-level, break them down by the object's `type` and by the Python type of the value, and for every OBJECT value record the sorted KEY NAMES of the object (never its values) and whether `headers` is among them. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
