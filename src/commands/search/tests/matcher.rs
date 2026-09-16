@@ -366,6 +366,13 @@ const MARKER_CASES: &[MarkerCase] = &[
 /// The law there is a SUPERSET, never equality - handing the line through may only widen
 /// the answer, because narrowing it is exactly how the whole-file gate would prune a file
 /// it has to keep.
+///
+/// What this file does NOT cover, and where it lives: the gate re-renders EVERY VIEW a
+/// record could carry, not the line alone - a record with no leaf of its own reaches the
+/// render seam only through the caller's class. Every case below happens to be a line
+/// WITH its own leaf or a text the engine's generic arms produce, so none of them can see
+/// that half; `the_whole_file_gate_reaches_a_render_only_a_class_can_name` (tests/seam.rs)
+/// is the one that does.
 #[test]
 fn stage_two_answers_every_registered_marker_the_same_or_wider_with_the_line() {
     // The glob reaches every leaf under `harness` on all three narrowing axes, which is

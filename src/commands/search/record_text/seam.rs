@@ -94,6 +94,37 @@ pub(crate) fn render_families(class: Class) -> &'static [RenderFamily] {
     }
 }
 
+/// Every leaf whose CATEGORY names at least one family - the classes a caller's view can
+/// carry into [`family_render`], and nothing else.
+///
+/// The reader is the §7f WHOLE-FILE GATE, the one path in csift allowed to prove a
+/// negative. Its stage-2 re-render has to see everything emission would render, and a
+/// record with no leaf of its OWN (every isMeta injection, every `<task-notification>`)
+/// renders only through the caller's class - so a gate that re-renders the line alone
+/// cannot reach that text at all, and prunes the file it is in.
+///
+/// It enumerates the classes a record COULD carry rather than the ones
+/// [`Record::classify`] answers for it, and the difference is load-bearing. Several leaves
+/// are decided by a per-FILE index the gate cannot have: [`Class::ScheduleFire`] is the
+/// parent-link join `ClassifyCtx::schedule_fires`, and that index is built from the very
+/// records the gate exists to avoid parsing. Classifying under the gate's neutral context
+/// therefore returns a strict SUBSET of the emission's views, and a subset is exactly how
+/// a file gets pruned. A superset can only cost work.
+///
+/// The work is bounded by the same order that makes the seam behaviour-identical: a line
+/// WITH a leaf of its own ([`render_leaf`]) renders one way for every view, so the gate
+/// walks this list only for the lines that have no leaf.
+pub(crate) fn rendering_classes() -> &'static [Class] {
+    static CLASSES: std::sync::OnceLock<Vec<Class>> = std::sync::OnceLock::new();
+    CLASSES.get_or_init(|| {
+        Class::ALL
+            .iter()
+            .copied()
+            .filter(|c| !render_families(*c).is_empty())
+            .collect()
+    })
+}
+
 /// The leaf the RENDER SEAM dispatches on for a LINE, independent of which view a caller
 /// is emitting.
 ///

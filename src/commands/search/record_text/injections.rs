@@ -21,12 +21,23 @@ use super::*;
 /// through the same generic arm every conversation record does. There is no per-family
 /// arm in the shared chain to move. The family lane fills this when it gives a template
 /// a head of its own.
+///
+/// The one thing that is NOT empty is the test probe below, and it belongs to this family
+/// on purpose: an isMeta injection is the shape with no leaf of its own, so this render is
+/// reachable only through the caller's CLASS, and a seam nothing reaches through a class
+/// is a seam the whole-file gate cannot see. KEEP the two lines when filling the body -
+/// they are what holds the gate to re-rendering every view.
 pub(crate) fn render(
-    _rec: &Record,
-    _raw: Option<&str>,
-    _class: Class,
-    _ctx: &ClassifyCtx,
+    rec: &Record,
+    raw: Option<&str>,
+    class: Class,
+    ctx: &ClassifyCtx,
 ) -> Option<String> {
+    #[cfg(test)]
+    if let Some(text) = super::probe::render(rec, class) {
+        return Some(text);
+    }
+    let _ = (rec, raw, class, ctx);
     None
 }
 

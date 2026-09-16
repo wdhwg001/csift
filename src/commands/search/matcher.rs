@@ -189,6 +189,11 @@ impl Matcher {
     /// caller holds it (stage 2 collected the line to parse it), and a render that reads
     /// the line answers differently without it. `None` is for a caller that genuinely has
     /// no line, and it can only make the gate MORE conservative, never less.
+    ///
+    /// The re-render walks EVERY VIEW, not the line alone: the render seam dispatches on
+    /// the line's own leaf when it has one and on the CALLER's class when it does not, so
+    /// a gate that only ever rendered the line was structurally blind to every family
+    /// reachable through a class. See the two blocks at the bottom of the body.
     pub(crate) fn synth_texts_match(&self, rec: &Record, raw: Option<&str>) -> bool {
         let ctx = crate::model::ClassifyCtx::top_level();
         if rec
@@ -217,12 +222,38 @@ impl Matcher {
         // match" for text the emission would have produced, and the whole-file gate then
         // prunes a file whose only hit lies in that head. That is the section 7 silent-drop
         // landmine, on the one path that is allowed to prove a negative.
-        // NO class: the gate re-renders a LINE, not a view of one, so the seam reads the
-        // line's own leaf - which is exactly what every shape with a fabricated head
-        // (the bookkeeping key=value view, a system event's head) is rendered under.
+        // FIRST the line on its own: `record_raw_text` with no class reads the line's own
+        // leaf ([`render_leaf`]) and, failing that, the engine's generic arms. That one
+        // call covers every class-INDEPENDENT answer there is, and for a line that HAS a
+        // leaf of its own it covers the family render too (the seam takes the line's leaf
+        // first, so the caller's class never changes the text).
         if let Some(t) = record_raw_text(rec, raw, None, &ctx) {
             if self.locate(&t).is_some() {
                 return true;
+            }
+        }
+        // THEN every VIEW, which is the only way to reach a family that renders a record
+        // carrying no leaf of its own. An isMeta injection is a `type:"user"` line with no
+        // attachment payload type and no promoted class, so `render_leaf` answers `None`
+        // and the injections family is reachable ONLY through the caller's class - the one
+        // the gate never had. A file whose only hit lay in such a head was pruned and
+        // reported as a definitive absence while `show --line` rendered it, which is the
+        // section 7 silent-drop landmine on the one path that may prove a negative.
+        //
+        // The union over `rendering_classes` EQUALS the union of `record_raw_text` over
+        // every class: with a class in hand the only thing that changes is which family
+        // is offered the record, and everything past the seam is class-independent and
+        // already answered above. The loop is skipped outright for a line with its own
+        // leaf, where the seam's answer does not vary with the view.
+        if crate::commands::search::record_text::render_leaf(rec).is_none() {
+            for class in crate::commands::search::record_text::rendering_classes() {
+                if let Some(t) =
+                    crate::commands::search::record_text::family_render(rec, raw, *class, &ctx)
+                {
+                    if self.locate(&t).is_some() {
+                        return true;
+                    }
+                }
             }
         }
         false

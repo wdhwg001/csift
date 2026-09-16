@@ -191,6 +191,68 @@ fn a_block_this_family_does_not_own_has_no_body() {
     );
 }
 
+/// THE WHOLE-FILE GATE RE-RENDERS EVERY VIEW, not the line alone.
+///
+/// The seam dispatches on the line's own leaf when it HAS one and on the caller's CLASS
+/// when it does not, and the second half is a whole family: an isMeta injection and a
+/// `<task-notification>` are `type:"user"` lines with no attachment payload type and no
+/// promoted class, so `render_leaf` answers `None` for both and the injections family is
+/// reachable through a class or not at all. The gate used to re-render the LINE - one
+/// call, no class - which made it structurally blind to that family: a file whose only
+/// hit lay in such a head was pruned and reported as a definitive absence while
+/// `show --line` rendered the head perfectly well. That is section 7's silent-drop
+/// landmine on the one path csift allows to prove a negative.
+///
+/// The probe render stands in for a head the family lane has not written yet. What it
+/// proves is the reachability, which is what the gate is blind to; the text itself is
+/// deliberately a fixture's.
+#[test]
+fn the_whole_file_gate_reaches_a_render_only_a_class_can_name() {
+    use crate::commands::search::record_text::{probe, render_leaf};
+    let ctx = ClassifyCtx::top_level();
+    let m = build_matcher(&args(probe::SENTINEL_RENDER)).unwrap();
+
+    // An isMeta injection: the shape with no leaf of its own.
+    let feedback = format!(
+        r#"{{"type":"user","uuid":"g1","sessionId":"{}","isMeta":true,"message":{{"role":"user","content":"Stop hook feedback: keep going"}}}}"#,
+        probe::SENTINEL_RENDER_SESSION
+    );
+    let fb = rec(&feedback);
+    assert_eq!(render_leaf(&fb), None, "no leaf of its own");
+    assert!(fb.classify(&ctx).contains(&Class::HookFeedback));
+    assert!(
+        !feedback.contains(probe::SENTINEL_RENDER),
+        "the head is FABRICATED: a literal hit would prove nothing about the re-render"
+    );
+    assert!(
+        m.synth_texts_match(&fb, Some(&feedback)),
+        "the gate must reach the family render, or it prunes the file the head is in"
+    );
+
+    // The WHOLE path on a line the marker registry already carries: stage 1 admits it
+    // for re-rendering, stage 2 keeps the file. The notification leaves route to the
+    // same family, so the same blindness applied.
+    let pulse = format!(
+        r#"{{"type":"user","uuid":"g2","sessionId":"{}","message":{{"role":"user","content":"<task-notification><task-id>b1a2b3c4</task-id><status>completed</status>a shell finished</task-notification>"}}}}"#,
+        probe::SENTINEL_RENDER_SESSION
+    );
+    let pl = rec(&pulse);
+    assert_eq!(render_leaf(&pl), None);
+    assert!(
+        m.synth_verifiable_hits(pulse.as_bytes()),
+        "stage 1 admits the line for re-rendering"
+    );
+    assert!(
+        m.synth_texts_match(&pl, Some(&pulse)),
+        "stage 2 keeps the file"
+    );
+
+    // And the gate can still PRUNE: the same pattern against a record no family answers
+    // for stays a definitive absence, which is the property the whole gate exists for.
+    let plain = r#"{"type":"user","uuid":"g3","isMeta":true,"message":{"role":"user","content":"Stop hook feedback: keep going"}}"#;
+    assert!(!m.synth_texts_match(&rec(plain), Some(plain)));
+}
+
 /// ONE leaf is rendered by a family that DELEGATES to the engine's promoted renderer, and
 /// it is the only one: `harness.bookkeeping.file-history` builds its head from fields
 /// `Record` models rather than from the raw line, so the family composes the promoted

@@ -36,6 +36,27 @@ pub(crate) const SENTINEL_LEAFLESS_MARKER: &str = "family probe leafless";
 /// before this fact existed.
 pub(crate) const SENTINEL_FACT: &str = "family probe fact";
 
+/// The head the probe RENDERS, once per view, for a record carrying the sentinel session
+/// id. The injections family calls it, because that family is the one whose records carry
+/// no leaf of their own: an isMeta `type:"user"` line has no attachment payload type and
+/// no promoted class, so the only way into its render is the caller's CLASS. An empty
+/// stub cannot show that a class arrives, which is the one thing the whole-file gate has
+/// to be held to.
+///
+/// The class's own path is part of the text so a test can name the VIEW that produced it
+/// rather than merely that something did.
+pub(crate) const SENTINEL_RENDER: &str = "zzfamilyrenderprobe";
+
+/// A sentinel of its OWN, not the facts one: a render answer REPLACES a unit's body,
+/// so a record that asked for facts would silently lose its text to this.
+pub(crate) const SENTINEL_RENDER_SESSION: &str = "family-render-probe";
+
+/// The probe's render: a head per view for a sentinel record, nothing for any other.
+pub(crate) fn render(rec: &Record, class: Class) -> Option<String> {
+    (rec.session_id.as_deref() == Some(SENTINEL_RENDER_SESSION))
+        .then(|| format!("{SENTINEL_RENDER} {}", class.path()))
+}
+
 /// The probe's per-unit facts and markers: one fact and one marker on every unit of a
 /// record carrying the sentinel session id, plus one marker per `Section` field so both
 /// halves are observable, and nothing at all on any other record.
