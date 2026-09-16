@@ -191,6 +191,36 @@ fn a_block_this_family_does_not_own_has_no_body() {
     );
 }
 
+/// A FAMILY REFUSES A RECORD THAT IS NOT ITS OWN, and the dispatch does not do it for it.
+///
+/// The seam reads `render_leaf(rec).or(class)`: a record with no leaf of its own arrives
+/// carrying only the CALLER's class, so "this arm is only reached for leaves in this
+/// category" is true of the leaf and false of the record. A bookkeeping render that
+/// answered unconditionally handed a role-bearing record its whole raw JSON line as the
+/// body - the human's own message replaced by the bytes around it - on every surface that
+/// can hand a class in.
+///
+/// Pinned on the family function AND through the shared resolution, because those are two
+/// different promises: the family says nothing about a record it does not own, and the
+/// engine's own arms then render the record the way they always did.
+#[test]
+fn a_family_refuses_a_record_that_is_not_its_own() {
+    use crate::commands::search::record_text::{bookkeeping, render_leaf};
+    let ctx = ClassifyCtx::top_level();
+    let line =
+        r#"{"type":"user","uuid":"b1","message":{"role":"user","content":"the human said this"}}"#;
+    let r = rec(line);
+    assert_eq!(render_leaf(&r), None, "no leaf of its own");
+    assert_eq!(
+        bookkeeping::render(&r, Some(line), Class::BookkeepingMode, &ctx),
+        None,
+        "the family owns the line TYPE, not whichever class a caller asked with"
+    );
+    let text = record_raw_text(&r, Some(line), Some(Class::BookkeepingMode), &ctx)
+        .expect("the engine's own arms answer for a conversation record");
+    assert_eq!(text, "the human said this");
+}
+
 /// THE WHOLE-FILE GATE RE-RENDERS EVERY VIEW, not the line alone.
 ///
 /// The seam dispatches on the line's own leaf when it HAS one and on the caller's CLASS

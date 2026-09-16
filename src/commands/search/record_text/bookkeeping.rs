@@ -25,14 +25,24 @@ use super::*;
 /// so its head still comes from the promoted renderer; when the family lane gives the
 /// other twelve heads of their own, they are built here.
 ///
-/// A record whose own line type is not a bookkeeping one never reaches this: the seam
-/// dispatched on its leaf, and this arm is only called for leaves in this category.
+/// THE GATE IS THE RECORD'S OWN LINE TYPE, and it is not redundant with the dispatch.
+/// The seam reads `render_leaf(rec).or(class)`, so a record with NO leaf of its own -
+/// every isMeta injection, every `<task-notification>` - arrives here carrying only the
+/// CALLER's class, and answering it unconditionally hands a role-bearing record's whole
+/// raw JSON line back as its body. So the family asks the one question that identifies
+/// its own record: is this line's own type a bookkeeping one.
 pub(crate) fn render(
     rec: &Record,
     raw: Option<&str>,
     _class: Class,
     _ctx: &ClassifyCtx,
 ) -> Option<String> {
+    if rec
+        .promoted_class()
+        .is_none_or(|c| c.category() != "harness.bookkeeping")
+    {
+        return None;
+    }
     super::head_and_body(super::promoted_record_text(rec), super::verbatim_body(raw))
 }
 
