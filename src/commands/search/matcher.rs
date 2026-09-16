@@ -184,7 +184,12 @@ impl Matcher {
     /// compact-boundary content + metadata excerpt (`record_raw_text`). Any VERBATIM
     /// text these return is already covered by the literal scan, so a miss here plus a
     /// literal miss proves the record cannot hit.
-    pub(crate) fn synth_texts_match(&self, rec: &Record) -> bool {
+    ///
+    /// `raw` is the record's own source LINE, and it is not optional in spirit: the
+    /// caller holds it (stage 2 collected the line to parse it), and a render that reads
+    /// the line answers differently without it. `None` is for a caller that genuinely has
+    /// no line, and it can only make the gate MORE conservative, never less.
+    pub(crate) fn synth_texts_match(&self, rec: &Record, raw: Option<&str>) -> bool {
         let ctx = crate::model::ClassifyCtx::top_level();
         if rec
             .record_text_sections(&ctx)
@@ -205,9 +210,14 @@ impl Matcher {
                 return true;
             }
         }
-        // The synth re-render only ever sees MARKER-bearing role lines, which carry
-        // their text in `message` - no source line needed.
-        if let Some(t) = record_raw_text(rec, None) {
+        // The SOURCE LINE is handed through, and it has to be. Several renders read the
+        // line rather than the record - a bookkeeping line's whole content lives in
+        // fields `Record` does not model, and a family's fabricated `[<leaf> key=value]`
+        // head is built from those fields - so re-rendering without it answers "cannot
+        // match" for text the emission would have produced, and the whole-file gate then
+        // prunes a file whose only hit lies in that head. That is the section 7 silent-drop
+        // landmine, on the one path that is allowed to prove a negative.
+        if let Some(t) = record_raw_text(rec, raw) {
             if self.locate(&t).is_some() {
                 return true;
             }

@@ -222,6 +222,79 @@ fn synth_marker_keeps_line_and_file_matchable_without_literal() {
     assert!(!m.file_may_match(b"a whole file with nothing relevant"));
 }
 
+// ── Stage 2 of the whole-file gate re-renders from the SOURCE LINE ──
+
+/// The gate's second stage is the one place csift proves a NEGATIVE: it re-renders a
+/// marker-bearing line and, on a miss, declares the whole file unmatchable. So it has to
+/// re-render what the emission would render - and several renders read the source LINE,
+/// because a bookkeeping line's content lives in fields `Record` does not model at all.
+///
+/// The instrument is the two answers side by side: the same record and the same pattern,
+/// once with the line and once without. They differ, and that difference is exactly the
+/// text a gate given no line would have pruned a file over.
+#[test]
+fn stage_two_renders_a_line_only_reachable_through_its_source_bytes() {
+    let line = r#"{"type":"cost-state","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","totalCostUSD":1.5,"totalDuration":900}"#;
+    let record: Record = serde_json::from_str(line).expect("valid fixture record");
+    let m = build_matcher(&args("totalDuration")).unwrap();
+    assert!(
+        m.synth_texts_match(&record, Some(line)),
+        "with its own line the bookkeeping render answers, and the file is not pruned"
+    );
+    assert!(
+        !m.synth_texts_match(&record, None),
+        "without it the same record renders nothing - the hole the source line closes"
+    );
+}
+
+/// And handing the line through changes NO pre-existing verdict. Every marker the gate
+/// shipped with re-renders from the record's own `message`, so the extra argument is
+/// inert for them: a notification's fabricated kind slug, an answered AUQ, the
+/// agents-stopped notice and a compaction boundary all answer the same either way.
+#[test]
+fn stage_two_answers_every_pre_existing_marker_the_same_with_or_without_the_line() {
+    let cases: [(&str, &str); 4] = [
+        (
+            // The pulse's fabricated head: the kind slug, the task id and the status in
+            // one phrase, which the raw line carries in three separate tags.
+            "agent t1 completed",
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#,
+        ),
+        (
+            "Pick one",
+            r#"{"type":"user","toolUseResult":{"answers":{"Pick one":"yes"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
+        ),
+        (
+            "subagent stopped",
+            r#"{"type":"user","message":{"role":"user","content":"Background agent \"probe\" was stopped by the user."}}"#,
+        ),
+        (
+            "trigger=auto",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#,
+        ),
+    ];
+    for (pattern, line) in cases {
+        let record: Record = serde_json::from_str(line).expect("valid fixture record");
+        let m = build_matcher(&args(pattern)).unwrap();
+        assert_eq!(
+            m.synth_texts_match(&record, Some(line)),
+            m.synth_texts_match(&record, None),
+            "verdict moved for {pattern}"
+        );
+        assert!(
+            m.synth_texts_match(&record, Some(line)),
+            "{pattern} should re-render into a match"
+        );
+    }
+    // A marker line whose synthesized text does NOT carry the pattern still answers no,
+    // with the line as without it - the gate stays able to prune.
+    let line = r#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#;
+    let record: Record = serde_json::from_str(line).expect("valid fixture record");
+    let m = build_matcher(&args("zzabsent")).unwrap();
+    assert!(!m.synth_texts_match(&record, Some(line)));
+    assert!(!m.synth_texts_match(&record, None));
+}
+
 #[test]
 fn resolve_persisted_flag_adds_pointer_markers() {
     let mut a = args("zzguarded");

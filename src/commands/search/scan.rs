@@ -197,7 +197,7 @@ pub(crate) fn search_one_file(
             for raw in &marker_lines {
                 match crate::parse::parse_line(raw) {
                     Ok(Some(rec)) => {
-                        if matcher.synth_texts_match(&rec) {
+                        if matcher.synth_texts_match(&rec, std::str::from_utf8(raw).ok()) {
                             synth_matched = true;
                             break;
                         }
