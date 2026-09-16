@@ -426,10 +426,18 @@ fn the_whole_file_gate_reaches_a_render_only_a_class_can_name() {
         "stage 2 keeps the file"
     );
 
-    // And the gate can still PRUNE: the same pattern against a record no family answers
-    // for stays a definitive absence, which is the property the whole gate exists for.
+    // And the gate can still PRUNE, in BOTH of the two ways it has to. A record no
+    // family answers for is a definitive absence, which is the property the whole gate
+    // exists for; and so is a record a family DOES answer for whose text does not carry
+    // the pattern - the loop has to walk past a `Some` that misses rather than treat any
+    // answer as a reason to keep the file.
     let plain = r#"{"type":"user","uuid":"g3","isMeta":true,"message":{"role":"user","content":"Stop hook feedback: keep going"}}"#;
     assert!(!m.synth_texts_match(&rec(plain), Some(plain)));
+    let elsewhere = build_matcher(&args("zzneverrendered")).unwrap();
+    assert!(
+        !elsewhere.synth_texts_match(&fb, Some(&feedback)),
+        "a family answered and its text missed; the file is still provably absent"
+    );
 }
 
 /// ONE leaf is rendered by a family that DELEGATES to the engine's promoted renderer, and

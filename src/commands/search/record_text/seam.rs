@@ -38,6 +38,9 @@ pub(crate) fn family_render(
     let families = render_families(class);
     let mut answer: Option<(RenderFamily, String)> = None;
     for &f in families {
+        // The release short-circuit, and the one line in this file coverage cannot
+        // reach: an instrumented test binary IS a debug build, so `cfg!` is false there
+        // and the break is compiled out of the only configuration that measures.
         if answer.is_some() && !cfg!(debug_assertions) {
             break;
         }
