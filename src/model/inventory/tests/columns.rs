@@ -30,7 +30,7 @@ fn only_the_never_convert_payloads_disagree_with_their_leaf_default() {
         .collect();
     want.sort_unstable();
     assert_eq!(disagree, want, "the disagreeing rows are not the drop arms");
-    assert_eq!(NEVER_CONVERTS.len(), 9, "the never-convert set drifted");
+    assert_eq!(NEVER_CONVERTS.len(), 11, "the never-convert set drifted");
     // Every never-convert type is a real attachment row, and none of them converts.
     for v in NEVER_CONVERTS {
         let r = rows()

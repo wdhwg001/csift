@@ -570,7 +570,7 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | AttachmentType | `task_status` | `harness.context.task` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `queued_command` | `harness.context.task` | default scan (own needle) | yes | (unstated) |
 | AttachmentType | `workflow_keyword_request` | `harness.context.task` | -t or --attachments | yes | (unstated) |
-| AttachmentType | `goal_status` | `harness.context.task` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `goal_status` | `harness.context.task` | -t or --attachments | no | (unstated) |
 | AttachmentType | `remote_session_change` | `harness.context.task` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `relevant_memories` | `harness.context.task` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `memory_update` | `harness.context.task` | -t or --attachments | yes | (unstated) |

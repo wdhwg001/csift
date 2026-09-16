@@ -304,14 +304,23 @@ pub(crate) const UNSHAPED: &[(Class, &str)] = &[
 ];
 
 /// The attachment payload types the harness converts to NOTHING - its own drop arms.
-/// Nine of them, and the six whose LEAF is otherwise visible are exactly the rows whose
-/// `llm` column disagrees with that leaf default; the other three carry
-/// `harness.hook.outcome`, which is invisible anyway. The drift test asserts that set
-/// equality in both directions, so a row cannot quietly claim a conversion it has not.
+///
+/// ELEVEN of them, reached by TWO different paths in the one converter and both ending in
+/// an empty list: NINE are named in the conversion table with the arm `()=>[]`, and TWO
+/// (`deferred_tools_record`, `thinking_stripped`) appear nowhere in the shipped build at
+/// all, so they fall to the default arm, which logs `Unknown attachment type:` and
+/// returns nothing. Both still occur on disk, written by builds that knew them.
+///
+/// The SEVEN whose leaf is otherwise visible are exactly the rows whose `llm` column
+/// disagrees with that leaf default; the other four carry `harness.hook.outcome`, which
+/// is invisible anyway. The drift test asserts that set equality in both directions, so a
+/// row cannot quietly claim a conversion it has not.
 pub(crate) const NEVER_CONVERTS: &[&str] = &[
+    "async_hook_response_batch",
     "batching_reminder_sent",
     "command_permissions",
     "deferred_tools_record",
+    "goal_status",
     "hook_cancelled",
     "hook_non_blocking_error",
     "hook_system_message",

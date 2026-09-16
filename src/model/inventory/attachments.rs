@@ -356,7 +356,9 @@ pub(crate) const ROWS: &[Entry] = &[
         Shape::AttachmentType("goal_status"),
         Some(Class::ContextTask),
         Gate::Attachments,
-        true,
+        // The conversion table drops it (`goal_status:()=>[]`), so the model never
+        // receives one even though `harness.context.task` is otherwise visible.
+        false,
         Human::Unstated,
     ),
     e(

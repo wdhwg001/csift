@@ -92232,8 +92232,8 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "311-321",
-          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
+          "lines": "318-330",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
         }
       ],
       "instrument": "Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript). Split each file on the byte 0x0A only; run one JSON parse per non-blank line; count a line that does not parse as unparsed and let it contribute to nothing. On every parsed line whose top-level `type` is `attachment`, collect the distinct values of `attachment.type`, and count separately the records whose TOP-LEVEL `rendered` key is present and non-null, bucketed by that payload type. On the binary side, byte-search for `already_read_file:()=>[],async_hook_response_batch:()=>[]` (the head of the drop-arm run), for `case\"hook_success\":if(e.hookEvent!==\"SessionStart\"` (the one arm that converts conditionally) and for `normalizeAttachmentForAPI\",Error(`Unknown attachment type:` (the default); each occurs once.",
@@ -92580,6 +92580,70 @@
           "observed": "All three excerpts byte-exact; `hhn(` occurs twice (the definition and one consumer). The read-forward window shows the five accepted kinds in order channel, observer, observer-activity, slack-ping, peer, the peer arm taking `senderTaskId !== undefined` or the defaulted second parameter. Census: root one, 9,556 files, 3,630 isMeta user records, 55 accepted (all `peer`), 3,575 refused - no origin 3,404, coordinator 143, task-notification 27, human 1. Root two, 10,330 files, 1,825 records, 109 accepted (all `peer`), 1,716 refused - no origin 1,658, coordinator 57, human 1.",
           "rule": "One count per isMeta `type:\"user\" `record, bucketed by `origin.kind` with an absent `origin` as its own bucket; accepted means the kind is one of the five the gate takes. Binary counts are byte occurrences over the whole executable.",
           "note": "Four inventory rows move from `always` to `never`: the image reference template, the image block, the coordinator relay and the notification frame. The two corpus roots overlap in the sessions they hold, so the two counts are not independent samples; each is reported as its own root."
+        }
+      ]
+    },
+    {
+      "id": "CLS-044",
+      "area": "classification",
+      "behavior": "The attachment converter that turns a persisted attachment record into the content a resumed request carries is ONE object of per-payload-type arms, and an arm may be the empty conversion `()=>[]`. At Claude Code 2.1.258 that object holds EIGHTEEN such arms - `prompt_snapshot`, `tool_host_result_lines`, `already_read_file`, `async_hook_response_batch`, `batching_reminder_sent`, `secondary_reminder_sent`, `command_permissions`, `edited_image_file`, `hook_cancelled`, `hook_error_during_execution`, `hook_non_blocking_error`, `hook_system_message`, `hook_permission_decision`, `hook_deferred_tool`, `goal_status`, `structured_output`, `max_turns_reached`, `teammate_shutdown_batch` - of which nine name a payload type csift's inventory has a row for. A payload type the object does NOT name reaches one of two arms below it, and both also return an empty list: a sixteen-name `.includes(e.type)` early return (`autocheckpointing`, `background_task_status`, `todo`, `task_progress`, `ultramemory`, `compaction_reminder`, `current_session_memory`, `thinking_reminder`, `companion_intro`, `pen_mode_enter`, `pen_mode_exit`, `ultrawork_request`, `echo_activities`, `verify_plan_reminder`, `fold_nudge`, `context_tip`), and then the default, which reports `Unknown attachment type: ${e.type}` through the error reporter and returns `[]`. So a payload type the build has never heard of converts to nothing rather than to an error, and two types csift models - `deferred_tools_record` and `thinking_stripped` - are exactly that case at this build: the name occurs zero times in the whole executable, yet records carrying both are on disk, written by builds that knew them.",
+      "depends": "`model::inventory::NEVER_CONVERTS` is csift's copy of that set restricted to the payload types it models, and `Record::delivery_override` reads it to answer whether the model received a given attachment record - which is what a bare `-t harness` or `-t agent` selector narrows on, and what the `[not delivered]` label-zone marker prints. A type missing from the list makes csift report a record as delivered that the harness drops; `goal_status` was exactly that, because `harness.context.task` is otherwise visible. The inventory's `llm` column carries the same answer per row, and the drift test beside it asserts the two agree in both directions, so the list and the column cannot drift apart silently.",
+      "code": [
+        {
+          "path": "src/model/inventory.rs",
+          "lines": "318-330",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
+        },
+        {
+          "path": "src/model/inventory/attachments.rs",
+          "lines": "356-361",
+          "snippet": "Shape::AttachmentType(\"goal_status\"),\n        Some(Class::ContextTask),\n        Gate::Attachments,\n        // The conversion table drops it (`goal_status:()=>[]`), so the model never\n        // receives one even though `harness.context.task` is otherwise visible.\n        false,"
+        }
+      ],
+      "instrument": "In the shipped executable, byte-find `hook_permission_decision:()=>[]`, walk back to the enclosing `{` and forward to its matching `}` - that window IS the conversion object - and collect every match of `(\\w+):\\(\\)=>\\[\\]` inside it. Then byte-find `Unknown attachment type: ` and read backwards from it for the `.includes(e.type))return[]` early return and the default arm. For each payload type the inventory models, decide: empty arm (named in the window), early return (in that list), or default arm (the type name occurs zero times in the whole executable). On disk, count files naming the quoted type and lines carrying `\"attachment\":{\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "normalizeAttachmentForAPI",
+          "offset": 166027702,
+          "excerpt": "Unknown attachment type: ",
+          "note": "the converter's own name, reported by the default arm - the entry every attachment record passes through on its way into a request"
+        },
+        {
+          "role": "gate",
+          "name": "the unnamed-type early return",
+          "offset": 166027338,
+          "excerpt": "if([\"autocheckpointing\",\"background_task_status\",\"todo\",\"task_progress\",\"ultramemory\",\"compaction_reminder\",\"current_session_memory\",\"thinking_reminder\",\"companion_intro\",\"pen_mode_enter\",\"pen_mode_exit\",\"ultrawork_request\",\"echo_activities\",\"verify_plan_reminder\",\"fold_nudge\",\"context_tip\"].includes(e.type))return[]",
+          "note": "sixteen more types that convert to nothing without an arm of their own; the default below it returns [] as well"
+        },
+        {
+          "role": "writer",
+          "name": "the conversion table's empty-arm run",
+          "offset": 166006355,
+          "excerpt": "already_read_file:()=>[],async_hook_response_batch:()=>[],batching_reminder_sent:()=>[],secondary_reminder_sent:()=>[],command_permissions:()=>[],edited_image_file:()=>[],hook_cancelled:()=>[],hook_error_during_execution:()=>[],hook_non_blocking_error:()=>[],hook_system_message:()=>[],hook_permission_decision:()=>[],hook_deferred_tool:()=>[],goal_status:()=>[],structured_output:()=>[],max_turns_reached:()=>[],teammate_shutdown_batch:()=>[]}",
+          "note": "sixteen of the eighteen empty arms, contiguous at the table's end; `prompt_snapshot` and `tool_host_result_lines` carry the identical arm earlier in the same object"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Walked the conversion object from the `hook_permission_decision:()=>[]` anchor to its enclosing braces and collected every `(\\w+):\\(\\)=>\\[\\]` arm inside; read the two arms below it from the `Unknown attachment type: ` literal; classified each of the 50 attachment payload types the inventory models as empty-arm, early-return or default-arm; then counted files and payload lines for the candidates over every `*.jsonl` under one projects root.",
+          "observed": "The object spans 10,476 bytes and holds 18 empty arms; the early-return list holds 16 names and the default arm returns [] after reporting. Of the 50 payload types csift models, 9 have an empty arm (`async_hook_response_batch`, `batching_reminder_sent`, `command_permissions`, `goal_status`, `hook_cancelled`, `hook_non_blocking_error`, `hook_system_message`, `prompt_snapshot`, `structured_output`), 0 are in the early-return list, and 2 occur zero times in the whole executable (`deferred_tools_record`, `thinking_stripped`) - 11 in total, against the 9 csift carried. On disk over 9,793 jsonl files: `goal_status` 0 files / 0 payload lines, `async_hook_response_batch` 0 / 0, while `deferred_tools_record` reads 12 files / 61 payload lines and `thinking_stripped` 3 / 3.",
+          "rule": "An empty arm is the literal `<name>:()=>[]` inside the conversion object's own brace window. A default-arm type is one whose name is a zero-count byte match over the whole executable, so nothing in the build can name it. A payload line is a byte match of `\"attachment\":{\"type\":\"<type>\"`; a file counts once however many such lines it holds.",
+          "note": "The two csift was missing are the two with zero corpus incidence, so the wrong answer had no occurrence to be wrong about - but `goal_status` carries `harness.context.task`, whose leaf default is visible, so a record would have been reported as delivered where the converter drops it. The nine empty arms that name types csift does not model are recorded here rather than added: the inventory has no row for them, and a never-convert entry with no row is a rule about nothing."
         }
       ]
     }
