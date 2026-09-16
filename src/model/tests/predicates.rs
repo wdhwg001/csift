@@ -286,3 +286,101 @@ fn a_record_with_no_attachment_memoises_nothing() {
     assert!(r.attachment_value().is_none());
     assert!(r.attachment_parsed.get().is_none());
 }
+
+// -- the attachment converter's two texts, parsed once --
+
+/// BOTH conversions a record can carry come back, and nothing chooses between them.
+///
+/// The harness writes the converter's output onto the record as a top-level key, and a
+/// `queued_command` payload carries two: the ordinary replay and the replay into a turn
+/// that also holds a genuine human message. Measured over one projects root, every one of
+/// the 1,507 records carrying the second carries the first as well, and the two texts
+/// DIFFER on all 1,507 - so a reader shown one of them is shown the wrong one half the
+/// time, and csift returns the pair.
+#[test]
+fn both_conversions_come_back_and_neither_is_chosen() {
+    let r = parse(
+        r#"{"type":"attachment","uuid":"a1","attachment":{"type":"queued_command"},
+            "rendered":[{"content":"the machine form"}],
+            "renderedInHumanTurn":[{"content":"the human-turn form"}]}"#,
+    );
+    let c = r.converted_text();
+    assert_eq!(c.rendered.as_deref(), Some("the machine form"));
+    assert_eq!(c.human_turn.as_deref(), Some("the human-turn form"));
+}
+
+/// The two halves are independent: a record with only the ordinary conversion answers
+/// `None` for the second rather than repeating the first, which is what would make the
+/// two texts look identical on every record that has one.
+#[test]
+fn a_record_with_one_conversion_answers_none_for_the_other() {
+    let r = parse(
+        r#"{"type":"attachment","uuid":"a2","attachment":{"type":"file"},
+            "rendered":[{"content":"only one"}]}"#,
+    );
+    let c = r.converted_text();
+    assert_eq!(c.rendered.as_deref(), Some("only one"));
+    assert_eq!(c.human_turn, None);
+    // And a record with NEITHER key answers nothing twice.
+    let bare = parse(r#"{"type":"attachment","uuid":"a3","attachment":{"type":"file"}}"#);
+    let c = bare.converted_text();
+    assert_eq!(c.rendered, None);
+    assert_eq!(c.human_turn, None);
+}
+
+/// A conversion is an ARRAY of messages: several entries JOIN with a newline, and a
+/// message whose `content` is a block array contributes its text blocks.
+///
+/// Both shapes are the writer's, not csift's: the string form is what every measured
+/// record carries and the block form is what the writer also admits, so the two arms are
+/// the whole domain and anything else contributes nothing.
+#[test]
+fn a_conversion_joins_its_entries_and_reads_both_content_shapes() {
+    let r = parse(
+        r#"{"type":"attachment","uuid":"a4","attachment":{"type":"file"},
+            "rendered":[{"content":"first"},
+                        {"content":[{"type":"text","text":"second"},{"type":"image"},{"type":"text","text":"third"}]},
+                        {"content":42}]}"#,
+    );
+    assert_eq!(
+        r.converted_text().rendered.as_deref(),
+        Some("first\nsecond\nthird"),
+        "entries join, blocks join, and a value that is neither carries no text"
+    );
+}
+
+/// An EMPTY conversion reads `None`, not an empty string: a conversion that produced no
+/// text is the same answer as no conversion, and a caller made to tell them apart would
+/// be distinguishing two ways of saying nothing.
+#[test]
+fn a_conversion_that_produced_no_text_reads_as_absent() {
+    for line in [
+        r#"{"type":"attachment","uuid":"a5","rendered":[]}"#,
+        r#"{"type":"attachment","uuid":"a6","rendered":[{"content":[]}]}"#,
+        r#"{"type":"attachment","uuid":"a7","rendered":"not an array"}"#,
+    ] {
+        assert_eq!(parse(line).converted_text().rendered, None, "{line}");
+    }
+}
+
+/// ONE parse for both conversions, and it is remembered: the memo holds the PAIR, so a
+/// second question about the same record costs nothing.
+///
+/// Asserted through the borrow the accessor hands out rather than by counting parses: two
+/// calls return the SAME allocation, which is only true if the second did not parse
+/// again. A conversion can embed a whole file, which is what makes the memo worth having.
+#[test]
+fn both_conversions_are_parsed_once_and_remembered() {
+    let r = parse(
+        r#"{"type":"attachment","uuid":"a8","attachment":{"type":"queued_command"},
+            "rendered":[{"content":"machine"}],
+            "renderedInHumanTurn":[{"content":"human"}]}"#,
+    );
+    let first = r.converted_text();
+    let second = r.converted_text();
+    assert!(
+        std::ptr::eq(first, second),
+        "the second call re-parsed instead of reading the memo"
+    );
+    assert_eq!(first.rendered.as_deref(), Some("machine"));
+}

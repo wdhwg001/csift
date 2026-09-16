@@ -2201,7 +2201,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "182-186",
+          "lines": "230-234",
           "snippet": "    pub fn automation_label(&self) -> Option<String> {\n        let content = self.message.as_ref()?.content.as_ref()?;\n        let Content::Text(s) = content else {\n            return None;\n        };"
         },
         {
@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "302-309",
+          "lines": "322-329",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7197,7 +7197,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "431-433",
+          "lines": "451-453",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9969,7 +9969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "418-424",
+          "lines": "438-444",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -13126,7 +13126,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "476",
+          "lines": "496",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -13215,7 +13215,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "362-370",
+          "lines": "439-447",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -13302,7 +13302,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "332-335",
+          "lines": "409-412",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -13429,7 +13429,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "348-353",
+          "lines": "425-430",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -14676,7 +14676,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "41-43",
+          "lines": "89-91",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            return false;\n        }"
         },
         {
@@ -17268,12 +17268,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "250-254",
+          "lines": "298-302",
           "snippet": "    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled\u2026` / `<tool_use_error>\u2026` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "273-283",
+          "lines": "321-331",
           "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes\n        // the text there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
         }
       ],
@@ -17813,7 +17813,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "264-272",
+          "lines": "312-320",
           "snippet": "        let mut has_non_errored_tool_result = false;\n        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }"
         },
         {
@@ -18954,7 +18954,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "346-349",
+          "lines": "366-369",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20096,7 +20096,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "335-339",
+          "lines": "355-359",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -21192,7 +21192,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "361-367",
+          "lines": "438-444",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -22014,7 +22014,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "260-268",
+          "lines": "280-288",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22134,7 +22134,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "263-266",
+          "lines": "283-286",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22229,7 +22229,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "270-278",
+          "lines": "290-298",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -35303,7 +35303,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "431-432",
+          "lines": "451-452",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -36649,7 +36649,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "263-266",
+          "lines": "283-286",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -45885,7 +45885,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "280-284",
+          "lines": "300-304",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46137,7 +46137,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "286-290",
+          "lines": "306-310",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -47055,7 +47055,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "302-305",
+          "lines": "322-325",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48609,7 +48609,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "320-326",
+          "lines": "340-346",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -51065,12 +51065,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "395-400",
+          "lines": "415-420",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "406-409",
+          "lines": "426-429",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51197,12 +51197,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "406-409",
+          "lines": "426-429",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "395-400",
+          "lines": "415-420",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52903,7 +52903,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "386-388",
+          "lines": "406-408",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -52990,7 +52990,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "68-73",
+          "lines": "116-121",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {"
         }
       ],
@@ -53154,12 +53154,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "470",
+          "lines": "490",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "492-497",
+          "lines": "512-517",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53266,7 +53266,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "492-497",
+          "lines": "512-517",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53355,7 +53355,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "476-478",
+          "lines": "496-498",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53640,7 +53640,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "431-432",
+          "lines": "451-452",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53747,7 +53747,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "332-336",
+          "lines": "409-413",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -53922,17 +53922,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "354-361",
+          "lines": "431-438",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[\u2026],\u2026}` - the context a SessionStart /\n    /// UserPromptSubmit / \u2026 hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "362-369",
+          "lines": "439-446",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "374-378",
+          "lines": "451-455",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -54034,7 +54034,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "372-377",
+          "lines": "392-397",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54132,7 +54132,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "379-383",
+          "lines": "399-403",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -55173,7 +55173,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "68-73",
+          "lines": "116-121",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {"
         }
       ],
@@ -55264,7 +55264,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "68-73",
+          "lines": "116-121",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {"
         }
       ],
@@ -55357,7 +55357,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "48-53",
+          "lines": "96-101",
           "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in\n        // any real corpus. Gating it would silently blank the subagent preview for zero\n        // real benefit; the per-surface scan owns subagent-vs-parent context instead."
         },
         {
@@ -60185,7 +60185,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "425-430",
+          "lines": "445-450",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -65327,7 +65327,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "395-400",
+          "lines": "415-420",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65492,7 +65492,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "406-409",
+          "lines": "426-429",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -66611,7 +66611,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "48-52",
+          "lines": "96-100",
           "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in\n        // any real corpus."
         },
         {
@@ -70865,12 +70865,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "37-43",
+          "lines": "85-91",
           "snippet": "    pub fn is_genuine_user(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        if self.is_compact_summary.unwrap_or(false) {\n            return false;\n        }"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "68-75",
+          "lines": "116-123",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {\n                    return false;\n                }"
         }
       ],
@@ -70971,7 +70971,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "68-75",
+          "lines": "116-123",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {\n                    return false;\n                }"
         }
       ],
@@ -71271,7 +71271,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "44-47",
+          "lines": "92-95",
           "snippet": "        // \u00a74.2 TRAP: isMeta:true user records look human but are system-injected.\n        if self.is_meta.unwrap_or(false) {\n            return false;\n        }"
         },
         {
@@ -71923,7 +71923,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "100-105",
+          "lines": "148-153",
           "snippet": "        const OPEN: &str = \"<command-args>\";\n        const CLOSE: &str = \"</command-args>\";\n        let start = s.find(OPEN)? + OPEN.len();\n        let end = s[start..].find(CLOSE).map_or(s.len(), |rel| start + rel);\n        let args = s[start..end].trim();\n        if args.is_empty() {"
         },
         {
@@ -72168,12 +72168,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "242-254",
+          "lines": "290-302",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (\u00a74.4 / \u00a76.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary.\n    ///\n    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled\u2026` / `<tool_use_error>\u2026` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "256-264",
+          "lines": "304-312",
           "snippet": "    pub fn is_auq_answer_boundary(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
         }
       ],
@@ -72276,7 +72276,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "265-275",
+          "lines": "313-323",
           "snippet": "        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }\n        if !has_non_errored_tool_result {\n            return false;\n        }"
         }
       ],
@@ -72384,7 +72384,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "242-248",
+          "lines": "290-296",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (\u00a74.4 / \u00a76.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary."
         }
       ],
@@ -73586,7 +73586,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "133-141",
+          "lines": "181-189",
           "snippet": "    /// Classify this record as a MACHINE-INJECTED automation trigger, if it is one.\n    ///\n    /// A `<task-notification>` record is a `type:\"user\"`, non-`isMeta`, STRING-content\n    /// record CC inserts when a background command / spawned task / workflow completes. It\n    /// passes every [`Record::is_genuine_user`] gate (so it opens a turn like a human\n    /// message), but it is an automation pulse - surfacing its raw `<task-id>` /\n    /// `<output-file>` / `<status>` XML as \"user prose\" is noise. This parser extracts the\n    /// stable inner tags so a surface can render `[workflow <task-id> completed] <summary>`\n    /// instead. Returns `None` for any non-`<task-notification>` record."
         }
       ],
@@ -73859,7 +73859,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "37-43",
+          "lines": "85-91",
           "snippet": "    pub fn is_genuine_user(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        if self.is_compact_summary.unwrap_or(false) {\n            return false;\n        }"
         }
       ],
@@ -73948,7 +73948,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "48-53",
+          "lines": "96-101",
           "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in\n        // any real corpus. Gating it would silently blank the subagent preview for zero\n        // real benefit; the per-surface scan owns subagent-vs-parent context instead."
         }
       ],
@@ -77582,7 +77582,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "288-294",
+          "lines": "336-342",
           "snippet": "    pub(crate) fn has_auq_response(&self) -> bool {\n        self.tur_probe()\n            .as_ref()\n            .and_then(|p| p.response.as_ref())\n            .and_then(serde_json::Value::as_str)\n            .is_some_and(|s| !s.trim().is_empty())\n    }"
         },
         {
@@ -92885,6 +92885,54 @@
           "observed": "2 files carry the literal; 29 `api_error` records; 5 carry an `error.headers` object; 18 distinct header names, each on all 5 (`anthropic-organization-id`, `cf-cache-status`, `cf-ray`, `connection`, `content-encoding`, `content-security-policy`, `content-type`, `date`, `request-id`, `server`, `set-cookie`, `strict-transport-security`, `traceresponse`, `transfer-encoding`, `vary`, `x-envoy-upstream-service-time`, `x-robots-tag`, `x-should-retry`). 2 distinct top-level key sets: 24 records with `slug` and 5 without, and the 5 without are exactly the 5 carrying headers.",
           "rule": "A record counts when its `type` is `system` and its `subtype` is `api_error`; a header name counts once per record carrying it; a key set is the sorted tuple of the record's own top-level keys.",
           "note": "The elision is written as a rule about the NAME at any depth rather than about `error.headers`, so a later shape that moves the object cannot walk around it; an exact-name match is also why a key merely containing the word is untouched. `--raw` stays the one path to the bytes and the e2e asserts both halves."
+        }
+      ]
+    },
+    {
+      "id": "REC-112",
+      "area": "record-model",
+      "behavior": "An attachment record can carry TWO persisted conversions, and both are TOP-LEVEL keys of the record rather than keys of its `attachment` payload: `rendered` (the ordinary replay) and `renderedInHumanTurn` (the replay into a turn that also carries a genuine human message). Over one projects root, 99,423 lines carry `rendered` and 1,507 carry `renderedInHumanTurn`; all 1,507 carry both, and ZERO lines of either population carry the key inside the payload. The second key is not spread across payload types the way the first is: all 1,507 ride a `queued_command` payload, while `rendered` rides 27 distinct payload types led by `total_tokens_reminder` (75,685). Each value is an ARRAY of messages whose `content` carries the text - a STRING on every measured entry (99,573 entries under `rendered`, 1,507 under the second, so an array can hold more than one) - and the second array holds exactly one entry on all 1,507. The two texts are NOT copies of each other: joined and compared, they differ on 1,507 of 1,507.",
+      "depends": "csift reports both and chooses neither. Which text the model received depends on the turn the record was replayed into, and the record does not record that turn, so a surface that printed one of them would be showing the wrong one whenever the other applied - which, on the population that carries both, is every record. `Record::converted_text` parses the pair ONCE and memoises it on the record, the same `OnceLock` reasoning `attachment_parsed` follows: a conversion can embed a whole file, and the delivery override and the attachment family's facts both ask. A record carrying neither key costs two `Option` tests and no parse, which is every conversation record in every transcript.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "lines": "269-270",
+          "snippet": "#[serde(default, rename = \"renderedInHumanTurn\")]\n    pub rendered_in_human_turn: Option<Box<serde_json::value::RawValue>>,"
+        },
+        {
+          "path": "src/model/predicates.rs",
+          "lines": "398-403",
+          "snippet": "pub fn converted_text(&self) -> &ConversionText {\n        self.conversion_parsed.get_or_init(|| ConversionText {\n            rendered: conversion_text(self.rendered.as_deref()),\n            human_turn: conversion_text(self.rendered_in_human_turn.as_deref()),\n        })\n    }"
+        },
+        {
+          "path": "src/model/tests/predicates.rs",
+          "lines": "301",
+          "snippet": "fn both_conversions_come_back_and_neither_is_chosen() {"
+        }
+      ],
+      "instrument": "Over every `*.jsonl` under one projects root, parse each line carrying the byte run `\"rendered` and record: whether `rendered` and `renderedInHumanTurn` are keys of the line's own object, whether either is a key of its `attachment` payload instead, the JSON type of each value, the type of each array entry's `content`, the line's `type` and payload `type`, and whether the two arrays' joined `content` strings are equal. Count lines per key, lines carrying both, payload-level occurrences, entries per array and equal-versus-differing pairs.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The writer is not traced: which branch of the persist path attaches the second conversion, and what makes a turn count as carrying a genuine human message, are unread. Byte-find the literal `renderedInHumanTurn` in the shipped executable and read the assignment back to the branch that decides it."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Walked every `*.jsonl` under one projects root, parsed every line carrying the byte run `\"rendered`, and tallied per key: top-level versus payload-level presence, value type, entry `content` types, carrier line and payload types, and equality of the two joined texts.",
+          "observed": "1,923 files carry either key. `rendered` on 99,423 lines, all top-level; `renderedInHumanTurn` on 1,507 lines, all top-level; 1,507 lines carry both; ZERO lines carry either inside the payload. Every value is an array; every entry's `content` is a string (99,573 entries under `rendered`, 1,507 under the second). All 1,507 second-conversion carriers are `queued_command` payloads and all hold exactly one entry, against 27 payload types for `rendered` led by `total_tokens_reminder` at 75,685. The two joined texts differ on 1,507 of 1,507 and are identical on 0.",
+          "rule": "A line counts once per key it carries. A key is TOP-LEVEL when it is a key of the line's own object and PAYLOAD-LEVEL when it is a key of the `attachment` object. A text is the `\\n`-join of the string `content` of each array entry; two texts differ when those joins are unequal.",
+          "note": "That the two texts differ on every record that has both is what decides the csift behaviour: the pair is reported and neither is chosen, because the record does not say which turn it was replayed into. The narrowness of the second key's carrier set - one payload type - is recorded as an observation about this corpus, not as a rule: nothing read here says the writer is limited to it."
         }
       ]
     }

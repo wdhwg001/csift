@@ -252,10 +252,30 @@ pub struct Record {
     /// inside the payload). Present only when the whole conversion was text, so its
     /// presence WITNESSES that a record converted; its absence is not evidence of the
     /// opposite, because a mixed text-and-image conversion writes none. Kept unparsed
-    /// (a conversion can embed a whole file) and read for exactly one question:
-    /// [`Record::delivery_override`]'s `hook_success` arm.
+    /// (a conversion can embed a whole file) and read by [`Record::delivery_override`]'s
+    /// `hook_success` arm and by [`Record::converted_text`].
     #[serde(default)]
     pub rendered: Option<Box<serde_json::value::RawValue>>,
+
+    /// The SECOND conversion the same record can carry: the text the converter produces
+    /// when the record is replayed into a turn that ALSO carries a genuine human message.
+    /// A top-level key like `rendered`, never a key inside the payload.
+    ///
+    /// Measured over one projects root: 1,507 lines carry it, every one of them beside a
+    /// `rendered`, every one of them a `queued_command` payload, and on every one of the
+    /// 1,507 the two texts DIFFER. Which of the two the model received depends on the
+    /// turn the record was replayed into, and the record does not say - so csift reports
+    /// both rather than choosing (claim REC-112).
+    #[serde(default, rename = "renderedInHumanTurn")]
+    pub rendered_in_human_turn: Option<Box<serde_json::value::RawValue>>,
+
+    /// One parse for both conversions, on the same `OnceLock` reasoning as
+    /// [`Record::attachment_parsed`]: a conversion can embed a whole file, and it is
+    /// asked for by the delivery override and by a family's facts. Holds the PAIR, so the
+    /// second key costs nothing on the overwhelming majority of records that lack it.
+    /// `serde(skip)` - derived from the two fields above, never read off a line.
+    #[serde(skip)]
+    pub conversion_parsed: std::sync::OnceLock<ConversionText>,
 
     /// `file-history-snapshot` payload (a top-level sibling). Carries
     /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.

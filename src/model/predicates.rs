@@ -2,6 +2,54 @@
 
 use super::*;
 
+/// BOTH texts the attachment converter produced for one record, parsed once.
+///
+/// Two fields rather than one because the record carries two conversions and does not say
+/// which the model received: `rendered` is the ordinary replay, `human_turn` the replay
+/// into a turn that also carries a genuine human message. Either is `None` when its key
+/// is absent or its conversion produced no text - the same answer, because a conversion
+/// that produced nothing is nothing.
+// The ordinary "no reader yet" allow (AGENTS section 4): the attachment family reads
+// both fields, and the amendment lands the accessor so it does not have to widen
+// `Record` itself. The allow goes with the family.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Default)]
+pub struct ConversionText {
+    /// The ordinary conversion's text.
+    pub rendered: Option<String>,
+    /// The human-turn conversion's text.
+    pub human_turn: Option<String>,
+}
+
+/// One persisted conversion, joined: an ARRAY of messages, each carrying its text under
+/// `content`. `None` when the key is absent, the blob does not parse, it is not an array,
+/// or no entry carried text.
+fn conversion_text(raw: Option<&serde_json::value::RawValue>) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(raw?.get()).ok()?;
+    let parts: Vec<String> = value
+        .as_array()?
+        .iter()
+        .filter_map(|entry| entry_text(entry.get("content")?))
+        .collect();
+    (!parts.is_empty()).then(|| parts.join("\n"))
+}
+
+/// One conversion message's text: a STRING on every measured record, and a block array on
+/// the shape the writer also admits. Any other value carries no text.
+fn entry_text(content: &serde_json::Value) -> Option<String> {
+    match content {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Array(blocks) => {
+            let texts: Vec<&str> = blocks
+                .iter()
+                .filter_map(|b| b.get("text")?.as_str())
+                .collect();
+            (!texts.is_empty()).then(|| texts.join("\n"))
+        }
+        _ => None,
+    }
+}
+
 impl Record {
     /// True when this record is `type == "<t>"`.
     #[must_use]
@@ -323,6 +371,35 @@ impl Record {
         self.attachment_parsed
             .get_or_init(|| serde_json::from_str(raw.get()).ok())
             .as_ref()
+    }
+
+    /// The model-facing text of an attachment record: what the CONVERTER produced for it,
+    /// parsed ONCE for both of the record's conversions.
+    ///
+    /// The harness writes the conversion's output back onto the record as a top-level
+    /// key, and a record can carry TWO: `rendered` (the ordinary replay) and
+    /// `renderedInHumanTurn` (the replay into a turn that also carries a genuine human
+    /// message). Which one the model received depends on the turn the record was replayed
+    /// into, which the record does not say, so both are returned and nothing chooses.
+    ///
+    /// Each conversion is an ARRAY of messages whose `content` carries the text. The
+    /// value is a STRING on every measured record and a block array on the shape the
+    /// writer also admits, so those two arms are the whole domain; entries join with
+    /// `\n`. An empty join reads `None` rather than an empty string - a conversion that
+    /// produced no text is the same answer as no conversion.
+    ///
+    /// Costs NOTHING on a record carrying neither key: both `?`-guards return before any
+    /// parse, which is every record of every non-converting payload type.
+    // The ordinary "no caller yet" allow (AGENTS section 4): the attachment family is
+    // what reads this, and the amendment lands it so the family does not have to widen
+    // `Record`. The allow goes with the family.
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn converted_text(&self) -> &ConversionText {
+        self.conversion_parsed.get_or_init(|| ConversionText {
+            rendered: conversion_text(self.rendered.as_deref()),
+            human_turn: conversion_text(self.rendered_in_human_turn.as_deref()),
+        })
     }
 
     /// The attachment payload's own `type` value (`hook_additional_context`,
