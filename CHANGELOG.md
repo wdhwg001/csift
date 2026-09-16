@@ -7,6 +7,41 @@ surface change bumps the PATCH.
 
 ## [0.13.0] - unreleased
 
+### Added
+
+- **Every non-transcript line type says what it holds.** The head-and-body law landed with
+  twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
+  who named one still read raw JSON. Sixteen of the eighteen line types now build a
+  `[<line type> key=value ...]` head from their own bytes, in the key order Claude Code's
+  own writer uses, and the head opens with the line's own `type` - which is how
+  `mode`/`permission-mode`, `ai-title`/`agent-name` and the three artifact ledgers stay
+  apart in the output when their label does not tell them apart. The two `file-history`
+  forms keep the head built from the fields csift models: that one names the tracked path
+  and its version where a raw key walk could only print the snapshot object. Two rules
+  decide a head's values and there is no third: an account, organisation or record uuid
+  prints its first 8 characters, every other value is cut at 80 with the shared
+  `... (+N chars)` marker, an object printing as its sorted key list. The body is still
+  the line, so a key the head elides stays matchable; a fabricated head is not, so each
+  line type's own quoted value is registered as a synthesized-text marker under the same
+  predicate that admits the line - without it, four of five head-only patterns on a
+  21-line fixture read 0 instead of 1, and a default scan arms none of them.
+- **Five bookkeeping line types now say what they are FOR.** Three name a record and ride
+  the shared provenance edge: `last-prompt` -> `leaf` (its `leafUuid`), a file-history line
+  -> `versions` (its `messageId`), `fork-context-ref` -> `forked_from` (the record the
+  forked agent's prefix was cut at, with the parent session beside it, because that record
+  lives in another file). The other two name no record - `continued-in` names a whole
+  transcript, `cost-state` an instant - so they are the family's own facts:
+  `[continued in @<session>]` with JSON `continued_in`, and `[checkpoint closes <instant>]`
+  with JSON `checkpoint_closes_at` and `checkpoint_join`, the `startTime + totalDuration`
+  sum `list` joins a cleared session on as `cleared_from`. Each renders its honest empty
+  when the key it reads is absent, rather than dropping the field.
+- **`[not delivered]` on every bookkeeping unit.** JSON `delivered` has always read false
+  for all thirteen leaves while the text surface said nothing, because the engine prints
+  that marker only for a record carrying a per-record delivery override and a bookkeeping
+  line's invisibility comes from its leaf. It is the engine's own marker, so both surfaces
+  spell it one way. `show --format json` gains four record-row keys with it: `for`,
+  `continued_in`, `checkpoint_closes_at` and `checkpoint_join`.
+
 ### Changed
 
 - **One stamping site for every taxonomy family, and one place each edits.** The extension
