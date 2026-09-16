@@ -430,6 +430,20 @@ surface change bumps the PATCH.
   to hold, so the first time a TeammateIdle, TaskCreated or TaskCompleted hook blocks, its
   feedback would have landed in the isMeta residue - no leaf, no census key, reachable only
   by an address.
+- **A bare `-t agent` gives you the model's structured answer too, and the help pages name
+  every key they emit.** `agent.message.structured` rides a `structured_output`
+  attachment, which the harness converts to nothing, so the record-level delivery verdict
+  read NOT delivered and the bare-face law took the leaf out of `-t agent` and
+  `-t agent.message` - a reader asking for the agent's messages got the plain half of a
+  two-leaf category and nothing saying the other half existed. It is now the ONE stated
+  exception to that law: the axis asks what the model RECEIVED and this is the leaf the
+  model WROTE, and the API gives a turn free text or a schema-bound answer and never both,
+  so the coarse ask answers with whichever the turn used. The FACT does not move - the
+  record was not delivered, so its `delivered` still reads false and the unit still renders
+  `[not delivered]`; only which face it belongs to. A glob and an exact leaf reached it all
+  along. Alongside it, both manuals now write every JSON key they name in backticks or in
+  their own key block, and the `search` hit schema gained `tool_use_id` and `source`, which
+  a hit carries and the schema had never listed.
 
 ### Fixed
 
