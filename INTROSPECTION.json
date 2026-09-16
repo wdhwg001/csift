@@ -27963,12 +27963,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "353-358",
+          "lines": "355-360",
           "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a\n/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it\n/// is deliberately NOT the page index: it counts images across the WHOLE record, while a\n/// page is the element's position inside its own tool_result ([`record_pdf_pages`])."
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "383-389",
+          "lines": "385-391",
           "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };"
         }
       ],
@@ -28701,12 +28701,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "338-343",
+          "lines": "340-345",
           "snippet": "pub(crate) fn parse_image_markers(text: &str, out: &mut Vec<usize>) {\n    let mut rest = text;\n    const PAT: &str = \"[Image #\";\n    while let Some(i) = rest.find(PAT) {\n        let after = &rest[i + PAT.len()..];\n        let digits: String = after.chars().take_while(char::is_ascii_digit).collect();"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "408-416",
+          "lines": "410-418",
           "snippet": "    // Assign `#N` by NUMBER. The record's `imagePasteIds` lists the ids in the order of\n    // its image blocks (the submit path builds both arrays in one ascending-id pass),\n    // while the `[Image #N]` markers keep the operator's TEXT order - the two orders\n    // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a\n    // silently wrong `#N` there (v0.10.5, ledger IMG-005). Without the array (older\n    // records) the positional zip stays, and only when the marker count matches the\n    // image count (a mismatch means a back-reference to a compressed-out image, so\n    // `seq` stays `None` rather than misassign).\n    assign_image_seq(&mut out, rec.image_paste_ids.as_deref(), &markers);"
         }
       ],
@@ -29258,7 +29258,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "494-497",
+          "lines": "496-499",
           "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
         }
       ],
@@ -29858,12 +29858,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "359-363",
+          "lines": "361-365",
           "snippet": "pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {\n    let mut out = Vec::new();\n    let Some(blocks) = rec.blocks() else {\n        return queued_prompt_images(rec, with_data);\n    };"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "383-389",
+          "lines": "385-391",
           "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };"
         }
       ],
@@ -30027,17 +30027,17 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "494-497",
+          "lines": "496-499",
           "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "353-358",
+          "lines": "355-360",
           "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a\n/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it\n/// is deliberately NOT the page index: it counts images across the WHOLE record, while a\n/// page is the element's position inside its own tool_result ([`record_pdf_pages`])."
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "383-393",
+          "lines": "385-395",
           "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };\n                for (pos, el) in arr.iter().enumerate() {\n                    let Some(mut r) = image_element_ref(el, with_data) else {\n                        continue;\n                    };"
         }
       ],
@@ -95776,7 +95776,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::Attribution(a) => a\n                .specific()\n                .map(|(kind, name)| format!(\"[via {kind} {name}]\")),",
-          "lines": "99-101"
+          "lines": "106-108"
         }
       ],
       "instrument": "Corpus: over each root, count the lines carrying each of the five keys top-level, with the by-`type` breakdown, the distinct value count per key, and - for `attributionAgent` - the `isSidechain` histogram of its carriers; separately count the lines carrying any of the four non-agent keys, split by whether `attributionAgent` is also present. Binary: byte-search the verified build for `function wE(e,n,r,o,d){try{let f=$fr(e,n,r);`, `function $fr(e,n,r){if(!e)return{};if(e.startsWith(\"agent:builtin:\")` and `apiBlockIndex:la.index,requestId:Ys??void 0,...wE(`, and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96055,7 +96055,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(for_edge(\"interrupted\", Basis::Key, Some(id), None, ctx));",
-          "lines": "282"
+          "lines": "289"
         }
       ],
       "instrument": "Corpus: over each root, for every file, build the set of `uuid` values and the set of `message.id` values; then for each line carrying `interruptedMessageId` top-level record the value's prefix before the first underscore, whether the value is in that file's uuid set, whether it is in that file's message-id set, and the carrier's `type` and `isSidechain`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96137,7 +96137,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(HitFact::ForUnknown {",
-          "lines": "291"
+          "lines": "298"
         }
       ],
       "instrument": "Corpus: over each root, per file build the set of `uuid` values; then for each line carrying `toolUseID` top-level record the object's `subtype`, whether the value matches the uuid shape (length 36 with four dashes), and whether it is in that file's uuid set. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96180,7 +96180,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::UserFeedback(text) => Some(format!(",
-          "lines": "103"
+          "lines": "110"
         }
       ],
       "instrument": "Corpus: over each root count the lines carrying `userFeedback` top-level, with the `type` breakdown, the value shape, the set of sibling top-level keys beginning `tool`, and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96313,7 +96313,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "301-302",
+          "lines": "303-304",
           "snippet": "    let tur = rec.tool_use_result_value()?;\n    let first = usize::try_from(tur.get(\"firstPage\")?.as_u64()?).ok()?;"
         },
         {
@@ -96323,7 +96323,7 @@
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "lines": "252-259",
+          "lines": "259-266",
           "snippet": "    if let Some(p) = crate::commands::image::record_pdf_pages(rec) {\n        push(Fact::PdfPages {\n            first: p.first,\n            last: p.last(),\n            count: p.count,\n            path: p.path,\n        });\n    }"
         }
       ],
@@ -96402,7 +96402,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "329-332",
+          "lines": "331-334",
           "snippet": "fn image_element_ref(el: &Value, with_data: bool) -> Option<ImageRef> {\n    if el.get(\"type\").and_then(Value::as_str) != Some(\"image\") {\n        return None;\n    }"
         },
         {
@@ -96489,7 +96489,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "297-300",
+          "lines": "299-302",
           "snippet": "    let probe = rec.tur_probe()?;\n    if probe.r#type.as_ref().and_then(Value::as_str) != Some(\"parts\") {\n        return None;\n    }"
         },
         {

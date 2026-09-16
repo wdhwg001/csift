@@ -284,10 +284,12 @@ pub(crate) fn basename(path: &str) -> &str {
 /// requirement - the record carries exactly one `tool_result` block, because a `parts`
 /// result describes one tool call and could not say which of two blocks it belongs to.
 ///
-/// COST: one typed probe of `toolUseResult` (which skips the blob's huge unlisted values
-/// without allocating them) and, only when that probe reads `parts`, one full parse of
-/// what is by then a six-key object. Both are paid once per record and only for a record
-/// that carries a nested image, which is where the caller resolves this lazily.
+/// COST, stated as what it is: `Record::tur_probe` returns on its first `?` for a record
+/// with no `toolUseResult` at all, but otherwise DESERIALIZES THE WHOLE BLOB to read six
+/// small fields - a typed walk that skips the unlisted values without allocating them,
+/// never a walk that skips the bytes. Only once that reads `parts` does the full parse of
+/// what is by then a six-key object follow. Both are paid once per record and only for a
+/// record that carries a nested image, which is where the caller resolves this lazily.
 pub(crate) fn record_pdf_pages(rec: &Record) -> Option<PdfPages> {
     // The TYPE half of the gate, and it does two jobs. It is what keeps the derivation off
     // a carrier that re-emits page images with an offset of its own name (IMG-018), and it

@@ -21,11 +21,18 @@
 //! `Record` cannot answer for it, which is the opposite of the population these keys ride.
 //!
 //! ONE fact reads a key `Record` does not model - the PDF page range, off
-//! `toolUseResult.firstPage` and the result's own content elements - and it pays for that
-//! per EMITTED UNIT rather than per record: the typed `toolUseResult` probe on a record
-//! carrying no such key returns immediately, and the full parse of the six-key result
-//! object runs only once that probe has read `parts`. Emission is bounded by matches, so
-//! the cost rides hits and never a scan.
+//! `toolUseResult.firstPage` and the result's own content elements - and it is the one
+//! thing this family pays for. Per EMITTED UNIT it runs `Record::tur_probe`, which returns
+//! on its first `?` for a record carrying no `toolUseResult` at all (every assistant turn,
+//! every user message) but otherwise DESERIALIZES THE WHOLE RESULT BLOB to read six small
+//! fields - so on a tool-result unit it is a typed walk of that blob, skipping the unlisted
+//! values without allocating them rather than skipping the bytes. Only once that walk has
+//! read `parts` does the full `tool_use_result_value()` parse follow, which is why the type
+//! check and not the `firstPage` read is the short circuit. MEASURED: no difference on the
+//! section 7 landmark, and +9% on a synthetic worst case of 64 KB of result blob per
+//! emitted tool result - so the cost is real in principle and unmeasurable at the blob
+//! sizes a transcript carries. Emission is bounded by matches, so it rides hits, never a
+//! scan.
 
 use super::*;
 use crate::model::{ApiFailure, Attribution};
