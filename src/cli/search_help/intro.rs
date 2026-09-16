@@ -271,5 +271,5 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached} on a \
         ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts and \
         `resume_paired` the `harness.resume.placeholder` one, null \
-        elsewhere; `gated_leaves_unreached` is true when no selector reached a gated leaf). \
+        elsewhere; `gated_leaves_unreached` is true when no selector reached a gated leaf).\
 ";

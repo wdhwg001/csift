@@ -271,15 +271,19 @@ fn the_search_help_body_is_its_sections_joined_in_order() {
     assert!(body.ends_with(outro), "the closing notes no longer close");
     let middle = &body[intro.len()..body.len() - outro.len()];
     assert_eq!(middle, crate::cli::search_help::SECTIONS[1..7].concat());
-    // The seam the split had to get right: a line continuation strips the NEXT line's
-    // leading whitespace inside ONE literal and cannot strip across two, so the intro
-    // has to end on its own space and the outro open on a non-space. Getting this wrong
-    // inserts eight spaces into the rendered help and nothing else complains.
+    // The seam the split had to get right. A line continuation strips the NEXT line's
+    // leading whitespace inside ONE literal and cannot strip across two, so the eight
+    // spaces the continuation used to eat are dropped at the split instead; getting that
+    // wrong inserts them into the rendered help and nothing else complains. The ONE
+    // separating space then belongs to the OUTRO rather than to the intro's tail: a
+    // family section lands BETWEEN two sentences, and a space left at the intro's end
+    // would trail the JSON paragraph on every run where the six sections are empty.
     assert!(
-        intro.ends_with(' '),
-        "the seam lost the continuation's space"
+        !intro.ends_with(' '),
+        "the seam left a trailing space on the shared body"
     );
-    assert!(!outro.starts_with(' '), "the seam gained a literal indent");
+    assert!(outro.starts_with(' '), "the seam lost the separating space");
+    assert!(!outro.starts_with("  "), "the seam gained a literal indent");
 }
 
 /// `show --help`'s record-row key list is BUILT from the key table, not typed into the
