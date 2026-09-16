@@ -3,6 +3,10 @@
 
 use super::*;
 
+// `use super::*` pulls in the test module list, where this file's own name shadows the
+// family module - so the family is named once, explicitly, and read as `family::` below.
+use crate::commands::search::record_text::bookkeeping as family;
+
 /// The needle set a query reaching every bookkeeping leaf arms.
 fn book_args(pattern: &str) -> SearchArgs {
     let mut a = args(pattern);
@@ -39,6 +43,185 @@ fn a_fabricated_bookkeeping_head_survives_the_whole_file_gate() {
         !m.synth_texts_match(&record, None),
         "without the line there are no fields to build the head from - the line is what \
          makes the marker verifiable"
+    );
+}
+
+/// The head of a line the family names keys for: the line's own `type` first, then the
+/// keys in the WRITER's order, and only the ones the line carries.
+#[test]
+fn a_head_prints_the_writer_s_key_order_and_skips_an_absent_key() {
+    let line = r#"{"type":"bridge-session","sessionId":"s","bridgeSessionId":"b","lastSequenceNum":7,"ownerAccountUuid":"cccccccc-0000-4000-8000-000000000003"}"#;
+    assert_eq!(
+        family::head(Some(line)).as_deref(),
+        Some("[bridge-session bridgeSessionId=b lastSequenceNum=7 ownerAccountUuid=cccccccc]"),
+    );
+}
+
+/// The TWO value rules and nothing else: an account, an organisation or a record uuid is
+/// cut to eight characters; every other value is cut at eighty with the shared marker, an
+/// OBJECT printing as its sorted key list. A session-shaped value falls under the second
+/// rule, so it prints whole.
+#[test]
+fn the_two_value_rules_decide_every_head_value() {
+    // A record uuid and an account uuid at eight; a session id whole.
+    let fork = r#"{"type":"fork-context-ref","agentId":"a1","parentSessionId":"99999999-8888-4777-8666-555555555555","parentLastUuid":"aaaaaaaa-0000-4000-8000-000000000001","contextLength":12}"#;
+    assert_eq!(
+        family::head(Some(fork)).as_deref(),
+        Some(
+            "[fork-context-ref agentId=a1 \
+             parentSessionId=99999999-8888-4777-8666-555555555555 \
+             parentLastUuid=aaaaaaaa contextLength=12]"
+        ),
+    );
+    // An object renders its SORTED key list, whatever order the line spells it in.
+    let ledger = r#"{"type":"artifact-comment-monitor","v":1,"artifacts":{"zulu":{},"alpha":{}}}"#;
+    assert_eq!(
+        family::head(Some(ledger)).as_deref(),
+        Some("[artifact-comment-monitor v=1 artifacts=alpha, zulu]"),
+    );
+    // Eighty-one characters of prose: eighty kept, the shared marker naming the one cut.
+    let long = "x".repeat(81);
+    let line = format!(r#"{{"type":"ai-title","aiTitle":"{long}"}}"#);
+    assert_eq!(
+        family::head(Some(&line)).as_deref(),
+        Some(format!("[ai-title aiTitle={}… (+1 chars)]", "x".repeat(80)).as_str()),
+    );
+}
+
+/// The head's three refusals, each of which leaves the render falling back to the body or
+/// to the record-modeled head rather than printing an empty bracket: no source line, a
+/// line that is not a JSON object, and a line type the family names no keys for.
+#[test]
+fn a_head_refuses_what_it_cannot_summarise() {
+    assert_eq!(family::head(None), None);
+    assert_eq!(family::head(Some("not json")), None);
+    assert_eq!(family::head(Some("[1,2]")), None);
+    assert_eq!(
+        family::head(Some(r#"{"sessionId":"s"}"#)),
+        None,
+        "a line with no `type` names no keys"
+    );
+    assert_eq!(
+        family::head(Some(r#"{"type":"worktree-state","worktreeSession":"w"}"#)),
+        None,
+        "a type registered in Claude Code's tables that csift names no keys for"
+    );
+}
+
+/// A line type the family DOES name keys for, carrying none of them: the bracket holds the
+/// type alone rather than a trailing space or an empty `key=`.
+#[test]
+fn a_head_with_no_present_key_prints_the_type_alone() {
+    assert_eq!(
+        family::head(Some(r#"{"type":"mode","sessionId":"s"}"#)).as_deref(),
+        Some("[mode]"),
+    );
+}
+
+/// The family's facts, read straight off `facts()`: the marker on every unit, and the
+/// relation each line type carries. A caller with no row space resolves no uuid, so the
+/// edges print their ids - which is what a unit test, and any file-oriented surface, gets.
+#[test]
+fn facts_carry_the_marker_and_the_line_type_s_relation() {
+    let ctx = ClassifyCtx::top_level();
+    let zones = |line: &str| {
+        let record = rec(line);
+        let (facts, markers) = family::facts(
+            &record,
+            Some(line),
+            &Section::record(record.promoted_class()),
+            &ctx,
+        );
+        (
+            facts
+                .iter()
+                .filter_map(HitFact::label_zone)
+                .collect::<Vec<_>>(),
+            markers.iter().map(Marker::render).collect::<Vec<_>>(),
+        )
+    };
+    let (edges, markers) = zones(
+        r#"{"type":"last-prompt","leafUuid":"aaaaaaaa-0000-4000-8000-000000000001","lastPrompt":"go"}"#,
+    );
+    assert_eq!(markers, vec!["[not delivered]".to_string()]);
+    assert_eq!(
+        edges,
+        vec!["[for: leaf aaaaaaaa (not in this file)]".to_string()]
+    );
+    // A line type with no relation carries the marker and nothing else.
+    let (edges, markers) = zones(r#"{"type":"mode","mode":"default"}"#);
+    assert_eq!(markers, vec!["[not delivered]".to_string()]);
+    assert!(edges.is_empty(), "{edges:?}");
+    // The checkpoint is the SUM: one hour after the start instant.
+    let (edges, _) = zones(
+        r#"{"type":"cost-state","startTime":"2026-01-01T00:00:00.000Z","totalDuration":3600000}"#,
+    );
+    assert_eq!(
+        edges,
+        vec!["[checkpoint closes 2026-01-01T01:00:00Z]".to_string()]
+    );
+}
+
+/// The fork edge names the FILE its target lives in - and when the line names no record at
+/// all the edge is the honest empty, which carries no session because the shared builder
+/// has no target to put one on. That is a real gap and the test says so rather than
+/// leaving it for a reader to discover.
+#[test]
+fn the_fork_edge_names_its_session_only_when_it_has_a_target() {
+    let ctx = ClassifyCtx::top_level();
+    let zone = |line: &str| {
+        let record = rec(line);
+        let (facts, _) = family::facts(
+            &record,
+            Some(line),
+            &Section::record(record.promoted_class()),
+            &ctx,
+        );
+        facts
+            .first()
+            .and_then(HitFact::label_zone)
+            .expect("the fork line carries a relation")
+    };
+    assert_eq!(
+        zone(
+            r#"{"type":"fork-context-ref","parentSessionId":"99999999-8888-4777-8666-555555555555","parentLastUuid":"aaaaaaaa-0000-4000-8000-000000000001"}"#
+        ),
+        "[for: forked_from @99999999-8888-4777-8666-555555555555 aaaaaaaa (not in this file)]"
+    );
+    assert_eq!(
+        zone(
+            r#"{"type":"fork-context-ref","parentSessionId":"99999999-8888-4777-8666-555555555555"}"#
+        ),
+        "[for: forked_from unknown (the record carries no such key)]",
+        "with no record named, the edge is the honest empty and the session goes unprinted"
+    );
+}
+
+/// A `queue-operation` carrying the person's own text is `user.queued`, not this family's,
+/// so `facts()` refuses it: no marker, no relation. A rider on the same line type is the
+/// family's and carries the marker.
+#[test]
+fn the_person_s_queued_text_is_refused_by_the_family() {
+    let ctx = ClassifyCtx::top_level();
+    let markers = |line: &str| {
+        let record = rec(line);
+        let (facts, markers) = family::facts(
+            &record,
+            Some(line),
+            &Section::record(record.promoted_class()),
+            &ctx,
+        );
+        (facts.len(), markers.len())
+    };
+    assert_eq!(
+        markers(r#"{"type":"queue-operation","operation":"enqueue","content":"please continue"}"#),
+        (0, 0),
+        "the human's own queued text is the user family's"
+    );
+    assert_eq!(
+        markers(r#"{"type":"queue-operation","operation":"dequeue"}"#),
+        (0, 1),
+        "a content-less dequeue is the harness's own row"
     );
 }
 
