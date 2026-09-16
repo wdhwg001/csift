@@ -11,6 +11,10 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
         }
         return;
     }
+    // The document basename rides the FIRST row of each run of pages from one record, not
+    // every row: five pages of one PDF repeat one name five times, and the rows are already
+    // sorted by (line, ordinal) so a run is contiguous.
+    let mut named: Option<(usize, &str)> = None;
     for img in selected {
         let tag = if img.is_subagent {
             format!(
@@ -23,7 +27,19 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
         let size = if img.source_kind == "url" {
             format!("url {}", img.url.as_deref().unwrap_or("<no url>"))
         } else {
-            format!("{} ~{}", img.media_type, human_bytes(img.est_bytes))
+            match img.page {
+                Some(p) => format!("{} p{p} ~{}", img.media_type, human_bytes(img.est_bytes)),
+                None => format!("{} ~{}", img.media_type, human_bytes(img.est_bytes)),
+            }
+        };
+        // Never the whole path in the text listing (JSON carries it verbatim, like every
+        // other path field); the basename is what tells two documents apart on one line.
+        let doc = match (img.page.and(img.pdf_path.as_deref()), named) {
+            (Some(path), prev) if prev != Some((img.line_no, path)) => {
+                named = Some((img.line_no, path));
+                format!("  pdf {}", basename(path))
+            }
+            _ => String::new(),
         };
         // Lead with the session's `#N` handle (what the model says), then the exact locator.
         let label = match img.seq {
@@ -37,10 +53,11 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
             other => format!("  [{other}]"),
         };
         println!(
-            "{}  {}  {}{}{}",
+            "{}  {}  {}{}{}{}",
             label,
             size,
             format_timestamp(img.ts_utc.as_deref()),
+            doc,
             survival,
             tag
         );
@@ -80,6 +97,8 @@ pub(crate) fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_li
                 "b64_len": img.b64_len,
                 "est_bytes": img.est_bytes,
                 "url": img.url,
+                "page": img.page,
+                "pdf_path": img.pdf_path,
                 "record_uuid": img.record_uuid,
                 "survival": img.survival,
                 "ts_utc": img.ts_utc,

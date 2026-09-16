@@ -34,6 +34,16 @@ pub(crate) struct ImageRef {
     pub(crate) est_bytes: usize,
     /// The image URL, for a `source.type == "url"` image (no inline bytes to extract).
     pub(crate) url: Option<String>,
+    /// The DOCUMENT page number this image is, when the carrying record says so: a `Read`
+    /// with a `pages` parameter on a `.pdf` returns one image element per page and the
+    /// page number lives nowhere on the element, only in the record's own
+    /// `toolUseResult.firstPage` plus the element's position ([`record_pdf_pages`]).
+    /// `None` for every other image - a screenshot, a pasted picture, a page from a
+    /// carrier that names no `firstPage` - because an unknown page is never an assumed 1.
+    pub(crate) page: Option<usize>,
+    /// The PDF the page came from (`toolUseResult.file.filePath`, verbatim). Set only
+    /// beside a `page`, so the pair is never half an answer.
+    pub(crate) pdf_path: Option<String>,
     pub(crate) ts_utc: Option<String>,
     pub(crate) record_uuid: Option<String>,
     /// The wire spelling of the carrying record's survival (`live` / `pre-cut` /
@@ -214,8 +224,102 @@ pub(crate) fn image_ref_from_source(source: &Value, with_data: bool) -> Option<I
         ts_utc: None,
         record_uuid: None,
         survival: "live",
+        page: None,
+        pdf_path: None,
         data,
     })
+}
+
+/// The PDF page provenance a `Read` with a `pages` parameter leaves on its result record.
+///
+/// The harness returns ONE `tool_result` block carrying a leading text plus one element
+/// per requested page, in page order, and a SUCCESSFUL page element carries no number of
+/// any kind - the only page label the writer emits is on the FAILURE branch. So the page
+/// number is `firstPage + <position among the elements after the leading text>`, counted
+/// over CONTENT POSITIONS and never over image ordinals: a failed page is a TEXT element
+/// in the same sequence and counting images would shift every later page by one.
+#[derive(Debug, Clone)]
+pub(crate) struct PdfPages {
+    /// `toolUseResult.firstPage` - the document page number of the FIRST extracted page.
+    pub(crate) first: usize,
+    /// How many pages the result carries: the content elements after the leading text.
+    /// Always >= 1 ([`record_pdf_pages`] refuses a result with none).
+    pub(crate) count: usize,
+    /// `toolUseResult.file.filePath` - the document the pages came from, verbatim.
+    pub(crate) path: Option<String>,
+}
+
+impl PdfPages {
+    /// The document page of the element at CONTENT POSITION `pos` (0-based, so position 0
+    /// is the leading text and carries no page). `None` outside the mapped range.
+    pub(crate) fn page_at(&self, pos: usize) -> Option<usize> {
+        let i = pos.checked_sub(1)?;
+        (i < self.count).then_some(self.first + i)
+    }
+}
+
+/// A path's basename. Split on BOTH separators: the path is whatever the harness recorded
+/// and a Windows lane records `C:\...`, which a POSIX-only split would hand back whole.
+/// A path that is nothing but separators has no name to take, so it renders whole rather
+/// than empty.
+pub(crate) fn basename(path: &str) -> &str {
+    path.rsplit(['/', '\\'])
+        .find(|s| !s.is_empty())
+        .unwrap_or(path)
+}
+
+/// Read the PDF page provenance off ONE record, or `None` when the record does not carry
+/// it - a screenshot, a pre-`firstPage` build, a carrier that re-emits page images of its
+/// own (the REPL tool flattens inner-`Read` pages into its own result with no `firstPage`,
+/// so position no longer maps to a page there and this must not fire).
+///
+/// The gate is the record's OWN result object: `toolUseResult.type == "parts"` with a
+/// `firstPage`, which is the shape only the Read `pages` branch mints. Plus ONE structural
+/// requirement - the record carries exactly one `tool_result` block, because a `parts`
+/// result describes one tool call and could not say which of two blocks it belongs to.
+///
+/// COST: one typed probe of `toolUseResult` (which skips the blob's huge unlisted values
+/// without allocating them) and, only when that probe reads `parts`, one full parse of
+/// what is by then a six-key object. Both are paid once per record and only for a record
+/// that carries a nested image, which is where the caller resolves this lazily.
+pub(crate) fn record_pdf_pages(rec: &Record) -> Option<PdfPages> {
+    let probe = rec.tur_probe()?;
+    if probe.r#type.as_ref().and_then(Value::as_str) != Some("parts") {
+        return None;
+    }
+    let tur = rec.tool_use_result_value()?;
+    let first = usize::try_from(tur.get("firstPage")?.as_u64()?).ok()?;
+    let mut results = rec.blocks()?.iter().filter_map(|b| match b {
+        Block::ToolResult {
+            content: Some(c), ..
+        } => Some(c),
+        _ => None,
+    });
+    let content = results.next()?;
+    if results.next().is_some() {
+        return None;
+    }
+    // Element 0 is the leading text, so a result with nothing after it maps no page.
+    let count = content
+        .as_array()?
+        .len()
+        .checked_sub(1)
+        .filter(|n| *n > 0)?;
+    let path = tur
+        .get("file")
+        .and_then(|f| f.get("filePath"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    Some(PdfPages { first, count, path })
+}
+
+/// One `{type:"image"}` element of a tool_result content array as an `ImageRef` skeleton -
+/// `None` for every other element kind (the leading text, a failed page's placeholder).
+fn image_element_ref(el: &Value, with_data: bool) -> Option<ImageRef> {
+    if el.get("type").and_then(Value::as_str) != Some("image") {
+        return None;
+    }
+    image_ref_from_source(el.get("source")?, with_data)
 }
 
 /// Extract the `[Image #N]` numbers from a text block, in order of appearance. CC writes
@@ -237,8 +341,10 @@ pub(crate) fn parse_image_markers(text: &str, out: &mut Vec<usize>) {
 
 /// Collect every image carried by one record, in document order: a direct `Block::Image`
 /// (the user-sent / assistant case) OR an `{type:"image"}` element nested in a
-/// `Block::ToolResult.content` array (a tool screenshot). `img_index` is a 1-based running
-/// ordinal across both sources, so the id `L<line>i<n>` is stable.
+/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a
+/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it
+/// is deliberately NOT the page index: it counts images across the WHOLE record, while a
+/// page is the element's position inside its own tool_result ([`record_pdf_pages`]).
 pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     let mut out = Vec::new();
     let Some(blocks) = rec.blocks() else {
@@ -251,6 +357,10 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
             parse_image_markers(text, &mut markers);
         }
     }
+    // The PDF page fact, resolved at most ONCE per record and only once a nested image is
+    // actually in hand: `record_pdf_pages` probes `toolUseResult`, and a record with no
+    // nested image carries no page however its result object is shaped.
+    let mut pdf: Option<Option<PdfPages>> = None;
     for block in blocks {
         match block {
             Block::Image { source: Some(src) } => {
@@ -263,17 +373,22 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
                 content: Some(content),
                 ..
             } => {
-                if let Some(arr) = content.as_array() {
-                    for el in arr {
-                        if el.get("type").and_then(Value::as_str) == Some("image") {
-                            if let Some(src) = el.get("source") {
-                                if let Some(mut r) = image_ref_from_source(src, with_data) {
-                                    r.img_index = out.len() + 1;
-                                    out.push(r);
-                                }
-                            }
-                        }
+                let Some(arr) = content.as_array() else {
+                    continue;
+                };
+                for (pos, el) in arr.iter().enumerate() {
+                    let Some(mut r) = image_element_ref(el, with_data) else {
+                        continue;
+                    };
+                    if let Some(pages) = pdf.get_or_insert_with(|| record_pdf_pages(rec)).as_ref() {
+                        // The page and the document travel together: naming the PDF for an
+                        // element the mapping does not reach would be a document with no
+                        // page, which says less than saying nothing.
+                        r.page = pages.page_at(pos);
+                        r.pdf_path = r.page.and_then(|_| pages.path.clone());
                     }
+                    r.img_index = out.len() + 1;
+                    out.push(r);
                 }
             }
             _ => {}

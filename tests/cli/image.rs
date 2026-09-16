@@ -540,4 +540,5 @@ fn the_malformed_note_rides_both_image_listings_and_only_when_there_is_one() {
     );
 }
 
+mod pdf_pages;
 mod survival;

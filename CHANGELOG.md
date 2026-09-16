@@ -9,6 +9,24 @@ surface change bumps the PATCH.
 
 ### Added
 
+- **A PDF page says which page it is.** A `Read` with a `pages` parameter returns one image
+  element per requested page, so `csift image` has listed and extracted those pages all
+  along - as rows indistinguishable from a screenshot. The page number is on no key of the
+  element: the harness's own mapper writes a successful page bare and labels only a page it
+  failed to render, and the offset lives once on the carrying record as
+  `toolUseResult.firstPage`. csift derives the page as that offset plus the element's
+  position among the content elements after the leading text, counted over POSITIONS rather
+  than over images, so a failed page in the middle does not shift the pages after it. Text
+  rows gain ` p<N>` beside the media type and the document's basename once per record group;
+  JSON rows gain `page` and `pdf_path`, the path verbatim as every other path field is.
+  The derivation is gated on the record's own result reading `parts` with a `firstPage` and
+  on the record carrying exactly one `tool_result` block, so a screenshot, a result written
+  before that key existed, and the REPL tool's re-emitted inner-`Read` pages (which carry no
+  offset and flatten several documents into one list) all read `page: null` rather than an
+  assumed page 1. Addressing does not move: `--id`, `--turn` and the extracted filename are
+  what they were, because the page is provenance and not an id. A whole-PDF `Read` returns a
+  `document` block rather than images and stays unlisted.
+
 - **Every non-transcript line type says what it holds.** The head-and-body law landed with
   twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
   who named one still read raw JSON. Sixteen of the eighteen line types now build a

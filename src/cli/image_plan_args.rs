@@ -23,7 +23,22 @@ use super::*;
         JSON `survival`), so you know it is not part of the conversation the model now sees; \
         `[pre-cut]` marks one above a compaction cut. `--turn` is the exception: it windows \
         on NUMBERED turns, using the live numbering `search` and `show` print, and an \
-        abandoned record belongs to no numbered turn - so a turn window leaves it out.",
+        abandoned record belongs to no numbered turn - so a turn window leaves it out.\n\n\
+        PDF PAGES: a `Read` of a .pdf that carries a `pages` parameter returns one image \
+        element per requested page, so those pages list and extract like any other image - \
+        and each row says WHICH page it is. The page number is on no key of the element (the \
+        harness labels only a page it FAILED to render), so csift derives it from the \
+        carrying record's own `toolUseResult.firstPage` plus the element's position among \
+        the content elements after the leading text - counted over POSITIONS, so a failed \
+        page in the middle does not shift the pages after it. Text prints ` p<N>` beside the \
+        media type and the document's BASENAME once per record group (the whole path is a \
+        JSON field, not a listing column); JSON carries `page` and `pdf_path`. An image whose \
+        record carries no such offset reads `page: null` rather than an assumed page 1: a \
+        screenshot, a `parts` result from a build before the key existed, and the REPL \
+        tool's own result, which re-emits inner-Read pages with no offset of its own. A \
+        whole-PDF `Read` (no `pages`) returns a `document` block rather than images and is \
+        not listed at all. The page is provenance, never an address: `--id`, `--turn` and \
+        the extracted filename are exactly what they were.",
     after_help = "EXAMPLES\n  \
           csift image @<uuid>                             # list every image (deduped)\n  \
           csift image . --format json                     # machine-readable listing\n  \
@@ -33,10 +48,13 @@ use super::*;
         JSON SCHEMA (per --format json)\n  \
           Envelope: header → listing rows → summary. Listing rows: {kind:\"image\", handle \
         (the display `#N` / locator), seq, id, line, img_index, session_id, is_subagent, \
-        parent_session_id, source_kind, media_type, b64_len, est_bytes, url, record_uuid, \
+        parent_session_id, source_kind, media_type, b64_len, est_bytes, url, `page`, \
+        `pdf_path`, record_uuid, \
         survival, ts_utc, ts_local} (`survival` is live | pre-cut | abandoned - the carrying \
         record's place in the surviving conversation; an abandoned image is listed and \
-        extractable like any other). With `--out`, each written file adds {kind:\"extract\", handle, \
+        extractable like any other. `page` is the DOCUMENT page number when the image is a \
+        PDF page and null for every other image, `pdf_path` the document it came from, \
+        verbatim - null beside a null page). With `--out`, each written file adds {kind:\"extract\", handle, \
         seq, id, session_id, is_subagent, parent_session_id, path, bytes, media_type, \
         source_media_type, converted, notes}."
 )]

@@ -18,6 +18,8 @@ fn media_ref(mt: &str) -> ImageRef {
         ts_utc: None,
         record_uuid: None,
         survival: "live",
+        page: None,
+        pdf_path: None,
         data: None,
     }
 }
@@ -259,4 +261,168 @@ fn format_of_media_type_maps_the_four_api_types() {
         Some(ImageOutFormat::Webp)
     );
     assert_eq!(format_of_media_type("image/heic"), None);
+}
+
+/// A `parts` Read result, built from the writer's documented mapping: element 0 is the
+/// leading text and every element after it is one requested page, in page order.
+/// `elements` is the JSON after that leading text; `tur` is the record's own result object.
+fn parts_record(tur: serde_json::Value, elements: &str) -> Record {
+    let line = format!(
+        r#"{{"type":"user","message":{{"role":"user","content":[
+            {{"type":"tool_result","tool_use_id":"t1","content":[
+                {{"type":"text","text":"PDF pages extracted: N page(s) from /Users/dev/docs/report.pdf (218.5KB)"}}
+                {elements}
+            ]}}
+        ]}},"toolUseResult":{tur}}}"#
+    );
+    serde_json::from_str(&line).expect("fixture parses")
+}
+
+/// One `{type:"image"}` element, as the mapper writes a successfully rendered page.
+const PAGE: &str =
+    r#",{"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"aGk="}}"#;
+
+/// The result object of a Read that carried a `pages` parameter.
+fn parts_tur(first_page: u64, count: u64) -> serde_json::Value {
+    json!({
+        "type": "parts",
+        "firstPage": first_page,
+        "file": {
+            "count": count,
+            "filePath": "/Users/dev/docs/report.pdf",
+            "originalSize": 223_744,
+            "outputDir": "/Users/dev/tmp/pdf-1"
+        }
+    })
+}
+
+/// The page number is `firstPage` plus the element's CONTENT POSITION, so a range that
+/// does not start at page 1 numbers from where it started - never from 1, and never from
+/// the image ordinal.
+#[test]
+fn pdf_page_is_first_page_plus_content_position() {
+    for (first, count) in [(1_u64, 3_u64), (7, 2)] {
+        let r = parts_record(
+            parts_tur(first, count),
+            &PAGE.repeat(usize::try_from(count).unwrap()),
+        );
+        let imgs = record_images(&r, false);
+        assert_eq!(imgs.len(), usize::try_from(count).unwrap());
+        let pages: Vec<Option<usize>> = imgs.iter().map(|i| i.page).collect();
+        let want: Vec<Option<usize>> = (0..count)
+            .map(|k| Some(usize::try_from(first + k).unwrap()))
+            .collect();
+        assert_eq!(pages, want, "firstPage {first}, {count} page(s)");
+        assert!(
+            imgs.iter()
+                .all(|i| i.pdf_path.as_deref() == Some("/Users/dev/docs/report.pdf")),
+            "the document rides every page row, verbatim"
+        );
+    }
+}
+
+/// A page the harness could not render is a TEXT element in the same sequence, so the
+/// pages after it keep their own numbers. Counting IMAGES instead of content positions
+/// would name every later page one too low - which is the whole reason the derivation
+/// counts positions.
+#[test]
+fn a_failed_page_keeps_the_later_pages_on_their_own_numbers() {
+    let elements = format!(
+        r#"{PAGE},{{"type":"text","text":"[Page 8 could not be processed as an image]"}}{PAGE}"#
+    );
+    let r = parts_record(parts_tur(7, 3), &elements);
+    let imgs = record_images(&r, false);
+    assert_eq!(
+        imgs.iter().map(|i| i.page).collect::<Vec<_>>(),
+        vec![Some(7), Some(9)],
+        "positions 1 and 3 of the content array"
+    );
+    assert_eq!(
+        imgs.iter().map(|i| i.img_index).collect::<Vec<_>>(),
+        vec![1, 2],
+        "the image ordinal keeps counting images - it is not the page"
+    );
+}
+
+/// A carrier that names no `firstPage` names no page. Three shapes reach this: the REPL
+/// tool, which re-emits inner-Read page images in its own result and carries no
+/// `firstPage` at all; a `parts` result from a build before the key existed; and an
+/// ordinary screenshot. None of them may be read as page 1.
+#[test]
+fn a_carrier_without_first_page_names_no_page() {
+    let repl = parts_record(
+        json!({"type":"repl","images":2,"failedPages":[]}),
+        &PAGE.repeat(2),
+    );
+    let older = parts_record(
+        json!({"type":"parts","file":{"count":2,"filePath":"/Users/dev/docs/report.pdf"}}),
+        &PAGE.repeat(2),
+    );
+    let untyped = parts_record(json!("a bare string result"), PAGE);
+    for (what, rec) in [
+        ("repl", repl),
+        ("pre-firstPage", older),
+        ("string", untyped),
+    ] {
+        let imgs = record_images(&rec, false);
+        assert!(!imgs.is_empty(), "{what}: the images are still listed");
+        assert!(
+            imgs.iter()
+                .all(|i| i.page.is_none() && i.pdf_path.is_none()),
+            "{what}: no page and no document, rather than an assumed page 1"
+        );
+    }
+}
+
+/// A `parts` result describes ONE tool call, so a record carrying two tool_result blocks
+/// could not say which one the pages belong to. The images are still listed; only the
+/// derivation stands down.
+#[test]
+fn two_tool_result_blocks_refuse_the_derivation() {
+    let line = format!(
+        r#"{{"type":"user","message":{{"role":"user","content":[
+            {{"type":"tool_result","tool_use_id":"t1","content":[
+                {{"type":"text","text":"PDF pages extracted: 1 page(s) from /Users/dev/docs/report.pdf (1KB)"}}{PAGE}
+            ]}},
+            {{"type":"tool_result","tool_use_id":"t2","content":[
+                {{"type":"text","text":"shot"}}{PAGE}
+            ]}}
+        ]}},"toolUseResult":{}}}"#,
+        parts_tur(1, 1)
+    );
+    let r: Record = serde_json::from_str(&line).expect("fixture parses");
+    let imgs = record_images(&r, false);
+    assert_eq!(imgs.len(), 2);
+    assert!(imgs.iter().all(|i| i.page.is_none()));
+}
+
+/// A whole-PDF Read returns a `{type:"document"}` block, not an image, and `image` lists
+/// images. It stays unlisted - the surface would otherwise extract a PDF payload under an
+/// `ext()` that has no `application/pdf` row.
+#[test]
+fn the_whole_pdf_document_block_is_not_listed() {
+    let r = parts_record(
+        json!({"type":"pdf","file":{"filePath":"/Users/dev/docs/report.pdf","originalSize":173_363}}),
+        r#",{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"aGk="}}"#,
+    );
+    assert!(record_images(&r, false).is_empty());
+}
+
+/// The position-to-page map at both ends, and the basename split.
+#[test]
+fn page_at_boundaries_and_basename_separators() {
+    let p = PdfPages {
+        first: 7,
+        count: 3,
+        path: Some("/Users/dev/docs/report.pdf".into()),
+    };
+    assert_eq!(p.page_at(0), None, "element 0 is the leading text");
+    assert_eq!(p.page_at(1), Some(7));
+    assert_eq!(p.page_at(3), Some(9), "the last mapped position");
+    assert_eq!(p.page_at(4), None, "past the pages the result carries");
+    assert_eq!(basename("/Users/dev/docs/report.pdf"), "report.pdf");
+    assert_eq!(basename(r"C:\Users\dev\docs\report.pdf"), "report.pdf");
+    assert_eq!(basename("report.pdf"), "report.pdf");
+    assert_eq!(basename("/Users/dev/docs/"), "docs", "a trailing separator");
+    assert_eq!(basename("/"), "/", "nothing but separators renders whole");
 }

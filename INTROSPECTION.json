@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2343",
+          "lines": "2349",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -27963,13 +27963,13 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "238-241",
-          "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot). `img_index` is a 1-based running\n/// ordinal across both sources, so the id `L<line>i<n>` is stable."
+          "lines": "342-347",
+          "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a\n/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it\n/// is deliberately NOT the page index: it counts images across the WHOLE record, while a\n/// page is the element's position inside its own tool_result ([`record_pdf_pages`])."
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "262-266",
-          "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                if let Some(arr) = content.as_array() {"
+          "lines": "372-378",
+          "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };"
         }
       ],
       "instrument": "csift image <target> --format json, compared against a python3 walk that counts {type:\"image\"} objects at each of the four JSON paths - message.content[], a tool_result block's content array, an attachment's prompt[], and toolUseResult - and, for the queued carrier, compares each block's first 64 base64 characters against every message-block image in the same transcript. Counting rule: one image per {type:\"image\"} object with a base64 source, per record, in document order; one row per record for the structured Read result; an orphan is a queued block whose base64 head appears in no message block of the same file. For the producer set: grep -abo 'type:\"image\"' over the shipped binary and read every occurrence.",
@@ -28282,12 +28282,12 @@
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "101-105",
+          "lines": "111-115",
           "snippet": "            [\n                memmem::Finder::new(br#\"\"type\":\"image\"\"#),\n                memmem::Finder::new(br#\"\"media_type\"\"#),\n                memmem::Finder::new(b\"base64\"),\n            ]"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "179-185",
+          "lines": "189-195",
           "snippet": "    let (b64_len, est_bytes, url, fingerprint, data) = if source_kind == \"url\" {\n        let url = source\n            .get(\"url\")\n            .and_then(Value::as_str)\n            .map(str::to_string);\n        let fp = format!(\"url:{}\", url.as_deref().unwrap_or(\"\"));\n        (0, 0, url, fp, None)"
         }
       ],
@@ -28438,7 +28438,7 @@
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "65-72",
+          "lines": "75-82",
           "snippet": "    /// File extension implied by the media type (`bin` when unknown - never fabricated).\n    pub(crate) fn ext(&self) -> &'static str {\n        match self.media_type.as_str() {\n            \"image/png\" => \"png\",\n            \"image/jpeg\" | \"image/jpg\" => \"jpg\",\n            \"image/gif\" => \"gif\",\n            \"image/webp\" => \"webp\",\n            \"image/svg+xml\" => \"svg\","
         }
       ],
@@ -28701,12 +28701,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "223-228",
+          "lines": "327-332",
           "snippet": "pub(crate) fn parse_image_markers(text: &str, out: &mut Vec<usize>) {\n    let mut rest = text;\n    const PAT: &str = \"[Image #\";\n    while let Some(i) = rest.find(PAT) {\n        let after = &rest[i + PAT.len()..];\n        let digits: String = after.chars().take_while(char::is_ascii_digit).collect();"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "282-290",
+          "lines": "397-405",
           "snippet": "    // Assign `#N` by NUMBER. The record's `imagePasteIds` lists the ids in the order of\n    // its image blocks (the submit path builds both arrays in one ascending-id pass),\n    // while the `[Image #N]` markers keep the operator's TEXT order - the two orders\n    // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a\n    // silently wrong `#N` there (v0.10.5, ledger IMG-005). Without the array (older\n    // records) the positional zip stays, and only when the marker count matches the\n    // image count (a mismatch means a back-reference to a compressed-out image, so\n    // `seq` stays `None` rather than misassign).\n    assign_image_seq(&mut out, rec.image_paste_ids.as_deref(), &markers);"
         }
       ],
@@ -29258,7 +29258,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "368-371",
+          "lines": "483-486",
           "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
         }
       ],
@@ -29338,7 +29338,7 @@
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "65-72",
+          "lines": "75-82",
           "snippet": "    /// File extension implied by the media type (`bin` when unknown - never fabricated).\n    pub(crate) fn ext(&self) -> &'static str {\n        match self.media_type.as_str() {\n            \"image/png\" => \"png\",\n            \"image/jpeg\" | \"image/jpg\" => \"jpg\",\n            \"image/gif\" => \"gif\",\n            \"image/webp\" => \"webp\",\n            \"image/svg+xml\" => \"svg\","
         }
       ],
@@ -29578,8 +29578,8 @@
     {
       "id": "IMG-012",
       "area": "images",
-      "behavior": "A Read of a PDF that carries a validated pages range writes a toolUseResult whose top-level type is parts and whose file object is exactly {count, filePath, originalSize, outputDir} - it NAMES an on-disk output directory instead of carrying the pages in file. In 2.1.258 the sole writer of the shape is mHn (@157745640, the only occurrence of the literal type:\"parts\" in the build, at 157748522), and it has exactly two call sites: the pages branch (@164909039), whose result is returned, and the whole-PDF path (@164911003), whose result is read only by the tengu_pdf_page_extraction telemetry call and never returned. So a parts record is reachable ONLY through the pages branch (@164908897): a Read without a pages parameter takes the whole-PDF path, which returns a type:\"pdf\" result instead (the literal @157744814, declared as its own schema variant @164897445), and the page extraction that path runs when the model cannot read whole PDFs or the file is over the size threshold keeps its result only for telemetry, which is why parts records are rare. A top-level firstPage rides beside the file object, and its arrival is a BINARY boundary rather than a corpus floor: firstPage is ABSENT from the parts result at 2.1.240 and PRESENT at 2.1.243, where the reader returns {...be,firstPage:B.firstPage,pages:Z} (@206257210) and the output schema declares the member (@206266608), so it was introduced in the window (2.1.240, 2.1.243]. At 2.1.240 the twelve byte occurrences of firstPage belong to the page-range machinery and to unrelated text - the range parser (289049247, 289049362, 289049502), the range formatter (298636554), the pdftoppm argument builder (298638866, 298638897), the range validator (298770629), a constant-table entry (93308160), a destructure-error message (133423037) and three inside an unrelated firstPageId snippet in a bundled client asset (62836782, 62836833, 62837433) - each read, none of them a member of a result object, and that build's parts writer (@298640976) returns the four file members with no firstPage beside them. The ladder instrument is the schema describe texts, which are stable across minification: \"Document page number of the first extracted page\" counts 0 at 2.1.240, 2 at 2.1.243 and 2 at 2.1.258, while \"Directory containing extracted page images\" counts 2 in all three - so the parts result itself predates the window and only firstPage moved. Closing the window to adjacent releases needs the 2.1.241 and 2.1.242 builds. 2.1.251 is only the earliest build that wrote such a record into THIS corpus, which holds no parts record at all from 2.1.232 through 2.1.250. Corpus census over 8324 transcript files (journal.jsonl excluded; one observation per record whose toolUseResult has an object file and type == \"parts\"): 26 parts results in 26 distinct record uuids; file key set exactly {count, filePath, originalSize, outputDir} on 26 of 26; top-level key set {file, type} on 24 and {file, firstPage, type} on 2, those two being exactly the two records written by 2.1.251 (the other 24 by 2.1.196 once, 2.1.207 twice, 2.1.220 fifteen times and 2.1.231 six times). The 2.1.258 schema declares the same four file members with firstPage optional at the top level (@164897625, the optional member at @164897878).",
-      "depends": "csift's recover Read arm keys on the presence of a file object with a matching filePath, and a parts result carries one (the PDF path), so it enters the same path as a text Read but supplies no content (the unwrap_or_default() yields an empty string). The total > 0 gate in push_read_event is what stops that contentless variant from being minted as a FULL snapshot: the event still lands, on the else arm, as a zero-line windowed read, so recover --file <the pdf> reports 0/1 lines (0%) with 1 read (0 full, 1 windowed) rather than a false full read. Nothing in csift reads firstPage, so the version boundary changes no csift behaviour - it only dates the field for anyone reading a parts record's key set, and it is the reason the key set must be treated as version-dependent rather than fixed.",
+      "behavior": "A Read of a PDF that carries a validated pages range writes a toolUseResult whose top-level type is parts and whose file object is exactly {count, filePath, originalSize, outputDir} - it NAMES an on-disk output directory instead of carrying the pages in file. In 2.1.258 the sole writer of the shape is mHn (@157745640, the only occurrence of the literal type:\"parts\" in the build, at 157748522), and it has exactly two call sites: the pages branch (@164909039), whose result is returned, and the whole-PDF path (@164911003), whose result is read only by the tengu_pdf_page_extraction telemetry call and never returned. So a parts record is reachable ONLY through the pages branch (@164908897): a Read without a pages parameter takes the whole-PDF path, which returns a type:\"pdf\" result instead (the literal @157744814, declared as its own schema variant @164897445), and the page extraction that path runs when the model cannot read whole PDFs or the file is over the size threshold keeps its result only for telemetry, which is why parts records are rare. A top-level firstPage rides beside the file object, and its arrival is a BINARY boundary rather than a corpus floor: firstPage is ABSENT from the parts result at 2.1.240 and PRESENT at 2.1.243, where the reader returns {...be,firstPage:B.firstPage,pages:Z} (@206257210) and the output schema declares the member (@206266608), so it was introduced in the window (2.1.240, 2.1.243]. At 2.1.240 the twelve byte occurrences of firstPage belong to the page-range machinery and to unrelated text - the range parser (289049247, 289049362, 289049502), the range formatter (298636554), the pdftoppm argument builder (298638866, 298638897), the range validator (298770629), a constant-table entry (93308160), a destructure-error message (133423037) and three inside an unrelated firstPageId snippet in a bundled client asset (62836782, 62836833, 62837433) - each read, none of them a member of a result object, and that build's parts writer (@298640976) returns the four file members with no firstPage beside them. The ladder instrument is the schema describe texts, which are stable across minification: \"Document page number of the first extracted page\" counts 0 at 2.1.240, 2 at 2.1.243 and 2 at 2.1.258, while \"Directory containing extracted page images\" counts 2 in all three - so the parts result itself predates the window and only firstPage moved. Closing the window to adjacent releases needs the 2.1.241 and 2.1.242 builds. 2.1.251 is only the earliest build that wrote such a record into THIS corpus, which holds no parts record at all from 2.1.232 through 2.1.250. Corpus census over 8324 transcript files (journal.jsonl excluded; one observation per record whose toolUseResult has an object file and type == \"parts\"): 26 parts results in 26 distinct record uuids; file key set exactly {count, filePath, originalSize, outputDir} on 26 of 26; top-level key set {file, type} on 24 and {file, firstPage, type} on 2, those two being exactly the two records written by 2.1.251 (the other 24 by 2.1.196 once, 2.1.207 twice, 2.1.220 fifteen times and 2.1.231 six times). The 2.1.258 schema declares the same four file members with firstPage optional at the top level (@164897625, the optional member at @164897878). Re-censused with the Read-pairing rule (one count per tool_use BLOCK named Read whose input.file_path case-folds to a .pdf suffix, keyed by block id; one row per paired tool_result BLOCK), the live projects root now holds 114 such calls and 115 paired blocks over 9,644 transcripts, of which 38 carry a parts result - 24 with a plain-string content and 14 with an array - and firstPage is present on 14 of 14 of the array ones, with values 1 seven times and 5, 6, 7, 9, 11, 17 and 23 once each. A snapshot root of 10,335 transcripts holds 80 calls, 81 paired blocks and 18 parts results, none of them image-bearing. The counts grew; every shape statement above re-reads the same.",
+      "depends": "csift's recover Read arm keys on the presence of a file object with a matching filePath, and a parts result carries one (the PDF path), so it enters the same path as a text Read but supplies no content (the unwrap_or_default() yields an empty string). The total > 0 gate in push_read_event is what stops that contentless variant from being minted as a FULL snapshot: the event still lands, on the else arm, as a zero-line windowed read, so recover --file <the pdf> reports 0/1 lines (0%) with 1 read (0 full, 1 windowed) rather than a false full read. Nothing in csift reads firstPage, so the version boundary changes no csift behaviour - it only dates the field for anyone reading a parts record's key set, and it is the reason the key set must be treated as version-dependent rather than fixed. That last sentence no longer holds: firstPage is now READ. It is the only carrier of the page offset, so IMG-016 derives a page image's document page number from it plus the element's position in the tool_result content array, and `image` and the agent.tool.result unit both print the result.",
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
@@ -29634,6 +29634,16 @@
           "observed": "8324 transcript files: 26 parts results in 26 distinct record uuids; file key set {count, filePath, originalSize, outputDir} on 26 of 26; top-level key set {file, type} on 24 and {file, firstPage, type} on 2, both of the latter written by 2.1.251, the other 24 by 2.1.196 (1), 2.1.207 (2), 2.1.220 (15) and 2.1.231 (6); v5SidecarScope on 0 of 26. Describe-text ladder: \"Document page number of the first extracted page\" 0 / 2 / 2 and \"Directory containing extracted page images\" 2 / 2 / 2 at 2.1.240 / 2.1.243 / 2.1.258; twelve firstPage occurrences at 2.1.240, each read and none a result member. | Reading all twelve firstPage occurrences at 2.1.240 plus that build's parts writer replaces the enum",
           "rule": "One observation per record whose toolUseResult has an object file and type \"parts\", over every *.jsonl under the projects root, journal.jsonl excluded; binary counts are occurrences of the literal, not lines.",
           "note": "The behaviour holds in substance and three statements change. The version sentence pinned firstPage to results written by 2.1.251 and later, which is a statement about this corpus rather than about Claude Code: the member is absent from the parts result at 2.1.240 and present at 2.1.243 (@206257210, schema @206266608), so the boundary is the window (2.1.240, 2.1.243], and 2.1.251 is merely the earliest build that wrote such a record here, the corpus holding none at all from 2.1.232 through 2.1.250. The parenthetical that the 2.1.240 occurrences of firstPage are only the page-range parser is refuted by reading them: there are twelve, three in the parser, one in the range formatter, two in the pdftoppm argument builder, one in the range validator, one constant-table entry, one destructure-error message and three in an unrelated firstPageId snippet - none a member of a result object, and that build's own parts writer returns the four file members and nothing else. The rarity clause is now carried by an enumeration instead of an assertion: the literal type:\"parts\" occurs once in the 2.1.258 build, inside mHn, and mHn has exactly two call sites, one returning its result and one handing it to telemetry. The corpus census reproduces at 26 records with the same key-set split and the same writer versions."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Re-censused both projects roots for Read-on-.pdf calls and their paired results with the counting rule of IMG-016, and re-read the parts mapper arm and the firstPage schema entry in the 2.1.258 build.",
+          "observed": "Live root: 114 Read-on-.pdf calls, 115 paired tool_result blocks, result types parts 38 (24 with a plain-string content and 14 with an array), pdf 4, a bare string 3, absent 70; toolUseResult.file key set {count, filePath, originalSize, outputDir} on all 38 parts rows and firstPage present on 14 of 14 image-bearing ones with values 1 seven times and 5, 6, 7, 9, 11, 17, 23 once each. Snapshot root: 80 calls, 81 paired blocks, parts 18 with 0 image-bearing. The earlier census read 26 parts results with 2 image-bearing; the shape statements are unchanged and the counts moved by growth.",
+          "rule": "One count per tool_use BLOCK named Read whose input.file_path case-folds to a .pdf suffix, keyed by block id; one row per tool_result BLOCK whose tool_use_id is one of those ids; image-bearing means that block's content is a list holding at least one element of type image.",
+          "note": "The behavior text gained the grown counts and a pointer to IMG-016, which is what reads firstPage rather than only recording that it exists."
         }
       ],
       "attribution": "end-to-end",
@@ -29848,13 +29858,13 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "242-246",
+          "lines": "348-352",
           "snippet": "pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {\n    let mut out = Vec::new();\n    let Some(blocks) = rec.blocks() else {\n        return queued_prompt_images(rec, with_data);\n    };"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "262-266",
-          "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                if let Some(arr) = content.as_array() {"
+          "lines": "372-378",
+          "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };"
         }
       ],
       "instrument": "python3 over ~/.claude/projects: for every record whose `toolUseResult.type` is `image`, walk `message.content` for `{type:\"image\"}` elements nested in `tool_result` blocks and compare each element's `source.data` with `toolUseResult.file.base64`. Counting rule: one observation per record, with the nested-element tally taken per record. Measured 2026-09-02: 444 records; nested-element count 1 on 444 of 444; `source.media_type == file.type` on 444 of 444; base64 byte-identical on 435 of 444.",
@@ -29935,7 +29945,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "187-190",
+          "lines": "197-200",
           "snippet": "        let d = source.get(\"data\").and_then(Value::as_str)?;\n        // Cheap content fingerprint: length + base64 head/tail. Dedups the SAME image\n        // re-injected across context windows without holding/hashing the full payload.\n        let head: String = d.chars().take(32).collect();"
         }
       ],
@@ -30012,23 +30022,23 @@
     {
       "id": "IMG-015",
       "area": "images",
-      "behavior": "The `pages` key never reaches disk on a `parts` Read result. The Read descriptor registers a `stripForCreation` that removes `pages`, and only `pages`, and only when the result type is `parts` - `function kjn(e){if(typeof e!==\"object\"||e===null||e.type!==\"parts\"||e.pages===void 0)return e;let{pages:n,...r}=e;return r}` (164898866) - the result assembler applies it in a single statement before the record mint (164456451 into 164457235), and the 2.1.258 output schema states the rule verbatim: the page images are `Present only transiently in-process: the page image bytes are delivered solely as image blocks in the model-facing tool_result content and are not retained on the tool_use_result, so this key is absent on the emitted/persisted result` (164898052). That is a fact about the KEY, not about the bytes. The same assembler builds the model-facing content through the Read mapper's `parts` arm (164903101): when the in-process pages array is non-empty the tool_result content becomes an ARRAY of one text block plus one `{type:\"image\",source:{type:\"base64\",...}}` block per extracted page (or a text placeholder for a page that could not be processed), and when it is empty the content is the plain string `PDF pages extracted: N page(s) from <path>`. Both halves land on one record. The arrival of the image-block arm is a BINARY boundary, not the corpus floor the earlier text named: the mapper's per-page failure template, the pages strip predicate and the pages schema entry are all ABSENT at 2.1.240 and all PRESENT at 2.1.243, so the change landed in the window (2.1.240, 2.1.243]; closing it to adjacent releases needs the 2.1.241 and 2.1.242 builds, which are published but not cached here. Ladder instrument re-run 2026-09-04: `could not be processed as an image` counts 0 at 2.1.240, 9 at 2.1.243 and 8 at 2.1.258; `Extracted page images, in page order` counts 0, 2 and 2; the strip predicate `type!==\"parts\"` counts 0, 1 and 1. Corpus census 2026-09-04 over 8,237 transcripts under the projects root (one observation per record whose `toolUseResult` has an object `file` and type `parts`): `pages` present at the top level on 0 of 26 and inside `file` on 0 of 26; nested `{type:\"image\"}` elements 0 on 24 records - whose tool_result content is not an array at all but the plain string - and 3 and 5 on the two records written by 2.1.251, each equal to that record's `file.count`. The plain-string era therefore runs 2.1.196 through 2.1.231 as a CORPUS statement whose true upper bound in the binary is 2.1.240.",
-      "depends": "csift's `image` scans inline base64 in BOTH a direct image block and an `{type:\"image\"}` element nested in a tool_result content array, so on a `parts` Read written by a build that carries the image-block arm the pages are surfaced as ordinary `L<line>i<n>` rows and written out by `image --out` - a PDF page is recoverable from the transcript alone, no csift change required. On a record written before that arm there is nothing inline, `image` correctly reports nothing, and the recorded `outputDir` is the only pointer: the invisibility is a version boundary, not a permanent source fact. `recover --file <the pdf>` has no text content to replay in either era, since the `parts` `file` object carries no `content` string.",
+      "behavior": "The `pages` key never reaches disk on a `parts` Read result. The Read descriptor registers a `stripForCreation` that removes `pages`, and only `pages`, and only when the result type is `parts` - `function kjn(e){if(typeof e!==\"object\"||e===null||e.type!==\"parts\"||e.pages===void 0)return e;let{pages:n,...r}=e;return r}` (164898866) - the result assembler applies it in a single statement before the record mint (164456451 into 164457235), and the 2.1.258 output schema states the rule verbatim: the page images are `Present only transiently in-process: the page image bytes are delivered solely as image blocks in the model-facing tool_result content and are not retained on the tool_use_result, so this key is absent on the emitted/persisted result` (164898052). That is a fact about the KEY, not about the bytes. The same assembler builds the model-facing content through the Read mapper's `parts` arm (164903101): when the in-process pages array is non-empty the tool_result content becomes an ARRAY of one text block plus one `{type:\"image\",source:{type:\"base64\",...}}` block per extracted page (or a text placeholder for a page that could not be processed), and when it is empty the content is the plain string `PDF pages extracted: N page(s) from <path>`. Both halves land on one record. The arrival of the image-block arm is a BINARY boundary, not the corpus floor the earlier text named: the mapper's per-page failure template, the pages strip predicate and the pages schema entry are all ABSENT at 2.1.240 and all PRESENT at 2.1.243, so the change landed in the window (2.1.240, 2.1.243]; closing it to adjacent releases needs the 2.1.241 and 2.1.242 builds, which are published but not cached here. Ladder instrument re-run 2026-09-04: `could not be processed as an image` counts 0 at 2.1.240, 9 at 2.1.243 and 8 at 2.1.258; `Extracted page images, in page order` counts 0, 2 and 2; the strip predicate `type!==\"parts\"` counts 0, 1 and 1. Corpus census 2026-09-04 over 8,237 transcripts under the projects root (one observation per record whose `toolUseResult` has an object `file` and type `parts`): `pages` present at the top level on 0 of 26 and inside `file` on 0 of 26; nested `{type:\"image\"}` elements 0 on 24 records - whose tool_result content is not an array at all but the plain string - and 3 and 5 on the two records written by 2.1.251, each equal to that record's `file.count`. The plain-string era therefore runs 2.1.196 through 2.1.231 as a CORPUS statement whose true upper bound in the binary is 2.1.240. Re-censused with the same Read-pairing rule, the live projects root holds 14 image-bearing results carrying 56 image elements over 9,644 transcripts - media_type image/jpeg on 56 of 56, source.type base64 on 56 of 56, the leading text's N equal to the image count equal to file.count on 14 of 14, and no failure placeholder in either root - beside 24 parts results whose content is the plain string. A snapshot root of 10,335 transcripts holds 81 paired blocks and no image element at all.",
+      "depends": "csift's `image` scans inline base64 in BOTH a direct image block and an `{type:\"image\"}` element nested in a tool_result content array, so on a `parts` Read written by a build that carries the image-block arm the pages are surfaced as ordinary `L<line>i<n>` rows and written out by `image --out` - a PDF page is recoverable from the transcript alone, no csift change required. On a record written before that arm there is nothing inline, `image` correctly reports nothing, and the recorded `outputDir` is the only pointer: the invisibility is a version boundary, not a permanent source fact. `recover --file <the pdf>` has no text content to replay in either era, since the `parts` `file` object carries no `content` string. Since IMG-016 the pages are no longer only surfaced: each row also says WHICH page it is, derived from the record's own toolUseResult.firstPage plus the element's position among the content elements after the leading text. The strip this claim describes is what makes that necessary - the pages array is gone from the persisted result, so the position in the content array is the only surviving order.",
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "368-371",
+          "lines": "483-486",
           "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "238-241",
-          "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot). `img_index` is a 1-based running\n/// ordinal across both sources, so the id `L<line>i<n>` is stable."
+          "lines": "342-347",
+          "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a\n/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it\n/// is deliberately NOT the page index: it counts images across the WHOLE record, while a\n/// page is the element's position inside its own tool_result ([`record_pdf_pages`])."
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "262-273",
-          "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                if let Some(arr) = content.as_array() {\n                    for el in arr {\n                        if el.get(\"type\").and_then(Value::as_str) == Some(\"image\") {\n                            if let Some(src) = el.get(\"source\") {\n                                if let Some(mut r) = image_ref_from_source(src, with_data) {\n                                    r.img_index = out.len() + 1;\n                                    out.push(r);\n                                }"
+          "lines": "372-382",
+          "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };\n                for (pos, el) in arr.iter().enumerate() {\n                    let Some(mut r) = image_element_ref(el, with_data) else {\n                        continue;\n                    };"
         }
       ],
       "instrument": "Measured 2026-09-02 over the 7,814 transcript files under ~/.claude/projects with a python3 walk that json-parses every line carrying `toolUseResult` and keeps the ones whose `toolUseResult.file` is an object, filtered to `type == 'parts'` and testing for a `pages` key at the top level and inside `file`. Counting rule: one observation per record. Result: 0 of 26 carry `pages` at either level. Schema authority: the Read tool-result schema in the Claude Code 2.1.258 binary documents the page images as not retained on the persisted tool result, and the result is stripped of that key before it is written.",
@@ -30068,6 +30078,16 @@
           "observed": "before: The `pages` key is stripped before a `parts` Read result is persisted - 0 of 26 observed records carry it at the top level or inside `file`, and the 2.1.258 schema documents it as in-process only, 'not retained on the to || after: The `pages` key never reaches disk on a `parts` Read result. The Read descriptor registers a `stripForCreation` that removes `pages`, and only `pages`, and only when the result type is `parts` - `function kjn(e){if(typeo",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "The two operative halves are unchanged - the literal `pages` key is stripped and never persisted, and the page bytes do reach the transcript as image blocks on current builds - and the version sentence is replaced. The old text said 'Since 2.1.251 the page images DO reach the transcript'; the refuting hop is the build ladder, which shows the mapper's image arm, the strip predicate and the pages schema entry all absent at 2.1.240 and all present at 2.1.243, so the boundary is the window (2.1.240, 2.1.243] and 2.1.251 is only this corpus's earliest writer of such a record. The '2.1.196 through 2"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Re-censused both projects roots for the image elements of paired Read-on-.pdf results with the counting rule of IMG-016, and re-read the strip predicate and the parts mapper arm in the 2.1.258 build.",
+          "observed": "Live root: 14 image-bearing results carrying 56 image elements, media_type image/jpeg on 56 of 56 and source.type base64 on 56 of 56, the leading text's N equal to the image count equal to file.count on 14 of 14, 0 failure placeholders, and 56 distinct <b64 len>:<head 32>:<tail 32> fingerprints over the 56 elements with none repeated. The other 24 parts results carry a plain-string content and no image element. Snapshot root: 81 paired blocks, 0 image-bearing and 0 image elements - every record in it predates the arm. The earlier census read 8 page images on 2 records.",
+          "rule": "One count per image element inside the content list of a tool_result block paired to a Read-on-.pdf tool_use; one fingerprint per element.",
+          "note": "The depends text gained what csift now does with those pages beyond listing them - the document page number each one is, derived in IMG-016."
         }
       ],
       "attribution": "end-to-end",
@@ -96256,7 +96276,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2992"
+          "lines": "2998"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96282,6 +96302,264 @@
           "observed": "Root 1: supersedesUuids 5 (all assistant, all one-element lists, 0 of 5 entries in their file's uuid set), turnCompanion 244 (user, bool, lowest version 2.1.251), effort 320,447 (assistant; values high, low, max, medium, xhigh), perTurnEffort 2,751 (assistant; 2,024 strings all reading xhigh and 727 JSON null; lowest version 2.1.267), promptSource 7,044 (user; values queued, sdk, suggestion_accepted, system, typed), permissionMode 41,116 (permission-mode 33,124 and user 7,992), promptId 325,353 (user), queueSkipAttachments 924, queuePriority 181, queueOrigin 1; message-level stop_details 589,445, diagnostics 588,649 (key set {cache_miss_reason}), context_management 65,951 (key set {applied_edits}), container 65,879. Root 2: supersedesUuids 5 (0 of 5 resolve), turnCompanion 0, effort 93,496 (values high, max, xhigh), perTurnEffort 0, promptSource 5,780 (four values, no sdk), permissionMode 61,664 (permission-mode 54,322 and user 7,342), promptId 397,726, queuePriority 189 and no other `queue*` key; message-level 766,055 / 764,977 / 1,347 / 1,078 with the same two key sets.",
           "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
           "note": ""
+        }
+      ]
+    },
+    {
+      "id": "IMG-016",
+      "area": "images",
+      "behavior": "A Read of a .pdf carrying a validated pages range returns ONE tool_result block whose content is an ARRAY: element 0 is the leading text `PDF pages extracted: ${e.file.count} page(s) from ${e.file.filePath} (${Ut(e.file.originalSize)})` and every element after it is one requested page, mapped 1:1 and in order from the in-process pages array by `...o.map((f,_)=>...)` (164903101). A page that rendered is written as {type:\"image\",source:{type:\"base64\",data,media_type}} and carries NO page number of any kind - the ONLY page label the mapper writes is on the FAILURE branch, `[Page ${d+_} could not be processed as an image${...}]`, where d is `e.firstPage??1` and _ the index into that array, and that placeholder is a TEXT element occupying its own position in the same sequence. The offset lives once, on the record, as the top-level toolUseResult.firstPage, which the output schema describes as the `Document page number of the first extracted page (1 when no range was requested)` (164897878). So the document page of the k-th content element, k >= 1, is firstPage + (k - 1), counted over CONTENT POSITIONS and never over image ordinals. THE FRICTION, stated so a later reading of the schema does not conclude that a label went missing: that same schema sentence continues `labels the page images in the model-facing tool_result`, which the mapper does not do - it labels only a failure. The schema sentence is the intent and the mapper is the fact. A parts result is reachable only through the pages branch of the Read call path (164908897, gating on `let pn=hdt(v)` at 164908923, where v is the pages parameter), and the page bytes are produced by pdftoppm at a fixed `-jpeg -r 100` with -f/-l carrying the range (157746368), which is why such records need poppler on the host and are rare. The image-block arm and the firstPage key arrived together: the mapper's failure template is absent in all 51 cached builds through 2.1.240 and present in all 11 from 2.1.243, so the window is (2.1.240, 2.1.243] and 2.1.241/2.1.242 are published but not cached here. The shape is current at the newest cached build, where the same arm sits at 166502925 with different minified identifiers.",
+      "depends": "csift derives a PDF page's document page number rather than printing an ordinal or nothing. `commands::image::record_pdf_pages` is the ONE reader and both surfaces go through it, so they cannot disagree: `image` prints ` p<N>` beside the media type with the document's basename once per record group and carries `page`/`pdf_path` in JSON, and the agent.tool.result unit carries the keys-family fact `[pdf pages A-B of <basename>]` with JSON `pdf_pages`. Two properties of the writer are what the derivation rests on, and if either moved every number csift prints would be wrong rather than absent: pages map 1:1 onto the content elements AFTER element 0, and a failed page occupies a position. Counting images instead of positions would name every page after a failure one too low. The gate is the record's own result reading type == \"parts\" WITH a firstPage, plus the record carrying exactly one tool_result block, because a parts result describes one tool call and could not say which of two blocks it belongs to; every other image - a screenshot, a parts result from a build before the key existed, the REPL tool's re-emitted pages (IMG-018) - reads a null page rather than an assumed 1.",
+      "code": [
+        {
+          "path": "src/commands/image/refs.rs",
+          "lines": "290-291",
+          "snippet": "    let tur = rec.tool_use_result_value()?;\n    let first = usize::try_from(tur.get(\"firstPage\")?.as_u64()?).ok()?;"
+        },
+        {
+          "path": "src/commands/image/refs.rs",
+          "lines": "255-258",
+          "snippet": "    pub(crate) fn page_at(&self, pos: usize) -> Option<usize> {\n        let i = pos.checked_sub(1)?;\n        (i < self.count).then_some(self.first + i)\n    }"
+        }
+      ],
+      "instrument": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `case\"parts\":{let r=`PDF pages extracted:` and read the mapper arm whole - it is the one occurrence - then `firstPage:A().optional().describe(` for the schema sentence, `if(VNe(d)){if(v!==void 0)` for the extension branch and `let w=be(b,\"page\"),m=[\"-jpeg\"` for the renderer. LADDER: byte-search `could not be processed as an image` in every cached build directory holding a `claude` file, one verdict per build - present iff the bytes occur at least once. CORPUS: a python3 os.walk over every *.jsonl under a projects root, json-parsing a line only when it carries the bytes \"tool_result\" or \"document\". One count per tool_use BLOCK named Read whose input.file_path case-folds to a .pdf suffix, keyed by block id; one row per tool_result BLOCK whose tool_use_id is one of those ids; image-bearing means that block's content is a list holding at least one element of type image; one count per such image element.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.13.0",
+        "source": "SPEC.md section 6.9"
+      },
+      "first_seen_claude_code": "2.1.243",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the Read call path's pdf-extension branch",
+          "offset": 164908897,
+          "excerpt": "if(VNe(d)){if(v!==void 0)",
+          "note": "d is the lower-cased file extension and VNe tests it against the one-member pdf set; v is the tool input's pages parameter, so this is where a pdf read with a range leaves the ordinary path."
+        },
+        {
+          "role": "gate",
+          "name": "the pages-range parse that selects the parts result",
+          "offset": 164908923,
+          "excerpt": "let pn=hdt(v);",
+          "note": "The range is validated here and the branch then returns {...,firstPage:hn.firstPage,pages:Bn}; the other call site of the same extractor belongs to the whole-PDF path and its result feeds telemetry only, so only this branch can produce a parts record."
+        },
+        {
+          "role": "writer",
+          "name": "pdftoppm at a fixed resolution",
+          "offset": 157746368,
+          "excerpt": "let w=be(b,\"page\"),m=[\"-jpeg\",\"-r\",\"100\"];",
+          "note": "The page bytes: -f and -l carry the requested range, the child writes .jpg files into a temp directory and they are collected sorted, which is what makes position equal page order."
+        },
+        {
+          "role": "writer",
+          "name": "the Read result mapper's parts arm",
+          "offset": 164903101,
+          "excerpt": "case\"parts\":{let r=`PDF pages extracted: ${e.file.count} page(s) from ${e.file.filePath} (${Ut(e.file.originalSize)})`,o=e.pages??[],d=e.firstPage??1;return{tool_use_id:n,type:\"tool_result\",content:o.length?[{type:\"text\",text:r},...o.map((f,_)=>f.base64?{type:\"image\",source:{type:\"base64\",data:f.base64,media_type:f.mediaType}}:{type:\"text",
+          "note": "The whole mapping in one statement: one leading text, then one element per page in order, an image when the page rendered and a text placeholder when it did not - and only the placeholder carries a number, d+_."
+        },
+        {
+          "role": "writer",
+          "name": "the emitted result's schema entry for firstPage",
+          "offset": 164897878,
+          "excerpt": "firstPage:A().optional().describe(",
+          "note": "Declares the key on the persisted result and describes it as the document page number of the first extracted page; the sentence goes on to say it labels the page images, which the mapper does not do - the mapper is the fact."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "could not be processed as an image",
+        "lowest_present": "2.1.243",
+        "highest_absent": "2.1.240",
+        "ladder": "One verdict per cached build directory holding a `claude` file, present iff the literal's bytes occur at least once: absent in 51 builds from 1.0.60 through 2.1.240, present in all 11 from 2.1.243 through 2.1.268. 2.1.241 and 2.1.242 are published but not cached, so the window stays (2.1.240, 2.1.243]."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "Byte-searched the 2.1.258 build for the five hop literals above and read each arm whole; laddered `could not be processed as an image` across all 62 cached builds; censused both projects roots with the walk and the counting rule in this claim's instrument.",
+          "observed": "Live projects root, 9,644 transcripts (9,839 *.jsonl less 195 journal.jsonl): 114 Read-on-.pdf calls, 110 of them carrying a pages parameter; 115 paired tool_result blocks (the extra one is a transcript present under two encoded project directories, same record uuid and line); result types parts 38, pdf 4, a bare string 3, absent 70. 14 image-bearing results carrying 56 image elements, media_type image/jpeg on 56 of 56 and source.type base64 on 56 of 56. toolUseResult.firstPage present on 14 of 14, values 1 seven times and 5, 6, 7, 9, 11, 17, 23 once each. The leading text's N, the image-element count and toolUseResult.file.count are equal on 14 of 14. The carrying record holds exactly ONE tool_result block on 14 of 14. Failure placeholders (a text element at index >= 1 opening `[Page `) 0. Distinct <b64 len>:<head 32>:<tail 32> fingerprints 56 over 56 page images, 0 repeated. Snapshot root, 10,335 transcripts: 80 calls, 81 paired blocks, parts 18 / pdf 3 / string 3 / absent 57, 0 image-bearing and 0 page images. Producer: the parts mapper arm occurs once, at 164903101, and labels a page only on its failure branch; the schema entry at 164897878 reads `Document page number of the first extracted page (1 when no range was requested); labels the page images in the model-facing tool_result`. Ladder: absent in 51 cached builds through 2.1.240, present in all 11 from 2.1.243.",
+          "rule": "One count per tool_use BLOCK named Read whose input.file_path case-folds to a .pdf suffix, keyed by block id; one row per tool_result BLOCK whose tool_use_id is one of those ids; image-bearing means that block's content is a list holding at least one element of type image; one count per such image element. One ladder verdict per cached build directory holding a `claude` file.",
+          "note": "The derivation counts content positions rather than image ordinals because a failed page is a text element in the same sequence; no failure placeholder exists in either corpus, so that arm is carried by the writer alone."
+        }
+      ]
+    },
+    {
+      "id": "IMG-017",
+      "area": "images",
+      "behavior": "A Read of a .pdf with NO pages parameter takes the whole-PDF path, whose result type is `pdf` and whose file object is {base64, filePath, originalSize}. The same mapper's pdf arm returns a content ARRAY of one text `PDF file read: ${e.file.filePath} (${Ut(e.file.originalSize)})` plus one {type:\"document\",source:{type:\"base64\",media_type:\"application/pdf\",data:e.file.base64}} block when the file object carries base64, and the bare string otherwise (164902842). That block arm arrived in the SAME window as the page-image arm of IMG-016: the literal `media_type:\"application/pdf\",data:e.file.base64` is absent in all 51 cached builds through 2.1.240, where the pdf case returns a bare string, and present in all 11 from 2.1.243. A document block reaches a transcript by a SECOND route as well - a PDF a person attaches to a prompt lands as a document-only isMeta type:\"user\" record whose message.content holds the block and no text - and the producer of that route is not read here.",
+      "depends": "csift renders the whole-PDF result's own text and never its payload. `image` lists {type:\"image\"} elements only, so a document block contributes no row at all, and `ImageRef::ext()` has no application/pdf arm, so a listed one would be written out under the never-fabricated `bin` extension. The isMeta paste record carries no leaf and renders `? unmodeled: user/document` under an address, with its base64 source elided by the unmodeled excerpt's `data` rule. `--raw` is the only path to either payload. This is a deliberate ABSENCE: listing a document under a surface named `image` would change what the surface means - the leaf, the extension table and whether `--out` may write a .pdf are one decision, not three.",
+      "code": [
+        {
+          "path": "src/commands/image/refs.rs",
+          "lines": "318-321",
+          "snippet": "fn image_element_ref(el: &Value, with_data: bool) -> Option<ImageRef> {\n    if el.get(\"type\").and_then(Value::as_str) != Some(\"image\") {\n        return None;\n    }"
+        },
+        {
+          "path": "src/commands/image/tests.rs",
+          "lines": "403",
+          "snippet": "fn the_whole_pdf_document_block_is_not_listed() {"
+        }
+      ],
+      "instrument": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `case\"pdf\":{let r=`PDF file read:` - one occurrence - and read the arm whole. LADDER: byte-search `media_type:\"application/pdf\",data:e.file.base64` in every cached build directory holding a `claude` file, one verdict per build; read the 2.1.240 arm at 298771694 and the 2.1.243 arm at 206270260 to see the string-only and block forms side by side (the literal carries the mapper's parameter name, so it dates this arm only while that name holds). CORPUS: a python3 os.walk over every *.jsonl under a projects root; one count per {\"type\":\"document\"} object at message.content[], at a tool_result block's content[], or in a list inside an attachment payload, grouped by location and by the carrying record's type and isMeta flag.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.13.0",
+        "source": "SPEC.md section 6.9"
+      },
+      "first_seen_claude_code": "2.1.243",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The PASTE route's producer is not located. The literal `type:\"document\"` occurs FOUR times in the 2.1.258 build and each is read in this claim's enumeration: none of the four mints the document-only isMeta user record the corpus holds. The first only DESCRIBES a document block already present in a prompt's block list, so the block that record carries is built on the prompt-assembly path upstream of it, and that path is not read here. Two instruments close the leg: read the construction of the block list that summary's parameter comes from, or attach a PDF to a prompt live and read the record the submission writes."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "the Read result mapper's pdf arm",
+          "offset": 164902842,
+          "excerpt": "case\"pdf\":{let r=`PDF file read: ${e.file.filePath} (${Ut(e.file.originalSize)})`;return{tool_use_id:n,type:\"tool_result\",content:e.file.base64?[{type:\"text\",text:r},{type:\"document\",source:{type:\"bas",
+          "note": "The whole-PDF sibling of IMG-016's parts arm, in the same mapper: one text plus one document block when the file object carries base64, and the bare string when it does not."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "media_type:\"application/pdf\",data:e.file.base64",
+        "lowest_present": "2.1.243",
+        "highest_absent": "2.1.240",
+        "ladder": "One verdict per cached build directory holding a `claude` file: absent in 51 builds from 1.0.60 through 2.1.240 and present in all 11 from 2.1.243 through 2.1.268 - the same window IMG-016's failure template gives, which is how the two arms are known to have landed together. The literal carries the mapper's parameter name, so it dates this arm only while that name holds; the bare block literal without it is present in all 62 cached builds, because other paths construct the same block."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "Read the pdf arm of the Read result mapper in the 2.1.258 build at its one occurrence, laddered the document-arm literal across all 62 cached builds, read the 2.1.240 and 2.1.243 arms at the offsets in this claim's instrument, and censused document blocks on both projects roots by location.",
+          "observed": "Live projects root: 4 document blocks on 4 records - 1 inside a tool_result content array (the whole-PDF Read result) and 3 at message.content[] on type:\"user\" records with isMeta true - and 0 in an attachment payload. Two of the four files are one transcript under two encoded project directories (same record uuid, same line), so the four blocks are three distinct records. Snapshot root: 3 blocks, all at message.content[] on isMeta user records, 0 nested and 0 in an attachment. Ladder: the document-arm literal is absent in 51 cached builds through 2.1.240 and present in all 11 from 2.1.243; at 2.1.240 the pdf case returns the bare string `PDF file read: ...` with no blocks at all. The literal `type:\"document\"` occurs four times in the build and each is read in this claim's enumeration; none of the four writes the isMeta paste record.",
+          "rule": "One count per {\"type\":\"document\"} object at message.content[], at a tool_result block's content[], or in a list inside an attachment payload, over every *.jsonl under the root; one ladder verdict per cached build directory holding a `claude` file.",
+          "note": "The paste route's producer is an open leg; the four ASCII constructors were each read and none of them writes those records."
+        }
+      ],
+      "residue": [
+        "A byte search for `documentBlock` is a dead end and is recorded so a later reading does not spend the search again: six occurrences in the 2.1.258 build, all of them the telemetry counter `documentBlockCount` (the accumulator at 164765854, its zero value at 164766983, two report projections at 164770311 and 164770333, a second accumulator's return at 164855739, and the field name in a string table at 75005524). None is a constructor."
+      ],
+      "enumeration": [
+        {
+          "site": "the prompt-submission attachment summary",
+          "offset": 162727217,
+          "excerpt": "type:\"document\"})}for(let v of Object.values(r??{}))if(v.type===\"image\"||v.type===\"audio\")",
+          "verdict": "READS a document block already in the prompt's block list and pushes a bare {type:\"document\"} descriptor with NO source into the submission's `attachments` field. It constructs no content block, so the block it counts was built upstream of it - which is where the paste route's producer must be."
+        },
+        {
+          "site": "the REPL result mapper",
+          "offset": 164188884,
+          "excerpt": "type:\"document\",source:{type:\"base64\",media_type:\"application/pdf\",data:f.base64}})),...e.documentsOmitted?",
+          "verdict": "Re-emits the whole-PDF results of inner Read calls as document blocks of the REPL's own tool_result, capped at four (IMG-018). A tool result, not a prompt record."
+        },
+        {
+          "site": "the Read result mapper's pdf arm",
+          "offset": 164903009,
+          "excerpt": "type:\"document\",source:{type:\"base64\",media_type:\"application/pdf\",data:e.file.base64}}]:r}}",
+          "verdict": "This claim's own writer: the whole-PDF Read result. A tool result, not a prompt record."
+        },
+        {
+          "site": "the remote tool-call rehydration",
+          "offset": 183384314,
+          "excerpt": "type:\"document\",source:{type:\"base64\",media_type:a.media_type,data:a.data}}})}",
+          "verdict": "Maps over an EXISTING block list and replaces the entries whose payload was held back, so it re-places a payload rather than minting a record; the media_type comes from the held payload rather than being fixed to application/pdf."
+        }
+      ]
+    },
+    {
+      "id": "IMG-018",
+      "area": "images",
+      "behavior": "The REPL tool re-emits the output of Read calls made INSIDE it as blocks of ITS OWN tool_result, and a page image loses its provenance on the way. The collector's parts branch (164183280) reads the inner result's firstPage into a local and then, per entry of the pages array, pushes a page that rendered as a bare {base64, mediaType} with NO number, while a FAILED page is recorded as {page:f+C, file, error} (164183676) - the reverse of what a reader needs. The images of every inner Read are then concatenated into one list and capped: `images:n.slice(0,Olt)` with `var Olt=8,Dlt=8` (164183754, 164184030) caps images at 8 and named failed pages at 8, `documents:n.slice(0,Nlt)` with `var Nlt=4` (164184372, 164184423) caps PDF documents at 4, each with its own `[N more ... not shown]` text, and the failed pages render through `[Page ${e.page}${e.file?` of ${e.file}`:\" of an inner Read\"} could not be processed as an image...]` (164183881). So in a REPL result there is no firstPage on the record, an element's position is not a page number even in principle (several documents' pages are flattened into one list), and the page number survives only on the entries that failed.",
+      "depends": "csift's nested-image walk collects these elements correctly - it walks any tool_result content array - and IMG-016's page derivation must NOT fire on them. The gate is what keeps it off: `record_pdf_pages` requires the RECORD's own toolUseResult to read type == \"parts\" with a firstPage, and a REPL record's result object is the REPL's own, so a re-emitted page keeps a null page and a null pdf_path. Deriving there would fabricate: with several documents flattened into one capped list, position maps to nothing, so any number csift printed would be wrong rather than missing.",
+      "code": [
+        {
+          "path": "src/commands/image/refs.rs",
+          "lines": "286-289",
+          "snippet": "    let probe = rec.tur_probe()?;\n    if probe.r#type.as_ref().and_then(Value::as_str) != Some(\"parts\") {\n        return None;\n    }"
+        },
+        {
+          "path": "src/commands/image/tests.rs",
+          "lines": "352",
+          "snippet": "fn a_carrier_without_first_page_names_no_page() {"
+        }
+      ],
+      "instrument": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `else if(d.type===\"parts\"&&Array.isArray(d.pages))` and read the collector through its return, then `var Olt=8,Dlt=8`, `documents:n.slice(0,Nlt)`, `var Nlt=4` and `function D0o(e){return`[Page ` for the caps and the template; `userFacingName(){return\"REPL\"}` is the one occurrence naming the tool. CORPUS: a python3 os.walk over every *.jsonl under a projects root - one count per image element inside ANY tool_result content list, with the tool name taken from the tool_use block carrying the same id anywhere under the root, unknown when no such block is found.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.13.0",
+        "source": "SPEC.md section 6.9"
+      },
+      "first_seen_claude_code": "2.1.243",
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "No REPL result carrying a re-emitted page image exists in either corpus, so the shape is read in the binary and never on disk. A live trial closes it: run a REPL call that performs a Read of a .pdf with a pages parameter inside it, then read the REPL tool_result record and check that its content array holds image elements while its own toolUseResult carries no firstPage."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the REPL collector's parts branch",
+          "offset": 164183280,
+          "excerpt": "else if(d.type===\"parts\"&&Array.isArray(d.pages))",
+          "note": "Where an inner Read's parts result is taken apart; d is that result and the branch reads its firstPage into a local before walking the pages array."
+        },
+        {
+          "role": "gate",
+          "name": "the per-page split that drops the number on success",
+          "offset": 164183676,
+          "excerpt": "r.push({page:f+C",
+          "note": "The FAILED entry keeps its page (f is firstPage, C the index); the successful entry took the other arm a few bytes earlier and was pushed as {base64, mediaType} alone, so the number survives only where the image does not."
+        },
+        {
+          "role": "writer",
+          "name": "the flattened, capped result",
+          "offset": 164183754,
+          "excerpt": "images:n.slice(0,Olt),omitted:Math.max(0,n.length-Olt),failedPages:r.slice(0,Dlt),failedPagesOmitted:Math.max(",
+          "note": "Every inner Read's images are concatenated into one list and cut; with several documents in one list an element's position is not a page number even in principle."
+        },
+        {
+          "role": "writer",
+          "name": "the caps",
+          "offset": 164184030,
+          "excerpt": "var Olt=8,Dlt=8",
+          "note": "8 images and 8 named failed pages per REPL result."
+        },
+        {
+          "role": "writer",
+          "name": "the document cap",
+          "offset": 164184372,
+          "excerpt": "slice(0,Nlt),omitted:Math.max(0,n.length-Nlt)}}var Nlt=4;",
+          "note": "4 whole-PDF documents per REPL result, from inner Reads that carried no pages parameter."
+        },
+        {
+          "role": "writer",
+          "name": "the failed-page template",
+          "offset": 164183881,
+          "excerpt": "function D0o(e){return`[Page ",
+          "note": "The one place a REPL result names a page, and it names only the pages that failed."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "Read the REPL collector, its caps and its failure template in the 2.1.258 build at the offsets in this claim, and joined every nested image element on both projects roots to the tool_use block carrying its tool_use_id.",
+          "observed": "Each cited literal occurs exactly once in the build and the collector pushes a successful page as {base64, mediaType} with no number while recording {page, file, error} for a failure. Corpus: 708 image elements inside tool_result content arrays on the live root and 1,524 on the snapshot root, and on both roots every one of them joins to a tool_use block named Read - zero join to any other tool, so no REPL-carried page image exists in either corpus.",
+          "rule": "One count per image element inside any tool_result content list, with the tool name taken from the tool_use block carrying the same id anywhere under the root.",
+          "note": "The zero count is what makes the specimen leg open rather than closed; the gate that keeps csift's page derivation off this carrier reads the record's own result object, so it holds whether or not such a record ever lands."
         }
       ]
     }
