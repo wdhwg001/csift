@@ -9,3 +9,4 @@ mod columns;
 mod skill;
 mod specimens;
 mod table;
+mod treatment;
