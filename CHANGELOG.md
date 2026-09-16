@@ -126,6 +126,20 @@ surface change bumps the PATCH.
   those ids as `minted_elsewhere` with a count beside them, text row `minted`. It is the
   fourth lineage link a row can carry and the only one a record states about itself, so it
   carries no inference wording.
+- **An attachment unit says which record it is for.** Every attachment unit carries two
+  `for` edges and a producer fact: `attached_to` from the record's own `parentUuid`,
+  resolved to a LINE of this transcript through the chain's uuid map; `for_tool_use` from
+  the payload's inner `toolUseID`, which is a wire id no line carries, so the edge keeps
+  the id and says where it is not; and `[produced_by <command>]` from a hook run's own
+  command, JSON `produced_by:{command,hook_name,payload_type}`. The two edges fold into
+  the shared JSON `for` array. An edge whose key the line does not carry renders its
+  reason rather than disappearing, and all three ride an addressed record csift models no
+  leaf for as well.
+- **`search --help` and `show --help` name the attachment family's surface**, so the two
+  manuals stay at information parity with SKILL: an `ATTACHMENT LEAVES` region covering
+  the two bodies, the markers, the provenance facts and the matching rule, and the record
+  row's `body_source`, `human_turn_render_differs`, `produced_by` and `for` keys.
+
 ### Changed
 
 - **An unmodeled unit's excerpt elides an opaque `data` blob.** The key=value excerpt cuts
@@ -416,22 +430,6 @@ surface change bumps the PATCH.
   to hold, so the first time a TeammateIdle, TaskCreated or TaskCompleted hook blocks, its
   feedback would have landed in the isMeta residue - no leaf, no census key, reachable only
   by an address.
-
-### Added
-
-- **An attachment unit says which record it is for.** Every attachment unit carries two
-  `for` edges and a producer fact: `attached_to` from the record's own `parentUuid`,
-  resolved to a LINE of this transcript through the chain's uuid map; `for_tool_use` from
-  the payload's inner `toolUseID`, which is a wire id no line carries, so the edge keeps
-  the id and says where it is not; and `[produced_by <command>]` from a hook run's own
-  command, JSON `produced_by:{command,hook_name,payload_type}`. The two edges fold into
-  the shared JSON `for` array. An edge whose key the line does not carry renders its
-  reason rather than disappearing, and all three ride an addressed record csift models no
-  leaf for as well.
-- **`search --help` and `show --help` name the attachment family's surface**, so the two
-  manuals stay at information parity with SKILL: an `ATTACHMENT LEAVES` region covering
-  the two bodies, the markers, the provenance facts and the matching rule, and the record
-  row's `body_source`, `human_turn_render_differs`, `produced_by` and `for` keys.
 
 ### Fixed
 
