@@ -567,6 +567,7 @@ mod attachments;
 mod bookkeeping;
 mod gates;
 mod injections;
+mod keys;
 mod schedule_fire;
 mod selectors;
 mod system;

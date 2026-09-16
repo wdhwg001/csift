@@ -140,6 +140,7 @@ mod exchange;
 mod facts;
 mod hit_facts;
 mod hits;
+mod keys;
 mod matcher;
 mod record_text;
 mod render;

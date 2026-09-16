@@ -28,6 +28,7 @@ mod classify_schedule;
 mod compaction;
 mod delivery;
 mod grouping;
+mod keys;
 mod mutation;
 mod narration;
 mod peer;
