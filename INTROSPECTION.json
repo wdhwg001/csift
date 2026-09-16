@@ -94963,6 +94963,99 @@
           "note": "The `hook_success` figures refute the shape the round's brief carried, which had the `rendered` presence coinciding exactly with a non-empty payload content: here 15 lines carry the conversion and 90 carry content, so the two populations are not equal on this root and the coincidence REC-109 records for that payload type is the narrower statement. csift reads the `rendered` presence and not the content, so no behaviour rests on the refuted form."
         }
       ]
+    },
+    {
+      "id": "REC-111",
+      "area": "record-model",
+      "behavior": "Every attachment record hangs from another record by its own top-level `parentUuid`, and that uuid names a record of the SAME transcript on every line that carries one. Counted over one projects root, one JSON parse per non-blank line, of 664,769 attachment lines 664,691 carry a string `parentUuid` and every one of them resolves to a `uuid` on another line of its own file - 435,850 to another attachment, 165,738 to a `user` record, 63,041 to an `assistant` record and 62 to a `system` record, with 0 unresolved. The ONE population with no parent at all is `hook_success`: 78 of its lines on that root and 99 on a second root carry a null or absent `parentUuid`, and no other payload type ever does. So an attachment chain walks attachment to attachment and ends on a conversation record. A `structured_output` is the tightest case: 1,076 of 1,076 are parented to an `assistant` record, and on a second root, whose builds write none, 0 of 845,866 attachment lines are of that type. That root reproduces the rule with its own numbers: 610,685 attachment parents, 123,953 user, 111,065 assistant, 64 system, 0 unresolved.",
+      "depends": "`record_text::attachments::record_facts` emits `attached_to` from `parentUuid` on every attachment unit and resolves it through `ClassifyCtx::line_of_uuid`, the chain's own uuid map, so the edge renders as an ADDRESS (`[for: attached_to L<n>]`) rather than a bare id - the in-file resolution rate is what makes that worth rendering at all, and JSON carries the whole uuid beside the line. A record with no parent takes the honest empty rather than a fabricated target, which is exactly the `hook_success` population. csift walks ONE hop and no further: the walk to the first conversation record spans several attachments and belongs to a provenance index, not to a per-unit fact.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/attachments.rs",
+          "lines": "350",
+          "snippet": "    let attached_to = super::for_edge(\"attached_to\", Basis::Key, rec.parent_uuid.as_deref(), ctx);"
+        },
+        {
+          "path": "tests/cli/search/taxonomy/attachments.rs",
+          "lines": "306",
+          "snippet": "fn every_attachment_unit_says_which_record_it_is_for() {"
+        }
+      ],
+      "instrument": "Walk every `*.jsonl` at any depth under a projects root, subagent transcripts included, skipping a file named `journal.jsonl`; split on the byte 0x0A; one JSON parse per non-blank line. Build a per-FILE map from each line's top-level `uuid` to its top-level `type`, then for each line whose `type` is `attachment` look its `parentUuid` up in that map: count a hit under the PARENT's type, a miss as unresolved, and a null or absent `parentUuid` under the CHILD's own `attachment.type`. Counting rule: one attachment line contributes exactly one outcome, and the map is per file, so a uuid belonging to another transcript counts as a miss rather than a hit.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The WRITER that sets an attachment's `parentUuid` is untraced: which record the harness treats as the parent when it attaches a run of attachments to one turn, and what leaves a `hook_success` with none, are unread. Instrument: byte-find the attachment record constructor in the shipped executable (the one that writes `type:\"attachment\"` beside a payload) and read the expression that fills `parentUuid`, then the branch that reaches it with no parent in hand."
+      ],
+      "residue": null,
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Ran the per-file uuid-to-type map and the attachment parent lookup above over both projects roots, bucketing each attachment line by the parent's type, by unresolved, or by its own payload type when the parent is null or absent.",
+          "observed": "Root one: 9,611 files, 1,782,516 lines, 0 unparsed, 664,769 attachment lines. Parents resolve to attachment 435,850, user 165,738, assistant 63,041, system 62; unresolved 0; null or absent 78, every one of them a `hook_success`. `structured_output` parents: assistant 1,076, nothing else. Root two: 845,866 attachment lines; attachment 610,685, user 123,953, assistant 111,065, system 64; unresolved 0; null or absent 99, again all `hook_success`; 0 `structured_output` lines.",
+          "rule": "One JSON parse per non-blank line of every `*.jsonl` under a root, `journal.jsonl` skipped; the uuid map is per FILE and holds the last line carrying a uuid; one attachment line contributes exactly one outcome.",
+          "note": "The in-file resolution rate is total on both roots, which is what makes resolving `attached_to` to a LINE worth doing rather than printing a bare id; the one null-parent population is a single payload type on both, so the honest empty has a name."
+        }
+      ]
+    },
+    {
+      "id": "CLS-041",
+      "area": "classification",
+      "behavior": "A `hook_success` attachment payload has ONE key set on disk and it is ten keys: `type`, `hookName`, `toolUseID`, `hookEvent`, `content`, `stdout`, `stderr`, `exitCode`, `command`, `durationMs`. Counted over one projects root, all 429,041 `hook_success` lines carry exactly that set, with 1 distinct key set among them; a second root reproduces it on all 618,777 of its own. The inner `toolUseID` is a PAYLOAD key and never a top-level one: it occurs on 0 lines at the top level of either root, and inside the payload on TEN payload types of the first root, seven of them the hook family - `hook_success` 429,041, `hook_additional_context` 90,425, `bash_output_audience_note` 2,505, `structured_output` 1,076, `hook_cancelled` 771, `read_truncation_notice` 569, `hook_non_blocking_error` 93, `hook_blocking_error` 30, `hook_system_message` 5, `hook_stopped_continuation` 3 - and on EVERY line of each of those types. `hook_additional_context` carries no `command` on any of its 90,425 lines, so a hook's injected context names its hook and never what ran.",
+      "depends": "`record_text::attachments` reads the hook payload for what a reader cannot otherwise see: `hookEvent` and `hookName` become the `[hook ...]` marker, `exitCode` and `durationMs` its tail, `stdout` the body of a run with no persisted conversion, and `command` the `produced_by` fact. Each is read with a fallback, because the key set on disk is a fact about the builds that wrote these lines and not a guarantee: a missing name renders `unknown` in its slot and a missing tail is dropped rather than printed as a zero the record never carried. `for_tool_use` reads the INNER key and no top-level one, which is why it finds the id on all ten types; reading the top level would find it on no line at all. That `hook_additional_context` never carries a command is why its producer fact is the honest empty that still names the hook, rather than a branch that could have found one.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/attachments.rs",
+          "lines": "356-361",
+          "snippet": "    let for_tool_use = super::for_edge(\n        \"for_tool_use\",\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        ctx,\n    );"
+        },
+        {
+          "path": "src/commands/search/record_text/attachments.rs",
+          "lines": "334-336",
+          "snippet": "fn payload_str<'a>(rec: &'a Record, key: &str) -> Option<&'a str> {\n    rec.attachment_value()?.get(key)?.as_str()\n}"
+        },
+        {
+          "path": "src/commands/search/record_text/attachments/tests.rs",
+          "lines": "341",
+          "snippet": "fn a_top_level_tool_use_id_is_not_the_payloads() {"
+        }
+      ],
+      "instrument": "Corpus: walk every `*.jsonl` at any depth under a projects root, subagent transcripts included, skipping a file named `journal.jsonl`; split on the byte 0x0A; one JSON parse per non-blank line. For each line whose `attachment.type` is `hook_success`, record the SORTED tuple of the payload's own keys and count the distinct tuples. Separately count, per payload type, the lines carrying a string `attachment.toolUseID` and the lines carrying a string TOP-LEVEL `toolUseID`, and the lines of type `hook_additional_context` carrying a string `attachment.command`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The payload CONSTRUCTOR is untraced: how many call sites build a `hook_success` payload, and whether any of them builds a narrower key set than the one that reaches disk, are unread. Instrument: byte-find the literal `type:\"hook_success\"` in the shipped executable, read the object literal at each occurrence, and list the key sets those sites build against the single set measured on disk."
+      ],
+      "residue": null,
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Ran the payload key-set tally and the two `toolUseID` counts above over both projects roots, plus the `hook_additional_context` command count.",
+          "observed": "Root one: 429,041 `hook_success` lines, 1 distinct payload key set, and it is `command,content,durationMs,exitCode,hookEvent,hookName,stderr,stdout,toolUseID,type`. Inner `toolUseID` on ten payload types (hook_success 429,041, hook_additional_context 90,425, bash_output_audience_note 2,505, structured_output 1,076, hook_cancelled 771, read_truncation_notice 569, hook_non_blocking_error 93, hook_blocking_error 30, hook_system_message 5, hook_stopped_continuation 3), each count equal to that type's own line count; top-level `toolUseID` on 0 lines; `hook_additional_context` with a `command` on 0 of 90,425. Root two: 618,777 `hook_success` lines, the SAME single key set; inner `toolUseID` on six payload types there (hook_success 618,777, hook_additional_context 175,834, hook_cancelled 2,581, read_truncation_notice 110, hook_non_blocking_error 107, hook_blocking_error 35), top-level 0.",
+          "rule": "One JSON parse per non-blank line of every `*.jsonl` under a root, `journal.jsonl` skipped; a key set is the sorted tuple of the payload object's own keys; a `toolUseID` counts only when its value is a string; one line contributes one outcome per tally.",
+          "note": "The second root carries six of the ten carrier types rather than all ten, which is a fact about which features those builds ran and not a narrower rule: on both roots every line of a carrying type carries the key, and neither root has it at the top level."
+        }
+      ]
     }
   ]
 }

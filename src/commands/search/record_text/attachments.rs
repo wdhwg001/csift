@@ -106,9 +106,10 @@ fn payload_field_body(rec: &Record) -> Option<String> {
 
 /// The ATTACHMENT family's own facts.
 ///
-/// An EDGE to another record is never a variant here - [`super::for_edge`] builds those, so
+/// An EDGE to another RECORD is never a variant here - [`super::for_edge`] builds those, so
 /// every family's provenance edge resolves and renders alike. What IS here is what only
-/// this family knows: which of a record's two copies of itself the body shows.
+/// this family knows: which of a record's two copies of itself the body shows, and what
+/// produced the record when the producer is a COMMAND rather than another record.
 #[derive(Debug, Clone)]
 pub(crate) enum Fact {
     /// Which of an attachment record's two copies of itself the unit's BODY came from:
@@ -120,6 +121,27 @@ pub(crate) enum Fact {
     /// turn the record was replayed into, which the record does not say - so the unit
     /// reports the second copy rather than choosing.
     HumanTurnRender,
+    /// What RAN to produce this attachment: a hook run's own `command`, with the hook's
+    /// name beside it.
+    ///
+    /// NOT a `for` edge, and the reason is the shared edge's own shape: a resolved edge
+    /// goes through the chain's uuid map and renders its target as an eight-character id
+    /// handle, which cuts a command to nonsense and asks a lookup no command can answer.
+    /// The edge kinds point at RECORDS; a producer points at a command line.
+    ProducedBy {
+        /// The command the hook ran, when the line carries one.
+        command: Option<String>,
+        /// The hook's own name, which a hook line carries whether or not it names a
+        /// command; `None` on a payload type that is no hook's output at all.
+        hook_name: Option<String>,
+        /// The payload type, so a line with no producer key names what it IS instead of
+        /// only what it lacks.
+        payload_type: Option<String>,
+        /// Whether this payload type is one a hook writes. The two empties are different
+        /// facts: a hook line with no command is a hook csift can still name, and any
+        /// other type had no producer key to carry in the first place.
+        hook_payload: bool,
+    },
 }
 
 impl Fact {
@@ -128,6 +150,25 @@ impl Fact {
         match self {
             Fact::Body(source) => Some(format!("[{source}]")),
             Fact::HumanTurnRender => Some("[human-turn render differs]".to_string()),
+            // The HONEST EMPTY reads like every other one on the page (`unknown
+            // (<reason>)`) and says WHICH empty it is: a hook line whose command the record
+            // omits still names its hook, and a line of any other type names its type.
+            Fact::ProducedBy {
+                command,
+                hook_name,
+                payload_type,
+                hook_payload,
+            } => Some(match (command, hook_payload) {
+                (Some(cmd), _) => format!("[produced_by {cmd}]"),
+                (None, true) => format!(
+                    "[produced_by unknown (no command on this line; hookName={})]",
+                    hook_name.as_deref().unwrap_or("unknown")
+                ),
+                (None, false) => format!(
+                    "[produced_by unknown (no producer key; type={})]",
+                    payload_type.as_deref().unwrap_or("unknown")
+                ),
+            }),
         }
     }
 
@@ -138,6 +179,19 @@ impl Fact {
             Fact::HumanTurnRender => {
                 vec![("human_turn_render_differs", serde_json::json!(true))]
             }
+            Fact::ProducedBy {
+                command,
+                hook_name,
+                payload_type,
+                ..
+            } => vec![(
+                "produced_by",
+                serde_json::json!({
+                    "command": command,
+                    "hook_name": hook_name,
+                    "payload_type": payload_type,
+                }),
+            )],
         }
     }
 }
@@ -148,19 +202,23 @@ impl Fact {
 /// first thing it does is refuse a unit that is not its own - one type compare, which is
 /// what every record of every other family pays here.
 ///
-/// The body fact and the leaf marker ride only a unit whose text this family produced: a
-/// csift-channel delivery renders its own envelope verbatim, so stamping
-/// `[rendered]`/`[payload]` on it would describe a body it is not showing.
+/// TWO scopes, deliberately different. The `for` edges and `produced_by` are RECORD facts,
+/// so they ride every unit of an attachment line - including the one an ADDRESS renders for
+/// a payload type csift models no leaf for, because the same keys must not give two answers
+/// depending on whether csift has a leaf. The body fact and the leaf marker ride only a
+/// unit whose text this family produced: a csift-channel delivery renders its own envelope
+/// verbatim, so stamping `[rendered]`/`[payload]` on it would describe a body it is not
+/// showing.
 pub(crate) fn facts(
     rec: &Record,
     _raw: Option<&str>,
     section: &Section<'_>,
-    _ctx: &ClassifyCtx,
+    ctx: &ClassifyCtx,
 ) -> (Vec<HitFact>, Vec<Marker>) {
     if !rec.is_type("attachment") {
         return (Vec::new(), Vec::new());
     }
-    let mut facts = Vec::new();
+    let mut facts = record_facts(rec, ctx);
     let mut markers = Vec::new();
     if section.class == Some(Class::CommChannel) {
         return (facts, markers);
@@ -275,6 +333,55 @@ fn hook_outcome_detail(rec: &Record) -> String {
 /// so reading the payload IS the rule.
 fn payload_str<'a>(rec: &'a Record, key: &str) -> Option<&'a str> {
     rec.attachment_value()?.get(key)?.as_str()
+}
+
+/// The RECORD facts of an attachment line: which record it hangs from, which tool call it
+/// answers for, and what produced it.
+///
+/// Every one is emitted on every attachment unit. A key the line does not carry renders its
+/// REASON instead of disappearing, because a silently absent field cannot be told apart
+/// from a field csift never looked for.
+#[must_use]
+fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
+    // Where this attachment hangs. An attachment's parent is most often ANOTHER attachment
+    // - they chain - and the chain ends on the record the whole run of them was attached
+    // to. ONE hop: the walk to the first conversation record is a provenance index's work,
+    // not a per-unit fact's.
+    let attached_to = super::for_edge("attached_to", Basis::Key, rec.parent_uuid.as_deref(), ctx);
+    // The tool call this attachment answers for: an INNER key of the payload, never a
+    // top-level one. It is a WIRE id rather than a record uuid, so the lookup finds no line
+    // and the edge keeps the id under `not in this file` - which is the shared edge's own
+    // word for exactly this case, and better than a second index csift would have to build
+    // to pretend otherwise.
+    let for_tool_use = super::for_edge(
+        "for_tool_use",
+        Basis::Key,
+        payload_str(rec, "toolUseID"),
+        ctx,
+    );
+    vec![attached_to, for_tool_use, produced_by(rec)]
+}
+
+/// What produced this attachment. A hook RUN records the command it ran, so that is the
+/// answer and the hook's name rides beside it; the context a hook INJECTED records only the
+/// name, so the fact says so and names what the line does carry. Every other payload type
+/// records no producer at all, and the fact says THAT rather than vanishing.
+fn produced_by(rec: &Record) -> HitFact {
+    let payload_type = rec.attachment_type();
+    // The HOOK payload types are the ones whose record is a hook's own output: a run
+    // (`hook_success`) names the command it executed, an injection
+    // (`hook_additional_context`) names only the hook. Every other type is not a hook's
+    // output at all, which is a different empty and says so.
+    let hook_payload = matches!(
+        payload_type.as_deref(),
+        Some("hook_success" | "hook_additional_context")
+    );
+    HitFact::Attachments(Fact::ProducedBy {
+        command: payload_str(rec, "command").map(str::to_string),
+        hook_name: payload_str(rec, "hookName").map(str::to_string),
+        payload_type,
+        hook_payload,
+    })
 }
 
 #[cfg(test)]

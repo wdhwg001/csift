@@ -220,3 +220,211 @@ fn a_non_attachment_unit_gets_nothing() {
     let (facts, markers) = facts(&rec(line), Some(line), &section(Class::UserMessage), &ctx());
     assert!(facts.is_empty() && markers.is_empty());
 }
+
+// -- the three RECORD facts: two `for` edges and the producer --
+
+/// The edge of one kind, or a panic naming what was there instead.
+fn edge_of<'a>(facts: &'a [HitFact], kind: &str) -> &'a HitFact {
+    facts
+        .iter()
+        .find(|f| match f {
+            HitFact::For { kind: k, .. } | HitFact::ForUnknown { kind: k, .. } => *k == kind,
+            _ => false,
+        })
+        .unwrap_or_else(|| panic!("no {kind} edge among {facts:?}"))
+}
+
+/// The `for` array a hit's JSON carries, folded by the one merge rule so several edges of
+/// the same kind accumulate rather than overwrite.
+fn for_json(facts: &[HitFact]) -> serde_json::Value {
+    let mut obj = serde_json::json!({});
+    crate::commands::search::attach_facts(&mut obj, facts);
+    obj["for"].clone()
+}
+
+/// One edge object out of that array, by kind.
+fn edge_row(facts: &[HitFact], kind: &str) -> serde_json::Value {
+    for_json(facts)
+        .as_array()
+        .expect("an array of edges")
+        .iter()
+        .find(|e| e["kind"] == kind)
+        .unwrap_or_else(|| panic!("no {kind} row"))
+        .clone()
+}
+
+/// A resolver that answers for ONE uuid, so the resolved and the unresolved arms are both
+/// reachable from a unit test.
+struct OneLine;
+
+impl crate::model::LineOfUuid for OneLine {
+    fn line_of_uuid(&self, uuid: &str) -> Option<usize> {
+        (uuid == "11111111-2222-4333-8444-555555555500").then_some(7)
+    }
+}
+
+/// Every attachment unit carries all three record facts, so a reader never has to guess
+/// whether csift looked.
+#[test]
+fn all_three_record_facts_ride_every_attachment_unit() {
+    let line = r#"{"type":"attachment","attachment":{"type":"auto_mode"}}"#;
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::ContextMode), &ctx());
+    for kind in ["attached_to", "for_tool_use"] {
+        assert!(
+            matches!(edge_of(&facts, kind), HitFact::ForUnknown { .. }),
+            "{kind} is the honest empty on a line carrying none of its keys"
+        );
+    }
+    assert!(facts
+        .iter()
+        .any(|f| matches!(f, HitFact::Attachments(Fact::ProducedBy { .. }))));
+}
+
+/// The honest empty names its reason in the label zone AND in JSON, never an absent key.
+#[test]
+fn an_absent_key_renders_its_reason() {
+    let line = r#"{"type":"attachment","attachment":{"type":"auto_mode"}}"#;
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::ContextMode), &ctx());
+    assert_eq!(
+        edge_of(&facts, "attached_to").label_zone().as_deref(),
+        Some("[for: attached_to unknown (the record carries no such key)]")
+    );
+    let parent = edge_row(&facts, "attached_to");
+    assert_eq!(parent["target"], serde_json::Value::Null);
+    assert_eq!(parent["basis"], serde_json::Value::Null);
+    assert!(
+        parent["reason"].is_string(),
+        "the reason rides JSON: {parent}"
+    );
+}
+
+/// A parent this transcript carries renders as an ADDRESS - the line, not the id - and the
+/// JSON carries the whole uuid beside it.
+#[test]
+fn a_resolved_parent_carries_its_line() {
+    let line = r#"{"type":"attachment","parentUuid":"11111111-2222-4333-8444-555555555500","attachment":{"type":"auto_mode"}}"#;
+    let lines = OneLine;
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.lines = Some(&lines);
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::ContextMode), &ctx);
+    assert_eq!(
+        edge_of(&facts, "attached_to").label_zone().as_deref(),
+        Some("[for: attached_to L7]")
+    );
+    let parent = edge_row(&facts, "attached_to");
+    assert_eq!(parent["basis"], "key");
+    assert_eq!(parent["target"]["line"], 7);
+    assert_eq!(
+        parent["target"]["uuid"],
+        "11111111-2222-4333-8444-555555555500"
+    );
+}
+
+/// The inner tool-call id answers `for_tool_use` and keeps its id: it is a WIRE id, so no
+/// line of this transcript carries it and the edge says so rather than inventing one.
+#[test]
+fn an_inner_tool_use_id_keeps_its_id_with_no_line() {
+    let line = r#"{"type":"attachment","attachment":{"type":"read_truncation_notice","toolUseID":"toolu_zzq1"}}"#;
+    let lines = OneLine;
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.lines = Some(&lines);
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::ContextFile), &ctx);
+    let tool = edge_row(&facts, "for_tool_use");
+    assert_eq!(tool["target"]["uuid"], "toolu_zzq1");
+    assert_eq!(tool["target"]["line"], serde_json::Value::Null);
+    assert_eq!(tool["target"]["note"], "not in this file");
+}
+
+/// The id is read from the PAYLOAD and never from the top level, which is where no line
+/// carries it.
+#[test]
+fn a_top_level_tool_use_id_is_not_the_payloads() {
+    let line =
+        r#"{"type":"attachment","toolUseID":"toolu_zztop","attachment":{"type":"auto_mode"}}"#;
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::ContextMode), &ctx());
+    assert!(
+        matches!(edge_of(&facts, "for_tool_use"), HitFact::ForUnknown { .. }),
+        "the payload carries no id, so the edge is the honest empty"
+    );
+}
+
+/// A hook run's producer is the command it executed, with the hook's name beside it.
+#[test]
+fn a_hook_run_names_its_command_and_its_hook() {
+    let line = r#"{"type":"attachment","attachment":{"type":"hook_success","hookName":"zzp-gate","command":"/synthetic/hooks/gate.sh","stdout":"x"}}"#;
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::HookOutcome), &ctx());
+    let f = facts
+        .iter()
+        .find(|f| matches!(f, HitFact::Attachments(Fact::ProducedBy { .. })))
+        .expect("a producer fact");
+    assert_eq!(
+        f.label_zone().as_deref(),
+        Some("[produced_by /synthetic/hooks/gate.sh]"),
+        "a command is rendered whole - cutting it to an id handle would make it unusable"
+    );
+    assert_eq!(
+        f.json(),
+        vec![(
+            "produced_by",
+            serde_json::json!({
+                "command": "/synthetic/hooks/gate.sh",
+                "hook_name": "zzp-gate",
+                "payload_type": "hook_success",
+            })
+        )]
+    );
+}
+
+/// Injected context records the hook's name and no command, so the fact is the honest
+/// empty that still names what the line carries.
+#[test]
+fn injected_context_has_no_command_and_says_so() {
+    let line = r#"{"type":"attachment","attachment":{"type":"hook_additional_context","hookName":"zzp-seed","content":["x"]}}"#;
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::HookContext), &ctx());
+    let f = facts
+        .iter()
+        .find(|f| matches!(f, HitFact::Attachments(Fact::ProducedBy { .. })))
+        .expect("a producer fact");
+    assert_eq!(
+        f.label_zone().as_deref(),
+        Some("[produced_by unknown (no command on this line; hookName=zzp-seed)]")
+    );
+}
+
+/// A payload type that is no hook's output says THAT, and names the type, so the reason is
+/// checkable against the line.
+#[test]
+fn a_payload_with_no_producer_key_names_its_type() {
+    let line = r#"{"type":"attachment","attachment":{"type":"skill_listing"}}"#;
+    let (facts, _) = facts(
+        &rec(line),
+        Some(line),
+        &section(Class::ContextListing),
+        &ctx(),
+    );
+    let f = facts
+        .iter()
+        .find(|f| matches!(f, HitFact::Attachments(Fact::ProducedBy { .. })))
+        .expect("a producer fact");
+    assert_eq!(
+        f.label_zone().as_deref(),
+        Some("[produced_by unknown (no producer key; type=skill_listing)]")
+    );
+}
+
+/// An addressed attachment csift models no leaf for gets the SAME record facts a labelled
+/// one does: the keys are on the line either way, and two answers for one line would be the
+/// defect the 1:1 law exists to close.
+#[test]
+fn an_unmodeled_attachment_still_carries_its_record_facts() {
+    let line = r#"{"type":"attachment","parentUuid":"11111111-2222-4333-8444-555555555500","attachment":{"type":"some_future_type","toolUseID":"toolu_zzq1"}}"#;
+    let (facts, markers) = facts(&rec(line), Some(line), &Section::record(None), &ctx());
+    assert!(markers.is_empty(), "no leaf to name: {markers:?}");
+    assert_eq!(
+        edge_row(&facts, "for_tool_use")["target"]["uuid"],
+        "toolu_zzq1"
+    );
+    assert!(facts
+        .iter()
+        .any(|f| matches!(f, HitFact::Attachments(Fact::Body(_)))));
+}
