@@ -49138,12 +49138,17 @@
       "id": "QT-026",
       "area": "queue-and-telemetry",
       "behavior": "The TYPED-ENTRY append path routes through one function, appendEntry, which dispatches on a closed per-type write-policy table (vbr, 166066494): 38 top-level line types, 5 under `dedup-transcript` (user, assistant, attachment, system, progress), 30 under `always` and 3 under `route-by-agent`. Its switch (166107421) has NO default arm - an entry whose type is not in the table matches no case and is silently never written - and an `always` type is handed straight to enqueueWrite exactly as its constructor built it. That table bounds the typed-literal surface, NOT every byte that can reach a transcript: appendEntryToCurrentTranscriptNow (definition 166129659) writes an entry straight into the current session file through a synchronous O_APPEND appender (166154683, carrying the `appendEntryToExistingFileSync: short write` literal), appendEntryToFileAsync (166155592) is a second such path, both are separate exports (174412305, 174412345), three passthroughs accept any caller-built entry (166114479, 166114538, 166170820) and a test-only helper accepts any shape (166080808). Of the records that do travel the typed path, only the user record factory (165936023, `return{type:\"user\",message:{role:\"user\",content:e||up},...}`) and the assistant stream builder mint a `message{}` (the assistant side is attributed by the specimen census below, not by a located hop); the envelope of the MESSAGE-CHAIN path (166105359, inside the chain loop that ends in this.appendEntry) spreads parentUuid, logicalParentUuid, isSidechain, teamName, agentName, promptId, agentId, the record itself, the cwd/sessionId/version block, gitBranch and slug, and adds no `message` key; the insert methods that carry the promoted line types never route through that chain, so a promoted line carries none of those keys and cannot be threaded by parentUuid - so message-less is the default and a `message{}` is a property of two constructors rather than of the sample. FIVE message-less shapes carry the queue and telemetry facts csift promotes: `queue-operation` with the queued content (162031847), the `system` subtypes `turn_duration` (166030930), `away_summary` (166031203) and `stop_hook_summary` (166030639), and the `file-history-snapshot` / `file-history-delta` pair (166106053 / 166123148). They are a small part of the message-less set, not the whole of it. Corpus, one observation per physical jsonl line under the projects root with workflow journals and elicitation sidecars excluded: 8,251 transcript files, 1,446,970 parsed lines, 18 distinct top-level types and 11 distinct `system` subtypes - 28 distinct type/subtype pairs. Every observed type is an entry of the 38-entry table and none sits outside it; 20 table entries have no lines here (agent-color, agent-setting, artifact-autoreact-ledger, artifact-comment-monitor, attribution-snapshot, content-replacement, custom-title, ended-by-model, frame-link, isolation-latch, the three marble-origami types, observer-ref, pr-link, progress, relocated, summary, tag, worktree-state), which is a corpus fact and not evidence they cannot be written. Exactly TWO types carry a top-level `message` key - user (261,730 lines) and assistant (487,555) - and the other 697,685 lines carry none, `attachment` being the largest message-less bucket at 529,653 lines. The five named shapes on disk: queue-operation 13,928, stop_hook_summary 5,823, turn_duration 4,816, file-history-snapshot 4,158, file-history-delta 2,081, away_summary 1,691; the other message-less types on disk are last-prompt 29,838, permission-mode 29,774, mode 29,685, ai-title 29,355, agent-name 12,885, atis-latch 1,400, bridge-session 1,319, history-suppression 410, fork-context-ref 33, cost-state 19, continued-in 1, plus the eight remaining `system` subtypes (scheduled_task_fire 459, compact_boundary 236, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2).",
-      "depends": "csift promotes each of the five to exactly one LLM-invisible leaf (`user.queued`, `harness.turn.duration`, `harness.turn.recap`, `harness.turn.stop-hooks`, `harness.bookkeeping.file-history`) and admits them to a scan ONLY behind an explicit `-t` selector reaching that leaf or a `show` address, so a bare scan, a `-T`-only filter and a flagless `--count-by label` never parse them, and neither does a bare role selector - with ONE exception. A SIXTH gated leaf, `harness.system.*`, catches every OTHER `type:\"system\"` subtype, the compaction boundary excepted (it keeps its own leaf), and a bare `harness` role DOES admit its lines: one subtype under it, `local_command`, is re-minted by the request assembler and sent (CLS-026), so the lines are parsed and the per-record delivery override keeps only that subtype. The other five leaves keep the explicit-selector rule exactly. The remaining message-less types stay unmodeled, which is safe only because the promotion is a whitelist of named types (src/model/classify/bookkeeping.rs) rather than a message-less test: a rule keyed on the absence of `message{}` would sweep in attachment, last-prompt, mode, permission-mode, ai-title, agent-name, atis-latch and the rest of the bookkeeping set - 697,685 of 1,446,970 corpus lines.",
+      "depends": "csift promotes each of the five to exactly one LLM-invisible leaf (`user.queued`, `harness.turn.duration`, `harness.turn.recap`, `harness.turn.stop-hooks`, `harness.bookkeeping.file-history`) and admits them to a scan ONLY behind an explicit `-t` selector reaching that leaf or a `show` address, so a bare scan, a `-T`-only filter and a flagless `--count-by label` never parse them, and neither does a bare role selector - with ONE exception. A SIXTH gated leaf, `harness.system.*`, catches every OTHER `type:\"system\"` subtype, the compaction boundary excepted (it keeps its own leaf), and a bare `harness` role DOES admit its lines: one subtype under it, `local_command`, is re-minted by the request assembler and sent (CLS-026), so the lines are parsed and the per-record delivery override keeps only that subtype. The other five leaves keep the explicit-selector rule exactly. The remaining message-less types stay unmodeled, which is safe only because the promotion is a whitelist of named types (src/model/classify/bookkeeping.rs) rather than a message-less test: a rule keyed on the absence of `message{}` would sweep in attachment, last-prompt, mode, permission-mode, ai-title, agent-name, atis-latch and the rest of the bookkeeping set - 697,685 of 1,446,970 corpus lines. Each of those lines now also renders a key=value HEAD built from its own bytes before its verbatim body, so a reader who named the leaf sees what the line says without reading raw JSON; the head reads only keys the line carries, so a renamed key drops out of the summary and stays matchable in the body.",
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
           "lines": "69-75",
           "snippet": "    pub fn promoted_class(&self) -> Option<Class> {\n        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class().or(Some(Class::BookkeepingQueue)),\n            \"system\" => system::classify(self.subtype.as_deref()?),\n            other => classify(other),\n        }\n    }"
+        },
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "182",
+          "snippet": "pub(crate) fn render("
         }
       ],
       "instrument": "Census: parse every jsonl line under the projects root with json.loads and bucket it by (top-level type, subtype when the type is system), recording whether the parsed object has a top-level `message` key and classing the file as transcript, workflow journal or elicitation sidecar by its basename; counting rule one observation per physical line. Reconcile the observed type set against the policy table read whole from the binary at 166066494. Gating: `csift search '' <target> -t 'harness.*' --count-by label` against the same command without `-t` - the promoted leaves appear only in the gated run.",
@@ -49232,6 +49237,16 @@
           "observed": "the flagless census reports 29 leaf rows, not 28, and none of them is a gated leaf; the selector census reports the same 12 gated leaves over 32,102 records (bookkeeping.mode 10,161 / name 7,357 / last-prompt 5,120 / queue 3,024 / file-history 1,258, turn.duration 1,771 / stop-hooks 1,755 / recap 496, user.queued 676, schedule.event 456, system.api-error 27, system.command 1), every one absent from the flagless set",
           "rule": "one census ROW per leaf that survives the active selector, counted off the command output itself; one record per line admitted by the gate; one transcript with its subagents excluded",
           "note": "the preceding check said 28 leaves; the census prints 29. The gating conclusion is unaffected - it rests on the two sets being disjoint, which they are"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Rendered one line of each of the eighteen non-transcript types through `csift show --line` on a synthetic transcript built from the shapes the inventory names, and counted the units that printed a bracketed head.",
+          "observed": "Eighteen of eighteen render a head: sixteen built from the line's own bytes by the family and two (`file-history-snapshot`, `file-history-delta`) by the renderer that reads the fields csift models. Each head opens with the line's own `type` value except those two, whose head opens with the leaf name and the tracked path.",
+          "rule": "A unit counts as rendering a head when its text begins with `[` and the bracket closes before the verbatim body; the body is the source line byte for byte.",
+          "note": ""
         }
       ],
       "attribution": "end-to-end",
@@ -90084,7 +90099,7 @@
       "id": "QT-042",
       "area": "queue-and-telemetry",
       "behavior": "A `cost-state` line is the cost ledger's checkpoint and carries exactly twelve keys: `type`, `sessionId`, `totalCostUSD`, `totalAPIDuration`, `totalAPIDurationWithoutRetries`, `totalToolDuration`, `totalLinesAdded`, `totalLinesRemoved`, `totalDuration`, `startTime`, `modelUsage` and `hasUnknownModelCost`. There is no `uuid`, no `timestamp`, no `parentUuid` and no `message`, so the line is not a conversation record and carries no instant of its own beyond the two numbers: `startTime` is the session's start in epoch milliseconds and `totalDuration` its wall duration, so their SUM is the instant the ledger closed. One builder mints the object (`ddn`), gated on the ledger still belonging to the current session, and hands it to the transcript recorder; a zod schema declares the same twelve fields, with `hasUnknownModelCost` the only optional one, and two readers validate against that schema before trusting a line.",
-      "depends": "csift reads `startTime + totalDuration` off such a line and nothing else: it is the only instant the line carries, and it is what the `/clear` join compares against the wrapper's timestamp. The missing `uuid` and `timestamp` are why a checkpoint is addressed by LINE and never by uuid, and why the line is not a chain node. If the schema gained an instant field or renamed either number, the join would go silent rather than wrong, because csift requires both numbers and rejects a line of any other type.",
+      "depends": "csift reads `startTime + totalDuration` off such a line and nothing else: it is the only instant the line carries, and it is what the `/clear` join compares against the wrapper's timestamp. The missing `uuid` and `timestamp` are why a checkpoint is addressed by LINE and never by uuid, and why the line is not a chain node. If the schema gained an instant field or renamed either number, the join would go silent rather than wrong, because csift requires both numbers and rejects a line of any other type. The same sum now also rides an emitted unit of `harness.bookkeeping.cost` as the instant the checkpoint closed, so a reader of one line sees the join key without computing it; the joined session stays `list`'s answer, because running the join from this side means reading every sibling transcript in the project directory and a `cost-state` line carries no path.",
       "code": [
         {
           "path": "src/commands/session/summarize/clear.rs",
@@ -90095,6 +90110,11 @@
           "path": "src/commands/session/tests.rs",
           "snippet": "fn checkpoint_close_reads_the_sum_and_refuses_other_types() {",
           "lines": "411"
+        },
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "384",
+          "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         }
       ],
       "instrument": "Census every transcript under the projects root for lines whose top-level `type` is `cost-state`, collecting the sorted key tuple of each; report the number of transcripts carrying one, the number of lines, and every distinct key set. Cross-read the shipped binary at the schema literal `w.literal(\"cost-state\")` and at the builder head `function ddn(){if(!GPn())return;return{type:\"cost-state\"` and compare the field lists.",
@@ -90154,6 +90174,16 @@
           "instrument": "Key-set census of every `cost-state` line over every transcript under the projects root, compared against the schema and builder literals read in the 2.1.258 build.",
           "observed": "9,519 transcripts scanned, 14 carry a cost-state line, 44 lines in total, and all 44 share ONE key tuple of twelve: hasUnknownModelCost, modelUsage, sessionId, startTime, totalAPIDuration, totalAPIDurationWithoutRetries, totalCostUSD, totalDuration, totalLinesAdded, totalLinesRemoved, totalToolDuration, type. The builder literal names the same twelve in the same roles and the schema declares them with hasUnknownModelCost optional.",
           "rule": "A line counts when its parsed top-level `type` equals `cost-state`; the key tuple is the sorted list of its top-level keys, so an absent optional field would form a second tuple.",
+          "note": ""
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Censused the `cost-state` key set over two projects roots and rendered a synthetic `cost-state` line through `csift show --line --format json`.",
+          "observed": "Root A carries 44 `cost-state` lines and root B 35, and every one of the 79 carries `startTime`, `totalDuration` and `totalCostUSD`; none carries `uuid`, `timestamp` or `message`. A line whose `startTime` is 2026-01-01T00:00:00.000Z and whose `totalDuration` is 3600000 renders `[checkpoint closes 2026-01-01T01:00:00Z]` and carries `checkpoint_closes_at` with that instant.",
+          "rule": "A key counts as present when it is a top-level key of the line; the rendered instant is the epoch-millisecond sum of the two numbers formatted as a UTC instant.",
           "note": ""
         }
       ]
@@ -93380,6 +93410,706 @@
           "observed": "Build: `Stop hook feedback:` 3 at 71657624 / 179877893 / 180034964, all three continuing with a SPACE; `Stop hook feedback:` + newline 0; ` hook feedback:` 5, of which the declaration at 161464010 is the only suffix literal in code and 74153456 is its interned copy; the four-name array literal 1 at 161464032 (its `Dcn=` at 161464028); `eee(` 10, of which 1 is the definition, 4 are the per-name callers at 165848411 / 165848462 / 165848521 / 165848579 and 5 are an unrelated UI helper in another chunk; `Dcn` 7, of which 3 are code (declaration, recogniser, needle set) and 4 are name lists or interned identifiers. Corpus: 9,797 files walked, 46 records in 14 files opening with a name prefix, 46 of 46 under `Stop`, 46 of 46 followed by a newline, 0 under the other three names.",
           "rule": "Build: occurrences of a byte sequence, not lines (the bundle is one line). Corpus: one per RECORD, the prefix anchored at content start over a STRING `message.content`; a record quoting the phrase mid-prose is not counted, which is most of them. The record count is the reproducible one: a count of LINES carrying the substring is not, because the phrase is its own needle and every transcript discussing it raises the number.",
           "note": "Splits the producer fact out of CLS-016, which pins the three isMeta marker SHAPES and their corpus censuses. The clause it replaces said no whole prefix appeared as a literal in the build; that is true of the assembled form with its newline and false of `Stop hook feedback:`, which occurs three times as the TUI's own text."
+        }
+      ]
+    },
+    {
+      "id": "QT-045",
+      "area": "queue-and-telemetry",
+      "behavior": "The NON-TRANSCRIPT line types share one shape invariant: none carries a `uuid`, none carries a `message{}`, and only a few carry a `timestamp`. The invariant is the binary's own split rather than a coincidence: one predicate answers whether an entry is a transcript message, and it is a bare disjunction over exactly the four types `user`, `assistant`, `attachment` and `system`; the per-type retention table gives those four the value `transcript` and every other registered type one of `boundary-cleared`, `accumulate` or `last-wins`; and the re-stamp planner builds each non-transcript entry as a bare object literal of a `type`, a `sessionId` and that type's own fields, with no identity and no message. Seventeen such types are realized on either measured root - `last-prompt`, `mode`, `permission-mode`, `ai-title`, `agent-name`, `atis-latch`, `bridge-session`, `history-suppression`, `frame-link`, `artifact-comment-monitor`, `artifact-autoreact-ledger`, `file-history-snapshot`, `file-history-delta`, `cost-state`, `fork-context-ref`, `continued-in` and `queue-operation` - and four of them carry `timestamp` on every line (`queue-operation`, `file-history-delta`, `frame-link`, `continued-in`) while `history-suppression` names its own instant `ts` instead. An eighteenth, `pr-link`, is built by the same planner in the same bare form with a `timestamp`, and neither measured root carries a line of it. The per-type key sets are narrow and stable: one distinct key set for each of `mode`, `permission-mode`, `ai-title`, `agent-name`, `atis-latch`, `file-history-snapshot`, `file-history-delta`, `cost-state`, `fork-context-ref`, `continued-in` and the two artifact ledgers, two for `last-prompt` (`lastPrompt` optional), `history-suppression` (`vetoedAgainstAccountUuid` optional) and `frame-link`, and three for `bridge-session` and `queue-operation`.",
+      "depends": "Every `harness.bookkeeping` leaf renders a fabricated `[<line type> key=value ...]` head built from those key sets, read off the SOURCE LINE because no other render in the tree needs a field `Record` does not model. The invariant is also why the whole family is `Class::llm_visible` false and why none of its lines is a chain node: with no `uuid` a line can only ever be addressed by `show --line`. If a type gained a `uuid`, csift would under-report the chain rather than mislabel anything; if a key were renamed, that key would silently drop out of the head, which is why the render prints only the keys it finds and never an empty `key=`.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "64",
+          "snippet": "fn render_keys(line_type: &str) -> &'static [&'static str] {"
+        }
+      ],
+      "instrument": "Corpus: walk every transcript under a projects root, parse each non-blank line, bucket by top-level `type`, and count per type the lines carrying `uuid`, `message` and `timestamp` plus the distinct sorted key sets. Two roots are walked so a count that is an artefact of one machine's history shows up as a disagreement; the roots overlap in history, so a figure that agrees on both is not two independent samples. Binary: byte-find `function zI(e){if(!Re(e))return!1;` for the transcript predicate and `\"queue-operation\":\"last-wins\"` for the retention table, then walk that object literal quote-aware to its matching brace and read every `\"<type>\":\"<policy>\"` pair. Counting rule: A transcript is a `*.jsonl` whose basename is neither `journal.jsonl` nor `elicitations.jsonl`; a line counts when it is non-blank; a line counts under its top-level `type` when that is a string; a key counts as present when it is a top-level key of the line whatever its value; a key SET is the sorted tuple of a line's top-level keys.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "`pr-link` has zero specimens on either measured root, so its shape is read from the planner's object literal alone; a root carrying one would close the specimen leg for that type.",
+        "`last-prompt`'s optional `explicit` and `rewound` keys, which the leaf recorder writes, appear on no line of either measured root."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "transcript-membership predicate",
+          "offset": 166066234,
+          "excerpt": "function zI(e){if(!Re(e))return!1;return e.type===\"user\"||e.type===\"assistant\"||e.type===\"attachment\"||e.type===\"system\"}",
+          "note": "the four-way test that separates a transcript record from a bookkeeping line; a second function of the same minified name elsewhere in the build is unrelated, so the literal carries the body"
+        },
+        {
+          "role": "gate",
+          "name": "retention table",
+          "offset": 166050492,
+          "excerpt": "{user:\"transcript\",assistant:\"transcript\",system:\"transcript\",attachment:\"transcript\",progress:\"boundary-cleared\"",
+          "note": "38 keys over four policies; exactly the predicate's four are valued transcript"
+        },
+        {
+          "role": "writer",
+          "name": "re-stamp planner",
+          "offset": 166090618,
+          "excerpt": "planReAppendSessionMetadata(e,n,r,o){",
+          "note": "builds each non-transcript entry as a bare object literal with no uuid and no message"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "One per-type walk over each of two projects roots under the key-set counting rule, plus the retention table and the transcript predicate parsed out of the build.",
+          "observed": "Root A: 9,588 transcripts, 6,910,379,926 bytes, 1,782,160 non-blank lines, 0 malformed, 21 distinct types of which 17 are non-transcript; 185,673 non-transcript lines, 0 with `uuid`, 0 with `message`, and `timestamp` on `queue-operation` 18,494/18,494, `file-history-delta` 2,609/2,609, `frame-link` 8/8 and `continued-in` 1/1. Root B: 8,881 transcripts, 5,800,254,259 bytes, 1,583,452 lines, 0 malformed, 21 types of which 17 are non-transcript; 167,300 non-transcript lines, the same four timestamp carriers and the same zero counts for `uuid` and `message`. Neither root carries a `pr-link` line. The retention table is 38 keys with exactly four valued `transcript`, matching the predicate's four; the four policies are `transcript`, `boundary-cleared`, `accumulate` and `last-wins`.",
+          "rule": "A transcript is a `*.jsonl` whose basename is neither `journal.jsonl` nor `elicitations.jsonl`; a line counts when it is non-blank; a line counts under its top-level `type` when that is a string; a key counts as present when it is a top-level key of the line whatever its value; a key SET is the sorted tuple of a line's top-level keys.",
+          "note": "`pr-link` is registered and planner-built and has no specimen on either root, so its shape is stated from the planner and its absence is stated as an absence."
+        }
+      ]
+    },
+    {
+      "id": "QT-046",
+      "area": "queue-and-telemetry",
+      "behavior": "The non-transcript lines are re-stamped on a BYTE cadence, which is why a transcript holds tens of thousands of them. One counter accumulates the bytes appended to the session file, and when it reaches half of the lite-read buffer size the whole session-metadata set is re-appended and the counter reset. The buffer size is 65,536 and is exported as `LITE_READ_BUF_SIZE`, so the cadence is one re-stamp per 32,768 bytes appended. The re-stamp planner pushes sixteen `type:\"...\"` object literals plus one call to the history-suppression factory, seventeen distinct types in all, of which NINE are realized on either measured root: `last-prompt`, `ai-title`, `agent-name`, `mode`, `permission-mode`, `atis-latch`, `frame-link`, `bridge-session` and `history-suppression`, and `pr-link` on neither. The planner skips the re-append entirely when a dedup flag is set or the plan came out empty.",
+      "depends": "This is the cost model behind the gate: the family is about a tenth of a transcript's lines, so admitting these lines to a default scan would have every query parse a tenth of every transcript for a leaf it did not ask for. csift therefore keeps one `&&`-gated needle per line type behind one bitmask and a default scan pays nothing. It is also why `last-prompt` bodies repeat: the same prompt is re-stamped every 32,768 bytes, so a census of the leaf counts re-stamps, not prompts.",
+      "code": [
+        {
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "41",
+          "snippet": "pub(crate) fn bookkeeping_mask(args: &SearchArgs, addressed: bool) -> u32 {"
+        }
+      ],
+      "instrument": "Byte-find `var od=65536` for the buffer constant and `LITE_READ_BUF_SIZE` for its exported name; byte-find `this.bytesSinceMetadataReAppend>=od/2` for the drain trigger. For the planner, find `planReAppendSessionMetadata(e,n,r,o){`, read forward to the first `return{sessionFile:` and list every `type:\"<value>\"` literal in that body plus every `N5(<binding>,\"<cause>\")` call; the planner body's length is measured from the first byte of the anchor to the byte before that `return`. For the share, divide the non-transcript line count by the root's non-blank line count under the counting rule of QT-045.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 7"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "append drain trigger",
+          "offset": 166087416,
+          "excerpt": "this.bytesSinceMetadataReAppend>=od/2",
+          "note": "the byte counter that fires the re-stamp, at half the lite-read buffer"
+        },
+        {
+          "role": "gate",
+          "name": "lite-read buffer size",
+          "offset": 157606031,
+          "excerpt": "var od=65536",
+          "note": "the constant the trigger halves; exported under the name LITE_READ_BUF_SIZE"
+        },
+        {
+          "role": "writer",
+          "name": "re-stamp planner",
+          "offset": 166090618,
+          "excerpt": "planReAppendSessionMetadata(e,n,r,o){",
+          "note": "the body that pushes one object literal per session-metadata type"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Byte-found the three anchors, parsed the planner body for its `type:\"...\"` literals and its factory call, and divided the non-transcript line totals of the two-root walk by each root's non-blank line count.",
+          "observed": "`var od=65536` occurs once, at offset 157606031; `LITE_READ_BUF_SIZE` occurs twice (a name-table entry at 70063244 and the export at 173497132); `this.bytesSinceMetadataReAppend>=od/2` occurs once, at 166087416. The planner body is 3,975 characters and pushes, in order, last-prompt, custom-title, ai-title, tag, relocated, agent-name, agent-color, agent-setting, mode, permission-mode, isolation-latch, atis-latch, worktree-state, pr-link, frame-link and bridge-session, plus one history-suppression factory call carrying the cause `migration`: 17 distinct types. Share of all non-blank lines: 185,673 of 1,782,160 = 10.42% on root A, 167,300 of 1,583,452 = 10.57% on root B.",
+          "rule": "A type counts once however many times the planner pushes it; the planner body's length is the byte span from its anchor to the byte before the first `return{sessionFile:`; the share is non-transcript lines over ALL non-blank lines of the same walk, so the denominator includes the four transcript types.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "QT-047",
+      "area": "queue-and-telemetry",
+      "behavior": "A `queue-operation` line is WRITE-ONLY: nothing in the executable reads it back. The quoted literal `\"queue-operation\"` occurs exactly three times - the emitter's own object literal, and one key in each of the two per-type policy tables - and the transcript loader's per-entry dispatch carries no branch for the type. Its retention policy is nevertheless `last-wins`, so a local garbage-collection rewrite keeps one such line per session rather than dropping them: a line nothing reads is preserved across every compaction. The emitter builds `{type:\"queue-operation\", operation, timestamp, sessionId}` plus `content` and `reason` only when those arguments are given, which is why the type has three key sets on disk and not one. There is no `position` key in that object, so a queued line records WHAT happened to an entry and not where it sat.",
+      "depends": "csift is the only reader these lines have, which is the whole reason the leaf exists: `harness.bookkeeping.queue` renders `operation` and `reason` into a head over the line's own bytes, so a question like \"what was dropped mid-turn and why\" is answerable from the transcript. It is also why the leaf is `llm_visible` false with no argument needed - not even the harness reads it, so the model certainly never did - and why the leaf carries no provenance relation: the key set names nothing outside the line.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "101",
+          "snippet": "        \"queue-operation\" => &[\"operation\", \"reason\"],"
+        }
+      ],
+      "instrument": "Byte-find the quoted literal `\"queue-operation\"` over the whole executable and read each occurrence: a writer, a reader or a table entry. Then read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "queue operation emitter",
+          "offset": 162031935,
+          "excerpt": "\"queue-operation\"",
+          "note": "the only writer: an inner function building the object from its operation argument"
+        },
+        {
+          "role": "gate",
+          "name": "retention table entry",
+          "offset": 166051551,
+          "excerpt": "\"queue-operation\":\"last-wins\"",
+          "note": "last-wins, so a garbage-collection rewrite keeps one such line rather than dropping them"
+        },
+        {
+          "role": "writer",
+          "name": "append-policy table entry",
+          "offset": 166067280,
+          "excerpt": "\"queue-operation\":\"always\"",
+          "note": "the second of the two table occurrences; with the emitter these are all three"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "emitter object literal",
+          "offset": 162031929,
+          "excerpt": "{type:\"queue-operation\",operation:",
+          "verdict": "writes the line"
+        },
+        {
+          "site": "retention table",
+          "offset": 166051551,
+          "excerpt": "\"queue-operation\":\"last-wins\"",
+          "verdict": "a table key, not a reader"
+        },
+        {
+          "site": "append-policy table",
+          "offset": 166067280,
+          "excerpt": "\"queue-operation\":\"always\"",
+          "verdict": "a table key, not a reader"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Byte-found the quoted literal over the whole executable and read every occurrence; censused the `operation`, `reason`, `position` and key-set distributions of every `queue-operation` line over two projects roots.",
+          "observed": "Three occurrences of the quoted literal, at offsets 162031935, 166051551 and 166067280 - the emitter and the two tables; no fourth. The bare unquoted word occurs once more, at 74526872, as the interned name in the constant pool. On disk: 18,494 lines over 48 transcripts on root A and 15,226 over 45 on root B, 3 distinct key sets on each. Every line carries `timestamp`; none of the 33,720 carries `uuid`, `message` or `position`.",
+          "rule": "An occurrence is a byte match of the quoted literal anywhere in the executable, including the policy tables; a key set is the sorted tuple of a line's top-level keys.",
+          "note": "The absence of a `position` key is stated, because the taxonomy map's provenance cell for this leaf names one; the emitter's key set has no such field, so the leaf carries no relation."
+        }
+      ]
+    },
+    {
+      "id": "QT-048",
+      "area": "queue-and-telemetry",
+      "behavior": "The `queue-operation` `reason` domain is CLOSED and small, and it rides only the `remove` operation. The queue exposes four public methods that accept a reason - `remove`, `consume`, `removeByFilter` and `clearCommandQueue` - and all four funnel into the same emitter call, which passes the literal string `remove` as the operation and the caller's reason through. Enumerating every call into those four methods and reading the reason inside each argument list gives TEN reason-carrying call sites and FIVE distinct values: `absorbed_mid_turn` (3 sites), `delivered_to_agent` (2), `agent_stopped` (2), `cleared_on_cancel` (2, one through `removeByFilter` and one through `clearCommandQueue`) and `delivered_as_tool_result` (1). A later build adds a SIXTH, `resume_failed`, without adding a site: one `remove` call's reason becomes the ternary `agent_stopped` / `resume_failed`.",
+      "depends": "csift renders the reason VERBATIM into the `harness.bookkeeping.queue` head and never validates it against a list, so a seventh value costs nothing and is readable the day it appears - the domain is documentation, not a gate. What the closure does buy is the reading: every reason describes a DELIVERY or a CANCELLATION, never an error in the queue itself, which is why a `remove` line is evidence that something was consumed rather than lost. A bare enumeration of `consume` and `remove` alone misses two of the five, because `removeByFilter` and `clearCommandQueue` reach the same emitter.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "144",
+          "snippet": "fn render_value(key: &str, value: &serde_json::Value) -> String {"
+        }
+      ],
+      "instrument": "Byte-regex the executable for `\\.?(consume|remove|removeByFilter|clearCommandQueue)\\(`; for each hit walk forward from the open paren, quote-aware, to the MATCHING close paren and accept only a `reason:` inside that argument list, taking both arms of a ternary. A window-based form of the same probe reports a false positive (an unrelated `{ok:!1,reason:\"aborted\"}` a hundred bytes past a different object's `remove(`), so the paren walk is the counting rule. On disk, bucket every `queue-operation` line by (operation, reason present).",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The trigger hop's literal occurs at four offsets - a string-table entry and the three consume call sites that name it; the anchor is the FIRST call site."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "a reason-carrying consume call",
+          "offset": 164694469,
+          "excerpt": "absorbed_mid_turn",
+          "note": "the first of the ten call sites; the reason is the caller's argument, not the emitter's"
+        },
+        {
+          "role": "gate",
+          "name": "the emitter's operation argument",
+          "offset": 162031935,
+          "excerpt": "\"queue-operation\"",
+          "note": "all four methods funnel here and pass `remove` as the operation, which is why no other operation carries a reason"
+        },
+        {
+          "role": "writer",
+          "name": "emitter object literal",
+          "offset": 162031953,
+          "excerpt": "operation:Br,timestamp:new Date().toISOString()",
+          "note": "the object the reason rides on, built per call"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "consume call",
+          "offset": 164694457,
+          "excerpt": "(e,{reason:\"absorbed_mid_turn\"})",
+          "verdict": "absorbed_mid_turn"
+        },
+        {
+          "site": "consume call",
+          "offset": 164697523,
+          "excerpt": "(bn,{reason:\"absorbed_mid_turn\"})",
+          "verdict": "absorbed_mid_turn"
+        },
+        {
+          "site": "consume call",
+          "offset": 164752647,
+          "excerpt": "(rl,{reason:\"absorbed_mid_turn\"})",
+          "verdict": "absorbed_mid_turn"
+        },
+        {
+          "site": "consume call",
+          "offset": 164969039,
+          "excerpt": "(f,{reason:\"delivered_as_tool_result\"})",
+          "verdict": "delivered_as_tool_result"
+        },
+        {
+          "site": "consume call",
+          "offset": 179256780,
+          "excerpt": "(O.consumedCommands,{reason:\"delivered_to_agent\"})",
+          "verdict": "delivered_to_agent"
+        },
+        {
+          "site": "remove call",
+          "offset": 179256966,
+          "excerpt": "(O.consumedCommands,{reason:\"agent_stopped\"})",
+          "verdict": "agent_stopped"
+        },
+        {
+          "site": "removeByFilter call",
+          "offset": 179273106,
+          "excerpt": "(fg,{reason:\"cleared_on_cancel\"})",
+          "verdict": "cleared_on_cancel"
+        },
+        {
+          "site": "consume call",
+          "offset": 180733201,
+          "excerpt": "(Ee.consumedCommands,{reason:\"delivered_to_agent\"})",
+          "verdict": "delivered_to_agent"
+        },
+        {
+          "site": "remove call",
+          "offset": 180733346,
+          "excerpt": "(Ee.consumedCommands,{reason:\"agent_stopped\"})",
+          "verdict": "agent_stopped"
+        },
+        {
+          "site": "clearCommandQueue call",
+          "offset": 180832297,
+          "excerpt": "({reason:\"cleared_on_cancel\"})",
+          "verdict": "cleared_on_cancel"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Ran the paren-walk enumeration over the build and bucketed every `queue-operation` line of two projects roots by (operation, reason present), then by reason value.",
+          "observed": "131 `remove(`, 30 `consume(`, 7 `removeByFilter(` and 1 `clearCommandQueue(` call in all; 10 of them carry a reason, giving five values - absorbed_mid_turn 3, delivered_to_agent 2, agent_stopped 2, cleared_on_cancel 2, delivered_as_tool_result 1 - and each site's argument list is recorded in the enumeration. On disk root A carries `reason` on 1,853 of 4,911 `remove` lines and on 0 of 9,251 enqueue, 4,207 dequeue and 125 popAll lines; its values are absorbed_mid_turn 1,802, delivered_to_agent 48 and agent_stopped 3, which sum to the 1,853. Root B carries `reason` on 587 of 3,645 `remove` lines - absorbed_mid_turn 570, delivered_to_agent 15, agent_stopped 2 - which sum to the 587.",
+          "rule": "A call site counts when a `reason:` lies strictly inside the matching parens of a call to one of the four methods; a ternary counts once as a site and once per arm as a value. On disk a line counts under its `operation` value, and under `reason` when that key holds a string.",
+          "note": "On both roots the per-value counts sum EXACTLY to the reason-carrying remove count, which is the arithmetic a reader can check."
+        }
+      ]
+    },
+    {
+      "id": "QT-049",
+      "area": "queue-and-telemetry",
+      "behavior": "A `history-suppression` line records that a session's history stopped being synced, and its `cause` domain is closed at SIX: `migration`, `fork_inherit`, `meta_seed`, `chokepoint_veto`, `restored_owner_mismatch` and `env_owner_mismatch`. One factory mints the object - `{type, sessionId, cause, vetoedAgainstAccountUuid?, ts}` - and its cause is a PARAMETER, so the factory alone closes nothing; the writer that appends it has five occurrences (its definition, three direct calls naming `fork_inherit`, `meta_seed` and `chokepoint_veto`, and one forwarding call from a local wrapper whose own two callers name the last two), while the sixth cause reaches the factory directly from the re-stamp planner. The optional `vetoedAgainstAccountUuid` is NOT a marker of one cause: three of the six paths pass an account uuid - `chokepoint_veto`, `restored_owner_mismatch` and `env_owner_mismatch` - and the field records which account the credential store reported when a reattach was refused.",
+      "depends": "The `harness.bookkeeping.suppression` head prints `cause` and `ts` verbatim and prints `vetoedAgainstAccountUuid` as its FIRST EIGHT characters - the account is an identity with nothing to re-feed, unlike a session id, so csift shows enough to correlate two lines and no more. Reading the field as a marker of one cause would attribute a veto to the wrong path; the head therefore prints it beside whatever cause the line carries and asserts nothing about the pair.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "81",
+          "snippet": "        \"history-suppression\" => &[\"cause\", \"vetoedAgainstAccountUuid\", \"ts\"],"
+        }
+      ],
+      "instrument": "Byte-find the factory by its object literal `{type:\"history-suppression\"`, then enumerate every occurrence of the appending writer's minified name (which differs per build) followed by `(` and read each: one definition, three direct calls, one forwarding call. Read the wrapper at that forwarding call and enumerate ITS callers. On disk, census the `cause` values and the lines carrying `vetoedAgainstAccountUuid` under the QT-045 walk.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The gate hop's cause literal occurs at five offsets across unrelated features; the anchor is the one inside the writer's own direct call."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "appending writer definition",
+          "offset": 166158821,
+          "excerpt": "function cEe(e,n,r,o,d){",
+          "note": "the one appender; its third parameter is the cause, which is why the factory alone closes nothing"
+        },
+        {
+          "role": "gate",
+          "name": "a direct call naming its cause",
+          "offset": 166160516,
+          "excerpt": "\"fork_inherit\"",
+          "note": "one of the three direct calls; each names a literal cause at the call site"
+        },
+        {
+          "role": "writer",
+          "name": "history-suppression factory",
+          "offset": 157627100,
+          "excerpt": "function N5(e,n,r){return{type:\"history-suppression\",sessionId:e,cause:n,...r&&{vetoedAgainstAccountUuid:r},ts:new Date().toISOString()}}",
+          "note": "the object literal, with the optional account uuid spread in and its own ts"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "writer definition",
+          "offset": 166158830,
+          "excerpt": "cEe(e,n,r,o,d){",
+          "verdict": "the appender itself, cause as its third parameter"
+        },
+        {
+          "site": "direct call",
+          "offset": 166160503,
+          "excerpt": "cEe(r,void 0,\"fork_inherit\",void 0,n.storageV5)",
+          "verdict": "fork_inherit"
+        },
+        {
+          "site": "direct call",
+          "offset": 166166303,
+          "excerpt": "cEe(o,C,\"meta_seed\",void 0,I)",
+          "verdict": "meta_seed"
+        },
+        {
+          "site": "direct call",
+          "offset": 181657624,
+          "excerpt": "cEe(Fm,Um,\"chokepoint_veto\",ks?.accountUuid,Ee)",
+          "verdict": "chokepoint_veto, with an account uuid"
+        },
+        {
+          "site": "forwarding call inside a local wrapper",
+          "offset": 185486100,
+          "excerpt": "cEe(A,Oe,e,d,B)",
+          "verdict": "the cause is the wrapper's parameter; its two callers name restored_owner_mismatch and env_owner_mismatch, each passing an account uuid"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Enumerated every occurrence of the writer name followed by `(`, read the wrapper at the forwarding call and byte-found its two cause literals; censused `cause` values and the `vetoedAgainstAccountUuid` key over two projects roots.",
+          "observed": "Five writer occurrences - the definition at 166158830, three direct calls at 166160503, 166166303 and 181657624 naming fork_inherit, meta_seed and chokepoint_veto, and one forwarding call at 185486100 whose cause is a binding - plus the factory call carrying `migration` inside the re-stamp planner. The wrapper's two callers name restored_owner_mismatch (at 185487925) and env_owner_mismatch (at 185489373), each passing an account uuid from the credential store; both literals occur exactly twice in the build, once in the string table and once at the call. Six causes in all, three of them account-carrying. On disk: root A holds 3,345 lines over 2 transcripts - migration 3,343 and restored_owner_mismatch 2 - and exactly those 2 lines carry `vetoedAgainstAccountUuid`; root B holds 1,739 over 2, split 1,737 and 2 the same way.",
+          "rule": "A cause counts once per distinct literal reaching the writer's cause parameter, whether directly, through the factory or through the wrapper; the corpus count is lines per `cause` value under the QT-045 walk.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "QT-050",
+      "area": "queue-and-telemetry",
+      "behavior": "None of the non-transcript line types is ever admitted to the message array, yet FOUR of them change the request a resumed session sends. `fork-context-ref` is the strongest: the loader keys it by agent id, and the transcript builder opens the PARENT session, walks to the record its `parentLastUuid` names and concatenates that prefix in front of the agent's own messages, so the same agent resumed with and without this line sends different CONTENT. `mode` is re-applied on resume by a mode matcher that also pushes an operator-visible notice, `permission-mode` is re-applied as the resumed session's tool-permission mode, and `atis-latch` is re-latched as an HTTP request header on every API call. The remaining types change nothing a request carries.",
+      "depends": "csift calls the whole family LLM-invisible, and that is right about CONTENT while being incomplete about EFFECT - so the family's documentation says both, and the four are named rather than left for a reader to discover. It is also why `harness.bookkeeping.fork` carries a provenance relation naming the record its prefix was cut at AND the session that record lives in, while `harness.bookkeeping.mode` carries none: only the fork line points at a place a reader can go.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "349-352",
+          "snippet": "        \"fork-context-ref\" => in_session(\n            super::for_edge(\"forked_from\", Basis::Key, at(\"parentLastUuid\"), ctx),\n            at(\"parentSessionId\"),\n        ),"
+        }
+      ],
+      "instrument": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Trace each of the four applications back to its own trigger and gate, not only the site that reads the stored value: byte-find the loader arm that writes each field and the branch that decides whether the application runs at all."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "loader field set",
+          "offset": 166191185,
+          "excerpt": "forkContextRefs:Ot,contextCollapseCommits:",
+          "note": "the per-session assembly object the loader returns, carrying the fork refs beside the other tracked sets"
+        },
+        {
+          "role": "gate",
+          "name": "agent transcript builder destructure",
+          "offset": 166207247,
+          "excerpt": "forkContextRefs:F}=v;",
+          "note": "the read that reaches message CONTENT: the agent transcript builder takes the fork refs off the loaded session"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Byte-found the four loader field names and read the sites that apply them, recording each offset and its occurrence count; censused the `fork-context-ref` key set on two projects roots.",
+          "observed": "`forkContextRefs` occurs 3 times (a type position, the loader's assembly object at 166191185, and the agent transcript builder's destructure at 166207247); `atisLatches` 7, `permissionModes` 8, `modes:` 16. Three of the four are read through a single `.get(` apiece inside one loader object - `modes.get(` at 166148405, `permissionModes.get(` at 166148435 and `atisLatches.get(` at 166148511, each a UNIQUE byte match - while the fork refs are keyed separately by agent id and reach the builder instead. No other non-transcript type reaches a request path. On disk each root carries 33 `fork-context-ref` lines and all 33 of each carry all four of `agentId`, `parentSessionId`, `parentLastUuid` and `contextLength`, so the relation's two keys are never absent in practice.",
+          "rule": "A type counts as request-affecting when a read of its stored value reaches message content, a context flag the request carries, or an HTTP header - not when it only reaches a display surface. An occurrence is a byte match of the field name anywhere in the executable.",
+          "note": "The relation csift renders reads both `parentLastUuid` and `parentSessionId`; the key-set census is what says an absent first key does not arise in practice."
+        }
+      ]
+    },
+    {
+      "id": "QT-051",
+      "area": "queue-and-telemetry",
+      "behavior": "Claude Code has its own word for a transcript that holds nothing but these lines: `bookkeepingOnly`. The session-list head reader defaults the field to false, sets it from a probe for a conversation record, carries it on the summary object, and the resume filter drops any session it is true for. The bare word `bookkeeping` occurs 23 times in the executable, six of them that compound and seventeen in text and code that has nothing to do with the transcript format - a bytecode cache note, a device-request ceiling, hand-back provenance field descriptions, a shipped-cache copy log, stream-tombstone messages and a memory-system block note among them.",
+      "depends": "The category name `harness.bookkeeping` is the harness's own, which is what the transparency law asks for: csift speaks no word about a line that the producer does not already use for it. The seventeen unrelated occurrences are why the word alone is not evidence - the compound is.",
+      "code": [
+        {
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "18",
+          "snippet": "pub(crate) fn classify(line_type: &str) -> Option<Class> {"
+        }
+      ],
+      "instrument": "Byte-find the bare word `bookkeeping` over the whole executable and read every occurrence, classing each as the `bookkeepingOnly` compound (the word immediately followed by `Only`) or unrelated; then read each compound occurrence for its role - default, probe, summary field, filter.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a transcript the field is true for: neither measured projects root holds a session whose head window carries no conversation record, so the filter's effect is read from the binary and not witnessed on disk."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "session-list head reader default",
+          "offset": 166215866,
+          "excerpt": "bookkeepingOnly",
+          "note": "the field defaulted false before the head window is read"
+        },
+        {
+          "role": "gate",
+          "name": "resume filter",
+          "offset": 166222374,
+          "excerpt": "bookkeepingOnly",
+          "note": "the branch that drops a session the field is true for"
+        },
+        {
+          "role": "writer",
+          "name": "summary object field",
+          "offset": 166217106,
+          "excerpt": "bookkeepingOnly",
+          "note": "the field carried on the session summary the list surface renders"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Byte-found `bookkeeping` over the whole executable, classed every occurrence as the compound or not, and read each compound occurrence's role.",
+          "observed": "23 occurrences. Six are `bookkeepingOnly`, at 75837624, 163213510, 166215866, 166217106, 166222374 and 166222392 - a string-table entry, the head-reader default, the summary field, two on the loader carry-through statement and the resume filter. Seventeen are unrelated. Neither projects root holds a session the field is true for, so the compound is read from the binary alone.",
+          "rule": "An occurrence is a byte match of the lowercase word anywhere in the executable, string tables included; a compound occurrence is one immediately followed by `Only`.",
+          "note": "The seventeen unrelated occurrences are not counted by distinct message: that number needs a sentence-extraction rule, and the same occurrences group into 15 maximal printable runs under one rule and fewer under others. What the depends rests on is the split between the compound and everything else, which the stated rule produces exactly."
+        }
+      ]
+    },
+    {
+      "id": "QT-054",
+      "area": "queue-and-telemetry",
+      "behavior": "There are TWO per-type registration tables and they carry the same 38 keys. The retention table values each key `transcript`, `boundary-cleared`, `accumulate` or `last-wins`; the APPEND-POLICY table values each `dedup-transcript` (the five conversational types user, assistant, attachment, system and progress), `always` (30 types) or `route-by-agent` (`content-replacement`, `fork-context-ref` and `observer-ref`), and `appendEntry` switches on it with no default arm. Subtracting the four transcript types leaves 34 REGISTERED non-transcript types, and csift models a leaf for 18 of them. The other 16 - `progress`, `summary`, `custom-title`, `ended-by-model`, `tag`, `relocated`, `agent-color`, `agent-setting`, `attribution-snapshot`, `isolation-latch`, `worktree-state`, `observer-ref`, `content-replacement` and the three `marble-origami-` forms - are registered in both tables and appear on no line of either measured projects root.",
+      "depends": "This is the bound on the family: a line type outside the 38 keys cannot be written at all through the typed path, so the set csift must eventually name is finite and known. A registered type csift names no render keys for renders its own verbatim bytes rather than an empty bracket, which is what makes the 16 safe to leave unmodeled until one appears on disk; and the candidate-gate table carries a needle only for a type csift has a leaf for, so a line of the other 16 is never even a scan candidate. If a build started writing one, csift would render it under `show --line` as an unmodeled unit naming its type rather than reporting the line absent.",
+      "code": [
+        {
+          "path": "src/commands/search/scan/gates.rs",
+          "lines": "20",
+          "snippet": "pub(crate) const BOOKKEEPING_NEEDLES: [(&str, Class); 15] = ["
+        },
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "120",
+          "snippet": "fn head_of(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
+        }
+      ],
+      "instrument": "Byte-find `\"queue-operation\":\"last-wins\"` and `\"queue-operation\":\"always\"`, walk each surrounding object literal quote-aware from its `{` to the matching `}` and read every `\"<type>\":\"<policy>\"` pair; the key count and the policy domain are what that walk returns. Byte-find `async appendEntry(` for the switch. Then subtract the four types the retention table values `transcript` and the 18 types `crate::model::classify::bookkeeping::classify` names a leaf for, and census the remainder over two projects roots under the QT-045 counting rule.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "typed-entry append path",
+          "offset": 166106795,
+          "excerpt": "async appendEntry(",
+          "note": "the one entry every constructed line goes through; it switches on the append-policy table and has no default arm"
+        },
+        {
+          "role": "gate",
+          "name": "append-policy table",
+          "offset": 166066494,
+          "excerpt": "var vbr={user:\"dedup-transcript\"",
+          "note": "38 keys over three policies; a type that is not a key of it matches no case and is never queued"
+        },
+        {
+          "role": "writer",
+          "name": "retention table",
+          "offset": 166050492,
+          "excerpt": "{user:\"transcript\",assistant:\"transcript\",system:\"transcript\",attachment:\"transcript\",progress:\"boundary-cleared\"",
+          "note": "the same 38 keys under the four retention policies, which is what makes the registered set one set rather than two"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Walked both object literals quote-aware from their opening brace to the matching close and read every type-to-policy pair, then differenced the key sets against the four transcript types and against csift's own line-type table, and censused the remainder over two projects roots.",
+          "observed": "Both tables carry exactly 38 keys and the same key set. The retention table's policies are transcript (4), boundary-cleared (8), accumulate (4) and last-wins (22); the append table's are dedup-transcript (5), always (30) and route-by-agent (3: content-replacement, fork-context-ref, observer-ref). 38 minus the 4 transcript types leaves 34 registered non-transcript types; csift names a leaf for 18 of them, and the remaining 16 appear 0 times over 3,365,612 non-blank lines of the two roots.",
+          "rule": "A key counts once per table; a type is registered when it is a key of the retention table; a type counts as modeled when csift's line-type table returns a leaf for it; a corpus occurrence is a line whose top-level `type` equals the name, under the QT-045 walk.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "QT-055",
+      "area": "queue-and-telemetry",
+      "behavior": "A `continued-in` line is never rendered to a person, and its EFFECT is seen twice. One function writes it, `{type:\"continued-in\", timestamp, sessionId, continuedInSessionId}`, and one tail scan reads it back: that scan walks a transcript's last lines for the quoted literal `\"type\":\"continued-in\"` and returns the child session id. Two consumers use that id, and neither prints the line. The RESUME filter sets `superseded` on the parent and drops it from the picker, logging `Session <id> filtered from /resume: continued in <child>` through the developer log callback rather than the session list. The STARTUP path reports the child instead of the parent, in a sentence naming the child session id and the commands that reach it. So the only text a person can see carries the child's ID, never the line, and the parent's disappearance from the resume picker is the other half of the effect.",
+      "depends": "The inventory's `human` column answers \"does a person see this shape\", and SPEC section 5's table and SKILL's transparency tables print it verbatim. The row reads `Human::Indirect` on this evidence rather than `Always` or `Never`: `Always` would claim the line is rendered, which nothing does, and `Never` would deny the two effects a person does meet. csift's own render of the line is the family head plus the verbatim body, and the child session id also rides the unit as a fact, which is the address a reader follows.",
+      "code": [
+        {
+          "path": "src/model/inventory/lines.rs",
+          "lines": "164-168",
+          "snippet": "        Shape::TopLevelType(\"continued-in\"),\n        Some(Class::BookkeepingContinued),\n        Gate::Selector,\n        false,\n        Human::Indirect,"
+        },
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "353-355",
+          "snippet": "        \"continued-in\" => HitFact::Bookkeeping(Fact::ContinuedIn(\n            at(\"continuedInSessionId\").map(str::to_string),\n        )),"
+        }
+      ],
+      "instrument": "Byte-find `function MYn(e,t){return{type:\"continued-in\"` for the writer and `function T9t(e){` immediately after it for the tail scan that reads it back. Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter. For the two person-facing effects, byte-find `filtered from /resume: continued in ${o.continuedInSessionId}` (the developer log, followed immediately by the `superseded` assignment) and `Your most recent conversation is running in the background (session ` (the startup sentence).",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "continued-in writer",
+          "offset": 160428091,
+          "excerpt": "function MYn(e,t){return{type:\"continued-in\",timestamp:new Date().toISOString(),sessionId:e,continuedInSessionId:t}}",
+          "note": "the four-key object, with no uuid and no message"
+        },
+        {
+          "role": "gate",
+          "name": "resume filter",
+          "offset": 166222289,
+          "excerpt": "filtered from /resume: continued in ${o.continuedInSessionId}`),F.superseded=!0",
+          "note": "the id reaches a developer log, and the same branch sets `superseded`, which is what removes the parent from the picker"
+        },
+        {
+          "role": "writer",
+          "name": "startup notice",
+          "offset": 160427645,
+          "excerpt": "Your most recent conversation is running in the background (session ${e.sessionId})",
+          "note": "the one person-facing sentence, and it names the CHILD session rather than the line"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "zod schema",
+          "offset": 160427439,
+          "excerpt": "type:x(\"continued-in\"),continuedInSessionId:i()",
+          "verdict": "the shape, not a render"
+        },
+        {
+          "site": "writer",
+          "offset": 160428171,
+          "excerpt": "sessionId:e,continuedInSessionId:t}}",
+          "verdict": "writes the line"
+        },
+        {
+          "site": "tail scan",
+          "offset": 160428470,
+          "excerpt": "if(d.success)return Wf(d.data.continuedInSessionId)??void 0",
+          "verdict": "reads the id back off the tail; prints nothing"
+        },
+        {
+          "site": "startup callback",
+          "offset": 163213635,
+          "excerpt": "onNewestRunningInBackground?.({sessionId:De.continuedInSessionId,provable:",
+          "verdict": "hands the child id to the startup notice"
+        },
+        {
+          "site": "summary object field",
+          "offset": 166217082,
+          "excerpt": "continuedInSessionId:rt,bookkeepingOnly:fe}",
+          "verdict": "carried on the session summary, beside the bookkeepingOnly flag"
+        },
+        {
+          "site": "resume filter",
+          "offset": 166222131,
+          "excerpt": "if(o.continuedInSessionId!==void 0){if(F.continuedInSessionId=o.continuedInSessionId",
+          "verdict": "the branch whose log line and `superseded` assignment are the two effects"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Byte-found `\"continued-in\"` and `continuedInSessionId` over the whole executable and read every occurrence, then read the resume filter and the startup sentence in full; censused the type's lines and key set over two projects roots.",
+          "observed": "`\"continued-in\"` occurs 6 times: a string-table entry, the schema (twice, the quoted literal constant and the parser), the writer, and one key in each of the two policy tables. `continuedInSessionId` occurs 15 times, over the six sites the enumeration lists. No occurrence renders the line: the two that reach a person carry the CHILD id - a developer log callback inside the resume filter, whose same branch sets `superseded`, and the startup sentence. On disk each root carries exactly 1 `continued-in` line, with the key set type, timestamp, sessionId, continuedInSessionId and no uuid or message.",
+          "rule": "An occurrence is a byte match of the literal anywhere in the executable, string tables included; a site counts as person-facing when the value reaches a rendered sentence or a list a person chooses from, and as developer-facing when it reaches the log callback only.",
+          "note": ""
         }
       ]
     }
