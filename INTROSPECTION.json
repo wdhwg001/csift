@@ -92715,7 +92715,7 @@
           "site": "queue-operation append-policy table",
           "offset": 166067280,
           "excerpt": "\"queue-operation\":\"always\"",
-          "verdict": "a table key, not a reader; with the emitter these are all three occurrences"
+          "verdict": "a table key, not a reader. With the emitter and the interned name these are all FOUR occurrences of `queue-operation` under this claim's rule, and none of them reads the line."
         },
         {
           "site": "fork-context-ref retention table",
@@ -92745,7 +92745,7 @@
           "site": "fork-context-ref loader dispatch",
           "offset": 166188096,
           "excerpt": "fork-context-ref\")Ot.set(Dn.agentId,Dn)",
-          "verdict": "stores it keyed by agentId; these five are all the occurrences of the type"
+          "verdict": "stores it keyed by agentId. With the two policy tables, the append router, the appendEntry writer, the three interned strings and the two diagnostics these are all TEN occurrences of `fork-context-ref` under this claim's rule, and none of them renders the line."
         },
         {
           "site": "forkContextRefs name-table entry",
@@ -93239,7 +93239,7 @@
     {
       "id": "CLS-048",
       "area": "classification",
-      "behavior": "A blocking hook's feedback text is ASSEMBLED, never written as one literal. At Claude Code 2.1.258 one builder `eee(e,n)` @161464086 returns `${name}${suffix}${body}` with the suffix a variable of its own, `m$t` = ` hook feedback:` plus a newline @161464001, and four sibling functions call it with the four hook names, one literal each - `Stop` @165848388, `TeammateIdle` @165848439, `TaskCreated` @165848498, `TaskCompleted` @165848556 - the same four the name array `Dcn` @161464028 holds for the harness's own recogniser @161464911 and byte-scanner needle set @172794405. So the assembled prefix `Stop hook feedback:` + newline occurs in the build at NO offset, while the suffix and each name occur separately. The literal `Stop hook feedback:` DOES occur, three times, and none of the three is that writer: the TUI's turn summary template `Stop hook feedback: ${E}` @179877882 and the TUI row component @180034963, both continuing with a SPACE rather than a newline, and the interned copy of that same string in the constant pool @71657624. Corpus: over 9,797 transcripts under one projects root, 988 lines carry the substring `hook feedback:` anywhere, and 46 records in 14 files have a string `message.content` OPENING with `<name> hook feedback:` - all 46 under the name `Stop`, and all 46 with a NEWLINE as the next character. No record opens with any of the other three names.",
+      "behavior": "A blocking hook's feedback text is ASSEMBLED, never written as one literal. At Claude Code 2.1.258 one builder `eee(e,n)` @161464086 returns `${name}${suffix}${body}` with the suffix a variable of its own, `m$t` = ` hook feedback:` plus a newline @161464001, and four sibling functions call it with the four hook names, one literal each - `Stop` @165848388, `TeammateIdle` @165848439, `TaskCreated` @165848498, `TaskCompleted` @165848556 - the same four the name array `Dcn` @161464028 holds for the harness's own recogniser @161464911 and byte-scanner needle set @172794405. So the assembled prefix `Stop hook feedback:` + newline occurs in the build at NO offset, while the suffix and each name occur separately. The literal `Stop hook feedback:` DOES occur, three times, and none of the three is that writer: the TUI's turn summary template `Stop hook feedback: ${E}` @179877882 and the TUI row component @180034963, both continuing with a SPACE rather than a newline, and the interned copy of that same string in the constant pool @71657624. The suffix has its own interned copy in the constant pool @74153456, as the TUI string does. Corpus: over 9,797 transcripts under one projects root, 46 records in 14 files have a string `message.content` OPENING with `<name> hook feedback:` - all 46 under the name `Stop`, and all 46 with a NEWLINE as the next character. No record opens with any of the other three names. A count of LINES merely carrying the substring is deliberately not stated: the phrase is its own needle, so any transcript discussing this claim raises it.",
       "depends": "csift classifies `harness.hook.feedback` on the prefix `Stop hook feedback:` WITHOUT the newline, anchored at content start. Matching the prefix rather than the assembled form is what makes the leaf robust to the suffix moving, and dropping the newline from the test is what keeps a body that continues some other way classified rather than silently unlabelled. The wider fact matters to the DOC surfaces, not to the code: taxonomy.rs and SKILL state the on-disk shape so a reader can cross-check a record against the jsonl, and the previous wording said no whole prefix appeared as a literal in the build, which is false of `Stop hook feedback:` and true only of the assembled form with its newline.",
       "code": [
         {
@@ -93258,7 +93258,7 @@
           "snippet": "/// separate ones. `Stop hook feedback:` IS in the build three times, and none of the\n    /// three is that writer: two are the TUI's own summary and row, both continuing with\n    /// a SPACE, and the third is the interned copy of that same string (claim CLS-048).\n    /// csift matches the prefix WITHOUT the newline, so a body that continues any other\n    /// way still classifies; only the `Stop` name has a corpus specimen.\n    HookFeedback,"
         }
       ],
-      "instrument": "BINARY: byte-search the shipped build for `Stop hook feedback:` (3 occurrences), for the same string followed by a newline (0), for the suffix ` hook feedback:` (5), and for the array literal `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]` (1); then read each occurrence's surrounding bytes and give it a verdict. Counting rule: occurrences of the byte sequence, not lines - a minified bundle is one line. CORPUS: walk every `*.jsonl` under one projects root, keep lines carrying the substring `hook feedback:`, parse each and keep records whose `message.content` is a STRING that STARTS WITH `<name> hook feedback:` for one of the four names, then count by name and by the single character that follows the colon. Counting rule: one per RECORD, prefix-anchored at content start, so a body quoting the phrase mid-prose is excluded - which is most of them, and the gap between 988 lines and 46 records is exactly that.",
+      "instrument": "BINARY: byte-search the shipped build for `Stop hook feedback:` (3 occurrences), for the same string followed by a newline (0), for the suffix ` hook feedback:` (5), and for the array literal `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]` (1); then read each occurrence's surrounding bytes and give it a verdict. Counting rule: occurrences of the byte sequence, not lines - a minified bundle is one line. CORPUS: walk every `*.jsonl` under one projects root, keep lines carrying the substring `hook feedback:`, parse each and keep records whose `message.content` is a STRING that STARTS WITH `<name> hook feedback:` for one of the four names, then count by name and by the single character that follows the colon. Counting rule: one per RECORD, prefix-anchored at content start, so a body quoting the phrase mid-prose is excluded, which is most of them. Count RECORDS only: a count of lines carrying the substring anywhere is not reproducible, because the phrase is its own needle and every transcript that discusses this claim adds to it.",
       "located": {
         "claude_code": "2.1.258",
         "csift": "0.13.0",
@@ -93362,6 +93362,12 @@
           "offset": 79875025,
           "excerpt": "Dcn",
           "verdict": "The identifier in a symbol name list."
+        },
+        {
+          "site": "the shared suffix, constant pool",
+          "offset": 74153456,
+          "excerpt": " hook feedback:\n",
+          "verdict": "The interned copy of the suffix the builder joins, in the binary's string table rather than in code - the same shape the TUI string has, and not a writer."
         }
       ],
       "checks": [
@@ -93371,8 +93377,8 @@
           "date": "2026-09-16",
           "verdict": "holds",
           "instrument": "python byte-search over the shipped build for `Stop hook feedback:`, the same plus a newline, ` hook feedback:`, `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]`, `eee(` and `Dcn`, reading every occurrence's surrounding bytes; then a python walk of every *.jsonl under one projects root counting records whose string `message.content` starts with `<name> hook feedback:` for each of the four names, and the single character following the colon.",
-          "observed": "Build: `Stop hook feedback:` 3 at 71657624 / 179877893 / 180034964, all three continuing with a SPACE; `Stop hook feedback:` + newline 0; ` hook feedback:` 5, of which the declaration at 161464010 is the only suffix literal; the four-name array 1 at 161464036 (its `Dcn=` at 161464028); `eee(` 10, of which 1 is the definition, 4 are the per-name callers at 165848411 / 165848462 / 165848521 / 165848579 and 5 are an unrelated UI helper in another chunk; `Dcn` 7, of which 3 are code (declaration, recogniser, needle set) and 4 are name lists or interned identifiers. Corpus: 9,797 files walked, 988 lines carrying the substring anywhere, 46 records in 14 files opening with a name prefix, 46 of 46 under `Stop`, 46 of 46 followed by a newline, 0 under the other three names.",
-          "rule": "Build: occurrences of a byte sequence, not lines (the bundle is one line). Corpus: one per RECORD, the prefix anchored at content start over a STRING `message.content`; a record quoting the phrase mid-prose is not counted, which is the whole of the gap between 988 and 46.",
+          "observed": "Build: `Stop hook feedback:` 3 at 71657624 / 179877893 / 180034964, all three continuing with a SPACE; `Stop hook feedback:` + newline 0; ` hook feedback:` 5, of which the declaration at 161464010 is the only suffix literal in code and 74153456 is its interned copy; the four-name array literal 1 at 161464032 (its `Dcn=` at 161464028); `eee(` 10, of which 1 is the definition, 4 are the per-name callers at 165848411 / 165848462 / 165848521 / 165848579 and 5 are an unrelated UI helper in another chunk; `Dcn` 7, of which 3 are code (declaration, recogniser, needle set) and 4 are name lists or interned identifiers. Corpus: 9,797 files walked, 46 records in 14 files opening with a name prefix, 46 of 46 under `Stop`, 46 of 46 followed by a newline, 0 under the other three names.",
+          "rule": "Build: occurrences of a byte sequence, not lines (the bundle is one line). Corpus: one per RECORD, the prefix anchored at content start over a STRING `message.content`; a record quoting the phrase mid-prose is not counted, which is most of them. The record count is the reproducible one: a count of LINES carrying the substring is not, because the phrase is its own needle and every transcript discussing it raises the number.",
           "note": "Splits the producer fact out of CLS-016, which pins the three isMeta marker SHAPES and their corpus censuses. The clause it replaces said no whole prefix appeared as a literal in the build; that is true of the assembled form with its newline and false of `Stop hook feedback:`, which occurs three times as the TUI's own text."
         }
       ]
