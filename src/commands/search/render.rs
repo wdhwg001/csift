@@ -2,6 +2,27 @@
 
 use super::*;
 
+/// The two EXTENSION POINTS as one label-zone string: a family's `Marker`s in push order,
+/// then every `HitFact` that projects a tag.
+///
+/// Split out of [`render_label`] because BOTH of its arms need it. A record csift models
+/// no leaf for is still a record the one stamping site ran for, so a family can and does
+/// attach facts to it - the attachment family's three provenance facts are on every
+/// attachment line, whether or not csift has a leaf for that payload type. Those reached
+/// JSON and vanished from the text surface, which made an address the one place the two
+/// formats disagreed about the same unit.
+fn extension_zone(h: &Hit) -> String {
+    h.markers
+        .iter()
+        .map(|m| format!(" {}", m.render()))
+        .chain(
+            h.facts
+                .iter()
+                .filter_map(|f| f.label_zone().map(|z| format!(" {z}"))),
+        )
+        .collect()
+}
+
 /// Glyph for the ROLE a hit sits on (GOLD §6): `◂` user, `▸` agent, `⚙` harness machinery.
 /// (`⚙`/gear is the chosen distinct harness marker - visually separate from the two
 /// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.) An
@@ -19,6 +40,12 @@ pub(crate) fn role_glyph(class: Option<Class>) -> char {
 /// The rendered label for a hit: the dotted [`Class::path`], DECORATED with the GOLD §4/§7
 /// markers - a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
 pub(crate) fn render_label(h: &Hit) -> String {
+    // The EXTENSION POINTS ride the label zone after the markers this function computes
+    // itself: a family's `Marker` in push order, then any `HitFact` that projects one.
+    // Computed FIRST because the unmodeled arm below needs it too - a leafless unit is
+    // still a record, the stamping site still runs for it, and the facts a family
+    // attached there reached JSON while the text surface dropped them on the floor.
+    let ext = extension_zone(h);
     // An ADDRESSED record csift models no leaf for (the refetch law, `Hit::class`): say so
     // instead of borrowing a neighbouring leaf's name - and NAME the on-disk shape when
     // the record carries one, so a reader learns what the line is rather than only that
@@ -39,8 +66,8 @@ pub(crate) fn render_label(h: &Hit) -> String {
         // the harness's own - and the bare word is the floor for a line whose own `type`
         // key is missing, the only case with no value left to name.
         return match shape {
-            Some(s) => format!("unmodeled: {s}"),
-            None => "unmodeled".to_string(),
+            Some(s) => format!("unmodeled: {s}{ext}"),
+            None => format!("unmodeled{ext}"),
         };
     };
     // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
@@ -77,18 +104,6 @@ pub(crate) fn render_label(h: &Hit) -> String {
         (Class::AgentToolResult, Some(kind)) => format!(" [denied: {kind}]"),
         _ => String::new(),
     };
-    // The EXTENSION POINTS ride the label zone after the markers this function computes
-    // itself: a family's `Marker` in push order, then any `HitFact` that projects one.
-    let ext: String = h
-        .markers
-        .iter()
-        .map(|m| format!(" {}", m.render()))
-        .chain(
-            h.facts
-                .iter()
-                .filter_map(|f| f.label_zone().map(|z| format!(" {z}"))),
-        )
-        .collect();
     let nd = format!("{nd}{sv}{dk}{ext}");
     let nd = nd.as_str();
     match (class, h.pair) {

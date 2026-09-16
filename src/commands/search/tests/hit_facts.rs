@@ -221,7 +221,14 @@ fn the_address_site_stamps_the_unmodeled_unit() {
         &"- | unmodeled=\"future-thing\"".to_string(),
         "shape fact",
     );
-    assert_eq!(render_label(&hit), "unmodeled: future-thing");
+    // And the label ZONE carries them too. The shape replaces the leaf path; everything
+    // else a family attached renders after it, in the same push order a labelled unit
+    // uses. A leafless unit whose facts reached JSON alone was the one place the two
+    // formats disagreed about the same record.
+    assert_eq!(
+        render_label(&hit),
+        "unmodeled: future-thing [family probe] [family probe leafless] family probe fact"
+    );
 }
 
 /// A record no family owns costs an empty answer, never a fabricated one: the probe is

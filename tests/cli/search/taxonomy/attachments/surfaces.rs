@@ -73,11 +73,11 @@ fn the_help_names_every_marker_word_json_key_and_render_form_the_family_ships() 
 }
 
 #[test]
-fn an_addressed_unmodeled_attachment_carries_its_facts_in_json_and_its_shape_in_text() {
-    // The 1:1 law's attachment case, and the ONE place the two surfaces differ on purpose.
-    // A payload type csift models no leaf for still carries every key the line holds, so
-    // JSON answers exactly as it does for a labelled record; the TEXT renders the shape in
-    // place of a label, which is what a leafless hit does, so the edges are not there.
+fn an_addressed_unmodeled_attachment_carries_its_facts_on_both_surfaces() {
+    // The 1:1 law's attachment case. A payload type csift models no leaf for still carries
+    // every key the line holds, so BOTH surfaces answer as they do for a labelled record:
+    // JSON carries the facts, and the label zone renders them after the shape, which is
+    // what stands in for the leaf path.
     let h = Home::new();
     let lines = [
         r#"{"type":"user","uuid":"aa000000-0000-4000-8000-000000000001","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzunm chart the reef"}}"#,
@@ -98,8 +98,11 @@ fn an_addressed_unmodeled_attachment_carries_its_facts_in_json_and_its_shape_in_
         text.stdout
     );
     assert!(
-        !text.stdout.contains("[for: "),
-        "a leafless unit renders no label zone, so no edge is in the text:\n{}",
+        text.stdout.contains("[for: attached_to L1]")
+            && text
+                .stdout
+                .contains("[for: for_tool_use toolu_01zzunm (not in this file)]"),
+        "the shape replaces the leaf path; the family's facts still render after it:\n{}",
         text.stdout
     );
 

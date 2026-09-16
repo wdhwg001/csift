@@ -124,6 +124,11 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **A leafless unit renders its facts on the text surface too.** An addressed record
+  csift models no leaf for carried its family facts into JSON and dropped every one of
+  them from the label zone, so `show --line N` and `show --line N --format json`
+  disagreed about the same record. The label zone now renders the shape in place of the
+  leaf path and the facts after it, exactly as a labelled unit does.
 - **A `for` edge can name a whole transcript.** BREAKING: `continued-in`'s relation moves
   from the `continued_in` JSON key into the shared `for` array, where every other relation
   already lives, and its label zone reads `[for: continued_in @<session>]` instead of
