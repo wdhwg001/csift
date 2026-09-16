@@ -13249,7 +13249,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "450-458",
+          "lines": "446-454",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -13336,7 +13336,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "420-423",
+          "lines": "416-419",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -13463,7 +13463,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "436-441",
+          "lines": "432-437",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -21226,7 +21226,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "449-455",
+          "lines": "445-451",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -53846,7 +53846,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "420-424",
+          "lines": "416-420",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -54021,17 +54021,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "442-449",
+          "lines": "438-445",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[\u2026],\u2026}` - the context a SessionStart /\n    /// UserPromptSubmit / \u2026 hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "450-457",
+          "lines": "446-453",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "462-466",
+          "lines": "458-462",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -93108,7 +93108,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "401-405",
+          "lines": "397-401",
           "snippet": "pub fn converted_text(&self) -> Option<&ConversionText> {\n        self.conversion_parsed\n            .get_or_init(|| {\n                let rendered = conversion_text(self.rendered.as_deref());\n                let human_turn = conversion_text(self.rendered_in_human_turn.as_deref());"
         },
         {
@@ -96246,7 +96246,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2906"
+          "lines": "2961"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

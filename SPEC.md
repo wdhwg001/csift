@@ -2782,6 +2782,61 @@ build over the whole DAG, and both are what the answer is made of. An early stop
 key walk is impossible (REC-104, above), and a reverse scan from the line end lands within
 one percent of the forward walk on every shape.
 
+### 7h. The v0.13.0 taxonomy: what the whole rewrite costs a scan
+
+**The question and the instrument.** The taxonomy rewrite touches the classify engine, the
+render seam, the candidate gates and the emission path, which is most of what a scan
+executes - so "does a bare scan still cost what it did" is not answerable by reading the
+diff. It is answered by a ROTATED INTERLEAVED A/B over a corpus of real invocations: 60
+command shapes drawn from actual LLM use of csift, each run against a TINY transcript and
+against a COMPACTED one, 21 timed repetitions per cell with the arm order reversed on odd
+reps so neither arm owns the warm half, medians of those 21, and an untimed comparison pass
+that byte-compares the two arms' stdout. Arm A is a build of the commit the six family
+branches were picked onto; arm B is this tip. 122 (row, size) pairs.
+
+**The control band, and what it is made of.** The same driver ran with A = B = this tip, on
+the same host in the same session, so every ratio it produces is the host's own noise. Over
+the same 122 pairs: the largest same-binary median drift is 4.58% (`H07/tiny` at 1.0458),
+the 90th-percentile relative IQR of a single arm's own distribution is 9.17%, and the band
+is their sum, 13.75% - a B/A ratio inside [0.8625, 1.1375] is noise. The band is WIDE
+because the host was not idle: `uptime` read a 1-minute load average between 4.0 and 14.8
+across the run, with a media-analysis daemon and the Spotlight store among the top
+consumers. The DRIFT term alone, 4.58%, is the tighter reading for a directional claim,
+because it is the only one that measures two medians against each other.
+
+**The result: nothing is outside the band, and the default path is well inside the drift
+term.** Of 122 pairs, ZERO sit outside 13.75%. Of the 48 default-path pairs - the 24 rows
+whose invocation names no `-t` and takes no gated leaf - the worst is `B06/compacted` at
+1.0372, then `H07/compacted` 1.0369, `B03/compacted` 0.9634, `B04/tiny` 1.0327; every one
+is under the 4.58% same-binary drift, in both directions. A taxonomy change does not
+justify a slower bare scan and did not produce one.
+
+**The GATED rows, which is where a cost would show.** `D04` and `D05` are the census and
+the selector under a gated leaf - the paths that now parse lines a flagless scan never
+touches. `D04` reads 1.0119 compacted and 1.0142 tiny; `D05` reads 1.0051 and 1.0045. The
+three rows a family render makes the whole-file gate pay for (`G01`, `G02`, `G04`) read
+between 0.9923 and 1.0161. All are inside the drift term, so the gated paths cost what
+they cost before within this host's ability to tell.
+
+**STDOUT identity.** 110 of 122 pairs are byte-identical; 2 are excluded as
+time-dependent (`whoami` prints a live instant, so even two runs of ONE binary differ);
+and 10 differ by design, in four groups. `A05` and `A08` are `--help` pages and differ
+ONLY in the usage line's binary name, an artefact of the two arms being differently-named
+files, plus - for `A08` - the surface changes this version documents. `D05` is the census
+under `harness.hook.context`, whose attachment units now render their family facts. `F03`
+is `show --line 1..200 --format json`, which gained `queue_operation` and `queue_reason`.
+`D06` is `-t harness`, which reaches the leaves whose renders moved. Exit codes match on
+122 of 122 pairs.
+
+**What was NOT measured, and why.** The LANDMARK size class (38 rows on the largest
+transcripts) was not run. The tiny-and-compacted pair alone took hours of wall on this
+host, and the band it produced is 13.75% wide for load reasons rather than code reasons -
+a third class measured on a host that had grown busier still would buy less information per
+hour than it cost. What it would have added is the same 24 default rows at a file size
+where a per-record cost has room to show; the per-record widths that could carry such a
+cost are pinned exactly instead (`size_of::<Record>()` 1,376 and `size_of::<SpineRow>()`
+72, both unchanged by this version).
+
 ---
 
 ## 8. Output formats

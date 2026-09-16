@@ -259,12 +259,11 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         already flattened carries no newline there either (`--raw` is the path to the \
         bytes), `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
-        when the hit is `agent.communication.*`, `refetch` is the ready-to-run `csift show` \
-        `denial_kind` the harness's own reason a rejected call never ran (null off a \
-        rejection's tool_result), `image_ids` the extractable `#N` / `L<line>i<n>` ids the \
-        record carries (an empty array when none), \
-        `for` the record's PROVENANCE edges - one array however many relations a unit \
-        carries, each `{kind, basis, target, reason}`, present only on a unit that \
+        when the hit is `agent.communication.*`, `denial_kind` the harness's own reason a \
+        rejected call never ran (null off a rejection's tool_result), `image_ids` the \
+        extractable `#N` / `L<line>i<n>` ids the record carries (an empty array when \
+        none), `for` the record's PROVENANCE edges - one array however many relations a \
+        unit carries, each `{kind, basis, target, reason}`, present only on a unit that \
         carries one, `refetch` is the ready-to-run `csift show` \
         command addressed at the RIGHT id (run it verbatim), and `refetch_uuid` its \
         uuid-addressed twin: a line number is a durable address only while the transcript \

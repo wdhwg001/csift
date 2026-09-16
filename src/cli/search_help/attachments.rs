@@ -49,8 +49,8 @@ pub(crate) const SECTION: &str =
      two empties differ: `no command on this line; hookName=<name>` for a hook line that \
      records no command, `no producer key; type=<t>` for a payload type that is no hook's \
      output. The three facts ride every attachment unit INCLUDING an addressed record \
-     csift models no leaf for - on that one they reach JSON only, because a leafless unit \
-     renders its shape in place of a label.\n  \
+     csift models no leaf for: the shape stands in for the leaf path there and the three \
+     render after it, exactly as they do on a labelled unit.\n  \
      MATCHING follows the BODY. A record that carries a conversion is searchable by the \
      converted text, not by the payload text it replaced, and `--raw` does not recover the \
      difference (the raw backfill runs after the match phase); the way to the bytes is an \

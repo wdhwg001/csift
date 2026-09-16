@@ -393,10 +393,6 @@ impl Record {
     /// then holds `None` rather than a boxed pair of nothings - so such a record pays no
     /// allocation either. `None` from this accessor means exactly that: the record
     /// carries no conversion at all.
-    // The ordinary "no caller yet" allow (AGENTS section 4): the attachment family is
-    // what reads this, and the amendment lands it so the family does not have to widen
-    // `Record`. The allow goes with the family.
-    #[allow(dead_code)]
     #[must_use]
     pub fn converted_text(&self) -> Option<&ConversionText> {
         self.conversion_parsed
