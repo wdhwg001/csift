@@ -233,16 +233,7 @@ pub(crate) fn collect_record_hits(
     // field is top-level and applies to the whole carrier.
     let denial_kind = rec.tool_denial_kind.clone();
     // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).
-    let queue_operation = if rec.is_type("queue-operation") {
-        rec.operation.clone()
-    } else {
-        None
-    };
-    let queue_reason = if rec.is_type("queue-operation") {
-        rec.reason.clone()
-    } else {
-        None
-    };
+    let (queue_operation, queue_reason) = queue_facts(rec);
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
     // C-33: the compaction facts of a boundary/summary record. The BOUNDARY carries the
     // metrics but no direction, so its mode comes from the per-file pairing in `ctx`; the

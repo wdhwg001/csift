@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2322",
+          "lines": "2323",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -46391,9 +46391,9 @@
       "depends": "csift renders the verbatim `operation` and `reason` facts and NEVER asserts a `dispatched` flag; inventing a join would fabricate a link between a queued draft and a delivered turn that the format does not carry.",
       "code": [
         {
-          "path": "src/commands/search/hits.rs",
-          "lines": "235-245",
-          "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
+          "path": "src/commands/search/hit_facts.rs",
+          "lines": "69-74",
+          "snippet": "pub(crate) fn queue_facts(rec: &Record) -> (Option<String>, Option<String>) {\n    if !rec.is_type(\"queue-operation\") {\n        return (None, None);\n    }\n    (rec.operation.clone(), rec.reason.clone())\n}"
         },
         {
           "path": "src/commands/search/render.rs",
@@ -55585,7 +55585,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "359-363",
+          "lines": "350-354",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -89054,7 +89054,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "282-285",
+          "lines": "298-301",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -93055,12 +93055,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "221-222",
+          "lines": "237-238",
           "snippet": "/// What a `headers` member renders as, everywhere and always: nothing.\npub(crate) const HEADERS_ELIDED: &str = \"<elided>\";"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "238-251",
+          "lines": "254-267",
           "snippet": "fn elide_headers(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if k == \"headers\" {\n                        serde_json::json!(HEADERS_ELIDED)\n                    } else {\n                        elide_headers(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
         },
         {
@@ -96236,7 +96236,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2900"
+          "lines": "2901"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

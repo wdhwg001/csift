@@ -53,6 +53,8 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Shared, "to"),
     k(Family::Shared, "pairing (paired | pending | orphan | null)"),
     k(Family::Shared, "tool_use_id"),
+    k(Family::Shared, "queue_operation"),
+    k(Family::Shared, "queue_reason"),
     k(Family::Shared, "source (\"elicitation-sidecar\" | null)"),
     k(Family::Shared, "survival (live | pre-cut | abandoned)"),
     k(Family::Shared, "abandoned_root_line"),

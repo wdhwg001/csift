@@ -204,6 +204,40 @@ fn fabricated_excerpts_survive_the_whole_file_gate() {
     assert!(out.stdout.contains("matched 1 exchange"), "{}", out.stdout);
 }
 
+/// An ADDRESS carries the queue facts a scan carries. The address site hard-coded both to
+/// null, so `show --line` on a queue line lost `queue_operation` and `queue_reason` from
+/// JSON and its label zone fell back to the bare word `queued` - for a record the same
+/// query reports in full under `search`. The refetch law is that the two agree, and a
+/// `refetch` command every hit prints is what a reader runs to get here.
+#[test]
+fn an_addressed_queue_line_carries_the_same_queue_facts_a_scan_does() {
+    let h = promoted_home();
+    // Line 11 is the `remove` with a reason - the shape that carries both fields.
+    let text = h.run(&["show", &at(SESS), "--line", "11"]);
+    assert!(text.success, "stderr {}", text.stderr);
+    assert!(
+        text.stdout.contains("[remove \u{b7} absorbed_mid_turn]"),
+        "the label zone names the event and its reason:\n{}",
+        text.stdout
+    );
+    let json = h.run(&["show", &at(SESS), "--line", "11", "--format", "json"]);
+    assert!(json.success, "stderr {}", json.stderr);
+    let rows = json_rows(&json.stdout, "record");
+    assert_eq!(rows.len(), 1, "{}", json.stdout);
+    assert_eq!(rows[0]["queue_operation"], "remove", "{}", json.stdout);
+    assert_eq!(
+        rows[0]["queue_reason"], "absorbed_mid_turn",
+        "{}",
+        json.stdout
+    );
+    // And a line that is no queue operation still carries nulls, so the helper did not
+    // start answering for every record.
+    let other = h.run(&["show", &at(SESS), "--line", "1", "--format", "json"]);
+    let rows = json_rows(&other.stdout, "record");
+    assert!(rows[0]["queue_operation"].is_null(), "{}", other.stdout);
+    assert!(rows[0]["queue_reason"].is_null(), "{}", other.stdout);
+}
+
 #[test]
 fn json_carries_queue_facts_and_census_counts_gated_leaves() {
     let h = promoted_home();

@@ -159,6 +159,13 @@ pub(crate) fn render_json(
                 "to": to,
                 "pairing": crate::commands::search::pairing_json(h.pair),
                 "tool_use_id": h.tool_use_id,
+                // The queue facts a `queue-operation` line carries, on the surface a
+                // reader reaches by running a hit's own `refetch` command: a `user.queued`
+                // hit named its event and its removal reason under `search` and answered
+                // null here for the same record, which is the one thing a refetch must not
+                // do. Null on every other line type, as it is there.
+                "queue_operation": h.queue_operation,
+                "queue_reason": h.queue_reason,
                 "source": if h.from_sidecar { json!("elicitation-sidecar") } else { serde_json::Value::Null },
                 "ts_utc": h.timestamp_utc,
                 "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),

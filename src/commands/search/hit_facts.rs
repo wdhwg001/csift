@@ -58,6 +58,21 @@ pub(crate) fn family_facts(
     out
 }
 
+/// The queue event a `queue-operation` line records, and the reason a removal gives -
+/// `None` for every other line type.
+///
+/// One writer, because both hit-construction sites carry the pair and they must agree:
+/// the scan read the record and the address hard-coded nulls, so `show --line N` on a
+/// queue line lost `queue_operation` and `queue_reason` from its JSON row and its label
+/// zone fell back to the bare word `queued`, for a record the same query reports in full
+/// under `search`.
+pub(crate) fn queue_facts(rec: &Record) -> (Option<String>, Option<String>) {
+    if !rec.is_type("queue-operation") {
+        return (None, None);
+    }
+    (rec.operation.clone(), rec.reason.clone())
+}
+
 /// The ONE unit an ADDRESSED record renders when the ordinary passes produced nothing
 /// (see the refetch-law note in [`collect_turn_hits`]) - the 1:1 law's whole mechanism.
 ///
@@ -103,6 +118,7 @@ pub(crate) fn addressed_unit(
     // one (this unit is emitted both for a record with no leaf and for one whose leaf
     // simply has no text).
     let (family, markers) = family_facts(rec, raw, &Section::record(class), ctx);
+    let (queue_operation, queue_reason) = queue_facts(rec);
     Some(Hit {
         class,
         labels: labels.iter().map(|c| c.path()).collect(),
@@ -123,8 +139,8 @@ pub(crate) fn addressed_unit(
         raw: None,
         image_ids: Vec::new(),
         from_sidecar: false,
-        queue_operation: None,
-        queue_reason: None,
+        queue_operation,
+        queue_reason,
         task_ids: Vec::new(),
         orphan_kind: None,
         delivery: rec.delivery_override(),

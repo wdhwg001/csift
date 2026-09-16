@@ -124,6 +124,11 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **`show --format json` carries a record's queue facts.** `queue_operation` and
+  `queue_reason` reached a `search` hit and no `show` record row, so running a hit's own
+  `refetch` command answered null for a record the query it came from had just reported in
+  full. Both are on the row now and in `show --help`'s key table. The pair also has one
+  writer: the scan read the record and the address site hard-coded both to null.
 - **A leafless unit renders its facts on the text surface too.** An addressed record
   csift models no leaf for carried its family facts into JSON and dropped every one of
   them from the label zone, so `show --line N` and `show --line N --format json`
