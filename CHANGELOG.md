@@ -9,6 +9,23 @@ surface change bumps the PATCH.
 
 ### Changed
 
+- **One stamping site for every taxonomy family, and one place each edits.** The extension
+  points on a search hit existed with nothing filling them, so each family would have cut
+  its own dispatch through the same shared files. `family_facts` is that one seam, called
+  at both hit-construction sites, so a record fetched by `show --line` carries every fact
+  the same record carries under `search`. `search --help` becomes one section file per
+  family and `show --help`'s record-row key list is rendered from a table with a family
+  column; both rendered helps are byte-identical to what the single strings carried.
+- **A bookkeeping unit renders its key=value head over its own bytes.** A summary is lossy,
+  and `search` matches rendered text, so a key only the head elided had stopped being
+  findable at all. The head stays, the line's verbatim JSON follows it, and every key the
+  head does not name is matchable again. The `harness.system.*` leaves are deliberately
+  outside the rule: an `api_error` line carries the whole HTTP response header set, which
+  csift prints on no path but `--raw`.
+- **A uuid a record NAMES resolves to that record's line.** `ClassifyCtx::line_of_uuid` is
+  backed by the chain's own uuid map rather than a second index, so an edge can render an
+  address; a caller with no row space gets an honest absence instead of a guessed line.
+
 - **The `-t` label taxonomy is 17 categories over 73 leaves, split by producer.** The old
   38-leaf space had one bag in it: `harness.meta` pooled hook-injected text, a hook run's own
   record, a slash command's caveat, the loop tick, the end-of-turn telemetry and the
@@ -154,6 +171,24 @@ surface change bumps the PATCH.
   with `Record::direction` moved verbatim into a fifth child so the engine stays under
   the 600-line cap, and the engine's cases nested to match. Every path is respelled at
   every call site, with no alias and no forwarding shim. No behaviour change.
+
+### Fixed
+
+- **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
+  the one place csift proves a negative, and it was re-rendering without the line - so for
+  a record whose text lives in fields the record model does not carry, it could prove a
+  file unmatchable on text the search would have produced.
+- **Four shape-inventory rows said a person sees a record they never saw.** The image
+  reference, the image block, the coordinator relay and the notification frame are all
+  isMeta user records, which the transcript render refuses unless their origin is one of
+  five kinds none of them writes. SPEC's inventory table and SKILL's identity cells follow,
+  and a drift test now compares the two row for row.
+
+### Performance
+
+- **An attachment payload is parsed once per record.** Four layers ask one attachment
+  record about its payload, and each ask re-parsed bytes that can hold a whole file
+  snapshot.
 
 ### Removed
 
