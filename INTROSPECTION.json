@@ -93103,13 +93103,11 @@
         "csift": null,
         "source": "SPEC.md section 4"
       },
-      "first_seen_claude_code": null,
-      "producer_trace": "none",
+      "first_seen_claude_code": "2.1.259",
+      "producer_trace": "complete",
       "specimen": "observed",
-      "attribution": "specimen-only",
-      "open_legs": [
-        "The writer is not traced: which branch of the persist path attaches the second conversion, and what makes a turn count as carrying a genuine human message, are unread. Byte-find the literal `renderedInHumanTurn` in the shipped executable and read the assignment back to the branch that decides it."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "checks": [
         {
           "claude_code": "2.1.258",
@@ -93120,7 +93118,60 @@
           "observed": "1,923 files carry either key. `rendered` on 99,423 lines, all top-level; `renderedInHumanTurn` on 1,507 lines, all top-level; 1,507 lines carry both; ZERO lines carry either inside the payload. Every value is an array; every entry's `content` is a string (99,573 entries under `rendered`, 1,507 under the second). All 1,507 second-conversion carriers are `queued_command` payloads and all hold exactly one entry, against 27 payload types for `rendered` led by `total_tokens_reminder` at 75,685. The two joined texts differ on 1,507 of 1,507 and are identical on 0.",
           "rule": "A line counts once per key it carries. A key is TOP-LEVEL when it is a key of the line's own object and PAYLOAD-LEVEL when it is a key of the `attachment` object. A text is the `\\n`-join of the string `content` of each array entry; two texts differ when those joins are unequal.",
           "note": "That the two texts differ on every record that has both is what decides the csift behaviour: the pair is reported and neither is chosen, because the record does not say which turn it was replayed into. The narrowness of the second key's carrier set - one payload type - is recorded as an observation about this corpus, not as a rule: nothing read here says the writer is limited to it."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-searched the 2.1.268 executable for `renderedInHumanTurn` and read every occurrence back to its enclosing function, then byte-searched the same four excerpts in the 2.1.258 executable and counted their occurrences and the leading bytes matching at each recorded offset. Re-ran the corpus walk of the first check over both projects roots.",
+          "observed": "Five occurrences of the literal at 2.1.268: one in a prompt string, one in a re-serialize path that deletes both keys, and three inside the mint-and-derive pair. Each of the four cited excerpts occurs EXACTLY once at 2.1.268 and is byte-exact at its offset; each occurs ZERO times in 2.1.258 with 0 leading bytes matching at that offset, so all four are marked `absent`. Corpus, root one: `rendered` on 101,551 lines, `renderedInHumanTurn` on 1,612, all 1,612 carrying both, all 1,612 pairs differing and 0 equal, every one of the 1,612 on a `queued_command` payload. Of that root's 4,062 `queued_command` lines, 164 carry a payload `origin.kind` of `human`, 51 `coordinator`, 8 `peer` and 3,839 none; the 1,612 carrying the second key are all in the last group, and 20 human-origin, 51 coordinator and 2 peer lines carry `rendered` alone. Root two: 0 of 845,866 attachment lines carry either key.",
+          "rule": "One JSON parse per non-blank line of every `*.jsonl` under a root, `journal.jsonl` skipped; a line counts once per key it carries; two conversions differ when the `\\n`-join of their entries' string `content` values is unequal; an origin is the payload's `attachment.origin.kind` and a line with no such object counts under none. A binary excerpt is byte-exact when the bytes at the recorded offset equal it, and `absent` when it occurs at no offset of the build and no leading byte matches at that offset.",
+          "note": "This closes the claim's open leg: the writer is traced and the pair is now end-to-end. The counts differ from the first check because the corpus is LIVE and grew between the two runs - the same walk under the same rule now reads 101,551 and 1,612 where it read 99,423 and 1,507 - and the invariants the claim rests on are unchanged: every second-key carrier also carries the first, every pair differs, and the carrier set is one payload type."
         }
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "WBe, the record-mint path",
+          "offset": 170184737,
+          "excerpt": "function WBe(e,n){let{rendered:r,renderedInHumanTurn:o,",
+          "note": "The entry that puts the keys on a record: it destructures BOTH conversions off the record it is given and re-derives them from the payload through the writer below, so a persisted pair is always the current converter's output and never a carried-over one. Byte-exact at this offset in Claude Code 2.1.268, where it occurs once; absent from 2.1.258.",
+          "anchor_status": "absent"
+        },
+        {
+          "role": "gate",
+          "name": "rNt, the conversion guard",
+          "offset": 170184194,
+          "excerpt": "function rNt(e){try{if(K0r(e.type))return{}",
+          "note": "The branch that decides whether a record gets any conversion at all: a payload type the drop predicate names returns an empty object, so no `rendered` is written for it. Byte-exact at this offset in Claude Code 2.1.268, where it occurs once; absent from 2.1.258.",
+          "anchor_status": "absent"
+        },
+        {
+          "role": "writer",
+          "name": "rNt, the second conversion",
+          "offset": 170184358,
+          "excerpt": "if(e.type!==\"queued_command\")return{rendered:n};let r=C0r(kre(e,{inHumanTurn:!0}));return r===void 0||R0r(r,n)?{rendered:n}:{rendered:n,renderedInHumanTurn:r}",
+          "note": "What makes the second key narrow and what makes the two texts always differ: only a `queued_command` is converted twice, and the second result is written ONLY when it is unequal to the first. Byte-exact at this offset in Claude Code 2.1.268, where it occurs once; absent from 2.1.258.",
+          "anchor_status": "absent"
+        },
+        {
+          "role": "writer",
+          "name": "Xst, the replay reader's choice",
+          "offset": 170184984,
+          "excerpt": "let r=Zjs(e.attachment.type===\"queued_command\"&&n?.inHumanTurn===!0?e.renderedInHumanTurn:e.rendered)",
+          "note": "Which copy a replay hands the model, and the reason csift reports both: the discriminator is the CALLER's own `inHumanTurn` option, a property of the turn being assembled, and no field of the record - so nothing on the line decides it. Byte-exact at this offset in Claude Code 2.1.268, where it occurs once; absent from 2.1.258.",
+          "anchor_status": "absent"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "renderedInHumanTurn",
+        "lowest_present": "2.1.259",
+        "highest_absent": "2.1.258",
+        "ladder": "Byte-count the literal in each historical build's `claude` executable: 0 in each of the 60 builds from 1.0.60 through 2.1.258, 4 at 2.1.259, 5 at 2.1.268."
+      },
+      "residue": [
+        "Every hop of this chain is marked `absent`: the producer entered the executable after the build the ledger is verified at, so the four excerpts sit in 2.1.268 and in no offset of 2.1.258. Re-locate them by byte-searching the verified build for each excerpt once it carries the feature."
       ]
     },
     {
@@ -94844,6 +94895,72 @@
           "observed": "Root one: 3,713 isMeta user records, 97 textless - 94 image-only, 3 document-only, 0 carrying both kinds - and 836 opening with an image reference. Root two: 1,825 records, 78 textless - 75 image-only, 3 document-only, 0 both - and 556 references.",
           "rule": "One count per RECORD, a record being a b'\\n'-delimited line under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`; a textless record counts once in exactly one shape bucket. The two roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
           "note": "The block counts now render in the label zone, so an address on such a record no longer falls through to the key=value excerpt alone."
+        }
+      ]
+    },
+    {
+      "id": "REC-110",
+      "area": "record-model",
+      "behavior": "The text a converted attachment record carries back on its top-level `rendered` key is the text the model received, and its shape is fixed. The value is an ARRAY of messages, each carrying its text under `content`; over one projects root, counted one JSON parse per non-blank line of every `*.jsonl`, 101,551 attachment lines carry the key, every value is an array, and every one of the 101,705 entries under them holds `content` as a STRING - no entry on that root holds the block-array form the writer also admits. The joined text of all 101,551 opens with `<system-reminder>`. The key rides 30 distinct payload types, led by `total_tokens_reminder` at 77,472, `task_reminder` at 5,063 and `skill_listing` at 2,165. `hook_success` is not among the leaders and is the narrow case: 15 of that root's 429,041 `hook_success` lines carry the key at all, against 90 whose payload `content` is non-empty. A second projects root, on builds below the key's floor, carries it on 0 of its 845,866 attachment lines.",
+      "depends": "`record_text::attachments::attachment_body` renders that text as an attachment unit's BODY, ahead of any field of the payload, and marks the unit `[rendered]` (JSON `body_source`) so a reader knows which of the record's two copies of itself is on screen; a record with no conversion falls to a payload field and then to the verbatim payload JSON, marked `[payload]`. The array-of-messages shape is what the join walks, and the string `content` is the arm every measured entry takes - the block-array arm stays because the writer admits it, and an entry of any other shape contributes nothing rather than crashing. The `<system-reminder>` head is why the body is worth preferring: the payload holds the strings a hook wrote, the conversion holds what the model actually read. THE SECTION 7 CONSEQUENCE, and it is the whole soundness argument: the persisted value is a JSON STRING, so the DECODED body is NOT a byte substring of its own line - a conversion that opens `<system-reminder>` and runs on past a newline stores that newline as `\\n`. What keeps the 7d literal prefilter and the 7f whole-file gate sound over it is the NEEDLE law rather than a substring: `matcher::required_needles` derives a needle only from a run carrying no whitespace and no JSON-escaped character, and such a run appears verbatim inside the raw line's JSON string, so a needle present in the decoded text is present in the raw bytes. That is the same reading every decoded `message.content` render at this seam already rests on, and it is why no synthesized-marker registration is added for the converted body.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/attachments.rs",
+          "lines": "74-80",
+          "snippet": "pub(crate) fn attachment_body(rec: &Record) -> Option<(String, &'static str)> {\n    if !rec.is_type(\"attachment\") {\n        return None;\n    }\n    if let Some(text) = rec.converted_text().and_then(|c| c.rendered.clone()) {\n        return Some((text, BODY_RENDERED));\n    }"
+        },
+        {
+          "path": "src/model/predicates.rs",
+          "lines": "39-41",
+          "snippet": "fn entry_text(content: &serde_json::Value) -> Option<String> {\n    match content {\n        serde_json::Value::String(s) => Some(s.clone()),"
+        },
+        {
+          "path": "src/commands/search/record_text/attachments/tests.rs",
+          "lines": "27",
+          "snippet": "fn a_persisted_conversion_is_the_body_and_names_itself() {"
+        }
+      ],
+      "instrument": "Corpus: walk every `*.jsonl` at any depth under a projects root, subagent transcripts included, skipping a file named `journal.jsonl`; split on the byte 0x0A; one JSON parse per non-blank line; a line that does not parse counts as unparsed and contributes to nothing. On each parsed line whose top-level `type` is `attachment`, record whether the TOP-LEVEL key `rendered` is present, the payload's `attachment.type`, whether the value is an array, the JSON type of each entry's `content`, and whether the `\\n`-join of the string entries starts with the literal `<system-reminder>`. Separately, for lines whose `attachment.type` is `hook_success`, count those carrying `rendered` and those whose `attachment.content` is truthy. Binary: byte-search a build for the literal `renderedInHumanTurn` to place the pair's floor.",
+      "located": {
+        "claude_code": "2.1.268",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": "2.1.259",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The CONVERTER itself is untraced here: which arm of the attachment conversion table produces the `<system-reminder>` wrapper, and whether the wrapper is added per payload type or once for the whole conversion, are unread. Instrument: byte-find `normalizeAttachmentForAPI` in the shipped executable, read the arm for `total_tokens_reminder` (the leading carrier) and follow its return value to the string that wraps it.",
+        "The floor is a LITERAL floor, not a behaviour floor: the ladder places the second key's first appearance, and whether `rendered` itself predates it on a build carrying no specimen is unmeasured. Instrument: byte-search each historical build for the literal `rendered:` inside the conversion writer rather than for the field name."
+      ],
+      "residue": null,
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "rNt, the conversion pair's derivation",
+          "offset": 170184358,
+          "excerpt": "if(e.type!==\"queued_command\")return{rendered:n};let r=C0r(kre(e,{inHumanTurn:!0}));return r===void 0||R0r(r,n)?{rendered:n}:{rendered:n,renderedInHumanTurn:r}",
+          "note": "The one function that writes the pair: it converts the payload once, returns `{rendered:n}` for every payload type but `queued_command`, and for that type converts a SECOND time with the `inHumanTurn` option before returning both - and only when the second result differs from the first. Byte-exact at this offset in Claude Code 2.1.268, where it occurs once; absent from 2.1.258, which is why the hop is marked.",
+          "anchor_status": "absent"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "renderedInHumanTurn",
+        "lowest_present": "2.1.259",
+        "highest_absent": "2.1.258",
+        "ladder": "Byte-count the literal in each historical build's `claude` executable: 0 in each of the 60 builds from 1.0.60 through 2.1.258, 4 at 2.1.259, 5 at 2.1.268."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Ran the corpus walk above over both projects roots, tallying per attachment line the presence of the top-level `rendered`, the payload type, the value's JSON type, each entry's `content` type, and whether the joined text opens with `<system-reminder>`; plus the `hook_success` cross-tab of `rendered` presence against non-empty payload `content`. Ran the literal ladder for `renderedInHumanTurn` over all 62 historical builds held on this host.",
+          "observed": "Root one: 9,611 files, 1,782,516 lines, 0 unparsed, 664,769 attachment lines over 45 payload types. `rendered` on 101,551 lines across 30 payload types (total_tokens_reminder 77,472, task_reminder 5,063, skill_listing 2,165, instructions 2,037, date 2,028); every value an array; 101,705 entries, 101,705 of them with a string `content` and 0 of any other shape; 101,551 of 101,551 joined texts open `<system-reminder>`. hook_success: 429,041 lines, 15 with `rendered`, 90 with a non-empty payload `content`. Root two: 845,866 attachment lines over 28 payload types, 0 carrying `rendered`. Ladder: 0 hits in each of 1.0.60 through 2.1.258 (60 builds), 4 at 2.1.259, 5 at 2.1.268.",
+          "rule": "One JSON parse per non-blank line; a line contributes exactly one outcome per tally; an entry is counted once per conversion array it sits in; a joined text is the `\\n`-join of the string `content` values in array order; `hook_success` content counts as non-empty when the value is truthy.",
+          "note": "The `hook_success` figures refute the shape the round's brief carried, which had the `rendered` presence coinciding exactly with a non-empty payload content: here 15 lines carry the conversion and 90 carry content, so the two populations are not equal on this root and the coincidence REC-109 records for that payload type is the narrower statement. csift reads the `rendered` presence and not the content, so no behaviour rests on the refuted form."
         }
       ]
     }

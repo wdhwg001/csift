@@ -563,6 +563,7 @@ fn a_freeform_askuserquestion_response_is_a_user_answer() {
     assert_eq!(head.stdout.trim(), "1", "{}", head.stdout);
 }
 
+mod attachments;
 mod bookkeeping;
 mod gates;
 mod injections;
