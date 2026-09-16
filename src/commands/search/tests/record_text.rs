@@ -301,3 +301,69 @@ fn a_windowed_excerpt_keeps_its_quarter_of_context_and_counts_only_real_remainde
         "a window at the end must not promise more: {out}"
     );
 }
+
+// ── The matchable-text law: a key=value HEAD over the line's verbatim BODY ──
+
+/// A bookkeeping line with a head renders BOTH: the summary a reader scans, then the
+/// bytes a pattern searches. The instrument is a key the head elides - a file-history
+/// delta's head names the path and the version, so `messageId` exists only in the body,
+/// and a render that stopped at the head would make that id unfindable by `search` on
+/// any surface.
+#[test]
+fn a_bookkeeping_line_renders_its_head_over_its_own_bytes() {
+    let line = r#"{"type":"file-history-delta","messageId":"msg-88ff","trackingPath":"/a/f.txt","backup":{"backupFileName":"f.txt@v4","version":4},"timestamp":"2026-06-07T05:01:00.000Z"}"#;
+    let text = record_raw_text(&rec(line), Some(line)).expect("a bookkeeping line renders");
+    let (head, body) = text
+        .split_once('\n')
+        .expect("head and body, newline between");
+    assert_eq!(
+        head,
+        "[file-history delta at 2026-06-07T05:01:00.000Z: /a/f.txt@v4 backup=f.txt@v4]"
+    );
+    assert_eq!(body, line, "the body is the line, byte for byte");
+    assert!(
+        !head.contains("msg-88ff") && body.contains("msg-88ff"),
+        "the id the head elides is matchable in the body"
+    );
+}
+
+/// Twelve of the thirteen bookkeeping leaves have no head yet, and they render the body
+/// alone - never an empty bracket, and never nothing at all.
+#[test]
+fn a_bookkeeping_line_with_no_head_renders_the_line_alone() {
+    let line = r#"{"type":"cost-state","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","totalCostUSD":1.5}"#;
+    assert_eq!(
+        record_raw_text(&rec(line), Some(line)).as_deref(),
+        Some(line)
+    );
+}
+
+/// And with no source line in hand the head still renders. A caller that holds no bytes
+/// (the whole-file gate before this lane handed the line through, a fixture) gets the
+/// summary rather than nothing, which is the conservative half of the law.
+#[test]
+fn a_bookkeeping_line_without_its_bytes_renders_the_head_alone() {
+    let line = r#"{"type":"file-history-delta","messageId":"m","trackingPath":"/a/f.txt","backup":{"version":4},"timestamp":"2026-06-07T05:01:00.000Z"}"#;
+    let text = record_raw_text(&rec(line), None).expect("the head survives on its own");
+    assert!(!text.contains('\n'));
+    assert!(text.starts_with("[file-history delta at "));
+}
+
+/// The join itself: each half alone is the whole text, and neither half is `None` turned
+/// into an empty string.
+#[test]
+fn head_and_body_keeps_whichever_half_exists() {
+    assert_eq!(
+        head_and_body(Some("H".into()), Some("B".into())).as_deref(),
+        Some("H\nB")
+    );
+    assert_eq!(head_and_body(Some("H".into()), None).as_deref(), Some("H"));
+    assert_eq!(head_and_body(None, Some("B".into())).as_deref(), Some("B"));
+    assert_eq!(head_and_body(None, None), None);
+    // `verbatim_body` is the line and nothing else - no trim, no re-encode.
+    assert_eq!(
+        verbatim_body(Some("  {\"a\":1} ")).as_deref(),
+        Some("  {\"a\":1} ")
+    );
+    assert_eq!(verbatim_body(None), None);
+}

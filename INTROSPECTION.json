@@ -56081,7 +56081,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text.rs",
-          "lines": "293-304",
+          "lines": "332-343",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],

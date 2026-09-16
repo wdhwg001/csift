@@ -206,26 +206,25 @@ pub(crate) fn record_raw_text(rec: &Record, raw: Option<&str>) -> Option<String>
     if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }
-    // v0.10.0 promoted non-message lines: verbatim content where the line has one
-    // (queued text, away recap), a fabricated key=value excerpt otherwise (turn
-    // duration, stop hooks, file-history) - each fabricated form is registered as a
-    // synth marker (`synth_marker_finders`) so the whole-file gate stays sound.
-    if let Some(text) = promoted_record_text(rec) {
-        return Some(text);
-    }
-    // A BOOKKEEPING line with no dedicated render: its own VERBATIM JSON, exactly as an
-    // attachment payload renders, and for the same reason - the text is a byte substring
-    // of the source line, so the 7d prefilter and the 7f whole-file gate stay sound with
-    // no synthesized marker. The line's content lives in fields `Record` does not model,
-    // which is why this is the ONE render that reads the source line rather than the
-    // record. (`raw` is present only for a non-role line a gate admitted.)
+    // A BOOKKEEPING line: the MATCHABLE-TEXT LAW (see [`verbatim_body`]). The family's
+    // key=value view is the HEAD - a legible summary of the fields that matter - and the
+    // line's own verbatim JSON is the BODY, so every full uuid and every key the summary
+    // elides stays matchable. Ordered BEFORE the general promoted arm because
+    // `harness.bookkeeping.file-history` has a head there and would otherwise return it
+    // alone. A line type with no head yet renders the body only, which is what twelve of
+    // the thirteen leaves do today.
     if rec
         .promoted_class()
         .is_some_and(|c| c.category() == "harness.bookkeeping")
     {
-        if let Some(text) = raw {
-            return Some(text.to_string());
-        }
+        return head_and_body(promoted_record_text(rec), verbatim_body(raw));
+    }
+    // v0.10.0 promoted non-message lines: verbatim content where the line has one
+    // (queued text, away recap), a fabricated key=value excerpt otherwise (turn
+    // duration, stop hooks) - each fabricated form is registered as a synth marker
+    // (`synth_marker_finders`) so the whole-file gate stays sound.
+    if let Some(text) = promoted_record_text(rec) {
+        return Some(text);
     }
     let Some(msg) = rec.message.as_ref() else {
         // No `message` blocks → a system record. D7: the boundary's content + compactMetadata.
@@ -243,6 +242,46 @@ pub(crate) fn record_raw_text(rec: &Record, raw: Option<&str>) -> Option<String>
                 .collect();
             (!parts.is_empty()).then(|| parts.join("\n"))
         }
+    }
+}
+
+/// The MATCHABLE-TEXT LAW: the body of a unit whose content lives in fields `Record`
+/// does not model is the line's OWN VERBATIM JSON.
+///
+/// A key=value head is a summary, and a summary is lossy by construction: it shortens a
+/// uuid to eight characters, prints three of a line's twelve keys, and formats a number.
+/// Rendering only the head makes the elided material UNSEARCHABLE - `search` matches
+/// rendered text, so a full uuid that no longer appears in any rendered string cannot be
+/// found at all. The verbatim line is also free of every section 7 hazard for the same
+/// reason `--attachments` renders a payload verbatim: it is a byte substring of the
+/// source line, so the 7d literal prefilter and the 7f whole-file gate hold with no
+/// synthesized-marker registration.
+///
+/// So a bookkeeping unit renders HEAD then BODY ([`head_and_body`]): the summary a reader
+/// scans, and the bytes a pattern searches.
+///
+/// ONE family is deliberately outside the law, and it is not an oversight. A
+/// `system`/`api_error` line carries the whole HTTP response header set inside its
+/// `error` object, and csift does not print those on any path but `--raw`; the system
+/// family therefore renders the FIELDS it names rather than the line, and `--raw` stays
+/// the way to the bytes there. Any family whose lines carry no such material uses this.
+///
+/// `None` when the caller has no source line - every conversation record, where the
+/// question does not arise because `message` holds the text.
+pub(crate) fn verbatim_body(raw: Option<&str>) -> Option<String> {
+    raw.map(str::to_string)
+}
+
+/// Join a family's key=value HEAD to the verbatim BODY of the same line, newline between
+/// them so a `--no-truncate` body keeps the two apart (the excerpt collapses whitespace
+/// anyway). Either half alone is the whole text when the other is absent; `None` only
+/// when there is neither, which is the honest answer for a line with no render and no
+/// source bytes in hand.
+pub(crate) fn head_and_body(head: Option<String>, body: Option<String>) -> Option<String> {
+    match (head, body) {
+        (Some(h), Some(b)) => Some(format!("{h}\n{b}")),
+        (Some(h), None) => Some(h),
+        (None, body) => body,
     }
 }
 

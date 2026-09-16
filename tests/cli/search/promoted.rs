@@ -498,3 +498,37 @@ fn the_system_leaves_are_gated_rendered_and_gate_sound() {
         census.stdout
     );
 }
+
+/// The MATCHABLE-TEXT LAW at the surface: a bookkeeping line renders its key=value head
+/// AND its own bytes, so a key the head elides is still findable.
+///
+/// `snapshotMessageId` joins a file-history delta to the snapshot it follows, and the
+/// head names only the path and the version - so a render that stopped at the head would
+/// make that join unsearchable on every surface. The head has to survive too: it is the
+/// legible half, and it is what a reader scans a result list by.
+#[test]
+fn a_bookkeeping_key_the_head_elides_is_still_searchable() {
+    let h = promoted_home();
+    let hit = h.run(&[
+        "search",
+        "snapshotMessageId",
+        &at(SESS),
+        "-t",
+        "harness.bookkeeping.file-history",
+    ]);
+    assert!(hit.success, "stderr: {}", hit.stderr);
+    assert!(
+        hit.stdout.contains("harness.bookkeeping.file-history"),
+        "the key in the line's own bytes is matchable:\n{}",
+        hit.stdout
+    );
+    // And the unit still carries the head, under an address where nothing is clipped.
+    let shown = h.run(&["show", &at(SESS), "--line", "10"]);
+    assert!(shown.success, "stderr: {}", shown.stderr);
+    assert!(
+        shown.stdout.contains("[file-history delta at ")
+            && shown.stdout.contains("snapshotMessageId"),
+        "head then body, both present:\n{}",
+        shown.stdout
+    );
+}
