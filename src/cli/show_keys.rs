@@ -81,6 +81,24 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         "signature_len (thinking blocks; null when the block carries no signature field)",
     ),
     k(Family::Thinking, "thinking_text_absent"),
+    // A rendered spelling carries no `", "`: the help joins the rows with exactly that
+    // separator, so an inner one would read as two keys.
+    k(
+        Family::Injections,
+        "for:[{kind|basis|target|reason}] (what an injection was written for)",
+    ),
+    k(
+        Family::Injections,
+        "relayed (a person's message the harness delivered into this lane)",
+    ),
+    k(
+        Family::Injections,
+        "peer_sender_task_id (the lane a peer relay came from)",
+    ),
+    k(
+        Family::Injections,
+        "image_only:{images|documents} (a textless harness.context.image record)",
+    ),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.
