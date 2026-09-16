@@ -78,6 +78,21 @@ fn marker_heads(hits: &[Hit]) -> Vec<Vec<&'static str>> {
         .collect()
 }
 
+/// Assert that the probe's own answer is PRESENT on this unit, exactly once - never that
+/// it is the ONLY thing there.
+///
+/// The three seam tests below pin the WIRING, not a family's output, and every real
+/// family is about to start stamping facts and markers of its own onto the very records
+/// these fixtures use. An equality assertion would make each of those a failure here, in
+/// a file the family does not own, for a reason that has nothing to do with the seam -
+/// which is exactly what happened to the first family that landed a per-block fact. So:
+/// contained, and contained once, because a probe arriving twice would mean the site is
+/// called twice and that is a defect the equality form used to catch.
+fn appears_once<T: PartialEq + std::fmt::Debug>(have: &[T], want: &T, what: &str) {
+    let n = have.iter().filter(|x| *x == want).count();
+    assert_eq!(n, 1, "{what}: expected {want:?} exactly once in {have:?}");
+}
+
 /// Each unit's FACTS as a consumer reads them: the label-zone tag the fact projects (`-`
 /// when it projects none) and the `key=value` it appends to the hit's JSON object. Read
 /// through [`HitFact::label_zone`]/[`HitFact::json`] rather than off the enum, because
@@ -145,19 +160,21 @@ fn the_scan_site_stamps_every_unit_a_record_produced() {
     );
     // Two blocks, two units, and BOTH carry the probe's per-unit answer - a site that
     // stamped the record once would leave the second unit empty.
-    assert_eq!(
-        marker_heads(&hits),
-        vec![
-            vec![probe::SENTINEL_MARKER, probe::SENTINEL_BLOCK_MARKER],
-            vec![probe::SENTINEL_MARKER, probe::SENTINEL_BLOCK_MARKER],
-        ]
-    );
+    let markers = marker_heads(&hits);
+    assert_eq!(markers.len(), 2, "two blocks, two units");
+    for (i, unit) in markers.iter().enumerate() {
+        appears_once(unit, &probe::SENTINEL_MARKER, &format!("unit {i} marker"));
+        appears_once(
+            unit,
+            &probe::SENTINEL_BLOCK_MARKER,
+            &format!("unit {i} block marker"),
+        );
+    }
     // The FACT half of the seam arrives on both units too. It is a separate field merged
     // by a separate line, so the markers above say nothing about it.
-    assert_eq!(
-        fact_projections(&hits),
-        vec![vec![probe_fact()], vec![probe_fact()]]
-    );
+    for (i, unit) in fact_projections(&hits).iter().enumerate() {
+        appears_once(unit, &probe_fact(), &format!("unit {i} fact"));
+    }
 }
 
 /// A RECORD-LEVEL unit reaches the same site, and its `Section` says it came from no
@@ -167,8 +184,14 @@ fn a_record_level_unit_is_stamped_without_a_block() {
     let hits = scanned(
         r#"{"type":"user","uuid":"u1","sessionId":"family-facts-probe","message":{"role":"user","content":"hello"}}"#,
     );
-    assert_eq!(marker_heads(&hits), vec![vec![probe::SENTINEL_MARKER]]);
-    assert_eq!(fact_projections(&hits), vec![vec![probe_fact()]]);
+    let markers = marker_heads(&hits);
+    assert_eq!(markers.len(), 1, "one record-level unit");
+    appears_once(&markers[0], &probe::SENTINEL_MARKER, "marker");
+    assert!(
+        !markers[0].contains(&probe::SENTINEL_BLOCK_MARKER),
+        "a record-level unit came from no block, and the probe says so"
+    );
+    appears_once(&fact_projections(&hits)[0], &probe_fact(), "fact");
 }
 
 /// And the ADDRESSED unit reaches it too. Without this call a `show --line N` render
@@ -185,19 +208,18 @@ fn the_address_site_stamps_the_unmodeled_unit() {
         EXCERPT_MAX,
     )
     .expect("a parseable line always renders one unit");
-    assert_eq!(
-        hit.markers.iter().map(|m| m.head).collect::<Vec<_>>(),
-        vec![probe::SENTINEL_MARKER, probe::SENTINEL_LEAFLESS_MARKER]
-    );
-    // And so does the FACT - behind the shape fact, which still leads so `render_label`
-    // reads it as the label. This is the assertion the `.chain(family)` line answers to:
-    // drop it and the markers above still arrive while the family's facts vanish.
-    assert_eq!(
-        fact_projections(std::slice::from_ref(&hit)),
-        vec![vec![
-            "- | unmodeled=\"future-thing\"".to_string(),
-            probe_fact()
-        ]]
+    let heads: Vec<&str> = hit.markers.iter().map(|m| m.head).collect();
+    appears_once(&heads, &probe::SENTINEL_MARKER, "marker");
+    appears_once(&heads, &probe::SENTINEL_LEAFLESS_MARKER, "leafless marker");
+    // And so does the FACT - beside the SHAPE fact, which the label still finds wherever
+    // the list grows. This is the assertion the `.chain(family)` line answers to: drop it
+    // and the markers above still arrive while the family's facts vanish.
+    let facts = &fact_projections(std::slice::from_ref(&hit))[0];
+    appears_once(facts, &probe_fact(), "fact");
+    appears_once(
+        facts,
+        &"- | unmodeled=\"future-thing\"".to_string(),
+        "shape fact",
     );
     assert_eq!(render_label(&hit), "unmodeled: future-thing");
 }
