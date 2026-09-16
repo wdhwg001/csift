@@ -64,6 +64,18 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Shared, "image_ids:[…]"),
     k(Family::Shared, "mode"),
     k(Family::Shared, "compact_metadata"),
+    // The SHARED provenance edge, listed under the first family to build one: a
+    // `harness.bookkeeping` unit is the first record row that can carry `for`, and the
+    // key is one array whatever family filled it, so a later family finds this row
+    // already here and adds none of its own.
+    k(
+        Family::Bookkeeping,
+        "for:[…] (kind/basis/reason + target{line/uuid/session/note})",
+    ),
+    // The family's own two, on the two lines whose relation names no record.
+    k(Family::Bookkeeping, "continued_in"),
+    k(Family::Bookkeeping, "checkpoint_closes_at"),
+    k(Family::Bookkeeping, "checkpoint_join"),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.

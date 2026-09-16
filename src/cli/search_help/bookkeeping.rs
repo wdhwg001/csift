@@ -36,4 +36,20 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      shared `... (+N chars)` marker, an OBJECT value printing as its sorted key list, \
      which is where the artifact ids are. A session-shaped value (bridgeSessionId, \
      parentSessionId) prints whole under the second rule rather than the first, because \
-     it is a join key carried to another file and half a uuid joins nothing.";
+     it is a join key carried to another file and half a uuid joins nothing.\n\n  \
+     Every unit of the family carries the marker [not delivered]: none of these lines \
+     reaches the model, which is what the JSON `delivered` field says about all \
+     thirteen leaves.\n\n  \
+     FIVE line types also name something outside themselves. Three name a RECORD and \
+     ride the shared provenance edge - `[for: leaf L42]` in the label zone, a `for` \
+     array in JSON: `last-prompt` -> leaf (its leafUuid), a file-history line -> \
+     versions (its messageId), `fork-context-ref` -> forked_from (the record the \
+     forked agent's prefix was cut at, with the parent session beside it). A uuid \
+     resolves to a LINE of this transcript when one carries it, else the id prints \
+     with `(not in this file)`, and a line naming no such key renders `[for: <kind> \
+     unknown (<reason>)]` rather than dropping the edge. The other two name no record, \
+     so they are the family's own: `continued-in` renders `[continued in @<session>]` \
+     (JSON `continued_in`) for the child transcript a background handover moved to, \
+     and `cost-state` renders `[checkpoint closes <instant>]` (JSON \
+     `checkpoint_closes_at` plus `checkpoint_join`) - startTime plus totalDuration, \
+     the instant `list` joins a cleared session on as `cleared_from`.";

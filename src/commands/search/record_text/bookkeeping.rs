@@ -208,6 +208,11 @@ pub(crate) fn render(
 /// itself, because several families carry them and a reader has to read every one the
 /// same way; a family builds one through the shared helper instead of describing the
 /// shape again.
+/// TWO of the family's five relations point at something that is NOT a record, so the
+/// shared `for` edge - whose target is a uuid and a line - has no honest slot for them:
+/// `continued-in` names a whole TRANSCRIPT and `cost-state` names an INSTANT. They are
+/// this family's own facts instead, and each renders its honest empty rather than
+/// vanishing when the key it reads is absent.
 #[derive(Debug, Clone)]
 pub(crate) enum Fact {
     /// The DELEGATION PIN. Each of [`HitFact`]'s six family arms forwards `label_zone`
@@ -219,37 +224,166 @@ pub(crate) enum Fact {
     /// alone.
     #[cfg(test)]
     Probe(&'static str),
+    /// `continued-in`: the CHILD transcript a background handover moved this session to.
+    /// A whole file, not a record in it - `list` reports the same fact per session, and
+    /// the way to the child is `csift show @<id>`.
+    ContinuedIn(Option<String>),
+    /// `cost-state`: the instant this checkpoint stopped accumulating, `startTime` plus
+    /// `totalDuration`. It is the KEY the `/clear` join is computed from, not the joined
+    /// session: that join runs the other way, from a cleared session's own wrapper back
+    /// to the sibling holding the checkpoint, and reading it from this side means
+    /// opening every sibling transcript in the project directory. The stamping site is
+    /// handed the record, its line and the classify context, and none of them names this
+    /// transcript's path - a `cost-state` line carries no `cwd` either, so the directory
+    /// cannot even be derived. `list` reports the resolved side as `cleared_from`.
+    Checkpoint(Option<String>),
 }
 
 impl Fact {
     /// The label-zone tag this fact adds, if any.
     pub(crate) fn label_zone(&self) -> Option<String> {
-        match *self {
+        Some(match self {
             #[cfg(test)]
-            Fact::Probe(head) => Some(head.to_string()),
-        }
+            Fact::Probe(head) => (*head).to_string(),
+            Fact::ContinuedIn(Some(id)) => format!("[continued in @{id}]"),
+            Fact::ContinuedIn(None) => {
+                "[continued in unknown (no continuedInSessionId on this line)]".to_string()
+            }
+            Fact::Checkpoint(Some(at)) => format!("[checkpoint closes {at}]"),
+            Fact::Checkpoint(None) => {
+                "[checkpoint closes unknown (needs startTime and totalDuration)]".to_string()
+            }
+        })
     }
 
     /// The JSON key(s) and value(s) this fact adds to its hit object.
     pub(crate) fn json(&self) -> Vec<(&'static str, serde_json::Value)> {
-        match *self {
+        match self {
             #[cfg(test)]
             Fact::Probe(head) => vec![("bookkeeping_probe", serde_json::json!(head))],
+            Fact::ContinuedIn(id) => vec![("continued_in", serde_json::json!(id))],
+            Fact::Checkpoint(at) => vec![
+                ("checkpoint_closes_at", serde_json::json!(at)),
+                (
+                    "checkpoint_join",
+                    serde_json::json!("startTime+totalDuration; list joins it as cleared_from"),
+                ),
+            ],
         }
     }
 }
 
+/// The marker word every unit of the family carries. None of these lines is admitted to
+/// the message array, which is what the JSON `delivered` field has always said about all
+/// thirteen leaves and what the TEXT surface said about none of them - the engine prints
+/// that marker only for a record carrying a per-record delivery override, and a
+/// bookkeeping line's invisibility comes from its leaf instead. Rendered through the
+/// engine's own [`Marker`], so both surfaces spell it one way.
+const NOT_DELIVERED: &str = "not delivered";
+
 /// The `harness.bookkeeping` family's per-unit facts and markers.
 ///
 /// Called for EVERY emitted unit through [`crate::commands::search::family_facts`], so
-/// the first thing a filled body does is refuse a unit that is not its own: the leaf on
-/// `section`, or the record's own line type. Returning two empty vectors allocates
-/// nothing, which is what every unit of every other family pays here.
+/// the first thing it does is refuse a unit that is not its own. The gate is
+/// [`Record::promoted_class`] rather than the bare line type, because ONE line type
+/// splits between two families: a `queue-operation` carrying the person's own text is
+/// `user.queued`, which is the human's voice and none of this family's business.
 pub(crate) fn facts(
-    _rec: &Record,
-    _raw: Option<&str>,
+    rec: &Record,
+    raw: Option<&str>,
     _section: &Section<'_>,
-    _ctx: &ClassifyCtx,
+    ctx: &ClassifyCtx,
 ) -> (Vec<HitFact>, Vec<Marker>) {
-    (Vec::new(), Vec::new())
+    if rec
+        .promoted_class()
+        .is_none_or(|c| c.category() != "harness.bookkeeping")
+    {
+        return (Vec::new(), Vec::new());
+    }
+    let line_type = rec.r#type.as_deref().unwrap_or_default();
+    let facts = edge(line_type, raw, ctx).map_or_else(Vec::new, |f| vec![f]);
+    (facts, vec![Marker::plain(NOT_DELIVERED)])
+}
+
+/// The PROVENANCE relation a bookkeeping line carries - what the line is FOR.
+///
+/// FIVE of the eighteen line types name something outside themselves:
+/// - `last-prompt` names the conversation LEAF (`leafUuid`), the record Claude Code's own
+///   resume walk starts from;
+/// - a file-history line names the prompt-or-write record its versions belong to
+///   (`messageId`);
+/// - `fork-context-ref` names the record the forked agent's prefix was cut at
+///   (`parentLastUuid`) and the SESSION that record lives in (`parentSessionId`);
+/// - `continued-in` names the CHILD session a background handover moved to;
+/// - `cost-state` names the INSTANT the `/clear` join keys on.
+///
+/// The first three point at a RECORD, so they are the shared [`HitFact::For`] edge, built
+/// through [`super::for_edge`] - the one place the uuid-to-line lookup happens, so every
+/// family's edge resolves and renders alike. The last two point at a whole transcript and
+/// at an instant, which that edge's target cannot express without putting a session id or
+/// a timestamp in a field documented as the target record's uuid; they are [`Fact`]
+/// variants instead, carrying the same information.
+///
+/// The LINE TYPE is matched BEFORE the parse, so the thirteen types with no relation pay
+/// nothing here. The five that do pay one `serde_json::from_str` of a line the query
+/// already admitted - the same parse [`head`] pays on the render side, which the two
+/// cannot share: they run at different points with no value between them.
+fn edge(line_type: &str, raw: Option<&str>, ctx: &ClassifyCtx) -> Option<HitFact> {
+    match line_type {
+        "last-prompt"
+        | "file-history-snapshot"
+        | "file-history-delta"
+        | "fork-context-ref"
+        | "continued-in"
+        | "cost-state" => {}
+        _ => return None,
+    }
+    let v: serde_json::Value = serde_json::from_str(raw?).ok()?;
+    let obj = v.as_object()?;
+    let at = |k: &str| obj.get(k).and_then(serde_json::Value::as_str);
+    Some(match line_type {
+        "last-prompt" => super::for_edge("leaf", Basis::Key, at("leafUuid"), ctx),
+        "file-history-snapshot" | "file-history-delta" => {
+            super::for_edge("versions", Basis::Key, at("messageId"), ctx)
+        }
+        "fork-context-ref" => in_session(
+            super::for_edge("forked_from", Basis::Key, at("parentLastUuid"), ctx),
+            at("parentSessionId"),
+        ),
+        "continued-in" => HitFact::Bookkeeping(Fact::ContinuedIn(
+            at("continuedInSessionId").map(str::to_string),
+        )),
+        _ => HitFact::Bookkeeping(Fact::Checkpoint(checkpoint_join(obj))),
+    })
+}
+
+/// Name the FILE a resolved edge's target lives in.
+///
+/// The shared builder resolves the uuid - the one lookup no family repeats - and answers
+/// the honest empty when the record names none. What it has no parameter for is the
+/// session the target sits in, which `fork-context-ref` names on the line beside the
+/// uuid; [`ForTarget::session`] is the field that exists to print it, so the session is
+/// stamped onto the edge the builder made rather than onto a target built here.
+fn in_session(mut fact: HitFact, session: Option<&str>) -> HitFact {
+    if let (HitFact::For { target, .. }, Some(s)) = (&mut fact, session) {
+        target.session = Some(s.to_string());
+    }
+    fact
+}
+
+/// The `/clear` join key a `cost-state` line carries: `startTime + totalDuration`, the
+/// instant the session this checkpoint belongs to stopped accumulating, rendered as the
+/// ISO instant `list` compares a clear-minted sibling's wrapper timestamp against.
+///
+/// `None` when either number is missing or the instant is unparseable - the honest empty,
+/// which [`Fact::Checkpoint`] then renders rather than dropping.
+///
+/// The instant is built with `jiff` here rather than through `crate::timez`, which renders
+/// a raw timestamp STRING into local text and has no epoch-milliseconds-to-UTC-instant
+/// form; adding one is a change to a shared base module, and this is the only caller.
+fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    let start = obj.get("startTime")?.as_str()?;
+    let duration = Record::u64_field(obj.get("totalDuration"))?;
+    let close = crate::timez::epoch_ms(start)?.checked_add(i64::try_from(duration).ok()?)?;
+    Some(jiff::Timestamp::from_millisecond(close).ok()?.to_string())
 }

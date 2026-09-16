@@ -367,8 +367,8 @@ fn the_show_record_keys_render_from_their_table() {
         "the help and the table disagree about the record row"
     );
     // Every row prints inside its own family's BLOCK: walking the rendered list, the
-    // family order index never goes backwards. Today every row is `Shared`, so this is
-    // the guard that keeps a later lane's rows from interleaving with another's.
+    // family order index never goes backwards. This is the guard that keeps one lane's
+    // rows from interleaving with another's, now that a family block is filled.
     let order = |f: Family| {
         FAMILY_ORDER
             .iter()
