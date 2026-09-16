@@ -217,7 +217,14 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         record IS sent, an `isVirtual` record and the `<synthetic>` API-error placeholder\n  \
         are NOT, an attachment whose payload type the converter drops is NOT, and a\n  \
         `hook_success` IS exactly when it carries a rendered body. An undelivered record\n  \
-        renders `[not delivered]`; JSON carries `delivered` on every hit. AXIS 3,\n  \
+        renders `[not delivered]`; JSON carries `delivered` on every hit. ONE leaf is\n  \
+        exempt from axis 2, the single stated exception to the visible-face law:\n  \
+        `agent.message.structured` rides a converter-dropped payload, so the axis would\n  \
+        take it out of `-t agent` and `-t agent.message` and leave that category showing\n  \
+        only its plain half. The axis asks what the model RECEIVED and this is the leaf\n  \
+        the model WROTE, so a bare `agent.message` gives you both - the way the API gives\n  \
+        a turn free text or a schema-bound answer and never both. The record was still not\n  \
+        delivered, so its `delivered` field and its marker are unchanged. AXIS 3,\n  \
         SURVIVAL: Claude Code rebuilds a session by walking `parentUuid` from ONE leaf, and\n  \
         a record that walk no longer reaches is off the conversation however it was\n  \
         delivered - marked `[abandoned]` / `[rewound]` / `[replay copy of L<n>]`, outside\n  \

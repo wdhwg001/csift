@@ -665,6 +665,20 @@ Every other record carries no override, so its leaf default stands. The assemble
 remaining arms need none: it KEEPS an `api_system` record and drops a `progress` record,
 and csift models no leaf for either type, so neither is selectable at all.
 
+ONE leaf is exempt from the override, and it is the single stated exception to the
+visible-face law: **`agent.message.structured`**. Its carrier is a `structured_output`
+attachment, which is a converter-dropped payload type, so the override reads `Some(false)`
+and the rule above would take the leaf out of `-t agent` and `-t agent.message` - leaving
+the bare form of a two-leaf category holding only its plain half, with nothing in the
+output to say the other half exists. The axis asks whether the model RECEIVED the record;
+this leaf is the one case where the model WROTE it, and a bare face asks for the
+conversation, of which a subagent's own answer is part whatever the assembler later did
+with the line. The API offers a turn free text or a schema-bound answer and never both, so
+a reader asking for `agent.message` is asking for whichever one that turn used
+(`cli::selectors::keeps_face_against_delivery`). The exception moves FACE MEMBERSHIP only:
+the record was not delivered, so the hit's `delivered` field still reads false and an
+explicit selector still renders `[not delivered]`.
+
 Only the BARE-FACE forms consult the override. A glob (`-t 'agent.*'`) and an exact leaf
 path keep their full sets, so every record
 stays reachable by naming it; `-T` speaks the same rule on the exclude side. The label

@@ -96,6 +96,56 @@ fn a_category_with_no_visible_face_is_named_not_refused() {
     assert!(LabelFilter::new(&both, &glob).is_statically_empty());
 }
 
+/// The visible-face law's ONE stated exception, and the fact it does not touch.
+///
+/// A `structured_output` payload is in `inventory::NEVER_CONVERTS`, so the record-level
+/// delivery override reads NOT delivered - which drops every other leaf it reaches out
+/// of a bare face. `agent.message.structured` is exempt: the model WROTE those words,
+/// and a bare `agent.message` that returned only the plain half would hide a whole leaf
+/// of a two-leaf category behind a glob nobody knows to type.
+#[test]
+fn a_bare_agent_face_keeps_the_structured_answer_the_model_wrote() {
+    // The exception, on both faces that reach the leaf.
+    for face in ["agent", "agent.message"] {
+        assert!(
+            selector_matches(face, "agent.message.structured", Some(false)),
+            "-t {face} keeps the structured answer despite its delivery verdict"
+        );
+        assert!(
+            selector_matches(face, "agent.message.plain", None),
+            "-t {face} still reaches the plain half"
+        );
+    }
+    // It is an exception, not a hole: every OTHER leaf still narrows on the axis.
+    assert!(
+        !selector_matches("harness", "harness.context.task", Some(false)),
+        "the delivery axis still narrows a bare face everywhere else"
+    );
+    assert!(
+        !selector_matches("harness.context", "harness.context.mode", Some(false)),
+        "a bare category narrows the same way a bare role does"
+    );
+    // It does not leak to the leaf beside it: the exception is keyed on the PATH, so
+    // the plain half of the same category narrows on the axis like everything else.
+    assert!(
+        !selector_matches("agent.message", "agent.message.plain", Some(false)),
+        "the exception names one leaf, not the category"
+    );
+    // The exempt leaf is exempt on the DELIVERY axis only. It is `llm_visible`, which
+    // is what carries it through with no record in hand; a leaf that is not would still
+    // be dropped by axis one, where this exception does not reach.
+    assert!(selector_matches(
+        "agent.message",
+        "agent.message.structured",
+        None
+    ));
+    assert!(!selector_matches(
+        "agent.thinking",
+        "agent.thinking.redacted",
+        None
+    ));
+}
+
 #[test]
 fn selector_three_forms_and_visibility() {
     // Bare ROLE: the leaves the model received (no record in hand ⇒ the leaf default).

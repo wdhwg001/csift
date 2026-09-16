@@ -73,7 +73,8 @@ pub fn is_bare_face(selector: &str) -> bool {
 /// leaf default for the record this label came from, `None` otherwise. Only the
 /// bare-face form consults it, because only the bare-face form claims to be the
 /// conversation. `None` = no record in hand (or none that disagrees), so the leaf
-/// default stands.
+/// default stands. ONE leaf is exempt from that consult
+/// ([`keeps_face_against_delivery`]).
 #[must_use]
 pub fn selector_matches(selector: &str, path: &str, delivered: Option<bool>) -> bool {
     if let Some(prefix) = selector.strip_suffix(".*") {
@@ -88,12 +89,37 @@ pub fn selector_matches(selector: &str, path: &str, delivered: Option<bool>) -> 
     // A bare role or category: what the model received - the leaf default unless this
     // record's own delivery verdict overrides it.
     if let Some(d) = delivered {
-        return d;
+        if !keeps_face_against_delivery(path) {
+            return d;
+        }
     }
     Class::ALL
         .iter()
         .find(|c| c.path() == path)
         .is_none_or(|c| c.llm_visible())
+}
+
+/// The ONE leaf a bare face keeps despite its record's delivery verdict, and the one
+/// stated exception to the visible-face law.
+///
+/// `agent.message.structured` is a schema-bound subagent's final answer, carried by a
+/// `structured_output` attachment. That payload type is in
+/// [`crate::model::inventory::NEVER_CONVERTS`], so the record-level override reads NOT
+/// delivered and the delivery axis would drop the leaf out of `-t agent` and
+/// `-t agent.message` - leaving the bare `agent.message` face holding only half of a
+/// two-leaf category, with no way to learn the other half exists short of a glob.
+///
+/// The drop is right for every other row it applies to and wrong for this one, because
+/// the axis asks "did the model RECEIVE this" and this leaf is the case where the model
+/// WROTE it. A bare face asks for the conversation, and an answer the model produced is
+/// part of the conversation whatever the assembler later did with the record. The API
+/// itself offers text or a schema-bound answer and never both, so a reader asking for
+/// `agent.message` is asking for whichever one this turn used.
+///
+/// What changes is FACE MEMBERSHIP alone. The hit's own `delivered` column still reads
+/// false, because the record genuinely was not delivered; nothing here edits a fact.
+fn keeps_face_against_delivery(path: &str) -> bool {
+    path == Class::AgentMessageStructured.path()
 }
 
 /// The bare-face selectors among `selectors` whose visible face is EMPTY - every leaf

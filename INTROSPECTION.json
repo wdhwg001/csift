@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2328",
+          "lines": "2342",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -49641,8 +49641,8 @@
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "79-96",
-          "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if !is_bare_face(selector) {\n        return true; // an exact leaf: any visibility.\n    }\n    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
+          "lines": "80-99",
+          "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if !is_bare_face(selector) {\n        return true; // an exact leaf: any visibility.\n    }\n    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        if !keeps_face_against_delivery(path) {\n            return d;\n        }\n    }\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
         },
         {
           "path": "src/model/taxonomy/facets.rs",
@@ -87128,8 +87128,8 @@
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "88-92",
-          "snippet": "    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }"
+          "lines": "89-95",
+          "snippet": "    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        if !keeps_face_against_delivery(path) {\n            return d;\n        }\n    }"
         },
         {
           "path": "src/cli/search_args.rs",
@@ -88754,7 +88754,7 @@
       "code": [
         {
           "path": "src/cli/selectors.rs",
-          "lines": "183-185",
+          "lines": "209-211",
           "snippet": "    pub fn with_survival(self, live: bool) -> Self {\n        Self { live, ..self }\n    }"
         },
         {
@@ -92745,7 +92745,7 @@
       "id": "CLS-044",
       "area": "classification",
       "behavior": "The attachment converter that turns a persisted attachment record into the content a resumed request carries is ONE object of per-payload-type arms, and an arm may be the empty conversion `()=>[]`. At Claude Code 2.1.258 that object holds EIGHTEEN such arms - `prompt_snapshot`, `tool_host_result_lines`, `already_read_file`, `async_hook_response_batch`, `batching_reminder_sent`, `secondary_reminder_sent`, `command_permissions`, `edited_image_file`, `hook_cancelled`, `hook_error_during_execution`, `hook_non_blocking_error`, `hook_system_message`, `hook_permission_decision`, `hook_deferred_tool`, `goal_status`, `structured_output`, `max_turns_reached`, `teammate_shutdown_batch` - of which nine name a payload type csift's inventory has a row for. A payload type the object does NOT name reaches one of two arms below it, and both also return an empty list: a sixteen-name `.includes(e.type)` early return (`autocheckpointing`, `background_task_status`, `todo`, `task_progress`, `ultramemory`, `compaction_reminder`, `current_session_memory`, `thinking_reminder`, `companion_intro`, `pen_mode_enter`, `pen_mode_exit`, `ultrawork_request`, `echo_activities`, `verify_plan_reminder`, `fold_nudge`, `context_tip`), and then the default, which reports `Unknown attachment type: ${e.type}` through the error reporter and returns `[]`. So a payload type the build has never heard of converts to nothing rather than to an error, and two types csift models - `deferred_tools_record` and `thinking_stripped` - are exactly that case at this build: the name occurs zero times in the whole executable, yet records carrying both are on disk, written by builds that knew them.",
-      "depends": "`model::inventory::NEVER_CONVERTS` is csift's copy of that set restricted to the payload types it models, and `Record::delivery_override` reads it to answer whether the model received a given attachment record - which is what a bare `-t harness` or `-t agent` selector narrows on, and what the `[not delivered]` label-zone marker prints. A type missing from the list makes csift report a record as delivered that the harness drops; `goal_status` was exactly that, because `harness.context.task` is otherwise visible. The inventory's `llm` column carries the same answer per row, and the drift test beside it asserts the two agree in both directions, so the list and the column cannot drift apart silently.",
+      "depends": "`model::inventory::NEVER_CONVERTS` is csift's copy of that set restricted to the payload types it models, and `Record::delivery_override` reads it to answer whether the model received a given attachment record - which is what the `[not delivered]` label-zone marker prints and what a bare `-t harness` or `-t agent` selector narrows on, with ONE leaf exempt from that narrowing. `agent.message.structured` rides `structured_output`, so the override answers not-delivered for it and the bare face would be left holding only the plain half of a two-leaf category; the face keeps it instead (`cli::selectors::keeps_face_against_delivery`), because the axis asks what the model RECEIVED and this is the leaf the model WROTE. The exemption moves face membership only - the record's own verdict, its `delivered` field and its marker are the ones this claim's fact decides, and none of them changes. A type missing from the list makes csift report a record as delivered that the harness drops; `goal_status` was exactly that, because `harness.context.task` is otherwise visible. The inventory's `llm` column carries the same answer per row, and the drift test beside it asserts the two agree in both directions, so the list and the column cannot drift apart silently.",
       "code": [
         {
           "path": "src/model/inventory.rs",
@@ -92802,6 +92802,16 @@
           "observed": "The object spans 10,476 bytes and holds 18 empty arms; the early-return list holds 16 names and the default arm returns [] after reporting. Of the 50 payload types csift models, 9 have an empty arm (`async_hook_response_batch`, `batching_reminder_sent`, `command_permissions`, `goal_status`, `hook_cancelled`, `hook_non_blocking_error`, `hook_system_message`, `prompt_snapshot`, `structured_output`), 0 are in the early-return list, and 2 occur zero times in the whole executable (`deferred_tools_record`, `thinking_stripped`) - 11 in total, against the 9 csift carried. On disk over 9,793 jsonl files: `goal_status` 0 files / 0 payload lines, `async_hook_response_batch` 0 / 0, while `deferred_tools_record` reads 12 files / 61 payload lines and `thinking_stripped` 3 / 3.",
           "rule": "An empty arm is the literal `<name>:()=>[]` inside the conversion object's own brace window. A default-arm type is one whose name is a zero-count byte match over the whole executable, so nothing in the build can name it. A payload line is a byte match of `\"attachment\":{\"type\":\"<type>\"`; a file counts once however many such lines it holds.",
           "note": "The two csift was missing are the two with zero corpus incidence, so the wrong answer had no occurrence to be wrong about - but `goal_status` carries `harness.context.task`, whose leaf default is visible, so a record would have been reported as delivered where the converter drops it. The nine empty arms that name types csift does not model are recorded here rather than added: the inventory has no row for them, and a never-convert entry with no row is a rule about nothing."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Built a three-line transcript - a genuine user record, an assistant text turn, and a `type:\"attachment\"` record whose payload `type` is `structured_output` parented to it - and ran `search '' @<id> -t agent.message --count-by label`, the same with `-t agent`, and `search '' @<id> -t agent.message --format json` against two release-equivalent builds of csift: one carrying the bare-face delivery consult unconditionally, one carrying the `agent.message.structured` exemption. Counted census keys per run and read each hit's `delivered` field and its rendered label zone.",
+          "observed": "Without the exemption both bare faces report 1 census key (`agent.message.plain`, 1 record) and the structured record reaches neither. With it both report 2 keys (`agent.message.plain` 1, `agent.message.structured` 1). The structured hit's `delivered` reads false in the run that surfaces it, and its label zone still renders `[not delivered]` beside `[structured]`, so the payload-conversion fact this claim pins is unchanged in both the JSON field and the rendered marker.",
+          "rule": "One census key per distinct leaf among the matched records; one observation per hit for `delivered` and for the label zone. The two builds differ only in whether the bare-face form consults the record-level delivery verdict for this one leaf path.",
+          "note": "The Claude Code fact is untouched: `structured_output` is still a payload the converter drops, and `Record::delivery_override` still answers not-delivered for a record carrying one. What the text gained is the boundary of what csift does with that answer - the verdict decides the record's `delivered` field and its marker, and it decides bare-face membership for every leaf but this one."
         }
       ]
     },
@@ -96246,7 +96256,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2961"
+          "lines": "2975"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

@@ -203,18 +203,20 @@ fn the_leaf_list_here_is_the_selector_space_the_binary_prints() {
     assert_eq!(leaves, want, "the pinned leaf list is not the binary's");
 }
 
-/// What the three BARE faces drop, exactly.
+/// What the three BARE faces drop, exactly: the 28 leaves `Class::llm_visible` calls
+/// invisible - the two scan-layer user leaves, `user.queued` and the 13 bookkeeping leaves
+/// (non-transcript lines with no `message{}`), the two textless thinking shapes, the nine
+/// message-less system records, and `harness.hook.outcome`.
 ///
-/// The 28 leaves `Class::llm_visible` calls invisible - the two scan-layer user leaves,
-/// `user.queued` and the 13 bookkeeping leaves (non-transcript lines with no `message{}`),
-/// the two textless thinking shapes, the nine message-less system records, and
-/// `harness.hook.outcome` - PLUS one leaf whose absence is a different fact and the reason
-/// this list is typed out rather than counted: `agent.message.structured` is VISIBLE as a
-/// leaf (the model produced that text) while the harness converts its attachment to
-/// nothing, so the RECORD-level delivery verdict is what removes it from a bare face. A
-/// count alone would let those two reasons trade places unnoticed.
-const DROPPED_BY_A_BARE_FACE: [&str; 29] = [
-    "agent.message.structured",
+/// It is typed out rather than counted because the two reasons a leaf can be missing must
+/// not be able to trade places unnoticed. The leaf that is NOT here is the proof: a
+/// `structured_output` attachment is in `inventory::NEVER_CONVERTS`, so the record-level
+/// delivery verdict reads NOT delivered and would drop `agent.message.structured` from
+/// every bare face - and that is the ONE stated exception to the visible-face law, because
+/// the model PRODUCED those words even though it never receives them back
+/// (`cli::selectors::keeps_face_against_delivery`). A bare `agent.message` gives the plain
+/// answer and the structured one, the way the API offers a turn one or the other.
+const DROPPED_BY_A_BARE_FACE: [&str; 28] = [
     "agent.thinking.omitted",
     "agent.thinking.redacted",
     "harness.bookkeeping.artifact",
@@ -247,8 +249,9 @@ const DROPPED_BY_A_BARE_FACE: [&str; 29] = [
 
 /// A BARE role selects only its LLM-VISIBLE face, and the fixture reaches every leaf of
 /// all three faces. The complement is the same statement from the other side, and it is
-/// the one this asserts exactly: what a bare face drops is what the visibility law and the
-/// per-record delivery verdict say it drops, and nothing else.
+/// the one this asserts exactly: what a bare face drops is what the visibility law, the
+/// per-record delivery verdict and that law's one stated exception say it drops, and
+/// nothing else.
 ///
 /// Without this, the reachability sweep above would pass on a fixture that only ever
 /// produced records under the explicit glob - and the coarse "show me the conversation"
