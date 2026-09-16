@@ -1,6 +1,7 @@
 mod fixtures;
 mod home;
 mod live_fixtures;
+mod root;
 
 pub(crate) use fixtures::*;
 pub(crate) use home::*;

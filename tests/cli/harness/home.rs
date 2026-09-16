@@ -33,8 +33,10 @@ pub(crate) struct Home {
 impl Home {
     pub(crate) fn new() -> Self {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let pid = std::process::id();
-        let root = std::env::temp_dir().join(format!("csift-it-{pid}-{n}"));
+        let root = super::root::scratch_root(n);
+        // Claimed, not merged: a root that is already there is a home leaked by another run
+        // (see harness/root.rs), and adopting it would run this test on foreign fixtures.
+        super::root::create_fresh(&root).expect("a scratch home of this run's own");
         std::fs::create_dir_all(root.join(".claude").join("projects")).unwrap();
         Home { root }
     }
