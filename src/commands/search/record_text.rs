@@ -340,19 +340,6 @@ pub(crate) fn record_raw_text(
     if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }
-    // A BOOKKEEPING line: the MATCHABLE-TEXT LAW (see [`verbatim_body`]). The family's
-    // key=value view is the HEAD - a legible summary of the fields that matter - and the
-    // line's own verbatim JSON is the BODY, so every full uuid and every key the summary
-    // elides stays matchable. Ordered BEFORE the general promoted arm because
-    // `harness.bookkeeping.file-history` has a head there and would otherwise return it
-    // alone. A line type with no head yet renders the body only, which is what twelve of
-    // the thirteen leaves do today.
-    if rec
-        .promoted_class()
-        .is_some_and(|c| c.category() == "harness.bookkeeping")
-    {
-        return head_and_body(promoted_record_text(rec), verbatim_body(raw));
-    }
     // v0.10.0 promoted non-message lines: verbatim content where the line has one
     // (queued text, away recap), a fabricated key=value excerpt otherwise (turn
     // duration, stop hooks) - each fabricated form is registered as a synth marker

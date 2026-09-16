@@ -11,16 +11,29 @@ use super::*;
 /// What a `harness.bookkeeping` LINE says - the family's half of the render seam.
 ///
 /// Called by [`super::family_render`] for every unit whose leaf sits in this family's
-/// category, BEFORE the engine's generic arms; `None` falls through to them. A STUB at
-/// the render seam: the composition this family owns still lives in `record_text.rs`
-/// and moves here in its own commit.
+/// category, BEFORE the engine's generic arms; `None` falls through to them.
+///
+/// THE MATCHABLE-TEXT LAW as this family renders it ([`super::verbatim_body`]): the HEAD
+/// is a key=value summary of the fields that matter and the BODY is the line's own
+/// VERBATIM JSON, so every full uuid and every key the summary elides stays matchable.
+/// A summary alone would make the elided material unfindable, because `search` matches
+/// rendered text; the verbatim half is a byte substring of the source line, so it costs
+/// the section 7 prefilter laws nothing.
+///
+/// Twelve of the thirteen leaves have no head yet and render body-only. The one that
+/// does - `harness.bookkeeping.file-history` - builds it from fields `Record` models,
+/// so its head still comes from the promoted renderer; when the family lane gives the
+/// other twelve heads of their own, they are built here.
+///
+/// A record whose own line type is not a bookkeeping one never reaches this: the seam
+/// dispatched on its leaf, and this arm is only called for leaves in this category.
 pub(crate) fn render(
-    _rec: &Record,
-    _raw: Option<&str>,
+    rec: &Record,
+    raw: Option<&str>,
     _class: Class,
     _ctx: &ClassifyCtx,
 ) -> Option<String> {
-    None
+    super::head_and_body(super::promoted_record_text(rec), super::verbatim_body(raw))
 }
 
 /// The `harness.bookkeeping` family's own facts.
