@@ -22,9 +22,13 @@ pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.sch
      key words, with `fallbackModel=none` printed rather than elided because the absence \
      of a second model is what separates the two subtypes (with no source line the head \
      stops at the subtype rather than reporting a key it never read); \
-     `harness.system.api-error` reads `[api-error status=<s> retry <attempt>/<max> in \
-     <ms>ms]` followed by the error's own type and message (an attempt the line omits \
-     prints as `?`, since a bare maximum would read as an attempt number); \
+     `harness.system.api-error` reads `[api-error status=<s> type=<kind> retry \
+     <attempt>/<max> in <ms>ms]` followed by the failure's own wording (an attempt the \
+     line omits prints as `?`, since a bare maximum would read as an attempt number). \
+     The kind and the wording are read where the shape puts them, which is not the same \
+     place twice: a connection failure carries its wording in `error.message` and names \
+     no kind, while an HTTP failure names the kind in `error.type` and keeps the response \
+     body it received, so its wording sits two hops down the `error` chain. \
      `harness.system.notice` reads `[notice <level>] <content>`; `harness.system.kill` \
      reads the bare `[kill]` (the record carries no payload on disk); \
      `harness.system.command` reads `[command] <content>` and is the one LLM-visible \

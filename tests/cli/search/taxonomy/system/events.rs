@@ -22,7 +22,8 @@ fn every_system_event_kind_renders_its_own_fields() {
         ),
         (
             "harness.system.api-error",
-            "[api-error status=529 retry 3/20 in 1522.5ms] overloaded_error Overloaded zzoverload",
+            "[api-error status=529 type=overloaded_error retry 3/20 in 1522.5ms] \
+             Overloaded zzoverload",
         ),
         (
             "harness.system.notice",
@@ -69,7 +70,9 @@ fn the_label_census_names_every_system_event_key() {
             .unwrap_or(0)
     };
     assert_eq!(count("harness.system.refusal"), 2, "{rows:?}");
-    assert_eq!(count("harness.system.api-error"), 1, "{rows:?}");
+    // TWO api_error records now: the HTTP shape and the connection shape, the two
+    // key sets the corpus holds.
+    assert_eq!(count("harness.system.api-error"), 2, "{rows:?}");
     assert_eq!(count("harness.system.notice"), 1, "{rows:?}");
     assert_eq!(count("harness.system.kill"), 1, "{rows:?}");
     assert_eq!(count("harness.system.command"), 1, "{rows:?}");

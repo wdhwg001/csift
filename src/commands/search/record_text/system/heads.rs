@@ -43,8 +43,9 @@ pub(crate) fn system_event_text(
     let body = match class {
         // An `api_error` line carries no `content` key at all, so the statement of WHAT
         // failed lives in the `error` object - and a reader searching for the failure
-        // searches for its wording. The two descriptive fields are rendered as the body;
-        // every other key of that object, `headers` above all, stays unrendered.
+        // searches for its WORDING, which is the body. The failure KIND rides the head
+        // beside the status; every other key of that object, `headers` above all, stays
+        // unrendered.
         Class::SystemApiError => error_text(p),
         _ => content_body(rec),
     };
@@ -82,13 +83,14 @@ fn refusal_head(rec: &Record, p: Option<&serde_json::Map<String, serde_json::Val
     parts.join(" ")
 }
 
-/// `[api-error status=<status> retry <retryAttempt>/<maxRetries> in <retryInMs>ms]`,
-/// each part only when the line carries it.
+/// `[api-error status=<status> type=<kind> retry <retryAttempt>/<maxRetries> in
+/// <retryInMs>ms]`, each part only when the line carries it.
 ///
-/// `status` is read from INSIDE the `error` object (the HTTP shape carries it there, and
-/// so does the connection shape when the attempt reached a response); the three retry
-/// counters are top-level. Numbers render as their own JSON text - `retryInMs` is a
-/// jittered float, and rounding it would report a value the line does not hold.
+/// `status` and the failure KIND are read from INSIDE the `error` object (the HTTP shape
+/// carries both there, and the connection shape carries a status when the attempt reached
+/// a response); the three retry counters are top-level. Numbers render as their own JSON
+/// text - `retryInMs` is a jittered float, and rounding it would report a value the line
+/// does not hold.
 ///
 /// A line carrying a MAXIMUM and no attempt renders the attempt slot as `?`: the pair is
 /// one counter, and printing `retry 20` for a maximum would read as an attempt number.
@@ -98,9 +100,13 @@ fn api_error_head(p: Option<&serde_json::Map<String, serde_json::Value>>) -> Str
     let Some(p) = p else {
         return "[api-error]".to_string();
     };
+    let err = p.get("error");
     let mut parts = vec!["[api-error".to_string()];
-    if let Some(s) = p.get("error").and_then(|e| e.get("status")).map(num_text) {
+    if let Some(s) = err.and_then(|e| e.get("status")).map(num_text) {
         parts.push(format!("status={s}"));
+    }
+    if let Some(kind) = error_fields(err).kind {
+        parts.push(format!("type={kind}"));
     }
     let attempt = p.get("retryAttempt").map(num_text);
     let max = p.get("maxRetries").map(num_text);
@@ -162,37 +168,77 @@ fn content_body(rec: &Record) -> String {
     }
 }
 
-/// What an api_error SAYS failed, as the searchable body: the error's `type` and its
-/// `message`, in that order, joined by a space. Neither is sensitive - the object's
-/// sensitive half is `headers`, which no path but `--raw` prints - and without them the
-/// record's statement of the failure is unsearchable: `content` is absent on every
-/// observed specimen, so this is the whole body there is. The empty string when the line
-/// carries neither field.
-fn error_text(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {
-    let Some(obj) = p.and_then(|p| p.get("error")).and_then(|e| e.as_object()) else {
-        return String::new();
-    };
-    let mut parts = Vec::new();
-    for key in ["type", "message"] {
-        if let Some(s) = obj.get(key).and_then(|v| v.as_str()) {
-            if !s.is_empty() {
-                parts.push(s.to_string());
-            }
-        }
-    }
-    parts.join(" ")
+/// What an api_error's `error` object says failed: the failure KIND and the WORDING, each
+/// read where the shape it arrives in puts it.
+///
+/// The two observed shapes put them in different places and NEITHER carries both at one
+/// level (claim CLS-062). The CONNECTION shape keeps its wording in `error.message` and
+/// names no kind at all. The HTTP shape names the kind in `error.type` and keeps the
+/// response BODY it received verbatim, so its wording sits two hops down the `error` chain
+/// (`error.error.error.message`) - reading one level there renders the kind and drops the
+/// sentence that says what actually failed, which is the one thing a reader searches for.
+///
+/// So the WORDING is walked and the KIND is not: the `type` one hop down is the API
+/// envelope's own word rather than a failure kind, and a walk that took the first `type`
+/// it found would report that word about every record of the HTTP shape.
+/// [`ERROR_WALK_DEPTH`] bounds the walk one hop past the deepest shape observed.
+#[derive(Debug, Default)]
+struct ErrorFields<'a> {
+    kind: Option<&'a str>,
+    message: Option<&'a str>,
 }
 
-/// The api_error `error` object reduced to the two fields that say WHAT failed. Every
-/// other key is dropped, `headers` above all: the observed header set carries a session
-/// cookie, an organization id and a CDN trace id, none of which belongs in a rendered
-/// transcript view. `None` when the error object carries neither field.
+/// One hop past the deepest observed wording (`error.error.error.message`, two hops down),
+/// so a shape one envelope deeper still renders while an arbitrary structure does not get
+/// walked to its bottom.
+const ERROR_WALK_DEPTH: usize = 4;
+
+fn error_fields(err: Option<&serde_json::Value>) -> ErrorFields<'_> {
+    let Some(obj) = err.and_then(serde_json::Value::as_object) else {
+        return ErrorFields::default();
+    };
+    let mut node = obj;
+    let mut message = None;
+    for _ in 0..ERROR_WALK_DEPTH {
+        if let Some(m) = str_member(node, "message") {
+            message = Some(m);
+            break;
+        }
+        match node.get("error").and_then(serde_json::Value::as_object) {
+            Some(inner) => node = inner,
+            None => break,
+        }
+    }
+    ErrorFields {
+        kind: str_member(obj, "type"),
+        message,
+    }
+}
+
+/// The searchable BODY of an api_error: the wording [`error_fields`] found. Without it the
+/// record's statement of the failure is unsearchable - `content` is absent on every
+/// observed specimen, so this is the whole body there is - and it is not sensitive: the
+/// object's sensitive half is `headers`, which no path but `--raw` prints. The empty
+/// string when no hop of the chain carries a message.
+fn error_text(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {
+    error_fields(p.and_then(|p| p.get("error")))
+        .message
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// The api_error `error` object reduced to the two fields that say WHAT failed, read by
+/// the SAME [`error_fields`] the head and the body read - so the hit's `error` key and the
+/// rendered text can never name different fields. Every other key is dropped, `headers`
+/// above all: the observed header set carries a session cookie, an organization id and a
+/// CDN trace id, none of which belongs in a rendered transcript view. `None` when neither
+/// field is a non-empty string anywhere on the chain.
 pub(crate) fn error_summary(err: Option<&serde_json::Value>) -> Option<serde_json::Value> {
-    let obj = err?.as_object()?;
+    let fields = error_fields(err);
     let mut out = serde_json::Map::new();
-    for key in ["type", "message"] {
-        if let Some(v) = obj.get(key) {
-            out.insert(key.to_string(), v.clone());
+    for (key, value) in [("type", fields.kind), ("message", fields.message)] {
+        if let Some(v) = value {
+            out.insert(key.to_string(), serde_json::Value::String(v.to_string()));
         }
     }
     (!out.is_empty()).then_some(serde_json::Value::Object(out))
@@ -262,20 +308,69 @@ mod tests {
         );
     }
 
-    /// The retry counters render as the line's own numbers, the status is read from
-    /// INSIDE the error object, the jittered float is not rounded, and the error's own
-    /// words are the body - while no byte of `headers` reaches the text.
+    /// THE HTTP SHAPE, the one that carries response headers: `error` holds `{error,
+    /// headers, requestID, status, type}` on 5 records of each measured root. Its failure
+    /// KIND is at `error.type` and its WORDING two hops down, inside the response body it
+    /// kept verbatim - so the head names the status and the kind, the body carries the
+    /// sentence, and no byte of `headers` reaches either.
     #[test]
-    fn api_error_head_names_the_counters_and_the_failure() {
-        let line = r#"{"type":"system","subtype":"api_error","uuid":"e1","level":"error","error":{"type":"overloaded_error","message":"Overloaded zzoverload","status":529,"headers":{"set-cookie":"sess=zz","anthropic-organization-id":"org-zz"}},"retryAttempt":3,"maxRetries":20,"retryInMs":1522.5}"#;
+    fn the_http_shape_renders_its_kind_in_the_head_and_its_wording_from_two_hops_down() {
+        let line = r#"{"type":"system","subtype":"api_error","uuid":"e1","level":"error","error":{"type":"overloaded_error","headers":{"set-cookie":"sess=zz","anthropic-organization-id":"org-zz"},"requestID":"req-zz","status":529,"error":{"type":"error","request_id":"req-zz","error":{"type":"overloaded_error","message":"Overloaded zzoverload"}}},"retryAttempt":3,"maxRetries":20,"retryInMs":1522.5}"#;
         let t = text(line).expect("renders");
         assert_eq!(
             t,
-            "[api-error status=529 retry 3/20 in 1522.5ms] overloaded_error Overloaded zzoverload"
+            "[api-error status=529 type=overloaded_error retry 3/20 in 1522.5ms] \
+             Overloaded zzoverload"
         );
         assert!(!t.contains("set-cookie"), "headers never reach the render");
         assert!(!t.contains("org-zz"), "headers never reach the render");
         assert!(!t.contains("headers"), "not even the key name");
+        // The hit's `error` key is built by the same reader, so it names the same two
+        // fields the text does - never the envelope's own `type`, one hop down.
+        let payload: serde_json::Value = serde_json::from_str(line).expect("parses");
+        assert_eq!(
+            error_summary(payload.get("error")),
+            Some(serde_json::json!({
+                "type": "overloaded_error",
+                "message": "Overloaded zzoverload",
+            }))
+        );
+    }
+
+    /// THE CONNECTION SHAPE, the common one: `error` holds `{connection, formatted,
+    /// isNetworkDown, message, rateLimits}` (24 records on one measured root, 253 on the
+    /// other, `status` present on some), keeps its wording at the TOP level of that object
+    /// and names no kind at any depth - so the head elides `type=` rather than reporting
+    /// the envelope word, and the wording is still the body.
+    #[test]
+    fn the_connection_shape_renders_its_wording_with_no_kind_to_name() {
+        let line = r#"{"type":"system","subtype":"api_error","uuid":"e2","level":"error","error":{"connection":{"host":"zzhost"},"formatted":"zzformatted","isNetworkDown":false,"message":"Connection error zzconn","rateLimits":{},"status":429},"retryAttempt":1,"maxRetries":10,"retryInMs":600}"#;
+        assert_eq!(
+            text(line).as_deref(),
+            Some("[api-error status=429 retry 1/10 in 600ms] Connection error zzconn")
+        );
+        let payload: serde_json::Value = serde_json::from_str(line).expect("parses");
+        assert_eq!(
+            error_summary(payload.get("error")),
+            Some(serde_json::json!({"message": "Connection error zzconn"}))
+        );
+    }
+
+    /// The walk stops at the FIRST wording it meets and never descends past the bound, so
+    /// a chain deeper than any observed shape renders nothing rather than an arbitrary
+    /// walk, and an outer message is never shadowed by an inner one.
+    #[test]
+    fn the_wording_walk_takes_the_first_message_and_stops_at_its_bound() {
+        let outer = r#"{"type":"system","subtype":"api_error","uuid":"e7","error":{"message":"outer zzfirst","error":{"message":"inner zzsecond"}}}"#;
+        assert_eq!(
+            text(outer).as_deref(),
+            Some("[api-error] outer zzfirst"),
+            "the shallowest message wins"
+        );
+        // Five hops: one past the bound, so the message is out of reach and the head
+        // stands alone rather than the walk running to the bottom of the structure.
+        let deep = r#"{"type":"system","subtype":"api_error","uuid":"e8","error":{"error":{"error":{"error":{"error":{"message":"too deep zzdeep"}}}}}}"#;
+        assert_eq!(text(deep).as_deref(), Some("[api-error]"));
     }
 
     /// A missing counter leaves its slot out rather than printing a zero, an absent

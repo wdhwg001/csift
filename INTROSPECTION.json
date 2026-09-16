@@ -95162,7 +95162,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "66",
+          "lines": "67",
           "snippet": "fn refusal_head(rec: &Record, p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
         },
         {
@@ -95221,22 +95221,22 @@
     {
       "id": "CLS-062",
       "area": "classification",
-      "behavior": "An `api_error` record's `error` is an OBJECT on every specimen - 29 of 29 on the live root, 258 of 258 on the older snapshot - never a string, and it comes in two families. The CONNECTION family carries `message`, `formatted`, `connection`, `isNetworkDown` and `rateLimits` (22 records live, 60 snapshot), sometimes with `status` added (2 and 11), and on the snapshot sometimes with a camelCase `requestId` beside that status (182, a shape the live root does not hold). The HTTP family carries `error`, `headers`, `requestID`, `status` and `type` - 5 records on each root - and its `headers` object is the response headers VERBATIM: 18 distinct header names on each root, the set carrying `set-cookie`, `anthropic-organization-id`, `cf-ray`, `request-id` and `traceresponse`. Those same 5 records are exactly the ones with no top-level `slug` key (24 with / 5 without live; 253 with / 5 without on the snapshot). The retry counters are top-level: `retryAttempt` 1..16 live and 1..30 on the snapshot, `maxRetries` in {20, 10} live and {20, 50, 10} on the snapshot, `retryInMs` a jittered float. The record carries NO `content` key at all - the key is absent on 29 of 29 and on 258 of 258, which matches the constructor, whose returned object has no `content` field - and the `source` key that constructor does emit appears on 0 of 29 and 0 of 258.",
-      "depends": "csift renders `[api-error status=<status> retry <retryAttempt>/<maxRetries> in <retryInMs>ms]` and, because there is no `content` to render, uses the error's own `type` and `message` as the BODY - so the record's statement of what failed is searchable, which it is not if the head alone is rendered. The same two fields ride JSON as an `error` fact beside `status`, `retry_attempt`, `max_retries` and `retry_in_ms`. `error.headers` reaches NO rendered or JSON path: a transcript view that printed them would put a session cookie and an organization id in front of whoever reads the output, and `--raw` is the one documented way to the bytes because it prints the line and says so. A counter the line does not carry is elided rather than defaulted, and a maximum with no attempt renders the declared `?` placeholder, because printing the maximum alone would read as an attempt number. `retryInMs` renders as the line's own number rather than a rounded one, so a reader can compare the rendered value against the line.",
+      "behavior": "An `api_error` record's `error` is an OBJECT on every specimen - 29 of 29 on the live root, 258 of 258 on the older snapshot - never a string, and it comes in two families. The CONNECTION family carries `message`, `formatted`, `connection`, `isNetworkDown` and `rateLimits` (22 records live, 60 snapshot), sometimes with `status` added (2 and 11), and on the snapshot sometimes with a camelCase `requestId` beside that status (182, a shape the live root does not hold). The HTTP family carries `error`, `headers`, `requestID`, `status` and `type` - 5 records on each root - and its `headers` object is the response headers VERBATIM: 18 distinct header names on each root, the set carrying `set-cookie`, `anthropic-organization-id`, `cf-ray`, `request-id` and `traceresponse`. Those same 5 records are exactly the ones with no top-level `slug` key (24 with / 5 without live; 253 with / 5 without on the snapshot). The retry counters are top-level: `retryAttempt` 1..16 live and 1..30 on the snapshot, `maxRetries` in {20, 10} live and {20, 50, 10} on the snapshot, `retryInMs` a jittered float. The record carries NO `content` key at all - the key is absent on 29 of 29 and on 258 of 258, which matches the constructor, whose returned object has no `content` field - and the `source` key that constructor does emit appears on 0 of 29 and 0 of 258. WHERE the failure text sits differs by family and NEITHER carries both fields at one level. The HTTP family names the failure KIND at `error.type` (a non-empty string on 5 of 5 on each root) and keeps the response BODY it received verbatim: `error.error` is `{error, request_id, type}` whose `type` is the envelope word rather than a failure kind, and `error.error.error` is `{message, type}` - so the WORDING is two hops down on 5 of 5 on each root, and the kind at `error.type` is the same value as the kind two hops down on all 5 of each. The connection family carries `message` at the top of the `error` object (24 of 24 and 253 of 253) and no string `type` at any depth of that chain.",
+      "depends": "csift renders `[api-error status=<status> type=<kind> retry <retryAttempt>/<maxRetries> in <retryInMs>ms]` and, because there is no `content` to render, the failure's WORDING as the BODY - so the record's statement of what failed is searchable, which it is not when the head alone is rendered. The kind and the wording are read where the SHAPE puts them rather than at one fixed level: the kind is `error.type` and is read at that ONE level, because the `type` one hop down is the envelope word and a walk taking the first `type` it found would report that word as the failure kind; the wording is the first non-empty `message` walking the `error` chain down, bounded one hop past the deepest shape observed, which is the top level for the connection family and two hops down for the HTTP family. One reader answers for the head, for the body and for the hit's `error` key beside `status`, `retry_attempt`, `max_retries` and `retry_in_ms`, so the three can never name different fields. `error.headers` reaches NO rendered or JSON path (the header set itself is pinned by CLS-045): a transcript view that printed them would put a session cookie and an organization id in front of whoever reads the output, and `--raw` is the one documented way to the bytes because it prints the line and says so. A counter the line does not carry is elided rather than defaulted, and a maximum with no attempt renders the declared `?` placeholder, because printing the maximum alone would read as an attempt number. `retryInMs` renders as the line's own number rather than a rounded one, so a reader can compare the rendered value against the line.",
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "97",
+          "lines": "99",
           "snippet": "fn api_error_head(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
         },
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "171",
+          "lines": "223",
           "snippet": "fn error_text(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
         },
         {
           "path": "src/commands/search/record_text/system.rs",
-          "lines": "262",
+          "lines": "263",
           "snippet": "        Class::SystemApiError => {"
         }
       ],
@@ -95272,6 +95272,26 @@
           "observed": "29 and 258 api_error records, `error` an object on all of them. Key sets: the HTTP family {error, headers, requestID, status, type} on 5 and 5; the connection family {connection, formatted, isNetworkDown, message, rateLimits} on 22 and 60, with `status` added on 2 and 11, and with a camelCase `requestId` beside that status on 0 and 182. `headers` present on 5 and 5 records, 18 distinct lowercased names on each. Top-level `slug` on 24 and 253, absent on 5 and 5 - the same 5 that carry headers. `content` key absent on 29 of 29 and 258 of 258; `source` absent on all. maxRetries {20: 24, 10: 5} and {20: 185, 50: 58, 10: 15}; retryAttempt 1..16 and 1..30.",
           "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
           "note": "New claim; the api-error head, its error body and the headers law land with it."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "drifted",
+          "instrument": "Render one fixture line per MEASURED key set through the family's own entry and read what reaches the output: the HTTP family `{error, headers, requestID, status, type}` with the response body it received nested two hops down, and the connection family `{connection, formatted, isNetworkDown, message, rateLimits, status}`. For each, `csift show @<id> --line N` for the rendered unit and `csift search '<the wording>' @<id> -t harness.system.api-error -c` for its reachability.",
+          "observed": "The body was built by reading `type` and `message` at ONE level of the `error` object. On the HTTP family that level carries the kind and no message, so the body rendered the kind alone, the hit's `error` key held `{type}` alone, and a search for the failure's wording counted 0. On the connection family that level carries the message and no kind, so the body was the wording alone. The fixture that had pinned the render carried both at that level, which is a key set this claim's own census reports on 0 of 29 and 0 of 258 records.",
+          "rule": "One fixture line per measured key set, rendered through `show --line`; a search count is the `-c` integer over that one transcript. Fixture shapes are synthetic, built from the key sets this claim measures rather than copied from a transcript.",
+          "note": "csift never matched the `depends` this claim carried, on the HTTP family: the statement of the failure was in the record and reachable by no pattern. Fixed in the same change - the kind is read at `error.type`, the wording is the first non-empty `message` on the `error` chain, and both fixtures are measured key sets. The refined check below carries the corpus measurement the fix rests on."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Over both projects roots, keep every parsed record whose `type` is `system` and `subtype` is `api_error`, walk its `error` member down its own `error` key, and record per DEPTH: the key set, the distinct values of a `type` member, and whether a non-empty `message` is present; then the first depth carrying each.",
+          "observed": "Depth 0 key sets are this claim's three: HTTP `{error, headers, requestID, status, type}` 5 and 5; connection `{connection, formatted, isNetworkDown, message, rateLimits}` 22 and 60, with `status` added on 2 and 11 and a camelCase `requestId` beside it on 0 and 182. The first non-empty `message` sits at depth 0 on 24 and 253 records and at depth 2 on 5 and 5; no record carries none. A string `type` sits at depth 0 on 5 and 5 (one distinct value on each root) and at no depth on 24 and 253. Depth 1 is `{error, request_id, type}` on 5 and 5, its `type` the envelope word; depth 2 is `{message, type}` on 5 and 5, its `type` the same value as depth 0's.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per line carrying the literal `\"api_error\"`; one observation per parsed record. A DEPTH is one hop down the `error` member, depth 0 being the record's own `error` object. A member counts as present only when it is a non-empty string. Header VALUES are never read - the walk takes key names and discards the object. Two roots, reported separately and never merged.",
+          "note": "Where each shape puts the failure text is now in `behavior`, and the render reads each where its own shape puts it."
         }
       ]
     },
@@ -95384,7 +95404,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "129",
+          "lines": "135",
           "snippet": "fn schedule_event_head("
         },
         {

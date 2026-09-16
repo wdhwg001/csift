@@ -13,9 +13,10 @@
 //! record's `error` object can carry the response headers verbatim, and those headers
 //! carry a session cookie, an organization id and a CDN trace id. This family is the ONE
 //! that stays OUTSIDE the shared matchable-text law ([`super::verbatim_body`]) for exactly
-//! that reason: it renders the FIELDS it names - status, the retry counters, the error's
-//! own type and message - and never the line. `--raw` stays the one documented way to the
-//! bytes, and it says so.
+//! that reason: it renders the FIELDS it names - the status, the retry counters, and the
+//! failure's own kind and wording, each read where the shape it arrives in puts them
+//! ([`heads::error_summary`]'s reader) - and never the line. `--raw` stays the one
+//! documented way to the bytes, and it says so.
 //!
 //! **Every fabricated word here is re-renderable from the line alone.** The heads
 //! (`[refusal ...]`, `[api-error ...]`, `[notice ...]`, `[kill]`, `[command]`,
@@ -300,8 +301,14 @@ fn payload(raw: Option<&str>) -> Option<serde_json::Map<String, serde_json::Valu
 /// A top-level key read as a non-empty string; `None` for any other shape, so a rendered
 /// `key=` never carries a JSON fragment.
 fn str_field(m: &serde_json::Map<String, serde_json::Value>, key: &str) -> Option<String> {
+    str_member(m, key).map(str::to_string)
+}
+
+/// The same read, BORROWED. The api-error walk reads a `message` member at each hop of a
+/// nested object and discards every miss, so it has no reason to allocate one copy per hop.
+fn str_member<'a>(m: &'a serde_json::Map<String, serde_json::Value>, key: &str) -> Option<&'a str> {
     let s = m.get(key)?.as_str()?;
-    (!s.is_empty()).then(|| s.to_string())
+    (!s.is_empty()).then_some(s)
 }
 
 /// A JSON scalar as the text the line itself holds - an integer as digits, a float with

@@ -55,7 +55,8 @@ fn api_error_response_headers_never_reach_an_output_path() {
             out.stdout
         );
     }
-    // The JSON `error` fact carries the two descriptive fields and nothing else.
+    // The JSON `error` fact carries the two descriptive fields and nothing else - read
+    // off the HEADER-BEARING record, which is the one this law is about.
     let js = h.run(&[
         "search",
         "",
@@ -65,7 +66,10 @@ fn api_error_response_headers_never_reach_an_output_path() {
         "--format",
         "json",
     ]);
-    let hit = hits_of(&js.stdout).into_iter().next().expect("one hit");
+    let hit = hits_of(&js.stdout)
+        .into_iter()
+        .find(|hh| hh["line"] == serde_json::json!(4))
+        .expect("the HTTP-shape hit");
     assert_eq!(hit["status"], serde_json::json!(529));
     assert_eq!(hit["retry_attempt"], serde_json::json!(3));
     assert_eq!(hit["max_retries"], serde_json::json!(20));
@@ -86,13 +90,18 @@ fn api_error_response_headers_never_reach_an_output_path() {
     }
 }
 
-/// What an api_error SAYS failed is SEARCHABLE. The record carries no `content`, so the
-/// error's own type and message are the body; without them the statement of the failure
-/// is in the output and reachable by no pattern.
+/// What an api_error SAYS failed is SEARCHABLE - on BOTH observed shapes. The record
+/// carries no `content`, so the failure's own wording is the body and its kind is in the
+/// head; a reader who searches for either reaches the record that holds it, and the two
+/// shapes keep those values in different places.
 #[test]
 fn the_api_error_failure_text_is_searchable() {
     let h = system_home();
-    for pattern in ["Overloaded zzoverload", "overloaded_error"] {
+    for pattern in [
+        "Overloaded zzoverload", // the HTTP shape's wording, two hops down its chain
+        "overloaded_error",      // its kind, which rides the head
+        "Connection error zzconn", // the connection shape's wording, at the top level
+    ] {
         let out = h.run(&[
             "search",
             pattern,
@@ -110,6 +119,69 @@ fn the_api_error_failure_text_is_searchable() {
             out.stderr
         );
     }
+}
+
+/// THE TWO MEASURED SHAPES, each rendered from where IT puts its fields.
+///
+/// The HTTP shape names the kind in `error.type` and keeps the response body it received,
+/// so its wording is two hops down the `error` chain; the connection shape keeps its
+/// wording at the top of that object and names no kind anywhere. Reading one level renders
+/// the kind and silently drops the sentence that says what failed, which is exactly what a
+/// reader of a failed request is looking for.
+#[test]
+fn both_measured_api_error_shapes_render_their_kind_and_their_wording() {
+    let h = system_home();
+    let http = h.run(&["show", &at(SESS), "--line", "4"]);
+    assert!(http.success, "stderr: {}", http.stderr);
+    assert!(
+        http.stdout.contains(
+            "[api-error status=529 type=overloaded_error retry 3/20 in 1522.5ms] \
+             Overloaded zzoverload"
+        ),
+        "the HTTP shape:\n{}",
+        http.stdout
+    );
+    // The envelope's own `type` is one hop down and is the word `error`, so naming the
+    // first `type` on the chain would report it as the failure kind.
+    assert!(
+        !http.stdout.contains("type=error"),
+        "the envelope word is never the kind:\n{}",
+        http.stdout
+    );
+    let conn = h.run(&["show", &at(SESS), "--line", "13"]);
+    assert!(conn.success, "stderr: {}", conn.stderr);
+    assert!(
+        conn.stdout
+            .contains("[api-error status=429 retry 1/10 in 600ms] Connection error zzconn"),
+        "the connection shape, which names no kind to print:\n{}",
+        conn.stdout
+    );
+    // Each hit's `error` key names exactly what its own text named.
+    let js = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "harness.system.api-error",
+        "--format",
+        "json",
+    ]);
+    let hits = hits_of(&js.stdout);
+    let by_line = |n: u64| {
+        hits.iter()
+            .find(|hh| hh["line"] == serde_json::json!(n))
+            .unwrap_or_else(|| panic!("a hit on line {n}"))
+            .clone()
+    };
+    assert_eq!(
+        by_line(4)["error"],
+        serde_json::json!({"type":"overloaded_error","message":"Overloaded zzoverload"})
+    );
+    assert_eq!(
+        by_line(13)["error"],
+        serde_json::json!({"message":"Connection error zzconn"})
+    );
+    assert_eq!(by_line(13)["status"], serde_json::json!(429));
 }
 
 /// THE HEADERS LAW HOLDS FOR A SUBTYPE CSIFT MODELS NO LEAF FOR.
