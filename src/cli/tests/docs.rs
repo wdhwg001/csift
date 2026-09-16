@@ -334,6 +334,40 @@ fn the_search_help_body_is_its_sections_joined_in_order() {
     );
 }
 
+/// The PROVENANCE edge is ONE key and one row, owned by no family.
+///
+/// Four families build edges and every one of them folds into the same array through
+/// `attach_facts`, so four families listing the key produced four rows spelled four
+/// different ways - `for:[…] (kind/basis/reason + target{…})`, `for:[{kind|basis|target|
+/// reason}] (what an injection was written for)`, and two more - which a consumer reading
+/// the help reads as four keys. The row is Shared, and this is what keeps it there: a
+/// family that starts carrying edges adds no row.
+#[test]
+fn the_provenance_edge_is_one_shared_key_not_one_per_family() {
+    let rows: Vec<&crate::cli::show_keys::RecordKey> = RECORD_KEYS
+        .iter()
+        .filter(|r| r.rendered.starts_with("for:"))
+        .collect();
+    assert_eq!(
+        rows.len(),
+        1,
+        "the edge is one array whatever family filled it: {:?}",
+        rows.iter().map(|r| r.rendered).collect::<Vec<_>>()
+    );
+    assert_eq!(rows[0].family, Family::Shared, "no family owns the edge");
+    assert_eq!(
+        rows[0].rendered, "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
+        "the one spelling names every field the target carries"
+    );
+    // And the `search` hit schema names it too. A key on the wire that the help's
+    // enumeration does not list is a key a consumer cannot find, and the two surfaces
+    // carry the same array.
+    assert!(
+        SEARCH_AFTER_HELP.contains("for:[{kind,basis,target:{line,uuid,session,note},reason}]"),
+        "the search JSON schema does not list the provenance edge"
+    );
+}
+
 /// `show --help`'s record-row key list is BUILT from the key table, not typed into the
 /// sentence - so a family adds a key to that row by adding a table row.
 #[test]

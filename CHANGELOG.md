@@ -124,6 +124,11 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **The `for` array is named once on each help surface.** Four families each listed the
+  shared provenance key in `show --help`'s record-row table under their own block, spelled
+  four different ways, so a consumer reading that enumeration read four keys; it is one
+  row under the shared block now. `search --help`'s JSON schema listed every hit key
+  except `for`, so the array shipped on the wire and appeared in no list; it is there now.
 - **`scheduled_at` answers on the scheduler's own fire record too.** The field carried the
   instant for the fired prompt and read null on the `harness.schedule.event` record - the
   line the instant is written on. It now reads that line's own parenthesised tail, so the

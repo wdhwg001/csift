@@ -244,6 +244,7 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         labels:[…], line, uuid, excerpt, body, tool_name, pairing, \
         from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, \
         survival, abandoned_root_line, replay_copy_of, mode, compact_metadata, \
+        for:[{kind,basis,target:{line,uuid,session,note},reason}], \
         refetch, refetch_uuid}, …]}: \
         `label` is the matched dotted path, `labels` \
         the record's full label set, `excerpt` the match-centered fragment (ONE line: \
@@ -256,6 +257,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         bytes), `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
         when the hit is `agent.communication.*`, `refetch` is the ready-to-run `csift show` \
+        `for` the record's PROVENANCE edges - one array however many relations a unit \
+        carries, each `{kind, basis, target, reason}`, present only on a unit that \
+        carries one, `refetch` is the ready-to-run `csift show` \
         command addressed at the RIGHT id (run it verbatim), and `refetch_uuid` its \
         uuid-addressed twin: a line number is a durable address only while the transcript \
         is append-only, and Claude Code rewrites a live transcript in place on a stream \

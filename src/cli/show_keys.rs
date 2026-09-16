@@ -66,16 +66,16 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Shared, "image_ids:[…]"),
     k(Family::Shared, "mode"),
     k(Family::Shared, "compact_metadata"),
-    // The SHARED provenance edge, listed under the first family to build one: a
-    // `harness.bookkeeping` unit is the first record row that can carry `for`, and the
-    // key is one array whatever family filled it, so a later family finds this row
-    // already here and adds none of its own.
+    // The PROVENANCE edge, and it is SHARED. Four families build edges and every one of
+    // them folds into this ONE array, so the key belongs to no family: four families
+    // listing it produced four rows spelled four ways, which reads as four keys. A family
+    // that starts carrying edges adds no row at all.
     k(
-        Family::Bookkeeping,
-        "for:[…] (kind/basis/reason + target{line/uuid/session/note})",
+        Family::Shared,
+        "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
     ),
-    // The family's own two, on the two lines whose relation names no record.
-    k(Family::Bookkeeping, "continued_in"),
+    // The family's own one, on the line whose relation names an INSTANT rather than a
+    // record or a file - the one relation no `for` target can express.
     k(Family::Bookkeeping, "checkpoint_closes_at"),
     k(Family::Bookkeeping, "checkpoint_join"),
     k(
@@ -83,12 +83,6 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         "signature_len (thinking blocks; null when the block carries no signature field)",
     ),
     k(Family::Thinking, "thinking_text_absent"),
-    // A rendered spelling carries no `", "`: the help joins the rows with exactly that
-    // separator, so an inner one would read as two keys.
-    k(
-        Family::Injections,
-        "for:[{kind|basis|target|reason}] (what an injection was written for)",
-    ),
     k(
         Family::Injections,
         "relayed (a person's message the harness delivered into this lane)",
@@ -113,15 +107,6 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         Family::Attachments,
         "produced_by:{command,hook_name,payload_type}",
     ),
-    // The SHARED `for` array, in this block because the attachment family is the first to
-    // construct an edge and a key nothing names is a key a consumer cannot find. It is not
-    // this family's key: every family's edges fold into the one array, so a later family
-    // adding edges adds NO second row - the row moves to the shared block instead, which
-    // is a change in a block no family owns.
-    k(
-        Family::Attachments,
-        "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
-    ),
     // The SYSTEM family's per-event keys, in the order each leaf emits them, each present
     // only when the line carried it. `error` carries the failure's type and message ONLY -
     // an `api_error` line's `error.headers` reaches no rendered or JSON path, and `--raw`
@@ -143,13 +128,6 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::System, "prompt (cut at 200 chars)"),
     k(Family::System, "served_by"),
     k(Family::System, "fell_back_from"),
-    // Spelled with slashes inside PARENTHESES: the rendered list is comma-separated and is
-    // read back by trimming its outer braces, so a comma inside one key would read as
-    // three more keys and a closing brace at the end would be trimmed away.
-    k(
-        Family::System,
-        "for:[…] (kind/basis/target/reason per edge)",
-    ),
     // The EXPOSED KEYS: facts a record states about the CALL behind it. Each is absent
     // from a record that does not name it - the absence rule is read at key level.
     k(
@@ -169,7 +147,6 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Keys, "hook_run_id"),
     k(Family::Keys, "scheduled_task_id"),
     k(Family::Keys, "scheduled_fire_id"),
-    k(Family::Keys, "for:[{kind basis target reason}]"),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.
