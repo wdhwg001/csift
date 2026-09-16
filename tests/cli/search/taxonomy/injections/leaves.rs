@@ -89,9 +89,10 @@ fn the_image_only_record_is_reachable_by_address() {
         "and points at the extraction:\n{}",
         out.stdout
     );
-    // The record renders NO text, so without the counts the unit falls through to the
-    // key=value excerpt of its own top-level keys and prints the head of a base64
-    // payload. The counts say what the record actually is.
+    // The record renders NO text, so the unit falls through to the engine's key=value
+    // excerpt of its own top-level keys. The counts are ADDED to the label zone beside
+    // that excerpt - they are what says what the record is; the excerpt stays, and the
+    // case below pins both halves.
     assert!(
         out.stdout
             .contains("[context image-only: 1 image block(s), 0 document block(s)]"),
@@ -103,6 +104,67 @@ fn the_image_only_record_is_reachable_by_address() {
     assert_eq!(rows.len(), 1, "{}", json.stdout);
     assert_eq!(rows[0]["image_only"]["images"], 1, "{}", rows[0]);
     assert_eq!(rows[0]["image_only"]["documents"], 0, "{}", rows[0]);
+}
+
+#[test]
+fn the_image_only_counts_are_added_beside_the_key_value_excerpt() {
+    let h = inject_home();
+    // The counts do NOT replace the unit's body. A record with no renderable text takes
+    // the engine's key=value excerpt of its own top-level keys - the same body the 1:1
+    // law gives every textless line - and the family's counts ride the LABEL ZONE in
+    // front of it. Both halves are asserted here so neither can be described as the
+    // other: a doc saying the counts render "instead of" the excerpt fails this case.
+    let out = h.run(&["show", &at(SESS), "--line", "6"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let line = out
+        .stdout
+        .lines()
+        .find(|l| l.contains("harness.context.image"))
+        .unwrap_or_else(|| panic!("no unit line:\n{}", out.stdout));
+    let counts = "[context image-only: 1 image block(s), 0 document block(s)]";
+    let at_counts = line
+        .find(counts)
+        .unwrap_or_else(|| panic!("the counts ride the label zone:\n{line}"));
+    // The excerpt is the record's own top-level keys, rendered key=value in on-disk
+    // order, so it names the fields an address is asked for.
+    for key in [
+        "cwd=/Users/dev/inject-project",
+        "isMeta=true",
+        "type=user",
+        "uuid=11111111-2222-4333-8444-000000000006",
+    ] {
+        let at_key = line
+            .find(key)
+            .unwrap_or_else(|| panic!("the key=value excerpt still carries {key}:\n{line}"));
+        assert!(
+            at_counts < at_key,
+            "the counts lead the excerpt rather than replacing it ({key}):\n{line}"
+        );
+    }
+    // Including the image payload itself: the block's base64 `data` is a value of the
+    // `message` key, so it reaches the excerpt like any other. The fixture's payload is
+    // short enough to survive the excerpt's own 80-char per-value budget whole.
+    assert!(
+        line.contains(r#""data":"iVBORw0KGgo=""#),
+        "the base64 payload is still part of the body:\n{line}"
+    );
+    // A machine reader gets both halves too, and from the one address: the counts as
+    // their own key, the excerpt as the unit's text.
+    let json = h.run(&["show", &at(SESS), "--line", "6", "--format", "json"]);
+    let rows = json_rows(&json.stdout, "record");
+    assert_eq!(rows.len(), 1, "{}", json.stdout);
+    assert_eq!(rows[0]["image_only"]["images"], 1, "{}", rows[0]);
+    let text = rows[0]["text"].as_str().unwrap_or_default();
+    assert!(
+        text.contains("isMeta=true") && text.contains(r#""data":"iVBORw0KGgo=""#),
+        "the JSON text is the same key=value excerpt:\n{}",
+        rows[0]
+    );
+    assert!(
+        !text.contains("image block(s)"),
+        "and the counts are a fact beside it, never folded into the text:\n{}",
+        rows[0]
+    );
 }
 
 #[test]
