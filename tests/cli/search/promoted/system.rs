@@ -1,6 +1,6 @@
 //! The `harness.system` family at the surface: one leaf per `type:"system"`
 //! subtype, each gated behind a selector that reaches it, each rendering the
-//! fabricated `[<subtype> <level>]` head the whole-file gate has to re-render.
+//! fabricated per-event-kind head the whole-file gate has to re-render.
 
 use super::*;
 
@@ -39,22 +39,20 @@ fn the_system_leaves_are_gated_rendered_and_gate_sound() {
         bare.stderr
     );
     // The CATEGORY reaches both records, each under its own event-kind leaf, rendered as
-    // `[<subtype> <level>] <content>` / `[<subtype>] <json>`.
+    // `[notice <level>] <content>` / `[kill] <json>`.
     let out = h.run(&["search", "", &at(SESS), "-t", "harness.system.*"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("harness.system.notice")
             && out
                 .stdout
-                .contains("[informational warning] Remote Control disconnected"),
+                .contains("[notice warning] Remote Control disconnected"),
         "{}",
         out.stdout
     );
     assert!(
         out.stdout.contains("harness.system.kill")
-            && out
-                .stdout
-                .contains(r#"[agents_killed] {"count":2,"reason":"user"}"#),
+            && out.stdout.contains(r#"[kill] {"count":2,"reason":"user"}"#),
         "a kill notice is its own event kind, not the notice leaf:\n{}",
         out.stdout
     );
@@ -76,7 +74,7 @@ fn the_system_leaves_are_gated_rendered_and_gate_sound() {
         "harness.system.*",
     ]);
     assert!(
-        prefix.stdout.contains("[informational warning]"),
+        prefix.stdout.contains("[notice warning]"),
         "{}",
         prefix.stdout
     );
@@ -89,7 +87,7 @@ fn the_system_leaves_are_gated_rendered_and_gate_sound() {
     // The whole-file gate stays sound: a pattern matching ONLY the fabricated head.
     let head = h.run(&[
         "search",
-        r"\[informational warning\]",
+        r"\[notice warning\]",
         &at(SESS),
         "-t",
         "harness.system.notice",
@@ -119,7 +117,7 @@ fn the_system_leaves_are_gated_rendered_and_gate_sound() {
         shown.success
             && shown
                 .stdout
-                .contains("[informational warning] Remote Control disconnected"),
+                .contains("[notice warning] Remote Control disconnected"),
         "{}\n{}",
         shown.stdout,
         shown.stderr

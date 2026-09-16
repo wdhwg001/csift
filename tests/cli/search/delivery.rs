@@ -148,14 +148,15 @@ fn an_is_virtual_record_leaves_the_bare_user_role() {
     );
 }
 
-/// The §7f whole-file gate must not prune a file whose only hit sits in the FABRICATED
-/// `[<subtype> <level>]` head: that text is not a raw byte substring of the line, so the
-/// synthesized-marker set has to be as wide as the candidate gate that admitted it.
+/// The §7f whole-file gate must not prune a file whose only hit sits in a FABRICATED
+/// head: the leaf's own word is not a raw byte substring of the line (the line spells
+/// the SUBTYPE, `local_command`), so the synthesized-marker set has to be as wide as the
+/// candidate gate that admitted it.
 #[test]
 fn a_pattern_matching_only_the_fabricated_head_survives_the_whole_file_gate() {
     let h = delivery_home();
     for sel in ["harness", "harness.system.command"] {
-        let out = h.run(&["search", r"\[local_command info\]", &at(SESS), "-t", sel]);
+        let out = h.run(&["search", r"\[command\]", &at(SESS), "-t", sel]);
         assert!(out.success, "{sel} stderr: {}", out.stderr);
         assert!(
             out.stdout.contains("lagoon depth 12m"),
@@ -165,7 +166,7 @@ fn a_pattern_matching_only_the_fabricated_head_survives_the_whole_file_gate() {
         );
     }
     // The same pattern under a selector that never admits the line is a clean absence.
-    let user = h.run(&["search", r"\[local_command info\]", &at(SESS), "-t", "user"]);
+    let user = h.run(&["search", r"\[command\]", &at(SESS), "-t", "user"]);
     assert!(user.success, "stderr: {}", user.stderr);
     assert!(
         user.stdout.contains("no matching exchanges"),

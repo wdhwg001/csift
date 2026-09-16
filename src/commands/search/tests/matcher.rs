@@ -342,9 +342,10 @@ const MARKER_CASES: &[MarkerCase] = &[
     },
     MarkerCase {
         needle: r#""subtype""#,
-        // `[informational warning]`: the raw line carries the two values in separate
-        // fields, so the joined phrase exists only in the fabricated head.
-        pattern: "informational warning",
+        // `[notice warning]`: the head names the LEAF's own word, which the raw line
+        // does not carry at all, and the level beside it - so the phrase exists only in
+        // the fabricated head.
+        pattern: "notice warning",
         line: r#"{"type":"system","subtype":"informational","level":"warning","uuid":"n1","content":"heads up"}"#,
         widens: false,
     },

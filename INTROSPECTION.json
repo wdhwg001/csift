@@ -50102,7 +50102,7 @@
       "id": "QT-031",
       "area": "queue-and-telemetry",
       "behavior": "At 2.1.258 the set of `type:\"system\"` subtypes that can reach a transcript is enumerable and it is 18. The binary holds 50 distinct system-subtype literals: 48 in the adjacent form `type:\"system\",subtype:\"X\"` over 92 occurrences, plus init_milestone built with the keys reordered (166551634) and workflow_launch_result built with a variable subtype (172675266). Eighteen are built by constructors carrying the transcript envelope (timestamp, uuid, isMeta) AND reach a transcript append: compact_boundary, turn_duration, away_summary, stop_hook_summary, scheduled_task_fire, model_refusal_fallback, model_refusal_no_fallback, model_fallback, model_consent_fallback, api_error, local_command, agents_killed, informational, permission_retry, bridge_status, cloud_session_status, memory_saved and file_snapshot. The other 32 are SDK / control-protocol wire frames pushed onto the output queue by the enqueue helper `function _u(e){Kr().enqueue(e)}` (158424073) and its siblings, and never touch a jsonl. file_snapshot (163818853) carries isMeta:true, level:info and a snapshotFiles array of {key,path,content} entries, and its record literal is followed on the SAME statement by the persistence call `await Rw([_],...)`. This corpus holds 11 of the 18. Census over every transcript under the projects root (8,494 *.jsonl files), one observation per parsed record whose top-level type is \"system\": 13,172 records - stop_hook_summary 5,835, turn_duration 4,828, away_summary 1,692, scheduled_task_fire 460, compact_boundary 236, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2. The other seven (permission_retry, bridge_status, cloud_session_status, memory_saved, file_snapshot, model_fallback, model_consent_fallback) have zero specimens here, which is a corpus fact and not evidence they cannot be written. Shapes, one observation per parsed record: the 460 scheduled_task_fire records split along the scheduler's `r.kind===\"loop\"` branch (187389289) - 459 carry a content string opening \"Claude resuming /loop wakeup (\" from the loop arm's template (187387332) and 1 opens \"Running scheduled task (\" from the plain arm's U_t call (187389378) - and a fire sits within 2s of the delivered wakeup, an isMeta:true user record, in 447 of 460, and within 2s of a queue-operation line in 460 of 460. The fire constructor (166030196) emits taskId, cron and prompt on every fire: the one record written by 2.1.258 carries all three, and the 459 written by 2.1.159, 2.1.177 and 2.1.207 carry none of them. All 29 api_error records carry exactly error, retryAttempt, maxRetries, retryInMs and level beside the envelope, and none carries the source key the api_error constructor also emits (166032184). agents_killed is envelope-only, with no content and no payload key, in all 10. 9 of the 51 model_refusal_fallback records carry a `scope` key and every observed value is \"session\"; those 9 fall into three distinct top-level key shapes (7 + 1 + 1), and the 2 model_refusal_no_fallback records carry none. Version floors: compact_boundary and the three promoted subtypes are written continuously and have specimens at 2.1.258 and 2.1.259; informational has 1 at 2.1.258 and 9 at 2.1.259 of 14, and scheduled_task_fire has 1 at 2.1.258 of 460. The remaining five subtypes' newest specimens predate 2.1.258 - fallback refusals 2.1.251, agents_killed 2.1.233, local_command 2.1.223, no-fallback refusals 2.1.219, api_error 2.1.177 - so those on-disk shapes attest older writers and their 2.1.258 shapes are attested by the traced constructors alone.",
-      "depends": "csift's classify system arm pushes a label only for the compaction boundary (src/model/classify.rs), and the promoted arm (src/model/classify/bookkeeping.rs) maps turn_duration, away_summary and stop_hook_summary to their own leaves and every OTHER system subtype to the catch-all leaf harness.system.*. That leaf is GATED: such a record is parsed only when an explicit -t selector reaches the leaf or a show address is present (the candidate gates in src/commands/search/scan.rs, keyed on SearchArgs::reaches_gated in src/cli/search_args.rs), so a bare scan, a bare role selector or a flagless census never surfaces it. The catch-all is the right default for the seven unspecimened subtypes too, file_snapshot included - none is modeled individually and none needs to be, since the leaf is defined by exclusion rather than by a list. Because the census stays conservative, the stats whole-file line-type census remains the enumerating authority - but it keys on the top-level type, so a new subtype raises the `system` bucket rather than being named individually: stats enumerates the bucket, not the subtype, and a per-subtype census still needs the needle instrument in this claim.",
+      "depends": "csift models a leaf per system subtype it has specimens of: `harness.compaction.boundary` for the boundary, the three `harness.turn.*` closers for turn_duration, away_summary and stop_hook_summary, `harness.schedule.event` for scheduled_task_fire, and the five `harness.system.*` event kinds - refusal, api-error, notice, kill and command - for the rest (src/model/classify/system.rs). Every one of them is GATED: such a record is parsed only when an explicit -t selector reaches the leaf or a show address is present (the candidate gates in src/commands/search/scan/gates.rs), so a bare scan, a bare role selector or a flagless census never surfaces one. The seven unspecimened subtypes and the 32 wire-frame names reach NO leaf at all: an address renders such a line as `? unmodeled: system/<subtype>` under the 1:1 law, which names the shape csift has not caught up with instead of collecting it under a catch-all that would say nothing about which arrived. Because the census stays conservative, the stats whole-file line-type census remains the enumerating authority - but it keys on the top-level type, so a new subtype raises the `system` bucket rather than being named individually: stats enumerates the bucket, not the subtype, and a per-subtype census still needs the needle instrument in this claim.",
       "code": [
         {
           "path": "src/model/classify.rs",
@@ -50197,6 +50197,16 @@
           "observed": "A `type:system, subtype:scheduled_task_fire` record written by the audited build with keys {content, cron, entrypoint, isMeta, isSidechain, prompt, subtype, taskId, type, userType} and content `Running scheduled task (<local time>)`.",
           "rule": "one fired schedule, one system record",
           "note": "One of the subtypes now has a specimen written by the audited build itself."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Re-ran the claim's binary instrument (`grep -abo 'type:\"system\",subtype:\"' <executable>`) and read the leaf table `src/model/classify/system.rs` against it.",
+          "observed": "92 adjacent-form occurrences over 48 distinct subtype names, unchanged. csift's own subtype table now names 11 of them and maps them to nine leaves across four categories; the catch-all leaf the claim's `depends` described no longer exists.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "Refined: the behavior is unchanged and the depends is rewritten to the leaf set that replaced the catch-all."
         }
       ],
       "attribution": "end-to-end",
@@ -70729,7 +70739,7 @@
       "id": "QT-SYS-001",
       "area": "queue-and-telemetry",
       "behavior": "Claude Code writes `type:\"system\"` records for its own UI whose `subtype` falls outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`). Measured 2026-09-04 over 8225 transcripts under the projects root (journal and elicitation-sidecar files excluded): 13087 system records under exactly 11 subtypes - stop_hook_summary 5798, turn_duration 4791, away_summary 1683, scheduled_task_fire 459, compact_boundary 235, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2. `informational` is a notice with a string `content` and a `level` (warning 9, notice 5); its live specimen is the Remote Control disconnect notice, composed at 181648256 - which also dedupes against the last transcript record - and reached from the bridge failure arm at 181655786. Every one of the 13087 carries `uuid`, `timestamp` and `parentUuid`, and NONE carries a `message{}` field. `isMeta` is NOT universal, which the old text asserted: the key is ABSENT on api_error (29 of 29), on stop_hook_summary (5798 of 5798) and on 134 of the 235 compaction boundaries, and is `false` on the remaining 7126. The constructors agree - the api_error constructor (166032184) returns {type, subtype, level:\"error\", error, retryInMs, retryAttempt, maxRetries, source, timestamp, uuid} with no isMeta field, and the stop_hook_summary constructor (166030639) likewise, while every other transcript-writing constructor in that cluster sets isMeta:false. A subtype the corpus has not yet seen is not guaranteed isMeta:false either: the file_snapshot record literal (163818846) writes isMeta:true. `parentUuid` is set by no system-record constructor at all - it is stamped by the shared envelope hop (166105359) after the write-policy table (166066498) routes type `system` to the transcript sink like user and assistant records - which is also why a compaction boundary is the one system record whose parentUuid is null. The 11 observed subtypes are a CORPUS property, not the shipped set: the 2.1.258 executable holds 92 adjacent `type:\"system\",subtype:\"...\"` literals over 48 DISTINCT subtype names, and the transcript-writing constructor cluster alone builds four with zero corpus specimens (permission_retry, bridge_status, cloud_session_status, memory_saved). Two of the eleven have a second literal outside that cluster and neither is a counterexample: an informational wire projection (163575905) whose only call site (179104884) spreads it into a control-protocol message carrying session_id and never appends a transcript record, and a local_command rehydration mapper (163578281) that supplies timestamp, uuid and isMeta explicitly. Only two literals in the whole executable put a `message` key inside a system-subtype object, both permission_denied (169797551, 178901181), and both are control-protocol wire projections with session_id and snake_case fields, never transcript records. The two model_refusal subtypes are inline yields in the query loop (164720173, 164725713) rather than factory functions, and model_refusal_fallback has a second producer on the banner path (164575450) that adds the `scope` key - so an audit reading only the constructor cluster would miss them.",
-      "depends": "`search -t harness.system.*` (the gated catch-all leaf) classifies any system subtype other than the four modeled ones and renders `[<subtype> <level>] <content>`, falling back to `[<subtype>]` when the record carries no `level` (away_summary, turn_duration, scheduled_task_fire and agents_killed carry none; stop_hook_summary carries the unusual level `suggestion`) and to the head alone when there is no `content` (agents_killed carries neither); `show --line` renders such a line flag-free. Two csift laws rest on the record SHAPE rather than on the subtype list, which is exactly why the leaf is a catch-all and not an enumeration: the leaf DEFAULT is `llm_visible:false` because no such record carries a `message{}` field (0 of 13087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - and 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the catch-all admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The leaf default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the leaf is the harness sending a SECOND subtype (a new arm beside `UWt`) or moving a subtype into a differently-typed record.",
+      "depends": "The eleven observed subtypes now reach NINE leaves across four categories rather than one catch-all: `harness.compaction.boundary`, the three `harness.turn.*` closers, `harness.schedule.event`, and the five `harness.system.*` event kinds - refusal, api-error, notice, kill and command (src/model/classify/system.rs). Each of the five renders the fields that make its own event useful rather than the one-size `[<subtype> <level>] <content>` head the catch-all printed, and a subtype the table does not name reaches NO leaf: `show --line` renders it `? unmodeled: system/<subtype>` under the 1:1 law, which names the shape csift has not caught up with. Two csift laws still rest on the record SHAPE rather than on the subtype list, and the open shipped set is why: every one of these leaves defaults to `llm_visible:false` because no such record carries a `message{}` field (0 of 13,087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the gated admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026, CLS-051), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the mapping is the harness moving a subtype into a differently-typed record; a NEW subtype no longer breaks anything, because it lands on the unmodeled unit by construction.",
       "code": [
         {
           "path": "src/model/classify/system.rs",
@@ -70737,9 +70747,9 @@
           "snippet": "        \"model_refusal_fallback\" | \"model_refusal_no_fallback\" => Class::SystemRefusal,\n        \"api_error\" => Class::SystemApiError,\n        \"informational\" => Class::SystemNotice,\n        \"agents_killed\" => Class::SystemKill,\n        \"local_command\" => Class::SystemCommand,\n        _ => return None,"
         },
         {
-          "path": "src/commands/search/record_text/system.rs",
-          "lines": "48",
-          "snippet": "let subtype = rec.subtype.as_deref().unwrap_or(\"system\");"
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "32",
+          "snippet": "        Class::SystemNotice => match rec.level.as_deref() {"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
@@ -70793,6 +70803,16 @@
           "observed": "585 records under 7 subtypes over 72 top-level transcripts (scheduled_task_fire 460, model_refusal_fallback 54, api_error 29, local_command 16, informational 14, agents_killed 10, model_refusal_no_fallback 2), the two counts agreeing exactly. The predicate exempts `subtype:\"local_command\"` and the assembler re-mints it, so the message-less shape rule does not settle delivery for that subtype.",
           "rule": "One observation per record for the census; one per byte offset read for the predicate.",
           "note": "The depends clause claiming the leaf default settles delivery for every subtype is rewritten; csift now overrides it per record for local_command (CLS-026)."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Read the eleven observed subtypes against csift's own subtype table (src/model/classify/system.rs) and the render each now reaches, then re-ran the whole-build count of `type:\"system\",subtype:\"...\"` literals.",
+          "observed": "The eleven map to nine leaves across four categories; the catch-all leaf the depends described is gone, and a twelfth subtype reaches no leaf at all rather than a shared one. 92 writer literals over 48 distinct names in the build, unchanged.",
+          "rule": "One row per byte occurrence of the literal `type:\"system\",subtype:\"` in the executable; distinct names are the set of capture values. The corpus counts in the behavior are the ones already recorded there and were not re-run.",
+          "note": "Refined: the behavior is unchanged and the depends is rewritten to the five event kinds and the unmodeled unit that replaced the catch-all."
         }
       ],
       "attribution": "end-to-end",
@@ -95131,6 +95151,384 @@
           "observed": "Anchor occurs once at 166006641. The enclosing object is 10,476 bytes and holds 70 depth-1 keys, 18 of them `()=>[]`; 16 of the 18 are contiguous and the other two sit 2,402 and 813 bytes earlier in the same object. The build holds 25 `()=>[]` occurrences in total; the seven outside the table are 13 MB or further away and are event-handler property names. csift's list has 11 entries: 9 are named arms, and `deferred_tools_record` and `thinking_stripped` occur 0 times anywhere in the build. Of the 9 named arms csift omits, 0 have an inventory row and 0 have a specimen on either root. Payload types on disk: 45 on one root, 28 on the other, union 46, the second root's only exclusive value being `selected_lines_in_ide`.",
           "rule": "A table entry is a key at brace depth 1 inside the object enclosing the anchor, preceded by `{` or `,`; an empty arm is a `name:()=>[]` match; a distance is the byte offset difference from the anchor. A payload type has a specimen when at least one line of that root carries it as `attachment.type`, counted one JSON parse per non-blank line of every `*.jsonl` under the root with `journal.jsonl` skipped.",
           "note": "The list is complete for every shape csift models: all 11 entries are correct and the 9 omissions carry no leaf and have no specimen, so `delivery_override` gives no wrong answer on either root. The table's entry count is recorded as a per-build fact rather than a constant."
+        }
+      ]
+    },
+    {
+      "id": "CLS-051",
+      "area": "classification",
+      "behavior": "A `local_command` record is the stdout of a slash command, and it is the one system subtype the request assembler re-mints for the model: the assembler converts it into a user message and merges it into the message before it. That merge happens in memory, on the request path, and leaves no trace in the transcript - measured over the live root, the record's own `content` string recurs inside the string content of a `type:\"user\"` record in the same file on 1 of 17 records, and on 6 of 32 on the older snapshot, so the on-disk transcript is NOT where the merged form lands. The record's own shape: 17 records in 8 files live and 32 in 14 files on the snapshot; the content is a `<local-command-stdout>` wrapper carrying text on 12 and 21, plain text on 4 and 11, and an empty stdout wrapper on 1 and 0. Its `parentUuid` names the slash-command WRAPPER record on 9 of 17 and 10 of 32; the rest name another `local_command` record (4 and 11 - a run of commands chains stdout to stdout), a `turn_duration` (1 and 4), an `away_summary` (2 and 2), an attachment (1 and 1) and, on the snapshot only, a `stop_hook_summary`, an assistant record and two user records.",
+      "depends": "csift renders `[command] <content>` and treats the record as DELIVERED - it is the only member of `harness.system.*` the model receives - so the leaf is LLM-visible while its four siblings are not. Its `for` edge is `wraps`, built from `parentUuid` with `Basis::Position` rather than `Basis::Key`: the census above is why. The harness writes the caveat, then the wrapper, then this record, so the link usually reaches the wrapper - but a RUN of local commands chains stdout to stdout, so what the link actually names is the record ABOVE, and calling that a key the harness wrote for the purpose would overstate it. A reader who wants the invocation follows the chain up rather than trusting one hop.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "39",
+          "snippet": "        Class::SystemCommand => \"[command]\".to_string(),"
+        },
+        {
+          "path": "src/commands/search/record_text/system/edges.rs",
+          "lines": "46",
+          "snippet": "        Class::SystemCommand => {"
+        }
+      ],
+      "instrument": "Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `local_command`. Per FILE parse every line, build the loader's uuid map (last line carrying a uuid wins), resolve each record's `parentUuid` and bucket the target: a `type:\"user\"` record whose string content, after a leading trim, opens `<command-name>` or `<command-message>` is the WRAPPER, anything else is reported by its own type and subtype. Separately bucket the record's `content`: an empty `<local-command-stdout></local-command-stdout>` shell, a wrapper carrying text, or plain text. Then, for each record whose content is a non-blank string, ask whether that string occurs as a substring of the string content of ANY `type:\"user\"` record in the same file (text blocks joined with a newline), counting records rather than occurrences.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the GATE of the merge: the branch in the request assembler that folds a local_command record into the preceding user message, and what it does when there is no preceding one. Instrument: read the assembler's conversion arm in the verified build from the subtype compare to the merge."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "local_command constructor",
+          "offset": 166031707,
+          "excerpt": "function um(e,n){return{type:\"system\",subtype:\"local_command\",content:e,level:\"info\"",
+          "note": "the transcript record the slash-command executor appends, with the level it fixes"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The claim's own corpus instrument over both projects roots, with the uuid map built from every line of each file holding a local_command record.",
+          "observed": "17 records in 8 files and 32 in 14 files. parentUuid targets: wrapper 9 and 10, another local_command 4 and 11, turn_duration 1 and 4, away_summary 2 and 2, attachment 1 and 1, and on the snapshot only stop_hook_summary 1, assistant 1, user 2. Content shapes: stdout wrapper with text 12 and 21, plain text 4 and 11, empty stdout shell 1 and 0. The content recurs inside a user record's text on 1 of 17 and 6 of 32.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the `[command]` head and the `wraps` edge's Position basis land with it. The recurrence census is what says the assembler's merge is a request-path fact rather than a transcript one."
+        }
+      ]
+    },
+    {
+      "id": "CLS-061",
+      "area": "classification",
+      "behavior": "A refused request lands a `type:\"system\"` record under one of two subtypes, written by TWO constructors that sit side by side and differ in SHAPE, not only in the subtype string. The no-fallback one writes a fixed seven-key payload with no conditional spread at all; the fallback one adds `trigger`, `direction` and `fallbackModel` unconditionally and FIVE keys only when its caller set them - `scope`, `sawCyberRefusal`, `retractedMessageUuids`, `refusedUserMessageUuid` and `provisional` - of which `sawCyberRefusal` and `provisional` reach no corpus record on either root. Payload keys beside the envelope, per root: `content`, `originalModel`, `requestId`, `apiRefusalCategory`, `apiRefusalExplanation` and `refusedUserMessageUuid` on 61 of 61 and 61 of 61 records; `direction`, `trigger` and `fallbackModel` on exactly the 56 and 59 fallback records; `retractedMessageUuids` on 49 and 52 of them; `scope` on 14 and 0. TWO uuid keys ride the record and only ONE of them is an in-file edge. `refusedUserMessageUuid` is present on every record; its value is a string on 56 and 54, and of those it names a line in the same file 55 and 53 times - a `type:\"user\"` record every single time - with 1 and 1 naming no line there; the value is null on the remaining 5 and 7. `retractedMessageUuids` resolves NEVER: 0 of 75 entries and 0 of 79, because those are wire uuids of the normalized SDK messages the fallback retracted, not uuids of transcript lines.",
+      "depends": "csift renders the pair under ONE leaf, `harness.system.refusal`, with the head `[refusal <subtype>] originalModel=<v> fallbackModel=<v|none> apiRefusalCategory=<v>`, in the harness's own key words so each is a byte substring of the line - `fallbackModel=none` printed rather than elided, because the ABSENCE is what separates the two subtypes and an elided field would render them alike. That negative is printed only when the source line was read: with no line csift does not know whether the key is there, so the head stops at the subtype rather than reporting a key it never looked at. JSON carries `original_model`, `fallback_model`, `category` and `retried` (the subtype, as a boolean). `refusedUserMessageUuid` is the leaf's PROVENANCE EDGE, built through the shared `for_edge`: it renders `[for: refused L<n>]` when the named record is in this transcript, the id with `(not in this file)` when it is not, and `[for: refused unknown (the record carries no such key)]` when the value is null or absent - stated rather than dropped. `retractedMessageUuids` is deliberately NOT an edge and not an exposed key: a reader offered two uuid lists beside each other would try to join both, and one of them resolves to nothing by construction.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "66",
+          "snippet": "fn refusal_head(rec: &Record, p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
+        },
+        {
+          "path": "src/model/classify/system.rs",
+          "lines": "27",
+          "snippet": "        \"model_refusal_fallback\" | \"model_refusal_no_fallback\" => Class::SystemRefusal,"
+        },
+        {
+          "path": "src/commands/search/record_text/system/edges.rs",
+          "lines": "32",
+          "snippet": "        Class::SystemRefusal => {"
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `function Bgt(e){return{type:\"system\",subtype:\"model_refusal_fallback\",content:e.content,level:\"warning\"` and for `function jgt(e){return{type:\"system\",subtype:\"model_refusal_no_fallback\",content:e.content,level:\"warning\"` (one occurrence each, adjacent in the build) and read both key lists, counting a `...x&&{k:v}` or `...x!==void 0&&{k:v}` spread as a CONDITIONAL key and everything else as unconditional. Corpus: over each projects root collect every parsed record whose `type` is `system` and whose `subtype` is `model_refusal_fallback` or `model_refusal_no_fallback`; tally the key set minus the envelope keys (type, subtype, uuid, parentUuid, timestamp, sessionId, cwd, version, gitBranch, isSidechain, userType, entrypoint, slug, sessionKind, isMeta, level, agentId, logicalParentUuid). Then, for each FILE holding at least one such record, parse EVERY line of that file to build the loader's uuid map (last line carrying a uuid wins) and resolve `refusedUserMessageUuid` and every entry of `retractedMessageUuids` against it, recording the resolved record's `type` and counting a JSON null separately from an absent key. Building the map from a prefiltered subset of the file's lines under-resolves and is the error this instrument names.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the TRIGGER and GATE of the two yields: which query-loop branch selects the fallback arm over the no-fallback one. Instrument: read the enclosing loop in the verified build from the yield backwards to its branch condition, and enumerate the other yields in the same loop."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "model_refusal_fallback constructor",
+          "offset": 163581512,
+          "excerpt": "function Bgt(e){return{type:\"system\",subtype:\"model_refusal_fallback\",content:e.content,level:\"warning\"",
+          "note": "the fallback record's shape, with the five conditional spreads in its tail"
+        },
+        {
+          "role": "writer",
+          "name": "model_refusal_no_fallback constructor",
+          "offset": 163582200,
+          "excerpt": "function jgt(e){return{type:\"system\",subtype:\"model_refusal_no_fallback\",content:e.content,level:\"warning\"",
+          "note": "the sibling, a fixed key list with no conditional spread - which is why the two subtypes differ in more than one field"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The claim's own corpus instrument over both projects roots, with the uuid map built from EVERY line of each file holding a refusal record.",
+          "observed": "61 and 61 refusal records (56 + 5 and 59 + 2 by subtype). refusedUserMessageUuid: a string on 56 and 54, of which 55 and 53 name a line in the same file and every one of those is a `type:\"user\"` record, 1 and 1 name no line there, and 5 and 7 are null. retractedMessageUuids: 75 and 79 entries, 0 and 0 resolving. `scope` on 14 and 0 records; `sawCyberRefusal` and `provisional` on 0 and 0.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the refusal head and the `refused` edge land with it."
+        }
+      ]
+    },
+    {
+      "id": "CLS-062",
+      "area": "classification",
+      "behavior": "An `api_error` record's `error` is an OBJECT on every specimen - 29 of 29 on the live root, 258 of 258 on the older snapshot - never a string, and it comes in two families. The CONNECTION family carries `message`, `formatted`, `connection`, `isNetworkDown` and `rateLimits` (22 records live, 60 snapshot), sometimes with `status` added (2 and 11), and on the snapshot sometimes with a camelCase `requestId` beside that status (182, a shape the live root does not hold). The HTTP family carries `error`, `headers`, `requestID`, `status` and `type` - 5 records on each root - and its `headers` object is the response headers VERBATIM: 18 distinct header names on each root, the set carrying `set-cookie`, `anthropic-organization-id`, `cf-ray`, `request-id` and `traceresponse`. Those same 5 records are exactly the ones with no top-level `slug` key (24 with / 5 without live; 253 with / 5 without on the snapshot). The retry counters are top-level: `retryAttempt` 1..16 live and 1..30 on the snapshot, `maxRetries` in {20, 10} live and {20, 50, 10} on the snapshot, `retryInMs` a jittered float. The record carries NO `content` key at all - the key is absent on 29 of 29 and on 258 of 258, which matches the constructor, whose returned object has no `content` field - and the `source` key that constructor does emit appears on 0 of 29 and 0 of 258.",
+      "depends": "csift renders `[api-error status=<status> retry <retryAttempt>/<maxRetries> in <retryInMs>ms]` and, because there is no `content` to render, uses the error's own `type` and `message` as the BODY - so the record's statement of what failed is searchable, which it is not if the head alone is rendered. The same two fields ride JSON as an `error` fact beside `status`, `retry_attempt`, `max_retries` and `retry_in_ms`. `error.headers` reaches NO rendered or JSON path: a transcript view that printed them would put a session cookie and an organization id in front of whoever reads the output, and `--raw` is the one documented way to the bytes because it prints the line and says so. A counter the line does not carry is elided rather than defaulted, and a maximum with no attempt renders the declared `?` placeholder, because printing the maximum alone would read as an attempt number. `retryInMs` renders as the line's own number rather than a rounded one, so a reader can compare the rendered value against the line.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "97",
+          "snippet": "fn api_error_head(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
+        },
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "171",
+          "snippet": "fn error_text(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
+        },
+        {
+          "path": "src/commands/search/record_text/system.rs",
+          "lines": "219",
+          "snippet": "        Class::SystemApiError => {"
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `function mle(e,n,r,o,d){return{type:\"system\",subtype:\"api_error\"` (one occurrence) and read its key list. Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `api_error`; record the JSON type of `error`, its key set, whether a `headers` object is present and the lowercased names inside it, whether the RECORD carries a top-level `slug`, the values of `maxRetries`, the range of `retryAttempt`, whether a `content` key is PRESENT (separately from whether its value is null), and whether a `source` key is present.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the TRIGGER and GATE: which retry paths call the api_error constructor and with which `source` argument, and why no specimen carries that argument. Instrument: enumerate the constructor's call sites in the verified build and read the `source` value each passes."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "api_error constructor",
+          "offset": 166032184,
+          "excerpt": "function mle(e,n,r,o,d){return{type:\"system\",subtype:\"api_error\"",
+          "note": "the returned object's key list, which carries no `content`"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The claim's own corpus instrument over both projects roots.",
+          "observed": "29 and 258 api_error records, `error` an object on all of them. Key sets: the HTTP family {error, headers, requestID, status, type} on 5 and 5; the connection family {connection, formatted, isNetworkDown, message, rateLimits} on 22 and 60, with `status` added on 2 and 11, and with a camelCase `requestId` beside that status on 0 and 182. `headers` present on 5 and 5 records, 18 distinct lowercased names on each. Top-level `slug` on 24 and 253, absent on 5 and 5 - the same 5 that carry headers. `content` key absent on 29 of 29 and 258 of 258; `source` absent on all. maxRetries {20: 24, 10: 5} and {20: 185, 50: 58, 10: 15}; retryAttempt 1..16 and 1..30.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the api-error head, its error body and the headers law land with it."
+        }
+      ]
+    },
+    {
+      "id": "CLS-063",
+      "area": "classification",
+      "behavior": "An `agents_killed` record carries NO payload at all. Its constructor returns the envelope and nothing else - type, subtype, timestamp, uuid, isMeta - with no content and no field naming how many agents stopped or which. The corpus agrees on every specimen: 10 of 10 records on the live root and 23 of 23 on the older snapshot have an empty payload key set once the envelope keys are removed. The line a person sees is fabricated by the renderer, which holds `All background agents stopped` as a fixed string beside the component that draws it.",
+      "depends": "csift renders the leaf head `[kill]` and appends the record's own `content` only when a line carries one, which no observed line does - so the rendered unit is the head alone. That is the honest shape: there is no count to print, and inventing one from the renderer's sentence would report a number the line does not hold. The leaf stays reachable and censusable by address and by `-t harness.system.kill`, which is the whole value of a payload-less record: it says an interrupt happened, and when.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "38",
+          "snippet": "        Class::SystemKill => \"[kill]\".to_string(),"
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `function ghn(){return{type:\"system\",subtype:\"agents_killed\"` (one occurrence) and read the object literal; byte-search for `All background agents stopped` and read each occurrence's surroundings. Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `agents_killed` and tally the key set minus the envelope keys.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the TRIGGER: the interrupt path that appends the record. Instrument: enumerate the constructor's call sites in the verified build and read the transcript append each sits in."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "agents_killed constructor",
+          "offset": 166031591,
+          "excerpt": "function ghn(){return{type:\"system\",subtype:\"agents_killed\",timestamp:new Date().toISOString(),uuid:oT(),isMeta:!1}}",
+          "note": "takes no argument, so there is nothing for a payload to be built from"
+        },
+        {
+          "role": "writer",
+          "name": "the rendered sentence",
+          "offset": 180035941,
+          "excerpt": "All background agents stopped\"})",
+          "note": "the human line is a literal in the renderer, not a stored field"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Read the agents_killed constructor and the renderer's fixed string in the verified build at the anchors above, then ran the two-root census of the subtype's payload key set.",
+          "observed": "The constructor takes no argument and emits five envelope keys. The payload key set is empty on 10 of 10 records on the live root and 23 of 23 on the older snapshot.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the `[kill]` head lands with it."
+        }
+      ]
+    },
+    {
+      "id": "CLS-064",
+      "area": "classification",
+      "behavior": "An `informational` record is a generic banner: its transcript constructor takes the content and the LEVEL as arguments, so the level is caller data rather than a property of the subtype, and the producer set is open by construction. Observed levels over the live root are `warning` on 13 records and `notice` on 8, across 21 records in 11 files; the older snapshot carries none of this subtype at all, which is consistent with its ceiling rather than contradictory. A second, differently shaped `informational` literal exists in the same build with a snake_case `session_id` and no timestamp: that one is a control-protocol frame and never a transcript record, so counting literals overstates the number of transcript producers.",
+      "depends": "csift renders `[notice <level>] <content>` - the level named because it is the only thing distinguishing one banner from another, and the content verbatim because that is the whole payload. An empty `level` string renders as the bare `[notice]` head rather than `[notice ]`. Nothing keys on the content's wording, so a new producer with a new sentence reaches the leaf unchanged; a build that stopped setting `level` would render the bare head and lose nothing else.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "32",
+          "snippet": "        Class::SystemNotice => match rec.level.as_deref() {"
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `function dne(e,n){return{type:\"system\",subtype:\"informational\",content:e,isMeta:!1,timestamp:` (one occurrence) and for the bare literal `subtype:\"informational\"` (twelve occurrences) and read each to sort transcript constructors from wire frames by whether the literal carries a timestamp and a uuid or a snake_case `session_id`. Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `informational` and tally the `level` values and the file count.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the TRIGGER set: which call sites pass which level. Instrument: enumerate the transcript constructor's call sites in the verified build and read the level argument at each."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "informational constructor",
+          "offset": 163953658,
+          "excerpt": "function dne(e,n){return{type:\"system\",subtype:\"informational\",content:e,isMeta:!1,timestamp:",
+          "note": "the level is the second argument, so it is caller data"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The claim's own corpus instrument over both projects roots, plus the binary reads at the anchors above.",
+          "observed": "21 informational records in 11 files on the live root, levels `warning` 13 and `notice` 8; 0 records on the older snapshot. The constructor takes the content and the level as its two arguments.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the `[notice <level>]` head lands with it."
+        }
+      ]
+    },
+    {
+      "id": "CLS-065",
+      "area": "classification",
+      "behavior": "A scheduled fire record written by the CRON arm carries `taskId`, `cron` and `prompt`, and that task id is resolvable inside the same transcript: for every such record the file also holds a tool result whose own `id` equals it - the result of the call that armed the task. Measured over the live root, every one of the 6 cron-arm fire records joins that way, 6 of 6; the older snapshot holds 0 cron-arm records to join. The wakeup arm carries none of the three keys (459 of 465 fire records on the live root and 504 of 504 on the snapshot are that shape), so the absence of the keys is the absence of the arm rather than a missing value.",
+      "depends": "csift renders `[scheduled <when>] task=<id> cron=<expr> prompt=<cut>` and exposes the same three values as the hit's `task_id`, `cron` and `prompt` keys - the head and the keys carry ONE value each, so a field exposed in JSON is always searchable in text. The armed prompt is cut to the shared 200-character preview budget on both sides. The instant is NOT a family key: it is the engine's `scheduled_at` field, which has one writer. The `taskId` is stated as a RELATION rather than as a resolvable edge - `[for: armed_by unknown (the arming call is joined by taskId, not by a record uuid - search the id)]` - because the arming record is found by MATCHING an id inside a tool result, which a uuid map cannot do; a wakeup-arm record reads `[for: armed_by unknown (the record carries no taskId - the wakeup arm arms no task)]`, so the absence of the arm is stated instead of leaving a reader to wonder whether csift looked.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "129",
+          "snippet": "fn schedule_event_head("
+        },
+        {
+          "path": "src/commands/search/record_text/system/edges.rs",
+          "lines": "62",
+          "snippet": "        Class::ScheduleEvent => Some(HitFact::ForUnknown {"
+        }
+      ],
+      "instrument": "Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `scheduled_task_fire`; split them on whether any of `taskId`, `cron`, `prompt` is present; for each record carrying a `taskId`, scan the SAME file's parsed records for a `toolUseResult` whose `id` equals that value (or, when the field is a string, that contains it) and count the joins.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the PRODUCER of the arming result: which tool writes a result whose `id` is the scheduler's task id. Instrument: locate that tool's result literal in the verified build and read the field it fills the id from."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The claim's own corpus instrument over both projects roots.",
+          "observed": "465 and 504 scheduled_task_fire records; the cron arm (any of taskId, cron, prompt present) on 6 and 0, the wakeup arm on 459 and 504. Every one of the 6 cron-arm records joins to a tool result whose `id` equals its `taskId`: 6 of 6.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the schedule head, its three keys and the `armed_by` relation land with it."
+        }
+      ]
+    },
+    {
+      "id": "CLS-066",
+      "area": "classification",
+      "behavior": "The transcript renderer's system component decides what a person sees, and TWO of the subtypes are written for no one: the component returns null outright for `api_error` and for `model_refusal_no_fallback`, before any verbose or transcript-mode test. A third rule sits above them: any system record whose `level` is `info` is dropped unless verbose is on, with `stop_hook_summary` exempted by name. That component is the ONLY renderer these records reach. The dispatch above it offers a second, compact path - a row formatter behind a gate - and the gate is constantly false: it reads `!verbose && !dZt() && !(e0e()?.isQueued===true) && re()`, and `re` in that module is `function re(){return!1}`. So the compact path is dead code in the shipped build and the component below decides every case. Counting the receiver-qualified subtype comparisons over the whole system-handling span (bytes 180030000 to 180070000), there are 19 of them over 18 distinct names: 15 inside the component itself over 14 names, and 4 more in the dispatch beneath it (`compact_boundary`, `microcompact_boundary`, `read_divider`, `local_command`). THREE of those 18 names - `thinking`, `microcompact_boundary`, `read_divider` - appear in no `type:\"system\",subtype:\"...\"` writer literal anywhere in the build, so a renderer arm is not evidence that a writer exists.",
+      "depends": "csift's SKILL human-visibility column reports `no` for `harness.system.api-error` and the no-fallback half of `harness.system.refusal`, and `verbose` for `harness.system.notice`, on the strength of these arms rather than on a guess about what a banner is for - and it may read them AS the answer only because the alternative renderer above cannot run. The column is documentation, not behaviour: no csift code path reads it, so a renderer change moves the column and nothing else. It matters because the LLM-visibility column beside it is a different question with a different answer - the model receives exactly one of these subtypes - and conflating the two is the mistake the two columns exist to prevent. The non-nesting of the renderer's names and the writers' names is why csift models a leaf per OBSERVED subtype and renders anything else as `? unmodeled: system/<subtype>` rather than folding the unknown into a catch-all.",
+      "code": [
+        {
+          "path": "src/model/inventory/subtypes.rs",
+          "lines": "62",
+          "snippet": "        Shape::SystemSubtype(\"api_error\"),"
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `de.subtype` (15 occurrences, all inside one component) and read each arm; for `if(de.subtype===\"api_error\"){return null}` (at 180038979) and `if(de.subtype!==\"stop_hook_summary\"&&!cp&&de.level===\"info\"){return null}` (at 180038906) (one occurrence each) to confirm each precedes the type switch and is not behind a verbose test; then for `EB=oC(To);switch(J.type){` to find the dispatch, for `function oC(s){` to read the compact-path gate, and for `function re(){return!1}` immediately before it to read its last conjunct. Then regex-walk `([A-Za-z_$]+)\\.subtype[!=]==\"([a-zA-Z_]+)\"` over bytes 180030000..180070000 to get the whole system-handling arm set including the dispatch's own `J.subtype` comparisons, and regex-count `type:\"system\",subtype:\"([a-zA-Z_]+)\"` over the whole build to get the writer names the arm set is compared against. Counting rule: an arm is one occurrence of a receiver-qualified comparison; distinct names are the set of the string literals those arms compare against.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured in the verified build"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "the SPECIMEN: what a person actually saw. Instrument: a live trial that provokes each subtype with the transcript view open, which is the only observation of a render that leaves no artefact."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the api_error null return",
+          "offset": 180038979,
+          "excerpt": "if(de.subtype===\"api_error\"){return null}",
+          "note": "an unconditional drop, before any verbose test"
+        },
+        {
+          "role": "gate",
+          "name": "the info-level drop",
+          "offset": 180038906,
+          "excerpt": "if(de.subtype!==\"stop_hook_summary\"&&!cp&&de.level===\"info\"){return null}",
+          "note": "the verbose-gated rule, with one subtype exempted by name"
+        },
+        {
+          "role": "trigger",
+          "name": "the compact path's gate",
+          "offset": 177383915,
+          "excerpt": "function re(){return!1}",
+          "note": "the last conjunct of the compact row formatter's gate, so that path never runs"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Read the two null returns and the compact-path gate in the verified build at the anchors above; then the regex walk of receiver-qualified subtype comparisons over bytes 180030000..180070000, and the whole-build count of `type:\"system\",subtype:\"...\"` writer literals.",
+          "observed": "19 comparisons over 18 distinct names in the span: 15 `de.subtype` arms over 14 names inside the component, plus `J.subtype` against compact_boundary (180063189), microcompact_boundary (180063484), read_divider (180063817) and local_command (180064018). 92 writer literals over 48 distinct names in the whole build. Three arm names have no writer literal: thinking, microcompact_boundary, read_divider - each byte-counts 0 as `subtype:\"<name>\"`.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim. The arm set is the whole system-handling span rather than the component alone: reading `de.subtype` by itself names 14 and misses the four the dispatch compares."
         }
       ]
     }

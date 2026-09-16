@@ -239,13 +239,16 @@ fn a_record_quoting_the_preamble_is_not_the_tick() {
 #[test]
 fn the_demote_leaves_the_fire_line_addressable_and_keeps_it_on_the_chain() {
     let h = fire_home();
-    // An ADDRESS turns the gated `harness.meta.system` leaf on, so the demote that a
-    // scan applies must not run: `show` renders the fire record whole.
+    // An ADDRESS turns the gated `harness.schedule.event` leaf on, so the demote that a
+    // scan applies must not run: `show` renders the fire record whole, under the fire
+    // record's own head - the instant it names, then its content.
     let show = h.run(&["show", &at(SESS), "--line", "4"]);
     assert!(show.success, "stderr: {}", show.stderr);
     assert!(
-        show.stdout
-            .contains("[scheduled_task_fire] Running scheduled task (Jun 7 5:28am)"),
+        show.stdout.contains("[scheduled Jun 7 5:28am]")
+            && show
+                .stdout
+                .contains("Running scheduled task (Jun 7 5:28am)"),
         "an addressed fire record renders under the system leaf:\n{}",
         show.stdout
     );

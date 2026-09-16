@@ -112,51 +112,39 @@ fn snapshot_and_delta_excerpts_name_paths_and_versions() {
     assert_eq!(promoted_record_text(&none), None);
 }
 
-/// The six `type:"system"` EVENT leaves render `[<subtype> <level>] <content>`, and the
-/// renderer that decides it is the SYSTEM FAMILY's, not the promoted one.
+/// The six system EVENT leaves left the promoted renderer: each names the fields that
+/// make its own event useful (`record_text/system/heads.rs`), and the one-size
+/// `[<subtype> <level>]` head that named the subtype and threw the payload away is gone.
 ///
-/// Before the render seam these four shapes were pinned against `promoted_record_text`;
-/// the arm moved into `record_text/system.rs` and the assertions moved with it, byte for
-/// byte. The last three cases are what the move makes statable: the promoted renderer now
-/// answers NOTHING for these leaves, so the render has exactly one owner rather than two,
-/// and the family refuses a system subtype whose leaf belongs to another category.
+/// Pinned HERE, beside the promoted arms, so a future arm added back to
+/// `promoted_record_text` for one of these leaves fails rather than shadowing the family
+/// render - the seam consults the family first, so a second answer is silent.
 #[test]
-fn a_system_event_renders_its_subtype_level_and_content() {
-    let ctx = ClassifyCtx::top_level();
-    let render = |r: &Record| system::render(r, None, Class::SystemNotice, &ctx);
-    // String content with a level: the Remote Control disconnect shape.
-    let info = rec(
-        r#"{"type":"system","subtype":"informational","level":"warning","uuid":"i","timestamp":"t","content":"Remote Control disconnected - run /remote-control"}"#,
-    );
-    assert_eq!(
-        render(&info).as_deref(),
-        Some("[informational warning] Remote Control disconnected - run /remote-control")
-    );
-    // No level: the head is the bare subtype; a non-string content renders as its JSON.
-    let killed = rec(
+fn the_promoted_renderer_no_longer_answers_for_a_system_event() {
+    for line in [
+        r#"{"type":"system","subtype":"informational","level":"warning","uuid":"i","timestamp":"t","content":"Remote Control disconnected"}"#,
         r#"{"type":"system","subtype":"agents_killed","uuid":"k","timestamp":"t","content":{"count":2}}"#,
-    );
-    assert_eq!(
-        render(&killed).as_deref(),
-        Some(r#"[agents_killed] {"count":2}"#)
-    );
-    // No content at all: the head alone (still a searchable, addressable record).
-    let bare = rec(r#"{"type":"system","subtype":"api_error","uuid":"e","timestamp":"t"}"#);
-    assert_eq!(render(&bare).as_deref(), Some("[api_error]"));
-    // An empty level string is treated as absent.
-    let empty = rec(
+        r#"{"type":"system","subtype":"api_error","uuid":"e","timestamp":"t"}"#,
         r#"{"type":"system","subtype":"local_command","level":"","uuid":"l","timestamp":"t","content":"ran"}"#,
+        r#"{"type":"system","subtype":"model_refusal_fallback","uuid":"r","timestamp":"t","originalModel":"model-a"}"#,
+        r#"{"type":"system","subtype":"scheduled_task_fire","uuid":"s","timestamp":"t","content":"Running scheduled task (Jun 7 5:28am)"}"#,
+    ] {
+        assert_eq!(promoted_record_text(&rec(line)), None, "{line}");
+    }
+    // The three telemetry leaves on the same subtype axis DO keep their promoted render.
+    let dur = rec(
+        r#"{"type":"system","subtype":"turn_duration","uuid":"d","timestamp":"t","durationMs":64911}"#,
     );
-    assert_eq!(render(&empty).as_deref(), Some("[local_command] ran"));
-    assert_eq!(promoted_record_text(&info), None);
-    assert_eq!(promoted_record_text(&killed), None);
+    assert!(promoted_record_text(&dur).is_some());
+    // And the family that took the six refuses a subtype whose leaf is another
+    // category's, so the boundary keeps the engine's own render.
+    let ctx = ClassifyCtx::top_level();
     let boundary = rec(
         r#"{"type":"system","subtype":"compact_boundary","uuid":"b","timestamp":"t","content":"Conversation compacted"}"#,
     );
     assert_eq!(
-        render(&boundary),
-        None,
-        "a compaction boundary's leaf is in another category - the family refuses it"
+        system::render(&boundary, None, Class::SystemNotice, &ctx),
+        None
     );
 }
 
