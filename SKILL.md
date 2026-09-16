@@ -250,16 +250,16 @@ Two consequences worth knowing before you guess a filter. `harness.bookkeeping` 
 | `harness.bookkeeping.last-prompt` | a `type:"last-prompt"` line (`leafUuid`, `explicit`, `lastPrompt`) | explicit -t | no | indirect |
 | `harness.bookkeeping.mode` | a `type:"mode"` or `type:"permission-mode"` line | explicit -t | no | indirect |
 | `harness.bookkeeping.name` | a `type:"ai-title"` or `type:"agent-name"` line | explicit -t | no | indirect |
-| `harness.bookkeeping.atis` | a `type:"atis-latch"` line | explicit -t | no | indirect |
+| `harness.bookkeeping.atis` | a `type:"atis-latch"` line | explicit -t | no | no |
 | `harness.bookkeeping.bridge` | a `type:"bridge-session"` line | explicit -t | no | indirect |
 | `harness.bookkeeping.suppression` | a `type:"history-suppression"` line | explicit -t | no | indirect |
 | `harness.bookkeeping.pr-link` | a `type:"pr-link"` line | explicit -t | no | indirect |
 | `harness.bookkeeping.artifact` | a `type:"frame-link"`, `type:"artifact-comment-monitor"` or `type:"artifact-autoreact-ledger"` line | explicit -t | no | indirect |
 | `harness.bookkeeping.file-history` | a `type:"file-history-snapshot"` (the per-prompt tracked-file version table) or `type:"file-history-delta"` (one path's version bump) line: the instrument `recover` reads for external writes | explicit -t | no | indirect |
 | `harness.bookkeeping.cost` | a `type:"cost-state"` checkpoint line | explicit -t | no | indirect |
-| `harness.bookkeeping.fork` | a `type:"fork-context-ref"` line (`parentSessionId`, `parentLastUuid`) | explicit -t | no | indirect |
+| `harness.bookkeeping.fork` | a `type:"fork-context-ref"` line (`parentSessionId`, `parentLastUuid`) | explicit -t | no | no |
 | `harness.bookkeeping.continued` | a `type:"continued-in"` line naming the child a background handoff minted | explicit -t | no | indirect |
-| `harness.bookkeeping.queue` | a `type:"queue-operation"` line that is NOT the human's own content (a `dequeue`, or a harness rider) | explicit -t | no | yes |
+| `harness.bookkeeping.queue` | a `type:"queue-operation"` line that is NOT the human's own content (a `dequeue`, or a harness rider) | explicit -t | no | no |
 
 ### Shape - where each leaf comes FROM on disk
 

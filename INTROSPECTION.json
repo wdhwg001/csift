@@ -92615,8 +92615,8 @@
         {
           "role": "trigger",
           "name": "normalizeAttachmentForAPI",
-          "offset": 166027702,
-          "excerpt": "Unknown attachment type: ",
+          "offset": 166027668,
+          "excerpt": "normalizeAttachmentForAPI\",Error(`Unknown attachment type: ${e.type}`)),[]}var rts=1e4;fun",
           "note": "the converter's own name, reported by the default arm - the entry every attachment record passes through on its way into a request"
         },
         {
@@ -92644,6 +92644,199 @@
           "observed": "The object spans 10,476 bytes and holds 18 empty arms; the early-return list holds 16 names and the default arm returns [] after reporting. Of the 50 payload types csift models, 9 have an empty arm (`async_hook_response_batch`, `batching_reminder_sent`, `command_permissions`, `goal_status`, `hook_cancelled`, `hook_non_blocking_error`, `hook_system_message`, `prompt_snapshot`, `structured_output`), 0 are in the early-return list, and 2 occur zero times in the whole executable (`deferred_tools_record`, `thinking_stripped`) - 11 in total, against the 9 csift carried. On disk over 9,793 jsonl files: `goal_status` 0 files / 0 payload lines, `async_hook_response_batch` 0 / 0, while `deferred_tools_record` reads 12 files / 61 payload lines and `thinking_stripped` 3 / 3.",
           "rule": "An empty arm is the literal `<name>:()=>[]` inside the conversion object's own brace window. A default-arm type is one whose name is a zero-count byte match over the whole executable, so nothing in the build can name it. A payload line is a byte match of `\"attachment\":{\"type\":\"<type>\"`; a file counts once however many such lines it holds.",
           "note": "The two csift was missing are the two with zero corpus incidence, so the wrong answer had no occurrence to be wrong about - but `goal_status` carries `harness.context.task`, whose leaf default is visible, so a record would have been reported as delivered where the converter drops it. The nine empty arms that name types csift does not model are recorded here rather than added: the inventory has no row for them, and a never-convert entry with no row is a rule about nothing."
+        }
+      ]
+    },
+    {
+      "id": "QT-052",
+      "area": "queue-and-telemetry",
+      "behavior": "Two non-transcript line types reach a PERSON through nothing at all, and the closure is an enumeration of every occurrence of their quoted type literal in the shipped executable. `queue-operation` occurs exactly THREE times - the emitter's own object literal, one key in the retention-policy table (`last-wins`) and one in the append-policy table (`always`) - and the loader's per-entry dispatch carries no branch for the type, so nothing reads the line back. `fork-context-ref` occurs FIVE times - the same two policy tables (`accumulate` and `route-by-agent`), the append router that sends it to the issuing agent's file, the `appendEntry` writer, and the loader's per-entry dispatch, which stores it keyed by `agentId` - and its stored set is read at exactly ONE place: the agent transcript builder destructures `forkContextRefs` off the loaded session, which is a MESSAGE-CONTENT path (it concatenates the parent session's prefix in front of the agent's own messages), not a display surface. Neither type has a reader that renders.",
+      "depends": "The inventory's `human` column answers \"does a person see this shape\", and SPEC section 5's table and SKILL's transparency tables print it verbatim. Both rows read `Human::Never` on this evidence rather than `Indirect`, which would say a person sees the line's EFFECT: for `queue-operation` there is no effect at all because nothing reads it, and the queue text a person did see is the `user.queued` leaf's fact, carried by the same line type and classified apart from it; for `fork-context-ref` the effect is what an agent's own resumed transcript contains, which is the model's input rather than anything rendered. If a later build gave either a rendering reader the enumeration would gain a fourth or sixth occurrence, which is what re-running the instrument detects.",
+      "code": [
+        {
+          "path": "src/model/inventory/lines.rs",
+          "lines": "154-160",
+          "snippet": "Shape::TopLevelType(\"fork-context-ref\"),\n        Some(Class::BookkeepingFork),\n        Gate::Selector,\n        false,\n        // Its one reader is the agent transcript builder, which concatenates the parent\n        // session's prefix in front of an agent's messages - message CONTENT, not a\n        // display surface, so a person never sees the line or its effect (claim QT-052)."
+        },
+        {
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "71",
+          "snippet": "\"queue-operation\" => self.queued_class().or(Some(Class::BookkeepingQueue)),"
+        }
+      ],
+      "instrument": "In the shipped executable, byte-find the quoted type literals `\"queue-operation\"` and `\"fork-context-ref\"` and read EVERY occurrence, classifying each as a writer, a policy-table key, an append router or a reader; then byte-find the loader field `forkContextRefs` and read every occurrence of that too. A type has a rendering reader only when one of those occurrences reaches a component. On disk, count lines whose text opens `{\"type\":\"<type>\"` and files naming `\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "queue operation emitter",
+          "offset": 162031935,
+          "excerpt": "\"queue-operation\"",
+          "note": "the only writer of the type: an inner function building the object from its operation argument"
+        },
+        {
+          "role": "gate",
+          "name": "fork-context-ref append router",
+          "offset": 166107492,
+          "excerpt": "route-by-agent\":{let v=(e.type===\"content-replacement\"||e.type===\"fork-context-ref\"||e.type===\"observer-ref\")&",
+          "note": "the policy that sends a fork-context-ref to the issuing AGENT's file rather than the session's, which is why its stored set is keyed by agentId"
+        },
+        {
+          "role": "writer",
+          "name": "agent transcript builder destructure",
+          "offset": 166207247,
+          "excerpt": "forkContextRefs:F}=v;",
+          "note": "the ONE read of the stored set, and it reaches message content rather than any rendering component"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "queue-operation emitter object literal",
+          "offset": 162031929,
+          "excerpt": "{type:\"queue-operation\",operation:",
+          "verdict": "writes the line"
+        },
+        {
+          "site": "queue-operation retention table",
+          "offset": 166051551,
+          "excerpt": "\"queue-operation\":\"last-wins\"",
+          "verdict": "a table key, not a reader"
+        },
+        {
+          "site": "queue-operation append-policy table",
+          "offset": 166067280,
+          "excerpt": "\"queue-operation\":\"always\"",
+          "verdict": "a table key, not a reader; with the emitter these are all three occurrences"
+        },
+        {
+          "site": "fork-context-ref retention table",
+          "offset": 166050921,
+          "excerpt": "\"fork-context-ref\":\"accumulate\"",
+          "verdict": "a table key, not a reader"
+        },
+        {
+          "site": "fork-context-ref append-policy table",
+          "offset": 166067446,
+          "excerpt": "\"fork-context-ref\":\"route-by-agent\"",
+          "verdict": "a table key, not a reader"
+        },
+        {
+          "site": "fork-context-ref append router branch",
+          "offset": 166107548,
+          "excerpt": "e.type===\"fork-context-ref\"",
+          "verdict": "chooses the destination file; reads the type, never the stored set"
+        },
+        {
+          "site": "fork-context-ref appendEntry writer",
+          "offset": 166114384,
+          "excerpt": "appendEntry({type:\"fork-context-ref\"",
+          "verdict": "writes the line"
+        },
+        {
+          "site": "fork-context-ref loader dispatch",
+          "offset": 166188096,
+          "excerpt": "fork-context-ref\")Ot.set(Dn.agentId,Dn)",
+          "verdict": "stores it keyed by agentId; these five are all the occurrences of the type"
+        },
+        {
+          "site": "forkContextRefs name-table entry",
+          "offset": 75835032,
+          "excerpt": "forkContextRefs",
+          "verdict": "an interned name, not code"
+        },
+        {
+          "site": "forkContextRefs loader assembly",
+          "offset": 166191185,
+          "excerpt": "forkContextRefs:Ot,contextCollapseCommits:",
+          "verdict": "puts the stored set on the loaded session object"
+        },
+        {
+          "site": "forkContextRefs agent transcript builder",
+          "offset": 166207247,
+          "excerpt": "forkContextRefs:F}=v;",
+          "verdict": "the one READ, and it is a message-content path; these three are all the occurrences of the field"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-found `\"queue-operation\"`, `\"fork-context-ref\"` and `forkContextRefs` over the whole executable and read every occurrence of each with 200 bytes of context, classifying it as a writer, a table key, a router or a reader; then counted `{\"type\":\"<type>\"` lines and naming files over every `*.jsonl` under one projects root.",
+          "observed": "`\"queue-operation\"` 3 occurrences (emitter at 162031935, retention table at 166051551, append-policy table at 166067280) - no reader. `\"fork-context-ref\"` 5 (two tables, the route-by-agent branch, the appendEntry writer, the loader dispatch) and `forkContextRefs` 3 (an interned name, the loader assembly at 166191185, the agent transcript builder destructure at 166207247) - one reader, on the message-content path. On disk: `queue-operation` 18,252 lines over 48 files, `fork-context-ref` 33 lines over 33 files.",
+          "rule": "An occurrence is a byte match of the literal anywhere in the executable, policy tables included; a reader is an occurrence that consults the stored value rather than the type name. A corpus line counts when its text opens `{\"type\":\"<type>\"`; a file counts once however many such lines it holds.",
+          "note": "The inventory read `Indirect` for both, which claims a person sees the effect. Neither supports that: nothing reads a queue-operation line at all, and the fork line's one reader builds an agent's message array. Both rows are `Never`, and SPEC section 5's table and SKILL's cells follow."
+        }
+      ]
+    },
+    {
+      "id": "QT-053",
+      "area": "queue-and-telemetry",
+      "behavior": "An `atis-latch` line stores one printable-ASCII string per session, and no reader of the LINE renders anything. Its quoted type literal occurs nine times in the shipped executable: the two write-policy tables (`last-wins`, `always`), two writers (the session-state re-stamp that pushes one whenever the current latch is defined, and the per-append re-stamp that writes one when the latch value changes under the same session file), two loader dispatches that store it into a per-session map behind a `/^[\\x21-\\x7e]*$/` guard, and three fork or branch re-writers that carry the entry across into the new session. The stored value is lifted onto the session-summary object as `atisLatch` and read back through the latch getter, whose nine call sites are the getter itself, two feature-gated value readers, the two record writers, the summary assembly, two fork writers and the conversation-reset re-latch. None of the eighteen sites is a rendering component.",
+      "depends": "The inventory's `human` column answers \"does a person see this shape\", and SPEC section 5's table and SKILL's transparency tables print it verbatim. The row reads `Human::Never` rather than `Indirect`, because `Indirect` asserts that a person sees the line's EFFECT and nothing measured here shows one: every reader is machine-side. If the value turns out to reach something a person reads, the row is `Indirect` and this claim is what says so.",
+      "code": [
+        {
+          "path": "src/model/inventory/lines.rs",
+          "lines": "80-88",
+          "snippet": "Shape::TopLevelType(\"atis-latch\"),\n        Some(Class::BookkeepingAtis),\n        Gate::Selector,\n        false,\n        // No reader of this LINE renders anything: every occurrence of the type is a\n        // write-policy table, a writer, a loader dispatch into a per-session map, or a\n        // fork re-writer, and the value it carries is read back only by the latch store\n        // (claim QT-053).\n        Human::Never,"
+        }
+      ],
+      "instrument": "In the shipped executable, byte-find `\"atis-latch\"` and read every occurrence with 240 bytes of context, classifying each as a table key, a writer, a loader dispatch or a fork re-writer. Then byte-find the latch getter's definition (`function X1(){` at this build) and read every call site of it, classifying each the same way. A rendering reader is an occurrence that reaches a component. On disk, count lines opening `{\"type\":\"atis-latch\"` and files naming `\"type\":\"atis-latch\"` over every `*.jsonl` under one projects root.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Where the latched value LANDS is not traced: the two feature-gated readers of the latch getter pass it onward and the chain past them is unread, so `Never` rests on the absence of a rendering reader rather than on a named destination. Byte-find the two readers' own call sites and follow the value until it reaches a request, a header map or a component."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "session-state re-stamp",
+          "offset": 166093201,
+          "excerpt": "\"atis-latch\",atis:F,sessionId:d}),this.atisLatchStamp=",
+          "note": "the writer that pushes one entry whenever the current latch is defined, stamping what it wrote so the next append can compare"
+        },
+        {
+          "role": "gate",
+          "name": "loader per-entry dispatch",
+          "offset": 166186178,
+          "excerpt": "\"atis-latch\"&&Dn.sessionId){if(typeof Dn.atis===\"string\"&&/^[\\x21-\\x7e]*$/.test(Dn.atis))",
+          "note": "the read: a printable-ASCII guard, then the value into a per-session map - and no branch that renders"
+        },
+        {
+          "role": "writer",
+          "name": "the latch getter",
+          "offset": 156824696,
+          "excerpt": "function X1(){let e=g();return e?e.conversationAtisLatch:n().conversationLatches.atisLatch()}",
+          "note": "what every consumer of the stored value goes through; its call sites are writers, the summary assembly and two feature-gated readers"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-found `\"atis-latch\"`, `atisLatches`, `atisLatch:` and the latch getter's definition over the whole executable, read every occurrence with context and classified each; counted `{\"type\":\"atis-latch\"` lines and naming files over every `*.jsonl` under one projects root.",
+          "observed": "9 occurrences of the quoted type: 2 policy tables, 2 writers (166093201, 166105036), 2 loader dispatches (166186178, 177187280) and 3 fork or branch re-writers (172852212, 172854613, 177190368). `atisLatches` 7 occurrences, all loader assembly or the per-session map read at 166148511. 9 call sites of the getter, none a component. On disk: 4,690 lines over 28 files.",
+          "rule": "An occurrence is a byte match of the literal anywhere in the executable. A site counts as rendering only when it reaches a component; a store, a map read, a summary field and a fork re-write do not. A corpus line counts when its text opens `{\"type\":\"atis-latch\"`; a file counts once however many such lines it holds.",
+          "note": "The row read `Indirect`, which asserts a visible effect. Nothing measured supports one, so it is `Never` with the destination leg left open rather than `Indirect` with no evidence for the word."
         }
       ]
     }

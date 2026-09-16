@@ -81,7 +81,11 @@ pub(crate) const ROWS: &[Entry] = &[
         Some(Class::BookkeepingAtis),
         Gate::Selector,
         false,
-        Human::Indirect,
+        // No reader of this LINE renders anything: every occurrence of the type is a
+        // write-policy table, a writer, a loader dispatch into a per-session map, or a
+        // fork re-writer, and the value it carries is read back only by the latch store
+        // (claim QT-053).
+        Human::Never,
     ),
     e(
         Shape::TopLevelType("bridge-session"),
@@ -151,7 +155,10 @@ pub(crate) const ROWS: &[Entry] = &[
         Some(Class::BookkeepingFork),
         Gate::Selector,
         false,
-        Human::Indirect,
+        // Its one reader is the agent transcript builder, which concatenates the parent
+        // session's prefix in front of an agent's messages - message CONTENT, not a
+        // display surface, so a person never sees the line or its effect (claim QT-052).
+        Human::Never,
     ),
     e(
         Shape::TopLevelType("continued-in"),
@@ -165,6 +172,9 @@ pub(crate) const ROWS: &[Entry] = &[
         Some(Class::BookkeepingQueue),
         Gate::Selector,
         false,
-        Human::Always,
+        // Nothing in the executable reads it back at all, so nothing renders the LINE to
+        // anybody. The person saw their own text in the queue UI, which is the
+        // `user.queued` leaf's fact and not this one (claim QT-052).
+        Human::Never,
     ),
 ];

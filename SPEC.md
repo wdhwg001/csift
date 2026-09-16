@@ -501,7 +501,7 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | TopLevelType | `permission-mode` | `harness.bookkeeping.mode` | explicit -t | no | indirect |
 | TopLevelType | `ai-title` | `harness.bookkeeping.name` | explicit -t | no | indirect |
 | TopLevelType | `agent-name` | `harness.bookkeeping.name` | explicit -t | no | indirect |
-| TopLevelType | `atis-latch` | `harness.bookkeeping.atis` | explicit -t | no | indirect |
+| TopLevelType | `atis-latch` | `harness.bookkeeping.atis` | explicit -t | no | no |
 | TopLevelType | `bridge-session` | `harness.bookkeeping.bridge` | explicit -t | no | indirect |
 | TopLevelType | `history-suppression` | `harness.bookkeeping.suppression` | explicit -t | no | indirect |
 | TopLevelType | `pr-link` | `harness.bookkeeping.pr-link` | explicit -t | no | indirect |
@@ -511,9 +511,9 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | TopLevelType | `file-history-snapshot` | `harness.bookkeeping.file-history` | explicit -t | no | indirect |
 | TopLevelType | `file-history-delta` | `harness.bookkeeping.file-history` | explicit -t | no | indirect |
 | TopLevelType | `cost-state` | `harness.bookkeeping.cost` | explicit -t | no | indirect |
-| TopLevelType | `fork-context-ref` | `harness.bookkeeping.fork` | explicit -t | no | indirect |
+| TopLevelType | `fork-context-ref` | `harness.bookkeeping.fork` | explicit -t | no | no |
 | TopLevelType | `continued-in` | `harness.bookkeeping.continued` | explicit -t | no | indirect |
-| TopLevelType | `queue-operation` | `harness.bookkeeping.queue` | explicit -t | no | yes |
+| TopLevelType | `queue-operation` | `harness.bookkeeping.queue` | explicit -t | no | no |
 | SystemSubtype | `compact_boundary` | `harness.compaction.boundary` | default scan | no | yes |
 | SystemSubtype | `turn_duration` | `harness.turn.duration` | explicit -t | no | (unstated) |
 | SystemSubtype | `stop_hook_summary` | `harness.turn.stop-hooks` | explicit -t | no | (unstated) |
