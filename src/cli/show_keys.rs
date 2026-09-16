@@ -76,6 +76,11 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Bookkeeping, "continued_in"),
     k(Family::Bookkeeping, "checkpoint_closes_at"),
     k(Family::Bookkeeping, "checkpoint_join"),
+    k(
+        Family::Thinking,
+        "signature_len (thinking blocks; null when the block carries no signature field)",
+    ),
+    k(Family::Thinking, "thinking_text_absent"),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.

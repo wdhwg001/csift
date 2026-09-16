@@ -66,28 +66,48 @@ pub(crate) fn block_body(block: &Block) -> Option<Cow<'_, str>> {
 
 /// The thinking family's own facts.
 ///
-/// UNINHABITED at the skeleton amendment - the family lane adds its variants HERE and
-/// nowhere else: one enum per family is what keeps `types/facts.rs` out of every
-/// family's way, and what stops two families minting one idea twice. A PER-BLOCK fact
-/// (a signature length, say) is a variant here like any other: the block it belongs to
-/// arrives on [`Section::block`].
+/// Both variants are PER-BLOCK: the block they describe arrives on [`Section::block`], so
+/// a record carrying two thinking blocks emits two units whose facts differ.
 ///
 /// An EDGE to another record is never a variant here. Edges are SHARED on [`HitFact`]
 /// itself, because several families carry them and a reader has to read every one the
 /// same way; a family builds one through the shared helper instead of describing the
 /// shape again.
 #[derive(Debug, Clone)]
-pub(crate) enum Fact {}
+pub(crate) enum Fact {
+    /// Character length of a `thinking` block's own `signature` field, and `None` when the
+    /// block carries no such field at all - which is the honest empty, not a zero. The
+    /// distinction is this family's own discriminator: a block the client minted from a
+    /// cancelled stream carries the signature PRESENT and EMPTY, so collapsing an absent
+    /// field onto 0 would put every unsigned block from an older transcript into that
+    /// population.
+    SignatureLen(Option<usize>),
+    /// This thinking block holds no readable text: the API returned a signed block with no
+    /// summary text (its `thinking.display` mode `omitted`). Rides the
+    /// `agent.thinking.omitted` leaf alone, so a consumer can tell that absence from an
+    /// excerpt that merely rendered empty for some other reason.
+    TextAbsent,
+}
 
 impl Fact {
     /// The label-zone tag this fact adds, if any.
+    ///
+    /// NEITHER adds one, and that is a decision rather than an omission: a signature
+    /// length is a number nobody reads in a label zone, and the text absence is already
+    /// said there by the `[no summary text]` marker, so a second tag would read as a
+    /// second fact.
     pub(crate) fn label_zone(&self) -> Option<String> {
-        match *self {}
+        match *self {
+            Fact::SignatureLen(_) | Fact::TextAbsent => None,
+        }
     }
 
     /// The JSON key(s) and value(s) this fact adds to its hit object.
     pub(crate) fn json(&self) -> Vec<(&'static str, serde_json::Value)> {
-        match *self {}
+        match *self {
+            Fact::SignatureLen(n) => vec![("signature_len", serde_json::json!(n))],
+            Fact::TextAbsent => vec![("thinking_text_absent", serde_json::json!(true))],
+        }
     }
 }
 
@@ -109,7 +129,37 @@ pub(crate) fn facts(
     let Some(block) = section.block else {
         return (Vec::new(), Vec::new());
     };
-    (Vec::new(), block_markers(rec, block, section.class))
+    (
+        block_facts(block, section.class),
+        block_markers(rec, block, section.class),
+    )
+}
+
+/// The per-block FACTS a thinking unit carries into JSON.
+///
+/// `signature_len` rides every `thinking` block, because the signature is the field that
+/// separates a block the API signed - and will accept back - from one the client minted.
+/// It reports the CHARACTER length of the block's own `signature`, and `null` when the
+/// block carries no such field: that is the honest empty, and it is load-bearing rather
+/// than decorative here, because the family's salvage discriminator rests on exactly the
+/// difference between a signature that is absent and one that is present and empty. A
+/// `redacted_thinking` block has no signature field in its shape, so it reports nothing at
+/// all rather than a fabricated zero.
+///
+/// `thinking_text_absent` rides the omitted leaf alone, so a JSON consumer can tell "the
+/// API sent no summary text" from "this hit's excerpt happens to be empty".
+#[must_use]
+fn block_facts(block: &Block, class: Option<Class>) -> Vec<HitFact> {
+    let Block::Thinking { signature, .. } = block else {
+        return Vec::new();
+    };
+    let mut facts = vec![HitFact::Thinking(Fact::SignatureLen(
+        signature.as_deref().map(|s| s.chars().count()),
+    ))];
+    if class == Some(Class::AgentThinkingOmitted) {
+        facts.push(HitFact::Thinking(Fact::TextAbsent));
+    }
+    facts
 }
 
 /// The label-zone markers a content BLOCK adds to its unit, in push order.

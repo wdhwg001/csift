@@ -5,14 +5,35 @@ use super::*;
 
 /// The family's markers for one BLOCK of a record, under one leaf.
 fn markers(line: &str, block_index: usize, class: Option<Class>) -> Vec<String> {
+    family(line, block_index, class).1
+}
+
+/// The family's JSON facts for one BLOCK, as `(key, value)` pairs.
+fn facts(line: &str, block_index: usize, class: Option<Class>) -> Vec<(&'static str, String)> {
+    family(line, block_index, class).0
+}
+
+/// One call of the family's entry point, projected the way each surface reads it.
+#[allow(clippy::type_complexity)]
+fn family(
+    line: &str,
+    block_index: usize,
+    class: Option<Class>,
+) -> (Vec<(&'static str, String)>, Vec<String>) {
     let r = rec(line);
     let blocks = r.blocks().expect("blocks").to_vec();
     let section = Section {
         class,
         block: Some(&blocks[block_index]),
     };
-    let (_, markers) = thinking::facts(&r, None, &section, &ClassifyCtx::top_level());
-    markers.iter().map(Marker::render).collect()
+    let (facts, markers) = thinking::facts(&r, None, &section, &ClassifyCtx::top_level());
+    (
+        facts
+            .iter()
+            .flat_map(|f| f.json().into_iter().map(|(k, v)| (k, v.to_string())))
+            .collect(),
+        markers.iter().map(Marker::render).collect(),
+    )
 }
 
 const OMITTED: &str = r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":"AbCdEf=="}]}}"#;
@@ -82,6 +103,64 @@ fn a_record_level_unit_is_refused_before_any_block_is_read() {
         &ClassifyCtx::top_level(),
     );
     assert!(facts.is_empty() && markers.is_empty());
+}
+
+#[test]
+fn a_signature_that_is_absent_is_null_and_one_that_is_empty_is_zero() {
+    // The distinction the family's own salvage discriminator rests on, so it is the one
+    // thing the fact may never collapse: a block with NO signature field reports null, and
+    // a block whose signature is the empty string reports 0.
+    assert_eq!(
+        facts(SALVAGE, 0, Some(Class::AgentThinkingSummary)),
+        vec![("signature_len", "0".to_string())]
+    );
+    let unsigned = r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"reasoning"}]}}"#;
+    assert_eq!(
+        facts(unsigned, 0, Some(Class::AgentThinkingSummary)),
+        vec![("signature_len", "null".to_string())]
+    );
+    // An ordinary signed block reports the CHARACTER count of its own signature.
+    assert_eq!(
+        facts(SUMMARY, 0, Some(Class::AgentThinkingSummary)),
+        vec![("signature_len", "8".to_string())]
+    );
+}
+
+#[test]
+fn the_text_absence_rides_the_omitted_leaf_alone() {
+    // An omitted unit carries both facts, so a consumer can tell "the API sent no summary
+    // text" from "this excerpt happens to be empty".
+    assert_eq!(
+        facts(OMITTED, 0, Some(Class::AgentThinkingOmitted)),
+        vec![
+            ("signature_len", "8".to_string()),
+            ("thinking_text_absent", "true".to_string()),
+        ]
+    );
+    // A signed block WITH text carries the length alone.
+    assert_eq!(
+        facts(SUMMARY, 0, Some(Class::AgentThinkingSummary)).len(),
+        1
+    );
+    // A redacted block has no signature field in its shape, so it carries neither fact - a
+    // zero there would read as a client-minted block.
+    assert!(facts(REDACTED, 0, Some(Class::AgentThinkingRedacted)).is_empty());
+    // And so does an assistant text block, whatever its text.
+    assert!(facts(REMOVED, 0, Some(Class::AgentMessagePlain)).is_empty());
+}
+
+#[test]
+fn neither_fact_writes_a_label_zone_tag() {
+    // A length is a number nobody reads in a label zone, and the text absence is already
+    // said there by `[no summary text]`. Read through the projection rather than off the
+    // enum, because that projection is the whole surface the fact has.
+    for f in [
+        thinking::Fact::SignatureLen(Some(24)),
+        thinking::Fact::SignatureLen(None),
+        thinking::Fact::TextAbsent,
+    ] {
+        assert!(f.label_zone().is_none(), "{f:?}");
+    }
 }
 
 #[test]
