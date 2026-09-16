@@ -55,6 +55,42 @@ surface change bumps the PATCH.
   when the block carries no such field, because absent and empty are different shapes and
   the salvage discriminator rests on exactly that one. `thinking_text_absent` rides
   `agent.thinking.omitted` alone. Both are named in `search --help` and `show --help`.
+
+
+- **Each `harness.system.*` event kind renders the fields that make it useful.** The old
+  catch-all head named the subtype and threw the payload away: a refusal rendered its banner
+  sentence and dropped both model ids, the category and the rewind target, and an `api_error`
+  rendered a head with no status, no retry counter and no word about what failed. Now `refusal`
+  reads `[refusal <subtype>] originalModel=... fallbackModel=...|none apiRefusalCategory=...`
+  (the `none` is printed rather than elided, because the absence of a second model is what
+  separates the two subtypes; with no source line to read the head stops at the subtype rather
+  than reporting a key it never looked at), `api-error` reads `[api-error status=... retry N/M
+  in Xms]` plus the error's own type and message, `notice` reads `[notice <level>]`, `kill`
+  reads `[kill]` (the record carries no payload on disk), `command` reads `[command]`, and the
+  scheduler's `harness.schedule.event` reads `[scheduled <when>] task=... cron=... prompt=...`.
+  Every one of those fields also rides JSON as its own key - `retried`, `original_model`,
+  `fallback_model`, `category`, `status`, `retry_attempt`, `max_retries`, `retry_in_ms`,
+  `error`, `task_id`, `cron`, `prompt` (cut at 200 characters) - and the head carries the same
+  value, because a key that reaches JSON alone is unsearchable.
+- **A leaf that NAMES another record says which one.** A refusal's `refusedUserMessageUuid` and
+  a delivered command's `parentUuid` ride the hit as a `for` fact: `[for: refused L42]` when
+  this transcript holds the named record, `[for: wraps <id8> (not in this file)]` when it does
+  not, and `[for: <kind> unknown (<reason>)]` when the record names none - so an edge is never
+  silently absent. A fire record's `taskId` and a fallback turn's banner take that last form on
+  purpose: the arming call is found by MATCHING an id inside a tool result and the banner
+  DESCENDS from its record, and neither is a lookup a uuid map can make. JSON `for` is an array,
+  one object per edge, each carrying `kind`, `basis`, `target` and `reason`.
+- **A turn the API served from a FALLBACK model names both models.** Its sole content block is
+  the API's `fallback` block, written in place of the text, and nothing in the harness renders
+  it - so a reader had no way to learn the turn was served by a different model. It now carries
+  `[served by <to.model>, fell back from <from.model>]` in the label zone plus JSON `served_by`
+  and `fell_back_from`, the one place a transcript keeps the pre-fallback model. The ids are
+  read off the parsed block, so a scanned unit and an addressed one carry the same fact; a
+  record whose only block is that one still emits nothing on a scan, because there is no text
+  to match or excerpt.
+- **`search --help` and `show --help` carry the family's surface**: a SYSTEM LEAVES region
+  naming every render form, marker word, `for` kind and per-hit key, and fifteen key rows on the
+  `show` record-row table.
 ### Changed
 
 - **An attachment unit renders the text the model received.** BREAKING: the body of a
@@ -344,6 +380,15 @@ surface change bumps the PATCH.
   beside that excerpt: `[context image-only: N image block(s), M document block(s)]`,
   JSON `image_only`. The excerpt stays: it is the line's own keys, rendered by the path
   every textless address takes.
+
+- **An `api_error`'s response headers never reach a rendered or JSON output path.** The HTTP
+  shape of that record carries the response headers verbatim, cookie and organization id
+  included. The render names the status and the retry counters, the JSON `error` fact carries
+  the error's `type` and `message` and nothing else, and `--raw` prints the source line and is
+  the one documented way to the bytes.
+- **What an `api_error` says failed is searchable.** The record carries no `content` key at
+  all, so the error's own type and message are rendered as its body; without them the statement
+  of the failure was in the output under no pattern that could reach it.
 - **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
   the one place csift proves a negative, and it was re-rendering without the line - so for
   a record whose text lives in fields the record model does not carry, it could prove a
