@@ -565,6 +565,7 @@ fn a_freeform_askuserquestion_response_is_a_user_answer() {
 
 mod bookkeeping;
 mod gates;
+mod injections;
 mod schedule_fire;
 mod selectors;
 mod thinking;
