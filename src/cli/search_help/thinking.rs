@@ -1,4 +1,7 @@
-//! The `search --help` section for the THINKING family: the four `agent.thinking.*` leaves and the two shapes that are markers rather than
+//! The `search --help` section for the THINKING family: the four `agent.thinking.*` leaves
+//! and the two shapes that are markers rather than leaves of their own - the block salvaged
+//! from a cancelled stream, and the `[Thinking removed]` text the client can push in place
+//! of one - beside `agent.message.plain`, the assistant's ordinary say.
 //!
 //! EMPTY at the skeleton amendment, and that is deliberate: the family's sentences
 //! land here, in the SAME commit series as the surface they document, without any

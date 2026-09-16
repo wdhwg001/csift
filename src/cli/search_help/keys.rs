@@ -1,4 +1,7 @@
-//! The `search --help` section for the KEYS family: the EXPOSED KEYS: facts a record carries about the call behind it, which belong to
+//! The `search --help` section for the KEYS family: the EXPOSED KEYS - facts a record
+//! carries about the call behind it (which agent, skill, plugin or MCP tool it ran under,
+//! which request and block it came from, why it failed, what a person typed refusing it),
+//! which belong to no single leaf and are therefore a section rather than a taxonomy row.
 //!
 //! EMPTY at the skeleton amendment, and that is deliberate: the family's sentences
 //! land here, in the SAME commit series as the surface they document, without any

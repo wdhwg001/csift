@@ -1,4 +1,7 @@
-//! The `search --help` section for the ATTACHMENTS family: the `harness.context` leaves, `harness.hook.{context,outcome}` and
+//! The `search --help` section for the ATTACHMENTS family: the `harness.context` leaves,
+//! `harness.hook.{context,outcome}`, `agent.message.structured` and the person's mid-turn
+//! `queued_command` - every leaf a `type:"attachment"` payload decides, and the two bodies
+//! such a line can render (the text the model received, or the payload JSON itself).
 //!
 //! EMPTY at the skeleton amendment, and that is deliberate: the family's sentences
 //! land here, in the SAME commit series as the surface they document, without any

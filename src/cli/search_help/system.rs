@@ -1,4 +1,7 @@
-//! The `search --help` section for the SYSTEM family: the five `harness.system.*` event kinds, `harness.schedule.event` and the three
+//! The `search --help` section for the SYSTEM family: the five `harness.system.*` event
+//! kinds, `harness.schedule.event` and the three `harness.turn.*` closers - every leaf a
+//! `type:"system"` subtype decides, plus the one family that stays OUTSIDE the
+//! matchable-text law, because an `api_error` line carries the HTTP response headers.
 //!
 //! EMPTY at the skeleton amendment, and that is deliberate: the family's sentences
 //! land here, in the SAME commit series as the surface they document, without any

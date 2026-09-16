@@ -1,4 +1,7 @@
-//! The `search --help` section for the INJECTIONS family: the isMeta templates - `harness.enforce.*`, `harness.command.caveat`,
+//! The `search --help` section for the INJECTIONS family: the isMeta templates -
+//! `harness.enforce.*`, `harness.command.caveat`, `harness.hook.feedback` and the isMeta
+//! forms of `harness.context.{reminder,image,skill}` - the records the harness wrote into
+//! a turn wearing a user record's clothes, and the two that are a PERSON underneath.
 //!
 //! EMPTY at the skeleton amendment, and that is deliberate: the family's sentences
 //! land here, in the SAME commit series as the surface they document, without any
