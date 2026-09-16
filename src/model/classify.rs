@@ -426,16 +426,26 @@ impl Record {
             .collect::<Vec<_>>()
             .join("\n");
         if joined.trim().is_empty() {
-            // harness.context.image: an image-ONLY `type:"user"` record - the block form
-            // of the attached image the `[Image: ` reference names in text form, and the
-            // shape the inventory's `Block("image")` row records. Measured over two
-            // projects roots, every such record is isMeta (94 and 75) and every
-            // non-isMeta record carrying an image carries the person's text beside it
-            // (802 and 539), which is why the leaf is a statement about THIS shape and
-            // not about an image block wherever it lands. Any other textless block
-            // record (a `document`, a bare `fallback`) still carries nothing, which is
-            // what sends it to the unmodeled unit.
-            if blocks.iter().any(|b| matches!(b, Block::Image { .. })) {
+            // harness.context.image: an image-ONLY `type:"user"` record the HARNESS
+            // wrote - the block form of the attached image the `[Image: ` reference
+            // names in text form, and the shape the inventory's `Block("image")` row
+            // records.
+            //
+            // The isMeta conjunction is the same one EVERY injection arm takes, and for
+            // the same reason: the leaf says the harness authored this record, so a
+            // record the harness did not author cannot carry it. Measured over one
+            // projects root, all 94 image-only user records are isMeta and NONE is not,
+            // so the conjunction costs no corpus record - it decides the shape that has
+            // yet to appear, and decides it the way the rest of the family already does.
+            // A non-isMeta one renders `? unmodeled: user/image` under an address, which
+            // is the honest answer for a shape csift has no leaf for.
+            //
+            // Any other textless block record (a `document`, a bare `fallback`) still
+            // carries nothing BY DESIGN - including the 3 document-only isMeta records
+            // that same census finds, which render `? unmodeled: user/document`.
+            if self.is_meta.unwrap_or(false)
+                && blocks.iter().any(|b| matches!(b, Block::Image { .. }))
+            {
                 push_unique(out, Class::ContextImage);
             }
             return;

@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "484-487",
+          "lines": "494-497",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -93011,6 +93011,49 @@
           "observed": "`kind:\"coordinator\"` occurs twice - the send path's ternary else-branch at 175782563 and the module constant at 179124619 - and both build the one-key object; the ternary's other branch builds the peer form with `from` and `senderTaskId`. The preamble literal occurs twice, once as an interned name and once as the constant at 160143615. On disk: 147 coordinator-relay records over 91 files, ONE origin key set `{kind}` on all 147, `isMeta` true on all 147; preamble-and-origin 147, preamble-only 0, origin-only 0. Other `origin.kind` values: task-notification 3,567, human 3,081, peer 55.",
           "rule": "An occurrence is a byte match of the literal anywhere in the executable. A record counts as a coordinator relay when its top-level `origin.kind` is `coordinator`; a key set is the sorted tuple of the `origin` object's own keys; the preamble detector is a `starts_with` on the left-trimmed `message.content` string.",
           "note": "The two detectors agreeing on all 147 with no record on either side alone is why the direction arm can key on `origin.kind` while the leaf keys on the framing: they are one population at this build, and a divergence would show up as a nonzero count in either of the two other columns."
+        }
+      ]
+    },
+    {
+      "id": "CLS-047",
+      "area": "classification",
+      "behavior": "A TEXTLESS `type:\"user\"` record whose `message.content` is a block array carrying an image and no readable text is always one the HARNESS wrote: over one projects root all 94 such records carry `isMeta:true` and none lacks it. The same census finds two other textless block shapes on that line type and both are equally one-sided: 3 document-only records, all `isMeta`, and 669 `tool_result` carriers, none `isMeta` - which is the ordinary tool-result shape rather than an injection. A person's own image never lands in this shape at all: a non-isMeta record carrying an image carries the person's text beside it.",
+      "depends": "The leaf `harness.context.image` says the harness authored the record, so its arm takes the isMeta conjunction that EVERY other injection arm takes; without it, the one arm of that family decided authorship from block shape alone. The conjunction costs no corpus record - all 94 carry the flag - so what it decides is the shape that has yet to appear, and it decides it the way the rest of the family already does: a non-isMeta image-only record renders `? unmodeled: user/image` under an address rather than claiming the harness wrote it. A document-only record stays unmodeled BY DESIGN, isMeta or not: `harness.context.image` is a statement about an image, and 3 records are not a reason to widen a leaf's meaning.",
+      "code": [
+        {
+          "path": "src/model/classify.rs",
+          "lines": "446-450",
+          "snippet": "if self.is_meta.unwrap_or(false)\n                && blocks.iter().any(|b| matches!(b, Block::Image { .. }))\n            {\n                push_unique(out, Class::ContextImage);\n            }"
+        },
+        {
+          "path": "src/model/tests/classify_harness.rs",
+          "lines": "461-463",
+          "snippet": "let mine = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{}}]}}\"#,\n    );"
+        }
+      ],
+      "instrument": "Over every `*.jsonl` under one projects root, parse each `type:\"user\"` line whose bytes carry `\"image\"` or `\"document\"`, keep those whose `message.content` is an ARRAY in which no `text` block carries non-blank text, and bucket each by the SET of its non-text block types and by the truthiness of `isMeta`. Report the count per bucket.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The writer of the image-only record is not traced: which call site builds a user record whose content is an image block and no text, and whether it passes `isMeta` as a constant or from a caller, are unread. TURN-004 traces the flag's own stamp; byte-find the image-block constructor and read back to the call that supplies its content array."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Walked every `*.jsonl` under one projects root, parsed each `type:\"user\"` line carrying the bytes `\"image\"` or `\"document\"`, kept the records whose `message.content` array holds no non-blank text block, and bucketed by non-text block-type set and `isMeta`.",
+          "observed": "Three buckets and no others: 669 records carrying `tool_result` with `isMeta` false, 94 carrying `image` with `isMeta` true, 3 carrying `document` with `isMeta` true. Zero image-only records without the flag; zero document-only records without it.",
+          "rule": "A record counts when its `type` is `user` and its `message.content` is an array in which the concatenation of every `text` block's `text` is blank after trimming. Its bucket is the sorted set of block `type` values other than `text`, paired with the truthiness of the record's `isMeta`.",
+          "note": "The zero on the non-isMeta side is what makes the conjunction free: it changes no corpus record and closes a hole that block shape alone left open, which is exactly what the other injection arms already do with the same test."
         }
       ]
     }

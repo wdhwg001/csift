@@ -445,15 +445,23 @@ fn classify_unmodeled_records_are_empty() {
     // A line type csift models no leaf for stays empty.
     let unknown = parse(r#"{"type":"some-future-line","leafUuid":"x"}"#);
     assert!(unknown.classify(&ClassifyCtx::top_level()).is_empty());
-    // An image-only user record (no text, no tool_result) carries the same leaf its text
-    // form does - the image reached the model either way.
+    // An image-only user record the HARNESS wrote carries the same leaf its text form
+    // does - the image reached the model either way. The isMeta half is the conjunction
+    // every injection arm takes: the leaf says the harness authored the record.
     let img = parse(
-        r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
+        r#"{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
     );
     assert_eq!(
         img.classify(&ClassifyCtx::top_level()),
         vec![Class::ContextImage]
     );
+    // Without it the record is a shape csift has no leaf for - `? unmodeled: user/image`
+    // under an address. All 94 image-only user records of one projects root are isMeta
+    // and none is not, so this decides a shape that has yet to appear.
+    let mine = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
+    );
+    assert!(mine.classify(&ClassifyCtx::top_level()).is_empty());
     // A textless block record that carries no image still carries nothing, which is what
     // sends it to the unmodeled unit under an address.
     let doc = parse(
