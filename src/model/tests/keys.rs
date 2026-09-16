@@ -385,3 +385,54 @@ fn every_json_shape_reaches_every_decoder_and_only_its_own_type_decodes() {
     assert_eq!(q.limit_type.as_deref(), Some("weekly"));
     assert_eq!(q.resets_at, Some(1790000003));
 }
+
+/// ONE key is enough, for each of the EIGHTEEN.
+///
+/// `Exposed` is built only for a record that names at least one key, and the gate is ANY
+/// of them rather than all - so the statement is per KEY, and a record naming exactly one
+/// is the ordinary shape rather than an edge case. The table walks them one at a time,
+/// each alone on its record, which is the only way to see the gate answer for that key.
+#[test]
+fn any_one_exposed_key_alone_carries_the_box() {
+    // (key, a value of the type that key's decoder accepts)
+    let keys: &[(&str, &str)] = &[
+        ("attributionAgent", r#""general-purpose""#),
+        ("attributionSkill", r#""csift""#),
+        ("attributionPlugin", r#""omc""#),
+        ("attributionMcpServer", r#""srv""#),
+        ("attributionMcpTool", r#""srv__tool""#),
+        ("requestId", r#""req_1""#),
+        ("apiBlockIndex", "3"),
+        ("toolEndsTurn", "true"),
+        ("userFeedback", r#""use the staging copy""#),
+        ("error", r#""rate_limit""#),
+        ("apiErrorStatus", "429"),
+        ("quotaLimits", r#"{"rateLimitType":"weekly"}"#),
+        ("truncatedAfterOutput", "true"),
+        ("isAbortedMidStream", "true"),
+        ("interruptedMessageId", r#""msg_a1""#),
+        ("scheduledTaskId", r#""task-1""#),
+        ("scheduledFireId", r#""fire-1""#),
+        ("toolUseID", r#""66666666-7777-4888-8999-aaaaaaaaaaaa""#),
+    ];
+    assert_eq!(
+        keys.len(),
+        18,
+        "the table is the eighteen exposed keys; a new key adds a row here"
+    );
+    for (key, value) in keys {
+        let line = format!(r#"{{"type":"assistant","uuid":"a-40","{key}":{value}}}"#);
+        assert!(
+            parse(&line).exposed_keys().is_some(),
+            "{key} alone carries the box"
+        );
+    }
+    // And a record naming NONE of them allocates nothing, which is the other half of the
+    // same gate.
+    assert!(
+        parse(r#"{"type":"assistant","uuid":"a-41","promptId":"p-1"}"#)
+            .exposed_keys()
+            .is_none(),
+        "a record naming no exposed key carries no box"
+    );
+}
