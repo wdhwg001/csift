@@ -252,10 +252,18 @@ pub(crate) fn collect_record_hits(
     // sibling, joined by `parentUuid` through the per-file index on `ctx`. Gated on the label
     // set `classify` just produced, like the compaction facts above, so every other hit pays
     // one enum compare and carries a null.
+    //
+    // The EVENT record is the other half of that pair and carries the instant in its own
+    // content, so it answers from the record rather than from the index. It read null,
+    // which said the scheduler's own fire record does not know when it fired - for the
+    // line the instant is written on. One field, one meaning: this is the instant the
+    // schedule fired, whichever of the pair the hit is.
     let scheduled_at = if labels.contains(&Class::ScheduleFire) {
         ctx.schedule_fires
             .and_then(|ix| ix.instant_for(rec.parent_uuid.as_deref()))
             .map(str::to_string)
+    } else if labels.contains(&Class::ScheduleEvent) {
+        rec.scheduled_fire_instant().map(str::to_string)
     } else {
         None
     };

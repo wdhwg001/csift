@@ -124,6 +124,10 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **`scheduled_at` answers on the scheduler's own fire record too.** The field carried the
+  instant for the fired prompt and read null on the `harness.schedule.event` record - the
+  line the instant is written on. It now reads that line's own parenthesised tail, so the
+  key means one thing on both halves of the pair. The head still prints it.
 - **`show --format json` carries a record's queue facts.** `queue_operation` and
   `queue_reason` reached a `search` hit and no `show` record row, so running a hit's own
   `refetch` command answered null for a record the query it came from had just reported in

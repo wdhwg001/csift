@@ -42,9 +42,10 @@ pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.sch
      `original_model`, `fallback_model`, `category` (refusal); `status`, `retry_attempt`, \
      `max_retries`, `retry_in_ms`, `error` (type and message only) (api-error); `task_id`, \
      `cron`, `prompt` (cut at 200 chars) (schedule.event); `served_by`, `fell_back_from` \
-     (the fallback turn). The fire record's instant is the engine's `scheduled_at` field, \
-     which is written for the fired PROMPT and is null on the event hit - the head carries \
-     it there. \
+     (the fallback turn). The instant is the engine's `scheduled_at` field on BOTH halves \
+     of the pair and means one thing on each - when the schedule fired: the fired PROMPT \
+     reads it off its event sibling, the EVENT reads its own parenthesised tail. The head \
+     carries it too, because every key this family exposes is also in the rendered text. \
      PROVENANCE: a leaf that NAMES another record carries a `for` fact, rendered \
      `[for: <kind> L<n>]` when this transcript holds the named record, `[for: <kind> \
      <id> (not in this file)]` when it does not - a uuid cut to its eight-character \

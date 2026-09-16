@@ -55,10 +55,19 @@ fn the_schedule_event_renders_both_fire_shapes() {
         .expect("the cron-arm hit");
     assert_eq!(cron["cron"], serde_json::json!("0 5 * * *"));
     assert_eq!(cron["prompt"], serde_json::json!("zzarmed check the queue"));
-    // `scheduled_at` is the ENGINE's field with ONE writer, and that writer fills it for
-    // the fired PROMPT. On the event hit it is null and the HEAD carries the instant -
-    // a family fact here would be a second writer of one key.
-    assert_eq!(cron["scheduled_at"], serde_json::Value::Null);
+    // `scheduled_at` is the ENGINE's field with ONE writer, and it means one thing on
+    // both halves of the pair: the instant the schedule fired. On the fired PROMPT the
+    // writer reads the per-file index; on the EVENT record it reads the record's own
+    // parenthesised tail, which is the line the instant is written on. It read null here,
+    // which said the scheduler's own fire record does not know when it fired.
+    assert_eq!(cron["scheduled_at"], serde_json::json!("Jun 7 5:28am"));
+    // The head still carries it too, because every exposed key of this family is also IN
+    // the rendered text - a key that reached JSON alone would be unsearchable.
+    assert!(
+        out.stdout.contains("[scheduled Jun 7 5:28am]"),
+        "{}",
+        out.stdout
+    );
     // The edge resolves to nothing at all: the join is by id, not by uuid.
     assert_eq!(cron["for"][0]["kind"], serde_json::json!("armed_by"));
     assert_eq!(cron["for"][0]["target"], serde_json::Value::Null);
