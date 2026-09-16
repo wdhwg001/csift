@@ -121,3 +121,84 @@ fn the_skill_manual_head_occurs_once() {
          opening into the body"
     );
 }
+
+/// The shape cell of every leaf's row NAMES the on-disk shapes that reach it.
+///
+/// The leaf column is pinned above; the SHAPE column was not, and it is the half a reader
+/// acts on - the manual promises a leaf can be cross-checked against the bytes, so a
+/// shape the inventory carries and the table omits is a reader grepping for something the
+/// table never told them exists.
+///
+/// The check is CONTAINMENT rather than equality, and that is a property of the cell
+/// rather than a concession: a cell is prose, it factors a shared prefix across several
+/// values (`attachment.type:"skill_listing" · "agent_listing_delta" · …`) and it adds the
+/// sentence a shape needs beside it. Equality would pin the wording and fail on every
+/// rewrite. So the assertion is per INVENTORY ROW - one row, one shape, one leaf - and it
+/// accepts the three spellings the table itself uses, measured over all of it rather than
+/// guessed:
+///
+/// - the QUOTED value, which is how the four FIELD axes write a shape
+///   (`type:"permission-mode"`, `attachment.type:"goal_status"`);
+/// - `template:<value>`, which is how the TEMPLATE axis writes one, unquoted because a
+///   template name is csift's own name for a text shape and not a value on the line;
+/// - the whole `Entry::disk()` string, which is what a row whose mark on disk is not a
+///   value needs (the fired scheduler prompt, whose mark is the PARENT LINK).
+#[test]
+fn every_shape_that_carries_a_leaf_is_named_in_that_leaf_row() {
+    let md = skill();
+    let cells = shape_cells(&md);
+    assert!(
+        cells.len() == Class::ALL.len(),
+        "the shape table parsed to {} rows for {} leaves",
+        cells.len(),
+        Class::ALL.len()
+    );
+
+    let mut unnamed: Vec<String> = Vec::new();
+    let mut checked = 0usize;
+    for r in rows() {
+        let Some(leaf) = r.leaf else { continue };
+        checked += 1;
+        let cell = cells
+            .iter()
+            .find(|(l, _)| l == leaf.path())
+            .map(|(_, c)| c.as_str())
+            .unwrap_or_default();
+        let named = cell.contains(&format!("\"{}\"", r.value()))
+            || cell.contains(&format!("template:{}", r.value()))
+            || cell.contains(&r.disk());
+        if !named {
+            unnamed.push(format!("{} <- {}", leaf.path(), r.disk()));
+        }
+    }
+    assert!(
+        checked > 90,
+        "the sweep checked {checked} rows - the inventory walk found almost nothing"
+    );
+    assert!(
+        unnamed.is_empty(),
+        "shapes the inventory carries and SKILL's shape table does not name:\n  {}",
+        unnamed.join("\n  ")
+    );
+}
+
+/// `(leaf, shape cell)` for every row of the shape table.
+fn shape_cells(md: &str) -> Vec<(String, String)> {
+    let head = "| leaf | on disk | grab the raw bytes |";
+    let start = md
+        .find(head)
+        .unwrap_or_else(|| panic!("SKILL.md carries no table headed {head:?}"));
+    let mut out = Vec::new();
+    for line in md[start..].lines().skip(2) {
+        if !line.starts_with('|') {
+            break;
+        }
+        let mut cells = line.trim_start_matches('|').split('|');
+        let leaf = cells.next().unwrap_or("").trim().trim_matches('`');
+        let shape = cells.next().unwrap_or("").trim();
+        if !leaf.is_empty() {
+            out.push((leaf.to_string(), shape.to_string()));
+        }
+    }
+    out
+}
