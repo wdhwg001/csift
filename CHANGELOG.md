@@ -124,6 +124,15 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **A `for` edge can name a whole transcript.** BREAKING: `continued-in`'s relation moves
+  from the `continued_in` JSON key into the shared `for` array, where every other relation
+  already lives, and its label zone reads `[for: continued_in @<session>]` instead of
+  `[continued in @<session>]`. The shared edge builder now takes the session beside the
+  uuid, so a target that is a whole file and no record in it is a RESOLVED edge rather
+  than an honest empty - `@<session>` is an address a reader feeds back to csift. A
+  `fork-context-ref` that names a parent session but no cut record renders that session
+  for the same reason. `cost-state` stays a family fact: its target is an instant, not a
+  record or a file.
 - **A `for` edge cuts a uuid to its handle and prints every other id whole.** The label
   zone cut an unresolved target to eight characters whatever it was. That is right for a
   uuid - the first eight hex digits identify one and the compaction excerpt has printed

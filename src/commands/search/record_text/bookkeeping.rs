@@ -224,10 +224,6 @@ pub(crate) enum Fact {
     /// alone.
     #[cfg(test)]
     Probe(&'static str),
-    /// `continued-in`: the CHILD transcript a background handover moved this session to.
-    /// A whole file, not a record in it - `list` reports the same fact per session, and
-    /// the way to the child is `csift show @<id>`.
-    ContinuedIn(Option<String>),
     /// `cost-state`: the instant this checkpoint stopped accumulating, `startTime` plus
     /// `totalDuration`. It is the KEY the `/clear` join is computed from, not the joined
     /// session: that join runs the other way, from a cleared session's own wrapper back
@@ -245,10 +241,6 @@ impl Fact {
         Some(match self {
             #[cfg(test)]
             Fact::Probe(head) => (*head).to_string(),
-            Fact::ContinuedIn(Some(id)) => format!("[continued in @{id}]"),
-            Fact::ContinuedIn(None) => {
-                "[continued in unknown (no continuedInSessionId on this line)]".to_string()
-            }
             Fact::Checkpoint(Some(at)) => format!("[checkpoint closes {at}]"),
             Fact::Checkpoint(None) => {
                 "[checkpoint closes unknown (needs startTime and totalDuration)]".to_string()
@@ -261,7 +253,6 @@ impl Fact {
         match self {
             #[cfg(test)]
             Fact::Probe(head) => vec![("bookkeeping_probe", serde_json::json!(head))],
-            Fact::ContinuedIn(id) => vec![("continued_in", serde_json::json!(id))],
             Fact::Checkpoint(at) => vec![
                 ("checkpoint_closes_at", serde_json::json!(at)),
                 (
@@ -317,12 +308,14 @@ pub(crate) fn facts(
 /// - `continued-in` names the CHILD session a background handover moved to;
 /// - `cost-state` names the INSTANT the `/clear` join keys on.
 ///
-/// The first three point at a RECORD, so they are the shared [`HitFact::For`] edge, built
-/// through [`super::for_edge`] - the one place the uuid-to-line lookup happens, so every
-/// family's edge resolves and renders alike. The last two point at a whole transcript and
-/// at an instant, which that edge's target cannot express without putting a session id or
-/// a timestamp in a field documented as the target record's uuid; they are [`Fact`]
-/// variants instead, carrying the same information.
+/// FOUR of the five are the shared [`HitFact::For`] edge, built through
+/// [`super::for_edge`] - the one place the uuid-to-line lookup happens, so every family's
+/// edge resolves and renders alike. Three name a RECORD; `continued-in` names a whole
+/// TRANSCRIPT and no record in it, which is the builder's session-only answer
+/// (`[for: continued_in @<session>]`, an address a reader feeds straight back to csift).
+/// The fifth points at an INSTANT, which no target shape can express without putting a
+/// timestamp in a field documented as the target record's uuid, so it stays a [`Fact`]
+/// variant carrying the same information.
 ///
 /// The LINE TYPE is matched BEFORE the parse, so the thirteen types with no relation pay
 /// nothing here. The five that do pay one `serde_json::from_str` of a line the query
@@ -342,33 +335,27 @@ fn edge(line_type: &str, raw: Option<&str>, ctx: &ClassifyCtx) -> Option<HitFact
     let obj = v.as_object()?;
     let at = |k: &str| obj.get(k).and_then(serde_json::Value::as_str);
     Some(match line_type {
-        "last-prompt" => super::for_edge("leaf", Basis::Key, at("leafUuid"), ctx),
+        "last-prompt" => super::for_edge("leaf", Basis::Key, at("leafUuid"), None, ctx),
         "file-history-snapshot" | "file-history-delta" => {
-            super::for_edge("versions", Basis::Key, at("messageId"), ctx)
+            super::for_edge("versions", Basis::Key, at("messageId"), None, ctx)
         }
-        "fork-context-ref" => in_session(
-            super::for_edge("forked_from", Basis::Key, at("parentLastUuid"), ctx),
+        "fork-context-ref" => super::for_edge(
+            "forked_from",
+            Basis::Key,
+            at("parentLastUuid"),
             at("parentSessionId"),
+            ctx,
         ),
-        "continued-in" => HitFact::Bookkeeping(Fact::ContinuedIn(
-            at("continuedInSessionId").map(str::to_string),
-        )),
+        // No uuid at all: a handover names the child TRANSCRIPT, and nothing in it.
+        "continued-in" => super::for_edge(
+            "continued_in",
+            Basis::Key,
+            None,
+            at("continuedInSessionId"),
+            ctx,
+        ),
         _ => HitFact::Bookkeeping(Fact::Checkpoint(checkpoint_join(obj))),
     })
-}
-
-/// Name the FILE a resolved edge's target lives in.
-///
-/// The shared builder resolves the uuid - the one lookup no family repeats - and answers
-/// the honest empty when the record names none. What it has no parameter for is the
-/// session the target sits in, which `fork-context-ref` names on the line beside the
-/// uuid; [`ForTarget::session`] is the field that exists to print it, so the session is
-/// stamped onto the edge the builder made rather than onto a target built here.
-fn in_session(mut fact: HitFact, session: Option<&str>) -> HitFact {
-    if let (HitFact::For { target, .. }, Some(s)) = (&mut fact, session) {
-        target.session = Some(s.to_string());
-    }
-    fact
 }
 
 /// The `/clear` join key a `cost-state` line carries: `startTime + totalDuration`, the

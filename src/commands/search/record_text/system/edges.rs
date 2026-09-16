@@ -35,6 +35,7 @@ pub(crate) fn edge(
                 "refused",
                 Basis::Key,
                 key.as_deref(),
+                None,
                 ctx,
             ))
         }
@@ -49,6 +50,7 @@ pub(crate) fn edge(
                 "wraps",
                 Basis::Position,
                 parent,
+                None,
                 ctx,
             ))
         }

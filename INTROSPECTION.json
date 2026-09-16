@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2320",
+          "lines": "2321",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -90207,7 +90207,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "384",
+          "lines": "371",
           "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         }
       ],
@@ -94029,8 +94029,8 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "349-352",
-          "snippet": "        \"fork-context-ref\" => in_session(\n            super::for_edge(\"forked_from\", Basis::Key, at(\"parentLastUuid\"), ctx),\n            at(\"parentSessionId\"),\n        ),"
+          "lines": "342-348",
+          "snippet": "        \"fork-context-ref\" => super::for_edge(\n            \"forked_from\",\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
       "instrument": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
@@ -94213,8 +94213,8 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "353-355",
-          "snippet": "        \"continued-in\" => HitFact::Bookkeeping(Fact::ContinuedIn(\n            at(\"continuedInSessionId\").map(str::to_string),\n        )),"
+          "lines": "350-356",
+          "snippet": "        \"continued-in\" => super::for_edge(\n            \"continued_in\",\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],
       "instrument": "Byte-find `function MYn(e,t){return{type:\"continued-in\"` for the writer and `function T9t(e){` immediately after it for the tail scan that reads it back. Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter. For the two person-facing effects, byte-find `filtered from /resume: continued in ${o.continuedInSessionId}` (the developer log, followed immediately by the `superseded` assignment) and `Your most recent conversation is running in the background (session ` (the startup sentence).",
@@ -94815,16 +94815,16 @@
         {
           "path": "src/commands/search/record_text/injections.rs",
           "lines": "242-244",
-          "snippet": "fn parent_edge(kind: &'static str, rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), ctx)\n}"
+          "snippet": "fn parent_edge(kind: &'static str, rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)\n}"
         },
         {
           "path": "src/commands/search/record_text/injections.rs",
           "lines": "253-258",
-          "snippet": "fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    let id = rec\n        .raw_message_text()\n        .and_then(|s| extract_xml_tag(&s, \"tool-use-id\"));\n    super::for_edge(\"reports\", Basis::Key, id.as_deref(), ctx)\n}"
+          "snippet": "fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    let id = rec\n        .raw_message_text()\n        .and_then(|s| extract_xml_tag(&s, \"tool-use-id\"));\n    super::for_edge(\"reports\", Basis::Key, id.as_deref(), None, ctx)\n}"
         },
         {
           "path": "src/commands/search/record_text/seam.rs",
-          "lines": "241-245",
+          "lines": "256-260",
           "snippet": "    let line = ctx.line_of_uuid(uuid);\n    HitFact::For {\n        kind,\n        basis,\n        target: ForTarget {"
         }
       ],
@@ -95002,8 +95002,8 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "378",
-          "snippet": "    let attached_to = super::for_edge(\"attached_to\", Basis::Key, rec.parent_uuid.as_deref(), ctx);"
+          "lines": "378-384",
+          "snippet": "    let attached_to = super::for_edge(\n        \"attached_to\",\n        Basis::Key,\n        rec.parent_uuid.as_deref(),\n        None,\n        ctx,\n    );"
         },
         {
           "path": "tests/cli/search/taxonomy/attachments/edges.rs",
@@ -95046,8 +95046,8 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "384-389",
-          "snippet": "    let for_tool_use = super::for_edge(\n        \"for_tool_use\",\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        ctx,\n    );"
+          "lines": "390-396",
+          "snippet": "    let for_tool_use = super::for_edge(\n        \"for_tool_use\",\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        None,\n        ctx,\n    );"
         },
         {
           "path": "src/commands/search/record_text/attachments.rs",
@@ -95409,7 +95409,7 @@
         },
         {
           "path": "src/commands/search/record_text/system/edges.rs",
-          "lines": "62",
+          "lines": "64",
           "snippet": "        Class::ScheduleEvent => Some(HitFact::ForUnknown {"
         }
       ],
@@ -95590,7 +95590,7 @@
         },
         {
           "path": "src/commands/search/record_text/system/edges.rs",
-          "lines": "46",
+          "lines": "47",
           "snippet": "        Class::SystemCommand => {"
         }
       ],
@@ -96014,7 +96014,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "snippet": "        return Some(for_edge(\"interrupted\", Basis::Key, Some(id), ctx));",
+          "snippet": "        return Some(for_edge(\"interrupted\", Basis::Key, Some(id), None, ctx));",
           "lines": "223"
         }
       ],
@@ -96236,7 +96236,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2898"
+          "lines": "2899"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

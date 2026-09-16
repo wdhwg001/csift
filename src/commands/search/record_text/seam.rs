@@ -230,9 +230,24 @@ pub(crate) fn for_edge(
     kind: &'static str,
     basis: Basis,
     uuid: Option<&str>,
+    session: Option<&str>,
     ctx: &ClassifyCtx,
 ) -> HitFact {
+    let session = session.map(str::to_string);
     let Some(uuid) = uuid else {
+        // A relation whose target is a whole TRANSCRIPT - `continued-in` names the child
+        // session a handover moved to, and nothing in it. The edge is resolved, not
+        // unknown: `@<session>` is an address a reader feeds back to csift.
+        if let Some(session) = session {
+            return HitFact::For {
+                kind,
+                basis,
+                target: ForTarget {
+                    session: Some(session),
+                    ..ForTarget::default()
+                },
+            };
+        }
         return HitFact::ForUnknown {
             kind,
             reason: "the record carries no such key".to_string(),
@@ -245,7 +260,7 @@ pub(crate) fn for_edge(
         target: ForTarget {
             line,
             uuid: Some(uuid.to_string()),
-            session: None,
+            session,
             note: line.is_none().then(|| "not in this file".to_string()),
         },
     }

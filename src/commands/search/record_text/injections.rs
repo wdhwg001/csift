@@ -240,7 +240,7 @@ fn inbox_facts(rec: &Record, facts: &mut Vec<HitFact>) {
 /// rather than naming a target the producer chose - the append path stamps it from the
 /// running tail of the transcript (claim CLS-049), so what it names is the record above.
 fn parent_edge(kind: &'static str, rec: &Record, ctx: &ClassifyCtx) -> HitFact {
-    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), ctx)
+    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)
 }
 
 /// The FRAME carrier's edge: the `<tool-use-id>` its wrapped pulse names.
@@ -254,7 +254,7 @@ fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {
     let id = rec
         .raw_message_text()
         .and_then(|s| extract_xml_tag(&s, "tool-use-id"));
-    super::for_edge("reports", Basis::Key, id.as_deref(), ctx)
+    super::for_edge("reports", Basis::Key, id.as_deref(), None, ctx)
 }
 
 /// The image and document block counts of a TEXTLESS block record, or `None` when the

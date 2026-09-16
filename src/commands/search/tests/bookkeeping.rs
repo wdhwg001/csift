@@ -162,12 +162,12 @@ fn facts_carry_the_marker_and_the_line_type_s_relation() {
     );
 }
 
-/// The fork edge names the FILE its target lives in - and when the line names no record at
-/// all the edge is the honest empty, which carries no session because the shared builder
-/// has no target to put one on. That is a real gap and the test says so rather than
-/// leaving it for a reader to discover.
+/// The fork edge names the FILE its target lives in - and when the line names no record
+/// at all, what is left is still an answer: the parent SESSION. The builder's session-only
+/// arm renders it, because `@<session>` is a target a reader feeds back to csift and
+/// `unknown` would say the line named nothing when it named the file.
 #[test]
-fn the_fork_edge_names_its_session_only_when_it_has_a_target() {
+fn the_fork_edge_names_its_session_with_or_without_a_record() {
     let ctx = ClassifyCtx::top_level();
     let zone = |line: &str| {
         let record = rec(line);
@@ -192,8 +192,8 @@ fn the_fork_edge_names_its_session_only_when_it_has_a_target() {
         zone(
             r#"{"type":"fork-context-ref","parentSessionId":"99999999-8888-4777-8666-555555555555"}"#
         ),
-        "[for: forked_from unknown (the record carries no such key)]",
-        "with no record named, the edge is the honest empty and the session goes unprinted"
+        "[for: forked_from @99999999-8888-4777-8666-555555555555]",
+        "with no record named, the parent session is the whole answer and prints alone"
     );
 }
 

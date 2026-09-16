@@ -44,12 +44,14 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      ride the shared provenance edge - `[for: leaf L42]` in the label zone, a `for` \
      array in JSON: `last-prompt` -> leaf (its leafUuid), a file-history line -> \
      versions (its messageId), `fork-context-ref` -> forked_from (the record the \
-     forked agent's prefix was cut at, with the parent session beside it). A uuid \
-     resolves to a LINE of this transcript when one carries it, else the id prints \
-     with `(not in this file)`, and a line naming no such key renders `[for: <kind> \
-     unknown (<reason>)]` rather than dropping the edge. The other two name no record, \
-     so they are the family's own: `continued-in` renders `[continued in @<session>]` \
-     (JSON `continued_in`) for the child transcript a background handover moved to, \
-     and `cost-state` renders `[checkpoint closes <instant>]` (JSON \
+     forked agent's prefix was cut at, with the parent session beside it), and \
+     `continued-in` -> continued_in (the CHILD transcript a background handover moved \
+     to - a whole file and no record in it, so the edge renders \
+     `[for: continued_in @<session>]`, an `@` target you can feed straight back). A \
+     uuid resolves to a LINE of this transcript when one carries it, else the id \
+     prints with `(not in this file)`, and a line naming no such key renders \
+     `[for: <kind> unknown (<reason>)]` rather than dropping the edge. ONE relation \
+     is not an edge, because its target is an INSTANT rather than a record or a file: \
+     `cost-state` renders `[checkpoint closes <instant>]` (JSON \
      `checkpoint_closes_at` plus `checkpoint_join`) - startTime plus totalDuration, \
      the instant `list` joins a cleared session on as `cleared_from`.";

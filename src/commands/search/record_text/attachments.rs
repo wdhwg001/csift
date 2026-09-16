@@ -375,7 +375,13 @@ fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
     // - they chain - and the chain ends on the record the whole run of them was attached
     // to. ONE hop: the walk to the first conversation record is a provenance index's work,
     // not a per-unit fact's.
-    let attached_to = super::for_edge("attached_to", Basis::Key, rec.parent_uuid.as_deref(), ctx);
+    let attached_to = super::for_edge(
+        "attached_to",
+        Basis::Key,
+        rec.parent_uuid.as_deref(),
+        None,
+        ctx,
+    );
     // The tool call this attachment answers for: an INNER key of the payload, never a
     // top-level one. It is a WIRE id rather than a record uuid, so the lookup finds no line
     // and the edge keeps the id under `not in this file` - which is the shared edge's own
@@ -385,6 +391,7 @@ fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
         "for_tool_use",
         Basis::Key,
         payload_str(rec, "toolUseID"),
+        None,
         ctx,
     );
     vec![attached_to, for_tool_use, produced_by(rec)]

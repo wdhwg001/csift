@@ -245,7 +245,7 @@ fn the_five_provenance_relations_render() {
         "[for: leaf L1]",
         "[for: versions L1]",
         "[for: forked_from @99999999-8888-4777-8666-555555555555 88888888 (not in this file)]",
-        "[continued in @77777777-6666-4555-8444-333333333333]",
+        "[for: continued_in @77777777-6666-4555-8444-333333333333]",
         "[checkpoint closes 2026-01-01T01:00:00Z]",
     ] {
         assert!(
@@ -285,9 +285,20 @@ fn the_provenance_relations_ride_the_json_row() {
     assert_eq!(leaf["for"][0]["kind"], "leaf");
     assert_eq!(leaf["for"][0]["target"]["line"], 1);
     assert_eq!(leaf["for"][0]["target"]["uuid"], LEAF);
-    // The family's own two.
+    // The handover edge: a target that is a whole TRANSCRIPT and no record in it, so the
+    // session stands alone under `target` with no uuid and no line beside it.
     let cont = row("18");
-    assert_eq!(cont["continued_in"], "77777777-6666-4555-8444-333333333333");
+    let edge = &cont["for"][0];
+    assert_eq!(edge["kind"], "continued_in");
+    assert_eq!(edge["basis"], "key");
+    assert_eq!(
+        edge["target"]["session"],
+        "77777777-6666-4555-8444-333333333333"
+    );
+    assert_eq!(edge["target"]["uuid"], serde_json::Value::Null);
+    assert_eq!(edge["target"]["line"], serde_json::Value::Null);
+    assert_eq!(edge["reason"], serde_json::Value::Null);
+    // The family's own one.
     let cost = row("16");
     assert_eq!(cost["checkpoint_closes_at"], "2026-01-01T01:00:00Z");
     assert_eq!(
@@ -369,7 +380,7 @@ fn a_missing_key_renders_the_relation_as_an_honest_empty() {
     assert!(out.success, "stderr {}", out.stderr);
     for expect in [
         "[for: leaf unknown (the record carries no such key)]",
-        "[continued in unknown (no continuedInSessionId on this line)]",
+        "[for: continued_in unknown (the record carries no such key)]",
         "[checkpoint closes unknown (needs startTime and totalDuration)]",
     ] {
         assert!(

@@ -130,6 +130,17 @@ impl ForTarget {
         if let Some(line) = self.line {
             return format!("[for: {kind} L{line}]");
         }
+        // A target that is a WHOLE TRANSCRIPT and not a record in one: the session IS the
+        // answer, so it renders alone. Without this arm such an edge reads
+        // `[for: <kind> @<session> unknown]`, which says the edge failed to name a record
+        // when there was never a record to name - and `@<session>` is a target a reader
+        // can feed straight back to csift.
+        if let (None, Some(session)) = (self.uuid.as_deref(), self.session.as_deref()) {
+            return match self.note.as_deref() {
+                Some(note) => format!("[for: {kind} @{session} ({note})]"),
+                None => format!("[for: {kind} @{session}]"),
+            };
+        }
         // No line: name the id, and prefix the SESSION when the target is in another
         // transcript - a bare handle is not addressable from the text surface, and the
         // JSON carries the session either way.
