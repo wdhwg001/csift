@@ -149,3 +149,78 @@ fn search_teammate_message_is_inbox_not_user_regression() {
         user.stdout
     );
 }
+
+/// A SIGNAL's body is the payload the tag wrapped, never the wrapper.
+///
+/// `record_text_emission` gives `agent.communication.signal` its own arm - the opener
+/// renderer, which flattens the record and strips the relay framing, with the raw text
+/// only as a fallback. Without that arm the class falls to the engine's generic arm and
+/// the body becomes the `<teammate-message …>` XML, tag and attributes and all: the same
+/// loss the peer-render law names for every other inbound shape. The direction is
+/// asserted elsewhere; this is about the BODY.
+#[test]
+fn a_teammate_signals_body_is_the_payload_not_the_wrapper() {
+    let h = acceptance_home();
+    let out = acc(&h, "zzidle", "agent.communication.signal");
+    assert!(out.success, "stderr {}", out.stderr);
+    let line = out
+        .stdout
+        .lines()
+        .find(|l| l.contains("agent.communication.signal"))
+        .unwrap_or_else(|| panic!("no signal hit:\n{}", out.stdout));
+    assert!(
+        line.contains(r#"{"type":"idle_notification""#),
+        "the body is the wrapped payload:\n{line}"
+    );
+    assert!(
+        !line.contains("<teammate-message") && !line.contains("teammate_id="),
+        "and never the wrapper tag:\n{line}"
+    );
+}
+
+/// An ABANDONED peer opener carries no comm direction, because its label is not a comm
+/// label any more.
+///
+/// The scan layer replaces an abandoned opener's whole label set with `user.unsent` or
+/// `user.rewound` - the record is no longer "an inbound message", it is a draft the
+/// conversation left behind - and the direction is gated on the label set for exactly
+/// that reason. A peer relay is the shape where the two disagree: the RECORD still has a
+/// direction to compute, so a gate that answered for every class would print
+/// `Zed ⇨ self` beside `user.unsent` and say the draft was delivered by someone.
+#[test]
+fn an_abandoned_peer_opener_carries_no_comm_direction() {
+    let h = Home::new();
+    let sess = "bbbbbbbb-1111-4222-8333-444444444444";
+    let lines = [
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzdir kick off"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzdir ok"}]}}"#,
+        // The DRAFT: a peer relay sharing its parent with the opener below and carrying no
+        // assistant descendant, which is what makes it abandoned.
+        r#"{"type":"user","uuid":"p1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"Zed\">\nzzdirdraft please check the rate limit\n</teammate-message>"}}"#,
+        r#"{"type":"user","uuid":"p2","parentUuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":"zzdir the message that was sent"}}"#,
+        r#"{"type":"assistant","uuid":"a2","parentUuid":"p2","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzdir done"}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-dev-example-project/{sess}.jsonl"),
+        &format!("{}\n", lines.join("\n")),
+    );
+    let out = h.run(&["search", "zzdirdraft", &at(sess), "-t", "user.unsent"]);
+    assert!(out.success, "stderr {}", out.stderr);
+    let line = out
+        .stdout
+        .lines()
+        .find(|l| l.contains("user.unsent"))
+        .unwrap_or_else(|| panic!("no draft hit:\n{}", out.stdout));
+    assert!(
+        !line.contains("⇨"),
+        "an abandoned opener is not an inbound message:\n{line}"
+    );
+    // And the LIVE peer relay in the same file does render one, so the assertion above is
+    // about the abandoned label rather than about peer relays generally.
+    let live = h.run(&["search", "zzdirdraft", &at(sess), "-t", "user.rewound"]);
+    assert!(
+        live.stdout.contains("no matching exchanges"),
+        "the draft has no assistant below it, so it is unsent rather than rewound:\n{}",
+        live.stdout
+    );
+}

@@ -65,7 +65,6 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
             | Class::UserUnsent
             | Class::UserRewound
             | Class::CommInbox
-            | Class::CommSignal
             | Class::CommChannel
             | Class::NotificationWorkflow
             | Class::NotificationMonitor
@@ -134,8 +133,16 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
 /// record's labels in `classify`'s richest-first order, taking the first record-text class that
 /// is selected, then resolving its text source: a `<task-notification>` → `automation_label`; a
 /// genuine/AUQ/rejection/teammate-prose/subagent-opener → `reconstructed_user_text`; any other
-/// harness marker / compaction summary / teammate-signal → the raw string. `None` ⇒ no record-
-/// text class is selected (or it has no text).
+/// harness marker / compaction summary → the raw string. `None` ⇒ no record-text class is
+/// selected (or it has no text).
+///
+/// `agent.communication.signal` is deliberately NOT in the class list, and the reason is a
+/// measurement rather than a judgement. This function runs only when a record produced no
+/// SECTIONS, and a record carrying that leaf always produces one: a peer control payload is
+/// a peer section, and a `SendMessage` control call is a tool BLOCK the block loop emits.
+/// Instrumenting the arm to return a sentinel and scanning one projects root found 397
+/// records under `-t agent.communication.signal` and 0 reaching it. Listing an
+/// unreachable class here is a promise about a path nothing takes.
 pub(crate) fn record_text_emission(
     rec: &Record,
     raw: Option<&str>,
@@ -183,13 +190,15 @@ pub(crate) fn record_text_emission(
             // A csift-channel delivery renders the envelope chunk VERBATIM (header line +
             // body), never a rewrite: the header is the receipt a reader audits, and a
             // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth
-            // marker. The `harness.hook.context` view of the same record stays the joined form.
+            // marker. The `harness.hook.context` view of the SAME record takes the attachment
+            // family's ordinary body rule instead, which is the conversion the harness
+            // persisted when the record carries one and the joined `content` when it does
+            // not - so the two views of a channel delivery can show different text, and
+            // each says which.
+            //
+            // The CHANNEL view is the one that must not move: a reader audits the envelope
+            // header, and a conversion is the harness's own rewrite of it.
             Class::CommChannel => rec.csift_channel_text(),
-            // A teammate signal rides on the raw string; `reconstructed_user_text` returns it for a
-            // teammate record (it flattens the content), with the raw text as the fallback.
-            Class::CommSignal => rec
-                .reconstructed_user_text(Some(plan_index))
-                .or_else(|| record_raw_text(rec, raw, Some(c), ctx)),
             _ => record_raw_text(rec, raw, Some(c), ctx),
         };
         if let Some(text) = text {
