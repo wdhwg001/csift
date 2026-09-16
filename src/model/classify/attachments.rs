@@ -101,7 +101,7 @@ impl Record {
         }
         let payload = self.attachment_value()?;
         match payload.get("type").and_then(serde_json::Value::as_str)? {
-            "queued_command" if payload_origin_is_human(&payload) => Some(Class::UserMessage),
+            "queued_command" if payload_origin_is_human(payload) => Some(Class::UserMessage),
             "structured_output" => Some(Class::AgentMessageStructured),
             _ => None,
         }

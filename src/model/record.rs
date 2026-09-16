@@ -231,6 +231,22 @@ pub struct Record {
     #[serde(default)]
     pub attachment: Option<Box<serde_json::value::RawValue>>,
 
+    /// The PARSED form of `attachment`, held here so one record is parsed once.
+    ///
+    /// The payload answers several questions of one record and they are asked from
+    /// different layers: `classify` reads its `type` and, for two payload types, one more
+    /// field; the delivery override reads the type again; a family's own facts read
+    /// whatever their leaf needs. Parsing on each call re-walked a payload that can hold
+    /// a whole file snapshot, per question, per record.
+    ///
+    /// A `OnceLock` rather than a `RefCell`: records are built inside rayon workers and
+    /// read from them, so the memo has to be `Sync`, and it holds the `Option` (not just
+    /// the value) so a payload that does not parse is remembered as unparseable instead
+    /// of being retried. `serde(skip)` - it is derived from `attachment`, never read off
+    /// a line.
+    #[serde(skip)]
+    pub attachment_parsed: std::sync::OnceLock<Option<serde_json::Value>>,
+
     /// The text the harness's attachment CONVERTER produced for this record, written as
     /// a TOP-LEVEL key of the attachment record (a sibling of `attachment`, never a key
     /// inside the payload). Present only when the whole conversion was text, so its

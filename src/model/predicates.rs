@@ -305,12 +305,24 @@ impl Record {
         serde_json::from_str(raw.get()).ok()
     }
 
-    /// Parse the raw `attachment` blob into a full `Value` tree ON DEMAND (`recover`'s
-    /// external-edit/file-snapshot reader, `plan`'s `plan_mode` binding reader).
+    /// The raw `attachment` blob as a full `Value` tree, parsed ON DEMAND and ONCE.
+    ///
+    /// Several layers ask this record the same question - `classify` for the payload
+    /// type, the delivery override for it again, a family's facts for whatever its leaf
+    /// needs - and an attachment payload can be a whole file snapshot, so the parse is
+    /// memoised on the record ([`Record::attachment_parsed`]). The FIRST call parses; every
+    /// later call on the same record returns the same tree by reference, which is also
+    /// why this hands out a borrow rather than a clone.
+    ///
+    /// `None` on a record with no `attachment` key (the common case - nothing is
+    /// memoised for it) and on one whose payload does not parse, which is remembered so
+    /// the failed parse is not retried.
     #[must_use]
-    pub fn attachment_value(&self) -> Option<serde_json::Value> {
+    pub fn attachment_value(&self) -> Option<&serde_json::Value> {
         let raw = self.attachment.as_ref()?;
-        serde_json::from_str(raw.get()).ok()
+        self.attachment_parsed
+            .get_or_init(|| serde_json::from_str(raw.get()).ok())
+            .as_ref()
     }
 
     /// The attachment payload's own `type` value (`hook_additional_context`,

@@ -251,3 +251,38 @@ fn is_synthetic_user_marker_matches_each_form() {
         "[Request interrupted by user] and then I said more"
     ));
 }
+
+// ── One payload parse per attachment record ──
+
+/// TWO calls, ONE parse. The instrument is identity: a second parse would build a second
+/// tree at a second address, so two calls returning the SAME address is the parse count.
+/// It matters because a payload can be a whole file snapshot and four layers ask this
+/// record about it - the classify dispatch, the delivery override, the render and a
+/// family's own facts.
+#[test]
+fn an_attachment_payload_is_parsed_once_per_record() {
+    let r = parse(
+        r#"{"type":"attachment","uuid":"a1","attachment":{"type":"hook_additional_context","content":["ctx"]}}"#,
+    );
+    // Nothing is parsed before the first ask: the memo is empty on a record nobody has
+    // questioned yet.
+    assert!(r.attachment_parsed.get().is_none());
+    let first = r.attachment_value().expect("the payload parses");
+    let second = r.attachment_value().expect("and answers again");
+    assert!(
+        std::ptr::eq(first, second),
+        "two calls returned two trees - the payload was parsed twice"
+    );
+    assert!(r.attachment_parsed.get().is_some());
+}
+
+/// A record with NO attachment memoises nothing at all. The guard is the `attachment`
+/// field, tested before the memo is touched, so the overwhelming majority of records -
+/// every conversation record in every transcript - pay one `Option` test and allocate
+/// nothing.
+#[test]
+fn a_record_with_no_attachment_memoises_nothing() {
+    let r = parse(r#"{"type":"user","uuid":"u1","message":{"role":"user","content":"hi"}}"#);
+    assert!(r.attachment_value().is_none());
+    assert!(r.attachment_parsed.get().is_none());
+}

@@ -187,7 +187,7 @@ impl Record {
         if self.is_type("attachment") {
             if let Some(payload) = self.attachment_value() {
                 if let Some(ty) = payload.get("type").and_then(serde_json::Value::as_str) {
-                    if ty == "queued_command" && attachments::payload_origin_is_human(&payload) {
+                    if ty == "queued_command" && attachments::payload_origin_is_human(payload) {
                         push_unique(&mut out, Class::UserMessage);
                         return out;
                     }

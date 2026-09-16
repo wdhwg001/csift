@@ -255,7 +255,7 @@ pub(crate) fn extract_from_record(
     // The raw blob is parsed to a full tree ON DEMAND (the model keeps it unparsed so
     // the scanning subcommands never pay for it; recover is the deep consumer).
     if let Some(att) = rec.attachment_value() {
-        extract_from_attachment(line_no, turn_index, &ts, &att, target_file, events);
+        extract_from_attachment(line_no, turn_index, &ts, att, target_file, events);
     }
 
     // ── toolUseResult-bearing carriers: Read / Write / Edit / Bash-hint results ──
