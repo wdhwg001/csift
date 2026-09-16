@@ -59,6 +59,19 @@ fn a_record_without_the_authorship_flag_gets_nothing() {
     let assistant = r#"{"type":"assistant","isMeta":true,"uuid":"a1","parentUuid":"parent-1","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#;
     let out = run(assistant, Some(Class::AgentMessagePlain));
     assert!(out.0.is_empty() && out.1.is_empty());
+    // THE HALF A LEAF ALONE CANNOT SEPARATE. A TEAMMATE relay is an inbound message like
+    // the coordinator's and the peer session's and carries the SAME leaf, but the harness
+    // writes it WITHOUT the authorship flag - so it is not this family's record and must
+    // take none of the relay facts. A gate that refused only a record failing BOTH tests
+    // would stamp a `replies_to` reason on every teammate message in the corpus, and the
+    // leaf is no help: all three arrive as `agent.communication.inbox`.
+    let teammate = r#"{"type":"user","uuid":"t1","parentUuid":"parent-1","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"lead\">go</teammate-message>"}}"#;
+    let out = run(teammate, Some(Class::CommInbox));
+    assert!(
+        out.0.is_empty() && out.1.is_empty(),
+        "a teammate relay is not this family's: {}",
+        zone(&out)
+    );
 }
 
 /// Each leaf names its OWN relation, so a reader learns what the injection was for rather
