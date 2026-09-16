@@ -33,10 +33,14 @@ use super::*;
         page in the middle does not shift the pages after it. Text prints ` p<N>` beside the \
         media type and the document's BASENAME once per record group - one transcript, one \
         line, one document (the whole path is a \
-        JSON field, not a listing column); JSON carries `page` and `pdf_path`. An image whose \
-        record carries no such offset reads `page: null` rather than an assumed page 1: a \
-        screenshot, a `parts` result from a build before the key existed, and the REPL \
-        tool's own result, which re-emits inner-Read pages with no offset of its own. A \
+        JSON field, not a listing column); JSON carries `page` and `pdf_path`. The gate is \
+        BOTH halves of the record's own result (`type == \"parts\"` WITH a `firstPage`) AND \
+        the record carrying exactly one `tool_result` block, because a `parts` result \
+        describes one tool call and could not say which of two blocks it belongs to. \
+        Anything else reads `page: null` rather than an assumed page 1: a screenshot, a \
+        `parts` result from a build before the key existed, the REPL tool's own result, \
+        which re-emits inner-Read pages with no offset of its own, and a record carrying \
+        two tool_result blocks. A \
         whole-PDF `Read` (no `pages`) returns a `document` block rather than images and is \
         not listed at all. The page is provenance, never an address: `--id`, `--turn` and \
         the extracted filename are exactly what they were.",

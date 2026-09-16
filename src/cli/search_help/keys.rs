@@ -39,9 +39,12 @@ pub(crate) const SECTION: &str =
      of which document the result holds, read off `toolUseResult.firstPage` plus the \
      result's own content elements. The tag names the basename because it sits beside a \
      leaf path on one line, and the key carries the whole path; `csift image` prints the \
-     same derivation per page, so the two surfaces agree by construction. It is ABSENT on \
-     a result whose own object names no `firstPage` - a screenshot, a build before the key \
-     existed, the REPL tool's re-emitted pages - rather than a range that starts at 1. \
+     same derivation per page, so the two surfaces agree by construction. The gate is both \
+     halves of the record's own result (`type == \"parts\"` WITH a `firstPage`) AND the \
+     record carrying exactly one `tool_result` block, since a `parts` result describes one \
+     tool call. It is ABSENT on anything else - a screenshot, a build before the key \
+     existed, the REPL tool's re-emitted pages, a two-block record - rather than a range \
+     that starts at 1. \
      `interrupted_message_id`, `hook_run_id`, `scheduled_task_id` and `scheduled_fire_id` \
      are the explicit joins, JSON only. The unit's ONE `for` edge comes from the first two: \
      `[for: interrupted <id> (not in this file)]`, `[for: hook run <first 8> (not in this \
