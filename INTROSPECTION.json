@@ -96173,7 +96173,7 @@
       "id": "REC-151",
       "area": "record-model",
       "behavior": "A record can name TWO session ids under two spellings. The local transcript writer spreads a per-process stamp AFTER the caller's own record and that stamp names `sessionId` and nothing else, so the camel id always reads as the session doing the appending, while a SNAKE-case `session_id` the record arrived with survives untouched. The snake key is common - 542,069 and 553,382 carrier lines over two projects roots, on the four record-bearing types (`assistant`, `attachment`, `system`, `user`) and on no bookkeeping line type - and it AGREES with the line's own `sessionId` on almost all of them. It disagrees on 494 lines of one root, sitting in 2 files, and in both the id it names is a sibling `*.jsonl` in the same project directory; the other root carries no disagreement at all, and its only 2 lines with a snake id and no camel one carry no `type` either.",
-      "depends": "csift reports the DISAGREEING ids as `session_id_names` on a `list` row, as a SET with its count, because one transcript can hold runs hydrated from more than one session and a first-wins scalar would drop the rest silently. It is answered by the whole-file `--lineage` pass only, and the row says so without the flag - the same rule `session_kind`'s SPAN follows, and for the same measured reason: of the two disagreeing files, one file's run starts below the head window, so a window read reports nothing for it and reporting half an answer by default would be worse than naming the flag. It is the one lineage link a RECORD states about itself, so the row carries no inference wording.",
+      "depends": "csift reports the DISAGREEING ids as `minted_elsewhere` on a `list` row, with `minted_elsewhere_count` beside it and a text row reading `minted`, as a SET because one transcript can hold runs hydrated from more than one session and a first-wins scalar would drop the rest silently. It is answered by the whole-file `--lineage` pass only, and the row says so without the flag - the same rule `session_kind`'s SPAN follows, and for the same measured reason: of the two disagreeing files, one file's run starts below the head window, so a window read reports nothing for it and reporting half an answer by default would be worse than naming the flag. It is the one lineage link a RECORD states about itself, so the row carries no inference wording.",
       "code": [
         {
           "path": "src/parse/lineage.rs",
@@ -96209,6 +96209,16 @@
           "observed": "Root 1: 542,069 carriers - assistant 117,523, attachment 364,049, user 55,659, system 4,838, and no other type. Equal to the line's own `sessionId` on 541,575 and unequal on 494; the 494 sit in 2 files, 455 lines in one and 39 in the other, each naming exactly 1 distinct id, and both named ids exist as `<id>.jsonl` in the same project directory. Root 2: 553,382 carriers - attachment 381,975, assistant 114,897, user 53,543, system 2,965, and 2 lines carrying no `type` at all; 553,380 equal, 0 unequal, and the 2 remaining lines carry a snake id with no string `sessionId` to compare against.",
           "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
           "note": ""
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Name check over the shipped surface: `grep -r session_id_names src tests` and `grep -h session_id_names` over AGENTS.md, SPEC.md, SKILL.md and CHANGELOG.md, against the same two greps for `minted_elsewhere` and `minted_elsewhere_count`. Counting rule: one occurrence per matching LINE, `src` and `tests` walked whole.",
+          "observed": "session_id_names 0 occurrences in src+tests and 0 across the four documents; minted_elsewhere 25 in src+tests, minted_elsewhere_count 5, and per document AGENTS 2, SPEC 4, SKILL 1, CHANGELOG 1.",
+          "rule": "One occurrence per matching line; src and tests walked in full; the four documents grepped individually.",
+          "note": "The Claude Code behaviour is unchanged - the two session-id spellings and their disagreement are what the earlier check measured. Only this claim's depends text moved: it named a JSON field `session_id_names` that no tree ever shipped, where the surface carries `minted_elsewhere` plus `minted_elsewhere_count`."
         }
       ]
     },
