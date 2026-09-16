@@ -567,3 +567,4 @@ mod bookkeeping;
 mod gates;
 mod schedule_fire;
 mod selectors;
+mod thinking;
