@@ -92650,8 +92650,8 @@
     {
       "id": "QT-052",
       "area": "queue-and-telemetry",
-      "behavior": "Two non-transcript line types reach a PERSON through nothing at all, and the closure is an enumeration of every occurrence of their quoted type literal in the shipped executable. `queue-operation` occurs exactly THREE times - the emitter's own object literal, one key in the retention-policy table (`last-wins`) and one in the append-policy table (`always`) - and the loader's per-entry dispatch carries no branch for the type, so nothing reads the line back. `fork-context-ref` occurs FIVE times - the same two policy tables (`accumulate` and `route-by-agent`), the append router that sends it to the issuing agent's file, the `appendEntry` writer, and the loader's per-entry dispatch, which stores it keyed by `agentId` - and its stored set is read at exactly ONE place: the agent transcript builder destructures `forkContextRefs` off the loaded session, which is a MESSAGE-CONTENT path (it concatenates the parent session's prefix in front of the agent's own messages), not a display surface. Neither type has a reader that renders.",
-      "depends": "The inventory's `human` column answers \"does a person see this shape\", and SPEC section 5's table and SKILL's transparency tables print it verbatim. Both rows read `Human::Never` on this evidence rather than `Indirect`, which would say a person sees the line's EFFECT: for `queue-operation` there is no effect at all because nothing reads it, and the queue text a person did see is the `user.queued` leaf's fact, carried by the same line type and classified apart from it; for `fork-context-ref` the effect is what an agent's own resumed transcript contains, which is the model's input rather than anything rendered. If a later build gave either a rendering reader the enumeration would gain a fourth or sixth occurrence, which is what re-running the instrument detects.",
+      "behavior": "Two non-transcript line types reach a PERSON through nothing at all, and the closure is an enumeration of every occurrence of their type literal in the shipped executable. `queue-operation` occurs FOUR times - the interned name in the constant pool, the emitter's own object literal, one key in the retention-policy table (`last-wins`) and one in the append-policy table (`always`) - and the loader's per-entry dispatch carries no branch for the type, so nothing reads the line back. `fork-context-ref` occurs TEN times: three interned strings in the constant pool (the type name and two diagnostic messages), the same two policy tables (`accumulate` and `route-by-agent`), the append router that sends it to the issuing agent's file, the `appendEntry` writer, the loader's per-entry dispatch, which stores it keyed by `agentId`, and TWO diagnostic log calls - one on the record-failure path, which interpolates the error and no field of the entry, and one warn on the hydration path, which interpolates `parentLastUuid` when the parent uuid names no loaded record. Its stored set is read at exactly ONE place: the agent transcript builder destructures `forkContextRefs` off the loaded session, which is a MESSAGE-CONTENT path (it concatenates the parent session's prefix in front of the agent's own messages), not a display surface. Neither type has a reader that RENDERS the line.",
+      "depends": "The inventory's `human` column answers \"does a person see this shape\", and SPEC section 5's table and SKILL's transparency tables print it verbatim. Both rows read `Human::Never` on this evidence rather than `Indirect`, which would say a person sees the line's EFFECT: for `queue-operation` there is no effect at all because nothing reads it, and the queue text a person did see is the `user.queued` leaf's fact, carried by the same line type and classified apart from it; for `fork-context-ref` the effect is what an agent's own resumed transcript contains, which is the model's input rather than anything rendered. The two diagnostic calls do not move that: neither renders the line, both fire only on a failure, and what they carry is an error and one uuid. If a later build gave either type a rendering reader the enumeration would gain an occurrence, which is what re-running the instrument detects.",
       "code": [
         {
           "path": "src/model/inventory/lines.rs",
@@ -92664,7 +92664,7 @@
           "snippet": "\"queue-operation\" => self.queued_class().or(Some(Class::BookkeepingQueue)),"
         }
       ],
-      "instrument": "In the shipped executable, byte-find the quoted type literals `\"queue-operation\"` and `\"fork-context-ref\"` and read EVERY occurrence, classifying each as a writer, a policy-table key, an append router or a reader; then byte-find the loader field `forkContextRefs` and read every occurrence of that too. A type has a rendering reader only when one of those occurrences reaches a component. On disk, count lines whose text opens `{\"type\":\"<type>\"` and files naming `\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
+      "instrument": "ONE rule, in the shipped executable: byte-find the UNQUOTED literals `queue-operation` and `fork-context-ref` - which subsumes the quoted forms and also reaches the constant pool and every diagnostic string - and read EVERY occurrence, classifying each as an interned name, a writer, a policy-table key, an append router, a loader dispatch, a diagnostic or a reader; then byte-find the loader field `forkContextRefs` and read every occurrence of that too. A type has a RENDERING reader only when one of those occurrences reaches a component. On disk, count lines whose text opens `{\"type\":\"<type>\"` and files naming `\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -92764,6 +92764,42 @@
           "offset": 166207247,
           "excerpt": "forkContextRefs:F}=v;",
           "verdict": "the one READ, and it is a message-content path; these three are all the occurrences of the field"
+        },
+        {
+          "site": "queue-operation interned name",
+          "offset": 74526872,
+          "excerpt": "queue-operation",
+          "verdict": "the type name in the constant pool's string table, not code"
+        },
+        {
+          "site": "fork-context-ref interned name",
+          "offset": 74526540,
+          "excerpt": "fork-context-ref",
+          "verdict": "the type name in the constant pool's string table, not code"
+        },
+        {
+          "site": "fork-context-ref interned record-failure message",
+          "offset": 74850749,
+          "excerpt": "fork-context-ref: ",
+          "verdict": "the interned copy of the record-failure log string, not code"
+        },
+        {
+          "site": "fork-context-ref interned hydration warn",
+          "offset": 75830405,
+          "excerpt": "fork-context-ref] parent uuid ",
+          "verdict": "the interned copy of the hydration warn string, not code"
+        },
+        {
+          "site": "fork-context-ref record-failure log",
+          "offset": 163772720,
+          "excerpt": "(`Failed to record fork-context-ref: ${e}`)}function fat(e){t(`F",
+          "verdict": "a diagnostic on the failure path: it interpolates the error and no field of the entry, and renders nothing of the line"
+        },
+        {
+          "site": "fork-context-ref hydration warn",
+          "offset": 166122327,
+          "excerpt": "t(`[fork-context-ref] parent uuid ${e.parentLastUuid} not found in ${d}; returning empty prefi",
+          "verdict": "a diagnostic inside the message-content hydration path, fired only when the parent uuid names no loaded record; it interpolates `parentLastUuid` and renders nothing of the line"
         }
       ],
       "checks": [
@@ -92776,7 +92812,20 @@
           "observed": "`\"queue-operation\"` 3 occurrences (emitter at 162031935, retention table at 166051551, append-policy table at 166067280) - no reader. `\"fork-context-ref\"` 5 (two tables, the route-by-agent branch, the appendEntry writer, the loader dispatch) and `forkContextRefs` 3 (an interned name, the loader assembly at 166191185, the agent transcript builder destructure at 166207247) - one reader, on the message-content path. On disk: `queue-operation` 18,252 lines over 48 files, `fork-context-ref` 33 lines over 33 files.",
           "rule": "An occurrence is a byte match of the literal anywhere in the executable, policy tables included; a reader is an occurrence that consults the stored value rather than the type name. A corpus line counts when its text opens `{\"type\":\"<type>\"`; a file counts once however many such lines it holds.",
           "note": "The inventory read `Indirect` for both, which claims a person sees the effect. Neither supports that: nothing reads a queue-operation line at all, and the fork line's one reader builds an agent's message array. Both rows are `Never`, and SPEC section 5's table and SKILL's cells follow."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-found the UNQUOTED literals `queue-operation` and `fork-context-ref` over the whole executable - one rule, subsuming the quoted forms - and read every occurrence with surrounding bytes, classifying each; then the same for `forkContextRefs`.",
+          "observed": "`queue-operation` 4 occurrences (the interned name at 74526872, the emitter, the retention table, the append-policy table) against 3 for the quoted form, the difference being the constant pool. `fork-context-ref` 10 against 5 quoted: three interned strings (74526540, 74850749, 75830405) and two diagnostic log calls (the record-failure helper at 163772739 and the hydration warn at 166122331) beside the five already read. `forkContextRefs` 3, unchanged. No occurrence reaches a rendering component.",
+          "rule": "One rule for both types and both counts: an occurrence is a byte match of the UNQUOTED type literal anywhere in the executable, constant pool and diagnostic strings included. A RENDERING reader is an occurrence that puts a field of the line onto a display surface; a diagnostic that names the type or interpolates one field into a log is not one.",
+          "note": "The claim had stated its count under the quoted literal and its rule under any byte match, which are different numbers (3 and 5 against 4 and 10) and left two occurrences unread. One rule now, the broader one, with every occurrence enumerated."
         }
+      ],
+      "residue": [
+        "The two diagnostic calls reach a logger whose sink was not traced. Tracing it is what a later reading would do if the `human` column were ever challenged on them; it does not change what they carry, which is an error string and one uuid."
       ]
     },
     {
@@ -92939,7 +92988,7 @@
     {
       "id": "CLS-046",
       "area": "classification",
-      "behavior": "A COORDINATOR relay is an isMeta `type:\"user\"` record whose content opens the preamble `The coordinator sent a message` and whose top-level `origin` object carries the single key `kind` with the value `coordinator`. The object has no sender field, and that is structural rather than incidental: the executable constructs it in exactly TWO places and both build the one-key form - the module-level constant `rl={kind:\"coordinator\"}`, and the else-branch of the send path's ternary, whose other branch builds the PEER form `{kind:\"peer\", from, senderTaskId, name?, body?}` when a sender task id and address are both known. So a relay that reached this arm is by construction one with no sender to name. Over one projects root the two detectors - the preamble and `origin.kind` - name exactly the SAME 147 records across 91 files, with zero carrying only one of them, and all 147 are `isMeta`. The same `origin` object carries three other kinds in that corpus (`task-notification` 3,567, `human` 3,081, `peer` 55).",
+      "behavior": "A COORDINATOR relay is an isMeta `type:\"user\"` record whose content opens the preamble `The coordinator sent a message` and whose top-level `origin` object carries the single key `kind` with the value `coordinator`. The object has no sender field, and that is structural rather than incidental: of the 22 occurrences of the quoted value `\"coordinator\"` in the executable, exactly THREE construct an origin object and all three build the one-key form - the module-level constant `rl={kind:\"coordinator\"}`, the else-branch of the send path's ternary (whose other branch builds the PEER form `{kind:\"peer\", from, senderTaskId, name?, body?}` when a sender task id and address are both known), and a NARROWING normalizer whose `coordinator` case returns `{kind:e.kind}`, discarding every other key an origin arrived with. So a relay that reached this arm is by construction one with no sender to name, and the normalizer would strip one even if some future branch supplied it. The other 19 occurrences are the session MODE string, the ingress GATE class and their readers, a schema declaration and a system-prompt sentence - none of them an origin object. Over one projects root the two detectors - the preamble and `origin.kind` - name exactly the SAME 147 records across 91 files, with zero carrying only one of them, and all 147 are `isMeta`. The same `origin` object carries three other kinds in that corpus (`task-notification` 3,567, `human` 3,081, `peer` 55).",
       "depends": "`Record::direction` renders `coordinator \u21e8 self` on such a record. Every other `agent.communication.*` leaf renders an arrow, so without this arm the relay was the one inbound message whose hit said nothing about where it came from - and it carries `agent.communication.inbox` like any other. The FROM is the literal word rather than a read of some field, because the producer shows there is no field: a csift that invented an id there would be inventing it. The arm keys on the VALUE `coordinator`, never on the presence of `origin`, because the same key carries three other kinds and an arm keyed on presence would put a coordinator arrow on 6,703 records that are not relays. It runs LAST in the direction chain, so nothing that already resolves a direction is touched.",
       "code": [
         {
@@ -92953,7 +93002,7 @@
           "snippet": "fn a_coordinator_relay_renders_its_arrow() {"
         }
       ],
-      "instrument": "In the shipped executable, byte-find `kind:\"coordinator\"` and read EVERY occurrence: each is a construction of the origin object, and the claim's negative closes only when all of them build the same key set. Then byte-find the preamble literal `The coordinator sent a message` for the writer. On disk, over every `*.jsonl` under one projects root, parse each line carrying `\"origin\"`, take the records whose top-level `origin.kind` is `coordinator`, and tally their `origin` key SETS, their `isMeta` values and their files; separately count records whose `message.content` string starts with the preamble, and cross-tabulate the two detectors.",
+      "instrument": "ONE rule, in the shipped executable: byte-find the quoted value `\"coordinator\"` - not the `kind:\"coordinator\"` pair, which cannot match a construction that writes `{kind:e.kind}` - and read EVERY occurrence, classifying each as a construction of an origin object, a reader of one, the session MODE string, the ingress GATE class, a schema declaration or prose. The claim's negative closes only when every construction builds the same key set. Then byte-find the preamble literal `The coordinator sent a message` for the writer. On disk, over every `*.jsonl` under one projects root, parse each line carrying `\"origin\"`, take the records whose top-level `origin.kind` is `coordinator`, and tally their `origin` key SETS, their `isMeta` values and their files; separately count records whose `message.content` string starts with the preamble, and cross-tabulate the two detectors.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -92989,16 +93038,136 @@
       ],
       "enumeration": [
         {
+          "site": "origin-kind schema declaration",
+          "offset": 158580782,
+          "excerpt": "\"coordinator\")}),c({kind:x(\"unclassified\")}).describe(\"Injecte",
+          "verdict": "declares `coordinator` a valid kind in the origin union; builds no object"
+        },
+        {
+          "site": "coordinator MODE toggle",
+          "offset": 160047510,
+          "excerpt": "\"coordinator\";if(r===o)return;if(o)process.env.CLAUDE_CODE_C",
+          "verdict": "the session's own mode, written to an env var; a different namespace from the origin kind"
+        },
+        {
+          "site": "agent-set selector",
+          "offset": 162249163,
+          "excerpt": "\"coordinator\";return\"default\"}class qXt{enabled=void 0;p",
+          "verdict": "picks which built-in agents a coordinator-mode session offers; not an origin"
+        },
+        {
+          "site": "agent-set selector branch",
+          "offset": 162249841,
+          "excerpt": "\"coordinator\"){let{getCoordinatorAgents:o}=import.meta.requi",
+          "verdict": "the same mode string consumed; not an origin"
+        },
+        {
+          "site": "the narrowing origin normalizer",
+          "offset": 162964388,
+          "excerpt": "\"coordinator\":case\"unclassified\":case\"observer\":case\"auto-continuation\":case\"observer-activity\":case\"slack-ping\":return{kind:e.kind",
+          "verdict": "CONSTRUCTION, and the one the `kind:\"coordinator\"` needle could not find: the coordinator case returns `{kind:e.kind}`, a single-key object that discards every other key the origin arrived with"
+        },
+        {
+          "site": "system-prompt sentence",
+          "offset": 165910469,
+          "excerpt": "\"coordinator\"> entries and the note are the ",
+          "verdict": "prose describing a cited author; builds no object"
+        },
+        {
+          "site": "relay preamble dispatch",
+          "offset": 166046630,
+          "excerpt": "\"coordinator\":return XJn(e);case\"channel\":re",
+          "verdict": "READS an origin's kind to choose the preamble a relay is wrapped in; builds no origin"
+        },
+        {
+          "site": "origin predicate",
+          "offset": 166047540,
+          "excerpt": "\"coordinator\":case\"observer-activity\":case\"auto-cont",
+          "verdict": "READS the kind; builds no origin"
+        },
+        {
+          "site": "second origin predicate",
+          "offset": 166047991,
+          "excerpt": "\"coordinator\":case\"observer-activity\":case\"auto-cont",
+          "verdict": "READS the kind; builds no origin"
+        },
+        {
+          "site": "mode save on session restore",
+          "offset": 169646552,
+          "excerpt": "\"coordinator\":\"normal\");let _=r.includeAttributi",
+          "verdict": "the session mode string again; not an origin"
+        },
+        {
+          "site": "mode save after hooks",
+          "offset": 170278344,
+          "excerpt": "\"coordinator\":\"normal\"),pr(de,n);let me=ce.lengt",
+          "verdict": "the session mode string; not an origin"
+        },
+        {
+          "site": "mode save on clear",
+          "offset": 173274441,
+          "excerpt": "\"coordinator\":\"normal\")}let R=La();if(R)",
+          "verdict": "the session mode string; not an origin"
+        },
+        {
+          "site": "ingress gate classifier",
+          "offset": 175671437,
+          "excerpt": "\"coordinator\";return\"ungated\"}function W3e({",
+          "verdict": "returns the STRING `coordinator` as a gate class for a peer-send-message notification; a gate class, not an origin object"
+        },
+        {
+          "site": "gate-class switch",
+          "offset": 175671807,
+          "excerpt": "\"coordinator\":return G(n);case\"ungated\":retu",
+          "verdict": "READS that gate class; builds no origin"
+        },
+        {
+          "site": "second gate-class switch",
+          "offset": 175671922,
+          "excerpt": "\"coordinator\":case\"host-injected\":return _Se()===\"refuse\"?\"o",
+          "verdict": "READS that gate class; builds no origin"
+        },
+        {
+          "site": "third gate-class switch",
+          "offset": 175672650,
+          "excerpt": "\"coordinator\":return B();case\"host-injected\"",
+          "verdict": "READS that gate class; builds no origin"
+        },
+        {
           "site": "the send path's origin ternary, else-branch",
-          "offset": 175782562,
-          "excerpt": "{kind:\"coordinator\"}",
-          "verdict": "builds the object with the single key `kind`"
+          "offset": 175782568,
+          "excerpt": "\"coordinator\"};switch(n.kind){",
+          "verdict": "CONSTRUCTION: the else-branch builds `{kind:\"coordinator\"}`, the single key `kind` and nothing else; the peer branch beside it is the one that carries a sender"
         },
         {
           "site": "the module-level origin constant",
-          "offset": 179124617,
-          "excerpt": "rl={kind:\"coordinator\"}",
-          "verdict": "builds the same one-key object; with the ternary these are both occurrences of the construction"
+          "offset": 179124626,
+          "excerpt": "\"coordinator\"};function Bu",
+          "verdict": "CONSTRUCTION: `rl={kind:\"coordinator\"}`, the same one-key object held as a constant"
+        },
+        {
+          "site": "mode save on session resume",
+          "offset": 179353643,
+          "excerpt": "\"coordinator\":\"normal\");return{messages:A.me",
+          "verdict": "the session mode string; not an origin"
+        },
+        {
+          "site": "mode save on print resume",
+          "offset": 179360232,
+          "excerpt": "\"coordinator\":\"normal\");return s(\"tengu_sess",
+          "verdict": "the session mode string; not an origin"
+        },
+        {
+          "site": "mode save on startup",
+          "offset": 180764543,
+          "excerpt": "\"coordinator\":\"normal\")}if(Ihe(),TTe(I),",
+          "verdict": "the session mode string; not an origin"
+        },
+        {
+          "site": "mode save on a second startup path",
+          "offset": 181938880,
+          "excerpt": "\"coordinator\":\"normal\")}let Ie=nHe(t.age",
+          "verdict": "the session mode string; not an origin"
         }
       ],
       "checks": [
@@ -93011,6 +93180,16 @@
           "observed": "`kind:\"coordinator\"` occurs twice - the send path's ternary else-branch at 175782563 and the module constant at 179124619 - and both build the one-key object; the ternary's other branch builds the peer form with `from` and `senderTaskId`. The preamble literal occurs twice, once as an interned name and once as the constant at 160143615. On disk: 147 coordinator-relay records over 91 files, ONE origin key set `{kind}` on all 147, `isMeta` true on all 147; preamble-and-origin 147, preamble-only 0, origin-only 0. Other `origin.kind` values: task-notification 3,567, human 3,081, peer 55.",
           "rule": "An occurrence is a byte match of the literal anywhere in the executable. A record counts as a coordinator relay when its top-level `origin.kind` is `coordinator`; a key set is the sorted tuple of the `origin` object's own keys; the preamble detector is a `starts_with` on the left-trimmed `message.content` string.",
           "note": "The two detectors agreeing on all 147 with no record on either side alone is why the direction arm can key on `origin.kind` while the leaf keys on the framing: they are one population at this build, and a divergence would show up as a nonzero count in either of the two other columns."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Byte-found the quoted value `\"coordinator\"` over the whole executable (rather than the `kind:\"coordinator\"` pair, which cannot match a construction writing `{kind:e.kind}`) and read all 22 occurrences with surrounding bytes, classifying each as an origin construction, an origin reader, the session mode string, the ingress gate class, a schema declaration or prose.",
+          "observed": "22 occurrences. THREE construct an origin object: the send path's ternary else-branch, the module-level constant, and a narrowing normalizer at 162964388 whose `coordinator` case returns `{kind:e.kind}` - a single-key object that discards every other key. The remaining 19 are 9 occurrences of the session MODE string, 4 of the ingress GATE class and its readers, 2 origin predicates, 1 relay-preamble dispatch, 1 agent-set selector pair, 1 schema declaration and 1 system-prompt sentence. No construction carries a sender field.",
+          "rule": "An occurrence is a byte match of the quoted value anywhere in the executable. A CONSTRUCTION is an occurrence that builds an object whose `kind` is or becomes `coordinator`; everything else is classified by what it does with the value.",
+          "note": "The previous enumeration used the `kind:\"coordinator\"` needle, which matches a literal key-value pair and therefore could not reach the normalizer that writes `{kind:e.kind}`. The third construction strengthens the conclusion rather than moving it: it produces the single-key form and would strip a sender field if one ever arrived."
         }
       ]
     },
