@@ -79,6 +79,94 @@ impl Section<'_> {
     }
 }
 
+/// HOW a `for` edge was resolved - the honesty column of the edge.
+///
+/// An edge read off a KEY the record carries is a fact Claude Code wrote down. One read
+/// off POSITION (the parent link, the record physically above) is csift's own reading of
+/// the file's shape. An INFERRED one is neither: a join csift computed from two other
+/// facts. A reader that cannot tell them apart cannot weigh them, so the basis rides
+/// every resolved edge and is never defaulted.
+// The ordinary "no caller yet" allow AGENTS section 4 describes, not one of the four it
+// names: which basis an edge carries is the CALLER's statement, so `for_edge` constructs
+// none of these three itself and no family is filled in yet. It goes when the first
+// family builds an edge.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Basis {
+    /// A key on the record names the target.
+    Key,
+    /// The target is where the record sits - a parent link, the line above.
+    Position,
+    /// csift joined it from other facts.
+    Inferred,
+}
+
+impl Basis {
+    /// The wire word, which is also what the closed set is named by.
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Basis::Key => "key",
+            Basis::Position => "position",
+            Basis::Inferred => "inferred",
+        }
+    }
+}
+
+/// WHAT a resolved `for` edge points at.
+///
+/// Every field is optional because each one can genuinely be absent: a target in another
+/// transcript has no line HERE, a target named by position has no uuid, a target inside
+/// this file needs no session. The `note` is what an edge says about itself when the
+/// line is missing (`not in this file`), so a reader is never left with a bare id and no
+/// reason for it.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ForTarget {
+    /// The 1-based jsonl line of the target, when it is in THIS transcript.
+    pub(crate) line: Option<usize>,
+    /// The target record's uuid, when the edge names one.
+    pub(crate) uuid: Option<String>,
+    /// The transcript the target lives in, when it is not this one.
+    pub(crate) session: Option<String>,
+    /// Why the line is absent, when it is.
+    pub(crate) note: Option<String>,
+}
+
+impl ForTarget {
+    /// The label-zone form: an ADDRESS when the target is in this file, else the id with
+    /// whatever the edge can say about where it went.
+    fn label_zone(&self, kind: &str) -> String {
+        if let Some(line) = self.line {
+            return format!("[for: {kind} L{line}]");
+        }
+        // No line: name the id, cut to the eight-character handle the compaction excerpt
+        // already prints, and prefix the SESSION when the target is in another
+        // transcript - a bare handle is not addressable from the text surface, and the
+        // JSON carries the session either way.
+        let id = self.uuid.as_deref().map_or_else(
+            || "unknown".to_string(),
+            |u| u.chars().take(8).collect::<String>(),
+        );
+        let id = match self.session.as_deref() {
+            Some(s) => format!("@{s} {id}"),
+            None => id,
+        };
+        match self.note.as_deref() {
+            Some(note) => format!("[for: {kind} {id} ({note})]"),
+            None => format!("[for: {kind} {id}]"),
+        }
+    }
+
+    /// The wire form - every field, explicitly null where absent.
+    fn json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "line": self.line,
+            "uuid": self.uuid,
+            "session": self.session,
+            "note": self.note,
+        })
+    }
+}
+
 /// A per-record FACT a hit carries beside its label: something true of the record that
 /// is not a leaf and not a marker word - a shape csift models no leaf for, a join a
 /// family resolved, a key the record exposes.
@@ -98,6 +186,32 @@ pub enum HitFact {
     /// splits on one. Produced ONLY under an explicit address (a scan never emits an
     /// unmodeled unit), and it is what the label renders in place of a leaf path.
     Unmodeled(String),
+    /// A RESOLVED edge from this record to another: which relation (`kind`), how it was
+    /// resolved ([`Basis`]) and what it points at ([`ForTarget`]). Built through
+    /// [`record_text::for_edge`], the one place the uuid lookup happens.
+    ///
+    /// SHARED rather than per-family because four of the six families carry edges, and
+    /// four separate renders of one idea is what a reader would then have to learn.
+    #[allow(dead_code)]
+    For {
+        /// The relation word - `attached_to`, `refused`, `closes`, ...
+        kind: &'static str,
+        /// How the edge was resolved.
+        basis: Basis,
+        /// What it points at.
+        target: ForTarget,
+    },
+    /// The HONEST EMPTY of the same edge: the record names no target, or the target is a
+    /// DESCENT (one record to many) that only a provenance index can answer. Rendered,
+    /// never omitted - a silently absent edge reads as "there is no such relation", which
+    /// is a different claim from "this record does not say".
+    #[allow(dead_code)]
+    ForUnknown {
+        /// The relation word the edge would have carried.
+        kind: &'static str,
+        /// Why there is no target.
+        reason: String,
+    },
     // THE SIX FAMILY ARMS. Each carries an enum that is UNINHABITED until its family
     // lane lands, so nothing constructs these yet and the allow says exactly that
     // rather than letting a reader take them for rot. Each allow goes when its family
@@ -140,6 +254,10 @@ impl HitFact {
         match self {
             // The shape IS the label for an unmodeled unit, so it adds no second tag.
             HitFact::Unmodeled(_) => None,
+            HitFact::For { kind, target, .. } => Some(target.label_zone(kind)),
+            HitFact::ForUnknown { kind, reason } => {
+                Some(format!("[for: {kind} unknown ({reason})]"))
+            }
             HitFact::Bookkeeping(f) => f.label_zone(),
             HitFact::Attachments(f) => f.label_zone(),
             HitFact::Injections(f) => f.label_zone(),
@@ -158,6 +276,33 @@ impl HitFact {
     pub(crate) fn json(&self) -> Vec<(&'static str, serde_json::Value)> {
         match self {
             HitFact::Unmodeled(shape) => vec![("unmodeled", serde_json::json!(shape))],
+            // ONE key for every edge, carrying a ONE-element array, so several edges on
+            // one unit accumulate through [`attach_facts`] instead of a key per relation
+            // (which would make `for` unreadable without knowing every family's words).
+            // `reason` is null on a resolved edge and the target is null on an unknown
+            // one, so the objects have one key set either way.
+            HitFact::For {
+                kind,
+                basis,
+                target,
+            } => vec![(
+                "for",
+                serde_json::json!([{
+                    "kind": kind,
+                    "basis": basis.as_str(),
+                    "target": target.json(),
+                    "reason": serde_json::Value::Null,
+                }]),
+            )],
+            HitFact::ForUnknown { kind, reason } => vec![(
+                "for",
+                serde_json::json!([{
+                    "kind": kind,
+                    "basis": serde_json::Value::Null,
+                    "target": serde_json::Value::Null,
+                    "reason": reason,
+                }]),
+            )],
             HitFact::Bookkeeping(f) => f.json(),
             HitFact::Attachments(f) => f.json(),
             HitFact::Injections(f) => f.json(),

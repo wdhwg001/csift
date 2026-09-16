@@ -28,6 +28,57 @@ pub(crate) mod probe;
 
 use super::*;
 
+/// Build the ONE `for` EDGE fact from a uuid a record names - the only place the
+/// uuid-to-line lookup happens, so every family's edge resolves and renders alike.
+///
+/// THREE answers, and the difference between them is the whole point of the helper:
+/// - the record names a uuid this transcript carries -> [`HitFact::For`] with the LINE,
+///   which is an address a reader can fetch;
+/// - the record names a uuid no line here carries -> still [`HitFact::For`], with the id
+///   and the note `not in this file`, because the id is real and worth printing (a
+///   compaction deleted the line, another session holds it, or it is a wire id that was
+///   never a record at all);
+/// - the record names NOTHING -> [`HitFact::ForUnknown`] with the reason, never an
+///   absent fact: a missing edge reads as "there is no such relation", which is a
+///   different claim from "this record does not say".
+///
+/// `ctx.line_of_uuid` is backed by the chain's own uuid map, so the lookup costs nothing
+/// and answers the way the loader would. A caller with no row space (a unit test, a
+/// file-oriented surface) gets `None` from it, and the edge then renders its id rather
+/// than a guessed line.
+///
+/// A DESCENT edge - one record to many - is not this helper's shape and never will be:
+/// the map answers uuid to line in one direction only. A family that owns one builds
+/// [`HitFact::ForUnknown`] with that as the reason.
+// The ordinary "no caller yet" allow (AGENTS section 4): the amendment lands the helper
+// so the four edge-carrying families all build their edges one way, and the first of
+// them to land takes the allow away.
+#[allow(dead_code)]
+pub(crate) fn for_edge(
+    kind: &'static str,
+    basis: Basis,
+    uuid: Option<&str>,
+    ctx: &ClassifyCtx,
+) -> HitFact {
+    let Some(uuid) = uuid else {
+        return HitFact::ForUnknown {
+            kind,
+            reason: "the record carries no such key".to_string(),
+        };
+    };
+    let line = ctx.line_of_uuid(uuid);
+    HitFact::For {
+        kind,
+        basis,
+        target: ForTarget {
+            line,
+            uuid: Some(uuid.to_string()),
+            session: None,
+            note: line.is_none().then(|| "not in this file".to_string()),
+        },
+    }
+}
+
 /// True for the four `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).
 pub(crate) fn is_comm_class(c: Class) -> bool {
     matches!(

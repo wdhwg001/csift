@@ -59,6 +59,170 @@ fn a_scalar_fact_key_is_written_and_a_second_replaces_it() {
     assert_eq!(obj["label"], serde_json::json!("harness.bookkeeping.mode"));
 }
 
+// ── the ONE `for` edge ──
+//
+// Four families carry edges, and every one of them goes through `for_edge`, so these
+// four cases are the whole contract: what a RESOLVED edge renders, what an edge naming a
+// record this file does not hold renders, what an absent key renders, and how two edges
+// on one unit reach the wire.
+
+/// The lookup a test uses when it wants one uuid to resolve: everything else is absent,
+/// exactly as a real transcript answers for an id no line carries.
+struct OneLine(&'static str, usize);
+
+impl crate::model::LineOfUuid for OneLine {
+    fn line_of_uuid(&self, uuid: &str) -> Option<usize> {
+        (uuid == self.0).then_some(self.1)
+    }
+}
+
+/// A ctx whose uuid map holds exactly one record.
+fn ctx_with(lookup: &dyn crate::model::LineOfUuid) -> ClassifyCtx<'_> {
+    let mut ctx = ClassifyCtx::top_level();
+    ctx.lines = Some(lookup);
+    ctx
+}
+
+/// A RESOLVED edge renders the LINE, because a line is an address `csift show --line`
+/// takes and a uuid is not.
+#[test]
+fn a_resolved_edge_renders_the_line_it_points_at() {
+    let lookup = OneLine("target-uuid", 42);
+    let fact = for_edge(
+        "refused",
+        Basis::Key,
+        Some("target-uuid"),
+        &ctx_with(&lookup),
+    );
+    assert_eq!(fact.label_zone().as_deref(), Some("[for: refused L42]"));
+    assert_eq!(
+        fact.json(),
+        vec![(
+            "for",
+            serde_json::json!([{
+                "kind": "refused",
+                "basis": "key",
+                "target": { "line": 42, "uuid": "target-uuid", "session": null, "note": null },
+                "reason": null,
+            }])
+        )]
+    );
+}
+
+/// An edge naming a record NO line of this transcript carries keeps the id and says so.
+/// Dropping it would lose a real fact: a compaction deleted the line, another session
+/// holds it, or the id was never a record uuid at all - and only the id distinguishes
+/// those.
+#[test]
+fn an_unresolved_edge_keeps_the_id_and_says_the_line_is_elsewhere() {
+    let lookup = OneLine("some-other-record", 7);
+    let fact = for_edge(
+        "attached_to",
+        Basis::Position,
+        Some("abcdef0123456789"),
+        &ctx_with(&lookup),
+    );
+    assert_eq!(
+        fact.label_zone().as_deref(),
+        Some("[for: attached_to abcdef01 (not in this file)]"),
+        "the id is cut to the eight-character handle, and the note says why there is no line"
+    );
+    assert_eq!(
+        fact.json(),
+        vec![(
+            "for",
+            serde_json::json!([{
+                "kind": "attached_to",
+                "basis": "position",
+                "target": {
+                    "line": null,
+                    "uuid": "abcdef0123456789",
+                    "session": null,
+                    "note": "not in this file",
+                },
+                "reason": null,
+            }])
+        )]
+    );
+}
+
+/// An ABSENT key is the honest empty, and it is rendered rather than omitted: an edge
+/// that simply disappears reads as "there is no such relation", which is a different
+/// claim from "this record does not say".
+#[test]
+fn an_absent_key_renders_the_honest_empty_with_its_reason() {
+    let fact = for_edge("closes", Basis::Key, None, &ClassifyCtx::top_level());
+    assert_eq!(
+        fact.label_zone().as_deref(),
+        Some("[for: closes unknown (the record carries no such key)]")
+    );
+    assert_eq!(
+        fact.json(),
+        vec![(
+            "for",
+            serde_json::json!([{
+                "kind": "closes",
+                "basis": null,
+                "target": null,
+                "reason": "the record carries no such key",
+            }])
+        )]
+    );
+}
+
+/// TWO edges on one unit both reach the wire. This is the array arm of the merge rule,
+/// and the reason the `for` key carries a list: an attachment names its parent AND the
+/// tool call it belongs to, and a projector that assigned the key would ship the second
+/// alone with no sign the first existed.
+#[test]
+fn two_edges_on_one_unit_accumulate_under_the_one_key() {
+    let lookup = OneLine("parent-uuid", 3);
+    let ctx = ctx_with(&lookup);
+    let mut obj = serde_json::json!({ "label": "harness.hook.context" });
+    attach_facts(
+        &mut obj,
+        &[
+            for_edge("attached_to", Basis::Position, Some("parent-uuid"), &ctx),
+            for_edge("for_tool_use", Basis::Key, None, &ctx),
+        ],
+    );
+    let edges = obj["for"].as_array().expect("the edges ride one array");
+    assert_eq!(edges.len(), 2, "neither edge overwrote the other");
+    assert_eq!(edges[0]["kind"], serde_json::json!("attached_to"));
+    assert_eq!(edges[0]["target"]["line"], serde_json::json!(3));
+    assert_eq!(edges[1]["kind"], serde_json::json!("for_tool_use"));
+    assert_eq!(
+        edges[1]["reason"],
+        serde_json::json!("the record carries no such key")
+    );
+}
+
+/// A ctx with NO row space answers `None` for every id, so an edge built there renders
+/// the id rather than a guessed line. That is what a unit test and a file-oriented
+/// surface both get, and it must never become a fabricated address.
+#[test]
+fn an_edge_built_without_a_row_space_renders_the_id_not_a_line() {
+    let fact = for_edge(
+        "fires",
+        Basis::Inferred,
+        Some("11111111-2222-4333-8444-555555555555"),
+        &ClassifyCtx::top_level(),
+    );
+    assert_eq!(
+        fact.label_zone().as_deref(),
+        Some("[for: fires 11111111 (not in this file)]")
+    );
+}
+
+/// The three BASIS words are the closed set a consumer filters on, so they are pinned
+/// here rather than left to whatever each family happens to spell.
+#[test]
+fn the_basis_words_are_the_three_the_wire_carries() {
+    assert_eq!(Basis::Key.as_str(), "key");
+    assert_eq!(Basis::Position.as_str(), "position");
+    assert_eq!(Basis::Inferred.as_str(), "inferred");
+}
+
 /// The unmodeled SHAPE still projects what it always did - one key, one string - through
 /// the widened `Vec` return. The 1:1 law's whole wire surface is that key.
 #[test]
