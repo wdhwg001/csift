@@ -7,11 +7,18 @@
 //! says, so the render seam does not offer it a record (`seam::render_families`) and
 //! there is nothing here to answer with.
 //!
-//! PERF (SPEC section 7): the keys are read off the source line by one depth-1 walk,
-//! memoised per record ([`Record::exposed`]), so a record emitting several units walks
-//! once and a record that matched nothing never walks at all. Nothing here is a `Record`
-//! field: eighteen tolerant `Option`s would widen the row every parsed line of every scan
-//! carries, which is the C-41 lesson this family is built around.
+//! PERF (SPEC section 7): the keys reach this family as [`Record::exposed_keys`] - the
+//! eighteen of them in ONE [`crate::model::Exposed`] behind ONE `Box`, read by the same
+//! serde pass that builds the record (`#[serde(flatten)]`) and allocated only for a record
+//! that names at least one. That shape answers both halves of the C-41 law this family is
+//! built around: the row every parsed line of every scan carries grows by a pointer rather
+//! than by eighteen `Option`s (`size_of::<Record>()` 1368 -> 1376, pinned in
+//! `parse::tests::spine`), and nothing walks the line twice. The walk was the alternative,
+//! and it was built and measured rather than argued about: a depth-1 key read at the one
+//! place a `Record` is built from bytes cost 48 to 79 percent of user CPU on three section
+//! 7 acid rows, being a second whole-line pass. A read at EMISSION time instead cannot
+//! reach the bytes at all - the engine keeps a record's source line only for a line whose
+//! `Record` cannot answer for it, which is the opposite of the population these keys ride.
 
 use super::*;
 use crate::model::{ApiFailure, Attribution};
@@ -165,26 +172,28 @@ pub(crate) fn facts(
     if let Some(f) = rec.api_failure() {
         push(Fact::ApiFailure(Box::new(f)));
     }
-    if rec.tool_ends_turn == Some(true) {
-        push(Fact::ToolEndsTurn);
-    }
-    if let Some(t) = rec.user_feedback.as_deref() {
-        push(Fact::UserFeedback(t.to_string()));
-    }
-    if let Some(id) = rec.request_id.as_deref() {
-        push(Fact::RequestId(id.to_string()));
-    }
-    if let Some(n) = rec.api_block_index {
-        push(Fact::ApiBlockIndex(n));
-    }
-    if let Some(id) = rec.interrupted_message_id.as_deref() {
-        push(Fact::InterruptedMessage(id.to_string()));
-    }
-    if let Some(id) = rec.scheduled_task_id.as_deref() {
-        push(Fact::ScheduledTaskId(id.to_string()));
-    }
-    if let Some(id) = rec.scheduled_fire_id.as_deref() {
-        push(Fact::ScheduledFireId(id.to_string()));
+    if let Some(k) = rec.exposed_keys() {
+        if k.tool_ends_turn == Some(true) {
+            push(Fact::ToolEndsTurn);
+        }
+        if let Some(t) = k.user_feedback.as_deref() {
+            push(Fact::UserFeedback(t.to_string()));
+        }
+        if let Some(id) = k.request_id.as_deref() {
+            push(Fact::RequestId(id.to_string()));
+        }
+        if let Some(n) = k.api_block_index {
+            push(Fact::ApiBlockIndex(n));
+        }
+        if let Some(id) = k.interrupted_message_id.as_deref() {
+            push(Fact::InterruptedMessage(id.to_string()));
+        }
+        if let Some(id) = k.scheduled_task_id.as_deref() {
+            push(Fact::ScheduledTaskId(id.to_string()));
+        }
+        if let Some(id) = k.scheduled_fire_id.as_deref() {
+            push(Fact::ScheduledFireId(id.to_string()));
+        }
     }
     if let Some(id) = rec.hook_run_id() {
         push(Fact::HookRunId(id.to_string()));
@@ -207,7 +216,10 @@ pub(crate) fn facts(
 /// a `uuid` of their own file. The resolving arm is still the one that runs, because
 /// nothing but the uuid map decides it and a family may not build a second index.
 fn for_edges(rec: &Record, section: &Section<'_>, ctx: &ClassifyCtx) -> Option<HitFact> {
-    if let Some(id) = rec.interrupted_message_id.as_deref() {
+    if let Some(id) = rec
+        .exposed_keys()
+        .and_then(|k| k.interrupted_message_id.as_deref())
+    {
         return Some(for_edge("interrupted", Basis::Key, Some(id), ctx));
     }
     if let Some(id) = rec.hook_run_id() {

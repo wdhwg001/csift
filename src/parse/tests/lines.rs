@@ -234,3 +234,35 @@ fn read_range_and_read_tail_are_plain_reads_that_tolerate_a_shrink() {
     let e = read_tail(&missing, 10).unwrap_err();
     assert!(format!("{e:#}").contains("cannot stat"), "{e:#}");
 }
+
+/// A line whose BYTES are not valid UTF-8 still parses, and the undecodable byte lands as
+/// a replacement character.
+///
+/// csift reads and renders such a line lossily on every other path, so dropping the record
+/// here would lose the text on the same line to a byte in a field nothing reads. The retry
+/// is gated on the payload being invalid UTF-8, which is why the two assertions below are
+/// a pair: a line that is merely BAD JSON takes the ordinary single-parse path and still
+/// reports an error.
+#[test]
+fn an_undecodable_byte_costs_the_byte_and_not_the_record() {
+    let mut line: Vec<u8> = br#"{"type":"user","uuid":"u-1","messageId":"al"#.to_vec();
+    line.push(0xff);
+    line.extend_from_slice(br#"pha","message":{"role":"user","content":"hello"}}"#);
+    let rec = parse_line(&line)
+        .expect("an undecodable byte is not a parse failure")
+        .expect("a non-blank line yields a record");
+    assert_eq!(rec.uuid.as_deref(), Some("u-1"));
+    assert!(
+        rec.is_genuine_user(),
+        "the text on the line survives the byte and still reads as the human's"
+    );
+
+    // Bad JSON carrying an undecodable byte is still bad JSON.
+    let mut broken: Vec<u8> = br#"{"type":"user","uuid":"u-2","x":"a"#.to_vec();
+    broken.push(0xff);
+    broken.extend_from_slice(br#"b""#);
+    assert!(
+        parse_line(&broken).is_err(),
+        "an unterminated object is malformed however its bytes decode"
+    );
+}

@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "451-458",
+          "lines": "366-373",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7192,7 +7192,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "241-242",
+          "lines": "243-244",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
@@ -14700,12 +14700,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "108-110",
+          "lines": "110-112",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "119-121",
+          "lines": "121-123",
           "snippet": "    /// Co-set with `isCompactSummary` on compaction-summary records (\u00a74.7).\n    #[serde(default, rename = \"isVisibleInTranscriptOnly\")]\n    pub is_visible_in_transcript_only: Option<bool>,"
         },
         {
@@ -14822,7 +14822,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "187-192",
+          "lines": "189-194",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14968,7 +14968,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "222-227",
+          "lines": "224-229",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
@@ -18988,7 +18988,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "495-498",
+          "lines": "410-413",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -19654,7 +19654,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "809-814",
+          "lines": "812-817",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -20120,17 +20120,17 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "807",
+          "lines": "810",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "816-817",
+          "lines": "819-820",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "484-488",
+          "lines": "399-403",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -21060,12 +21060,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "773",
+          "lines": "776",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "795",
+          "lines": "798",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21236,12 +21236,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "773",
+          "lines": "776",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "795",
+          "lines": "798",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21424,7 +21424,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "839",
+          "lines": "842",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21691,12 +21691,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "775",
+          "lines": "778",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "839",
+          "lines": "842",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21793,7 +21793,7 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "775",
+          "lines": "778",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -22048,7 +22048,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "409-417",
+          "lines": "324-332",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22168,7 +22168,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "412-415",
+          "lines": "327-330",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22263,7 +22263,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "419-427",
+          "lines": "334-342",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -36683,7 +36683,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "412-415",
+          "lines": "327-330",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -38528,12 +38528,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "767",
+          "lines": "770",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "775",
+          "lines": "778",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -44005,7 +44005,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "64-69",
+          "lines": "66-71",
           "snippet": "    /// The session's plan slug (one stable value per session, minted BEFORE Plan Mode\n    /// is entered - the first slug-carrying record precedes the plan_mode line in every\n    /// measured session - and absent from every record before the mint and from\n    /// metadata-only records). The harness derives the plan file name from it.\n    #[serde(default)]\n    pub slug: Option<String>,"
         },
         {
@@ -45939,7 +45939,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "429-433",
+          "lines": "344-348",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46191,7 +46191,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "435-439",
+          "lines": "350-354",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -47109,7 +47109,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "451-454",
+          "lines": "366-369",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48663,7 +48663,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "469-475",
+          "lines": "384-390",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -50007,7 +50007,7 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "362-394",
+          "lines": "363-395",
           "snippet": "pub(crate) fn line_type_and_spine(\n    line_no: usize,\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {\n    if line.iter().all(u8::is_ascii_whitespace) {\n        return Ok(None);\n    }\n    // The same key set [`SpineFields`] holds, captured as borrowed `RawValue` spans so\n    // serde validates the whole line without decoding or allocating any of them.\n    #[derive(serde::Deserialize)]\n    struct Probe<'a> {\n        #[serde(rename = \"type\", borrow, default)]\n        r#type: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        subtype: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"parentUuid\", borrow, default)]\n        parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"logicalParentUuid\", borrow, default)]\n        logical_parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"leafUuid\", borrow, default)]\n        leaf_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        timestamp: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"isSidechain\", borrow, default)]\n        is_sidechain: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        explicit: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        rewound: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"compactMetadata\", borrow, default)]\n        compact_metadata: Option<&'a serde_json::value::RawValue>,"
         }
       ],
@@ -50116,7 +50116,7 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "362-365",
+          "lines": "363-366",
           "snippet": "pub(crate) fn line_type_and_spine(\n    line_no: usize,\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {"
         }
       ],
@@ -50572,7 +50572,7 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "362-365",
+          "lines": "363-366",
           "snippet": "pub(crate) fn line_type_and_spine(\n    line_no: usize,\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {"
         }
       ],
@@ -52350,7 +52350,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "36-39",
+          "lines": "38-41",
           "snippet": "    /// Record discriminator: \"user\", \"assistant\", \"system\", \"summary\",\n    /// \"last-prompt\", \"attachment\", \u2026 (open set - keep as String, never enum-panic).\n    #[serde(default)]\n    pub r#type: Option<String>,"
         },
         {
@@ -52494,7 +52494,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "229-231",
+          "lines": "231-233",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -52645,7 +52645,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "182-189",
+          "lines": "184-191",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52734,7 +52734,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "47-49",
+          "lines": "49-51",
           "snippet": "    /// ISO8601 UTC, e.g. `2026-06-07T05:43:00.000Z`. Absent on metadata-only records.\n    #[serde(default)]\n    pub timestamp: Option<String>,"
         },
         {
@@ -53555,7 +53555,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "240-242",
+          "lines": "242-244",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53637,7 +53637,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "233-237",
+          "lines": "235-239",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -53841,7 +53841,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "244-247",
+          "lines": "246-249",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -55007,7 +55007,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "71-75",
+          "lines": "73-77",
           "snippet": "    /// Fork provenance (line 1 of a `/fork` child transcript, `type:\"fork-context-ref\"`):\n    /// the PARENT session's last record uuid at fork time - the fork point, feedable to\n    /// `csift show @<parent> --uuid <it>`. Absent everywhere else.\n    #[serde(default, rename = \"parentLastUuid\")]\n    pub parent_last_uuid: Option<String>,"
         },
         {
@@ -55101,7 +55101,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "222-227",
+          "lines": "224-229",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -64828,7 +64828,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "227",
+          "lines": "229",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -71375,7 +71375,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "112-117",
+          "lines": "114-119",
           "snippet": "    /// System-injected pseudo-turn marker (\u00a74.2). `true` \u21d2 a `type:\"user\"` record\n    /// whose string/text content LOOKS human (\"Continue from where you left off.\",\n    /// loop ticks, stop-hook feedback, `<local-command-caveat>\u2026`) but is machine-\n    /// generated - must be excluded from genuine-user and from turn-delimiting.\n    #[serde(default, rename = \"isMeta\")]\n    pub is_meta: Option<bool>,"
         },
         {
@@ -73963,7 +73963,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "108-110",
+          "lines": "110-112",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
@@ -87245,7 +87245,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "144-150",
+          "lines": "146-152",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
@@ -88400,7 +88400,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "194-199",
+          "lines": "196-201",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         },
         {
@@ -88630,7 +88630,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "194-199",
+          "lines": "196-201",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         }
       ],
@@ -88891,7 +88891,7 @@
       "code": [
         {
           "path": "src/parse/spine.rs",
-          "lines": "283-288",
+          "lines": "284-289",
           "snippet": "/// The depth-1 key walk itself. `type` is NOT an early exit for the OTHER keys: measured\n/// over a real corpus, `parentUuid` is the first key of every one of 673,710 lines of an\n/// admitted type while `uuid` and `timestamp` sit AFTER the payload key on 662,470 of them\n/// (claim REC-104) - so the walk has to reach the end of the object either way, and a\n/// \"stop once the wanted keys are in hand\" shortcut would stop on almost no line.\npub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {"
         },
         {
@@ -89049,7 +89049,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "212-215",
+          "lines": "214-217",
           "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
         },
         {
@@ -91531,7 +91531,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "141-142",
+          "lines": "143-144",
           "snippet": "    #[serde(default, rename = \"toolDenialKind\")]\n    pub tool_denial_kind: Option<String>,"
         },
         {
@@ -91768,7 +91768,7 @@
         {
           "path": "src/model/record.rs",
           "snippet": "    #[serde(default, rename = \"continuedInSessionId\")]\n    pub continued_in_session_id: Option<String>,",
-          "lines": "86-87"
+          "lines": "88-89"
         },
         {
           "path": "src/commands/session/run.rs",
@@ -91942,7 +91942,7 @@
         {
           "path": "src/model/record.rs",
           "snippet": "    #[serde(default, rename = \"sessionKind\")]\n    pub session_kind: Option<String>,",
-          "lines": "95-96"
+          "lines": "97-98"
         },
         {
           "path": "src/parse/lineage.rs",
@@ -93103,7 +93103,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "288-289",
+          "lines": "290-291",
           "snippet": "#[serde(default, rename = \"renderedInHumanTurn\")]\n    pub rendered_in_human_turn: Option<Box<serde_json::value::RawValue>>,"
         },
         {
@@ -95731,12 +95731,12 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    pub fn specific(&self) -> Option<(&'static str, &str)> {",
-          "lines": "72"
+          "lines": "271"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::Attribution(a) => a\n                .specific()\n                .map(|(kind, name)| format!(\"[via {kind} {name}]\")),",
-          "lines": "69-71"
+          "lines": "76-78"
         }
       ],
       "instrument": "Corpus: over each root, count the lines carrying each of the five keys top-level, with the by-`type` breakdown, the distinct value count per key, and - for `attributionAgent` - the `isSidechain` histogram of its carriers; separately count the lines carrying any of the four non-agent keys, split by whether `attributionAgent` is also present. Binary: byte-search the verified build for `function wE(e,n,r,o,d){try{let f=$fr(e,n,r);`, `function $fr(e,n,r){if(!e)return{};if(e.startsWith(\"agent:builtin:\")` and `apiBlockIndex:la.index,requestId:Ys??void 0,...wE(`, and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -95793,9 +95793,9 @@
       "depends": "csift exposes it as `request_id` on the hit, JSON only - it is a join key rather than a word worth a reader's line. The gate is the KEY, not a leaf, which is why the two model-refusal `harness.system.*` units carry it as well as every assistant unit; a doc that said `assistant units` alone would be wrong on 61 lines per root. Nothing joins on it inside csift: it is reported so a consumer can group a turn's records by the request that produced them.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, rename = \"requestId\")]\n    pub request_id: Option<Box<str>>,",
-          "lines": "341-342"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(\n        default,\n        rename = \"requestId\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub request_id: Option<Box<str>>,",
+          "lines": "89-94"
         }
       ],
       "instrument": "Corpus: over each root, count the lines carrying `requestId` top-level, break them down by the object's `type`, and for the `system` carriers by `subtype`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -95831,9 +95831,9 @@
       "depends": "csift exposes it as `api_block_index`, JSON only. Together with `request_id` it is what lets a consumer reassemble one API response from the several records Claude Code writes for it. Because the floor is real, its absence is never evidence about the record: on a transcript below the floor no record carries it, which is exactly the absence rule this family states at key level.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, rename = \"apiBlockIndex\")]\n    pub api_block_index: Option<u32>,",
-          "lines": "346-347"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(\n        default,\n        rename = \"apiBlockIndex\",\n        deserialize_with = \"lenient::u32_only\"\n    )]\n    pub api_block_index: Option<u32>,",
+          "lines": "98-103"
         }
       ],
       "instrument": "Corpus: over each root count the `apiBlockIndex` carriers with their `type` breakdown; then, restricted to `type:\"assistant\"` records whose `version` parses as a triple at or above 2.1.257, count present against absent and, among the absent, how many carry `isApiErrorMessage:true`; report the lowest version carrying the key and the highest lacking it. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -95872,9 +95872,9 @@
       "depends": "csift exposes it as `tool_ends_turn` and renders `[ends turn]` in the label zone - one of the four tags this family renders, because it says something about THIS record that a reader scanning a result list acts on. The value is only ever written as `true`, so the fact is the presence of the key; csift carries it as a bool that is false when absent and emits nothing then, which is the absence rule at key level.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, rename = \"toolEndsTurn\")]\n    pub tool_ends_turn: Option<bool>,",
-          "lines": "352-353"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(\n        default,\n        rename = \"toolEndsTurn\",\n        deserialize_with = \"lenient::bool_only\"\n    )]\n    pub tool_ends_turn: Option<bool>,",
+          "lines": "108-113"
         }
       ],
       "instrument": "Corpus: over each root, index every file's `tool_use` blocks by id to their `name`, then for each line carrying `toolEndsTurn` top-level join each of its `tool_result` blocks' `tool_use_id` to that index and record the tool name set; also record the `type` breakdown, the value shapes and the lowest `version` among carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -95912,12 +95912,12 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    fn parts(&self) -> Vec<String> {",
-          "lines": "131"
+          "lines": "330"
         },
         {
           "path": "src/model/record/keys.rs",
           "snippet": "        f.headline().is_some().then_some(f)",
-          "lines": "220"
+          "lines": "429"
         }
       ],
       "instrument": "Corpus: over each root count the carriers of `isApiErrorMessage`, `error`, `apiErrorStatus`, `quotaLimits`, `truncatedAfterOutput` and `isAbortedMidStream` top-level with their `type` breakdowns and value shapes; for every record with `isApiErrorMessage` exactly `true`, evaluate the five-part test (a STRING `error`, or `apiErrorStatus`, or `quotaLimits`, or either flag true) and count true against false; report the `error` string value histogram and the `quotaLimits` key sets. Binary: byte-search the verified build for `function zo({content:e,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,` and `requestId:void 0,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,` and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -95970,14 +95970,14 @@
       "depends": "csift reads the STRING form only. The record model's `error` field goes through a string-only deserializer that answers `None` for any other shape, so the object never enters the record model and no rendered or JSON path of this family can reach its `headers` member - the sensitive-headers law, enforced where the value would enter rather than by a rule someone has to remember. The `api_error` record's own render belongs to the system family, which names the fields that say what failed and drops the rest. If a build moved the failure kind into the object, this family would report nothing rather than something wrong, and the census below is what would catch it.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, deserialize_with = \"keys::string_only\")]\n    pub error: Option<Box<str>>,",
-          "lines": "366-367"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(default, deserialize_with = \"lenient::string_only\")]\n    pub error: Option<Box<str>>,",
+          "lines": "130-131"
         },
         {
-          "path": "src/model/record/keys.rs",
+          "path": "src/model/record/lenient.rs",
           "snippet": "pub(super) fn string_only<'de, D>(de: D) -> std::result::Result<Option<Box<str>>, D::Error>",
-          "lines": "36"
+          "lines": "284"
         }
       ],
       "instrument": "Corpus: over each root count the `error` carriers top-level, break them down by the object's `type` and by the Python type of the value, and for every OBJECT value record the sorted KEY NAMES of the object (never its values) and whether `headers` is among them. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96015,7 +96015,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(for_edge(\"interrupted\", Basis::Key, Some(id), ctx));",
-          "lines": "211"
+          "lines": "223"
         }
       ],
       "instrument": "Corpus: over each root, for every file, build the set of `uuid` values and the set of `message.id` values; then for each line carrying `interruptedMessageId` top-level record the value's prefix before the first underscore, whether the value is in that file's uuid set, whether it is in that file's message-id set, and the carrier's `type` and `isSidechain`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96051,9 +96051,9 @@
       "depends": "csift exposes both as `scheduled_task_id` and `scheduled_fire_id`, JSON only: they are join keys, and the label zone already names the fired prompt's instant through the engine's own field. The task-id join to the fire record is what makes the pair useful, and it is deliberately not built here - the leaf that owns the scheduler's record owns that edge, and this family provides the keys it joins on. A build that stopped writing the pair would leave the fired prompt identified only by its parent link.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, rename = \"scheduledTaskId\")]\n    pub scheduled_task_id: Option<Box<str>>,",
-          "lines": "396-397"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(\n        default,\n        rename = \"scheduledTaskId\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub scheduled_task_id: Option<Box<str>>,",
+          "lines": "180-185"
         }
       ],
       "instrument": "Corpus: over each root, per file collect the `taskId` values of the lines whose `subtype` is `scheduled_task_fire`; then for each line carrying `scheduledTaskId` or `scheduledFireId` top-level record which of the two keys are present and whether the task id is in that file's fire-id set; report the `type` breakdown and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96092,12 +96092,12 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "const HOOK_RUN_SUBTYPE: &str = \"stop_hook_summary\";",
-          "lines": "170"
+          "lines": "369"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(HitFact::ForUnknown {",
-          "lines": "220"
+          "lines": "232"
         }
       ],
       "instrument": "Corpus: over each root, per file build the set of `uuid` values; then for each line carrying `toolUseID` top-level record the object's `subtype`, whether the value matches the uuid shape (length 36 with four dashes), and whether it is in that file's uuid set. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96133,14 +96133,14 @@
       "depends": "csift exposes it as `user_feedback` - the whole text on the wire - and renders `[feedback: <first 60 characters>]` in the label zone, because what a person typed when refusing is the one thing about that record a reader scanning results wants. It is the STRUCTURED form of words csift otherwise has to parse back out of a rejection's prose tail, so a rejection that carries it needs no text heuristic at all. The key is read top-level; reading it through the `toolUseResult` probe would find nothing on every measured carrier.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, rename = \"userFeedback\")]\n    pub user_feedback: Option<Box<str>>,",
-          "lines": "358-359"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(\n        default,\n        rename = \"userFeedback\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub user_feedback: Option<Box<str>>,",
+          "lines": "118-123"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::UserFeedback(text) => Some(format!(",
-          "lines": "73"
+          "lines": "80"
         }
       ],
       "instrument": "Corpus: over each root count the lines carrying `userFeedback` top-level, with the `type` breakdown, the value shape, the set of sibling top-level keys beginning `tool`, and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96219,14 +96219,14 @@
       "depends": "csift models none of the eleven, and this claim is the record of that decision so a later reader can tell a deliberate silence from an oversight. Three reasons cover them: a pointer that resolves nowhere is worse than no pointer; a fact about how a request was SERVED belongs to the transport rather than to a transcript reader; and a value csift already reads elsewhere under another name adds nothing as a second key. Two of the eleven are read for a different purpose and are not exposed as keys - `promptSource` was removed from the classifier when its version floor was measured, and `permissionMode` is a bookkeeping line's own payload. If a build made one of them resolvable - `supersedesUuids` naming a uuid the file holds, say - the decision is worth re-taking, and the counting rule below is how.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "snippet": "    #[serde(default, rename = \"toolUseID\")]\n    pub tool_use_id_key: Option<Box<str>>,",
-          "lines": "406-407"
+          "path": "src/model/record/keys.rs",
+          "snippet": "    #[serde(\n        default,\n        rename = \"toolUseID\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub tool_use_id_key: Option<Box<str>>,",
+          "lines": "198-203"
         },
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "2893"
+          "lines": "2894"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

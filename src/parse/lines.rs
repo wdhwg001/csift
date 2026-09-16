@@ -153,12 +153,34 @@ pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {
 
 /// Parse one raw jsonl line into a [`Record`]. `Ok(None)` for an empty/blank line.
 /// A malformed (non-empty) line returns `Err` - the caller decides to skip+count.
+///
+/// ONE retry, and only for a line whose BYTES are not valid UTF-8. csift reads and renders
+/// such a line lossily everywhere else - a rendered body is the source line decoded with
+/// replacement characters - so a record whose only defect is a byte that does not decode is
+/// a record every surface can show, and dropping it would be a silent loss of the text on
+/// the same line. serde used to reach that outcome by accident, skipping the byte whenever
+/// it sat in a field the model does not read; the EXPOSED KEYS arrive through a
+/// `#[serde(flatten)]` map, which buffers every unknown key rather than skipping it, so the
+/// accident is gone and the decision is made here instead. The retry is gated on the
+/// payload actually being invalid UTF-8, so a line that is merely bad JSON takes exactly
+/// the path it always took: one parse, one error, one malformed count.
 pub fn parse_line(line: &[u8]) -> Result<Option<Record>> {
     let Some(payload) = line_payload(line) else {
         return Ok(None);
     };
-    let rec: Record = serde_json::from_slice(payload)?;
-    Ok(Some(rec))
+    match serde_json::from_slice::<Record>(payload) {
+        Ok(rec) => Ok(Some(rec)),
+        Err(e) if std::str::from_utf8(payload).is_err() => {
+            let lossy = String::from_utf8_lossy(payload);
+            match serde_json::from_str::<Record>(&lossy) {
+                Ok(rec) => Ok(Some(rec)),
+                // The lossy read failing means the line is bad JSON as well; report the
+                // FIRST error, which is the one about the bytes actually on disk.
+                Err(_) => Err(e.into()),
+            }
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Validate one raw jsonl line's JSON syntax WITHOUT building a [`Record`] (no

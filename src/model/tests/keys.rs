@@ -14,20 +14,25 @@ const ATTRIBUTED: &str = r#"{"type":"assistant","uuid":"a-1","requestId":"req_1"
 #[test]
 fn every_exposed_key_decodes_to_its_own_field() {
     let r = parse(ATTRIBUTED);
-    assert_eq!(r.request_id.as_deref(), Some("req_1"));
-    assert_eq!(r.api_block_index, Some(3));
-    assert_eq!(r.attribution_agent.as_deref(), Some("general-purpose"));
-    assert_eq!(r.attribution_skill.as_deref(), Some("csift"));
-    assert_eq!(r.attribution_plugin.as_deref(), Some("omc"));
-    assert_eq!(r.attribution_mcp_server.as_deref(), Some("srv"));
-    assert_eq!(r.attribution_mcp_tool.as_deref(), Some("srv__tool"));
+    let k = r
+        .exposed_keys()
+        .expect("the record names eight of the keys");
+    assert_eq!(k.request_id.as_deref(), Some("req_1"));
+    assert_eq!(k.api_block_index, Some(3));
+    assert_eq!(k.attribution_agent.as_deref(), Some("general-purpose"));
+    assert_eq!(k.attribution_skill.as_deref(), Some("csift"));
+    assert_eq!(k.attribution_plugin.as_deref(), Some("omc"));
+    assert_eq!(k.attribution_mcp_server.as_deref(), Some("srv"));
+    assert_eq!(k.attribution_mcp_tool.as_deref(), Some("srv__tool"));
     // A record naming none of them carries none of them - the absence rule at key level.
     let bare = parse(
         r#"{"type":"assistant","uuid":"a-2","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
     );
     assert!(bare.attribution().is_none());
-    assert_eq!(bare.request_id, None);
-    assert_eq!(bare.api_block_index, None);
+    assert!(
+        bare.exposed_keys().is_none(),
+        "a record naming no exposed key allocates no box for them"
+    );
 }
 
 /// ONE key is enough. The gate on the attribution object is ANY of the five, not all of
@@ -219,25 +224,95 @@ fn a_hook_run_id_is_read_on_its_own_subtype_and_no_other() {
 #[test]
 fn the_join_keys_and_the_refusal_text_decode_where_they_ride() {
     let ends = parse(r#"{"type":"user","uuid":"u-1","toolEndsTurn":true}"#);
-    assert_eq!(ends.tool_ends_turn, Some(true));
+    assert_eq!(
+        ends.exposed_keys().and_then(|k| k.tool_ends_turn),
+        Some(true)
+    );
 
     let refusal = parse(
         r#"{"type":"user","uuid":"u-2","toolDenialKind":"user-rejected","userFeedback":"use the staging copy"}"#,
     );
     assert_eq!(
-        refusal.user_feedback.as_deref(),
+        refusal
+            .exposed_keys()
+            .and_then(|k| k.user_feedback.as_deref()),
         Some("use the staging copy")
     );
 
     let interrupted = parse(r#"{"type":"user","uuid":"u-3","interruptedMessageId":"msg_a1"}"#);
     assert_eq!(
-        interrupted.interrupted_message_id.as_deref(),
+        interrupted
+            .exposed_keys()
+            .and_then(|k| k.interrupted_message_id.as_deref()),
         Some("msg_a1")
     );
 
     let fired = parse(
         r#"{"type":"user","uuid":"u-4","isMeta":true,"scheduledTaskId":"task-1","scheduledFireId":"fire-1"}"#,
     );
-    assert_eq!(fired.scheduled_task_id.as_deref(), Some("task-1"));
-    assert_eq!(fired.scheduled_fire_id.as_deref(), Some("fire-1"));
+    let k = fired
+        .exposed_keys()
+        .expect("the fired prompt names both ids");
+    assert_eq!(k.scheduled_task_id.as_deref(), Some("task-1"));
+    assert_eq!(k.scheduled_fire_id.as_deref(), Some("fire-1"));
+}
+
+/// A key of an UNEXPECTED JSON type costs that key and nothing else.
+///
+/// Every value below is what the DOCUMENTED rule says: the decoders accept one JSON type
+/// each and answer `None` for every other, so an odd type and an absent key give the same
+/// answer - this record does not say. Read directly off the field rather than through a
+/// render, because the decision is the decoder's.
+#[test]
+fn an_unexpected_type_reads_as_an_absent_key() {
+    // A number key given a string, and a string key given a number.
+    let odd = parse(
+        r#"{"type":"assistant","uuid":"a-20","apiBlockIndex":"3","apiErrorStatus":[429],"attributionSkill":42,"attributionPlugin":"omc","requestId":"req_ok"}"#,
+    );
+    let k = odd.exposed_keys().expect("the two good keys carry the box");
+    assert_eq!(k.api_block_index, None, "a string is not an index");
+    assert_eq!(k.api_error_status, None, "an array is not a status");
+    assert_eq!(k.attribution_skill, None, "a number is not a name");
+    // The well-typed siblings on the SAME record still decode: the rule is per key.
+    assert_eq!(k.attribution_plugin.as_deref(), Some("omc"));
+    assert_eq!(k.request_id.as_deref(), Some("req_ok"));
+
+    // A boolean key given a word, and an object key given a string.
+    let odd2 = parse(
+        r#"{"type":"user","uuid":"u-20","toolEndsTurn":"yes","truncatedAfterOutput":1,"quotaLimits":"weekly","userFeedback":"say so"}"#,
+    );
+    let k2 = odd2.exposed_keys().expect("the feedback carries the box");
+    assert_eq!(k2.tool_ends_turn, None, "a word is not a boolean");
+    assert_eq!(k2.truncated_after_output, None, "a number is not a boolean");
+    assert!(k2.quota_limits.is_none(), "a string is not a quota object");
+    assert_eq!(k2.user_feedback.as_deref(), Some("say so"));
+
+    // A quota object whose OWN members are oddly typed keeps the object and drops the
+    // members, for the same reason one level up.
+    let odd3 = parse(
+        r#"{"type":"assistant","uuid":"a-21","quotaLimits":{"rateLimitType":5,"resetsAt":"soon"}}"#,
+    );
+    let q = odd3
+        .exposed_keys()
+        .and_then(|k| k.quota_limits.as_deref())
+        .expect("the object itself decodes");
+    assert_eq!(q.limit_type, None);
+    assert_eq!(q.resets_at, None);
+
+    // A value too large for the field's own type reads absent for the same reason: the
+    // record said something this field cannot carry.
+    let big = parse(r#"{"type":"assistant","uuid":"a-22","apiBlockIndex":4294967296}"#);
+    assert!(
+        big.exposed_keys().is_none(),
+        "a u32 field cannot carry 2^32, so the record names no key at all"
+    );
+
+    // A NEGATIVE number is refused the same way - none of the three keys that use this
+    // decoder (an HTTP status, a block index, an epoch second) has a meaning below zero.
+    let neg = parse(r#"{"type":"assistant","uuid":"a-23","apiErrorStatus":-1,"error":"x"}"#);
+    assert_eq!(
+        neg.exposed_keys().and_then(|k| k.api_error_status),
+        None,
+        "a negative is not a status"
+    );
 }

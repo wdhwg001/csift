@@ -31,8 +31,9 @@ pub(crate) const SECTION: &str =
      API-failure set rides one `api_failure` object {error, status, quota{limit_type, \
      resets_at}, truncated_after_output, aborted_mid_stream} and renders \
      `[api failure <kind> status <n> quota <window> truncated after output aborted \
-     mid-stream]`, each half only when the record names it; a record naming none of them \
-     carries no object at all, so the tag can name no floor word. \
+     mid-stream]`, each half only when the record names it - a quota naming only its reset \
+     instant renders the bare word `quota` - and a record naming none of them carries no \
+     object at all, so the tag can name no floor word. \
      `interrupted_message_id`, `hook_run_id`, `scheduled_task_id` and `scheduled_fire_id` \
      are the explicit joins, JSON only. The unit's ONE `for` edge comes from the first two: \
      `[for: interrupted <id> (not in this file)]`, `[for: hook run <first 8> (not in this \
@@ -40,6 +41,10 @@ pub(crate) const SECTION: &str =
      run - neither id is a record uuid, so the middle form is what an ordinary transcript \
      renders. ABSENCE is read at KEY level: a missing key means this record does not say, \
      never no, and a fact object that IS present names every member with null for one the \
-     record lacks. ONE key is never rendered anywhere: a `type:\"system\"` `api_error` \
+     record lacks, and a key of an UNEXPECTED JSON TYPE reads exactly as an absent one: \
+     `\"apiBlockIndex\":\"3\"` gives null rather than 3, the record still emits with its text \
+     searchable, and nothing is booked malformed - csift reports what a record says and \
+     never coerces one type into another. ONE key is never rendered anywhere: a \
+     `type:\"system\"` `api_error` \
      record's `error` object holds the failed request's whole HTTP response header set, so \
      csift reads that key's string form only and `--raw` is the one way to those bytes.";

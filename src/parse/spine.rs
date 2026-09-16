@@ -133,7 +133,8 @@ impl SpineExtra {
 /// record-consuming pass.
 ///
 /// WIDTH is the whole point. Three lines in four of a real transcript are spine, and a
-/// `Record` is 1184 bytes: carrying the spine at that width cost about 120 MB of serial
+/// `Record` was 1184 bytes when this was measured (1376 at this tip, pinned in
+/// `parse::tests::spine`): carrying the spine at that width cost about 120 MB of serial
 /// moves per hand-off on a 397 MB transcript, and it grew the chain build from 1 ms over
 /// 183 nodes to 46 ms over 100,570.
 #[derive(Debug)]

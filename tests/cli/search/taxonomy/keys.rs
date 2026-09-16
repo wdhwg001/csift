@@ -265,3 +265,104 @@ fn a_record_that_names_no_key_carries_no_key() {
         );
     }
 }
+
+/// A key of an UNEXPECTED JSON type costs that key, never the record.
+///
+/// Every exposed key is a narrow type - a `u32`, a `bool`, an object, a string - and a
+/// strictly decoded field turns one wrong type into a parse error for the WHOLE line: the
+/// record is booked malformed and its TEXT disappears from every surface, which is the
+/// opposite of the trade csift makes everywhere else (AGENTS section 4: extend the model
+/// tolerantly, never tighten it into a crash). So each key decodes leniently and an
+/// unexpected type reads exactly as an absent key does.
+///
+/// The four shapes below are one per decoder - a number key given a string, a boolean key
+/// given a word, an object key given a string, a string key given a number - and each line
+/// also carries a WELL-typed sibling key, because the rule is per key rather than per
+/// record: the odd one reads absent and the good one still decodes.
+#[test]
+fn an_unexpected_type_costs_its_own_key_and_never_the_record() {
+    let lines = [
+        r#"{"type":"assistant","uuid":"a-1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","apiBlockIndex":"3","requestId":"req_ok1","message":{"role":"assistant","id":"m-1","model":"claude","content":[{"type":"text","text":"zzodd block index"}]}}"#,
+        r#"{"type":"user","uuid":"u-1","parentUuid":"a-1","timestamp":"2026-06-07T05:00:01.000Z","toolEndsTurn":"yes","message":{"role":"user","content":"zzodd ends turn"}}"#,
+        r#"{"type":"assistant","uuid":"a-2","parentUuid":"u-1","timestamp":"2026-06-07T05:00:02.000Z","isApiErrorMessage":true,"quotaLimits":"weekly","error":"rate_limit","message":{"role":"assistant","id":"m-2","model":"<synthetic>","content":[{"type":"text","text":"zzodd quota"}]}}"#,
+        r#"{"type":"assistant","uuid":"a-3","parentUuid":"a-2","timestamp":"2026-06-07T05:00:03.000Z","attributionSkill":42,"attributionPlugin":"omc","message":{"role":"assistant","id":"m-3","model":"claude","content":[{"type":"text","text":"zzodd attribution"}]}}"#,
+    ];
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &(lines.join("\n") + "\n"));
+
+    // Every line is emitted and NOTHING is booked malformed.
+    let out = h.run(&["search", "zzodd", &at(SESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let summary: serde_json::Value = serde_json::from_str(
+        out.stdout
+            .lines()
+            .find(|l| l.contains("\"kind\":\"summary\""))
+            .expect("a summary line"),
+    )
+    .expect("the summary is one object");
+    assert_eq!(summary["skipped_lines"], 0, "{}", out.stdout);
+    // All four records land in the ONE turn the opener starts, so the exchange count is 1
+    // and the four are its hits.
+    assert_eq!(summary["matched"], 1, "{}", out.stdout);
+    let hits: Vec<serde_json::Value> = serde_json::from_str::<serde_json::Value>(
+        out.stdout
+            .lines()
+            .find(|l| l.contains("\"kind\":\"exchange\""))
+            .expect("an exchange line"),
+    )
+    .expect("the exchange is one object")["hits"]
+        .as_array()
+        .expect("hits is an array")
+        .clone();
+    assert_eq!(hits.len(), 4, "every line emitted: {}", out.stdout);
+    for text in [
+        "zzodd block index",
+        "zzodd ends turn",
+        "zzodd quota",
+        "zzodd attribution",
+    ] {
+        assert!(
+            out.stdout.contains(text),
+            "the text on the line survives its odd key: {text}\n{}",
+            out.stdout
+        );
+    }
+
+    // The odd key reads ABSENT; the well-typed sibling on the same record decodes.
+    let r1 = row(&h, "1");
+    assert!(
+        r1["api_block_index"].is_null(),
+        "a string is not an index: {r1}"
+    );
+    assert_eq!(r1["request_id"], "req_ok1", "{r1}");
+
+    let r2 = row(&h, "2");
+    assert!(
+        r2["tool_ends_turn"].is_null(),
+        "a word is not a boolean: {r2}"
+    );
+
+    // The failure still builds from the parts the record DID give, and the object-typed
+    // key that was a string contributes nothing rather than failing the line.
+    let r3 = row(&h, "3");
+    assert!(
+        r3["api_failure"]["quota"].is_null(),
+        "a string is not a quota: {r3}"
+    );
+    assert_eq!(r3["api_failure"]["error"], "rate_limit", "{r3}");
+
+    let r4 = row(&h, "4");
+    assert!(
+        r4["attribution"]["skill"].is_null(),
+        "a number is not a name: {r4}"
+    );
+    assert_eq!(r4["attribution"]["plugin"], "omc", "{r4}");
+    // The label zone names the layer the record DID give, so the odd key costs the tag
+    // its own name and nothing else.
+    let text = h.run(&["search", "zzodd attribution", &at(SESS)]);
+    assert!(
+        text.stdout.contains("[via plugin omc]"),
+        "the surviving layer still renders:\n{}",
+        text.stdout
+    );
+}

@@ -106,7 +106,16 @@ surface change bumps the PATCH.
   `api_failure`, `interrupted_message_id`, `hook_run_id`, `scheduled_task_id`,
   `scheduled_fire_id` - and four of them render a label-zone tag: `[via skill X]`,
   `[ends turn]`, `[feedback: ...]` and the api-failure headline. An address carries exactly
-  what a scan does. A missing key means this record does not say, never no.
+  what a scan does. A missing key means this record does not say, never no - and so does a
+  key of an unexpected JSON type, which costs its own key and never the record: every one of
+  the eighteen decodes leniently, so a record carrying `"apiBlockIndex":"3"` still emits with
+  its text searchable instead of being booked malformed. They ride the record as ONE struct
+  behind ONE pointer, read by the same serde pass that builds it, so the row every parsed
+  line of every scan carries grows by 8 bytes rather than by the 216 eighteen fields cost:
+  `size_of::<Record>()` moves from 1,368 to 1,376 and the allocation is paid only by a record
+  that names a key. Measured against the tip before it on 56 acid (row, size) pairs, every
+  ratio inside a same-binary control band of 0.2467 and the compacted class reading a mean
+  of 1.0153.
 - **The session a record was minted in, where that is not the session holding it.**
   A record carries two session ids under two spellings, and they disagree exactly when a
   record was hydrated here from another session's stream. `csift list --lineage` reports

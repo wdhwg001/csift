@@ -668,7 +668,10 @@ A record carries keys about the call that produced it. They belong to no leaf, s
 not a label: they ride every `search` hit and every `show` record row as JSON, and four of
 them also render a tag in the label zone. **Absence is read at KEY level**: a missing key
 means *this record does not say*, never *no* - and a fact object that IS present names every
-member, with `null` for one the record lacks.
+member, with `null` for one the record lacks. A key of an UNEXPECTED JSON TYPE reads exactly
+as an absent one (`"apiBlockIndex":"3"` gives `null`, never `3`) and costs only itself: the
+record still emits, its text is still searchable, and nothing is booked malformed. csift
+reports what a record says and never coerces one type into another.
 
 | JSON key | on | label-zone tag | what it is |
 |---|---|---|---|
@@ -677,7 +680,7 @@ member, with `null` for one the record lacks.
 | `api_block_index` | assistant units | — | WHICH content block of that response. Has a version floor - absent from every record of an older build, which is not a fact about the record |
 | `tool_ends_turn` | `agent.tool.result` | `[ends turn]` | the assistant's turn stopped at this tool |
 | `user_feedback` | the refusal's `agent.tool.result` | `[feedback: <first 60 chars>]` | the words a person typed refusing the call - the STRUCTURED form of what csift otherwise parses out of prose. Whole on the wire |
-| `api_failure{error, status, quota{limit_type, resets_at}, truncated_after_output, aborted_mid_stream}` | the synthetic assistant unit a failed call left behind | `[api failure <kind> status <n> quota <window> truncated after output aborted mid-stream]`, each half only when the record names it | why the call failed. A record naming none of them carries no object at all, so the tag can name no floor word |
+| `api_failure{error, status, quota{limit_type, resets_at}, truncated_after_output, aborted_mid_stream}` | the synthetic assistant unit a failed call left behind | `[api failure <kind> status <n> quota <window> truncated after output aborted mid-stream]`, each half only when the record names it (a quota naming only its reset instant renders the bare word `quota`) | why the call failed. A record naming none of them carries no object at all, so the tag can name no floor word |
 | `interrupted_message_id` | user units | — (rides the `for` edge) | the API message an interruption cut short |
 | `hook_run_id` | `harness.turn.stop-hooks` | — (rides the `for` edge) | the hook RUN, not an API tool_use: the key is `toolUseID` and the name is the only thing that suggests otherwise |
 | `scheduled_task_id`, `scheduled_fire_id` | `harness.schedule.fire` | — | the scheduled task and its individual firing. The task id equals the `taskId` of the scheduler's own `harness.schedule.event` record in the same file |

@@ -6,42 +6,241 @@
 //! They belong to no single leaf, which is why they are a family of their own rather
 //! than fields of one classification.
 //!
-//! WIDTH IS THE DESIGN CONSTRAINT, and it is paid down rather than ignored. Every parsed
-//! line of every scan carries a whole `Record`, so seventeen new fields are seventeen
-//! fields on every row - the C-41 lesson, which narrowed a spine row to 72 bytes for
-//! exactly that reason. So every string here is `Box<str>` rather than `String` (8 bytes
-//! saved apiece - the same trade `parse::SpineRow` makes), the two numbers are `u32`
-//! rather than `u64`, `quotaLimits` is deserialized straight into the two-member summary
-//! that is all csift reads of it rather than kept as a payload, and `error` goes through a
-//! STRING-ONLY decoder that keeps the other shape of that key out of the record model
-//! entirely. The measured result is in the width pin (`parse::tests::spine`).
+//! WIDTH IS THE DESIGN CONSTRAINT, and the shape below is what satisfies it and the
+//! one-pass rule at once. Every parsed line of every scan carries a whole `Record`, so
+//! eighteen `Option`s in that struct are eighteen fields on every row - the C-41 lesson,
+//! which narrowed a spine row to 72 bytes for exactly that reason. They live in ONE
+//! [`Exposed`] behind ONE `Box` instead, so the row grows by a pointer and the allocation
+//! is paid only by a record that actually names a key; `#[serde(flatten)]` is what keeps
+//! it to the SAME pass serde already makes, reading the keys where they sit at the top
+//! level. Inside `Exposed` the width is still paid down where that is free, because a
+//! record carrying one key carries the whole struct: every string is `Box<str>` rather
+//! than `String` (8 bytes apiece, the trade `parse::SpineRow` makes), the two numbers are
+//! `u32`, and `quotaLimits` is deserialized straight into the two-member summary that is
+//! all csift reads of it rather than kept as a payload.
 //!
 //! The alternative - lifting the keys from the source line on demand - was built and
-//! measured rather than argued about, and it is why these are serde fields. A depth-1 key
-//! walk at the one place a `Record` is built from bytes, behind an Aho-Corasick gate over
-//! the fourteen key names, cost 48 to 79 percent of user CPU on the section 7 acid rows,
-//! because it is a second whole-line pass on top of the one serde already makes. Widening
-//! the row cost nothing measurable on the same rows. A lazier read at EMISSION time cannot
-//! reach the bytes at all: the engine keeps a record's source line only for a line whose
-//! `Record` cannot answer for it, which is the opposite of the population these keys ride.
+//! measured rather than argued about, and it is why this is a serde shape at all. A
+//! depth-1 key walk at the one place a `Record` is built from bytes, behind an
+//! Aho-Corasick gate over the key names, cost 48 to 79 percent of user CPU on three
+//! section 7 acid rows over a 415 MiB transcript, because it is a second whole-line pass
+//! on top of the one serde already makes. A lazier read at EMISSION time cannot reach the
+//! bytes at all: the engine keeps a record's source line only for a line whose `Record`
+//! cannot answer for it, which is the opposite of the population these keys ride.
 
+use super::lenient;
 use super::*;
 
-/// A JSON string value, or `None` for ANY other shape.
+/// The eighteen EXPOSED KEYS of one record, as one value behind one pointer.
 ///
-/// This is what keeps the `type:"system"` `api_error` record's `error` OBJECT - whose
-/// `headers` member holds the failed request's whole HTTP response header set - out of the
-/// record model, rather than reading it in and remembering not to render it. The
-/// sensitive-headers law of AGENTS section 4, enforced by the decoder.
-pub(super) fn string_only<'de, D>(de: D) -> std::result::Result<Option<Box<str>>, D::Error>
+/// Built only for a record that names at least one of them ([`exposed_keys`]), so the
+/// common record - which names none - costs the 8 bytes of a null pointer and no
+/// allocation at all.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Exposed {
+    /// `attributionAgent` - the agent DEFINITION the request ran under. A sidechain fact:
+    /// measured over one projects root, 413,510 of 413,510 carriers have `isSidechain`
+    /// true, which is why csift reports it as data and renders no marker for it.
+    #[serde(
+        default,
+        rename = "attributionAgent",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub attribution_agent: Option<Box<str>>,
+
+    /// `attributionSkill` - the skill that was active for the call.
+    #[serde(
+        default,
+        rename = "attributionSkill",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub attribution_skill: Option<Box<str>>,
+
+    /// `attributionPlugin` - the plugin that owns that skill, derived from it by the
+    /// composer rather than supplied beside it.
+    #[serde(
+        default,
+        rename = "attributionPlugin",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub attribution_plugin: Option<Box<str>>,
+
+    /// `attributionMcpServer` - the MCP server behind the tool. Written only for a main
+    /// or subagent query source, together with the tool below.
+    #[serde(
+        default,
+        rename = "attributionMcpServer",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub attribution_mcp_server: Option<Box<str>>,
+
+    /// `attributionMcpTool` - the MCP tool itself.
+    #[serde(
+        default,
+        rename = "attributionMcpTool",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub attribution_mcp_tool: Option<Box<str>>,
+
+    /// `requestId` - the API request this record's turn came back on. Every record built
+    /// from one response carries the same value, so it is the join key for "which records
+    /// are one API message". Rides assistant records and the two model-refusal `system`
+    /// subtypes; the synthetic failure placeholder carries it explicitly undefined.
+    #[serde(
+        default,
+        rename = "requestId",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub request_id: Option<Box<str>>,
+
+    /// `apiBlockIndex` - WHICH content block of that response this record is. Has a
+    /// version floor: absent from every record of a build below 2.1.257.
+    #[serde(
+        default,
+        rename = "apiBlockIndex",
+        deserialize_with = "lenient::u32_only"
+    )]
+    pub api_block_index: Option<u32>,
+
+    /// `toolEndsTurn` - the assistant's turn stopped at this tool's result. Written on
+    /// the `type:"user"` record that carries the result, and measured for exactly one
+    /// tool (`StructuredOutput`) on two projects roots.
+    #[serde(
+        default,
+        rename = "toolEndsTurn",
+        deserialize_with = "lenient::bool_only"
+    )]
+    pub tool_ends_turn: Option<bool>,
+
+    /// `userFeedback` - the words a person typed when refusing a tool call. A TOP-LEVEL
+    /// key of the synthesised refusal record, not a member of its `toolUseResult`, which
+    /// is a plain string on every measured carrier.
+    #[serde(
+        default,
+        rename = "userFeedback",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub user_feedback: Option<Box<str>>,
+
+    /// `error` - the failure KIND of a synthetic API-failure record, STRING form only.
+    /// The same key is an OBJECT on a `type:"system"` `api_error` record and that object
+    /// carries the failed request's whole HTTP response header set, so the decoder keeps
+    /// the string and answers `None` for anything else: the sensitive-headers law of
+    /// AGENTS section 4, enforced where the value enters rather than where it renders.
+    #[serde(default, deserialize_with = "lenient::string_only")]
+    pub error: Option<Box<str>>,
+
+    /// `apiErrorStatus` - the HTTP status of the failed call.
+    #[serde(
+        default,
+        rename = "apiErrorStatus",
+        deserialize_with = "lenient::u32_only"
+    )]
+    pub api_error_status: Option<u32>,
+
+    /// `quotaLimits` - a 429's quota object, deserialized straight into the two members
+    /// csift reads of it (which limit, and when it reopens) rather than carried whole:
+    /// the measured object is ten keys, and the other eight are account bookkeeping.
+    #[serde(
+        default,
+        rename = "quotaLimits",
+        deserialize_with = "lenient::quota_only"
+    )]
+    pub quota_limits: Option<Box<QuotaSummary>>,
+
+    /// `truncatedAfterOutput` - the stream died after output had begun, so the assistant
+    /// text before this placeholder is partial.
+    #[serde(
+        default,
+        rename = "truncatedAfterOutput",
+        deserialize_with = "lenient::bool_only"
+    )]
+    pub truncated_after_output: Option<bool>,
+
+    /// `isAbortedMidStream` - a partial record kept after an abort.
+    #[serde(
+        default,
+        rename = "isAbortedMidStream",
+        deserialize_with = "lenient::bool_only"
+    )]
+    pub is_aborted_mid_stream: Option<bool>,
+
+    /// `interruptedMessageId` - the API message an interruption cut short. An API
+    /// `message.id`, never a record `uuid`: measured, 0 of 272 and 0 of 418 values equal
+    /// a `uuid` of their own file.
+    #[serde(
+        default,
+        rename = "interruptedMessageId",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub interrupted_message_id: Option<Box<str>>,
+
+    /// `scheduledTaskId` - the scheduled task whose prompt this record is. Equal to the
+    /// `taskId` of the scheduler's own `scheduled_task_fire` record in the same file.
+    #[serde(
+        default,
+        rename = "scheduledTaskId",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub scheduled_task_id: Option<Box<str>>,
+
+    /// `scheduledFireId` - that task's individual firing, written together with the task
+    /// id and never alone.
+    #[serde(
+        default,
+        rename = "scheduledFireId",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub scheduled_fire_id: Option<Box<str>>,
+
+    /// `toolUseID` - on a `stop_hook_summary` record this is the HOOK RUN id, not an API
+    /// tool_use id, which is why [`Record::hook_run_id`] reads it on that subtype alone.
+    #[serde(
+        default,
+        rename = "toolUseID",
+        deserialize_with = "lenient::string_only"
+    )]
+    pub tool_use_id_key: Option<Box<str>>,
+}
+
+impl Exposed {
+    /// Does this record name any exposed key at all? The gate on the allocation: a
+    /// transcript is mostly records that name none, and an all-`None` box would be a heap
+    /// object per line saying nothing.
+    fn says_something(&self) -> bool {
+        self.attribution_agent.is_some()
+            || self.attribution_skill.is_some()
+            || self.attribution_plugin.is_some()
+            || self.attribution_mcp_server.is_some()
+            || self.attribution_mcp_tool.is_some()
+            || self.request_id.is_some()
+            || self.api_block_index.is_some()
+            || self.tool_ends_turn.is_some()
+            || self.user_feedback.is_some()
+            || self.error.is_some()
+            || self.api_error_status.is_some()
+            || self.quota_limits.is_some()
+            || self.truncated_after_output.is_some()
+            || self.is_aborted_mid_stream.is_some()
+            || self.interrupted_message_id.is_some()
+            || self.scheduled_task_id.is_some()
+            || self.scheduled_fire_id.is_some()
+            || self.tool_use_id_key.is_some()
+    }
+}
+
+/// The `#[serde(flatten)]` hook on [`Record::exposed`]: read the eighteen keys out of the
+/// record's own top level, and BOX the result only when at least one of them is there.
+///
+/// `Exposed` is built on the stack either way - that is what reading eighteen keys in one
+/// pass costs - and only a record that says something pays for a heap object that outlives
+/// the call.
+pub(super) fn exposed_keys<'de, D>(de: D) -> std::result::Result<Option<Box<Exposed>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let v = serde_json::Value::deserialize(de)?;
-    Ok(match v {
-        serde_json::Value::String(s) => Some(s.into_boxed_str()),
-        _ => None,
-    })
+    let keys = Exposed::deserialize(de)?;
+    Ok(keys.says_something().then(|| Box::new(keys)))
 }
 
 /// The five `attribution*` keys of one record, as one value.
@@ -92,10 +291,10 @@ impl Attribution {
 #[serde(default)]
 pub struct QuotaSummary {
     /// `rateLimitType` - which window was hit.
-    #[serde(rename = "rateLimitType")]
-    pub limit_type: Option<String>,
+    #[serde(rename = "rateLimitType", deserialize_with = "lenient::string_only")]
+    pub limit_type: Option<Box<str>>,
     /// `resetsAt` - epoch SECONDS at which that window reopens.
-    #[serde(rename = "resetsAt")]
+    #[serde(rename = "resetsAt", deserialize_with = "lenient::u64_only")]
     pub resets_at: Option<u64>,
 }
 
@@ -170,23 +369,32 @@ impl ApiFailure {
 const HOOK_RUN_SUBTYPE: &str = "stop_hook_summary";
 
 impl Record {
+    /// The exposed keys this record names, or `None` when it names none. Every accessor
+    /// below reads through it, so "the record does not say" and "the key is absent" are
+    /// one answer rather than two.
+    #[must_use]
+    pub fn exposed_keys(&self) -> Option<&Exposed> {
+        self.exposed.as_deref()
+    }
+
     /// The five attribution keys, when the record carries at least one. `None` on every
     /// record that names none - which is every record of a main-lane transcript with no
     /// skill, plugin or MCP tool in play.
     #[must_use]
     pub fn attribution(&self) -> Option<Attribution> {
-        let any = self.attribution_agent.is_some()
-            || self.attribution_skill.is_some()
-            || self.attribution_plugin.is_some()
-            || self.attribution_mcp_server.is_some()
-            || self.attribution_mcp_tool.is_some();
+        let k = self.exposed_keys()?;
+        let any = k.attribution_agent.is_some()
+            || k.attribution_skill.is_some()
+            || k.attribution_plugin.is_some()
+            || k.attribution_mcp_server.is_some()
+            || k.attribution_mcp_tool.is_some();
         let own = |v: &Option<Box<str>>| v.as_deref().map(str::to_string);
         any.then(|| Attribution {
-            agent: own(&self.attribution_agent),
-            skill: own(&self.attribution_skill),
-            plugin: own(&self.attribution_plugin),
-            mcp_server: own(&self.attribution_mcp_server),
-            mcp_tool: own(&self.attribution_mcp_tool),
+            agent: own(&k.attribution_agent),
+            skill: own(&k.attribution_skill),
+            plugin: own(&k.attribution_plugin),
+            mcp_server: own(&k.attribution_mcp_server),
+            mcp_tool: own(&k.attribution_mcp_tool),
         })
     }
 
@@ -204,16 +412,17 @@ impl Record {
         if self.is_api_error_message != Some(true) {
             return None;
         }
+        let k = self.exposed_keys()?;
         let f = ApiFailure {
             error: self.error_kind().map(str::to_string),
-            status: self.api_error_status,
-            quota: self
+            status: k.api_error_status,
+            quota: k
                 .quota_limits
                 .as_deref()
                 .filter(|q| QuotaSummary::says_something(q))
                 .cloned(),
-            truncated_after_output: self.truncated_after_output.unwrap_or(false),
-            aborted_mid_stream: self.is_aborted_mid_stream.unwrap_or(false),
+            truncated_after_output: k.truncated_after_output.unwrap_or(false),
+            aborted_mid_stream: k.is_aborted_mid_stream.unwrap_or(false),
         };
         // ONE list decides both the gate and the headline, so a failure that renders can
         // never say nothing and one that says nothing can never render.
@@ -225,7 +434,7 @@ impl Record {
     /// field's decoder keeps only the string, so no path can reach the object's `headers`.
     #[must_use]
     pub fn error_kind(&self) -> Option<&str> {
-        self.error.as_deref()
+        self.exposed_keys()?.error.as_deref()
     }
 
     /// The HOOK RUN a `stop_hook_summary` record reports on. `toolUseID` is read on that
@@ -236,6 +445,6 @@ impl Record {
         if self.subtype.as_deref() != Some(HOOK_RUN_SUBTYPE) {
             return None;
         }
-        self.tool_use_id_key.as_deref()
+        self.exposed_keys()?.tool_use_id_key.as_deref()
     }
 }
