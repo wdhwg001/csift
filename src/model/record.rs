@@ -2,14 +2,18 @@
 //! the shapes a transcript line holds.
 //!
 //! A PAIRED ROOT since the root crossed the 600-line structure gate: `Record` and its
-//! accessors stay here, the `message` object goes to `record/message.rs` and the content
-//! BLOCK enum to `record/blocks.rs`. Both are re-exported, so every `crate::model::<item>`
-//! path resolves exactly as before.
+//! accessors stay here, the `message` object goes to `record/message.rs`, the content
+//! BLOCK enum to `record/blocks.rs`, and the EXPOSED KEYS a record states about the call
+//! behind it - their shapes, their accessors and the width reasoning - to
+//! `record/keys.rs`. All three are re-exported, so every `crate::model::<item>` path
+//! resolves exactly as before.
 
 mod blocks;
+mod keys;
 mod message;
 
 pub use blocks::*;
+pub use keys::{ApiFailure, Attribution};
 pub use message::*;
 
 use super::*;
@@ -296,6 +300,108 @@ pub struct Record {
     /// [`Record::converted_text`] answers `Option`: the common case allocates nothing.
     #[serde(skip)]
     pub conversion_parsed: std::sync::OnceLock<Option<Box<ConversionText>>>,
+
+    // ---- THE EXPOSED KEYS (`record/keys.rs`) -------------------------------------
+    // What a record says about the CALL behind it. Every string here is `Box<str>` and
+    // the two numbers are `u32`, because these seventeen fields are paid for on every
+    // parsed line of every scan - the C-41 law, and the same trade `parse::SpineRow`
+    // makes. The width is pinned (`parse::tests::spine`) and the alternative was measured
+    // rather than assumed; the module doc in `record/keys.rs` carries both numbers.
+    /// `attributionAgent` - the agent DEFINITION the request ran under. A sidechain fact:
+    /// measured over one projects root, 413,510 of 413,510 carriers have `isSidechain`
+    /// true, which is why csift reports it as data and renders no marker for it.
+    #[serde(default, rename = "attributionAgent")]
+    pub attribution_agent: Option<Box<str>>,
+
+    /// `attributionSkill` - the skill that was active for the call.
+    #[serde(default, rename = "attributionSkill")]
+    pub attribution_skill: Option<Box<str>>,
+
+    /// `attributionPlugin` - the plugin that owns that skill, derived from it by the
+    /// composer rather than supplied beside it.
+    #[serde(default, rename = "attributionPlugin")]
+    pub attribution_plugin: Option<Box<str>>,
+
+    /// `attributionMcpServer` - the MCP server behind the tool. Written only for a main
+    /// or subagent query source, together with the tool below.
+    #[serde(default, rename = "attributionMcpServer")]
+    pub attribution_mcp_server: Option<Box<str>>,
+
+    /// `attributionMcpTool` - the MCP tool itself.
+    #[serde(default, rename = "attributionMcpTool")]
+    pub attribution_mcp_tool: Option<Box<str>>,
+
+    /// `requestId` - the API request this record's turn came back on. Every record built
+    /// from one response carries the same value, so it is the join key for "which records
+    /// are one API message". Rides assistant records and the two model-refusal `system`
+    /// subtypes; the synthetic failure placeholder carries it explicitly undefined.
+    #[serde(default, rename = "requestId")]
+    pub request_id: Option<Box<str>>,
+
+    /// `apiBlockIndex` - WHICH content block of that response this record is. Has a
+    /// version floor: absent from every record of a build below 2.1.257.
+    #[serde(default, rename = "apiBlockIndex")]
+    pub api_block_index: Option<u32>,
+
+    /// `toolEndsTurn` - the assistant's turn stopped at this tool's result. Written on
+    /// the `type:"user"` record that carries the result, and measured for exactly one
+    /// tool (`StructuredOutput`) on two projects roots.
+    #[serde(default, rename = "toolEndsTurn")]
+    pub tool_ends_turn: Option<bool>,
+
+    /// `userFeedback` - the words a person typed when refusing a tool call. A TOP-LEVEL
+    /// key of the synthesised refusal record, not a member of its `toolUseResult`, which
+    /// is a plain string on every measured carrier.
+    #[serde(default, rename = "userFeedback")]
+    pub user_feedback: Option<Box<str>>,
+
+    /// `error` - the failure KIND of a synthetic API-failure record, STRING form only.
+    /// The same key is an OBJECT on a `type:"system"` `api_error` record and that object
+    /// carries the failed request's whole HTTP response header set, so the decoder keeps
+    /// the string and answers `None` for anything else: the sensitive-headers law of
+    /// AGENTS section 4, enforced where the value enters rather than where it renders.
+    #[serde(default, deserialize_with = "keys::string_only")]
+    pub error: Option<Box<str>>,
+
+    /// `apiErrorStatus` - the HTTP status of the failed call.
+    #[serde(default, rename = "apiErrorStatus")]
+    pub api_error_status: Option<u32>,
+
+    /// `quotaLimits` - a 429's quota object, deserialized straight into the two members
+    /// csift reads of it (which limit, and when it reopens) rather than carried whole:
+    /// the measured object is ten keys, and the other eight are account bookkeeping.
+    #[serde(default, rename = "quotaLimits")]
+    pub quota_limits: Option<Box<keys::QuotaSummary>>,
+
+    /// `truncatedAfterOutput` - the stream died after output had begun, so the assistant
+    /// text before this placeholder is partial.
+    #[serde(default, rename = "truncatedAfterOutput")]
+    pub truncated_after_output: Option<bool>,
+
+    /// `isAbortedMidStream` - a partial record kept after an abort.
+    #[serde(default, rename = "isAbortedMidStream")]
+    pub is_aborted_mid_stream: Option<bool>,
+
+    /// `interruptedMessageId` - the API message an interruption cut short. An API
+    /// `message.id`, never a record `uuid`: measured, 0 of 272 and 0 of 418 values equal
+    /// a `uuid` of their own file.
+    #[serde(default, rename = "interruptedMessageId")]
+    pub interrupted_message_id: Option<Box<str>>,
+
+    /// `scheduledTaskId` - the scheduled task whose prompt this record is. Equal to the
+    /// `taskId` of the scheduler's own `scheduled_task_fire` record in the same file.
+    #[serde(default, rename = "scheduledTaskId")]
+    pub scheduled_task_id: Option<Box<str>>,
+
+    /// `scheduledFireId` - that task's individual firing, written together with the task
+    /// id and never alone.
+    #[serde(default, rename = "scheduledFireId")]
+    pub scheduled_fire_id: Option<Box<str>>,
+
+    /// `toolUseID` - on a `stop_hook_summary` record this is the HOOK RUN id, not an API
+    /// tool_use id, which is why [`Record::hook_run_id`] reads it on that subtype alone.
+    #[serde(default, rename = "toolUseID")]
+    pub tool_use_id_key: Option<Box<str>>,
 
     /// `file-history-snapshot` payload (a top-level sibling). Carries
     /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.

@@ -391,6 +391,16 @@ fn a_spine_row_stays_far_narrower_than_a_record() {
 ///
 /// The figure is platform-dependent in principle; it is asserted on the 64-bit targets the
 /// project builds for, and a port that moves it updates the number with its reason.
+///
+/// It last moved by 216 bytes, for the seventeen EXPOSED KEYS (`model::record::keys`).
+/// They are serde fields because the alternative was measured: lifting them from the
+/// source line by a depth-1 walk, at the one place a record is built from bytes and behind
+/// a byte gate, cost 48 to 79 percent of USER CPU on three acid rows, being a second
+/// whole-line pass on top of serde's. Widening the row by four hundred bytes of dead
+/// padding, measured the same way on the same rows, cost nothing outside the noise band.
+/// So the width is paid down instead of avoided - `Box<str>` rather than `String`, `u32`
+/// rather than `u64`, the quota object narrowed to its two read members at deserialization
+/// - and 216 is what that comes to.
 #[test]
 fn a_record_is_exactly_as_wide_as_it_is_written_down_to_be() {
     assert_eq!(
@@ -400,7 +410,7 @@ fn a_record_is_exactly_as_wide_as_it_is_written_down_to_be() {
     );
     assert_eq!(
         std::mem::size_of::<Record>(),
-        1368,
+        1584,
         "`Record`'s width moved - a field was added or a payload inlined; measure it, \
          say why the new width is worth paying on every parsed line, and update this \
          number and the one AGENTS section 3.3 quotes"

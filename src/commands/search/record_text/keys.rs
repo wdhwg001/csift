@@ -3,48 +3,224 @@
 //! request and block it came from, what a person typed refusing a tool, why a call
 //! failed. They belong to no single leaf, which is why they are a family of their own.
 //!
-//! A STUB at the skeleton amendment: the dispatch is wired here, the family's own
-//! semantics are not. The body below is what the family lane replaces.
+//! This family has NO render: its facts are keys a record EXPOSES, never what a line
+//! says, so the render seam does not offer it a record (`seam::render_families`) and
+//! there is nothing here to answer with.
+//!
+//! PERF (SPEC section 7): the keys are read off the source line by one depth-1 walk,
+//! memoised per record ([`Record::exposed`]), so a record emitting several units walks
+//! once and a record that matched nothing never walks at all. Nothing here is a `Record`
+//! field: eighteen tolerant `Option`s would widen the row every parsed line of every scan
+//! carries, which is the C-41 lesson this family is built around.
 
 use super::*;
+use crate::model::{ApiFailure, Attribution};
 
-/// The exposed-keys family's own facts.
+/// How much of a refusal's typed text the LABEL ZONE carries. The whole text rides JSON;
+/// the label zone is one line beside a leaf path, and a person refusing a tool can type
+/// a paragraph.
+const FEEDBACK_MAX: usize = 60;
+
+/// Why a Stop-hook summary that names no hook run has an edge at all: the leaf OWES one.
+const NO_HOOK_RUN_REASON: &str = "no toolUseID on this stop_hook_summary record";
+
+/// The exposed-keys family's own facts. One variant per key (or per key GROUP, where the
+/// harness writes a set that only means anything together).
 ///
-/// UNINHABITED at the skeleton amendment - the family lane adds its variants HERE and
-/// nowhere else: one enum per family is what keeps `types/facts.rs` out of every
-/// family's way, and what stops two families minting one idea twice.
-///
-/// An EDGE to another record is never a variant here. Edges are SHARED on [`HitFact`]
-/// itself, because several families carry them and a reader has to read every one the
-/// same way; a family builds one through the shared helper instead of describing the
-/// shape again.
+/// Each carries the value rather than the record, so the projections below are total and
+/// the JSON shape is decided in one place per key.
 #[derive(Debug, Clone)]
-pub(crate) enum Fact {}
+pub(crate) enum Fact {
+    /// The five `attribution*` keys as one object. Boxed: it is five `Option<String>`s
+    /// and the enum is carried by value on every hit that has any fact at all.
+    Attribution(Box<Attribution>),
+    /// `requestId` - the API request this record's turn came back on.
+    RequestId(String),
+    /// `apiBlockIndex` - which content block of that response this record is.
+    ApiBlockIndex(u32),
+    /// `toolEndsTurn` - the assistant's turn stopped at this tool's result.
+    ToolEndsTurn,
+    /// `userFeedback` - the words a person typed refusing a tool call, structured.
+    UserFeedback(String),
+    /// The API-failure set of a synthetic assistant record. Boxed for the same reason as
+    /// the attribution.
+    ApiFailure(Box<ApiFailure>),
+    /// `interruptedMessageId` - the API message an interruption cut short.
+    InterruptedMessage(String),
+    /// `scheduledTaskId` - the scheduled task whose prompt this is.
+    ScheduledTaskId(String),
+    /// `scheduledFireId` - that task's individual firing.
+    ScheduledFireId(String),
+    /// The HOOK RUN a `stop_hook_summary` reports on.
+    HookRunId(String),
+}
 
 impl Fact {
     /// The label-zone tag this fact adds, if any.
+    ///
+    /// Four of the ten render a tag and six ride JSON alone, and the split is not
+    /// arbitrary: a tag is worth a reader's line only when it says something about THIS
+    /// record that a person scanning a result list would act on. An id is a join key, and
+    /// `attributionAgent` is on every record of a subagent transcript, so a tag naming it
+    /// would be the same word on every line.
     pub(crate) fn label_zone(&self) -> Option<String> {
-        match *self {}
+        match self {
+            // Only the SPECIFIC half: a skill, the plugin that owns it, or the MCP pair.
+            Fact::Attribution(a) => a
+                .specific()
+                .map(|(kind, name)| format!("[via {kind} {name}]")),
+            Fact::ToolEndsTurn => Some("[ends turn]".to_string()),
+            Fact::UserFeedback(text) => Some(format!(
+                "[feedback: {}]",
+                crate::text::truncate_excerpt(text, FEEDBACK_MAX)
+            )),
+            // `headline` is `None` exactly when the failure says nothing, and the model
+            // layer never builds one that does - so this can render no floor word.
+            Fact::ApiFailure(f) => f.headline().map(|h| format!("[api failure {h}]")),
+            Fact::RequestId(_)
+            | Fact::ApiBlockIndex(_)
+            | Fact::InterruptedMessage(_)
+            | Fact::ScheduledTaskId(_)
+            | Fact::ScheduledFireId(_)
+            | Fact::HookRunId(_) => None,
+        }
     }
 
     /// The JSON key(s) and value(s) this fact adds to its hit object.
+    ///
+    /// An object-valued fact names EVERY member, with null for one the record lacks, so a
+    /// consumer reads presence from the KEY and never from an interior: `attribution`
+    /// present means the record named at least one of the five, and a null `skill` inside
+    /// it means this record did not name a skill.
     pub(crate) fn json(&self) -> Vec<(&'static str, serde_json::Value)> {
-        match *self {}
+        match self {
+            Fact::Attribution(a) => vec![(
+                "attribution",
+                serde_json::json!({
+                    "agent": a.agent,
+                    "skill": a.skill,
+                    "plugin": a.plugin,
+                    "mcp_server": a.mcp_server,
+                    "mcp_tool": a.mcp_tool,
+                }),
+            )],
+            Fact::RequestId(id) => vec![("request_id", serde_json::json!(id))],
+            Fact::ApiBlockIndex(n) => vec![("api_block_index", serde_json::json!(n))],
+            Fact::ToolEndsTurn => vec![("tool_ends_turn", serde_json::json!(true))],
+            Fact::UserFeedback(text) => vec![("user_feedback", serde_json::json!(text))],
+            Fact::ApiFailure(f) => vec![(
+                "api_failure",
+                serde_json::json!({
+                    "error": f.error,
+                    "status": f.status,
+                    "quota": f.quota.as_ref().map(|q| serde_json::json!({
+                        "limit_type": q.limit_type,
+                        "resets_at": q.resets_at,
+                    })),
+                    "truncated_after_output": f.truncated_after_output,
+                    "aborted_mid_stream": f.aborted_mid_stream,
+                }),
+            )],
+            Fact::InterruptedMessage(id) => {
+                vec![("interrupted_message_id", serde_json::json!(id))]
+            }
+            Fact::ScheduledTaskId(id) => vec![("scheduled_task_id", serde_json::json!(id))],
+            Fact::ScheduledFireId(id) => vec![("scheduled_fire_id", serde_json::json!(id))],
+            Fact::HookRunId(id) => vec![("hook_run_id", serde_json::json!(id))],
+        }
     }
 }
 
 /// The exposed-keys family's per-unit facts and markers.
 ///
 /// Called for EVERY emitted unit through [`crate::commands::search::family_facts`].
-/// Unlike the other five this family is keyed on FIELDS rather than on a leaf, so a
-/// filled body reads the record's own keys and returns nothing when it carries none -
-/// which is the common case, and the reason an absent key means "this record does not
-/// say" rather than "no".
+/// Unlike the other five this family is keyed on FIELDS rather than on a leaf, so the
+/// body reads the record's own keys and returns nothing when it carries none - which is
+/// the common case, and the reason an absent key means "this record does not say" rather
+/// than "no".
+///
+/// The gate is the KEY, never the leaf: a key is a fact about the record whatever csift
+/// labelled it, and keying the gate on a label would make the answer depend on which
+/// selector the reader passed. The two exceptions are the ones the HARNESS itself scopes -
+/// the API-failure set is read only through `isApiErrorMessage`, the flag its one factory
+/// sets, and `toolUseID` is read only on the `stop_hook_summary` subtype, where it is a
+/// hook-run id rather than the API tool_use id its name suggests.
+///
+/// The facts are RECORD-level, so the unit's own block is not consulted; `section` is read
+/// for the ONE edge a LEAF owes rather than a key.
+///
+/// The family produces no [`Marker`]: every tag it renders belongs to a value, so it
+/// rides that value's fact and the two surfaces stay one decision.
 pub(crate) fn facts(
-    _rec: &Record,
+    rec: &Record,
     _raw: Option<&str>,
-    _section: &Section<'_>,
-    _ctx: &ClassifyCtx,
+    section: &Section<'_>,
+    ctx: &ClassifyCtx,
 ) -> (Vec<HitFact>, Vec<Marker>) {
-    (Vec::new(), Vec::new())
+    let mut out: Vec<HitFact> = Vec::new();
+    let mut push = |f: Fact| out.push(HitFact::Keys(f));
+    if let Some(a) = rec.attribution() {
+        push(Fact::Attribution(Box::new(a)));
+    }
+    if let Some(f) = rec.api_failure() {
+        push(Fact::ApiFailure(Box::new(f)));
+    }
+    if rec.tool_ends_turn == Some(true) {
+        push(Fact::ToolEndsTurn);
+    }
+    if let Some(t) = rec.user_feedback.as_deref() {
+        push(Fact::UserFeedback(t.to_string()));
+    }
+    if let Some(id) = rec.request_id.as_deref() {
+        push(Fact::RequestId(id.to_string()));
+    }
+    if let Some(n) = rec.api_block_index {
+        push(Fact::ApiBlockIndex(n));
+    }
+    if let Some(id) = rec.interrupted_message_id.as_deref() {
+        push(Fact::InterruptedMessage(id.to_string()));
+    }
+    if let Some(id) = rec.scheduled_task_id.as_deref() {
+        push(Fact::ScheduledTaskId(id.to_string()));
+    }
+    if let Some(id) = rec.scheduled_fire_id.as_deref() {
+        push(Fact::ScheduledFireId(id.to_string()));
+    }
+    if let Some(id) = rec.hook_run_id() {
+        push(Fact::HookRunId(id.to_string()));
+    }
+    out.extend(for_edges(rec, section, ctx));
+    (out, Vec::new())
+}
+
+/// The `for` EDGES this unit carries - at most one, and the order below is the precedence.
+///
+/// One per unit is the rule rather than an accident of which keys happen to be there: the
+/// edge answers "which record is this FOR", and a unit with two answers has none. The two
+/// this family owns sit on different line TYPES (a user record and a `system` record), so
+/// a record carrying both keys is not a shape Claude Code writes.
+///
+/// Both ids are real and neither is a record uuid, so on an ordinary transcript both
+/// resolve through [`record_text::for_edge`]'s middle answer - the id printed with `not in
+/// this file`. That is measured rather than assumed: over two projects roots, 0 of 272 and
+/// 0 of 418 `interruptedMessageId` values and 0 of 6,849 and 0 of 6,308 hook-run ids equal
+/// a `uuid` of their own file. The resolving arm is still the one that runs, because
+/// nothing but the uuid map decides it and a family may not build a second index.
+fn for_edges(rec: &Record, section: &Section<'_>, ctx: &ClassifyCtx) -> Option<HitFact> {
+    if let Some(id) = rec.interrupted_message_id.as_deref() {
+        return Some(for_edge("interrupted", Basis::Key, Some(id), ctx));
+    }
+    if let Some(id) = rec.hook_run_id() {
+        return Some(for_edge("hook run", Basis::Key, Some(id), ctx));
+    }
+    // The edge is owed by the LEAF here, not by a key: every Stop-hook summary measured
+    // names its run, so one that does not is a shape worth saying out loud rather than a
+    // hit that quietly carries one fewer field.
+    if section.class == Some(Class::TurnStopHooks) {
+        return Some(HitFact::ForUnknown {
+            kind: "hook run",
+            reason: NO_HOOK_RUN_REASON.to_string(),
+        });
+    }
+    None
 }

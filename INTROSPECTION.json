@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "342-349",
+          "lines": "448-455",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7192,7 +7192,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "234-235",
+          "lines": "238-239",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
@@ -14700,12 +14700,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "101-103",
+          "lines": "105-107",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "112-114",
+          "lines": "116-118",
           "snippet": "    /// Co-set with `isCompactSummary` on compaction-summary records (\u00a74.7).\n    #[serde(default, rename = \"isVisibleInTranscriptOnly\")]\n    pub is_visible_in_transcript_only: Option<bool>,"
         },
         {
@@ -14822,7 +14822,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "180-185",
+          "lines": "184-189",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14968,7 +14968,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "215-220",
+          "lines": "219-224",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
@@ -18988,7 +18988,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "386-389",
+          "lines": "492-495",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20130,7 +20130,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "375-379",
+          "lines": "481-485",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -22048,7 +22048,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "300-308",
+          "lines": "406-414",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22168,7 +22168,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "303-306",
+          "lines": "409-412",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22263,7 +22263,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "310-318",
+          "lines": "416-424",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -36683,7 +36683,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "303-306",
+          "lines": "409-412",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -44005,7 +44005,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "57-62",
+          "lines": "61-66",
           "snippet": "    /// The session's plan slug (one stable value per session, minted BEFORE Plan Mode\n    /// is entered - the first slug-carrying record precedes the plan_mode line in every\n    /// measured session - and absent from every record before the mint and from\n    /// metadata-only records). The harness derives the plan file name from it.\n    #[serde(default)]\n    pub slug: Option<String>,"
         },
         {
@@ -45939,7 +45939,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "320-324",
+          "lines": "426-430",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46191,7 +46191,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "326-330",
+          "lines": "432-436",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -47109,7 +47109,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "342-345",
+          "lines": "448-451",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48663,7 +48663,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "360-366",
+          "lines": "466-472",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -52350,7 +52350,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "29-32",
+          "lines": "33-36",
           "snippet": "    /// Record discriminator: \"user\", \"assistant\", \"system\", \"summary\",\n    /// \"last-prompt\", \"attachment\", \u2026 (open set - keep as String, never enum-panic).\n    #[serde(default)]\n    pub r#type: Option<String>,"
         },
         {
@@ -52494,7 +52494,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "222-224",
+          "lines": "226-228",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -52645,7 +52645,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "175-182",
+          "lines": "179-186",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52734,7 +52734,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "40-42",
+          "lines": "44-46",
           "snippet": "    /// ISO8601 UTC, e.g. `2026-06-07T05:43:00.000Z`. Absent on metadata-only records.\n    #[serde(default)]\n    pub timestamp: Option<String>,"
         },
         {
@@ -53555,7 +53555,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "233-235",
+          "lines": "237-239",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53637,7 +53637,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "226-230",
+          "lines": "230-234",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -53841,7 +53841,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "237-240",
+          "lines": "241-244",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -55007,7 +55007,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "64-68",
+          "lines": "68-72",
           "snippet": "    /// Fork provenance (line 1 of a `/fork` child transcript, `type:\"fork-context-ref\"`):\n    /// the PARENT session's last record uuid at fork time - the fork point, feedable to\n    /// `csift show @<parent> --uuid <it>`. Absent everywhere else.\n    #[serde(default, rename = \"parentLastUuid\")]\n    pub parent_last_uuid: Option<String>,"
         },
         {
@@ -55101,7 +55101,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "215-220",
+          "lines": "219-224",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -64828,7 +64828,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "220",
+          "lines": "224",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -71375,7 +71375,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "105-110",
+          "lines": "109-114",
           "snippet": "    /// System-injected pseudo-turn marker (\u00a74.2). `true` \u21d2 a `type:\"user\"` record\n    /// whose string/text content LOOKS human (\"Continue from where you left off.\",\n    /// loop ticks, stop-hook feedback, `<local-command-caveat>\u2026`) but is machine-\n    /// generated - must be excluded from genuine-user and from turn-delimiting.\n    #[serde(default, rename = \"isMeta\")]\n    pub is_meta: Option<bool>,"
         },
         {
@@ -73963,7 +73963,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "101-103",
+          "lines": "105-107",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
@@ -87245,7 +87245,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "137-143",
+          "lines": "141-147",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
@@ -88400,7 +88400,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "187-192",
+          "lines": "191-196",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         },
         {
@@ -88630,7 +88630,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "187-192",
+          "lines": "191-196",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         }
       ],
@@ -89049,7 +89049,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "205-208",
+          "lines": "209-212",
           "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
         },
         {
@@ -91531,7 +91531,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "134-135",
+          "lines": "138-139",
           "snippet": "    #[serde(default, rename = \"toolDenialKind\")]\n    pub tool_denial_kind: Option<String>,"
         },
         {
@@ -91768,7 +91768,7 @@
         {
           "path": "src/model/record.rs",
           "snippet": "    #[serde(default, rename = \"continuedInSessionId\")]\n    pub continued_in_session_id: Option<String>,",
-          "lines": "79-80"
+          "lines": "83-84"
         },
         {
           "path": "src/commands/session/run.rs",
@@ -91942,7 +91942,7 @@
         {
           "path": "src/model/record.rs",
           "snippet": "    #[serde(default, rename = \"sessionKind\")]\n    pub session_kind: Option<String>,",
-          "lines": "88-89"
+          "lines": "92-93"
         },
         {
           "path": "src/parse/lineage.rs",
@@ -93103,7 +93103,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "281-282",
+          "lines": "285-286",
           "snippet": "#[serde(default, rename = \"renderedInHumanTurn\")]\n    pub rendered_in_human_turn: Option<Box<serde_json::value::RawValue>>,"
         },
         {
@@ -95719,6 +95719,453 @@
           "observed": "The rebuild returns the array unchanged when the has-any predicate is false, and otherwise replaces each fallback block with the re-validator's fresh object or drops it, per the boolean. `CYn(` occurs 3 times: the signature, the request-layer call carrying the beta boolean, and an unrelated same-named schema factory. `===\"fallback\"` occurs 13 times, at offsets from 156450016 to 176031167, none inside 180030000..180070000.",
           "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line. One observation per BLOCK whose `type` is `fallback`, found by walking `message.content[]`. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed. Binary counts are byte counts of the literal over the whole executable.",
           "note": "New claim; it is what licenses csift's marker to state what the API did and to state nothing about what a later turn received."
+        }
+      ]
+    },
+    {
+      "id": "REC-140",
+      "area": "record-model",
+      "behavior": "An assistant record carries up to five `attribution*` keys naming the CALL the request ran under: `attributionAgent`, `attributionSkill`, `attributionPlugin`, `attributionMcpServer` and `attributionMcpTool`. One composer builds the set from the query's own context - it takes the `querySource` string and branches on its prefix (`agent:builtin:` yields the agent name from character 14, `agent:custom:` from character 13, a bare `agent:` yields the skill pair alone, and a main-lane source yields the active skill), derives the owning plugin from the skill, and then, for a main or subagent source only, sets the MCP server and its tool. The composed object is SPREAD into the assistant record beside `apiBlockIndex` and `requestId`, so the keys ride the record rather than the message. `attributionAgent` is a SIDECHAIN fact: over two projects roots, 413,510 of 413,510 and 457,917 of 457,917 carriers have `isSidechain` true. The other four are not - 3,082 and 3,178 records carry a skill, plugin or MCP attribution with NO `attributionAgent` at all.",
+      "depends": "csift exposes the five as one `attribution` object on a hit, and renders a label-zone tag for the SPECIFIC half only (`[via skill X]`, else plugin, else the MCP pair). The agent name is deliberately data rather than a tag: it is on every record of a subagent transcript, so a tag naming it would be the same word on every line of that lane. The precedence - skill over the plugin that owns it, both over MCP - mirrors the composer's own derivation, and if a build reordered it the tag would name the wrong layer while the JSON object stayed correct, because the object names every member separately.",
+      "code": [
+        {
+          "path": "src/model/record/keys.rs",
+          "snippet": "    pub fn specific(&self) -> Option<(&'static str, &str)> {",
+          "lines": "72"
+        },
+        {
+          "path": "src/commands/search/record_text/keys.rs",
+          "snippet": "            Fact::Attribution(a) => a\n                .specific()\n                .map(|(kind, name)| format!(\"[via {kind} {name}]\")),",
+          "lines": "69-71"
+        }
+      ],
+      "instrument": "Corpus: over each root, count the lines carrying each of the five keys top-level, with the by-`type` breakdown, the distinct value count per key, and - for `attributionAgent` - the `isSidechain` histogram of its carriers; separately count the lines carrying any of the four non-agent keys, split by whether `attributionAgent` is also present. Binary: byte-search the verified build for `function wE(e,n,r,o,d){try{let f=$fr(e,n,r);`, `function $fr(e,n,r){if(!e)return{};if(e.startsWith(\"agent:builtin:\")` and `apiBlockIndex:la.index,requestId:Ys??void 0,...wE(`, and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root, count the lines carrying each of the five keys top-level, with the by-`type` breakdown, the distinct value count per key, and - for `attributionAgent` - the `isSidechain` histogram of its carriers; separately count the lines carrying any of the four non-agent keys, split by whether `attributionAgent` is also present. Binary: byte-search the verified build for `function wE(e,n,r,o,d){try{let f=$fr(e,n,r);`, `function $fr(e,n,r){if(!e)return{};if(e.startsWith(\"agent:builtin:\")` and `apiBlockIndex:la.index,requestId:Ys??void 0,...wE(`, and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: attributionAgent 413,510 (all `type` assistant; isSidechain true on 413,510 of 413,510; 20 distinct values), attributionSkill 11,380 (11 distinct), attributionPlugin 83,135 (1 distinct), attributionMcpServer 646 (1 distinct), attributionMcpTool 646 (8 distinct). Root 2: 457,917 / 10,767 / 190,878 / 8,042 / 8,042, with 21, 9, 1, 1 and 11 distinct values and isSidechain true on 457,917 of 457,917. Records carrying a skill, plugin or MCP key: 94,610 on root 1, of which 3,082 carry no `attributionAgent`; 202,436 on root 2, of which 3,178 carry none. Every carrier of every one of the five is `type:\"assistant\"` on both roots. The MCP server and tool counts are EQUAL on each root, which is the composer's `if(f.attributionMcpServer=o,d)f.attributionMcpTool=d` shape. All three cited byte anchors occur exactly once in the build and slice byte-exact at 161620013, 161620194 and 165443087.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the attribution composer",
+          "offset": 161620013,
+          "excerpt": "function wE(e,n,r,o,d){try{let f=$fr(e,n,r);if(o){let _=Aa(e);if(_===\"main\"||_===\"subagent\"){if(f.attributionMcpServer=o,d)f.attributionMcpTool=d}}return f}catch(f){retur",
+          "note": "The entry every writer calls: it delegates the agent/skill/plugin half and then adds the MCP pair, for a main or subagent source only."
+        },
+        {
+          "role": "gate",
+          "name": "the querySource prefix branch",
+          "offset": 161620194,
+          "excerpt": "function $fr(e,n,r){if(!e)return{};if(e.startsWith(\"agent:builtin:\"))return{attributionAgent:e.slice(14),...Jhe(n)};if(e.startsWith(\"agent:custom:\")){let o=e.slice(13);return{attributionAgent:o,...Jhe(n,AEn(o))}}if(e.startsWith(\"agent:\"))return Jhe(n);if(Aa(e)===\"main\"&&r)return Jhe(r);return{}}func",
+          "note": "Which of the five keys a record gets, decided entirely by the query source's prefix - and the reason a main-lane record can carry a skill with no agent."
+        },
+        {
+          "role": "writer",
+          "name": "the assistant record builder's spread",
+          "offset": 165443087,
+          "excerpt": "apiBlockIndex:la.index,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp:new Date().toISOString(),...!1,.",
+          "note": "The composed object spread into the record as TOP-LEVEL keys, beside the block index and the request id - one expression, three of this family's claims."
+        }
+      ]
+    },
+    {
+      "id": "REC-141",
+      "area": "record-model",
+      "behavior": "A `requestId` is written top-level onto the record an API response produced, and it is the id of the REQUEST rather than of the record: every record built from one response carries the same value. It rides two shapes on disk - the ordinary assistant record, and the `type:\"system\"` records of the two model-refusal subtypes (`model_refusal_fallback`, `model_refusal_no_fallback`), which is 61 lines of each of two projects roots. The SYNTHETIC assistant record Claude Code fabricates for a failed call carries `requestId: void 0` instead, so a failure placeholder names no request.",
+      "depends": "csift exposes it as `request_id` on the hit, JSON only - it is a join key rather than a word worth a reader's line. The gate is the KEY, not a leaf, which is why the two model-refusal `harness.system.*` units carry it as well as every assistant unit; a doc that said `assistant units` alone would be wrong on 61 lines per root. Nothing joins on it inside csift: it is reported so a consumer can group a turn's records by the request that produced them.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, rename = \"requestId\")]\n    pub request_id: Option<Box<str>>,",
+          "lines": "338-339"
+        }
+      ],
+      "instrument": "Corpus: over each root, count the lines carrying `requestId` top-level, break them down by the object's `type`, and for the `system` carriers by `subtype`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writers of a top-level `requestId` on a record, and read each to separate the response writer from the two model-refusal writers."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root, count the lines carrying `requestId` top-level, break them down by the object's `type`, and for the `system` carriers by `subtype`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 589,397 carriers - 589,336 `assistant` and 61 `system`, the latter splitting `model_refusal_fallback` 56 and `model_refusal_no_fallback` 5. Root 2: 765,994 carriers - 765,933 `assistant` and the same 61 `system`, splitting 59 and 2. Every value is a JSON string on both roots.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-142",
+      "area": "record-model",
+      "behavior": "`apiBlockIndex` is written top-level onto an assistant record and names WHICH content block of one API response that record is: the same expression that spreads the attribution set writes `apiBlockIndex:la.index` beside `requestId`. It has a version floor. On a live projects root the lowest `version` carrying it is 2.1.257 and, at versions at or above that, 166,407 assistant records carry it against 163 that do not - and 152 of those 163 are synthetic API-failure placeholders, which are built by a different factory that writes no block index. A frozen snapshot whose newest assistant record is 2.1.220 carries the key on zero of its 765,000-plus assistant records.",
+      "depends": "csift exposes it as `api_block_index`, JSON only. Together with `request_id` it is what lets a consumer reassemble one API response from the several records Claude Code writes for it. Because the floor is real, its absence is never evidence about the record: on a transcript below the floor no record carries it, which is exactly the absence rule this family states at key level.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, rename = \"apiBlockIndex\")]\n    pub api_block_index: Option<u32>,",
+          "lines": "343-344"
+        }
+      ],
+      "instrument": "Corpus: over each root count the `apiBlockIndex` carriers with their `type` breakdown; then, restricted to `type:\"assistant\"` records whose `version` parses as a triple at or above 2.1.257, count present against absent and, among the absent, how many carry `isApiErrorMessage:true`; report the lowest version carrying the key and the highest lacking it. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg beyond the one writer expression REC-140 cites: byte-search the verified build for the assignment of `la.index` and read the loop that supplies it, to state the index's base and its per-response range."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root count the `apiBlockIndex` carriers with their `type` breakdown; then, restricted to `type:\"assistant\"` records whose `version` parses as a triple at or above 2.1.257, count present against absent and, among the absent, how many carry `isApiErrorMessage:true`; report the lowest version carrying the key and the highest lacking it. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 166,206 carriers at the census pass, every one `type:\"assistant\"` and every value an integer; lowest carrying version 2.1.257. Restricted to assistant records at version >= 2.1.257 (a later pass over the same live root, which had grown): 166,407 present, 163 absent, of which 152 carry `isApiErrorMessage:true`; the 163 absences fall at versions 2.1.257 (1), 2.1.258 (3), 2.1.259 (156), 2.1.263 (2) and 2.1.266 (1). Root 2: 0 carriers, and its highest assistant `version` lacking the key is 2.1.220.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ],
+      "residue": [
+        "The 11 absences at or above the floor that are NOT flagged placeholders are unexplained; a shape census of those 11 records' key sets would say whether they are a second synthetic path or a write-order effect."
+      ]
+    },
+    {
+      "id": "REC-143",
+      "area": "record-model",
+      "behavior": "`toolEndsTurn:true` is written top-level on the `type:\"user\"` record that carries a tool RESULT, and it says the assistant's turn stopped at that tool. On two projects roots it is written for exactly one tool: joining each carrier's `tool_result` block to the `tool_use` id that opened it, the tool is `StructuredOutput` on 5,209 of 5,209 and on 3,871 of 3,871 carriers. The lowest `version` carrying it is 2.1.187 on both roots.",
+      "depends": "csift exposes it as `tool_ends_turn` and renders `[ends turn]` in the label zone - one of the four tags this family renders, because it says something about THIS record that a reader scanning a result list acts on. The value is only ever written as `true`, so the fact is the presence of the key; csift carries it as a bool that is false when absent and emits nothing then, which is the absence rule at key level.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, rename = \"toolEndsTurn\")]\n    pub tool_ends_turn: Option<bool>,",
+          "lines": "349-350"
+        }
+      ],
+      "instrument": "Corpus: over each root, index every file's `tool_use` blocks by id to their `name`, then for each line carrying `toolEndsTurn` top-level join each of its `tool_result` blocks' `tool_use_id` to that index and record the tool name set; also record the `type` breakdown, the value shapes and the lowest `version` among carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": "2.1.187",
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writer of `toolEndsTurn` and read the branch that decides it, to state whether the StructuredOutput-only result is a rule or a property of the tools in use."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root, index every file's `tool_use` blocks by id to their `name`, then for each line carrying `toolEndsTurn` top-level join each of its `tool_result` blocks' `tool_use_id` to that index and record the tool name set; also record the `type` breakdown, the value shapes and the lowest `version` among carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 5,209 carriers, every one `type:\"user\"`, every value the JSON literal `true`, and the joined tool name is `StructuredOutput` on all 5,209. Root 2: 3,871 carriers, same type, same value shape, `StructuredOutput` on all 3,871. Lowest carrying `version` 2.1.187 on both roots.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-144",
+      "area": "record-model",
+      "behavior": "When an API call fails, Claude Code fabricates an assistant record in its place through ONE factory. The failure entry passes `isApiErrorMessage:!0` plus `apiError`, `apiErrorIsTransient`, `quotaLimits`, `error`, `errorDetails` and `truncatedAfterOutput` into the record builder, which writes all of them as TOP-LEVEL keys beside `requestId:void 0`, `isVirtual` and a `message` whose `id` comes from the same generator as the record's own `uuid`. So the flag is the discriminator of the whole set: on two projects roots 987 and 1,078 records carry `isApiErrorMessage`, every one of them `type:\"assistant\"`, and every one of the 925 and 998 that carry a STRING `error` names a failure kind. `apiErrorStatus` (864 and 916 carriers) and `quotaLimits` (127 on the live root, 0 on the frozen one, lowest version 2.1.259) ride the same records; `isAbortedMidStream` (9 and 5) and `truncatedAfterOutput` (1 and 0) are the two partial-response flags.",
+      "depends": "csift builds ONE `api_failure` object from the set and gates it TWICE - on the flag, which is the factory's own discriminator, and on the failure SAYING something. The second gate exists because five members reading four nulls and a `false` answer no question, while the two `false`s read as a positive `no` where the record simply did not say. It changes no live record: 925 of 925 and 998 of 998 flag carriers name at least one part. The label-zone headline and the gate read the SAME list of parts, so a record that named only its quota cannot render a headline with no content in it.",
+      "code": [
+        {
+          "path": "src/model/record/keys.rs",
+          "snippet": "    fn parts(&self) -> Vec<String> {",
+          "lines": "131"
+        },
+        {
+          "path": "src/model/record/keys.rs",
+          "snippet": "        f.headline().is_some().then_some(f)",
+          "lines": "220"
+        }
+      ],
+      "instrument": "Corpus: over each root count the carriers of `isApiErrorMessage`, `error`, `apiErrorStatus`, `quotaLimits`, `truncatedAfterOutput` and `isAbortedMidStream` top-level with their `type` breakdowns and value shapes; for every record with `isApiErrorMessage` exactly `true`, evaluate the five-part test (a STRING `error`, or `apiErrorStatus`, or `quotaLimits`, or either flag true) and count true against false; report the `error` string value histogram and the `quotaLimits` key sets. Binary: byte-search the verified build for `function zo({content:e,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,` and `requestId:void 0,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,` and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The TRIGGER leg: byte-search the verified build for the call sites of the failure entry and read each, to state which error paths reach it.",
+        "`apiErrorStatus` is written by no hop read here - every occurrence found so far is a reader; byte-search the build for its assignment and read the branch that supplies the status."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root count the carriers of `isApiErrorMessage`, `error`, `apiErrorStatus`, `quotaLimits`, `truncatedAfterOutput` and `isAbortedMidStream` top-level with their `type` breakdowns and value shapes; for every record with `isApiErrorMessage` exactly `true`, evaluate the five-part test (a STRING `error`, or `apiErrorStatus`, or `quotaLimits`, or either flag true) and count true against false; report the `error` string value histogram and the `quotaLimits` key sets. Binary: byte-search the verified build for `function zo({content:e,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,` and `requestId:void 0,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,` and re-slice each at its offset. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: isApiErrorMessage 987 (all assistant, all the literal `true`), STRING `error` 925, apiErrorStatus 864 (integer), quotaLimits 127 (object), truncatedAfterOutput 1, isAbortedMidStream 9. The five-part test is true on 925 of 925 records whose flag is `true` and false on none. `error` string histogram: rate_limit 830, server_error 73, unknown 9, invalid_request 6, authentication_failed 5, oauth_org_not_allowed 2. `quotaLimits` key sets: a ten-key set on 112 and a seven-key subset of it on 15, both carrying `rateLimitType` and `resetsAt`; lowest carrying version 2.1.259. Root 2: 1,078 / 998 / 916 / 0 / 0 / 5, the five-part test true on 998 of 998, and the string histogram rate_limit 866, server_error 48, unknown 41, authentication_failed 24, model_not_found 10, invalid_request 7, oauth_org_not_allowed 2. Both byte anchors occur exactly once and slice byte-exact at 165934505 and 165934194.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the API-failure entry",
+          "offset": 165934505,
+          "excerpt": "function zo({content:e,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,errorDetails:f,truncatedAfterOutput:_,now:v,uuid:C}){let I=Jrr({content:[{type:\"text\",text:e===\"\"?up:e}],isApiErrorMessage:!0,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,errorDetails:f,truncatedAfterOutput:_,now:v,uuid:C});if(mor(I))I.healsD",
+          "note": "The one entry that sets the flag, and the reason the flag and the rest of the set travel together."
+        },
+        {
+          "role": "writer",
+          "name": "the synthetic assistant record builder",
+          "offset": 165934194,
+          "excerpt": "requestId:void 0,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,errorDetails:_,truncatedAfterOutput:v,isApiErrorMessage:n,isVirtual:C}}function mu({content:e,usage:n,isVirtual:r,now:",
+          "note": "The tail of the record the factory returns: every member written as a TOP-LEVEL key, with the request id explicitly undefined - which is why a failure placeholder names no request."
+        }
+      ]
+    },
+    {
+      "id": "REC-145",
+      "area": "record-model",
+      "behavior": "`error` is TWO different shapes under one name, split by the line type. On the synthetic assistant record it is a STRING naming the failure kind (925 and 998 carriers over two projects roots). On a `type:\"system\"` record of the `api_error` shape it is an OBJECT (29 and 258 carriers), and those objects come in a small closed set of key sets: `{connection, formatted, isNetworkDown, message, rateLimits}` and that set plus `status` and `requestId`, which carry no headers, and a five-key `{error, headers, requestID, status, type}` set which carries the failed request's whole HTTP response header set. The header-bearing shape is 5 records on each root. No `system` record of either shape carries `isApiErrorMessage`.",
+      "depends": "csift reads the STRING form only. The record model's `error` field goes through a string-only deserializer that answers `None` for any other shape, so the object never enters the record model and no rendered or JSON path of this family can reach its `headers` member - the sensitive-headers law, enforced where the value would enter rather than by a rule someone has to remember. The `api_error` record's own render belongs to the system family, which names the fields that say what failed and drops the rest. If a build moved the failure kind into the object, this family would report nothing rather than something wrong, and the census below is what would catch it.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, deserialize_with = \"keys::string_only\")]\n    pub error: Option<Box<str>>,",
+          "lines": "363-364"
+        },
+        {
+          "path": "src/model/record/keys.rs",
+          "snippet": "pub(super) fn string_only<'de, D>(de: D) -> std::result::Result<Option<Box<str>>, D::Error>",
+          "lines": "36"
+        }
+      ],
+      "instrument": "Corpus: over each root count the `error` carriers top-level, break them down by the object's `type` and by the Python type of the value, and for every OBJECT value record the sorted KEY NAMES of the object (never its values) and whether `headers` is among them. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writer of a `type:\"system\"` `api_error` record and read the branch that chooses between the header-bearing shape and the other two."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root count the `error` carriers top-level, break them down by the object's `type` and by the Python type of the value, and for every OBJECT value record the sorted KEY NAMES of the object (never its values) and whether `headers` is among them. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 954 carriers - 925 `assistant` with a string value, 29 `system` with an object value. The 29 object key sets are `connection,formatted,isNetworkDown,message,rateLimits` 22, the same plus `status` 2, and `error,headers,requestID,status,type` 5; `headers` is present on exactly those 5 and absent from the other 24. Root 2: 1,256 carriers - 998 `assistant` strings and 258 `system` objects, whose key sets are the five-key base 60, the base plus `requestId` and `status` 182, the base plus `status` 11, and the header-bearing five-key set 5; `headers` on exactly those 5. Zero `system` carriers on either root carry `isApiErrorMessage`.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-146",
+      "area": "record-model",
+      "behavior": "`interruptedMessageId` is written top-level on a `type:\"user\"` record and names the API message an interruption cut short. Its value is an API `message.id`, not a record `uuid`: over two projects roots all 272 and all 418 values carry the `msg_` prefix, 0 of 272 and 0 of 418 equal the `uuid` of any line of their own file, and 122 of 272 and 194 of 418 equal a `message.id` of their own file. Every carrier on both roots has `isSidechain` false, so the key is a main-lane shape.",
+      "depends": "csift exposes it as `interrupted_message_id` and builds the unit's ONE `for` edge from it, through the shared edge builder - the only place the uuid-to-line lookup happens. That lookup is keyed on record uuids, so on an ordinary transcript it cannot answer and the edge renders the id with the shared note that no line here carries it. That is the honest answer rather than a failure: the id is real and worth printing, and a family may not build a second index to join on it. If a build changed the value to a record uuid the same edge would start resolving to a line with no code change at all.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/keys.rs",
+          "snippet": "        return Some(for_edge(\"interrupted\", Basis::Key, Some(id), ctx));",
+          "lines": "211"
+        }
+      ],
+      "instrument": "Corpus: over each root, for every file, build the set of `uuid` values and the set of `message.id` values; then for each line carrying `interruptedMessageId` top-level record the value's prefix before the first underscore, whether the value is in that file's uuid set, whether it is in that file's message-id set, and the carrier's `type` and `isSidechain`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writer of `interruptedMessageId` and read the branch that supplies the id, to state which message it names when the file holds no matching `message.id`."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root, for every file, build the set of `uuid` values and the set of `message.id` values; then for each line carrying `interruptedMessageId` top-level record the value's prefix before the first underscore, whether the value is in that file's uuid set, whether it is in that file's message-id set, and the carrier's `type` and `isSidechain`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 272 carriers, every one `type:\"user\"` with `isSidechain` false; prefix `msg` on 272 of 272; in the file's uuid set on 0 of 272; in the file's message-id set on 122 of 272. Root 2: 418 carriers, same type and sidechain answer; prefix `msg` on 418 of 418; uuid set 0 of 418; message-id set 194 of 418.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-147",
+      "area": "record-model",
+      "behavior": "A prompt a SCHEDULED task submitted carries two top-level keys on its `type:\"user\"` record, `scheduledTaskId` and `scheduledFireId`, and they travel together: on a live projects root all 6 carriers carry both and none carries one alone. The task id is the join to the scheduler's own record - on all 6 it equals the `taskId` of a `type:\"system\"` `subtype:\"scheduled_task_fire\"` line of the SAME file. The fire id names the individual firing rather than the task. A frozen snapshot whose newest record predates the shape carries neither key on any line.",
+      "depends": "csift exposes both as `scheduled_task_id` and `scheduled_fire_id`, JSON only: they are join keys, and the label zone already names the fired prompt's instant through the engine's own field. The task-id join to the fire record is what makes the pair useful, and it is deliberately not built here - the leaf that owns the scheduler's record owns that edge, and this family provides the keys it joins on. A build that stopped writing the pair would leave the fired prompt identified only by its parent link.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, rename = \"scheduledTaskId\")]\n    pub scheduled_task_id: Option<Box<str>>,",
+          "lines": "393-394"
+        }
+      ],
+      "instrument": "Corpus: over each root, per file collect the `taskId` values of the lines whose `subtype` is `scheduled_task_fire`; then for each line carrying `scheduledTaskId` or `scheduledFireId` top-level record which of the two keys are present and whether the task id is in that file's fire-id set; report the `type` breakdown and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writers of `scheduledTaskId` and `scheduledFireId` and read the submit path that sets them, to state whether the fire id is unique per firing.",
+        "A second root with carriers: the live root's 6 specimens are one scheduler's output, so the pairing rule rests on a small population until a second root carries the shape."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root, per file collect the `taskId` values of the lines whose `subtype` is `scheduled_task_fire`; then for each line carrying `scheduledTaskId` or `scheduledFireId` top-level record which of the two keys are present and whether the task id is in that file's fire-id set; report the `type` breakdown and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 6 lines carry `scheduledTaskId` and 6 carry `scheduledFireId`; the present-key pair is (both) on 6 of 6 and neither key appears alone. Every carrier is `type:\"user\"`. The task id is in its own file's `scheduled_task_fire` `taskId` set on 6 of 6. Carrier versions: 2.1.258 and 2.1.268. Root 2: 0 carriers of either key, so the join has no specimen there.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-148",
+      "area": "record-model",
+      "behavior": "`toolUseID` on a `type:\"system\"` record is a HOOK-RUN id, not an API tool_use id, and the name is the only thing that suggests otherwise. Over two projects roots all 6,849 and all 6,308 carriers sit on ONE subtype, `stop_hook_summary`; every value is uuid-shaped (36 characters, four dashes), which no API tool_use id is; and 0 of 6,849 and 0 of 6,308 equal the `uuid` of any line of their own file.",
+      "depends": "csift reads the key ONLY on that subtype, so a later build that put a real tool_use id under the same name on another record shape would not be misread as a hook run. It is exposed as `hook_run_id` and it builds the unit's `for` edge, through the shared edge builder, which reports the id with the note that no line of this file carries it - because it is not a record uuid. The leaf OWES that edge: every Stop-hook summary measured names its run, so one that does not renders the edge's honest empty rather than one fewer field.",
+      "code": [
+        {
+          "path": "src/model/record/keys.rs",
+          "snippet": "const HOOK_RUN_SUBTYPE: &str = \"stop_hook_summary\";",
+          "lines": "170"
+        },
+        {
+          "path": "src/commands/search/record_text/keys.rs",
+          "snippet": "        return Some(HitFact::ForUnknown {",
+          "lines": "220"
+        }
+      ],
+      "instrument": "Corpus: over each root, per file build the set of `uuid` values; then for each line carrying `toolUseID` top-level record the object's `subtype`, whether the value matches the uuid shape (length 36 with four dashes), and whether it is in that file's uuid set. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writer of `toolUseID` on a stop-hook summary and read the hook runner that supplies the id, to state what else carries the same value."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root, per file build the set of `uuid` values; then for each line carrying `toolUseID` top-level record the object's `subtype`, whether the value matches the uuid shape (length 36 with four dashes), and whether it is in that file's uuid set. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 6,849 carriers, `subtype` `stop_hook_summary` on 6,849 of 6,849 and no other subtype; uuid-shaped on 6,849 of 6,849; in the file's own uuid set on 0 of 6,849. Root 2: 6,308 carriers, the same single subtype, uuid-shaped on 6,308 of 6,308, in the uuid set on 0 of 6,308. Every carrier is `type:\"system\"` on both roots.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "REC-149",
+      "area": "record-model",
+      "behavior": "`userFeedback` is a TOP-LEVEL key of the `type:\"user\"` record the harness synthesises for a refused tool call - not a member of that record's `toolUseResult`, which on every measured carrier is a STRING and could hold no member at all. It carries the words the person typed when refusing. It is rare and it is always in the same company: 5 carriers on one projects root and 4 on another, and on every one of the 9 the line also carries `toolDenialKind` and `toolUseResult` top-level. The lowest carrying `version` is 2.1.220 on both roots.",
+      "depends": "csift exposes it as `user_feedback` - the whole text on the wire - and renders `[feedback: <first 60 characters>]` in the label zone, because what a person typed when refusing is the one thing about that record a reader scanning results wants. It is the STRUCTURED form of words csift otherwise has to parse back out of a rejection's prose tail, so a rejection that carries it needs no text heuristic at all. The key is read top-level; reading it through the `toolUseResult` probe would find nothing on every measured carrier.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "snippet": "    #[serde(default, rename = \"userFeedback\")]\n    pub user_feedback: Option<Box<str>>,",
+          "lines": "355-356"
+        },
+        {
+          "path": "src/commands/search/record_text/keys.rs",
+          "snippet": "            Fact::UserFeedback(text) => Some(format!(",
+          "lines": "73"
+        }
+      ],
+      "instrument": "Corpus: over each root count the lines carrying `userFeedback` top-level, with the `type` breakdown, the value shape, the set of sibling top-level keys beginning `tool`, and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 8.2"
+      },
+      "first_seen_claude_code": "2.1.220",
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer leg: byte-search the verified build for the writer of `userFeedback` and read the refusal path that supplies it, to state which of the four `toolDenialKind` values can carry it."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Corpus: over each root count the lines carrying `userFeedback` top-level, with the `type` breakdown, the value shape, the set of sibling top-level keys beginning `tool`, and the `version` set of the carriers. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
+          "observed": "Root 1: 5 carriers, every one `type:\"user\"` with a string value; the sibling `tool*` key set is `toolDenialKind,toolUseResult` on 5 of 5; carrier versions 2.1.220 and 2.1.259. Root 2: 4 carriers, same type and value shape, the same sibling key set on 4 of 4, carrier version 2.1.220. No carrier on either root has `userFeedback` nested inside `toolUseResult`.",
+          "rule": "A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included.",
+          "note": ""
         }
       ]
     }
