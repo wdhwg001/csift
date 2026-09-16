@@ -115,7 +115,11 @@ use super::*;
         Within the read windows every malformed line, and every sidecar marker the current \
         schema cannot read, is booked exactly once. `--lineage` does NOT widen this count: \
         its pass is a key walk with no record parse, so it has no parse failure to report \
-        and cannot book a line the windows already booked."
+        and cannot book a line the windows already booked. ENCODING is not malformity: a \
+        line whose bytes are not valid UTF-8 but whose JSON is sound is decoded LOSSILY and \
+        counted as a record (the undecodable byte renders as U+FFFD and the text stays \
+        searchable), never as a malformed line - on this surface and on every other, with \
+        `--raw` the way back to the original bytes."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, a direct
