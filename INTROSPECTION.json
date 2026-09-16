@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "330-337",
+          "lines": "342-349",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7192,12 +7192,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "222-223",
+          "lines": "234-235",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
-          "path": "src/model/record.rs",
-          "lines": "459-461",
+          "path": "src/model/record/message.rs",
+          "lines": "82-84",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9968,8 +9968,8 @@
       "depends": "csift keeps toolUseResult UNPARSED as a RawValue and reads only small named fields through the typed probe, whose every field is an Option<Value> accepting any JSON type, so an added key and a retired one both parse without error - that tolerance is what lets one binary read a corpus spanning a hundred harness releases. A surface that enumerated this key set from one version's transcripts would be wrong for exactly the archived sessions a forensic tool exists to read, and enumerating it from one version's BINARY would be wrong the other way: the closed 21-field schema at 2.1.258 does not contain assistantAutoBackgrounded, which 21 archived records carry, and it does contain six names no record in this corpus has ever carried.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "446-452",
+          "path": "src/model/record/message.rs",
+          "lines": "69-75",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -13149,8 +13149,8 @@
       "depends": "csift folds `redacted_thinking` into the `agent.thinking` CATEGORY under its own leaf `agent.thinking.redacted`, and renders an EMPTY body for it: the block's whole payload is ciphertext, so there is nothing readable to render, and the words that say what the block is ride the label zone rather than the body - a fabricated body would be matchable text that no raw line carries. An unhandled block type would instead fall to the tolerant `Unknown` arm and vanish from every `agent.thinking` census.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "504",
+          "path": "src/model/record/blocks.rs",
+          "lines": "40",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -14700,12 +14700,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "89-91",
+          "lines": "101-103",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "100-102",
+          "lines": "112-114",
           "snippet": "    /// Co-set with `isCompactSummary` on compaction-summary records (\u00a74.7).\n    #[serde(default, rename = \"isVisibleInTranscriptOnly\")]\n    pub is_visible_in_transcript_only: Option<bool>,"
         },
         {
@@ -14822,7 +14822,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "168-173",
+          "lines": "180-185",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14968,7 +14968,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "203-208",
+          "lines": "215-220",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
@@ -18988,7 +18988,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "374-377",
+          "lines": "386-389",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20130,7 +20130,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "363-367",
+          "lines": "375-379",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -22048,7 +22048,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "288-296",
+          "lines": "300-308",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22168,7 +22168,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "291-294",
+          "lines": "303-306",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22263,7 +22263,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "298-306",
+          "lines": "310-318",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -35336,8 +35336,8 @@
       "depends": "`search --resolve-persisted` replaces the pointer with the file's content BEFORE matching, preferring the structured field (exact, no regex) and falling back to scraping the inline marker line; a read failure is non-fatal and appends an explicit note rather than silently matching nothing.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "459-460",
+          "path": "src/model/record/message.rs",
+          "lines": "82-83",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -36683,7 +36683,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "291-294",
+          "lines": "303-306",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -44005,7 +44005,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "45-50",
+          "lines": "57-62",
           "snippet": "    /// The session's plan slug (one stable value per session, minted BEFORE Plan Mode\n    /// is entered - the first slug-carrying record precedes the plan_mode line in every\n    /// measured session - and absent from every record before the mint and from\n    /// metadata-only records). The harness derives the plan file name from it.\n    #[serde(default)]\n    pub slug: Option<String>,"
         },
         {
@@ -45939,7 +45939,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "308-312",
+          "lines": "320-324",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46191,7 +46191,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "314-318",
+          "lines": "326-330",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -47109,7 +47109,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "330-333",
+          "lines": "342-345",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48663,7 +48663,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "348-354",
+          "lines": "360-366",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -51143,13 +51143,13 @@
       "depends": "csift's `TokenUsage` probe deserializes exactly four of the eleven keys (`input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, src/model/record.rs), and all four are present in BOTH shapes, so `csift stats` is untouched by the split; it reports no thinking-token split, no server-tool counts, no service tier and no inference geography. Any surface that ever reads `usage.output_tokens_details` must treat absence as NORMAL on a record with a null stop_reason at every build from 2.1.228 on - never as an old-build signal - because the missing key marks a per-block flush, not an old writer.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "423-428",
+          "path": "src/model/record/message.rs",
+          "lines": "46-51",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
-          "path": "src/model/record.rs",
-          "lines": "434-437",
+          "path": "src/model/record/message.rs",
+          "lines": "57-60",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51275,13 +51275,13 @@
       "depends": "csift reads none of the nested objects (src/model/record.rs `TokenUsage` deserializes the four flat counters only), so `stats` cannot report the 5m/1h cache split, web-tool call counts, or a thinking/non-thinking output split; a future addition must know these are nested rather than flat, that the flat `cache_creation_input_tokens` is a separate sibling key, and that on the lanes csift spans BY DEFAULT - subagent transcripts - server_tool_use and output_tokens_details are absent keys on the majority of records (9,655 of 11,011 at the audited build) rather than a rarity, so a probe must treat a missing outer key as ordinary and not as an old-build or damaged-record signal.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "434-437",
+          "path": "src/model/record/message.rs",
+          "lines": "57-60",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
-          "path": "src/model/record.rs",
-          "lines": "423-428",
+          "path": "src/model/record/message.rs",
+          "lines": "46-51",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52350,7 +52350,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "17-20",
+          "lines": "29-32",
           "snippet": "    /// Record discriminator: \"user\", \"assistant\", \"system\", \"summary\",\n    /// \"last-prompt\", \"attachment\", \u2026 (open set - keep as String, never enum-panic).\n    #[serde(default)]\n    pub r#type: Option<String>,"
         },
         {
@@ -52494,7 +52494,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "210-212",
+          "lines": "222-224",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -52645,7 +52645,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "163-170",
+          "lines": "175-182",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52734,7 +52734,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "28-30",
+          "lines": "40-42",
           "snippet": "    /// ISO8601 UTC, e.g. `2026-06-07T05:43:00.000Z`. Absent on metadata-only records.\n    #[serde(default)]\n    pub timestamp: Option<String>,"
         },
         {
@@ -52981,8 +52981,8 @@
       "depends": "csift models `role` + `content` plus a lazily-parsed `usage` blob; `stats` reads `message.model` and `message.usage` for its per-model token table and the live tail state machine reads `stop_reason`, so tightening `Message` breaks both.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "414-416",
+          "path": "src/model/record/message.rs",
+          "lines": "37-39",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53232,13 +53232,13 @@
       "depends": "csift's `Block` enum carries a `#[serde(other)] Unknown` arm so an unmodeled future block type parses instead of failing the whole line; losing it turns one new block type into a malformed-line count across every command.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "498",
+          "path": "src/model/record/blocks.rs",
+          "lines": "34",
           "snippet": "    Thinking {"
         },
         {
-          "path": "src/model/record.rs",
-          "lines": "520-525",
+          "path": "src/model/record/blocks.rs",
+          "lines": "56-61",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53354,8 +53354,8 @@
       "depends": "csift keeps `tool_result.content` as a raw `Value` and inspects it on demand; a `String`-typed field would drop every array-form tool result, which is where deferred-tool schemas and image results live.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "520-525",
+          "path": "src/model/record/blocks.rs",
+          "lines": "56-61",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53443,8 +53443,8 @@
       "depends": "csift gives the block the leaf `agent.thinking.redacted` and renders an EMPTY body: the `data` ciphertext reaches no rendered path and is printed on no path but `--raw`. The consequence is stated rather than hidden - with no rendered text a pattern scan cannot reach the leaf at all, so the ways in are an empty pattern plus an exact `-t`, the label census, or a `show` address.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "504-506",
+          "path": "src/model/record/blocks.rs",
+          "lines": "40-42",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53555,7 +53555,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "221-223",
+          "lines": "233-235",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53637,7 +53637,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "214-218",
+          "lines": "226-230",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -53738,8 +53738,8 @@
           "snippet": "/// Scrape the inline persisted-output pointer (\u00a74.6 fallback): the line\n/// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.\n/// Returns the trimmed path, or `None` if the marker is absent.\npub(crate) fn scrape_persisted_path(text: &str) -> Option<String> {\n    const MARKER: &str = \"Full output saved to:\";\n    let idx = text.find(MARKER)?;\n    let rest = &text[idx + MARKER.len()..];\n    // The path runs to end-of-line."
         },
         {
-          "path": "src/model/record.rs",
-          "lines": "459-460",
+          "path": "src/model/record/message.rs",
+          "lines": "82-83",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53841,7 +53841,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "225-228",
+          "lines": "237-240",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -54132,8 +54132,8 @@
       "depends": "csift's `status`/`wait` verdicts classify a child lane `generating` only when the last assistant record's `stop_reason` is not `end_turn`; treating a null on a subagent lane as a finished turn would mark a mid-generation child settled.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "400-405",
+          "path": "src/model/record/message.rs",
+          "lines": "23-28",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54230,8 +54230,8 @@
       "depends": "`csift stats` dedupes usage PER FILE by `message.id`, taking the per-field MAX across that id's admitted records; a naive per-record sum makes every token figure csift reports wrong, and that is exactly what pre-0.9.2 csift printed.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "407-411",
+          "path": "src/model/record/message.rs",
+          "lines": "30-34",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -55007,7 +55007,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "52-56",
+          "lines": "64-68",
           "snippet": "    /// Fork provenance (line 1 of a `/fork` child transcript, `type:\"fork-context-ref\"`):\n    /// the PARENT session's last record uuid at fork time - the fork point, feedable to\n    /// `csift show @<parent> --uuid <it>`. Absent everywhere else.\n    #[serde(default, rename = \"parentLastUuid\")]\n    pub parent_last_uuid: Option<String>,"
         },
         {
@@ -55101,7 +55101,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "203-208",
+          "lines": "215-220",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -60283,8 +60283,8 @@
       "depends": "csift's `TurProbe` deserializes only the small named fields and serde's ignore path skips everything else, so an added key costs nothing and never fails the probe - the tolerance invariant is what absorbs this drift.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "453-458",
+          "path": "src/model/record/message.rs",
+          "lines": "76-81",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -64828,7 +64828,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "208",
+          "lines": "220",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -65425,8 +65425,8 @@
       "depends": "csift's TokenUsage probe deserializes exactly four of the eleven - input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens (src/model/record.rs:270-275) - so csift stats reports no thinking-token split, no server-tool counts, no service tier and no inference geography. All four sit in the seven-key server shape as well as in the eleven-key rebuild, so the two-shape finding does not change what csift stats can read today. But any future reader of service_tier, speed, iterations, server_tool_use or output_tokens_details must expect them ABSENT on roughly half the corpus and on the great majority of records written in child lanes, where the per-record persist route captures the pre-backpatch shape - the absence rate is a property of the lane and of the serialization moment, not a stable per-build constant.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "423-428",
+          "path": "src/model/record/message.rs",
+          "lines": "46-51",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65590,8 +65590,8 @@
       "depends": "csift reads none of the nested objects, so `stats` cannot report the 5m/1h cache split, web-tool call counts, or a thinking/non-thinking output split; a future addition must know these are nested, not flat.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "434-437",
+          "path": "src/model/record/message.rs",
+          "lines": "57-60",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -71375,7 +71375,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "93-98",
+          "lines": "105-110",
           "snippet": "    /// System-injected pseudo-turn marker (\u00a74.2). `true` \u21d2 a `type:\"user\"` record\n    /// whose string/text content LOOKS human (\"Continue from where you left off.\",\n    /// loop ticks, stop-hook feedback, `<local-command-caveat>\u2026`) but is machine-\n    /// generated - must be excluded from genuine-user and from turn-delimiting.\n    #[serde(default, rename = \"isMeta\")]\n    pub is_meta: Option<bool>,"
         },
         {
@@ -73963,7 +73963,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "89-91",
+          "lines": "101-103",
           "snippet": "    /// Compaction summary marker - when true, this user record is NOT a human turn.\n    #[serde(default, rename = \"isCompactSummary\")]\n    pub is_compact_summary: Option<bool>,"
         },
         {
@@ -87245,7 +87245,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "125-131",
+          "lines": "137-143",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
@@ -88400,7 +88400,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "175-180",
+          "lines": "187-192",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         },
         {
@@ -88630,7 +88630,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "175-180",
+          "lines": "187-192",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         }
       ],
@@ -89049,7 +89049,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "193-196",
+          "lines": "205-208",
           "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
         },
         {
@@ -91531,7 +91531,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "122-123",
+          "lines": "134-135",
           "snippet": "    #[serde(default, rename = \"toolDenialKind\")]\n    pub tool_denial_kind: Option<String>,"
         },
         {
@@ -91768,7 +91768,7 @@
         {
           "path": "src/model/record.rs",
           "snippet": "    #[serde(default, rename = \"continuedInSessionId\")]\n    pub continued_in_session_id: Option<String>,",
-          "lines": "67-68"
+          "lines": "79-80"
         },
         {
           "path": "src/commands/session/run.rs",
@@ -91942,7 +91942,7 @@
         {
           "path": "src/model/record.rs",
           "snippet": "    #[serde(default, rename = \"sessionKind\")]\n    pub session_kind: Option<String>,",
-          "lines": "76-77"
+          "lines": "88-89"
         },
         {
           "path": "src/parse/lineage.rs",
@@ -93103,7 +93103,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "269-270",
+          "lines": "281-282",
           "snippet": "#[serde(default, rename = \"renderedInHumanTurn\")]\n    pub rendered_in_human_turn: Option<Box<serde_json::value::RawValue>>,"
         },
         {
@@ -93184,15 +93184,15 @@
           "anchor_status": "absent"
         }
       ],
+      "residue": [
+        "Every hop of this chain is marked `absent`: the producer entered the executable after the build the ledger is verified at, so the four excerpts sit in 2.1.268 and in no offset of 2.1.258. Re-locate them by byte-searching the verified build for each excerpt once it carries the feature."
+      ],
       "writer_literal_floor": {
         "literal": "renderedInHumanTurn",
         "lowest_present": "2.1.259",
         "highest_absent": "2.1.258",
         "ladder": "Byte-count the literal in each historical build's `claude` executable: 0 in each of the 60 builds from 1.0.60 through 2.1.258, 4 at 2.1.259, 5 at 2.1.268."
-      },
-      "residue": [
-        "Every hop of this chain is marked `absent`: the producer entered the executable after the build the ledger is verified at, so the four excerpts sit in 2.1.268 and in no offset of 2.1.258. Re-locate them by byte-searching the verified build for each excerpt once it carries the feature."
-      ]
+      }
     },
     {
       "id": "CLS-046",
@@ -95507,8 +95507,8 @@
       "depends": "csift models the block as `Block::Fallback { from, to }` - two sides, not one id - because `from.model` is the only place the pre-fallback model survives, so a flattened shape would carry the wrong one. It reads both off the PARSED BLOCK rather than off the source line, which is what makes the fact answer the same on a scan and under an address: a scan hands a family no source line for a role-bearing record, so a marker read off the line would appear under `show --line` and vanish under `search`. The unit carries the label-zone marker `[served by <to.model>, fell back from <from.model>]` plus JSON `served_by` / `fell_back_from`; a block naming only one side yields no marker at all, since half of it would name the wrong model. The record's BODY is the 1:1 law's key=value excerpt, and a flagless scan emits nothing for such a record - the emission sweep exempts it by specimen with that reason. The banner PAIRING is what makes the two renders agree: the refusal leaf names the same two models under the harness's own key words, so a reader who fetches the banner from the block, or the block from the banner, reads one story twice rather than two.",
       "code": [
         {
-          "path": "src/model/record.rs",
-          "lines": "546",
+          "path": "src/model/record/blocks.rs",
+          "lines": "82",
           "snippet": "    Fallback {"
         },
         {

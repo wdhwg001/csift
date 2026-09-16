@@ -1,4 +1,16 @@
-//! The serde record model: Record / Message / Content / Block (+ probes).
+//! The serde record model: `Record` itself, and the two children that carry the rest of
+//! the shapes a transcript line holds.
+//!
+//! A PAIRED ROOT since the root crossed the 600-line structure gate: `Record` and its
+//! accessors stay here, the `message` object goes to `record/message.rs` and the content
+//! BLOCK enum to `record/blocks.rs`. Both are re-exported, so every `crate::model::<item>`
+//! path resolves exactly as before.
+
+mod blocks;
+mod message;
+
+pub use blocks::*;
+pub use message::*;
 
 use super::*;
 
@@ -380,191 +392,6 @@ pub struct Record {
     /// detail). `None` otherwise. Additive + tolerant.
     #[serde(default, rename = "csiftMcpServer")]
     pub csift_mcp_server: Option<String>,
-}
-
-/// The `message` object on user / assistant records.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Message {
-    #[serde(default)]
-    pub role: Option<String>,
-
-    /// Either a bare string (genuine text) or an array of typed blocks.
-    #[serde(default)]
-    pub content: Option<Content>,
-
-    /// The model id on assistant records (`claude-…`). Kept as a raw `Value` so an
-    /// unexpected shape can never fail the whole record (tolerance discipline); read
-    /// via `as_str`. Consumed by `stats`.
-    #[serde(default)]
-    pub model: Option<serde_json::Value>,
-    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /
-    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN
-    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which
-    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.
-    #[serde(default, rename = "stop_reason")]
-    pub stop_reason: Option<String>,
-
-    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC
-    /// writes one line per content block and repeats the message envelope on each),
-    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.
-    #[serde(default)]
-    pub id: Option<String>,
-
-    /// The token-usage echo on assistant records. Kept UNPARSED (same rationale as
-    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].
-    #[serde(default)]
-    pub usage: Option<Box<serde_json::value::RawValue>>,
-}
-
-/// The token-usage fields `stats` sums (each optional + tolerant - a missing/odd
-/// field reads as absent, never an error).
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[serde(default)]
-pub struct TokenUsage {
-    pub input_tokens: Option<u64>,
-    pub output_tokens: Option<u64>,
-    pub cache_read_input_tokens: Option<u64>,
-    pub cache_creation_input_tokens: Option<u64>,
-}
-
-impl Message {
-    /// Parse the raw `usage` blob into the typed probe on demand (`None` when absent
-    /// or shaped unexpectedly - tolerant, never an error).
-    #[must_use]
-    pub fn token_usage(&self) -> Option<TokenUsage> {
-        let raw = self.usage.as_ref()?;
-        serde_json::from_str(raw.get()).ok()
-    }
-
-    /// The model id string, when present and a string.
-    #[must_use]
-    pub fn model_id(&self) -> Option<&str> {
-        self.model.as_ref().and_then(serde_json::Value::as_str)
-    }
-}
-
-/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see
-/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree
-/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe
-/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the
-/// former `.get(…)` chains did - byte-identical semantics). Crucially, the blob's HUGE
-/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by
-/// serde's ignore path without ever being allocated.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct TurProbe {
-    pub(crate) r#type: Option<serde_json::Value>,
-    #[serde(rename = "filePath")]
-    pub(crate) file_path: Option<serde_json::Value>,
-    #[serde(rename = "persistedOutputPath")]
-    pub(crate) persisted_output_path: Option<serde_json::Value>,
-    pub(crate) status: Option<serde_json::Value>,
-    #[serde(rename = "isAsync")]
-    pub(crate) is_async: Option<serde_json::Value>,
-    pub(crate) answers: Option<serde_json::Value>,
-    /// AskUserQuestion's freeform answer (v0.10.3): the text an answerer typed instead
-    /// of a structured option. Written beside an EMPTY `answers` map, synthesized as
-    /// `The user responded: <text>`; the TUI dialog never writes it (its Other entry
-    /// lands in `answers`), so it comes from an answerer outside the dialog.
-    pub(crate) response: Option<serde_json::Value>,
-}
-
-/// `message.content` is polymorphic: a plain string or a list of blocks.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum Content {
-    /// Bare-string content (older format / genuine user text / compaction summary).
-    Text(String),
-    /// Array of typed content blocks.
-    Blocks(Vec<Block>),
-}
-
-/// A typed content block within `message.content`. `#[serde(other)]` Unknown
-/// catches any future block type without a parse error.
-///
-/// Some block fields are deserialized for the documented model (SPEC §3.5) but not
-/// read by current logic (`signature`, the `ToolUse.id`, the `ToolResult`
-/// `tool_use_id`/`is_error`, `Image.source`). The round-trip reconstruction returns
-/// the whole turn, so `tool_use`↔`tool_result` pairing-by-id is not needed (both sit
-/// in the same emitted exchange); the fields stay for shape-completeness + future use.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Block {
-    Text {
-        #[serde(default)]
-        text: String,
-    },
-    Thinking {
-        #[serde(default)]
-        thinking: String,
-        #[serde(default)]
-        signature: Option<String>,
-    },
-    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible
-    /// `thinking` block (no readable text, only an opaque `data` payload). Classified
-    /// `agent.thinking` exactly like a normal thinking block (GOLD §2 / oracle B3); the opaque
-    /// `data` is captured for shape-completeness but never rendered.
-    RedactedThinking {
-        #[serde(default)]
-        data: String,
-    },
-    ToolUse {
-        #[serde(default)]
-        id: Option<String>,
-        #[serde(default)]
-        name: Option<String>,
-        #[serde(default)]
-        input: Option<serde_json::Value>,
-    },
-    ToolResult {
-        #[serde(default, rename = "tool_use_id")]
-        tool_use_id: Option<String>,
-        /// String OR array of {type:text,text}/{type:image} - keep raw.
-        #[serde(default)]
-        content: Option<serde_json::Value>,
-        #[serde(default)]
-        is_error: Option<bool>,
-    },
-    Image {
-        #[serde(default)]
-        source: Option<serde_json::Value>,
-    },
-    /// A `fallback` block - what the API writes in place of the text when it served the
-    /// turn from a fallback model. The record is still the assistant's TURN, so it takes
-    /// the plain message leaf with an empty body; the variant exists because every other
-    /// unmodeled block type parses to [`Block::Unknown`], and a leaf that keys on
-    /// "nothing else matched" would answer for `document` and for a whitespace-only text
-    /// block as well.
-    ///
-    /// TWO SIDES, not one model. The block's key set is exactly {from, to, type} on 48 of
-    /// 48 specimens over one projects root and 53 of 53 over another, with `from` and `to`
-    /// each exactly `{model}` and a flat `model` key on none of them (claim CLS-060). It
-    /// is modeled that way because `from.model` is the ONLY place the pre-fallback model
-    /// survives: every other record of the same API message already names the model that
-    /// answered, so a shape carrying one id would carry the wrong one.
-    Fallback {
-        /// The model the turn was asked of.
-        #[serde(default)]
-        from: Option<FallbackSide>,
-        /// The model that served it.
-        #[serde(default)]
-        to: Option<FallbackSide>,
-    },
-    /// Any block type not modeled above - never a parse failure.
-    #[serde(other)]
-    Unknown,
-}
-
-/// One side of a [`Block::Fallback`] - the object the API writes under `from` and under
-/// `to`, whose only key is the model id. Its own struct rather than a bare string because
-/// that is the shape on the wire, and a model that flattened it would silently accept a
-/// line the API never writes.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct FallbackSide {
-    /// The model id.
-    #[serde(default)]
-    pub model: Option<String>,
 }
 
 /// The provenance value every csift elicitation-sidecar record carries in its `csift`
