@@ -12604,7 +12604,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "347-350",
+          "lines": "350-353",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
@@ -12619,7 +12619,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "103-107",
+          "lines": "107-111",
           "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
@@ -12801,8 +12801,8 @@
     {
       "id": "CLS-016",
       "area": "classification",
-      "behavior": "Hook-injected feedback reaches the transcript as `isMeta` `type:\"user\"` records in two shapes emitted by Claude Code 2.1.258 - content opening `Stop hook feedback:` (29 records) and a `<local-command-caveat>` wrapper (155 records) - plus a third, hook-authored shape: the edit-retry notice `The last Edit failed because the target file was modified`, which is NOT a string in the 2.1.258 binary and whose single corpus instance rides inside a `Stop hook feedback:` body. All three land as isMeta user records; the edit-retry marker is matched ANYWHERE precisely because it nests.",
-      "depends": "csift gives the three shapes three leaves, by PRODUCER: a Stop hook's blocking feedback is `harness.hook.feedback`, the `<local-command-caveat>` wrapper is the slash-command executor's and takes `harness.command.caveat`, and the edit-retry notice is one of the harness's redo nudges, `harness.enforce.retry`. None is `user.message`, so a hook's own prose is never counted as an operator turn in `search -t user` or in `verbatim`; the edit-retry marker is matched ANYWHERE in the content rather than as a prefix, precisely because it nests inside a stop-hook body.",
+      "behavior": "Hook-injected feedback reaches the transcript as `isMeta` `type:\"user\"` records in two shapes emitted by Claude Code 2.1.258 - content opening `Stop hook feedback:` and a `<local-command-caveat>` wrapper - plus a third, hook-authored shape: the edit-retry notice `The last Edit failed because the target file was modified`, which is NOT a string in the 2.1.258 binary. All three land as isMeta user records. The edit-retry notice does NOT arrive as a standalone injected prompt: its own carrier is a failed tool's RESULT text, so on the isMeta-user path it appears only nested inside another template's body. Measured over two projects roots, one count per isMeta user record: the notice occurs anywhere in the text of 1 and 2 records, at content start in 0 and 0, and every one of the three opens with `Stop hook feedback:` instead.",
+      "depends": "csift gives the three shapes three leaves, by PRODUCER: a blocking hook's feedback is `harness.hook.feedback`, the `<local-command-caveat>` wrapper is the slash-command executor's and takes `harness.command.caveat`, and the edit-retry notice is one of the harness's redo nudges, `harness.enforce.retry`. None is `user.message`, so a hook's own prose is never counted as an operator turn in `search -t user` or in `verbatim`. All three arms anchor at CONTENT START after one `trim_start`, like every other arm of the injection table: an unanchored test on this path can only reach a record whose body QUOTES the template, which is the failure the content-start law names, and the three observed nesting records are `Stop hook feedback:` bodies that the arm ABOVE already claims. So the anchoring closes a hole without moving a label: under the two orders the leaf changes for 0 of 3,713 and 0 of 1,825 isMeta user records.",
       "code": [
         {
           "path": "src/model/markers.rs",
@@ -12811,8 +12811,13 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "288",
+          "lines": "291",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "85-87",
+          "snippet": "    if at_start.starts_with(EDIT_RETRY_MARKER) {\n        return Some(Class::EnforceRetry);\n    }"
         }
       ],
       "instrument": "`rg -c 'Stop hook feedback:' --glob '*.jsonl' <the projects root>` summed over its per-file counts, then `csift search 'Stop hook feedback' -t harness.hook.feedback --count-by label` and the same pattern under `-t user.message`, which must be 0. Counting rule: `rg -c` counts matching LINES, not occurrences, so a line carrying the literal twice counts once; one record per classified record for csift. SCOPE matters as much as the rule - a `<root>/*/*.jsonl` glob reaches top-level transcripts only, while the recursive walk adds every subagent transcript, and the two differ by roughly a factor of three.",
@@ -12862,6 +12867,16 @@
           "observed": "the one-level glob returns 174 matching lines, the recursive walk 574 matching lines and 1,152 occurrences; csift classifies 46 records harness.hook.feedback and 0 user.message for the same pattern, 187 records harness.command.caveat and 3 harness.enforce.retry. The three grep numbers measure three different things over the same bytes, and the gap between the grep and the leaf is records that QUOTE the marker rather than open with it, which is the content-start law working",
           "rule": "`rg -c` counts matching LINES summed over files, `rg -o | wc -l` counts OCCURRENCES, and the one-level glob scopes to top-level transcripts while the recursive walk includes every subagent transcript; one record per classified record for every csift figure",
           "note": "the preceding check recorded 553 for a command whose stated rule was occurrences; no scope reproduces that pairing. The numbers here name their command and their scope, and the corpus is live, so a later run moves them - the RELATION between them is what the claim rests on"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Walked every `*.jsonl` file except `journal.jsonl` under each projects root, kept the b'\\n'-delimited lines carrying b'isMeta', parsed them, kept the objects with `type == \"user\"` and truthy `isMeta`, and flattened each one's text the way the model layer does (`message.content` when it is a string, else the `text` blocks joined with \"\\n\"). Then per record: does the text CONTAIN the edit-retry notice, does its left-trimmed form START with it, and when it contains but does not open with it, which template does it open with. Separately, for the two arms that used to test the UNTRIMMED string, how many records the left-trim newly reaches (`a.startswith(p) and not s.startswith(p)`).",
+          "observed": "Root one: 9,611 files, 3,713 isMeta user records (97 with no text at all). The notice occurs anywhere in 1 record and at content start in 0; that 1 record opens `Stop hook feedback:`. Root two: 10,330 files, 1,825 records (78 textless); anywhere 2, at content start 0, both opening `Stop hook feedback:`. The left-trim newly reaches 0 records for `Stop hook feedback:` and 0 for `<local-command-caveat>` in either root (content-start counts 46 / 191 and 35 / 231, identical to the untrimmed counts). Since the feedback arm sits above the retry arm, every record the retry arm loses is claimed by the arm above it, so the emitted leaf moves for no record in either root.",
+          "rule": "One count per RECORD, a record being a b'\\n'-delimited line of a `*.jsonl` file under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`. A record with no text block counts once in the textless bucket and in no template bucket. The two projects roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
+          "note": "The edit-retry arm tested `contains` and the feedback and caveat arms tested the untrimmed string; all three now anchor after one `trim_start`. The producer hops are unchanged - the Stop-hook stream, its blocking-error branch, the shared formatter with its four-name table, the slash-command dispatch and the caveat factory."
         }
       ],
       "attribution": "end-to-end",
@@ -12983,12 +12998,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "352-356",
+          "lines": "355-359",
           "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "109-113",
+          "lines": "113-117",
           "snippet": "    if IMAGE_REFERENCE_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::ContextImage);"
         }
       ],
@@ -89684,12 +89699,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "156-162",
+          "lines": "160-166",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "163-168",
+          "lines": "167-172",
           "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
@@ -92473,12 +92488,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "84-87",
+          "lines": "88-91",
           "snippet": "    // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the\n    // four texts, because Claude Code's own recogniser tests them that way - these are\n    // whole messages, not prefixes of a longer body.\n    if RETRY_NUDGE_TEXTS.contains(&at_start) {"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "295-300",
+          "lines": "298-303",
           "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
         }
       ],
@@ -93330,7 +93345,7 @@
         {
           "path": "src/model/classify/injections.rs",
           "lines": "68-70",
-          "snippet": "if s.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {\n        return Some(Class::HookFeedback);\n    }"
+          "snippet": "    if at_start.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {\n        return Some(Class::HookFeedback);\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",

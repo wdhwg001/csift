@@ -65,20 +65,24 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
         return Some(Class::ScheduleWakeup);
     }
     // harness.hook.feedback: the Stop hook's blocking feedback, which the model reads.
-    if s.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {
+    if at_start.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {
         return Some(Class::HookFeedback);
     }
     // harness.command.caveat: the caveat the slash-command EXECUTOR writes after a
     // local command. Its producer is the command executor, never a hook, which is why
     // it sits in the command family and not beside the feedback arm above.
-    if s.starts_with(LOCAL_COMMAND_CAVEAT_PREFIX) {
+    if at_start.starts_with(LOCAL_COMMAND_CAVEAT_PREFIX) {
         return Some(Class::CommandCaveat);
     }
     // harness.enforce.retry: a redo nudge telling the model to re-issue a call. This
-    // arm is the edit-failed-retry notice; the marker is matched ANYWHERE because the
-    // harness appends it to the failed tool's own result text rather than writing it
-    // as a standalone prompt.
-    if s.contains(EDIT_RETRY_MARKER) {
+    // arm is the edit-failed-retry notice, and it is anchored like every other template
+    // arm. The notice's own carrier is a failed tool's RESULT text, not a standalone
+    // isMeta prompt, so on this path an unanchored match can only reach a record whose
+    // body QUOTES it - which is the exact failure the content-start law names. Censused
+    // over two projects roots: of the isMeta user records carrying the notice anywhere,
+    // 0 of 1 and 0 of 2 carry it at content start, and every one of the three is a
+    // `Stop hook feedback:` body the arm above already claims.
+    if at_start.starts_with(EDIT_RETRY_MARKER) {
         return Some(Class::EnforceRetry);
     }
     // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the

@@ -46,6 +46,41 @@ fn each_template_reaches_its_own_leaf() {
     assert!(labels(&meta("just some prose")).is_empty());
 }
 
+/// EVERY text arm anchors at content start, after the same `trim_start` the section
+/// discipline uses - so leading whitespace still reaches the leaf, and a template deeper
+/// in a body belongs to the record QUOTING it. The two arms that used to test the
+/// untrimmed string (feedback, caveat) and the one that used to test `contains`
+/// (edit-retry) are pinned here beside a family they must no longer steal.
+#[test]
+fn every_template_arm_anchors_at_content_start() {
+    let anchored: &[(&str, Class)] = &[
+        ("Stop hook feedback: do it again", Class::HookFeedback),
+        ("<local-command-caveat>ran /x", Class::CommandCaveat),
+        (
+            "The last Edit failed because the target file was modified",
+            Class::EnforceRetry,
+        ),
+    ];
+    for &(text, leaf) in anchored {
+        // Leading whitespace is trimmed, exactly like the loop-marker arms.
+        let padded = format!("\n  {text}");
+        assert_eq!(labels(&meta(&padded)), vec![leaf], "padded: {text}");
+        // The SAME template one sentence deep belongs to the record quoting it, which
+        // for an isMeta record with no other template is no leaf at all.
+        let quoted = format!("the harness wrote: {text}");
+        assert!(labels(&meta(&quoted)).is_empty(), "quoted mid-body: {text}");
+    }
+    // The observed carrier of the edit-retry notice is a `Stop hook feedback:` body, and
+    // the feedback arm sits ABOVE the retry arm, so such a record keeps the feedback leaf
+    // whether or not the retry arm is anchored.
+    assert_eq!(
+        labels(&meta(
+            "Stop hook feedback:\nThe last Edit failed because the target file was modified"
+        )),
+        vec![Class::HookFeedback]
+    );
+}
+
 #[test]
 fn the_wakeup_tick_wins_over_the_driver_tick() {
     // `# Autonomous loop check` and `# Autonomous loop tick` share a prefix up to the

@@ -283,8 +283,11 @@ pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer"
 pub const STOP_HOOK_FEEDBACK_PREFIX: &str = "Stop hook feedback:";
 /// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>…` executor wrapper.
 pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
-/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the edit-failed-retry notice (matched anywhere, as it
-/// also rides inside a `Stop hook feedback:` body).
+/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the edit-failed-retry notice, anchored at CONTENT
+/// START like every other template arm. Its own carrier is a failed tool's RESULT text
+/// rather than a standalone injected prompt, so on the isMeta-user path it appears only
+/// nested inside another template's body - a `Stop hook feedback:` one in all three
+/// records two projects roots hold - and the arm above claims each of those.
 pub const EDIT_RETRY_MARKER: &str = "The last Edit failed because the target file was modified";
 
 /// The harness's other REDO NUDGES (`harness.enforce.retry`), each an exact content
