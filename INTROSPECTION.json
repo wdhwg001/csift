@@ -27963,12 +27963,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "348-353",
+          "lines": "353-358",
           "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a\n/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it\n/// is deliberately NOT the page index: it counts images across the WHOLE record, while a\n/// page is the element's position inside its own tool_result ([`record_pdf_pages`])."
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "378-384",
+          "lines": "383-389",
           "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };"
         }
       ],
@@ -28701,12 +28701,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "333-338",
+          "lines": "338-343",
           "snippet": "pub(crate) fn parse_image_markers(text: &str, out: &mut Vec<usize>) {\n    let mut rest = text;\n    const PAT: &str = \"[Image #\";\n    while let Some(i) = rest.find(PAT) {\n        let after = &rest[i + PAT.len()..];\n        let digits: String = after.chars().take_while(char::is_ascii_digit).collect();"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "403-411",
+          "lines": "408-416",
           "snippet": "    // Assign `#N` by NUMBER. The record's `imagePasteIds` lists the ids in the order of\n    // its image blocks (the submit path builds both arrays in one ascending-id pass),\n    // while the `[Image #N]` markers keep the operator's TEXT order - the two orders\n    // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a\n    // silently wrong `#N` there (v0.10.5, ledger IMG-005). Without the array (older\n    // records) the positional zip stays, and only when the marker count matches the\n    // image count (a mismatch means a back-reference to a compressed-out image, so\n    // `seq` stays `None` rather than misassign).\n    assign_image_seq(&mut out, rec.image_paste_ids.as_deref(), &markers);"
         }
       ],
@@ -29258,7 +29258,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "489-492",
+          "lines": "494-497",
           "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
         }
       ],
@@ -29858,12 +29858,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "354-358",
+          "lines": "359-363",
           "snippet": "pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {\n    let mut out = Vec::new();\n    let Some(blocks) = rec.blocks() else {\n        return queued_prompt_images(rec, with_data);\n    };"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "378-384",
+          "lines": "383-389",
           "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };"
         }
       ],
@@ -30027,17 +30027,17 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "489-492",
+          "lines": "494-497",
           "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "348-353",
+          "lines": "353-358",
           "snippet": "/// Collect every image carried by one record, in document order: a direct `Block::Image`\n/// (the user-sent / assistant case) OR an `{type:\"image\"}` element nested in a\n/// `Block::ToolResult.content` array (a tool screenshot, or a PDF page). `img_index` is a\n/// 1-based running ordinal across both sources, so the id `L<line>i<n>` is stable - and it\n/// is deliberately NOT the page index: it counts images across the WHOLE record, while a\n/// page is the element's position inside its own tool_result ([`record_pdf_pages`])."
         },
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "378-388",
+          "lines": "383-393",
           "snippet": "            Block::ToolResult {\n                content: Some(content),\n                ..\n            } => {\n                let Some(arr) = content.as_array() else {\n                    continue;\n                };\n                for (pos, el) in arr.iter().enumerate() {\n                    let Some(mut r) = image_element_ref(el, with_data) else {\n                        continue;\n                    };"
         }
       ],
@@ -96313,7 +96313,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "296-297",
+          "lines": "301-302",
           "snippet": "    let tur = rec.tool_use_result_value()?;\n    let first = usize::try_from(tur.get(\"firstPage\")?.as_u64()?).ok()?;"
         },
         {
@@ -96402,12 +96402,12 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "324-327",
+          "lines": "329-332",
           "snippet": "fn image_element_ref(el: &Value, with_data: bool) -> Option<ImageRef> {\n    if el.get(\"type\").and_then(Value::as_str) != Some(\"image\") {\n        return None;\n    }"
         },
         {
           "path": "src/commands/image/tests.rs",
-          "lines": "403",
+          "lines": "422",
           "snippet": "fn the_whole_pdf_document_block_is_not_listed() {"
         }
       ],
@@ -96489,7 +96489,7 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "292-295",
+          "lines": "297-300",
           "snippet": "    let probe = rec.tur_probe()?;\n    if probe.r#type.as_ref().and_then(Value::as_str) != Some(\"parts\") {\n        return None;\n    }"
         },
         {

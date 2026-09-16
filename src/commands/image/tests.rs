@@ -374,6 +374,25 @@ fn a_carrier_without_first_page_names_no_page() {
     }
 }
 
+/// The TYPE half of the gate, pinned on its own: a result object that is NOT `parts` but
+/// DOES carry a top-level `firstPage` names no page. That shape is the REPL carrier's
+/// (IMG-018) - it re-emits inner-Read page images and can hold an offset of its own name,
+/// while its element positions map to nothing, several documents having been flattened
+/// into one capped list. Reading `firstPage` without the type check would number those.
+#[test]
+fn a_result_that_is_not_parts_names_no_page_even_carrying_first_page() {
+    let r = parts_record(
+        json!({"type":"repl","firstPage":5,"file":{"filePath":"/Users/dev/docs/report.pdf"}}),
+        &PAGE.repeat(2),
+    );
+    assert!(record_pdf_pages(&r).is_none());
+    let imgs = record_images(&r, false);
+    assert_eq!(imgs.len(), 2, "the images are still listed");
+    assert!(imgs
+        .iter()
+        .all(|i| i.page.is_none() && i.pdf_path.is_none()));
+}
+
 /// A `parts` result describes ONE tool call, so a record carrying two tool_result blocks
 /// could not say which one the pages belong to. The images are still listed; only the
 /// derivation stands down.

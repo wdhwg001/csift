@@ -289,6 +289,11 @@ pub(crate) fn basename(path: &str) -> &str {
 /// what is by then a six-key object. Both are paid once per record and only for a record
 /// that carries a nested image, which is where the caller resolves this lazily.
 pub(crate) fn record_pdf_pages(rec: &Record) -> Option<PdfPages> {
+    // The TYPE half of the gate, and it does two jobs. It is what keeps the derivation off
+    // a carrier that re-emits page images with an offset of its own name (IMG-018), and it
+    // is the SHORT CIRCUIT: a record whose result is not `parts` never reaches the full
+    // `tool_use_result_value()` parse below, which on a screenshot result would walk a
+    // base64 payload to find a `firstPage` that a REPL result can also carry.
     let probe = rec.tur_probe()?;
     if probe.r#type.as_ref().and_then(Value::as_str) != Some("parts") {
         return None;
