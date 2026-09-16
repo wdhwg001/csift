@@ -94486,6 +94486,79 @@
           "note": "The equality in both roots is what makes the one-leaf-plus-a-fact shape right: the placeholder is the common form and the prompt is the gated one, so the pairing is a property of the tail the loader found, not of the placeholder."
         }
       ]
+    },
+    {
+      "id": "NAR-012",
+      "area": "narration",
+      "behavior": "Claude Code 2.1.268 names a narration block OUTSIDE the signature for the first time, and only on the SDK wrapper frame: a field `narration_block_indexes`, absent from 2.1.258 and present at 2.1.268 in three places - the interned name table, the frame schema, and one builder. The schema's own description says what it is: ascending zero-based indexes into that frame's `message.content` of the thinking blocks whose signature the server tagged block_kind `narration`, and it is declared a wrapper-level sibling, never inside `message.content`, so it is not replayed to the model. The builder computes it from the same signature decode rather than from a second source - it calls the exported helper `narrationBlockIndexes` and emits the field only when that returns a non-empty array.",
+      "depends": "csift classifies `agent.thinking.narration` from the BLOCK's own signature (`model/narration.rs`), and this field does not change that: it never reaches a transcript line, so a reader with only a transcript has the signature and nothing else. Recording the field matters for the opposite reason - if a later build moved the tag out of the signature and into a persisted key, csift's decoder would silently stop finding narration blocks, and this claim is the marker that says which of the two carriers csift reads.",
+      "code": [
+        {
+          "path": "src/model/narration.rs",
+          "lines": "51-54",
+          "snippet": "pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {\n    let Some(sig) = signature else {\n        return Class::AgentThinkingSummary;\n    };"
+        }
+      ],
+      "instrument": "Binary: byte-count the literal `narration_block_indexes` in each held build, one non-overlapping count per build, and read every occurrence in the build that carries it. Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\", count (a) lines carrying the literal anywhere, (b) parsed records carrying it as a TOP-LEVEL key and (c) parsed records carrying it as a key anywhere below the top level - the second and third are the counts that decide whether a transcript ever holds it.",
+      "located": {
+        "claude_code": "2.1.268",
+        "csift": null,
+        "source": "TAXONOMY_MAP_v2 agent.thinking lead row"
+      },
+      "first_seen_claude_code": "2.1.268",
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "No specimen can exist on disk by construction - the field is a wrapper-level SDK frame sibling and the transcript writer persists `message.content` - so the closing instrument is an SDK frame capture rather than a corpus scan."
+      ],
+      "residue": [
+        "All three hops are anchored at 2.1.268 offsets and are marked absent at the verified version, because the field does not exist there at all: the literal `narration_block_indexes` occurs zero times in that build. Re-locating them is a byte search for each excerpt in whichever build the badge next names."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the extractor the builder binds",
+          "offset": 167822307,
+          "excerpt": "var v5n=import.meta.require(\"/$bunfs/root/chunk-7ykdvbsa.js\").narrationBlockIndexes;",
+          "note": "The field's only source is the exported narration-index helper, so the wrapper field and csift's own decoder read the same signature tag.",
+          "anchor_status": "absent"
+        },
+        {
+          "role": "gate",
+          "name": "the frame schema and its description",
+          "offset": 162125620,
+          "excerpt": "narration_block_indexes:T(A().int().nonnegative()).optional().describe(\"@internal Ascending zero-based indexes into this frame's `message.content` of the thinking blocks whose signature the server tagged block_kind 'narration'",
+          "note": "The declaration names the field optional and states what it indexes; the sibling field's own description in the same object declares the wrapper-level rule - never inside `message.content`, not replayed to the model.",
+          "anchor_status": "absent"
+        },
+        {
+          "role": "writer",
+          "name": "the frame builder",
+          "offset": 167829189,
+          "excerpt": "function fye(e){if(v5n===null||!Array.isArray(e))return{};let n=v5n(e);return n.length>0?{narration_block_indexes:n}:{}}",
+          "note": "The one site that emits the key. It returns an empty object when the helper is unavailable, when the content is not an array, or when no block is tagged - so a frame carrying no narration block carries no key either.",
+          "anchor_status": "absent"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "narration_block_indexes",
+        "lowest_present": "2.1.268",
+        "highest_absent": "2.1.259",
+        "ladder": "62 held builds from 1.0.60 to 2.1.268, one non-overlapping byte count each; 0 in the 61 below 2.1.268, 3 at 2.1.268."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Byte counts of the literal across the 62 held builds, reads of all three occurrences in 2.1.268 at their offsets, a byte-equality check of each recorded excerpt against the 2.1.268 bytes at its offset, and a corpus pass over two projects roots counting the literal as a raw line hit, as a top-level key and as a nested key.",
+          "observed": "The literal occurs 0 times in every held build below 2.1.268 and 3 times at 2.1.268 - the interned name table, the frame schema, and the builder `fye`. All three recorded excerpts are byte-equal to the 2.1.268 bytes at their offsets, and all three occur at NO offset of the 2.1.258 build, with zero leading bytes matching where each offset points - which is what their `absent` marks assert. Corpus: the first root carries the literal on 267 raw lines, of which 0 carry it as a top-level key and 0 as a nested key - every hit is payload prose in transcripts that discuss the field. The second root carries it on 0 lines. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second.",
+          "rule": "One non-overlapping byte occurrence per binary count; one raw count per line containing the literal anywhere; one key count per parsed record carrying the exact key name, tested at the top level and then recursively below it; an anchor mark is `absent` only when the excerpt occurs nowhere in the verified build AND no leading byte matches at the recorded offset.",
+          "note": "The claim is checked at the version the badge names even though the behavior is a 2.1.268 one: what is true at 2.1.258 is that the field does not exist there, and what is true on disk is that no transcript carries it under either build. The signature stays the only carrier a transcript has."
+        }
+      ]
     }
   ]
 }
