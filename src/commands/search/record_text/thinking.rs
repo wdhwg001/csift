@@ -98,10 +98,64 @@ impl Fact {
 /// family that needs `section.block`: a signature belongs to the BLOCK, and a record
 /// carrying two thinking blocks emits two units whose facts differ.
 pub(crate) fn facts(
-    _rec: &Record,
+    rec: &Record,
     _raw: Option<&str>,
-    _section: &Section<'_>,
+    section: &Section<'_>,
     _ctx: &ClassifyCtx,
 ) -> (Vec<HitFact>, Vec<Marker>) {
-    (Vec::new(), Vec::new())
+    // The gate that refuses a unit this family does not own. Every marker below is a
+    // statement about a content BLOCK, so a record-level unit - the record text, an
+    // answered AUQ, an elicitation marker - carries `None` here and gets nothing.
+    let Some(block) = section.block else {
+        return (Vec::new(), Vec::new());
+    };
+    (Vec::new(), block_markers(rec, block, section.class))
+}
+
+/// The label-zone markers a content BLOCK adds to its unit, in push order.
+///
+/// Four shapes, and the split is WHO WROTE the block. Two are the API's own answers with
+/// no text in them, so the marker is what a reader has instead of a body:
+///
+/// - `agent.thinking.omitted` -> `[no summary text]`: a signed block whose `thinking`
+///   field the API returned empty, which is what its `thinking.display` mode `omitted`
+///   means.
+/// - `agent.thinking.redacted` -> `[redacted thinking]`: the block is opaque ciphertext.
+///
+/// The other two are the CLIENT's own text wearing the assistant's role, and there the
+/// marker is what stops the unit reading as the model speaking:
+///
+/// - a cancel SALVAGE block -> `[cancelled stream salvage]`: text the client kept from a
+///   stream the person cancelled ([`crate::model::thinking_block_is_salvage`]). It keeps
+///   `agent.thinking.summary`, because the block IS a summary slot in the message; the
+///   marker is what says who wrote it.
+/// - an assistant TEXT block whose whole trimmed text is
+///   [`crate::model::THINKING_REMOVED_TEXT`] -> `[thinking removed by the client]`: the
+///   stand-in the strip path pushes when removing every thinking block would have left
+///   the message empty. The test is the WHOLE text, never a substring, so an assistant
+///   turn that QUOTES the phrase inside a longer message keeps its plain leaf unmarked.
+///
+/// `agent.thinking.narration` takes no marker here: the label renders its own
+/// `[narration summary]`, and two words for one block would read as two facts.
+#[must_use]
+fn block_markers(rec: &Record, block: &Block, class: Option<Class>) -> Vec<Marker> {
+    if let Block::Text { text } = block {
+        // Only the assistant's own text blocks can be the stand-in: the leaf is what says
+        // the unit is the assistant speaking, and a user text block is somebody else's
+        // words.
+        if class == Some(Class::AgentMessagePlain)
+            && text.trim() == crate::model::THINKING_REMOVED_TEXT
+        {
+            return vec![Marker::plain("thinking removed by the client")];
+        }
+        return Vec::new();
+    }
+    if crate::model::thinking_block_is_salvage(rec, block) {
+        return vec![Marker::plain("cancelled stream salvage")];
+    }
+    match class {
+        Some(Class::AgentThinkingOmitted) => vec![Marker::plain("no summary text")],
+        Some(Class::AgentThinkingRedacted) => vec![Marker::plain("redacted thinking")],
+        _ => Vec::new(),
+    }
 }

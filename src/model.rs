@@ -58,6 +58,8 @@ pub(crate) use classify::bookkeeping::classify as bookkeeping_leaf;
 pub(crate) use classify::support::*;
 pub(crate) use classify::system::classify as system_leaf;
 pub(crate) use classify::thinking::classify as thinking_block_leaf;
+pub(crate) use classify::thinking::is_cancel_salvage as thinking_block_is_salvage;
+pub(crate) use classify::thinking::THINKING_REMOVED_TEXT;
 pub(crate) use compaction::*;
 pub(crate) use grouping::*;
 pub(crate) use inventory::*;

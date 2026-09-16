@@ -94132,6 +94132,287 @@
           "note": ""
         }
       ]
+    },
+    {
+      "id": "CLS-037",
+      "area": "classification",
+      "behavior": "Claude Code's thinking-strip path never BLANKS a thinking block: it filters the block out of the assistant message's content array, and when nothing readable survives it pushes one ordinary text block whose text is exactly `[Thinking removed]`. The literal is absent from the 12 held builds below 2.1.152 and present from 2.1.152 onward, two occurrences per build - one in the constant pool, one at the push site.",
+      "depends": "csift marks an assistant text block whose WHOLE trimmed text is that literal with `[thinking removed by the client]`, under its ordinary `agent.message.plain` leaf. Without the marker the three words read as the assistant speaking, which is the one thing the block is not. TWO halves make the test: the whole text rather than a substring, so an assistant turn that QUOTES the phrase keeps the plain leaf unmarked; and the leaf itself, so the same words in somebody else's record take no marker. The marker rides `search` and `show`; `verbatim` replays the record's own text unmarked.",
+      "code": [
+        {
+          "path": "src/model/classify/thinking.rs",
+          "lines": "18",
+          "snippet": "pub(crate) const THINKING_REMOVED_TEXT: &str = \"[Thinking removed]\";"
+        },
+        {
+          "path": "src/commands/search/record_text/thinking.rs",
+          "lines": "149",
+          "snippet": "            return vec![Marker::plain(\"thinking removed by the client\")];"
+        }
+      ],
+      "instrument": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, count (a) raw lines carrying the literal anywhere and (b) entries of a list `message.content` whose `type` is `text` and whose `text` EQUALS the literal exactly - the second is the count that decides the claim. Binary: byte-count the literal per held build, sorted by numeric version, and read the push site at its offset.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "TAXONOMY_MAP_v2 agent.thinking guard row"
+      },
+      "first_seen_claude_code": "2.1.152",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "No specimen exists in either corpus: the block has never been persisted. A live trial that forces the strip path - a prefix-lock retry, or a compaction whose kept tail holds only thinking - would capture one.",
+        "The trigger and gate of the strip path are unread: the push site is located and read, but which caller runs the filter, and under which condition, is not traced. Reading the function that encloses the push offset and its call sites closes it."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "the strip path's stand-in push",
+          "offset": 166039654,
+          "excerpt": "_.push({type:\"text\",text:\"[Thinking removed]\",citations:[]});return{...o,message:{...o.message,content:_}}",
+          "note": "Reached only when the filtered content array is empty; the filter above it drops `thinking` and `redacted_thinking` blocks and every whitespace-only text block."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "[Thinking removed]",
+        "lowest_present": "2.1.152",
+        "highest_absent": "2.1.150",
+        "ladder": "62 held builds from 1.0.60 to 2.1.268, one non-overlapping byte count each; present in 50 at exactly 2 occurrences, absent in the 12 below 2.1.152."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "A corpus pass over two projects roots counting the literal both as a raw line hit and as an exact text-block value, plus a per-build byte count over the 62 held builds and a read of the push site at 2.1.258.",
+          "observed": "First root: 432 raw lines carry the literal, and 0 of them is a text block whose `text` equals it - every hit is payload prose in development transcripts that discuss the shape. Second root: 0 raw lines, 0 blocks. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second. Per build the literal count is 0 in the 12 held builds below 2.1.152 and exactly 2 from 2.1.152 through 2.1.268.",
+          "rule": "One raw count per line containing the literal anywhere; one block count per entry of a list `message.content` whose `type` is `text` and whose `text` is byte-equal to the literal, deduped by (record uuid, block index) over the whole root; one binary count per non-overlapping byte occurrence per build.",
+          "note": "The guard ships specimen-less by construction, which is the point: the marker exists before the first specimen rather than after it. The raw-line count rises as transcripts discussing the shape accumulate, which is exactly why the block count and not the line count decides the claim."
+        }
+      ]
+    },
+    {
+      "id": "CLS-039",
+      "area": "classification",
+      "behavior": "A `thinking` content block can arrive with an EMPTY `thinking` string beside a non-empty `signature`, and that is what the API's `thinking.display` mode `omitted` returns rather than a client placeholder. The 2.1.258 build declares the parameter on both thinking variants as `display:ee([\"summarized\",\"omitted\"]).optional()`, and the one function that chooses a value returns `\"summarized\"` for an interactive session with the `showThinkingSummaries` setting on, `\"omitted\"` for a quiet non-interactive one, and NO field otherwise - so an ordinary interactive session takes the API default, which the shipped SDK documentation in the same binary states as `display opt-in: default is omitted (empty thinking text)`. The client cannot BLANK a thinking string it received: its stream reader seeds a block as `thinking:\"\",signature:\"\"` and fills both from deltas, the only member write to a block's text is the streaming `+=` append, and the one discard path REMOVES the block from the message instead. One client path does write an empty string, and it is a different case: the content healer substitutes `\"\"` for a `thinking` field that is ABSENT or not a string and logs `tengu_content_block_healed`, so a healed block is indistinguishable on disk from an API-omitted one. Which of the two produced a given block is not recoverable from a transcript.",
+      "depends": "csift gives the shape its own leaf `agent.thinking.omitted` and renders an EMPTY body with the display-only marker `[no summary text]`; the leaf is `llm_visible() == false`, so a bare `-t agent` / `-t agent.thinking` skips it while a glob or the exact leaf reaches it. If the shape were folded back into `agent.thinking.summary` a census would count a block with no readable text as reasoning the model produced. csift states the emptiness and never its cause: the healer and the API default write the same bytes.",
+      "code": [
+        {
+          "path": "src/model/classify/thinking.rs",
+          "lines": "38",
+          "snippet": "            Class::AgentThinkingOmitted"
+        },
+        {
+          "path": "src/commands/search/record_text/thinking.rs",
+          "lines": "157",
+          "snippet": "        Some(Class::AgentThinkingOmitted) => vec![Marker::plain(\"no summary text\")],"
+        }
+      ],
+      "instrument": "Corpus: for every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, json.loads each non-blank segment, and count one observation per entry of a list `message.content` whose `type` is `thinking`, deduped by (record uuid, block index) over the whole ROOT, so a record replayed inside a file and a transcript duplicated across two project directories each count once; the target is `thinking == \"\"` with a non-empty `signature`, and the per-build rate buckets the same observations by the carrying record's top-level `version`. Binary: byte-count and read the literals `[\"summarized\",\"omitted\"]`, `default is omitted (empty thinking text)` and `thinking:\"\"` in the shipped build, one non-overlapping count each, and enumerate every member write to a block's text with the regexes `[,{(]thinking:`, `\\.thinking\\s*(=[^=]|\\+=)` and `\\[\"thinking\"\\]\\s*(=[^=]|\\+=)`, reading each hit.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "TAXONOMY_MAP_v2 agent.thinking rows"
+      },
+      "first_seen_claude_code": "2.1.176",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "Which display value produced any given empty-text block is not recoverable from a transcript: no record carries the request's `display`, and the API default, an explicit `omitted`, the `updates` beta and the content healer all write the identical block. The closing instrument is a request-side capture."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the display source",
+          "offset": 158520128,
+          "excerpt": "function rAn({explicitDisplay:e,isNonInteractive:n,outputFormat:r,verbose:o}){if(e)return e;if(!n)return mEt()?\"summarized\":void 0;if(oAn({isNonInteractive:n,outputFormat:r,verbose:o}))return\"omitted\";return}",
+          "note": "The only producer of the request's display value. An interactive session with the summaries setting off returns undefined - no field on the wire - which is how a session gets the API default."
+        },
+        {
+          "role": "gate",
+          "name": "the thinking parameter schema",
+          "offset": 158538740,
+          "excerpt": "[\"summarized\",\"omitted\"]).optional()}).describe(\"Claude decides when and how much to think (Opus 4.6+).\")",
+          "note": "The declared value set on the adaptive thinking variant; the enabled variant carries the same pair."
+        },
+        {
+          "role": "writer",
+          "name": "the stream block seed",
+          "offset": 165440118,
+          "excerpt": "thinking:\"\",signature:\"\"};break;default:if(km[la.index]={...la.content",
+          "note": "The client's own content_block_start arm seeds both fields empty and fills them from deltas, so a block that ends signed and text-less is a block whose signature delta arrived and whose thinking delta did not."
+        },
+        {
+          "role": "writer",
+          "name": "the content healer's thinking case",
+          "offset": 165971185,
+          "excerpt": "return s(\"tengu_content_block_healed\",{blockType:b(\"thinking\"),action:b(\"healed\"),missingThinking:!_,missingSignature:!v,",
+          "note": "The second writer of an empty thinking string, and the reason csift never names a cause: reached only when `typeof f.thinking` is not \"string\", it substitutes the empty string for the absent field and leaves a block shaped exactly like an API-omitted one."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "default is omitted (empty thinking text)",
+        "lowest_present": "2.1.176",
+        "highest_absent": "2.1.168",
+        "ladder": "62 held builds from 1.0.60 to 2.1.268, one non-overlapping byte count each; absent in the 15 below 2.1.176, present in the 47 from 2.1.176 onward (2 occurrences at 2.1.258, 3 at 2.1.268). A literal dates itself, not the behavior: the shape predates the sentence that documents it, and the stream seed `thinking:\"\",signature:\"\"` is present from 2.1.23."
+      },
+      "enumeration": [
+        {
+          "site": "the streaming delta append - the only member write to a block's text",
+          "offset": 165442325,
+          "excerpt": "Error(\"Content block is not a thinking block\");Hs.thinking+=Cu.thinking;break}break}",
+          "verdict": "Appends the delta to the accumulator, so it can only GROW the text; it is guarded by a type check that throws on any other block."
+        },
+        {
+          "site": "the disabled-thinking parameter sanitiser",
+          "offset": 165416175,
+          "excerpt": "if(Hs!==Nh.thinking)ha=!0,Nh.thinking=Hs;",
+          "verdict": "Operates on the REQUEST body's `thinking` PARAMETER (its guard is `e?.type!==\"disabled\"`), not on a content block, and it strips extra keys from the parameter object rather than touching any text."
+        },
+        {
+          "site": "the max-tokens clamp on the request parameter",
+          "offset": 165476986,
+          "excerpt": ";if(o.thinking?.type===\"enabled\"&&o.thinking.budget_tokens)o.thinking={...o.thinking,budget_tokens:Math.min(o.thinking.budget_tokens,r-1)}",
+          "verdict": "The same request PARAMETER again, rewritten only to clamp `budget_tokens`; no content block is in scope here."
+        },
+        {
+          "site": "the two empty-literal constructions",
+          "offset": 165971410,
+          "excerpt": "thinking:\"\",signature:v?f.signature:\"\"}}",
+          "verdict": "The build carries `thinking:\"\"` exactly twice: the stream seed at 165440118, whose block is then filled from deltas, and this healer arm, which substitutes the empty string for an absent field. No third site constructs an empty thinking text, and the bracket-assignment form occurs zero times."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Two corpus passes with the dedupe (record uuid, block index) over every *.jsonl except journal.jsonl / elicitations.jsonl on each of two projects roots, bucketing the same observations by the carrying record's `version`; byte counts of three literals in the 2.1.258 build; and a regex enumeration of every `thinking` property and member-assignment site in that build, each hit read.",
+          "observed": "First root: 141,165 thinking blocks, of which 1,658 carry an empty `thinking` and a non-empty `signature`; second root: 115,486 and 1,558. ZERO blocks in either root carry an empty text with an empty or absent signature, and zero carry a whitespace-only text. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second. 627 of the target keys are the same (record uuid, block index) pairs, so the union is 2,589 rather than the 3,216 the two numbers would sum to. The rate is a property of the BUILD, not the model: at client version 2.1.223 all 520 of that build's thinking blocks are empty-text, across three distinct `message.model` values (442, 66 and 12), while at 2.1.231 only 47 of 13,407 are (0.35%). In the build, `[\"summarized\",\"omitted\"]` occurs 4 times, `default is omitted (empty thinking text)` twice, and `thinking:\"\"` twice - the stream seed and the content healer. The member-write enumeration finds 43 `thinking:` property sites, 3 `.thinking` assignments and 0 bracket assignments; of the three assignments one is the streaming `+=` append and two operate on the request parameter rather than on a content block.",
+          "rule": "One observation per entry of a list `message.content` whose `type` is `thinking`, deduped by (record uuid, block index) over the whole root, over lines split on b\"\\n\" only; the per-build rate is that population bucketed by the carrying record's top-level `version`; basename overlap is a set intersection of file basenames; binary counts are non-overlapping byte occurrences over the whole image; the enumeration counts non-overlapping regex matches.",
+          "note": "The empty-text population is 1.17% of the first root's thinking blocks and 1.35% of the second's. The enumeration is what closes the claim's negative half, and it also corrects it: the client CAN write an empty thinking string, but only where the field was absent, never over a string it received."
+        }
+      ]
+    },
+    {
+      "id": "CLS-040",
+      "area": "classification",
+      "behavior": "Exactly one thinking block on disk is minted by Claude Code rather than returned by the API: when a streaming turn is cancelled, the stream guard's force-end snapshots the partial streamed thinking into a block with an EMPTY signature, through the synthetic-assistant factory. The record therefore carries `message.model` = the `<synthetic>` sentinel, `stop_reason:\"stop_sequence\"`, a uuid-shaped (non-`msg_`) message id and an all-zero usage. Two fields the constructor sets do NOT survive to disk as one might expect: it passes `isVirtual:!0`, and a pass on the persist path strips that key under the guard `if(o.isVirtual&&!r.has(d)&&o.virtualInResumeRun!==!0)` before the record is stamped and appended, so no transcript line carries it; and the factory defaults `isApiErrorMessage` to FALSE, which is what the line records. Both matter because Claude Code's own request-assembler drop predicate reads exactly those two fields, so the PERSISTED record is one the assembler keeps - the in-memory record of the cancelling session was dropped, and a later resume of the file sends the block.",
+      "depends": "csift keeps the leaf `agent.thinking.summary` on a salvage block - it occupies a summary slot in the message - and adds the display-only marker `[cancelled stream salvage]`, discriminating on the two facts that reach disk: the record's model sentinel, and the block's PRESENT-BUT-EMPTY signature beside non-empty text. An absent signature field is a different shape and answers false. csift deliberately does NOT override the record's delivery: the flag that kept the block out of the live request is not on the line, so asserting `delivered:false` would state a fact the transcript does not carry, and reading `isApiErrorMessage` instead would catch nothing.",
+      "code": [
+        {
+          "path": "src/model/classify/thinking.rs",
+          "lines": "67",
+          "snippet": "pub(crate) fn is_cancel_salvage(rec: &Record, block: &Block) -> bool {"
+        },
+        {
+          "path": "src/commands/search/record_text/thinking.rs",
+          "lines": "154",
+          "snippet": "        return vec![Marker::plain(\"cancelled stream salvage\")];"
+        }
+      ],
+      "instrument": "Corpus: over every *.jsonl under a projects root except journal.jsonl / elicitations.jsonl, split on b\"\\n\", count one observation per `thinking` block whose `signature` is the empty string, deduped by (record uuid, block index) over the whole root, and tally the carrying record's `message.model`, `message.stop_reason`, message id prefix, integer usage sum, the carrying record's `version`, and the VALUES of `isApiErrorMessage` / `isVirtual` separately from their presence. Separately count raw lines carrying the quoted key `\"isVirtual\"` anywhere. Binary: read the force-end call site, the synthetic factory and the guarded strip at their offsets, byte-count `,signature:\"\"}],isVirtual:!0}` across the held build ladder one non-overlapping count per build, and enumerate every site that could CONSTRUCT a thinking block - the object-literal form `type:\"thinking\"`, the quoted-key form `\"type\":\"thinking\"` and the zod form matched by `type:\\s*[A-Za-z_$]{1,3}\\(\"thinking\"\\)` - reading each hit.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "TAXONOMY_MAP_v2 agent.thinking marker row"
+      },
+      "first_seen_claude_code": "2.1.152",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "Whether a RESUME of such a transcript visibly sends the block is not decided here: the persisted record passes the assembler's drop predicate, and the only other filter that removes an unsigned thinking block is gated on a foreign-model test that exempts the `<synthetic>` sentinel by name. A live resume trial would settle it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the stream guard's force-end",
+          "offset": 181611985,
+          "excerpt": "mu({content:[{type:\"thinking\",thinking:Pe,signature:\"\"}],isVirtual:!0})]);let{salvage:Ie}=this.stream.previewStore.getState()",
+          "note": "The one call site in the build whose content is a thinking block. It is gated on the partial streamed text being non-empty, which is why a salvage block always carries text."
+        },
+        {
+          "role": "gate",
+          "name": "the synthetic assistant factory",
+          "offset": 165934304,
+          "excerpt": "isApiErrorMessage:n,isVirtual:C}}function mu({content:e,usage:n,isVirtual:r,now:o,uuid:d}){return Jrr({content:typeof e=",
+          "note": "The factory stamps the model sentinel and the stop reason, emits `isApiErrorMessage` from a parameter defaulting to false, and passes `isVirtual` straight through."
+        },
+        {
+          "role": "writer",
+          "name": "the guarded virtual-key strip on the persist path",
+          "offset": 166209903,
+          "excerpt": "if(o.isVirtual&&!r.has(d)&&o.virtualInResumeRun!==!0){let{isVirtual:C,...I}=o;return[{...I,message:{...o.message,content:v}}]}",
+          "note": "The pass that runs before the records are stamped with cwd, userType and sessionId. The strip is CONDITIONAL - the record must carry the flag, be absent from the kept set and not be flagged `virtualInResumeRun` - and the corpus says the condition holds for this shape: the key reaches no line."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": ",signature:\"\"}],isVirtual:!0}",
+        "lowest_present": "2.1.152",
+        "highest_absent": "2.1.150",
+        "ladder": "62 held builds from 1.0.60 to 2.1.268, one non-overlapping byte count each; present in 50 at exactly 1 occurrence, absent in the 12 below 2.1.152. A literal dates itself, not the behavior."
+      },
+      "enumeration": [
+        {
+          "site": "the object-literal construction - the stream guard's force-end",
+          "offset": 181611999,
+          "excerpt": "type:\"thinking\",thinking:Pe,signature:\"\"}],isVirtual:!0})",
+          "verdict": "The ONE occurrence of `type:\"thinking\"` in the whole build, and it is the mint this claim is about."
+        },
+        {
+          "site": "the quoted-key construction form",
+          "excerpt": "\"type\":\"thinking\"",
+          "verdict": "Occurs ZERO times in the build, so no site builds a thinking block through a JSON-shaped literal. Carries no offset because there is no occurrence to anchor."
+        },
+        {
+          "site": "the wire-block validator",
+          "offset": 179428410,
+          "excerpt": "type:x(\"thinking\"),thinking:i(),signature:i().optional()})",
+          "verdict": "A zod schema that PARSES a block the API sent, beside the `redacted_thinking` schema in the same object; a validator constructs nothing."
+        },
+        {
+          "site": "the SDK system frame for rendered thinking",
+          "offset": 158632383,
+          "excerpt": "type:x(\"thinking\"),content:i(),uuid:Y(),session_id:i()}).describe(\"@internal Rendered thinking content",
+          "verdict": "The `subtype` of a `type:\"system\"` SDK frame, not a content block, and an SDK frame reaches no transcript line."
+        },
+        {
+          "site": "the signature-delta type-mismatch guard",
+          "offset": 165441973,
+          "excerpt": "type:b(\"thinking\"),actual_type:u(Hs.type)}),Error(\"Content block is not a thinking block\");Hs.signature=Cu.signature;",
+          "verdict": "A telemetry field name in an error path. The accumulator it guards came from `content_block_start`, so the block is the API's and this site mints none."
+        },
+        {
+          "site": "the thinking-delta type-mismatch guard",
+          "offset": 165442281,
+          "excerpt": "type:b(\"thinking\"),actual_type:u(Hs.type)}),Error(\"Content block is not a thinking block\");Hs.thinking+=Cu.thinking;",
+          "verdict": "The same shape on the text delta: a telemetry name beside an append onto a block the wire supplied."
+        },
+        {
+          "site": "the stream block seed",
+          "offset": 165440118,
+          "excerpt": "thinking:\"\",signature:\"\"};break;default:if(km[la.index]={...la.content",
+          "verdict": "Spreads the wire block and seeds its two accumulators; the `type` comes from the content_block_start event, so this shapes an API block rather than minting one."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "One corpus pass per projects root counting empty-signature thinking blocks and tallying the carrying record's fields and version, a separate raw count of lines carrying the quoted key `\"isVirtual\"`, reads of three sites in the 2.1.258 build including the bytes immediately before the destructuring, a ladder of the force-end literal over the 62 held builds, and the construction-site enumeration.",
+          "observed": "The first root holds 36 such blocks and the second 39. On every one of them: `message.model` is `<synthetic>`, `stop_reason` is `stop_sequence`, the message id is not `msg_`-prefixed, the integer usage fields sum to 0, the thinking text is non-empty, `isApiErrorMessage` is present and FALSE, `isVirtual` is absent and the carrying record's type is `assistant`. The quoted key `\"isVirtual\"` occurs on 0 lines of either root. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second. 26 of the blocks are the same (record uuid, block index) pairs, so the union is 49 rather than the 75 the two numbers would sum to. The records span client versions 2.1.156 through 2.1.259, and the literal `,signature:\"\"}],isVirtual:!0}` is present in every held build from 2.1.152 onward and absent in the 12 below it. Read at the recorded offset, the strip is GUARDED: `if(o.isVirtual&&!r.has(d)&&o.virtualInResumeRun!==!0){let{isVirtual:C,...I}=o;...}`. The construction enumeration finds one object-literal site, zero quoted-key sites, and four further `type:\"thinking\"`-shaped hits that are two schemas and two telemetry field names.",
+          "rule": "One observation per thinking block whose `signature` is the empty string, deduped by (record uuid, block index) over the whole root; field values are read from the carrying record, with presence and value counted separately; the isVirtual line count is a raw byte scan over the same file set; the ladder is one non-overlapping byte count per build binary; basename and key overlap are set intersections; the enumeration counts non-overlapping literal occurrences and regex matches, each hit read.",
+          "note": "The version span is what closes the writer leg: the earliest observed record sits at 2.1.156, above the literal's 2.1.152 floor, so no observed record predates the flag being passed. The strip's guard is stated as the bytes read rather than as an unconditional destructure, which is what the 0-lines-on-disk specimen actually supports. The enumeration is what closes the claim's 'exactly one' half."
+        }
+      ]
     }
   ]
 }
