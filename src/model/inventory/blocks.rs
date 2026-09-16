@@ -71,7 +71,7 @@ pub(crate) const ROWS: &[Entry] = &[
         // plain message leaf; the block itself renders NOTHING to a person - of the 13
         // `==="fallback"` comparisons in the shipped build, none sits inside the transcript
         // renderer's byte range and its content-block dispatch names no such arm (claim
-        // CLS-049). csift names it instead, in the label zone.
+        // CLS-067). csift names it instead, in the label zone.
         Shape::Block("fallback"),
         Some(Class::AgentMessagePlain),
         Gate::Default,

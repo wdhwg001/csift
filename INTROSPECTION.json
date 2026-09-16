@@ -70739,7 +70739,7 @@
       "id": "QT-SYS-001",
       "area": "queue-and-telemetry",
       "behavior": "Claude Code writes `type:\"system\"` records for its own UI whose `subtype` falls outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`). Measured 2026-09-04 over 8225 transcripts under the projects root (journal and elicitation-sidecar files excluded): 13087 system records under exactly 11 subtypes - stop_hook_summary 5798, turn_duration 4791, away_summary 1683, scheduled_task_fire 459, compact_boundary 235, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2. `informational` is a notice with a string `content` and a `level` (warning 9, notice 5); its live specimen is the Remote Control disconnect notice, composed at 181648256 - which also dedupes against the last transcript record - and reached from the bridge failure arm at 181655786. Every one of the 13087 carries `uuid`, `timestamp` and `parentUuid`, and NONE carries a `message{}` field. `isMeta` is NOT universal, which the old text asserted: the key is ABSENT on api_error (29 of 29), on stop_hook_summary (5798 of 5798) and on 134 of the 235 compaction boundaries, and is `false` on the remaining 7126. The constructors agree - the api_error constructor (166032184) returns {type, subtype, level:\"error\", error, retryInMs, retryAttempt, maxRetries, source, timestamp, uuid} with no isMeta field, and the stop_hook_summary constructor (166030639) likewise, while every other transcript-writing constructor in that cluster sets isMeta:false. A subtype the corpus has not yet seen is not guaranteed isMeta:false either: the file_snapshot record literal (163818846) writes isMeta:true. `parentUuid` is set by no system-record constructor at all - it is stamped by the shared envelope hop (166105359) after the write-policy table (166066498) routes type `system` to the transcript sink like user and assistant records - which is also why a compaction boundary is the one system record whose parentUuid is null. The 11 observed subtypes are a CORPUS property, not the shipped set: the 2.1.258 executable holds 92 adjacent `type:\"system\",subtype:\"...\"` literals over 48 DISTINCT subtype names, and the transcript-writing constructor cluster alone builds four with zero corpus specimens (permission_retry, bridge_status, cloud_session_status, memory_saved). Two of the eleven have a second literal outside that cluster and neither is a counterexample: an informational wire projection (163575905) whose only call site (179104884) spreads it into a control-protocol message carrying session_id and never appends a transcript record, and a local_command rehydration mapper (163578281) that supplies timestamp, uuid and isMeta explicitly. Only two literals in the whole executable put a `message` key inside a system-subtype object, both permission_denied (169797551, 178901181), and both are control-protocol wire projections with session_id and snake_case fields, never transcript records. The two model_refusal subtypes are inline yields in the query loop (164720173, 164725713) rather than factory functions, and model_refusal_fallback has a second producer on the banner path (164575450) that adds the `scope` key - so an audit reading only the constructor cluster would miss them.",
-      "depends": "The eleven observed subtypes now reach NINE leaves across four categories rather than one catch-all: `harness.compaction.boundary`, the three `harness.turn.*` closers, `harness.schedule.event`, and the five `harness.system.*` event kinds - refusal, api-error, notice, kill and command (src/model/classify/system.rs). Each of the five renders the fields that make its own event useful rather than the one-size `[<subtype> <level>] <content>` head the catch-all printed, and a subtype the table does not name reaches NO leaf: `show --line` renders it `? unmodeled: system/<subtype>` under the 1:1 law, which names the shape csift has not caught up with. Two csift laws still rest on the record SHAPE rather than on the subtype list, and the open shipped set is why: every one of these leaves defaults to `llm_visible:false` because no such record carries a `message{}` field (0 of 13,087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the gated admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026, CLS-051), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the mapping is the harness moving a subtype into a differently-typed record; a NEW subtype no longer breaks anything, because it lands on the unmodeled unit by construction.",
+      "depends": "The eleven observed subtypes now reach NINE leaves across four categories rather than one catch-all: `harness.compaction.boundary`, the three `harness.turn.*` closers, `harness.schedule.event`, and the five `harness.system.*` event kinds - refusal, api-error, notice, kill and command (src/model/classify/system.rs). Each of the five renders the fields that make its own event useful rather than the one-size `[<subtype> <level>] <content>` head the catch-all printed, and a subtype the table does not name reaches NO leaf: `show --line` renders it `? unmodeled: system/<subtype>` under the 1:1 law, which names the shape csift has not caught up with. Two csift laws still rest on the record SHAPE rather than on the subtype list, and the open shipped set is why: every one of these leaves defaults to `llm_visible:false` because no such record carries a `message{}` field (0 of 13,087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the gated admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026, CLS-068), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the mapping is the harness moving a subtype into a differently-typed record; a NEW subtype no longer breaks anything, because it lands on the unmodeled unit by construction.",
       "code": [
         {
           "path": "src/model/classify/system.rs",
@@ -95155,58 +95155,6 @@
       ]
     },
     {
-      "id": "CLS-051",
-      "area": "classification",
-      "behavior": "A `local_command` record is the stdout of a slash command, and it is the one system subtype the request assembler re-mints for the model: the assembler converts it into a user message and merges it into the message before it. That merge happens in memory, on the request path, and leaves no trace in the transcript - measured over the live root, the record's own `content` string recurs inside the string content of a `type:\"user\"` record in the same file on 1 of 17 records, and on 6 of 32 on the older snapshot, so the on-disk transcript is NOT where the merged form lands. The record's own shape: 17 records in 8 files live and 32 in 14 files on the snapshot; the content is a `<local-command-stdout>` wrapper carrying text on 12 and 21, plain text on 4 and 11, and an empty stdout wrapper on 1 and 0. Its `parentUuid` names the slash-command WRAPPER record on 9 of 17 and 10 of 32; the rest name another `local_command` record (4 and 11 - a run of commands chains stdout to stdout), a `turn_duration` (1 and 4), an `away_summary` (2 and 2), an attachment (1 and 1) and, on the snapshot only, a `stop_hook_summary`, an assistant record and two user records.",
-      "depends": "csift renders `[command] <content>` and treats the record as DELIVERED - it is the only member of `harness.system.*` the model receives - so the leaf is LLM-visible while its four siblings are not. Its `for` edge is `wraps`, built from `parentUuid` with `Basis::Position` rather than `Basis::Key`: the census above is why. The harness writes the caveat, then the wrapper, then this record, so the link usually reaches the wrapper - but a RUN of local commands chains stdout to stdout, so what the link actually names is the record ABOVE, and calling that a key the harness wrote for the purpose would overstate it. A reader who wants the invocation follows the chain up rather than trusting one hop.",
-      "code": [
-        {
-          "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "39",
-          "snippet": "        Class::SystemCommand => \"[command]\".to_string(),"
-        },
-        {
-          "path": "src/commands/search/record_text/system/edges.rs",
-          "lines": "46",
-          "snippet": "        Class::SystemCommand => {"
-        }
-      ],
-      "instrument": "Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `local_command`. Per FILE parse every line, build the loader's uuid map (last line carrying a uuid wins), resolve each record's `parentUuid` and bucket the target: a `type:\"user\"` record whose string content, after a leading trim, opens `<command-name>` or `<command-message>` is the WRAPPER, anything else is reported by its own type and subtype. Separately bucket the record's `content`: an empty `<local-command-stdout></local-command-stdout>` shell, a wrapper carrying text, or plain text. Then, for each record whose content is a non-blank string, ask whether that string occurs as a substring of the string content of ANY `type:\"user\"` record in the same file (text blocks joined with a newline), counting records rather than occurrences.",
-      "located": {
-        "claude_code": "2.1.258",
-        "csift": null,
-        "source": "measured over two projects roots"
-      },
-      "first_seen_claude_code": null,
-      "producer_trace": "partial",
-      "specimen": "observed",
-      "attribution": "specimen-only",
-      "open_legs": [
-        "the GATE of the merge: the branch in the request assembler that folds a local_command record into the preceding user message, and what it does when there is no preceding one. Instrument: read the assembler's conversion arm in the verified build from the subtype compare to the merge."
-      ],
-      "producer_chain": [
-        {
-          "role": "writer",
-          "name": "local_command constructor",
-          "offset": 166031707,
-          "excerpt": "function um(e,n){return{type:\"system\",subtype:\"local_command\",content:e,level:\"info\"",
-          "note": "the transcript record the slash-command executor appends, with the level it fixes"
-        }
-      ],
-      "checks": [
-        {
-          "claude_code": "2.1.258",
-          "csift": null,
-          "date": "2026-09-16",
-          "verdict": "holds",
-          "instrument": "The claim's own corpus instrument over both projects roots, with the uuid map built from every line of each file holding a local_command record.",
-          "observed": "17 records in 8 files and 32 in 14 files. parentUuid targets: wrapper 9 and 10, another local_command 4 and 11, turn_duration 1 and 4, away_summary 2 and 2, attachment 1 and 1, and on the snapshot only stop_hook_summary 1, assistant 1, user 2. Content shapes: stdout wrapper with text 12 and 21, plain text 4 and 11, empty stdout shell 1 and 0. The content recurs inside a user record's text on 1 of 17 and 6 of 32.",
-          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
-          "note": "New claim; the `[command]` head and the `wraps` edge's Position basis land with it. The recurrence census is what says the assembler's merge is a request-path fact rather than a transcript one."
-        }
-      ]
-    },
-    {
       "id": "CLS-061",
       "area": "classification",
       "behavior": "A refused request lands a `type:\"system\"` record under one of two subtypes, written by TWO constructors that sit side by side and differ in SHAPE, not only in the subtype string. The no-fallback one writes a fixed seven-key payload with no conditional spread at all; the fallback one adds `trigger`, `direction` and `fallbackModel` unconditionally and FIVE keys only when its caller set them - `scope`, `sawCyberRefusal`, `retractedMessageUuids`, `refusedUserMessageUuid` and `provisional` - of which `sawCyberRefusal` and `provisional` reach no corpus record on either root. Payload keys beside the envelope, per root: `content`, `originalModel`, `requestId`, `apiRefusalCategory`, `apiRefusalExplanation` and `refusedUserMessageUuid` on 61 of 61 and 61 of 61 records; `direction`, `trigger` and `fallbackModel` on exactly the 56 and 59 fallback records; `retractedMessageUuids` on 49 and 52 of them; `scope` on 14 and 0. TWO uuid keys ride the record and only ONE of them is an in-file edge. `refusedUserMessageUuid` is present on every record; its value is a string on 56 and 54, and of those it names a line in the same file 55 and 53 times - a `type:\"user\"` record every single time - with 1 and 1 naming no line there; the value is null on the remaining 5 and 7. `retractedMessageUuids` resolves NEVER: 0 of 75 entries and 0 of 79, because those are wire uuids of the normalized SDK messages the fallback retracted, not uuids of transcript lines.",
@@ -95606,6 +95554,151 @@
           "observed": "48 and 53 blocks. Key set {from, to, type} on 48 of 48 and 53 of 53; `from` and `to` each {model} on all; a flat `model` key on 0 and 0; sole block at index 0 on all; carried by a `type:\"assistant\"` record on all; `message.model` equal to `to.model` on all. Same-`message.id` siblings carrying a model: 133 of 133 and 144 of 144 equal to `to.model`. Banner descendants: 47 of 48 and 52 of 53 blocks have one, and both models agree on 47 of 47 and 52 of 52 resolved pairs. The full beta literal counts 5 in this build; the block's own literal is absent at 2.1.168 and present at 2.1.176.",
           "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line. One observation per BLOCK whose `type` is `fallback`, found by walking `message.content[]`. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed. Binary counts are byte counts of the literal over the whole executable.",
           "note": "New claim; the two-sided `Block::Fallback`, the marker and the two keys land with it. The inventory's block specimen carried a flat `model` key that the corpus shows on no line, and it is corrected in the same change."
+        }
+      ]
+    },
+    {
+      "id": "CLS-068",
+      "area": "classification",
+      "behavior": "A `local_command` record is the stdout of a slash command, and it is the one system subtype the request assembler re-mints for the model: the assembler converts it into a user message and merges it into the message before it. That merge happens in memory, on the request path, and leaves no trace in the transcript - measured over the live root, the record's own `content` string recurs inside the string content of a `type:\"user\"` record in the same file on 1 of 17 records, and on 6 of 32 on the older snapshot, so the on-disk transcript is NOT where the merged form lands. The record's own shape: 17 records in 8 files live and 32 in 14 files on the snapshot; the content is a `<local-command-stdout>` wrapper carrying text on 12 and 21, plain text on 4 and 11, and an empty stdout wrapper on 1 and 0. Its `parentUuid` names the slash-command WRAPPER record on 9 of 17 and 10 of 32; the rest name another `local_command` record (4 and 11 - a run of commands chains stdout to stdout), a `turn_duration` (1 and 4), an `away_summary` (2 and 2), an attachment (1 and 1) and, on the snapshot only, a `stop_hook_summary`, an assistant record and two user records.",
+      "depends": "csift renders `[command] <content>` and treats the record as DELIVERED - it is the only member of `harness.system.*` the model receives - so the leaf is LLM-visible while its four siblings are not. Its `for` edge is `wraps`, built from `parentUuid` with `Basis::Position` rather than `Basis::Key`: the census above is why. The harness writes the caveat, then the wrapper, then this record, so the link usually reaches the wrapper - but a RUN of local commands chains stdout to stdout, so what the link actually names is the record ABOVE, and calling that a key the harness wrote for the purpose would overstate it. A reader who wants the invocation follows the chain up rather than trusting one hop.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/heads.rs",
+          "lines": "39",
+          "snippet": "        Class::SystemCommand => \"[command]\".to_string(),"
+        },
+        {
+          "path": "src/commands/search/record_text/system/edges.rs",
+          "lines": "46",
+          "snippet": "        Class::SystemCommand => {"
+        }
+      ],
+      "instrument": "Corpus: over each projects root keep every parsed record whose `type` is `system` and `subtype` is `local_command`. Per FILE parse every line, build the loader's uuid map (last line carrying a uuid wins), resolve each record's `parentUuid` and bucket the target: a `type:\"user\"` record whose string content, after a leading trim, opens `<command-name>` or `<command-message>` is the WRAPPER, anything else is reported by its own type and subtype. Separately bucket the record's `content`: an empty `<local-command-stdout></local-command-stdout>` shell, a wrapper carrying text, or plain text. Then, for each record whose content is a non-blank string, ask whether that string occurs as a substring of the string content of ANY `type:\"user\"` record in the same file (text blocks joined with a newline), counting records rather than occurrences.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured over two projects roots"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "the GATE of the merge: the branch in the request assembler that folds a local_command record into the preceding user message, and what it does when there is no preceding one. Instrument: read the assembler's conversion arm in the verified build from the subtype compare to the merge."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "local_command constructor",
+          "offset": 166031707,
+          "excerpt": "function um(e,n){return{type:\"system\",subtype:\"local_command\",content:e,level:\"info\"",
+          "note": "the transcript record the slash-command executor appends, with the level it fixes"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The claim's own corpus instrument over both projects roots, with the uuid map built from every line of each file holding a local_command record.",
+          "observed": "17 records in 8 files and 32 in 14 files. parentUuid targets: wrapper 9 and 10, another local_command 4 and 11, turn_duration 1 and 4, away_summary 2 and 2, attachment 1 and 1, and on the snapshot only stop_hook_summary 1, assistant 1, user 2. Content shapes: stdout wrapper with text 12 and 21, plain text 4 and 11, empty stdout shell 1 and 0. The content recurs inside a user record's text on 1 of 17 and 6 of 32.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line; a line that does not parse contributes to nothing. One observation per parsed record. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed.",
+          "note": "New claim; the `[command]` head and the `wraps` edge's Position basis land with it. The recurrence census is what says the assembler's merge is a request-path fact rather than a transcript one."
+        }
+      ]
+    },
+    {
+      "id": "CLS-067",
+      "area": "classification",
+      "behavior": "What happens to a `fallback` content block AFTER it lands is decided on the REQUEST side, by one pass over the message array. The pass takes the array and a boolean, returns the array untouched when no assistant record carries such a block, and otherwise rebuilds every record that does: each fallback block is replaced by the boolean's choice - re-validated and kept when the fallback beta is on the request, dropped when it is not. The re-validator is a separate function that re-reads `from.model` and `to.model`, requires each to be a string of 1..=256 characters, and returns a FRESH `{type:\"fallback\",from:{model},to:{model}}` object or nothing. A record left with no blocks at all is given a single text block rather than an empty array. The caller names the boolean `fallbackBeta` at its own call site. NOTHING renders the block to a person: of the 13 `===\"fallback\"` comparisons in the whole build, none sits inside the transcript renderer's system-handling span (bytes 180030000 to 180070000; every one of the 13 falls between 156450016 and 176031167), and the renderer's own content-block dispatch names no such arm.",
+      "depends": "csift states what the API DID and never what the model later received: the label-zone marker reads `[served by <to.model>, fell back from <from.model>]`, which is a fact about the turn that was written, and `Record::delivery_override` adds no arm for the block at all. That is the correct reading precisely because of the echo rule - the block is re-sent on a later request only while the beta is on it, so the block's presence on disk supports no claim about a subsequent turn's context, and a delivery verdict derived from it would be invented. The same rule explains why csift names the block at all rather than treating a text-less turn as absent: the block is the only trace of the switch, and dropping it on the request path is what makes the transcript the only place it survives. It is also why the inventory's human column for this block reads `never`.",
+      "code": [
+        {
+          "path": "src/commands/search/record_text/system/fallback.rs",
+          "lines": "54",
+          "snippet": "pub(crate) fn notes(rec: &Record) -> (Vec<HitFact>, Vec<Marker>) {"
+        },
+        {
+          "path": "src/commands/search/record_text/system/fallback.rs",
+          "lines": "78",
+          "snippet": "            head: \"served by\","
+        }
+      ],
+      "instrument": "Binary: byte-search the verified build for `function CYn(e,n){if(!Lme(e))return e;` (one occurrence) and read the rebuild, for `function its(e){` (one occurrence) to read the re-validator it calls, for `function Lme(e){return e.some(` to read the has-any predicate, and for `function xI(e){return e.type===\"fallback\"}` to read the block predicate. Then byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured in the verified build"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "the SPECIMEN: a request captured with and without the beta, to observe the block echoed back and stripped. Instrument: a live trial with request logging, which is the only observation of a request body that leaves no transcript artefact."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the has-any predicate",
+          "offset": 166044017,
+          "excerpt": "function Lme(e){return e.some(",
+          "note": "the array is returned untouched unless some record carries a fallback block"
+        },
+        {
+          "role": "writer",
+          "name": "the re-validator",
+          "offset": 166044391,
+          "excerpt": "function its(e){",
+          "note": "re-reads both model ids and returns a FRESH block object, or nothing"
+        },
+        {
+          "role": "writer",
+          "name": "the rebuild pass",
+          "offset": 166044922,
+          "excerpt": "function CYn(e,n){if(!Lme(e))return e;",
+          "note": "keeps the re-validated block when the beta is on the request and drops it otherwise"
+        },
+        {
+          "role": "trigger",
+          "name": "the request-layer call",
+          "offset": 165406271,
+          "excerpt": "uje(CYn(to,ms),Qs,",
+          "note": "the second argument is the closure's `ms`, compared as `Bo.fallbackBeta===ms` two statements above"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "this function's own signature",
+          "offset": 166044931,
+          "excerpt": "CYn(e,n){if(!Lme(e))return e;",
+          "verdict": "the definition, not a call"
+        },
+        {
+          "site": "the request layer",
+          "offset": 165406275,
+          "excerpt": "CYn(to,ms),Qs,",
+          "verdict": "the one call that passes the beta boolean; this is the echo rule's whole consumer"
+        },
+        {
+          "site": "the background-roster parser",
+          "offset": 160466736,
+          "excerpt": "CYn().safeParse(e)",
+          "verdict": "a DIFFERENT minified binding of the same name - a schema factory taking no argument - so it is not a call of this function at all"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Read the four producer hops and the three `CYn(` occurrences in the verified build at the anchors above, and recorded every `===\"fallback\"` offset against the renderer's system-handling span.",
+          "observed": "The rebuild returns the array unchanged when the has-any predicate is false, and otherwise replaces each fallback block with the re-validator's fresh object or drops it, per the boolean. `CYn(` occurs 3 times: the signature, the request-layer call carrying the beta boolean, and an unrelated same-named schema factory. `===\"fallback\"` occurs 13 times, at offsets from 156450016 to 176031167, none inside 180030000..180070000.",
+          "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line. One observation per BLOCK whose `type` is `fallback`, found by walking `message.content[]`. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed. Binary counts are byte counts of the literal over the whole executable.",
+          "note": "New claim; it is what licenses csift's marker to state what the API did and to state nothing about what a later turn received."
         }
       ]
     }
