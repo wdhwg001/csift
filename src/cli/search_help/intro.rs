@@ -1,8 +1,13 @@
-//! The body of `search --help` down to the family sections: the examples, the output
-//! geometry, the selector law, the leaf list and the JSON schema.
+//! The body of `search --help` down to the family regions: the examples, the output
+//! geometry, the selector law, the leaf list and the JSON schema. Its closing notes live
+//! in [`super::outro`] and follow it directly, so the schema block reads as one piece.
 //!
-//! The text is byte-identical to what the single const carried before the split, and a
-//! test pins that. A family lane edits its OWN section file, never this one.
+//! The SPLIT that produced this file moved no rendered byte - both helps were rendered
+//! before and after and compared - and the page has grown since, by one column-0 region
+//! per family that has written something. No test pins this text as a literal: a literal
+//! would go stale the first time a lane wrote a sentence, so the frame test checks the
+//! ORDER, the two seams and the region shape instead. A family lane edits its OWN section
+//! file, never this one.
 
 /// See the module doc.
 pub(crate) const INTRO: &str = "EXAMPLES\n  \

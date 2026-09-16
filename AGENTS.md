@@ -260,8 +260,9 @@ main.rs            # binary entrypoint: parse_argv -> install --claude-home over
 cli/               # clap surface: argv (the P0 normalize_argv machinery), root (Cli + Command),
                    #   selectors (-t/-T label machinery), formats, one *_args file per
                    #   command family, search_help + search_help/ (a PAIRED ROOT: the
-                   #   after_help body is the byte-join of intro, one section file per
-                   #   taxonomy family, and outro - each family owns one file), show_keys
+                   #   after_help body is the byte-join of intro, its closing notes, and
+                   #   one column-0 region per taxonomy family - each family owns one
+                   #   file, and an empty one renders nothing), show_keys
                    #   (the `show` record-row JSON keys as a table with a FAMILY column,
                    #   which `show --help` renders rather than carrying as a sentence)
 path/              # home (CC-exact cwd encoding + config home), project_dirs (>200 prefix scan),

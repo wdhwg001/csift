@@ -2,10 +2,19 @@
 //! family.
 //!
 //! ONE string used to carry all of it, which meant every family lane editing the same
-//! lines. The body is now the byte-JOIN of [`intro::INTRO`], the six family sections in
-//! a fixed order, and [`outro::OUTRO`]; each family owns exactly one of those files. The
-//! six ship EMPTY, so the rendered help is byte-identical to what the single const
-//! carried - a test pins that, and it is what makes the split provably inert.
+//! lines. The body is now the byte-JOIN of [`intro::INTRO`], [`outro::OUTRO`] and the six
+//! family sections in a fixed order; each family owns exactly one of those files.
+//!
+//! The SPLIT moved no rendered byte - the six shipped empty and both helps were rendered
+//! before and after and compared - but that is a fact about the commit that did it, not a
+//! standing property: a family filling its section is exactly what the split is FOR, and
+//! the page grows by one column-0 region each time one does. So no test pins this text as
+//! a literal, which would go stale the first time a lane wrote a sentence. The frame test
+//! pins what the assembler actually owes: that the rendered body IS the sections joined,
+//! the ORDER (shared body first, family regions the tail in family order), the two seams
+//! (no trailing space where the intro ends, exactly one leading space on the closing
+//! notes) and the region shape (a head at column 0, a body indented two, and an EMPTY
+//! section rendering nothing at all).
 //!
 //! A `LazyLock<String>` rather than a const: Rust concatenates string LITERALS at compile
 //! time and named consts not at all, so the join happens once on first use of the help.

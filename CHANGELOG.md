@@ -15,7 +15,10 @@ surface change bumps the PATCH.
   at both hit-construction sites, so a record fetched by `show --line` carries every fact
   the same record carries under `search`. `search --help` becomes one section file per
   family and `show --help`'s record-row key list is rendered from a table with a family
-  column; both rendered helps are byte-identical to what the single strings carried.
+  column. Splitting them moved no rendered byte; what the families then add is visible on
+  the page, and `search --help` carries the first of it - a `BOOKKEEPING LEAVES` region
+  stating the render law below. `show --help` renders exactly what it did, no family
+  having added a key yet.
 - **A bookkeeping unit renders its key=value head over its own bytes.** A summary is lossy,
   and `search` matches rendered text, so a key only the head elided had stopped being
   findable at all. The head stays, the line's verbatim JSON follows it, and every key the
