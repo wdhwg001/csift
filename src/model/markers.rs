@@ -279,7 +279,8 @@ pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer"
 /// isMeta exclusion and carry no leaf at all.
 ///
 /// The hook-feedback template is `<hook name> hook feedback:\n<body>` over a closed set
-/// of hook names; csift matches the Stop form, the only one with a corpus specimen.
+/// of hook names; csift matches all four through `injections::HOOK_FEEDBACK_PREFIXES`,
+/// the `Stop` form being the only one with a corpus specimen.
 pub const STOP_HOOK_FEEDBACK_PREFIX: &str = "Stop hook feedback:";
 /// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>…` executor wrapper.
 pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";

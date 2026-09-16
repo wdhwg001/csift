@@ -12604,7 +12604,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "350-353",
+          "lines": "351-354",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
@@ -12614,12 +12614,12 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "61-66",
+          "lines": "83-88",
           "snippet": "    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "107-111",
+          "lines": "137-141",
           "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
@@ -12711,7 +12711,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "59-66",
+          "lines": "81-88",
           "snippet": "    let at_start = s.trim_start();\n    // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick.\n    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         }
       ],
@@ -12801,22 +12801,22 @@
     {
       "id": "CLS-016",
       "area": "classification",
-      "behavior": "Hook-injected feedback reaches the transcript as `isMeta` `type:\"user\"` records in two shapes emitted by Claude Code 2.1.258 - content opening `Stop hook feedback:` and a `<local-command-caveat>` wrapper - plus a third, hook-authored shape: the edit-retry notice `The last Edit failed because the target file was modified`, which is NOT a string in the 2.1.258 binary. All three land as isMeta user records. The edit-retry notice does NOT arrive as a standalone injected prompt: its own carrier is a failed tool's RESULT text, so on the isMeta-user path it appears only nested inside another template's body. Measured over two projects roots, one count per isMeta user record: the notice occurs anywhere in the text of 1 and 2 records, at content start in 0 and 0, and every one of the three opens with `Stop hook feedback:` instead.",
-      "depends": "csift gives the three shapes three leaves, by PRODUCER: a blocking hook's feedback is `harness.hook.feedback`, the `<local-command-caveat>` wrapper is the slash-command executor's and takes `harness.command.caveat`, and the edit-retry notice is one of the harness's redo nudges, `harness.enforce.retry`. None is `user.message`, so a hook's own prose is never counted as an operator turn in `search -t user` or in `verbatim`. All three arms anchor at CONTENT START after one `trim_start`, like every other arm of the injection table: an unanchored test on this path can only reach a record whose body QUOTES the template, which is the failure the content-start law names, and the three observed nesting records are `Stop hook feedback:` bodies that the arm ABOVE already claims. So the anchoring closes a hole without moving a label: under the two orders the leaf changes for 0 of 3,713 and 0 of 1,825 isMeta user records.",
+      "behavior": "Hook-injected feedback reaches the transcript as `isMeta` `type:\"user\"` records in two shapes emitted by Claude Code 2.1.258 - content opening `<Name> hook feedback:` over the CLOSED four-name table `Stop`, `TeammateIdle`, `TaskCreated`, `TaskCompleted`, of which only the `Stop` form has a corpus specimen, and a `<local-command-caveat>` wrapper - plus a third, hook-authored shape: the edit-retry notice `The last Edit failed because the target file was modified`, which is NOT a string in the 2.1.258 binary. All three land as isMeta user records. The edit-retry notice does NOT arrive as a standalone injected prompt: its own carrier is a failed tool's RESULT text, so on the isMeta-user path it appears only nested inside another template's body. Measured over two projects roots, one count per isMeta user record: the notice occurs anywhere in the text of 1 and 2 records, at content start in 0 and 0, and every one of the three opens with `Stop hook feedback:` instead.",
+      "depends": "csift gives the three shapes three leaves, by PRODUCER: a blocking hook's feedback is `harness.hook.feedback` and the arm answers to all four names of the table rather than to the one shape the corpus happens to hold, the `<local-command-caveat>` wrapper is the slash-command executor's and takes `harness.command.caveat`, and the edit-retry notice is one of the harness's redo nudges, `harness.enforce.retry`. None is `user.message`, so a hook's own prose is never counted as an operator turn in `search -t user` or in `verbatim`. All three arms anchor at CONTENT START after one `trim_start`, like every other arm of the injection table: an unanchored test on this path can only reach a record whose body QUOTES the template, which is the failure the content-start law names, and the three observed nesting records are `Stop hook feedback:` bodies that the arm ABOVE already claims. So the anchoring closes a hole without moving a label: under the two orders the leaf changes for 0 of 3,713 and 0 of 1,825 isMeta user records.",
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "283-285",
+          "lines": "284-286",
           "snippet": "pub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` executor wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "291",
+          "lines": "292",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "85-87",
+          "lines": "115-117",
           "snippet": "    if at_start.starts_with(EDIT_RETRY_MARKER) {\n        return Some(Class::EnforceRetry);\n    }"
         }
       ],
@@ -12877,6 +12877,16 @@
           "observed": "Root one: 9,611 files, 3,713 isMeta user records (97 with no text at all). The notice occurs anywhere in 1 record and at content start in 0; that 1 record opens `Stop hook feedback:`. Root two: 10,330 files, 1,825 records (78 textless); anywhere 2, at content start 0, both opening `Stop hook feedback:`. The left-trim newly reaches 0 records for `Stop hook feedback:` and 0 for `<local-command-caveat>` in either root (content-start counts 46 / 191 and 35 / 231, identical to the untrimmed counts). Since the feedback arm sits above the retry arm, every record the retry arm loses is claimed by the arm above it, so the emitted leaf moves for no record in either root.",
           "rule": "One count per RECORD, a record being a b'\\n'-delimited line of a `*.jsonl` file under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`. A record with no text block counts once in the textless bucket and in no template bucket. The two projects roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
           "note": "The edit-retry arm tested `contains` and the feedback and caveat arms tested the untrimmed string; all three now anchor after one `trim_start`. The producer hops are unchanged - the Stop-hook stream, its blocking-error branch, the shared formatter with its four-name table, the slash-command dispatch and the caveat factory."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Per projects root, walked every `*.jsonl` except `journal.jsonl`, kept the b'\\n'-delimited lines carrying b'isMeta', parsed them and kept the objects with `type == \"user\"` and truthy `isMeta`; flattened each one's text the way the model layer does; then for each of the four names of the table asked whether the LEFT-TRIMMED text starts with `<name> hook feedback:` and, separately, whether the untrimmed text contains that opening anywhere.",
+          "observed": "Root one: 3,713 isMeta user records, 46 opening `Stop hook feedback:` and 47 carrying it anywhere; 0 at content start and 0 anywhere for `TeammateIdle`, `TaskCreated` and `TaskCompleted`. Root two: 1,825 records, 35 and 35 for `Stop`, 0 / 0 for each of the other three.",
+          "rule": "One count per RECORD, a record being a b'\\n'-delimited line under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`; content-start counts are taken after one left trim. The two roots overlap in the sessions they hold, so the pair is not two independent samples; each is reported as its own root.",
+          "note": "The arm matched the `Stop` opening alone and now matches the table the one formatter is called with, so a blocking hook of the other three names reaches the leaf instead of the residue. The residue line that recorded the gap is closed rather than left standing."
         }
       ],
       "attribution": "end-to-end",
@@ -12885,7 +12895,6 @@
       "specimen": "observed",
       "residue": [
         "The 'Stop hook feedback:' writer is live in 2.1.258 but has no specimen at 2.1.258 (newest is 2.1.251) because it fires only when a Stop hook exits 2 with a blocking error; the shape's continued existence rests on the binary read, not on a current record. A cached-build check confirms the same builder existed at 2.1.191 under different minified names (function Qvo(e){return`Stop hook feedback:\\n${e.blockingError}`}), so this is a rename, not a retirement.",
-        "The same builder produces three sibling prefixes from Dcn - TeammateIdle, TaskCreated and TaskCompleted hook feedback - which csift does not match; TeammateIdle in particular is reachable in teammate sessions.",
         "Counts moved with corpus growth (29 -> 30 and 155 -> 165).",
         "enumeration[9] the excerpt's head matches at the offset and its tail does not; re-read the bytes at the offset"
       ],
@@ -12998,12 +13007,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "355-359",
+          "lines": "356-360",
           "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "113-117",
+          "lines": "143-147",
           "snippet": "    if IMAGE_REFERENCE_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::ContextImage);"
         }
       ],
@@ -89699,12 +89708,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "160-166",
+          "lines": "190-196",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "167-172",
+          "lines": "197-202",
           "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
@@ -92488,12 +92497,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "88-91",
+          "lines": "118-121",
           "snippet": "    // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the\n    // four texts, because Claude Code's own recogniser tests them that way - these are\n    // whole messages, not prefixes of a longer body.\n    if RETRY_NUDGE_TEXTS.contains(&at_start) {"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "298-303",
+          "lines": "299-304",
           "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
         }
       ],
@@ -93335,17 +93344,17 @@
       "id": "CLS-048",
       "area": "classification",
       "behavior": "A blocking hook's feedback text is ASSEMBLED, never written as one literal. At Claude Code 2.1.258 one builder `eee(e,n)` @161464086 returns `${name}${suffix}${body}` with the suffix a variable of its own, `m$t` = ` hook feedback:` plus a newline @161464001, and four sibling functions call it with the four hook names, one literal each - `Stop` @165848388, `TeammateIdle` @165848439, `TaskCreated` @165848498, `TaskCompleted` @165848556 - the same four the name array `Dcn` @161464028 holds for the harness's own recogniser @161464911 and byte-scanner needle set @172794405. So the assembled prefix `Stop hook feedback:` + newline occurs in the build at NO offset, while the suffix and each name occur separately. The literal `Stop hook feedback:` DOES occur, three times, and none of the three is that writer: the TUI's turn summary template `Stop hook feedback: ${E}` @179877882 and the TUI row component @180034963, both continuing with a SPACE rather than a newline, and the interned copy of that same string in the constant pool @71657624. The suffix has its own interned copy in the constant pool @74153456, as the TUI string does. Corpus: over 9,797 transcripts under one projects root, 46 records in 14 files have a string `message.content` OPENING with `<name> hook feedback:` - all 46 under the name `Stop`, and all 46 with a NEWLINE as the next character. No record opens with any of the other three names. A count of LINES merely carrying the substring is deliberately not stated: the phrase is its own needle, so any transcript discussing this claim raises it.",
-      "depends": "csift classifies `harness.hook.feedback` on the prefix `Stop hook feedback:` WITHOUT the newline, anchored at content start. Matching the prefix rather than the assembled form is what makes the leaf robust to the suffix moving, and dropping the newline from the test is what keeps a body that continues some other way classified rather than silently unlabelled. The wider fact matters to the DOC surfaces, not to the code: taxonomy.rs and SKILL state the on-disk shape so a reader can cross-check a record against the jsonl, and the previous wording said no whole prefix appeared as a literal in the build, which is false of `Stop hook feedback:` and true only of the assembled form with its newline.",
+      "depends": "csift classifies `harness.hook.feedback` on `<Name> hook feedback:` for all four names of the table, WITHOUT the newline, anchored at content start. Matching the prefix rather than the assembled form is what makes the leaf robust to the suffix moving, and dropping the newline from the test is what keeps a body that continues some other way classified rather than silently unlabelled. The wider fact matters to the DOC surfaces, not to the code: taxonomy.rs and SKILL state the on-disk shape so a reader can cross-check a record against the jsonl, and the previous wording said no whole prefix appeared as a literal in the build, which is false of `Stop hook feedback:` and true only of the assembled form with its newline.",
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "281-283",
-          "snippet": "/// The hook-feedback template is `<hook name> hook feedback:\\n<body>` over a closed set\n/// of hook names; csift matches the Stop form, the only one with a corpus specimen.\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";"
+          "lines": "281-284",
+          "snippet": "/// The hook-feedback template is `<hook name> hook feedback:\\n<body>` over a closed set\n/// of hook names; csift matches all four through `injections::HOOK_FEEDBACK_PREFIXES`,\n/// the `Stop` form being the only one with a corpus specimen.\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "68-70",
-          "snippet": "    if at_start.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {\n        return Some(Class::HookFeedback);\n    }"
+          "lines": "95-100",
+          "snippet": "    if HOOK_FEEDBACK_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::HookFeedback);\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -94572,6 +94581,113 @@
           "observed": "The literal occurs 0 times in every held build below 2.1.268 and 3 times at 2.1.268 - the interned name table, the frame schema, and the builder `fye`. All three recorded excerpts are byte-equal to the 2.1.268 bytes at their offsets, and all three occur at NO offset of the 2.1.258 build, with zero leading bytes matching where each offset points - which is what their `absent` marks assert. Corpus: the first root carries the literal on 267 raw lines, of which 0 carry it as a top-level key and 0 as a nested key - every hit is payload prose in transcripts that discuss the field. The second root carries it on 0 lines. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second.",
           "rule": "One non-overlapping byte occurrence per binary count; one raw count per line containing the literal anywhere; one key count per parsed record carrying the exact key name, tested at the top level and then recursively below it; an anchor mark is `absent` only when the excerpt occurs nowhere in the verified build AND no leading byte matches at the recorded offset.",
           "note": "The claim is checked at the version the badge names even though the behavior is a 2.1.268 one: what is true at 2.1.258 is that the field does not exist there, and what is true on disk is that no transcript carries it under either build. The signature stays the only carrier a transcript has."
+        }
+      ]
+    },
+    {
+      "id": "CLS-035",
+      "area": "classification",
+      "behavior": "Claude Code carries its OWN recogniser for the text it injects as the operator, and its shape is the one csift mirrors. `function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;...}` reads the record's STRING content, else the `text` of the FIRST block, and answers with three tests in this order: a PREFIX set `Jar=[I4e,Lcn,FQe].filter((e)=>e.length>0)` tested with `startsWith`, an EQUALITY set `Zar=[kpt,Mcn,xpt,Hpt]` tested with `includes`, and the blocking-hook names tested as `Dcn.some((d)=>o.startsWith(`${d}${m$t}`))`. `Dcn` is the CLOSED four-name table `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]` and `m$t` is the separator ` hook feedback:\\n`, the NEWLINE included, both feeding the one formatter `function eee(e,n){return`${e}${m$t}${n}`}`. `I4e` is `[structured-output-enforce]`, `Lcn` is the EMPTY string at this build - the slot the hand-back sentinel fills at 2.1.268, where `[handback-send-enforce]` occurs and at 2.1.258 occurs zero times - and `Zar` is the four retry nudges verbatim. So the producer's own reading of its own injections is: gated on `type:\"user\"` AND `isMeta`, anchored at content start for both prefix families, and EXACT for the four nudges.",
+      "depends": "csift's injection table mirrors all three tests. Every text arm runs after one `trim_start` and tests `starts_with`, so a template deeper in a body belongs to the record QUOTING it. The four retry nudges are matched by EQUALITY rather than widened to prefixes, because a prefix would relabel any message that merely opens with one. `harness.hook.feedback` answers to all four names of the closed table rather than to the one shape the corpus happens to hold, so a blocking TeammateIdle, TaskCreated or TaskCompleted hook does not fall into the isMeta residue the first time one fires. And every text arm sits BELOW a single `isMeta` guard, which is what protects a person: without it a message quoting a template is moved out of `user` while it still opens its turn. ONE deliberate difference: csift's four prefixes stop at the COLON while the producer's separator carries the trailing newline, so csift's arm is one character WIDER - a body whose separator is missing or rewritten still reaches the leaf, which is the direction a forensic reader wants, and no record the producer writes is missed. If a later build moved a nudge from the equality set to the prefix set, dropped the isMeta test, or added a fifth hook name, csift's table would be reading the wrong rule.",
+      "code": [
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "33-38",
+          "snippet": "pub(crate) const HOOK_FEEDBACK_PREFIXES: &[&str] = &[\n    STOP_HOOK_FEEDBACK_PREFIX,\n    \"TeammateIdle hook feedback:\",\n    \"TaskCreated hook feedback:\",\n    \"TaskCompleted hook feedback:\",\n];"
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "69-71",
+          "snippet": "    if !rec.is_meta.unwrap_or(false) {\n        return None;\n    }"
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "121-123",
+          "snippet": "    if RETRY_NUDGE_TEXTS.contains(&at_start) {\n        return Some(Class::EnforceRetry);\n    }"
+        },
+        {
+          "path": "src/model/classify/tests/injections.rs",
+          "lines": "108",
+          "snippet": "fn the_feedback_prefixes_stop_at_the_colon() {"
+        }
+      ],
+      "instrument": "Byte-search the 2.1.258 build for `function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;` (one occurrence) and read 420 bytes forward to recover the three tests in order; byte-search for `Jar=[I4e,Lcn,FQe].filter((e)=>e.length>0),Zar=[kpt,Mcn,xpt,Hpt];` (one) and read 1,250 bytes back from it to recover the constant block the two sets name, including `m$t` and `Dcn`. Compare the four `Zar` texts byte for byte with `markers::RETRY_NUDGE_TEXTS` and the four `Dcn` names with `injections::HOOK_FEEDBACK_PREFIXES`. Count `jvt(` over the whole file and read every occurrence, to separate this definition and its consumer from any unrelated function the minifier gave the same name. Count `[handback-send-enforce]` in this build and in 2.1.268. Corpus side, over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` and truthy `isMeta`, flatten the text the way the model layer does, and count how many open (after a left trim) with each of the four `<name> hook feedback:` prefixes.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "the shipped binary's own injection recogniser"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the injection recogniser jvt",
+          "offset": 161464612,
+          "excerpt": "function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;let n=e.message?.content,r=Array.isArray(n)?n[0]:void 0,o=typeof n===\"string\"?n:r?.type===\"text\"&&typeof r.text===\"string\"?r.text:void 0;if(typeof o!==\"string\")return!1;if(Jar.some((d)=>o.startsWith(d)))return!0;if(Zar.includes(o))return!0;return Dcn.some((d)=>o.startsWith(`${d}${m$t}`))}",
+          "note": "the entry and all three tests: a record is a candidate only when it is a user record carrying the authorship flag, and then a prefix set, an equality set and the hook-name set decide"
+        },
+        {
+          "role": "gate",
+          "name": "the prefix set and the equality set",
+          "offset": 161464548,
+          "excerpt": "Jar=[I4e,Lcn,FQe].filter((e)=>e.length>0),Zar=[kpt,Mcn,xpt,Hpt];",
+          "note": "two sets with two different tests; the empty middle slot is the hand-back sentinel this build does not carry, which the filter drops"
+        },
+        {
+          "role": "writer",
+          "name": "the hook-name table, the separator and the formatter",
+          "offset": 161464001,
+          "excerpt": "var m$t=` hook feedback:\n`,Dcn=[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"];function eee(e,n){return`${e}${m$t}${n}`}",
+          "note": "the bytes the feedback template is built from: the four names, the separator with its trailing newline, and the one formatter that joins a name, the separator and the body"
+        },
+        {
+          "role": "writer",
+          "name": "the sentinel and nudge constants the two sets name",
+          "offset": 161464127,
+          "excerpt": "var I4e=\"[structured-output-enforce]\",Lcn=\"\",kpt=\"The previous response failed to produce a valid tool call. Please retry the tool call now.\",Mcn=\"Your tool call was malformed and could not be parsed. Please retry.\",xpt=\"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",Hpt=\"The PermissionDenied hook indicated you may retry this tool call.\"",
+          "note": "the structured-output sentinel, the empty hand-back slot and the four retry nudges verbatim - the texts csift's own constants mirror"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the definition",
+          "offset": 161464612,
+          "excerpt": "function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;",
+          "verdict": "the recogniser itself; the three tests this claim records"
+        },
+        {
+          "site": "the one consumer of the recogniser",
+          "offset": 166196991,
+          "excerpt": "jvt(_))continue;return!1}return!0}",
+          "verdict": "a backward walk that skips compaction summaries and injected records alike; it consumes the verdict and writes nothing, so it adds no fourth test"
+        },
+        {
+          "site": "an unrelated three-parameter function the minifier gave the same name",
+          "offset": 181530938,
+          "excerpt": "function jvt(T,I,O){switch(T){case\"yes\":return{",
+          "verdict": "a different arity and a different body in a later chunk; not the recogniser and not a call of it"
+        },
+        {
+          "site": "that unrelated function's own call site",
+          "offset": 181532581,
+          "excerpt": "jvt(uPr,Mu,qA)",
+          "verdict": "three arguments, so it reaches the later definition; not a call of the recogniser"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "The byte searches and the two window reads above over the 2.1.258 build, a count and a full read of every `jvt(` occurrence, a count of `[handback-send-enforce]` in 2.1.258, and the four-prefix census over both projects roots.",
+          "observed": "The recogniser occurs once and reads, in order, `Jar.some((d)=>o.startsWith(d))`, `Zar.includes(o)` and `Dcn.some((d)=>o.startsWith(`${d}${m$t}`))`. The constant block reads `m$t=` with the separator ` hook feedback:` plus a newline and `Dcn=[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]`, with `Lcn=\"\"`; the four `Zar` texts are byte-identical to `markers::RETRY_NUDGE_TEXTS` and the four `Dcn` names are byte-identical to the four entries of `injections::HOOK_FEEDBACK_PREFIXES` minus the shared ` hook feedback:` tail. `[handback-send-enforce]` occurs 0 times at 2.1.258. `jvt(` occurs 4 times: the definition, one consumer, and a different three-parameter function plus its own call site. Corpus, one count per isMeta user record: root one 3,713 records with 46 opening `Stop hook feedback:` and 0 for each of the other three names; root two 1,825 records with 35 and 0 / 0 / 0.",
+          "rule": "Build occurrences are byte-literal searches over the whole executable. One count per RECORD for the corpus figures, a record being a b'\\n'-delimited line of a `*.jsonl` file under the projects root (`journal.jsonl` excluded) that parses to an object with `type == \"user\"` and truthy `isMeta`; a record counts under a prefix when its left-trimmed flattened text starts with it. The two roots overlap in the sessions they hold, so each is reported as its own root rather than as an independent sample.",
+          "note": "The three siblings of the hook-name table have no corpus specimen in either root and are derived from the table; the separator difference (the producer's carries the newline, csift's prefixes stop at the colon) is the one place csift is deliberately wider, pinned by `the_feedback_prefixes_stop_at_the_colon`."
         }
       ]
     }

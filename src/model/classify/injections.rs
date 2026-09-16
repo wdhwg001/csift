@@ -15,6 +15,28 @@
 
 use super::*;
 
+/// The four openings `harness.hook.feedback` answers to: ONE formatter interpolates a
+/// hook NAME ahead of a fixed separator, over a closed four-name table, and the shipped
+/// recogniser tests all four the same way.
+///
+/// [`STOP_HOOK_FEEDBACK_PREFIX`] leads because it is the only one with a corpus specimen
+/// and the only one a marker constant already names; the three siblings are derived from
+/// the producer's table rather than from data, which is exactly why they are here - a
+/// leaf that answers only to the shape someone happened to record drops the other three
+/// producers into the residue the first time one of them blocks.
+///
+/// Each entry stops at the COLON while the producer's separator carries a trailing
+/// newline, so csift's arm is one character wider than the recogniser's on purpose: a
+/// record the producer would refuse still reaches the leaf, which is the direction a
+/// forensic reader wants, and a body whose separator is rewritten is still findable.
+/// Claim CLS-035 records the difference and a unit test pins it.
+pub(crate) const HOOK_FEEDBACK_PREFIXES: &[&str] = &[
+    STOP_HOOK_FEEDBACK_PREFIX,
+    "TeammateIdle hook feedback:",
+    "TaskCreated hook feedback:",
+    "TaskCompleted hook feedback:",
+];
+
 /// The leaf an isMeta-user INJECTION template carries, or `None` when the text matches
 /// no template csift models.
 ///
@@ -64,8 +86,16 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
     {
         return Some(Class::ScheduleWakeup);
     }
-    // harness.hook.feedback: the Stop hook's blocking feedback, which the model reads.
-    if at_start.starts_with(STOP_HOOK_FEEDBACK_PREFIX) {
+    // harness.hook.feedback: a blocking hook's feedback, which the model reads. ONE
+    // formatter builds `<hook name> hook feedback:\n<body>` over a CLOSED four-name set,
+    // so all four names take this leaf. Only the `Stop` form has a corpus specimen; the
+    // other three are read off the producer's own name table, which is the whole reason
+    // they are matched - a blocking TeammateIdle hook would otherwise land in the residue
+    // the first time one fires.
+    if HOOK_FEEDBACK_PREFIXES
+        .iter()
+        .any(|p| at_start.starts_with(p))
+    {
         return Some(Class::HookFeedback);
     }
     // harness.command.caveat: the caveat the slash-command EXECUTOR writes after a

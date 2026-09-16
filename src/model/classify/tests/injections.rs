@@ -81,6 +81,45 @@ fn every_template_arm_anchors_at_content_start() {
     );
 }
 
+/// ONE formatter writes the hook-feedback template over a CLOSED four-name set, so all
+/// four names reach the leaf. Only the `Stop` form has a corpus specimen; the other three
+/// are derived from the producer's own name table, which is the whole reason they are
+/// matched - a `TeammateIdle` feedback would otherwise be residue.
+#[test]
+fn every_blocking_hook_name_reaches_the_feedback_leaf() {
+    for name in ["Stop", "TeammateIdle", "TaskCreated", "TaskCompleted"] {
+        let body = format!("{name} hook feedback:\nfinish the sweep");
+        assert_eq!(labels(&meta(&body)), vec![Class::HookFeedback], "{name}");
+    }
+    // A hook name the formatter does not carry is not the template.
+    assert!(labels(&meta("SessionEnd hook feedback:\nbye")).is_empty());
+    // And the template still needs the authorship flag: a person quoting it keeps
+    // `user.message`, because the record they typed carries no `isMeta`.
+    let human = r#"{"type":"user","uuid":"h9","message":{"role":"user","content":"Stop hook feedback:\nwhy did that fire?"}}"#;
+    assert_eq!(labels(human), vec![Class::UserMessage]);
+}
+
+/// The ONE character csift's arm and the producer's recogniser disagree on, pinned so the
+/// difference stays deliberate. The producer's separator is `" hook feedback:\n"`, so its
+/// own test refuses a body whose newline is missing or rewritten; csift's prefixes stop at
+/// the colon, so such a body still reaches the leaf. WIDER, never narrower: a record the
+/// producer would refuse is findable, and no record it writes is missed.
+#[test]
+fn the_feedback_prefixes_stop_at_the_colon() {
+    for p in injections::HOOK_FEEDBACK_PREFIXES {
+        assert!(p.ends_with(':'), "{p} must stop at the colon");
+        assert!(
+            !p.contains('\n'),
+            "{p} must not carry the separator newline"
+        );
+    }
+    // A separator the producer's own `startsWith` would refuse still takes the leaf.
+    assert_eq!(
+        labels(&meta("Stop hook feedback: finish the sweep")),
+        vec![Class::HookFeedback]
+    );
+}
+
 #[test]
 fn the_wakeup_tick_wins_over_the_driver_tick() {
     // `# Autonomous loop check` and `# Autonomous loop tick` share a prefix up to the
