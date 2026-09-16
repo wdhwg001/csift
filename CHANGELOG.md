@@ -17,7 +17,7 @@ surface change bumps the PATCH.
   `toolUseResult.firstPage`. csift derives the page as that offset plus the element's
   position among the content elements after the leading text, counted over POSITIONS rather
   than over images, so a failed page in the middle does not shift the pages after it. Text
-  rows gain ` p<N>` beside the media type and the document's basename once per record group;
+  rows gain ` p<N>` beside the media type and the document's basename once per record group (one transcript, one line, one document);
   JSON rows gain `page` and `pdf_path`, the path verbatim as every other path field is.
   The derivation is gated on the record's own result reading `parts` with a `firstPage` and
   on the record carrying exactly one `tool_result` block, so a screenshot, a result written

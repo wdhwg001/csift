@@ -11,10 +11,18 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
         }
         return;
     }
-    // The document basename rides the FIRST row of each run of pages from one record, not
-    // every row: five pages of one PDF repeat one name five times, and the rows are already
-    // sorted by (line, ordinal) so a run is contiguous.
-    let mut named: Option<(usize, &str)> = None;
+    // The document basename rides the FIRST row of each RECORD GROUP, not every row: five
+    // pages of one PDF would repeat one name five times.
+    //
+    // A group is the whole coordinate of the record - TRANSCRIPT, line, document - and the
+    // memo is a SET rather than the previous row, because neither half is optional. The
+    // listing is sorted by `(seq, line, ordinal)` alone (`dedup_latest`), with no transcript
+    // and no timestamp in the key, so rows from two sessions whose results sit at the same
+    // line number ALTERNATE row by row. Without the transcript in the key, two such records
+    // naming the same path print the name on the first session's rows only; without the
+    // set, two naming different paths alternate keys and print it on every row.
+    let mut named: std::collections::HashSet<(&str, bool, usize, &str)> =
+        std::collections::HashSet::new();
     for img in selected {
         let tag = if img.is_subagent {
             format!(
@@ -34,9 +42,10 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
         };
         // Never the whole path in the text listing (JSON carries it verbatim, like every
         // other path field); the basename is what tells two documents apart on one line.
-        let doc = match (img.page.and(img.pdf_path.as_deref()), named) {
-            (Some(path), prev) if prev != Some((img.line_no, path)) => {
-                named = Some((img.line_no, path));
+        let doc = match img.page.and(img.pdf_path.as_deref()) {
+            Some(path)
+                if named.insert((img.session_id.as_str(), img.is_subagent, img.line_no, path)) =>
+            {
                 format!("  pdf {}", basename(path))
             }
             _ => String::new(),

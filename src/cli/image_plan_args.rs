@@ -31,7 +31,8 @@ use super::*;
         carrying record's own `toolUseResult.firstPage` plus the element's position among \
         the content elements after the leading text - counted over POSITIONS, so a failed \
         page in the middle does not shift the pages after it. Text prints ` p<N>` beside the \
-        media type and the document's BASENAME once per record group (the whole path is a \
+        media type and the document's BASENAME once per record group - one transcript, one \
+        line, one document (the whole path is a \
         JSON field, not a listing column); JSON carries `page` and `pdf_path`. An image whose \
         record carries no such offset reads `page: null` rather than an assumed page 1: a \
         screenshot, a `parts` result from a build before the key existed, and the REPL \

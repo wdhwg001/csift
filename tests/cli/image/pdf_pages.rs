@@ -49,6 +49,94 @@ fn pdf_home() -> Home {
     h
 }
 
+/// TWO transcripts in one project, each with a `parts` result at the SAME jsonl line. The
+/// listing is sorted by `(seq, line, ordinal)` with no transcript and no timestamp in the
+/// key, so the two records' rows ALTERNATE row by row at that line. `same_path` makes both
+/// name the same document; otherwise each names its own.
+fn two_transcript_home(same_path: bool) -> Home {
+    let h = Home::new();
+    let sessions = [
+        (
+            "7c6b5a49-4738-4261-8f4e-3d2c1b0a9e8d",
+            "/Users/dev/docs/alpha.pdf",
+        ),
+        (
+            "1b2c3d4e-5f60-4712-8834-9a0b1c2d3e4f",
+            "/Users/dev/docs/bravo.pdf",
+        ),
+    ];
+    for (i, (sess, own_path)) in sessions.iter().enumerate() {
+        let path = if same_path {
+            "/Users/dev/docs/alpha.pdf"
+        } else {
+            own_path
+        };
+        let ts = format!("2026-06-07T05:00:{:02}.000Z", 9 + i);
+        let r0 = serde_json::json!({
+            "type":"user","uuid":format!("u0-{i}"),"parentUuid":serde_json::Value::Null,
+            "timestamp":"2026-06-07T05:00:00.000Z",
+            "message":{"role":"user","content":[{"type":"text","text":"read it"}]}
+        });
+        // Line 2 in BOTH transcripts, so the two records share a line number.
+        let r1 = serde_json::json!({
+            "type":"user","uuid":format!("u1-{i}"),"parentUuid":format!("u0-{i}"),"timestamp":ts,
+            "toolUseResult":{"type":"parts","firstPage":5,
+                "file":{"count":2,"filePath":path,"originalSize":1024,"outputDir":"/Users/dev/tmp/p"}},
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[
+                {"type":"text","text":format!("PDF pages extracted: 2 page(s) from {path} (1KB)")},
+                img_block("image/jpeg", if i == 0 { PNG_1X1 } else { PNG_GREEN }),
+                img_block("image/jpeg", if i == 0 { PNG_RED } else { PNG_BLUE })]}]}
+        });
+        h.write(&format!("{PENC}/{sess}.jsonl"), &format!("{r0}\n{r1}\n"));
+    }
+    h
+}
+
+/// The document is named exactly ONCE per record group, and a record group is the whole
+/// coordinate (transcript, line, document) - not `(line, document)`, and remembered as a
+/// SET rather than as the previous row. Both shapes a weaker rule breaks on are covered,
+/// and each was confirmed to fail under its own canary: two transcripts naming the SAME
+/// path at one line (dropping the transcript from the key names only the first session's
+/// group), and two naming DIFFERENT paths (a single previous-row memo alternates keys and
+/// names every row).
+#[test]
+fn the_document_is_named_once_per_record_group_across_transcripts() {
+    for same_path in [true, false] {
+        let h = two_transcript_home(same_path);
+        let out = h.run(&["image", PENC]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        let page_rows: Vec<&str> = out
+            .stdout
+            .lines()
+            .filter(|l| l.starts_with("L2i"))
+            .collect();
+        assert_eq!(page_rows.len(), 4, "{}", out.stdout);
+        let named = page_rows.iter().filter(|l| l.contains("pdf ")).count();
+        assert_eq!(
+            named, 2,
+            "one name per record group, and there are two groups \
+             (same_path={same_path}):\n{}",
+            out.stdout
+        );
+        // Each group's name sits on the FIRST of that group's rows, and every group is
+        // named: the count alone would pass if one group took both names.
+        let mut seen: Vec<&str> = Vec::new();
+        for row in &page_rows {
+            if row.contains("pdf ") {
+                seen.push(row);
+            }
+        }
+        assert_eq!(seen.len(), 2, "{}", out.stdout);
+        if !same_path {
+            assert!(
+                out.stdout.contains("pdf alpha.pdf") && out.stdout.contains("pdf bravo.pdf"),
+                "each document names itself: {}",
+                out.stdout
+            );
+        }
+    }
+}
+
 /// The text listing carries ` p<N>` beside the media type, numbered from the range's own
 /// first page, and names the document ONCE for the run of pages from one record - never
 /// the whole path, which is what the JSON row is for.
