@@ -23,7 +23,7 @@ fn attachment_home() -> Home {
         // harness.hook.outcome, a run the converter turned into nothing.
         r#"{"type":"attachment","uuid":"cc000000-0000-4000-8000-000000000003","parentUuid":"bb000000-0000-4000-8000-000000000002","timestamp":"2026-06-07T05:00:02.000Z","attachment":{"type":"hook_success","hookName":"reef-gate","hookEvent":"PostToolUse","toolUseID":"toolu_01zzreef","command":"zzatt-check --reef","content":"","stdout":"zzatt stdout reef ok","stderr":"","exitCode":0,"durationMs":42}}"#,
         // harness.hook.outcome, the conditional arm: a run the converter DID convert.
-        r#"{"type":"attachment","uuid":"dd000000-0000-4000-8000-000000000004","parentUuid":"cc000000-0000-4000-8000-000000000003","timestamp":"2026-06-07T05:00:03.000Z","attachment":{"type":"hook_success","hookName":"reef-start","hookEvent":"SessionStart","toolUseID":"hook-dd000000","command":"zzatt-start --reef","content":"zzatt start notice","stdout":"zzatt start notice","stderr":"","exitCode":0,"durationMs":7},"rendered":[{"content":"<system-reminder>\nzzatt start notice\n</system-reminder>"}]}"#,
+        r#"{"type":"attachment","uuid":"dd000000-0000-4000-8000-000000000004","parentUuid":"cc000000-0000-4000-8000-000000000003","timestamp":"2026-06-07T05:00:03.000Z","attachment":{"type":"hook_success","hookName":"reef-start","hookEvent":"SessionStart","toolUseID":"hook-dd000000","command":"zzatt-start --reef","content":"zzatt start notice","stdout":"zzatt stdout start raw","stderr":"","exitCode":0,"durationMs":7},"rendered":[{"content":"<system-reminder>\nzzatt start notice\n</system-reminder>"}]}"#,
         // harness.context.listing
         r#"{"type":"attachment","uuid":"ee000000-0000-4000-8000-000000000005","parentUuid":"dd000000-0000-4000-8000-000000000004","timestamp":"2026-06-07T05:00:04.000Z","attachment":{"type":"skill_listing","content":"zzatt skills reef-mapper"}}"#,
         // harness.context.file with a NON-TEXT conversion: no persisted copy, still delivered.
@@ -81,8 +81,9 @@ fn an_attachment_body_is_the_text_the_model_received_when_the_record_carries_one
     );
     let converted = line_with(&out.stdout, "zzatt start notice");
     assert!(
-        converted.contains("[rendered]"),
-        "a run the converter DID convert renders that text instead:\n{converted}"
+        converted.contains("[rendered]") && !converted.contains("zzatt stdout start raw"),
+        "a run the converter DID convert renders the CONVERTED text, not its stdout - the \
+         two carry different words in this fixture so the marker is not the only witness:\n{converted}"
     );
     let listing = line_with(&out.stdout, "harness.context.listing");
     assert!(
@@ -472,6 +473,70 @@ fn the_help_names_every_marker_word_json_key_and_render_form_the_family_ships() 
     ] {
         assert!(show.stdout.contains(key), "show --help should name {key}");
     }
+}
+
+#[test]
+fn an_addressed_unmodeled_attachment_carries_its_facts_in_json_and_its_shape_in_text() {
+    // The 1:1 law's attachment case, and the ONE place the two surfaces differ on purpose.
+    // A payload type csift models no leaf for still carries every key the line holds, so
+    // JSON answers exactly as it does for a labelled record; the TEXT renders the shape in
+    // place of a label, which is what a leafless hit does, so the edges are not there.
+    let h = Home::new();
+    let lines = [
+        r#"{"type":"user","uuid":"aa000000-0000-4000-8000-000000000001","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzunm chart the reef"}}"#,
+        r#"{"type":"attachment","uuid":"bb000000-0000-4000-8000-000000000002","parentUuid":"aa000000-0000-4000-8000-000000000001","timestamp":"2026-06-07T05:00:01.000Z","attachment":{"type":"zzunm_future_type","toolUseID":"toolu_01zzunm","note":"zzunm payload"}}"#,
+    ];
+    h.write(
+        &format!("{ENC}/9a1b2c3d-4e5f-4061-8072-a3b4c5d6e7f8.jsonl"),
+        &format!("{}\n", lines.join("\n")),
+    );
+    let target = "@9a1b2c3d-4e5f-4061-8072-a3b4c5d6e7f8";
+
+    let text = h.run(&["show", target, "--line", "2"]);
+    assert!(text.success, "stderr {}", text.stderr);
+    assert!(
+        text.stdout
+            .contains("? unmodeled: attachment/zzunm_future_type"),
+        "the shape stands in for the label:\n{}",
+        text.stdout
+    );
+    assert!(
+        !text.stdout.contains("[for: "),
+        "a leafless unit renders no label zone, so no edge is in the text:\n{}",
+        text.stdout
+    );
+
+    let json = h.run(&["show", target, "--line", "2", "--format", "json"]);
+    assert!(json.success, "stderr {}", json.stderr);
+    let row: serde_json::Value = json
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["unmodeled"] == "attachment/zzunm_future_type")
+        .unwrap_or_else(|| panic!("no unmodeled row in:\n{}", json.stdout));
+    let edges = row["for"].as_array().expect("the shared for array");
+    assert_eq!(
+        edges.len(),
+        2,
+        "both edges ride the leafless unit: {edges:?}"
+    );
+    assert_eq!(
+        edges
+            .iter()
+            .find(|e| e["kind"] == "attached_to")
+            .expect("the parent edge")["target"]["line"],
+        1,
+        "and the parent still resolves to its line"
+    );
+    assert_eq!(
+        edges
+            .iter()
+            .find(|e| e["kind"] == "for_tool_use")
+            .expect("the tool edge")["target"]["uuid"],
+        "toolu_01zzunm"
+    );
+    assert_eq!(row["produced_by"]["payload_type"], "zzunm_future_type");
+    assert_eq!(row["body_source"], "payload");
 }
 
 /// The first stdout line containing `needle`, for an assertion that wants ONE unit.

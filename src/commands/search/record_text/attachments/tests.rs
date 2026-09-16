@@ -428,3 +428,80 @@ fn an_unmodeled_attachment_still_carries_its_record_facts() {
         .iter()
         .any(|f| matches!(f, HitFact::Attachments(Fact::Body(_)))));
 }
+
+/// A conversion message whose `content` is a BLOCK ARRAY joins its text blocks - the
+/// second of the two shapes the writer persists.
+#[test]
+fn a_block_array_conversion_joins_its_text_blocks() {
+    let line = r#"{"type":"attachment","attachment":{"type":"file"},"rendered":[{"content":[{"type":"text","text":"first"},{"type":"image"},{"type":"text","text":"second"}]}]}"#;
+    let (body, source) = attachment_body(&rec(line)).expect("an attachment renders");
+    assert_eq!(body, "first\nsecond", "the image block contributes no text");
+    assert_eq!(source, BODY_RENDERED);
+}
+
+/// A conversion carrying NO text at all is no body: the unit falls through to the payload
+/// rather than rendering an empty string.
+#[test]
+fn a_textless_conversion_falls_through_to_the_payload() {
+    for line in [
+        r#"{"type":"attachment","attachment":{"type":"file","note":"x"},"rendered":[{"content":42}]}"#,
+        r#"{"type":"attachment","attachment":{"type":"file","note":"x"},"rendered":[{"content":[{"type":"image"}]}]}"#,
+    ] {
+        let (body, source) = attachment_body(&rec(line)).expect("an attachment renders");
+        assert!(body.starts_with('{'), "the payload JSON, got {body}");
+        assert_eq!(source, BODY_PAYLOAD);
+    }
+}
+
+/// A leaf this family does not own takes no marker, even on an attachment line: one line
+/// can carry a view whose name is another family's to give.
+#[test]
+fn a_leaf_outside_the_family_takes_no_marker() {
+    let line = r#"{"type":"attachment","attachment":{"type":"hook_success","hookName":"zzp-gate","stdout":"x"}}"#;
+    let (_, markers) = facts(
+        &rec(line),
+        Some(line),
+        &section(Class::HookFeedback),
+        &ctx(),
+    );
+    assert!(
+        markers.is_empty(),
+        "no marker for a foreign leaf: {markers:?}"
+    );
+}
+
+/// The person's mid-turn steer takes the PAYLOAD source whatever the record carries,
+/// because its `user.message` unit is resolved by the opener renderer before this family
+/// is asked - so the fact never names a body the unit is not showing.
+#[test]
+fn the_mid_turn_steer_reports_the_payload_even_when_a_conversion_exists() {
+    let line = r#"{"type":"attachment","attachment":{"type":"queued_command","origin":{"kind":"human"},"prompt":"stop"},"rendered":[{"content":"the converted copy"}]}"#;
+    let r = rec(line);
+    // The family's own render still answers the conversion for every OTHER caller.
+    assert_eq!(
+        attachment_body(&r).map(|(_, s)| s),
+        Some(BODY_RENDERED),
+        "the record does carry a conversion"
+    );
+    let (facts, _) = facts(&r, Some(line), &section(Class::UserMessage), &ctx());
+    let f = facts
+        .iter()
+        .find(|f| matches!(f, HitFact::Attachments(Fact::Body(_))))
+        .expect("a body source");
+    assert_eq!(f.label_zone().as_deref(), Some("[payload]"));
+}
+
+/// A differing second conversion is reported only where the body IS the ordinary one:
+/// pairing `[human-turn render differs]` with a `[payload]` body would describe a
+/// difference from a text the unit is not showing.
+#[test]
+fn the_steer_does_not_report_a_difference_from_a_body_it_is_not_showing() {
+    let line = r#"{"type":"attachment","attachment":{"type":"queued_command","origin":{"kind":"human"},"prompt":"stop"},"rendered":[{"content":"ordinary"}],"renderedInHumanTurn":[{"content":"human turn"}]}"#;
+    let (facts, _) = facts(&rec(line), Some(line), &section(Class::UserMessage), &ctx());
+    assert!(
+        !facts
+            .iter()
+            .any(|f| matches!(f, HitFact::Attachments(Fact::HumanTurnRender))),
+        "no difference is reported beside a payload body: {facts:?}"
+    );
+}

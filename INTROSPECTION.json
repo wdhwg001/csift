@@ -94977,7 +94977,7 @@
         },
         {
           "path": "tests/cli/search/taxonomy/attachments.rs",
-          "lines": "306",
+          "lines": "307",
           "snippet": "fn every_attachment_unit_says_which_record_it_is_for() {"
         }
       ],
@@ -95075,7 +95075,7 @@
         },
         {
           "path": "tests/cli/search/taxonomy/attachments.rs",
-          "lines": "246",
+          "lines": "247",
           "snippet": "fn delivery_reads_the_converters_own_answer_per_record() {"
         }
       ],
