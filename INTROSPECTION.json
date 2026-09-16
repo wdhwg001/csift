@@ -95056,6 +95056,73 @@
           "note": "The second root carries six of the ten carrier types rather than all ten, which is a fact about which features those builds ran and not a narrower rule: on both roots every line of a carrying type carries the key, and neither root has it at the top level."
         }
       ]
+    },
+    {
+      "id": "CLS-042",
+      "area": "classification",
+      "behavior": "The attachment conversion table is ONE object literal keyed on the payload type, and at Claude Code 2.1.258 it holds 70 entries in 10,476 bytes. EIGHTEEN of those entries are the empty conversion `()=>[]` - the payloads that convert to nothing: `prompt_snapshot`, `tool_host_result_lines`, `already_read_file`, `async_hook_response_batch`, `batching_reminder_sent`, `secondary_reminder_sent`, `command_permissions`, `edited_image_file`, `hook_cancelled`, `hook_error_during_execution`, `hook_non_blocking_error`, `hook_system_message`, `hook_permission_decision`, `hook_deferred_tool`, `goal_status`, `structured_output`, `max_turns_reached`, `teammate_shutdown_batch`. Sixteen of the eighteen sit in one contiguous run and the other two sit earlier in the SAME object, 2,402 and 813 bytes before the run; the next `()=>[]` anywhere in the build is 13 MB away and is an event-handler property, not a payload type. A payload type the table does not name at all reaches the default arm, which reports `Unknown attachment type:` and returns empty, so an unnamed type converts to nothing too. The set of types actually WRITTEN is wider than any one machine shows: one projects root carries 45 distinct payload values and a second carries 28, with a union of 46; the one type only the second root has is `selected_lines_in_ide`.",
+      "depends": "`model::inventory::NEVER_CONVERTS` is the list `Record::delivery_override` reads to answer `Some(false)` for an attachment the converter drops, and the SKILL and SPEC visibility tables derive from the same list. All ELEVEN entries are correct against the table: nine are named empty arms, and the other two (`deferred_tools_record`, `thinking_stripped`) occur ZERO times in the whole build, so they reach the default arm and convert to nothing by that route instead. The list is SHORT of the table by nine named arms, and none of the nine can produce a wrong answer today: csift models NO leaf for any of them (none has an inventory row), so no record csift labels can take that path, and neither projects root carries a specimen of any of the nine. The narrowness is deliberate rather than an oversight - an entry for a payload type csift has never seen is a rule about nothing, which is why the list is maintained against the inventory's own rows.",
+      "code": [
+        {
+          "path": "src/model/inventory.rs",
+          "lines": "318-318",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &["
+        },
+        {
+          "path": "src/model/delivery.rs",
+          "lines": "98-98",
+          "snippet": "        if ty == \"hook_success\" {"
+        },
+        {
+          "path": "tests/cli/search/taxonomy/attachments.rs",
+          "lines": "246",
+          "snippet": "fn delivery_reads_the_converters_own_answer_per_record() {"
+        }
+      ],
+      "instrument": "Binary: byte-search the build for `hook_permission_decision:()=>[]`, walk back to the enclosing `{` and forward to its matching `}` counting brace depth, and in that window collect every `(\\w+):\\(\\)=>\\[\\]` (the empty arms) and every key at depth 1 that follows a `{` or a `,` (the table's entries). Then collect every `(\\w+):\\(\\)=>\\[\\]` in the WHOLE build and report each one's byte distance from the anchor, so an arm outside the table is visibly outside it. Byte-search separately for `Unknown attachment type:` (the default arm) and for each of csift's own `NEVER_CONVERTS` entries; an entry with zero whole-build occurrences is one the table does not name. Corpus: walk every `*.jsonl` at any depth under a projects root, `journal.jsonl` skipped, one JSON parse per non-blank line, collecting the distinct `attachment.type` values per root and their union.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The TRIGGER is unread: which request-assembly entry reaches this table, and whether any caller converts a payload by another route, are not traced here. Instrument: byte-find the two occurrences of `normalizeAttachmentForAPI` in the shipped executable, read the function whose default arm names it, and follow its callers to the one on the request path."
+      ],
+      "residue": [
+        "The table's SIZE is a per-build fact and is stated for one build: 70 entries at Claude Code 2.1.258. A later audit that re-walks the window on a newer build records its own count rather than assuming this one."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the empty-conversion arms",
+          "offset": 166006641,
+          "excerpt": "hook_permission_decision:()=>[]",
+          "note": "The anchor of the contiguous empty-arm run: the payload types the converter turns into nothing. It occurs exactly once in the build, and the window around it is the whole conversion table."
+        },
+        {
+          "role": "writer",
+          "name": "the default arm",
+          "offset": 166027657,
+          "excerpt": "return EW(\"normalizeAttachmentForAPI\",Error(`Unknown attachment type: ${e.type}`)),[]",
+          "note": "What a payload type the table does not name reaches: the arm reports the unknown type and returns an empty array, so an unnamed type converts to nothing exactly as a named empty arm does. This is the route csift's two unnamed entries take."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "holds",
+          "instrument": "Ran the brace-depth window walk from the `hook_permission_decision:()=>[]` anchor, counted the window's depth-1 keys and its empty arms, listed every `()=>[]` in the whole build with its distance from the anchor, counted the whole-build occurrences of each csift `NEVER_CONVERTS` entry, and cross-checked each omitted arm against `model::inventory`'s attachment rows and against both projects roots' payload-type sets.",
+          "observed": "Anchor occurs once at 166006641. The enclosing object is 10,476 bytes and holds 70 depth-1 keys, 18 of them `()=>[]`; 16 of the 18 are contiguous and the other two sit 2,402 and 813 bytes earlier in the same object. The build holds 25 `()=>[]` occurrences in total; the seven outside the table are 13 MB or further away and are event-handler property names. csift's list has 11 entries: 9 are named arms, and `deferred_tools_record` and `thinking_stripped` occur 0 times anywhere in the build. Of the 9 named arms csift omits, 0 have an inventory row and 0 have a specimen on either root. Payload types on disk: 45 on one root, 28 on the other, union 46, the second root's only exclusive value being `selected_lines_in_ide`.",
+          "rule": "A table entry is a key at brace depth 1 inside the object enclosing the anchor, preceded by `{` or `,`; an empty arm is a `name:()=>[]` match; a distance is the byte offset difference from the anchor. A payload type has a specimen when at least one line of that root carries it as `attachment.type`, counted one JSON parse per non-blank line of every `*.jsonl` under the root with `journal.jsonl` skipped.",
+          "note": "The list is complete for every shape csift models: all 11 entries are correct and the 9 omissions carry no leaf and have no specimen, so `delivery_override` gives no wrong answer on either root. The table's entry count is recorded as a per-build fact rather than a constant."
+        }
+      ]
     }
   ]
 }
