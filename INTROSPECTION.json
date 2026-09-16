@@ -55372,7 +55372,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "395-396",
+          "lines": "404-405",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],

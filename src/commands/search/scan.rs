@@ -197,7 +197,16 @@ pub(crate) fn search_one_file(
             for raw in &marker_lines {
                 match crate::parse::parse_line(raw) {
                     Ok(Some(rec)) => {
-                        if matcher.synth_texts_match(&rec, std::str::from_utf8(raw).ok()) {
+                        // LOSSY, exactly as the emission path decodes the same bytes
+                        // (`gated_raw` below). A strict decode answers `None` on a line
+                        // carrying one invalid byte, and `None` here means "re-render
+                        // without the source line" - so the gate would judge a shorter
+                        // text than the one the emission would produce and could prune a
+                        // file whose only hit lies in the part it did not render. The two
+                        // decodes have to agree, and the emission's is the one that
+                        // decides what a reader sees.
+                        let text = String::from_utf8_lossy(raw);
+                        if matcher.synth_texts_match(&rec, Some(&text)) {
                             synth_matched = true;
                             break;
                         }
