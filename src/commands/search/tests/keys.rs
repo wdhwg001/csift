@@ -40,7 +40,7 @@ fn a_record_that_names_no_key_produces_no_fact() {
     assert!(zones.is_empty() && json.is_empty(), "{zones:?} {json:?}");
 }
 
-/// Four of the ten facts render a tag and six ride JSON alone. The split is the family's
+/// Five of the eleven facts render a tag and six ride JSON alone. The split is the family's
 /// statement about what is worth a reader's line, so it is pinned at both ends: the ids
 /// are on the wire and NOT in the label zone.
 #[test]
@@ -258,4 +258,52 @@ fn the_scheduler_ids_ride_json_alone() {
         json.contains(&"scheduled_fire_id=\"fire-1\"".to_string()),
         "{json:?}"
     );
+}
+
+/// The PDF page RANGE a Read with a `pages` parameter returned - the range half of the
+/// same derivation `image` prints per page, so the two surfaces cannot drift. The tag
+/// carries the document's BASENAME because it sits beside a leaf path on one line; the
+/// whole path rides the JSON key.
+#[test]
+fn a_pdf_page_result_carries_its_range_and_names_the_document() {
+    let (zones, json) = projections(
+        r#"{"type":"user","uuid":"u-6","toolUseResult":{"type":"parts","firstPage":5,"file":{"count":3,"filePath":"/Users/dev/docs/report.pdf","originalSize":223744,"outputDir":"/Users/dev/tmp/pdf-1"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[
+            {"type":"text","text":"PDF pages extracted: 3 page(s) from /Users/dev/docs/report.pdf (218.5KB)"},
+            {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"aGk="}},
+            {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"aGVsbG8="}},
+            {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"eWVz"}}]}]}}"#,
+        Some(Class::AgentToolResult),
+    );
+    assert_eq!(zones, vec!["[pdf pages 5-7 of report.pdf]".to_string()]);
+    assert!(
+        json.contains(
+            &"pdf_pages={\"count\":3,\"first\":5,\"last\":7,\"path\":\"/Users/dev/docs/report.pdf\"}"
+                .to_string()
+        ),
+        "{json:?}"
+    );
+}
+
+/// A tool result that is not a page read carries no such fact - the gate is the record's
+/// own result object, so a screenshot and a carrier with no offset both stay silent
+/// rather than reporting a range that starts at page 1.
+#[test]
+fn a_tool_result_without_the_offset_carries_no_range() {
+    for line in [
+        // A screenshot: an image result, no parts and no firstPage.
+        r#"{"type":"user","uuid":"u-7","toolUseResult":{"type":"image","file":{"filePath":"/Users/dev/shot.png"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[
+            {"type":"text","text":"shot"},
+            {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}}]}]}}"#,
+        // A parts result from a build before the key existed.
+        r#"{"type":"user","uuid":"u-8","toolUseResult":{"type":"parts","file":{"count":1,"filePath":"/Users/dev/docs/report.pdf"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[
+            {"type":"text","text":"PDF pages extracted: 1 page(s) from /Users/dev/docs/report.pdf (1KB)"},
+            {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"aGk="}}]}]}}"#,
+    ] {
+        let (zones, json) = projections(line, Some(Class::AgentToolResult));
+        assert!(zones.is_empty(), "{zones:?}");
+        assert!(
+            !json.iter().any(|j| j.starts_with("pdf_pages=")),
+            "{json:?}"
+        );
+    }
 }

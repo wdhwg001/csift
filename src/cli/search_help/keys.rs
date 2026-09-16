@@ -4,8 +4,8 @@
 //! which belong to no single leaf and are therefore a section rather than a taxonomy row.
 //!
 //! Information parity with SKILL is the contract (AGENTS section 1): every marker word,
-//! JSON key and render form the family ships is named here too - the four label-zone tags
-//! with their variable halves, the ten JSON keys, the `for` edge's three forms, and the
+//! JSON key and render form the family ships is named here too - the five label-zone tags
+//! with their variable halves, the eleven JSON keys, the `for` edge's three forms, and the
 //! one shape whose contents reach no path but `--raw`.
 //!
 //! The concatenation is byte-joined, so a section brings its OWN separator and needs
@@ -20,7 +20,7 @@
 pub(crate) const SECTION: &str =
     "\n\nEXPOSED KEYS (facts a record states about the call behind it)\n  \
      A record carries keys about the CALL it came from, and they belong to no leaf - so \
-     they ride every hit as JSON, and four of them also render a tag in the label zone. \
+     they ride every hit as JSON, and five of them also render a tag in the label zone. \
      `attribution` {agent, skill, plugin, mcp_server, mcp_tool} names what the request ran \
      under, and the label zone takes the SPECIFIC half only - `[via skill <name>]`, else \
      `[via plugin <name>]`, else `[via mcp <server or tool>]` - because the agent name is \
@@ -34,6 +34,14 @@ pub(crate) const SECTION: &str =
      mid-stream]`, each half only when the record names it - a quota naming only its reset \
      instant renders the bare word `quota` - and a record naming none of them carries no \
      object at all, so the tag can name no floor word. \
+     `pdf_pages` {first, last, count, path} rides the `agent.tool.result` of a Read that \
+     carried a `pages` parameter and renders `[pdf pages A-B of <basename>]`: which pages \
+     of which document the result holds, read off `toolUseResult.firstPage` plus the \
+     result's own content elements. The tag names the basename because it sits beside a \
+     leaf path on one line, and the key carries the whole path; `csift image` prints the \
+     same derivation per page, so the two surfaces agree by construction. It is ABSENT on \
+     a result whose own object names no `firstPage` - a screenshot, a build before the key \
+     existed, the REPL tool's re-emitted pages - rather than a range that starts at 1. \
      `interrupted_message_id`, `hook_run_id`, `scheduled_task_id` and `scheduled_fire_id` \
      are the explicit joins, JSON only. The unit's ONE `for` edge comes from the first two: \
      `[for: interrupted <id> (not in this file)]`, `[for: hook run <first 8> (not in this \

@@ -155,3 +155,58 @@ fn addressing_and_out_filenames_are_unchanged_by_the_page() {
         turn.stdout
     );
 }
+
+/// The same fact reaches the `agent.tool.result` unit, so `show --line` and `image` agree
+/// about the pages one record carries - the unit names the RANGE and the document, and the
+/// per-image rows name each page.
+#[test]
+fn the_tool_result_unit_names_the_range_and_the_document() {
+    let h = pdf_home();
+    let out = h.run(&["show", at(PSESS).as_str(), "--line", "3"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("[pdf pages 5-7 of report.pdf]"),
+        "{}",
+        out.stdout
+    );
+    // The existing image annotation and its extraction hint are untouched.
+    assert!(out.stdout.contains("[3 images: L3i1"), "{}", out.stdout);
+
+    let js = h.run(&[
+        "show",
+        at(PSESS).as_str(),
+        "--line",
+        "3",
+        "--format",
+        "json",
+    ]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    let row: serde_json::Value = js
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).expect("jsonl"))
+        .find(|v: &serde_json::Value| v["kind"] == "record")
+        .expect("a record row");
+    assert_eq!(
+        row["pdf_pages"],
+        serde_json::json!({
+            "first": 5, "last": 7, "count": 3, "path": "/Users/dev/docs/report.pdf"
+        }),
+        "{row}"
+    );
+    // The screenshot result on the next line carries no such key at all.
+    let shot = h.run(&[
+        "show",
+        at(PSESS).as_str(),
+        "--line",
+        "4",
+        "--format",
+        "json",
+    ]);
+    assert!(shot.success, "stderr: {}", shot.stderr);
+    assert!(
+        !shot.stdout.contains("pdf_pages"),
+        "an absent key is absent, not null: {}",
+        shot.stdout
+    );
+}

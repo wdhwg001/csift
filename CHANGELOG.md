@@ -25,7 +25,12 @@ surface change bumps the PATCH.
   offset and flatten several documents into one list) all read `page: null` rather than an
   assumed page 1. Addressing does not move: `--id`, `--turn` and the extracted filename are
   what they were, because the page is provenance and not an id. A whole-PDF `Read` returns a
-  `document` block rather than images and stays unlisted.
+  `document` block rather than images and stays unlisted. The same fact reaches the
+  `agent.tool.result` unit as the exposed-keys family's `pdf_pages` - the label zone
+  `[pdf pages A-B of <basename>]`, JSON `{first, last, count, path}` - read through the one
+  function `image` reads, so `show --line` and `image` cannot disagree about which pages a
+  record carries; the existing `[N images: ...]` annotation and its extraction hint are
+  unchanged.
 
 - **Every non-transcript line type says what it holds.** The head-and-body law landed with
   twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader

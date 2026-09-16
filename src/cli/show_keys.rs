@@ -144,6 +144,10 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         "api_failure:{error status quota{limit_type resets_at} truncated_after_output \
          aborted_mid_stream}",
     ),
+    // Beside the other object-valued key rather than after the scalars: the rendered list
+    // is re-parsed by splitting on ", ", and a row whose form ENDS in `}` cannot sit last
+    // there (the outer brace and the row's own would be stripped together).
+    k(Family::Keys, "pdf_pages:{first last count path}"),
     k(Family::Keys, "interrupted_message_id"),
     k(Family::Keys, "hook_run_id"),
     k(Family::Keys, "scheduled_task_id"),

@@ -19,6 +19,13 @@
 //! 7 acid rows, being a second whole-line pass. A read at EMISSION time instead cannot
 //! reach the bytes at all - the engine keeps a record's source line only for a line whose
 //! `Record` cannot answer for it, which is the opposite of the population these keys ride.
+//!
+//! ONE fact reads a key `Record` does not model - the PDF page range, off
+//! `toolUseResult.firstPage` and the result's own content elements - and it pays for that
+//! per EMITTED UNIT rather than per record: the typed `toolUseResult` probe on a record
+//! carrying no such key returns immediately, and the full parse of the six-key result
+//! object runs only once that probe has read `parts`. Emission is bounded by matches, so
+//! the cost rides hits and never a scan.
 
 use super::*;
 use crate::model::{ApiFailure, Attribution};
@@ -60,12 +67,28 @@ pub(crate) enum Fact {
     ScheduledFireId(String),
     /// The HOOK RUN a `stop_hook_summary` reports on.
     HookRunId(String),
+    /// The PDF page RANGE a `Read` with a `pages` parameter returned, read off the pair of
+    /// keys that carry it: `toolUseResult.firstPage` for the offset and the result's own
+    /// content elements for how many pages followed it. `path` is `file.filePath`.
+    ///
+    /// The tag it renders is DISPLAY-ONLY and needs no synthesized-text marker: the label
+    /// zone is never matched, so no prefilter and no whole-file gate reasons about it.
+    PdfPages {
+        /// The document page of the first element after the leading text.
+        first: usize,
+        /// The document page of the last one.
+        last: usize,
+        /// How many pages the result carries.
+        count: usize,
+        /// The document, verbatim; `None` when the result named no path.
+        path: Option<String>,
+    },
 }
 
 impl Fact {
     /// The label-zone tag this fact adds, if any.
     ///
-    /// Four of the ten render a tag and six ride JSON alone, and the split is not
+    /// Five of the eleven render a tag and six ride JSON alone, and the split is not
     /// arbitrary: a tag is worth a reader's line only when it says something about THIS
     /// record that a person scanning a result list would act on. An id is a join key, and
     /// `attributionAgent` is on every record of a subagent transcript, so a tag naming it
@@ -90,6 +113,16 @@ impl Fact {
             | Fact::ScheduledTaskId(_)
             | Fact::ScheduledFireId(_)
             | Fact::HookRunId(_) => None,
+            // The BASENAME, never the whole path: this tag sits beside a leaf path on one
+            // line, and the JSON key carries the path verbatim for a reader who needs it.
+            Fact::PdfPages {
+                first, last, path, ..
+            } => Some(
+                match path.as_deref().map(crate::commands::image::basename) {
+                    Some(name) => format!("[pdf pages {first}-{last} of {name}]"),
+                    None => format!("[pdf pages {first}-{last}]"),
+                },
+            ),
         }
     }
 
@@ -134,6 +167,20 @@ impl Fact {
             Fact::ScheduledTaskId(id) => vec![("scheduled_task_id", serde_json::json!(id))],
             Fact::ScheduledFireId(id) => vec![("scheduled_fire_id", serde_json::json!(id))],
             Fact::HookRunId(id) => vec![("hook_run_id", serde_json::json!(id))],
+            Fact::PdfPages {
+                first,
+                last,
+                count,
+                path,
+            } => vec![(
+                "pdf_pages",
+                serde_json::json!({
+                    "first": first,
+                    "last": last,
+                    "count": count,
+                    "path": path,
+                }),
+            )],
         }
     }
 }
@@ -197,6 +244,18 @@ pub(crate) fn facts(
     }
     if let Some(id) = rec.hook_run_id() {
         push(Fact::HookRunId(id.to_string()));
+    }
+    // The PDF page range, read through the ONE reader `image` derives its per-page number
+    // from, so the two surfaces cannot drift: the gate, the offset and the count are that
+    // function's, and this adds only the range. It is keyed on the result object like
+    // every other fact here, never on the leaf.
+    if let Some(p) = crate::commands::image::record_pdf_pages(rec) {
+        push(Fact::PdfPages {
+            first: p.first,
+            last: p.last(),
+            count: p.count,
+            path: p.path,
+        });
     }
     out.extend(for_edges(rec, section, ctx));
     (out, Vec::new())

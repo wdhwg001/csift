@@ -256,6 +256,12 @@ impl PdfPages {
         let i = pos.checked_sub(1)?;
         (i < self.count).then_some(self.first + i)
     }
+
+    /// The document page of the LAST element the result carries - the closing half of the
+    /// range a whole-result reader (the `agent.tool.result` unit) prints.
+    pub(crate) fn last(&self) -> usize {
+        self.first + self.count - 1
+    }
 }
 
 /// A path's basename. Split on BOTH separators: the path is whatever the harness recorded
