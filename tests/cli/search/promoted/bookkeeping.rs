@@ -28,13 +28,36 @@ fn a_bookkeeping_key_the_head_elides_is_still_searchable() {
         "the key in the line's own bytes is matchable:\n{}",
         hit.stdout
     );
+    // LOCATE the delta rather than naming its line: a fixture line inserted above it
+    // would otherwise retarget this address silently at some other record that happens to
+    // render a head, and the assertions below would keep passing on the wrong line.
+    let j = h.run(&[
+        "search",
+        "snapshotMessageId",
+        &at(SESS),
+        "-t",
+        "harness.bookkeeping.file-history",
+        "--format",
+        "json",
+    ]);
+    let hits: Vec<serde_json::Value> = json_lines(&j.stdout)
+        .into_iter()
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    assert_eq!(hits.len(), 1, "one delta carries the key:\n{}", j.stdout);
+    let line = hits[0]["line"]
+        .as_u64()
+        .expect("a physical line")
+        .to_string();
+
     // And the unit still carries the head, under an address where nothing is clipped.
-    let shown = h.run(&["show", &at(SESS), "--line", "10"]);
+    let shown = h.run(&["show", &at(SESS), "--line", &line]);
     assert!(shown.success, "stderr: {}", shown.stderr);
     assert!(
         shown.stdout.contains("[file-history delta at ")
             && shown.stdout.contains("snapshotMessageId"),
-        "head then body, both present:\n{}",
+        "head then body, both present at L{line}:\n{}",
         shown.stdout
     );
 }
