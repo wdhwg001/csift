@@ -70,6 +70,22 @@ pub(crate) fn render(
 /// 3. The verbatim payload JSON, which is what every attachment rendered before.
 ///
 /// `None` for every non-attachment record, so no other line shape moves.
+///
+/// WHAT THE FIRST SOURCE COSTS, because performance is a contract (AGENTS section 4). The
+/// base rendered `raw.get()` - the payload's own bytes, no parse; this DECODES the
+/// conversion, which is one `serde_json` parse of the blob plus a join, memoised on the
+/// record by [`Record::converted_text`] so a record is decoded once however many units and
+/// facts ask. Measured on two synthetic 200,000-line transcripts, two release builds of the
+/// same tree at the base commit and at this one, seven interleaved rounds with a
+/// SAME-BINARY control inside each round, `/usr/bin/time` user+sys, medians: a file where
+/// EVERY line carries a conversion reads 1.220 s -> 1.380 s = 1.131x under
+/// `-t harness.hook.outcome -c`, a file where NO line does reads 1.030 s -> 1.100 s =
+/// 1.068x under `-t harness.context.file -c`, and the control band over those two rows is
+/// 1.033x and 0.942x. The DEFAULT path - a role-bearing transcript with no attachment line
+/// in it - reads 0.959x against a 0.967x control, so an ordinary scan pays nothing. The
+/// first figure is the cost of the decode itself and is the price of rendering what the
+/// model received; the second is inside its own control band and is not read as a
+/// regression.
 #[must_use]
 pub(crate) fn attachment_body(rec: &Record) -> Option<(String, &'static str)> {
     if !rec.is_type("attachment") {

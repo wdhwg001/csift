@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2315",
+          "lines": "2316",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -94906,7 +94906,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "74-80",
+          "lines": "90-96",
           "snippet": "pub(crate) fn attachment_body(rec: &Record) -> Option<(String, &'static str)> {\n    if !rec.is_type(\"attachment\") {\n        return None;\n    }\n    if let Some(text) = rec.converted_text().and_then(|c| c.rendered.clone()) {\n        return Some((text, BODY_RENDERED));\n    }"
         },
         {
@@ -94972,7 +94972,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "350",
+          "lines": "366",
           "snippet": "    let attached_to = super::for_edge(\"attached_to\", Basis::Key, rec.parent_uuid.as_deref(), ctx);"
         },
         {
@@ -95016,12 +95016,12 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "356-361",
+          "lines": "372-377",
           "snippet": "    let for_tool_use = super::for_edge(\n        \"for_tool_use\",\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        ctx,\n    );"
         },
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "334-336",
+          "lines": "350-352",
           "snippet": "fn payload_str<'a>(rec: &'a Record, key: &str) -> Option<&'a str> {\n    rec.attachment_value()?.get(key)?.as_str()\n}"
         },
         {

@@ -70,7 +70,12 @@ surface change bumps the PATCH.
   `queued_command` carrying a SECOND conversion for a human turn keeps the ordinary one
   as its body and reports the difference (`[human-turn render differs]`, JSON
   `human_turn_render_differs`), because which copy the model received depends on the turn
-  it was replayed into and the record does not say.
+  it was replayed into and the record does not say. The body DECODES a JSON string where
+  csift emitted the payload bytes unparsed, one parse per record: on two synthetic
+  200,000-line transcripts, seven interleaved rounds with a same-binary control in each,
+  a file whose every line carries a conversion costs 1.131x (control 1.033x) and one
+  where none does costs 1.068x (control 0.942x), while an ordinary scan of a transcript
+  with no attachment line reads 0.959x against a 0.967x control.
 
 - **One stamping site for every taxonomy family, and one place each edits.** The extension
   points on a search hit existed with nothing filling them, so each family would have cut
