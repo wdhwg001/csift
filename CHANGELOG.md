@@ -57,6 +57,21 @@ surface change bumps the PATCH.
   `agent.thinking.omitted` alone. Both are named in `search --help` and `show --help`.
 ### Changed
 
+- **An attachment unit renders the text the model received.** BREAKING: the body of a
+  `harness.hook.context` unit, and of every attachment unit whose record carries a
+  persisted conversion, is now that converted text rather than the joined content or the
+  payload JSON. The unit says which of the record's two copies it is showing -
+  `[rendered]` or `[payload]`, JSON `body_source` - and names itself beside it:
+  `[hook <event> <name>]`, `[hook <event> <name> exit <code> <ms>ms]`,
+  `[context <payload type>]`, `[structured]`, `[mid-turn]`. A record carrying a
+  conversion is searchable by the converted text and no longer by the payload text it
+  replaced; `--raw` does not recover the difference (the backfill runs after the match
+  phase), so the way to the bytes is `csift show @<id> --line N --raw`. A
+  `queued_command` carrying a SECOND conversion for a human turn keeps the ordinary one
+  as its body and reports the difference (`[human-turn render differs]`, JSON
+  `human_turn_render_differs`), because which copy the model received depends on the turn
+  it was replayed into and the record does not say.
+
 - **One stamping site for every taxonomy family, and one place each edits.** The extension
   points on a search hit existed with nothing filling them, so each family would have cut
   its own dispatch through the same shared files. `family_facts` is that one seam, called
@@ -278,6 +293,22 @@ surface change bumps the PATCH.
   to hold, so the first time a TeammateIdle, TaskCreated or TaskCompleted hook blocks, its
   feedback would have landed in the isMeta residue - no leaf, no census key, reachable only
   by an address.
+
+### Added
+
+- **An attachment unit says which record it is for.** Every attachment unit carries two
+  `for` edges and a producer fact: `attached_to` from the record's own `parentUuid`,
+  resolved to a LINE of this transcript through the chain's uuid map; `for_tool_use` from
+  the payload's inner `toolUseID`, which is a wire id no line carries, so the edge keeps
+  the id and says where it is not; and `[produced_by <command>]` from a hook run's own
+  command, JSON `produced_by:{command,hook_name,payload_type}`. The two edges fold into
+  the shared JSON `for` array. An edge whose key the line does not carry renders its
+  reason rather than disappearing, and all three ride an addressed record csift models no
+  leaf for as well.
+- **`search --help` and `show --help` name the attachment family's surface**, so the two
+  manuals stay at information parity with SKILL: an `ATTACHMENT LEAVES` region covering
+  the two bodies, the markers, the provenance facts and the matching rule, and the record
+  row's `body_source`, `human_turn_render_differs`, `produced_by` and `for` keys.
 
 ### Fixed
 
