@@ -472,8 +472,13 @@ pub(crate) struct ClassifyEnv<'a> {
     /// sibling, so the leaf reads its own instant through this per-file join.
     pub(crate) schedule_fires: &'a crate::model::ScheduleFireIndex,
     /// uuid -> jsonl LINE over this transcript's own rows, so a family's `for` edge can
-    /// render an address rather than a bare id. `Sync` because the per-turn walk fans out
-    /// over rayon.
+    /// render an address rather than a bare id.
+    ///
+    /// The `Sync` bound is spelled out HERE, at the bound itself, because this is where it
+    /// is needed: the per-turn walk fans out over rayon. The implementor csift ships
+    /// (`search::RowLines`) holds two shared borrows and no interior mutability, so it is
+    /// `Sync` by construction today - and a field added to it later that is not would fail
+    /// on this line, naming the reason, instead of somewhere down in the walk.
     pub(crate) lines: &'a (dyn crate::model::LineOfUuid + Sync),
 }
 

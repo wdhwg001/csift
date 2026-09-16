@@ -132,9 +132,11 @@ impl crate::model::LineOfUuid for RowLines<'_> {
     }
 }
 
-// `RowLines` holds two shared borrows and no interior mutability, so it is Sync by
-// construction; the bound is spelled out because `ClassifyEnv` hands it to the rayon
-// walk and a future field could quietly break it.
+// Hand-written because the crate denies a type without one (`missing_debug_implementations`)
+// and neither field can derive it: a `UuidIndex` borrows the build's map and `rows` is a
+// borrowed slice, so printing them would dump the transcript. The two SIZES are what a
+// reader debugging a `for` edge actually wants - did the map see this uuid, and over how
+// many rows.
 impl std::fmt::Debug for RowLines<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RowLines")
