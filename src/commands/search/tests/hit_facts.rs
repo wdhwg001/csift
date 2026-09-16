@@ -237,6 +237,68 @@ fn a_record_no_family_owns_carries_neither_extension_point() {
     assert!(hits[0].facts.is_empty());
 }
 
+/// A `headers` member is elided at EVERY depth, and the elision is keyed on the NAME.
+///
+/// The key=value excerpt is the one rendered path that walks a line's own values without
+/// knowing what they are, so it is the one path an HTTP response header set can reach -
+/// and the measured set carries a session cookie and an organization id. The unit reads
+/// the rule at each depth the shape can put it: the top level, inside an object, and
+/// inside an array of objects, because a rule that only covered `error.headers` would be
+/// a rule about one build's shape rather than about header sets.
+#[test]
+fn a_headers_member_is_elided_at_every_depth() {
+    let excerpt = |line: &str| {
+        addressed_unit(
+            &rec(line),
+            Some(line),
+            &ClassifyCtx::top_level(),
+            &Matcher::pure(),
+            EXCERPT_MAX,
+        )
+        .expect("a parseable line renders one unit")
+        .excerpt
+    };
+
+    // Nested one deep, the api_error shape.
+    let nested = r#"{"type":"zz-unmodeled","uuid":"h1","error":{"type":"overloaded_error","headers":{"set-cookie":"zzdonotprint"}}}"#;
+    let out = excerpt(nested);
+    assert!(
+        !out.contains("zzdonotprint"),
+        "a nested value leaked: {out}"
+    );
+    assert!(out.contains("<elided>"), "and the elision is stated: {out}");
+    assert!(
+        out.contains("overloaded_error"),
+        "the object's other fields still render: {out}"
+    );
+
+    // At the TOP level, where the value is the header object itself.
+    let top = r#"{"type":"zz-unmodeled","uuid":"h2","headers":{"set-cookie":"zzdonotprint"}}"#;
+    let out = excerpt(top);
+    assert!(
+        !out.contains("zzdonotprint"),
+        "a top-level value leaked: {out}"
+    );
+    assert!(out.contains("headers=<elided>"), "{out}");
+
+    // Inside an ARRAY of objects - two containers down, which a shape with a retry log
+    // would produce.
+    let deep = r#"{"type":"zz-unmodeled","uuid":"h3","attempts":[{"n":1,"headers":{"set-cookie":"zzdonotprint"}}]}"#;
+    let out = excerpt(deep);
+    assert!(
+        !out.contains("zzdonotprint"),
+        "an array value leaked: {out}"
+    );
+    assert!(out.contains("<elided>"), "{out}");
+
+    // A key that merely CONTAINS the word is not the header set and is untouched: the
+    // rule is an exact name, so it can neither over-elide nor be evaded by nesting.
+    let other = r#"{"type":"zz-unmodeled","uuid":"h4","headersSeen":3,"note":"zzkeepme"}"#;
+    let out = excerpt(other);
+    assert!(out.contains("zzkeepme"), "{out}");
+    assert!(out.contains("headersSeen=3"), "{out}");
+}
+
 /// The replay pointer renders the SURVIVOR's physical line, and a jsonl line number is
 /// 1-based - so a map answering ZERO is answering "I have no line", not "line 0". The
 /// guard that drops it is the difference between `replay copy of L42` and a pointer at a

@@ -218,9 +218,48 @@ fn distinguishing_block_type(raw: Option<&str>) -> Option<String> {
         .map(|t| (*t).to_string())
 }
 
+/// What a `headers` member renders as, everywhere and always: nothing.
+pub(crate) const HEADERS_ELIDED: &str = "<elided>";
+
+/// Replace every `headers` member of a value, at any depth, with [`HEADERS_ELIDED`].
+///
+/// An HTTP RESPONSE HEADER SET is the one thing a rendered transcript view must not
+/// carry. A `type:"system"` record of the `api_error` shape holds the whole set inside
+/// its `error` object, and the measured set carries a session cookie, an organization id
+/// and two request trace ids; csift output is pasted into reports, into chats and into
+/// other models' contexts, so a header set that reaches a rendered surface has left the
+/// machine it was on. `--raw` prints the source line and says so, which is what an escape
+/// hatch is for.
+///
+/// This is the UNMODELED unit's own guard, and it is deliberately blunt: the excerpt is a
+/// shape preview for a line csift models nothing about, so it cannot know which `headers`
+/// is the dangerous one and elides every one of them. A family that renders a known shape
+/// names the fields it wants instead, which is the same law from the other side.
+fn elide_headers(v: &serde_json::Value) -> serde_json::Value {
+    match v {
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, val)| {
+                    let val = if k == "headers" {
+                        serde_json::json!(HEADERS_ELIDED)
+                    } else {
+                        elide_headers(val)
+                    };
+                    (k.clone(), val)
+                })
+                .collect(),
+        ),
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(elide_headers).collect())
+        }
+        other => other.clone(),
+    }
+}
+
 /// A key=value excerpt of a line's own top-level keys, for a record that carries no
 /// renderable text at all. Keys in their on-disk order, values cut at 80 characters, so
 /// a reader sees the SHAPE of an unknown line without csift claiming to interpret it.
+/// A `headers` member is elided at every depth ([`elide_headers`]).
 /// `None` when the caller has no source line (every ordinary record) or the line is not
 /// a JSON object with keys.
 fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
@@ -230,8 +269,9 @@ fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
         .iter()
         .map(|(k, v)| {
             let rendered = match v {
+                _ if k == "headers" => HEADERS_ELIDED.to_string(),
                 serde_json::Value::String(s) => s.clone(),
-                other => other.to_string(),
+                other => elide_headers(other).to_string(),
             };
             format!("{k}={}", crate::text::truncate_excerpt(&rendered, 80))
         })

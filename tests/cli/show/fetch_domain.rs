@@ -360,3 +360,95 @@ fn the_shape_and_the_leaf_both_reach_json() {
     assert_eq!(fb["label"], "agent.message.plain", "{fb}");
     assert_eq!(fb["unmodeled"], serde_json::Value::Null, "{fb}");
 }
+
+// ── the headers law ──
+//
+// The key=value excerpt above is the ONE rendered path that walks a line's own values
+// without knowing what they are, so it is the one path an HTTP RESPONSE HEADER SET can
+// reach. Measured over one projects root, 5 of 29 `api_error` records carry an
+// `error.headers` object and the set holds 18 distinct names, among them a session
+// cookie, an organization id and two request trace ids. csift output is pasted into
+// reports, into chats and into other models' contexts; `--raw` prints the source line
+// and says so, which is what an escape hatch is for.
+
+/// Header VALUES here are invented for this fixture: `zz`-led strings that exist nowhere
+/// else. The NAMES are the real ones, because the rule is keyed on the name.
+const COOKIE: &str = "zzsession=zzdonotprint";
+const ORG: &str = "zzorg-1111-2222-4333-8444";
+const HSESS: &str = "00000000-0000-4000-8000-0000000000fe";
+
+/// A `type:"system"` record whose subtype csift models NO leaf for, carrying the
+/// `error.headers` shape an `api_error` line carries. The unmodeled subtype is what sends
+/// it down the key=value excerpt, which is the path under test.
+fn home_with_an_unmodeled_headers_record() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{HSESS}.jsonl"),
+        &format!(
+            concat!(
+                r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"zzheaders open"}}}}"#, "\n",
+                r#"{{"type":"system","subtype":"zz_future_failure","uuid":"s1","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","error":{{"type":"overloaded_error","status":529,"headers":{{"set-cookie":"{cookie}","anthropic-organization-id":"{org}"}}}}}}"#, "\n",
+            ),
+            cookie = COOKIE,
+            org = ORG,
+        ),
+    );
+    h
+}
+
+/// No rendered surface prints a header VALUE, and the excerpt says the set is there
+/// rather than dropping the key silently.
+#[test]
+fn an_unmodeled_line_never_prints_a_header_set() {
+    let h = home_with_an_unmodeled_headers_record();
+    for tail in [
+        vec!["--line", "2"],
+        vec!["--line", "2", "--format", "json"],
+        vec!["--uuid", "s1"],
+        vec!["--turn", "0"],
+    ] {
+        let target = at(HSESS);
+        let mut argv = vec!["show", target.as_str()];
+        argv.extend_from_slice(&tail);
+        let out = h.run(&argv);
+        assert!(out.success, "{argv:?} stderr: {}", out.stderr);
+        let all = format!("{}{}", out.stdout, out.stderr);
+        for secret in [COOKIE, ORG, "zzdonotprint"] {
+            assert!(
+                !all.contains(secret),
+                "a header value reached {argv:?}:\n{all}"
+            );
+        }
+    }
+    let out = h.run(&["show", at(HSESS).as_str(), "--line", "2"]);
+    assert!(
+        out.stdout.contains("? unmodeled: system/zz_future_failure"),
+        "the unit names the shape:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("<elided>"),
+        "the headers member renders its elision, so a reader learns the set exists:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("overloaded_error"),
+        "the error's own descriptive field still renders:\n{}",
+        out.stdout
+    );
+}
+
+/// `--raw` is the ONE documented way to the bytes, and it prints them: an escape hatch
+/// that elides too is not an escape hatch, and a reader who asked for the source line has
+/// said what they want.
+#[test]
+fn raw_is_the_one_path_that_prints_the_header_set() {
+    let h = home_with_an_unmodeled_headers_record();
+    let out = h.run(&["show", at(HSESS).as_str(), "--line", "2", "--raw"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(COOKIE) && out.stdout.contains(ORG),
+        "--raw prints the source line whole:\n{}",
+        out.stdout
+    );
+}

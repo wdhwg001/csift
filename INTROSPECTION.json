@@ -88945,7 +88945,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "242-245",
+          "lines": "282-285",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -92837,6 +92837,54 @@
           "observed": "9 occurrences of the quoted type: 2 policy tables, 2 writers (166093201, 166105036), 2 loader dispatches (166186178, 177187280) and 3 fork or branch re-writers (172852212, 172854613, 177190368). `atisLatches` 7 occurrences, all loader assembly or the per-session map read at 166148511. 9 call sites of the getter, none a component. On disk: 4,690 lines over 28 files.",
           "rule": "An occurrence is a byte match of the literal anywhere in the executable. A site counts as rendering only when it reaches a component; a store, a map read, a summary field and a fork re-write do not. A corpus line counts when its text opens `{\"type\":\"atis-latch\"`; a file counts once however many such lines it holds.",
           "note": "The row read `Indirect`, which asserts a visible effect. Nothing measured supports one, so it is `Never` with the destination leg left open rather than `Indirect` with no evidence for the word."
+        }
+      ]
+    },
+    {
+      "id": "CLS-045",
+      "area": "classification",
+      "behavior": "A `type:\"system\"` record of the `api_error` shape carries the failed request's whole HTTP RESPONSE HEADER SET verbatim, inside its top-level `error` object under a `headers` member. Over one projects root, 29 such records live in 2 transcripts and 5 of them carry that object; those 5 hold 18 distinct header names, among them `set-cookie`, `anthropic-organization-id`, `request-id`, `cf-ray` and `traceresponse`. The header-bearing records are exactly the ones with the SHORTER top-level key set: 24 of the 29 carry a `slug` key and 5 do not, and the 5 without are the 5 with headers - so the two shapes are one discriminator apart on the line itself.",
+      "depends": "csift renders no header set on any path but `--raw`. The rule bites hardest where csift knows the least: the key=value excerpt the UNMODELED unit falls back to is the one rendered path that walks a line's own values without knowing what they are, so a `type:\"system\"` line of a subtype csift models no leaf for - which is what a later build's failure shape would be - would print the set in full. That excerpt therefore elides every `headers` member at every depth, keyed on the exact name, and renders `<elided>` in its place rather than dropping the key: a reader learns the set is there and that `--raw` is the way to it. csift output is pasted into reports, into chats and into other models' contexts, so a header set on a rendered surface has left the machine it was on.",
+      "code": [
+        {
+          "path": "src/commands/search/hit_facts.rs",
+          "lines": "221-222",
+          "snippet": "/// What a `headers` member renders as, everywhere and always: nothing.\npub(crate) const HEADERS_ELIDED: &str = \"<elided>\";"
+        },
+        {
+          "path": "src/commands/search/hit_facts.rs",
+          "lines": "238-251",
+          "snippet": "fn elide_headers(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if k == \"headers\" {\n                        serde_json::json!(HEADERS_ELIDED)\n                    } else {\n                        elide_headers(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
+        },
+        {
+          "path": "tests/cli/show/fetch_domain.rs",
+          "lines": "383",
+          "snippet": "fn home_with_an_unmodeled_headers_record() -> Home {"
+        }
+      ],
+      "instrument": "Over every `*.jsonl` under one projects root, parse each line carrying the literal `\"api_error\"`, keep those whose `type` is `system` and `subtype` is `api_error`, and for each record record its sorted top-level key set and, when `error.headers` is an object, the KEY NAMES of that object. Count records, header-bearing records, distinct names and distinct key sets. Header VALUES are never read out: the script takes the key set and discards the object.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The writer is not traced: the `api_error` record constructor is known from QT-SYS-001's producer hop, but the branch that decides whether the caught error's `headers` object is attached at all - which is what splits the corpus 5 against 24 - is unread. Byte-find the api_error constructor and read the assignment of its `error` argument back to the catch site that builds it."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Walked every `*.jsonl` under one projects root, parsed the lines carrying `\"api_error\"`, kept the `system`/`api_error` records and tallied their top-level key sets plus the KEY NAMES of `error.headers` where it is an object; values were never read into the output.",
+          "observed": "2 files carry the literal; 29 `api_error` records; 5 carry an `error.headers` object; 18 distinct header names, each on all 5 (`anthropic-organization-id`, `cf-cache-status`, `cf-ray`, `connection`, `content-encoding`, `content-security-policy`, `content-type`, `date`, `request-id`, `server`, `set-cookie`, `strict-transport-security`, `traceresponse`, `transfer-encoding`, `vary`, `x-envoy-upstream-service-time`, `x-robots-tag`, `x-should-retry`). 2 distinct top-level key sets: 24 records with `slug` and 5 without, and the 5 without are exactly the 5 carrying headers.",
+          "rule": "A record counts when its `type` is `system` and its `subtype` is `api_error`; a header name counts once per record carrying it; a key set is the sorted tuple of the record's own top-level keys.",
+          "note": "The elision is written as a rule about the NAME at any depth rather than about `error.headers`, so a later shape that moves the object cannot walk around it; an exact-name match is also why a key merely containing the word is untouched. `--raw` stays the one path to the bytes and the e2e asserts both halves."
         }
       ]
     }
