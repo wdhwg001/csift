@@ -247,48 +247,191 @@ fn stage_two_renders_a_line_only_reachable_through_its_source_bytes() {
     );
 }
 
-/// And handing the line through changes NO pre-existing verdict. Every marker the gate
-/// shipped with re-renders from the record's own `message`, so the extra argument is
-/// inert for them: a notification's fabricated kind slug, an answered AUQ, the
-/// agents-stopped notice and a compaction boundary all answer the same either way.
+/// One case per REGISTERED verifiable marker: a fixture line carrying the needle, and a
+/// pattern that only the FABRICATED render carries, so the case exercises the stage-2
+/// re-render rather than the literal scan.
+struct MarkerCase {
+    /// The needle as `synth_marker_finders` registers it.
+    needle: &'static str,
+    /// A pattern present in the marker's synthesized text and absent from the raw bytes.
+    pattern: &'static str,
+    /// A line carrying the needle.
+    line: &'static str,
+    /// True when handing the SOURCE LINE through widens the answer rather than leaving
+    /// it alone - the `harness.bookkeeping` head-plus-verbatim-body law.
+    widens: bool,
+}
+
+/// One case per verifiable needle, in registration order.
+const MARKER_CASES: &[MarkerCase] = &[
+    MarkerCase {
+        needle: "<task-notification>",
+        // The pulse's fabricated head: the kind slug, the task id and the status in one
+        // phrase, which the raw line carries in three separate tags.
+        pattern: "agent t1 completed",
+        line: r#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: r#""answers""#,
+        // The `Q1:` scaffold the reconstruction fabricates around the question, which the
+        // raw line carries only as a key in the answers map.
+        pattern: "Q1: Pick one",
+        line: r#"{"type":"user","toolUseResult":{"answers":{"Pick one":"yes"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
+        widens: false,
+    },
+    // The four answer-marker branches: no `toolUseResult`, so the exchange renders
+    // through the fallback and the `[AskUserQuestion]` scaffold is entirely fabricated.
+    MarkerCase {
+        needle: "User has answered your questions",
+        pattern: "AskUserQuestion",
+        line: r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions"}]}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "Your questions have been answered",
+        pattern: "AskUserQuestion",
+        line: r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"Your questions have been answered"}]}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "The user answered:",
+        pattern: "AskUserQuestion",
+        line: r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"The user answered: \"q\"=\"a\""}]}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "The user responded:",
+        pattern: "AskUserQuestion",
+        line: r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"The user responded: go ahead"}]}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "stopped by the user",
+        pattern: "subagent stopped",
+        line: r#"{"type":"user","message":{"role":"user","content":"Background agent \"probe\" was stopped by the user."}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "compact_boundary",
+        pattern: "trigger=auto",
+        line: r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "turn_duration",
+        // The raw line spells the subtype with an underscore; the head spells it with a
+        // space, so the pattern reaches only the fabricated text.
+        pattern: "turn duration",
+        line: r#"{"type":"system","subtype":"turn_duration","uuid":"t1","durationMs":64911,"messageCount":908}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "stop_hook_summary",
+        pattern: "stop hooks",
+        line: r#"{"type":"system","subtype":"stop_hook_summary","uuid":"h1","hookCount":2,"hookErrors":[],"preventedContinuation":false}"#,
+        widens: false,
+    },
+    MarkerCase {
+        needle: "file-history-",
+        // A key the HEAD elides entirely: it names the tracked paths and their versions
+        // and nothing else. The verbatim body is the only render that carries it.
+        pattern: "snapshotMessageId",
+        line: r#"{"type":"file-history-snapshot","messageId":"m1","snapshotMessageId":"sm-9","snapshot":{"timestamp":"2026-01-01T00:00:00Z","trackedFileBackups":{"/a/b.rs":{"version":3}}}}"#,
+        widens: true,
+    },
+    MarkerCase {
+        needle: r#""subtype""#,
+        // `[informational warning]`: the raw line carries the two values in separate
+        // fields, so the joined phrase exists only in the fabricated head.
+        pattern: "informational warning",
+        line: r#"{"type":"system","subtype":"informational","level":"warning","uuid":"n1","content":"heads up"}"#,
+        widens: false,
+    },
+];
+
+/// Handing the source line through moves NO verdict the record alone can answer, and
+/// where it does move one it may only ADD matches.
+///
+/// The set under test is the REGISTERED one, read back out of `synth_marker_finders`
+/// rather than retyped: twelve verifiable needles, seven unconditional and five behind a
+/// selector reaching their leaf. A needle added without a case here fails this test by
+/// name instead of slipping through, which is the point - the earlier version of this
+/// test enumerated four of the twelve and stated a universal it could not have checked.
+///
+/// ELEVEN of the twelve render from the record's own fields, so the extra argument is
+/// inert and the two verdicts are EQUAL. The twelfth is `file-history-`, and it is a
+/// `harness.bookkeeping` line: that family renders its key=value HEAD and then the
+/// line's own verbatim JSON, so with the line it answers for every key the head elides.
+/// The law there is a SUPERSET, never equality - handing the line through may only widen
+/// the answer, because narrowing it is exactly how the whole-file gate would prune a file
+/// it has to keep.
 #[test]
-fn stage_two_answers_every_pre_existing_marker_the_same_with_or_without_the_line() {
-    let cases: [(&str, &str); 4] = [
-        (
-            // The pulse's fabricated head: the kind slug, the task id and the status in
-            // one phrase, which the raw line carries in three separate tags.
-            "agent t1 completed",
-            r#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#,
-        ),
-        (
-            "Pick one",
-            r#"{"type":"user","toolUseResult":{"answers":{"Pick one":"yes"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
-        ),
-        (
-            "subagent stopped",
-            r#"{"type":"user","message":{"role":"user","content":"Background agent \"probe\" was stopped by the user."}}"#,
-        ),
-        (
-            "trigger=auto",
-            r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#,
-        ),
-    ];
-    for (pattern, line) in cases {
-        let record: Record = serde_json::from_str(line).expect("valid fixture record");
-        let m = build_matcher(&args(pattern)).unwrap();
-        assert_eq!(
-            m.synth_texts_match(&record, Some(line)),
-            m.synth_texts_match(&record, None),
-            "verdict moved for {pattern}"
-        );
+fn stage_two_answers_every_registered_marker_the_same_or_wider_with_the_line() {
+    // The glob reaches every leaf under `harness` on all three narrowing axes, which is
+    // what arms the five conditional needles; without it the registered set is seven.
+    let mut probe = args("zz");
+    probe.labels = vec!["harness.*".to_string()];
+    let (verifiable, _) = synth_marker_finders(&probe);
+    let registered: Vec<String> = verifiable
+        .iter()
+        .map(|f| String::from_utf8_lossy(f.needle()).into_owned())
+        .collect();
+    assert_eq!(
+        registered.len(),
+        12,
+        "the verifiable needle set moved - every needle needs a case below: {registered:?}"
+    );
+    let covered: Vec<&str> = MARKER_CASES.iter().map(|c| c.needle).collect();
+    assert_eq!(
+        registered, covered,
+        "a registered needle has no case, or the cases drifted out of registration order"
+    );
+
+    for case in MARKER_CASES {
+        let record: Record = serde_json::from_str(case.line).expect("valid fixture record");
+        let m = build_matcher(&args(case.pattern)).unwrap();
+        let with = m.synth_texts_match(&record, Some(case.line));
+        let without = m.synth_texts_match(&record, None);
         assert!(
-            m.synth_texts_match(&record, Some(line)),
-            "{pattern} should re-render into a match"
+            with,
+            "{}: the marker's own render should carry {}",
+            case.needle, case.pattern
         );
+        // The SUPERSET law, asserted for every needle: a line may only add matches.
+        assert!(
+            with || !without,
+            "{}: the source line NARROWED the verdict - the gate would prune a file it must keep",
+            case.needle
+        );
+        if case.widens {
+            assert!(
+                !without,
+                "{}: this case exists because the line changes the answer; it no longer does",
+                case.needle
+            );
+        } else {
+            assert_eq!(
+                with, without,
+                "{}: verdict moved, and this render does not read the line",
+                case.needle
+            );
+        }
+        // The pattern must be absent from the raw BYTES, or the case would pass on the
+        // literal scan and prove nothing about the re-render. (For the widening case the
+        // body IS the raw line, so the head/body split is what the assertions above read.)
+        if !case.widens {
+            assert!(
+                !case.line.contains(case.pattern),
+                "{}: the pattern is a literal substring of the line - the case proves nothing",
+                case.needle
+            );
+        }
     }
+
     // A marker line whose synthesized text does NOT carry the pattern still answers no,
     // with the line as without it - the gate stays able to prune.
-    let line = r#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#;
+    let line = MARKER_CASES[0].line;
     let record: Record = serde_json::from_str(line).expect("valid fixture record");
     let m = build_matcher(&args("zzabsent")).unwrap();
     assert!(!m.synth_texts_match(&record, Some(line)));
