@@ -19,5 +19,21 @@
 pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n  \
      A `harness.bookkeeping` unit renders its key=value HEAD and then the line's own \
      VERBATIM JSON as the body, so every key and every full uuid on the line stays \
-     matchable and not only the few a head names; twelve of the thirteen leaves have no \
-     head yet and render the line alone.";
+     matchable and not only the few a head names.\n\n  \
+     SIXTEEN of the eighteen non-transcript line types build that head from their own \
+     bytes, and it opens with the line's own `type` value - `[cost-state \
+     totalCostUSD=1.5 totalDuration=42 startTime=2026-01-01T00:00:00Z]` - so the types \
+     that share one leaf (mode/permission-mode, ai-title/agent-name, the three artifact \
+     ledgers) stay apart in the output even though their label does not tell them \
+     apart. The other two are `file-history-snapshot` and `file-history-delta`, one \
+     leaf: they keep the head built from the fields csift models, `[file-history \
+     snapshot at <ts>: <path>@vN]`, which names the tracked path where a raw key walk \
+     could only print the snapshot object as JSON.\n\n  \
+     Two rules decide a head's values, and there is no third. A key naming an ACCOUNT, \
+     an ORGANISATION or a RECORD prints its first 8 characters (leafUuid, \
+     parentLastUuid, accountUuid, ownerAccountUuid, ownerOrganizationUuid, \
+     vetoedAgainstAccountUuid). Every other value is cut at 80 characters with the \
+     shared `... (+N chars)` marker, an OBJECT value printing as its sorted key list, \
+     which is where the artifact ids are. A session-shaped value (bridgeSessionId, \
+     parentSessionId) prints whole under the second rule rather than the first, because \
+     it is a join key carried to another file and half a uuid joins nothing.";

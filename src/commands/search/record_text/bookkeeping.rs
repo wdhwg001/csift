@@ -1,29 +1,177 @@
-//! The `harness.bookkeeping` family: the thirteen leaves of the loader's non-transcript
-//! line set - their key=value HEADS and the provenance edges a bookkeeping line names
-//! (`leafUuid`, `messageId`, `parentSessionId`, `continuedInSessionId`).
+//! The `harness.bookkeeping` family: the key=value HEAD of a non-transcript line type,
+//! and the provenance edge such a line names.
 //!
-//! A STUB at the skeleton amendment: the dispatch, the matchable-text law and the
-//! whole-file gate's re-render are wired here, the family's own semantics are not. The
-//! body below is what the family lane replaces.
+//! These lines carry no `message{}` and no `uuid`, and almost none of their fields is
+//! modeled on [`Record`] - so the head is read off the SOURCE LINE. That is the one place
+//! in the tree where a render parses the line, and it is affordable because every
+//! bookkeeping leaf is GATED: a scan that did not name the leaf never made the line a
+//! parse candidate at all, so this parse is paid only by a query that asked for it.
+//!
+//! The head is FABRICATED, so it is not a byte substring of the line and the whole-file
+//! gate needs a raw marker for it - one per line type, registered in
+//! `matcher::synth::synth_marker_finders` behind the same predicate that admits the line.
+//! The precedent is the promoted leaves (`turn_duration`, `stop_hook_summary`).
+//!
+//! The BODY is the line itself (the matchable-text law, [`super::verbatim_body`]): the
+//! head is a summary and a summary is lossy, so every key it elides and every full uuid it
+//! shortens stays matchable in the body.
+//!
+//! TWO rules decide what a head prints, and there is no third:
+//! - a key naming an ACCOUNT, an ORGANISATION or a RECORD prints its first 8 characters
+//!   ([`SHORT_KEYS`]) - enough to correlate two lines, and an identity a reader never
+//!   needs whole;
+//! - every other value is cut at [`VALUE_MAX`] characters with the shared `... (+N chars)`
+//!   marker, so one long prompt or one big nested object cannot fill the excerpt budget.
+//!
+//! A value that LOOKS like a session uuid (`bridgeSessionId`, `parentSessionId`) prints
+//! under the second rule rather than the first, because it is a JOIN KEY carried to
+//! another file and half a uuid joins nothing - not because it is re-feedable to csift,
+//! which a bridge id is not.
 
 use super::*;
+
+/// Per-value cut for a fabricated bookkeeping head.
+pub(crate) const VALUE_MAX: usize = 80;
+
+/// The keys whose value prints as its first 8 characters: an ACCOUNT or ORGANISATION
+/// identity, and a RECORD uuid. Nothing in csift consumes an account uuid, and a record
+/// uuid is scannable at eight while `show --uuid` takes the full value from the body or
+/// from JSON. See the module doc for why a session-shaped value is NOT here.
+const SHORT_KEYS: [&str; 6] = [
+    "leafUuid",
+    "parentLastUuid",
+    "accountUuid",
+    "ownerAccountUuid",
+    "ownerOrganizationUuid",
+    "vetoedAgainstAccountUuid",
+];
+
+/// The keys each non-transcript line type renders, in a fixed order.
+///
+/// The order is the WRITER's: each list is the key order of the object literal Claude Code
+/// builds for that type, so a head reads the way the line was written. A key absent from
+/// the line is skipped, never printed empty - several types have optional keys, and an
+/// absent one is a fact about the writer's gate rather than a hole to fill.
+///
+/// The head opens with the line's own `type` value, so the line types that SHARE a leaf
+/// (`mode`/`permission-mode`, `ai-title`/`agent-name`, the three artifact ledgers) stay
+/// apart in the output even though their label does not tell them apart.
+///
+/// `file-history-snapshot` / `file-history-delta` are deliberately absent: that leaf's
+/// head is built from fields `Record` DOES model (`snapshot`, `trackingPath`, `backup`),
+/// which names the path and the version a raw key walk could only print as nested JSON, so
+/// the family delegates it to [`super::promoted_record_text`] ([`render`]).
+fn render_keys(line_type: &str) -> &'static [&'static str] {
+    match line_type {
+        "last-prompt" => &["lastPrompt", "leafUuid", "explicit", "rewound"],
+        "mode" => &["mode"],
+        "permission-mode" => &["permissionMode"],
+        "ai-title" => &["aiTitle"],
+        "agent-name" => &["agentName"],
+        "atis-latch" => &["atis"],
+        "bridge-session" => &[
+            "bridgeSessionId",
+            "lastSequenceNum",
+            "declaredDialogKinds",
+            "sessionGroupingId",
+            "noHistoryBackfill",
+            "ownerAccountUuid",
+            "ownerOrganizationUuid",
+        ],
+        "history-suppression" => &["cause", "vetoedAgainstAccountUuid", "ts"],
+        "pr-link" => &["prNumber", "prUrl", "prRepository"],
+        "frame-link" => &["path", "frameUrl", "title", "artifactCount"],
+        "artifact-comment-monitor" | "artifact-autoreact-ledger" => {
+            &["v", "accountUuid", "artifacts"]
+        }
+        "cost-state" => &["totalCostUSD", "totalDuration", "startTime"],
+        "fork-context-ref" => &[
+            "agentId",
+            "parentSessionId",
+            "parentLastUuid",
+            "contextLength",
+        ],
+        "continued-in" => &["continuedInSessionId"],
+        // The operation and its reason. The queued CONTENT is deliberately not in the
+        // head: on a `harness.bookkeeping.queue` line it is a harness rider (a
+        // `<task-notification>` frame, a peer relay) whose delivered twin renders under
+        // its own leaf, and the raw body carries it either way. The line has no
+        // `position` key - the taxonomy map's cell for this leaf names one and the
+        // emitter's key set has none (claim QT-047) - so there is nothing to read.
+        "queue-operation" => &["operation", "reason"],
+        _ => &[],
+    }
+}
+
+/// The HEAD half of a `harness.bookkeeping` unit: `[<line type> key=value ...]`, read off
+/// the SOURCE LINE.
+///
+/// `None` when there is no source line, when it is not a JSON object, or when the line
+/// type has no render keys - the caller then falls back to the record-modeled head
+/// (`file-history`) or to the body alone, so a line type a later build adds renders its
+/// own bytes rather than an empty bracket.
+pub(crate) fn head(raw: Option<&str>) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(raw?).ok()?;
+    head_of(v.as_object()?)
+}
+
+/// [`head`] over an object already parsed, so a caller that needs the line's fields for
+/// something else pays ONE parse rather than two.
+fn head_of(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    let line_type = obj.get("type")?.as_str()?;
+    let keys = render_keys(line_type);
+    if keys.is_empty() {
+        return None;
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for key in keys {
+        if let Some(value) = obj.get(*key) {
+            parts.push(format!("{key}={}", render_value(key, value)));
+        }
+    }
+    Some(if parts.is_empty() {
+        format!("[{line_type}]")
+    } else {
+        format!("[{line_type} {}]", parts.join(" "))
+    })
+}
+
+/// One value of a bookkeeping head: a string verbatim, an OBJECT as its sorted key list
+/// (the artifact ledgers key their map by artifact slug, so the KEYS are the ids a reader
+/// wants and the per-slug state is not), anything else as compact JSON. The result is cut
+/// at [`VALUE_MAX`] with the shared explicit marker, and a [`SHORT_KEYS`] key is cut to
+/// its first 8 characters instead.
+fn render_value(key: &str, value: &serde_json::Value) -> String {
+    let rendered = match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Object(map) => {
+            let mut names: Vec<&str> = map.keys().map(String::as_str).collect();
+            names.sort_unstable();
+            names.join(", ")
+        }
+        other => other.to_string(),
+    };
+    if SHORT_KEYS.contains(&key) {
+        return rendered.chars().take(8).collect();
+    }
+    crate::text::truncate_excerpt(&rendered, VALUE_MAX)
+}
 
 /// What a `harness.bookkeeping` LINE says - the family's half of the render seam.
 ///
 /// Called by [`super::family_render`] for every unit whose leaf sits in this family's
 /// category, BEFORE the engine's generic arms; `None` falls through to them.
 ///
-/// THE MATCHABLE-TEXT LAW as this family renders it ([`super::verbatim_body`]): the HEAD
-/// is a key=value summary of the fields that matter and the BODY is the line's own
-/// VERBATIM JSON, so every full uuid and every key the summary elides stays matchable.
-/// A summary alone would make the elided material unfindable, because `search` matches
-/// rendered text; the verbatim half is a byte substring of the source line, so it costs
-/// the section 7 prefilter laws nothing.
+/// HEAD then BODY ([`super::head_and_body`]): the key=value summary a reader scans, and
+/// the line's own verbatim JSON, which is what keeps every key the summary elided
+/// matchable. The verbatim half is a byte substring of the source line, so it costs the
+/// section 7 prefilter laws nothing; the head is fabricated and pays its marker instead.
 ///
-/// Twelve of the thirteen leaves have no head yet and render body-only. The one that
-/// does - `harness.bookkeeping.file-history` - builds it from fields `Record` models,
-/// so its head still comes from the promoted renderer; when the family lane gives the
-/// other twelve heads of their own, they are built here.
+/// SIXTEEN of the eighteen line types build their head here. The other two -
+/// `file-history-snapshot` and `file-history-delta`, one leaf - keep the head
+/// [`super::promoted_record_text`] builds from the fields `Record` models, because that
+/// one names the tracked PATH and its version where a raw key walk could only print the
+/// snapshot object as JSON.
 ///
 /// THE GATE IS THE RECORD'S OWN LINE TYPE, and it is not redundant with the dispatch.
 /// The seam reads `render_leaf(rec).or(class)`, so a record with NO leaf of its own -
@@ -43,7 +191,10 @@ pub(crate) fn render(
     {
         return None;
     }
-    super::head_and_body(super::promoted_record_text(rec), super::verbatim_body(raw))
+    super::head_and_body(
+        head(raw).or_else(|| super::promoted_record_text(rec)),
+        super::verbatim_body(raw),
+    )
 }
 
 /// The `harness.bookkeeping` family's own facts.

@@ -348,14 +348,16 @@ fn a_bookkeeping_line_renders_its_head_over_its_own_bytes() {
     );
 }
 
-/// Twelve of the thirteen bookkeeping leaves have no head yet, and they render the body
-/// alone - never an empty bracket, and never nothing at all.
+/// A line type the family builds a head for from its own BYTES takes the same shape: the
+/// key=value summary, then the line. `cost-state` is the instrument because none of its
+/// twelve keys is modeled on `Record`, so a head exists here only because the render
+/// reads the source line.
 #[test]
-fn a_bookkeeping_line_with_no_head_renders_the_line_alone() {
+fn a_raw_read_bookkeeping_head_renders_over_its_own_bytes() {
     let line = r#"{"type":"cost-state","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","totalCostUSD":1.5}"#;
     assert_eq!(
         record_raw_text(&rec(line), Some(line), None, &ClassifyCtx::top_level()).as_deref(),
-        Some(line)
+        Some(format!("[cost-state totalCostUSD=1.5]\n{line}").as_str())
     );
 }
 
