@@ -56,15 +56,6 @@ surface change bumps the PATCH.
   received; the leaf's own `-t` still returns it); the hit's JSON `delivered` reads `false`
   where it read `true`; and the rendered label zone gains `[not delivered]`. A query written
   against the bare face has to name the leaf instead.
-- **A record's width is a number now, and it is written down.** The amendment gave `Record`
-  a second conversion key and a memo holding both parsed conversions, and the memo held its
-  payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
-  of every scan. It is behind a pointer now (16 bytes whatever the pair grows to, and no
-  allocation at all for a record carrying neither key), so `size_of::<Record>()` reads 1,368
-  where the inline form measured 1,408 and the pre-amendment record measured 1,336: the
-  amendment costs 32 bytes instead of 72. A unit test pins that exact number beside the
-  spine row's 72, because widening the record is worth doing deliberately and nothing else
-  in the crate notices when it happens.
 - **A coordinator relay says where it came from.** Every other inbound message renders a
   `from => to` arrow; this one rendered none. It now reads `coordinator => self`, and the
   from is the literal word because the record carries no sender field: the harness builds
@@ -246,6 +237,15 @@ surface change bumps the PATCH.
 
 ### Performance
 
+- **A record's width is a number now, and it is written down.** The amendment gave `Record`
+  a second conversion key and a memo holding both parsed conversions, and the memo held its
+  payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
+  of every scan. It is behind a pointer now (16 bytes whatever the pair grows to, and no
+  allocation at all for a record carrying neither key), so `size_of::<Record>()` reads 1,368
+  where the inline form measured 1,408 and the pre-amendment record measured 1,336: the
+  amendment costs 32 bytes instead of 72. A unit test pins that exact number beside the
+  spine row's 72, because widening the record is worth doing deliberately and nothing else
+  in the crate notices when it happens.
 - **An attachment payload is parsed once per record.** Four layers ask one attachment
   record about its payload, and each ask re-parsed bytes that can hold a whole file
   snapshot.

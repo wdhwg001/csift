@@ -157,6 +157,15 @@ pub(crate) fn render_families(class: Class) -> &'static [RenderFamily] {
 /// The work is bounded by the same order that makes the seam behaviour-identical: a line
 /// WITH a leaf of its own ([`render_leaf`]) renders one way for every view, so the gate
 /// walks this list only for the lines that have no leaf.
+///
+/// THE BOUND, so a later reader can decide whether it is still free rather than re-deriving
+/// it: the list is 52 of the 73 leaves, and walking it costs 59 `render_one` calls per
+/// LEAFLESS stage-2 line (52, plus one more for each of the seven leaves whose category
+/// names two families). Today every one of those calls returns `None` on one cheap test, so
+/// the regex is never reached and the loop is 59 table lookups: measured at +8.8% median on
+/// a 132 MB file where EVERY line carries a marker, against a 0.4% same-binary control band,
+/// and inside that band on a 1%-marker mix. When a family fills its render the gate pays one
+/// render plus one `locate` per view that answers, on marker lines only - re-measure then.
 pub(crate) fn rendering_classes() -> &'static [Class] {
     static CLASSES: std::sync::OnceLock<Vec<Class>> = std::sync::OnceLock::new();
     CLASSES.get_or_init(|| {

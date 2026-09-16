@@ -96,6 +96,30 @@ fn every_leaf_routes_to_the_families_its_category_names() {
     }
 }
 
+/// THE GATE LOOP'S BOUND, at an exact number, because two documents quote it.
+///
+/// The section 7f whole-file gate walks `rendering_classes` for every LEAFLESS marker line
+/// it re-renders, so the cost a later reader weighs is not "52 leaves" in the abstract but
+/// the `render_one` call count that walk produces. Both numbers are written down here, in
+/// `rendering_classes`' own doc and in SPEC section 7f; a table edit that moves either moves
+/// the quoted cost, and this is what says so.
+#[test]
+fn the_gate_loops_bound_is_the_number_the_docs_quote() {
+    use crate::commands::search::record_text::rendering_classes;
+    let classes = rendering_classes();
+    assert_eq!(
+        classes.len(),
+        52,
+        "the leaves whose category names at least one family"
+    );
+    let calls: usize = classes.iter().map(|c| render_families(*c).len()).sum();
+    assert_eq!(
+        calls, 59,
+        "one `render_one` call per family offered, summed over those leaves - 52 plus the \
+         seven leaves of the two shared categories"
+    );
+}
+
 /// The EXPOSED-KEYS family never renders, and the table is where that is stated.
 ///
 /// Its facts are keys a record exposes - which agent definition ran, which API request a
