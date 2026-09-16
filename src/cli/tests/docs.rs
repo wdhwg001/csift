@@ -292,6 +292,15 @@ fn the_show_record_keys_render_from_their_table() {
 
     let rendered = record_row_keys();
     assert!(rendered.starts_with('{') && rendered.ends_with('}'));
+    // EVERY row exactly once: the family blocks partition the table, so the rendered
+    // list is as long as the table and no name is repeated. A grouping that put a row in
+    // more than one block, or dropped a block, changes this count and nothing else.
+    let names: Vec<&str> = rendered.trim_matches(['{', '}']).split(", ").collect();
+    assert_eq!(names.len(), RECORD_KEYS.len());
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), names.len(), "a key is printed twice");
     for key in RECORD_KEYS {
         assert!(
             rendered.contains(key.rendered),
