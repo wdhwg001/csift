@@ -283,7 +283,10 @@ pub trait SpawnLookup {
 /// on. `None` from the lookup means "no record here carries that uuid", which is the
 /// honest answer for a wire id, another session's record, or a line a pre-boundary
 /// deletion removed.
-#[allow(dead_code)]
+///
+/// It carries NO dead-code allow, and must not be given one: `search::RowLines` implements
+/// it on the production path, which is what makes it reachable. An allow here would be a
+/// standing claim that nothing uses the trait, and would mask the day that became true.
 pub trait LineOfUuid {
     /// The 1-based jsonl line of the record this uuid names, or `None`.
     fn line_of_uuid(&self, uuid: &str) -> Option<usize>;
