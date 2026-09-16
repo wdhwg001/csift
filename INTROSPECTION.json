@@ -89054,7 +89054,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "313-316",
+          "lines": "316-319",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -93066,12 +93066,12 @@
         {
           "path": "src/commands/search/hit_facts.rs",
           "lines": "237-238",
-          "snippet": "/// What an elided member renders as, everywhere and always: nothing.\npub(crate) const HEADERS_ELIDED: &str = \"<elided>\";"
+          "snippet": "/// What an elided member renders as, everywhere and always: nothing.\npub(crate) const ELIDED_PLACEHOLDER: &str = \"<elided>\";"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "269-282",
-          "snippet": "fn elide_headers(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {\n                        serde_json::json!(HEADERS_ELIDED)\n                    } else {\n                        elide_headers(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
+          "lines": "270-283",
+          "snippet": "fn elide_members(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {\n                        serde_json::json!(ELIDED_PLACEHOLDER)\n                    } else {\n                        elide_members(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
         },
         {
           "path": "tests/cli/show/fetch_domain.rs",

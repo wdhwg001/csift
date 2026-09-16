@@ -235,9 +235,10 @@ fn distinguishing_block_type(raw: Option<&str>) -> Option<String> {
 }
 
 /// What an elided member renders as, everywhere and always: nothing.
-pub(crate) const HEADERS_ELIDED: &str = "<elided>";
+pub(crate) const ELIDED_PLACEHOLDER: &str = "<elided>";
 
-/// The member names the unmodeled excerpt replaces with [`HEADERS_ELIDED`], at any depth.
+/// The member names the unmodeled excerpt replaces with [`ELIDED_PLACEHOLDER`], at any
+/// depth. TWO, for two different reasons.
 ///
 /// `headers` is the SECRECY one, and it is the section 4 invariant. An HTTP RESPONSE
 /// HEADER SET is the one thing a rendered transcript view must not carry: a
@@ -259,29 +260,29 @@ pub(crate) const HEADERS_ELIDED: &str = "<elided>";
 const ELIDED_MEMBERS: [&str; 2] = ["headers", "data"];
 
 /// Replace every [`ELIDED_MEMBERS`] member of a value, at any depth, with
-/// [`HEADERS_ELIDED`].
+/// [`ELIDED_PLACEHOLDER`].
 ///
 /// This is the UNMODELED unit's own guard, and it is deliberately blunt: the excerpt is a
 /// shape preview for a line csift models nothing about, so it cannot know which `headers`
 /// is the dangerous one, or which `data` is the opaque one, and elides every one of them.
 /// A family that renders a known shape names the fields it wants instead, which is the
 /// same law from the other side.
-fn elide_headers(v: &serde_json::Value) -> serde_json::Value {
+fn elide_members(v: &serde_json::Value) -> serde_json::Value {
     match v {
         serde_json::Value::Object(map) => serde_json::Value::Object(
             map.iter()
                 .map(|(k, val)| {
                     let val = if ELIDED_MEMBERS.contains(&k.as_str()) {
-                        serde_json::json!(HEADERS_ELIDED)
+                        serde_json::json!(ELIDED_PLACEHOLDER)
                     } else {
-                        elide_headers(val)
+                        elide_members(val)
                     };
                     (k.clone(), val)
                 })
                 .collect(),
         ),
         serde_json::Value::Array(items) => {
-            serde_json::Value::Array(items.iter().map(elide_headers).collect())
+            serde_json::Value::Array(items.iter().map(elide_members).collect())
         }
         other => other.clone(),
     }
@@ -290,7 +291,9 @@ fn elide_headers(v: &serde_json::Value) -> serde_json::Value {
 /// A key=value excerpt of a line's own top-level keys, for a record that carries no
 /// renderable text at all. Keys in their on-disk order, values cut at 80 characters, so
 /// a reader sees the SHAPE of an unknown line without csift claiming to interpret it.
-/// A `headers` member is elided at every depth ([`elide_headers`]).
+/// A `headers` or `data` member is elided at every depth ([`elide_members`]) - one
+/// because it can carry a credential, the other because an opaque blob costs the keys
+/// that identify the shape.
 /// `None` when the caller has no source line (every ordinary record) or the line is not
 /// a JSON object with keys.
 fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
@@ -300,9 +303,9 @@ fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
         .iter()
         .map(|(k, v)| {
             let rendered = match v {
-                _ if ELIDED_MEMBERS.contains(&k.as_str()) => HEADERS_ELIDED.to_string(),
+                _ if ELIDED_MEMBERS.contains(&k.as_str()) => ELIDED_PLACEHOLDER.to_string(),
                 serde_json::Value::String(s) => s.clone(),
-                other => elide_headers(other).to_string(),
+                other => elide_members(other).to_string(),
             };
             format!("{k}={}", crate::text::truncate_excerpt(&rendered, 80))
         })
