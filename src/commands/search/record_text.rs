@@ -330,14 +330,13 @@ pub(crate) fn record_raw_text(
     {
         return Some(text);
     }
-    // Hook-injected additionalContext attachment: its joined content IS the record's text -
-    // both the searchable body under `-t harness.hook.context` and the `show`-addressed render.
-    if let Some(text) = rec.hook_additional_context_text() {
-        return Some(text);
-    }
-    // Any other attachment payload (`--attachments`): the VERBATIM payload JSON is the
-    // record's text - honestly raw, and a byte substring of the source line, so the
-    // literal prefilter and the whole-file gate hold with no synthesized markers.
+    // An attachment payload csift models NO leaf for: the seam had no leaf to dispatch
+    // on, so no family was offered it, and the VERBATIM payload JSON is the engine's own
+    // honest body for a shape csift has not caught up with. (Every MODELED payload
+    // renders through `attachments::render` above, which produces these same bytes for
+    // everything but a hook's injected context.) Raw by design, and a byte substring of
+    // the source line, so the literal prefilter and the whole-file gate hold with no
+    // synthesized markers.
     if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }

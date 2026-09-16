@@ -12,15 +12,30 @@ use super::*;
 ///
 /// Called by [`super::family_render`] for every unit whose leaf sits in one of this
 /// family's categories, BEFORE the engine's generic arms; `None` falls through to them.
-/// A STUB at the render seam: the two arms this family owns still live in
-/// `record_text.rs` and move here in their own commit.
+///
+/// TWO answers, both keyed on the RECORD and not on the leaf, which is why every view of
+/// one attachment renders the same text:
+/// - a hook's injected additionalContext renders its content strings JOINED, which is the
+///   form the model received (a `<system-reminder>`-wrapped user message) rather than the
+///   array it is stored as;
+/// - every other payload renders its VERBATIM JSON - honestly raw, and a byte substring
+///   of the source line, so the section 7d literal prefilter and the 7f whole-file gate
+///   hold with no synthesized-marker registration.
+///
+/// `None` for every non-attachment record, on one type compare. A payload csift models no
+/// leaf for never arrives here at all (the seam has no leaf to dispatch on) and the
+/// engine renders its JSON itself, which is the same bytes this would have produced.
 pub(crate) fn render(
-    _rec: &Record,
+    rec: &Record,
     _raw: Option<&str>,
     _class: Class,
     _ctx: &ClassifyCtx,
 ) -> Option<String> {
-    None
+    if !rec.is_type("attachment") {
+        return None;
+    }
+    rec.hook_additional_context_text()
+        .or_else(|| rec.attachment_payload_text())
 }
 
 /// The attachment family's own facts.
