@@ -434,6 +434,46 @@ fn an_addressed_unit_carries_the_same_edges_a_scanned_one_does() {
     );
 }
 
+#[test]
+fn the_help_names_every_marker_word_json_key_and_render_form_the_family_ships() {
+    // Information parity: a reader of `--help` alone learns the same surface SKILL does.
+    // Every word in these two lists is one this family actually prints.
+    let h = Home::new();
+    let search = h.run(&["search", "--help"]);
+    assert!(search.success, "stderr {}", search.stderr);
+    for word in [
+        "ATTACHMENT LEAVES",
+        "[rendered]",
+        "[payload]",
+        "body_source",
+        "[human-turn render differs]",
+        "human_turn_render_differs",
+        "[hook <event> <name>]",
+        "[context <payload type>]",
+        "[structured]",
+        "[mid-turn]",
+        "[for: <kind> L<line>]",
+        "[produced_by <command>]",
+        "{kind,basis,target,reason}",
+        "produced_by:{command,hook_name,payload_type}",
+    ] {
+        assert!(
+            search.stdout.contains(word),
+            "search --help should name {word}"
+        );
+    }
+    let show = h.run(&["show", "--help"]);
+    assert!(show.success, "stderr {}", show.stderr);
+    for key in [
+        "body_source",
+        "human_turn_render_differs",
+        "produced_by:{command,hook_name,payload_type}",
+        "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
+    ] {
+        assert!(show.stdout.contains(key), "show --help should name {key}");
+    }
+}
+
 /// The first stdout line containing `needle`, for an assertion that wants ONE unit.
 fn line_with(stdout: &str, needle: &str) -> String {
     stdout

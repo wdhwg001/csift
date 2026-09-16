@@ -99,6 +99,27 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         Family::Injections,
         "image_only:{images|documents} (a textless harness.context.image record)",
     ),
+    // The ATTACHMENT family: which of an attachment record's two copies of itself the body
+    // shows, whether a second copy for a human turn differs from it, and what produced the
+    // record when the producer is a command.
+    k(
+        Family::Attachments,
+        "body_source (\"rendered\" | \"payload\")",
+    ),
+    k(Family::Attachments, "human_turn_render_differs"),
+    k(
+        Family::Attachments,
+        "produced_by:{command,hook_name,payload_type}",
+    ),
+    // The SHARED `for` array, in this block because the attachment family is the first to
+    // construct an edge and a key nothing names is a key a consumer cannot find. It is not
+    // this family's key: every family's edges fold into the one array, so a later family
+    // adding edges adds NO second row - the row moves to the shared block instead, which
+    // is a change in a block no family owns.
+    k(
+        Family::Attachments,
+        "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
+    ),
 ];
 
 /// One row, positionally - a `const fn` so the table stays a `const` slice.
