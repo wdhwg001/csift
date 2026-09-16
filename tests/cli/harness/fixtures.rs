@@ -1,3 +1,7 @@
+mod reachability;
+
+pub(crate) use reachability::*;
+
 use super::home::*;
 
 /// A session whose ONLY event for the target is an edit with no preceding read → the edit
