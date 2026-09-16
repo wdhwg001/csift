@@ -226,10 +226,6 @@ pub(crate) fn render_leaf(rec: &Record) -> Option<Class> {
 /// A DESCENT edge - one record to many - is not this helper's shape and never will be:
 /// the map answers uuid to line in one direction only. A family that owns one builds
 /// [`HitFact::ForUnknown`] with that as the reason.
-// The ordinary "no caller yet" allow (AGENTS section 4): the amendment lands the helper
-// so the four edge-carrying families all build their edges one way, and the first of
-// them to land takes the allow away.
-#[allow(dead_code)]
 pub(crate) fn for_edge(
     kind: &'static str,
     basis: Basis,

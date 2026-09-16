@@ -94824,7 +94824,7 @@
         },
         {
           "path": "src/commands/search/record_text/seam.rs",
-          "lines": "245-249",
+          "lines": "241-245",
           "snippet": "    let line = ctx.line_of_uuid(uuid);\n    HitFact::For {\n        kind,\n        basis,\n        target: ForTarget {"
         }
       ],

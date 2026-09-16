@@ -55,15 +55,6 @@ impl Marker {
 /// record text, the answered-AUQ dual, the elicitation marker) carries `None`, and a
 /// multi-block record hands each block in turn, because a per-block fact - the length of
 /// a thinking block's signature, say - is the BLOCK's and not the record's.
-// The THIRD of the three allows AGENTS section 4 names by hand - beside the tolerant
-// `model::Record` fields and the `model::inventory` documentation surface - and, like
-// them, a surface that exists before its readers do rather than rot. It is a fact about
-// WHERE the readers live rather than about the fields. Both
-// are written by the emission engine on every unit and read by the family `facts()`
-// bodies in `record_text/`, which ship as stubs at the skeleton amendment and are filled
-// one family at a time. Without the allow the amendment cannot land the parameter the
-// families are being given, which is the whole seam.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Section<'a> {
     /// The leaf this unit is emitted under; `None` on an unmodeled addressed unit.
@@ -86,11 +77,6 @@ impl Section<'_> {
 /// the file's shape. An INFERRED one is neither: a join csift computed from two other
 /// facts. A reader that cannot tell them apart cannot weigh them, so the basis rides
 /// every resolved edge and is never defaulted.
-// The ordinary "no caller yet" allow AGENTS section 4 describes, not one of the four it
-// names: which basis an edge carries is the CALLER's statement, so `for_edge` constructs
-// none of these three itself and no family is filled in yet. It goes when the first
-// family builds an edge.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Basis {
     /// A key on the record names the target.
@@ -98,6 +84,12 @@ pub(crate) enum Basis {
     /// The target is where the record sits - a parent link, the line above.
     Position,
     /// csift joined it from other facts.
+    // The only one of the three no family carries yet: every edge on the tree today is
+    // read off a key or off the parent link. It stays because the honesty column is the
+    // WHOLE closed set - a family that computes a join has a word for it waiting rather
+    // than a reason to call its join a key - and the allow is per-VARIANT so the day one
+    // is built the enum needs no edit.
+    #[allow(dead_code)]
     Inferred,
 }
 
@@ -192,7 +184,6 @@ pub enum HitFact {
     ///
     /// SHARED rather than per-family because four of the six families carry edges, and
     /// four separate renders of one idea is what a reader would then have to learn.
-    #[allow(dead_code)]
     For {
         /// The relation word - `attached_to`, `refused`, `closes`, ...
         kind: &'static str,
@@ -205,37 +196,26 @@ pub enum HitFact {
     /// DESCENT (one record to many) that only a provenance index can answer. Rendered,
     /// never omitted - a silently absent edge reads as "there is no such relation", which
     /// is a different claim from "this record does not say".
-    #[allow(dead_code)]
     ForUnknown {
         /// The relation word the edge would have carried.
         kind: &'static str,
         /// Why there is no target.
         reason: String,
     },
-    // THE SIX FAMILY ARMS. Each carries an enum that is UNINHABITED until its family
-    // lane lands, so nothing constructs these yet and the allow says exactly that
-    // rather than letting a reader take them for rot. Each allow goes when its family
-    // adds its first variant. They are per-VARIANT and not on the enum on purpose:
-    // `Unmodeled` above is constructed on the production address path, and an allow
-    // wide enough to cover the family arms would also hide the day that stopped being
-    // true.
+    // THE SIX FAMILY ARMS, one per taxonomy family. Each carries an enum that lives in
+    // that family's own `record_text/<family>.rs`, so a family adds variants to its own
+    // file and edits neither this enum nor its parent.
     /// The `harness.bookkeeping` family's own facts.
-    #[allow(dead_code)]
     Bookkeeping(record_text::bookkeeping::Fact),
     /// The attachment family's own facts.
-    #[allow(dead_code)]
     Attachments(record_text::attachments::Fact),
     /// The isMeta-injection family's own facts.
-    #[allow(dead_code)]
     Injections(record_text::injections::Fact),
     /// The `type:"system"` family's own facts.
-    #[allow(dead_code)]
     System(record_text::system::Fact),
     /// The thinking family's own facts.
-    #[allow(dead_code)]
     Thinking(record_text::thinking::Fact),
     /// The exposed-keys family's own facts.
-    #[allow(dead_code)]
     Keys(record_text::keys::Fact),
     /// The test-only sentinel `record_text::probe` pushes on a fixture record, so a unit
     /// test can observe a FACT crossing the stamping site and not only a [`Marker`]. The
