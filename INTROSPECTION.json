@@ -13122,7 +13122,7 @@
       "id": "CLS-018",
       "area": "classification",
       "behavior": "Claude Code emits a `redacted_thinking` block type whose content is opaque, and it is not a distinct semantic class from thinking: 2.1.258 lists it beside `thinking` in its block-type allowlist and tests the two with a single predicate `function Hpe(e){return e.type===\"thinking\"||e.type===\"redacted_thinking\"}`. No such block exists anywhere in this corpus, so the folding can only be confirmed against the binary and csift's own unit fixture, not against live data.",
-      "depends": "csift folds `redacted_thinking` into `agent.thinking` and renders the literal `[redacted thinking]`; an unhandled block type would fall to the tolerant `Unknown` arm and vanish from every `-t agent.thinking` census.",
+      "depends": "csift folds `redacted_thinking` into the `agent.thinking` CATEGORY under its own leaf `agent.thinking.redacted`, and renders an EMPTY body for it: the block's whole payload is ciphertext, so there is nothing readable to render, and the words that say what the block is ride the label zone rather than the body - a fabricated body would be matchable text that no raw line carries. An unhandled block type would instead fall to the tolerant `Unknown` arm and vanish from every `agent.thinking` census.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -13131,8 +13131,8 @@
         },
         {
           "path": "src/commands/search/record_text/thinking.rs",
-          "lines": "33",
-          "snippet": "pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = \"[redacted thinking]\";"
+          "lines": "62",
+          "snippet": "        Block::RedactedThinking { .. } => Some(Cow::Borrowed(\"\")),"
         }
       ],
       "instrument": "strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o '.{0,110}redacted_thinking.{0,110}' | sort -u (the deciding instrument), plus a scoped rg for '\"type\":\"redacted_thinking\"' to record that the corpus has no instance.",
@@ -13162,6 +13162,16 @@
           "observed": "complete producer trace: trigger streaming content_block_start accumulator @165440009; gate content-block type allowlist @162521221; gate the single thinking predicate and the opacity test @166034064; writer content_block_stop assistant record @165442981. writer excerpt: uts,sy={message:{...md,content:Cu},...Pc.length>0&&{batchToolUses:Pc},...Ay!==void 0&&{wireToolInputs:Ay},apiBlockIndex:la.index,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp:new Date().toISOString(),...!1,...ke&&{advisor",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One count per raw LINE containing the exact 26-byte block-type key/value pair, whole corpus; the second figure counts lines containing the bare 17-byte word.",
           "note": "The binary settles the whole semantic claim - one allowlist entry beside thinking, one predicate for both, no text ever appended to the redacted form, and the same per-block assistant record - while the corpus holds zero instances to observe."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Binary: byte-count the bare token `redacted_thinking`, the object-literal construction form `type:\"redacted_thinking\"` and the zod form `type:x(\"redacted_thinking\")` in the shipped build, one non-overlapping count each, and count the comparison sites with the regex `===\\s*\"redacted_thinking\"`. Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, json.loads each non-blank segment and count entries of a list `message.content` whose `type` is `redacted_thinking`, deduped by (record uuid, block index) over the whole root.",
+          "observed": "The build carries the bare token 49 times and the object-literal construction form ZERO times, against 25 sites that COMPARE a block's type to it and one zod schema that validates it - so the client parses and echoes the block and constructs none, which is why the leaf ships with no specimen. On disk: 0 such blocks in either projects root, against 141,165 thinking blocks in the first and 115,486 in the second. The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second.",
+          "rule": "One non-overlapping byte occurrence per binary count; one regex match per comparison site; one block observation per entry of a list `message.content` whose `type` is `redacted_thinking`, deduped by (record uuid, block index) over the whole root, so a record replayed inside a file and a transcript duplicated across two project directories each count once.",
+          "note": "The render moved: the leaf's body is now EMPTY and the placeholder words are a label-zone marker, so the cited site is the render arm rather than the deleted constant. The zero construction count is what closes the claim's negative half - nothing in the build mints one."
         }
       ],
       "attribution": "producer-only",
@@ -53366,7 +53376,7 @@
       "id": "REC-012",
       "area": "record-model",
       "behavior": "A thinking block can arrive as `redacted_thinking`: Claude Code writes `\"type\":\"redacted_thinking\"` with no readable `thinking` text, only an opaque `data` payload.",
-      "depends": "csift classifies it `agent.thinking` and emits the constant placeholder `[redacted thinking]` as the hit text; the placeholder is synthesized but stays prefilter-sound only because both of its words occur verbatim in the raw bytes of `\"type\":\"redacted_thinking\"` and any bracketed or whitespaced pattern is prefilter-ineligible anyway.",
+      "depends": "csift gives the block the leaf `agent.thinking.redacted` and renders an EMPTY body: the `data` ciphertext reaches no rendered path and is printed on no path but `--raw`. The consequence is stated rather than hidden - with no rendered text a pattern scan cannot reach the leaf at all, so the ways in are an empty pattern plus an exact `-t`, the label census, or a `show` address.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -53375,8 +53385,8 @@
         },
         {
           "path": "src/commands/search/record_text/thinking.rs",
-          "lines": "33",
-          "snippet": "pub(crate) const REDACTED_THINKING_PLACEHOLDER"
+          "lines": "62",
+          "snippet": "        Block::RedactedThinking { .. } => Some(Cow::Borrowed(\"\")),"
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -53411,6 +53421,16 @@
           "observed": "complete producer trace: trigger the API stream loop's content_block_start arm, switching on the wire block type @165439616; gate the default arm stores the block verbatim, unlike the thinking arm which seeds thinking and signature @165440069; gate the block healer's switch: case thinking heals a missing thinking/signature, default returns the block untouched @165971654; writer the per-content-block assistant record literal built at content_block_stop @165442985; writer the client's own length reader for the block, which reads .data and not .thinking @162516421. writer excerpt: sy={message:{...md,content:Cu},...Pc.length>0&&{batchToolUses:Pc},...Ay!==void 0&&{wireToolInputs:Ay},apiBlockIndex:la.index,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp:new Date().toISOString(),...!1",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One count per raw jsonl line containing the quoted token, summed within a project dir, each dir counted separately.",
           "note": "Both normalisers on the write path take a default arm for this block type (165440069, 165971654) and the record literal at 165442985 persists what they left, so the on-disk shape is the wire shape - type plus an opaque data - but no such block exists in this corpus."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-16",
+          "verdict": "refined",
+          "instrument": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, json.loads each non-blank segment and count entries of a list `message.content` whose `type` is `redacted_thinking`, deduped by (record uuid, block index) over the whole root; run on two roots. Binary: byte-count `type:\"redacted_thinking\"` in the shipped build.",
+          "observed": "0 such blocks in the first projects root and 0 in the second, over 141,165 and 115,486 thinking blocks respectively; the build constructs the shape at no site (the object-literal form occurs 0 times). The two projects roots are NOT independent and their counts are never summed: 6,733 transcript basenames are shared, of 9,478 in the first root and 10,189 in the second.",
+          "rule": "One observation per entry of a list `message.content` whose `type` is `redacted_thinking`, deduped by (record uuid, block index) over the whole root; one non-overlapping byte occurrence per binary count.",
+          "note": "The claim's `depends` half moved with the render: there is no placeholder body any more, so the prefilter argument it used to rest on is gone with it - an empty body enters no matchable text at all, which is the stronger form of the same soundness property."
         }
       ],
       "attribution": "producer-only",

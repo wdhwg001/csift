@@ -333,11 +333,13 @@ fn search_teammate_message_is_inbox_not_user_regression() {
 #[test]
 fn search_redacted_thinking_is_agent_thinking() {
     // #12 / oracle B3 (G7): a `redacted_thinking` block (opaque encrypted reasoning, no readable
-    // text) is UNATTESTED in the corpus, so this SYNTHETIC fixture exercises it. It must classify
-    // `agent.thinking` and surface under `-t agent.thinking` as a `[redacted thinking]` placeholder
-    // (never the opaque `data` blob). The search pattern `redacted` is present BOTH in the raw line
-    // (the `redacted_thinking` type) - so the literal prefilter keeps the line - AND in the rendered
-    // placeholder, so the regex locates a match on the emitted text.
+    // text) is UNATTESTED in the corpus, so this SYNTHETIC fixture exercises it. It classifies
+    // `agent.thinking.redacted` and its BODY is EMPTY - the ciphertext reaches no rendered path,
+    // and the words that say what the block is ride the label zone, so nothing fabricated enters
+    // matchable text. The consequence is pinned here rather than left to be discovered: the word
+    // `redacted` is in the RAW line (the block's own type), so the literal prefilter keeps the
+    // file, and it is in no rendered text, so the leaf is reached by an empty pattern plus an
+    // exact `-t` while a pattern scan for that word returns a definitive absence.
     let h = Home::new();
     let sess = "abababab-cdcd-efef-0101-232323232323";
     let lines = [
@@ -351,7 +353,7 @@ fn search_redacted_thinking_is_agent_thinking() {
 
     let out = h.run(&[
         "search",
-        "redacted",
+        "",
         "-t",
         "agent.thinking.*",
         at(sess).as_str(),
@@ -364,14 +366,25 @@ fn search_redacted_thinking_is_agent_thinking() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("[redacted thinking]"),
-        "a redacted_thinking block must render the placeholder, not the opaque data; got: {}",
-        out.stdout
-    );
-    assert!(
         !out.stdout.contains("EncryptedOpaqueBlob"),
         "the opaque `data` blob must NOT be surfaced; got: {}",
         out.stdout
+    );
+    // The word is in the raw line, so the file survives the prefilter - and it is in no
+    // rendered text, so nothing matches. A definitive absence, exit 0.
+    let word = h.run(&[
+        "search",
+        "redacted",
+        "-t",
+        "agent.thinking.*",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(word.success, "stderr: {}", word.stderr);
+    assert!(
+        word.stdout.contains("no matching exchanges"),
+        "an empty-bodied leaf must not be reachable by a pattern scan; got: {}",
+        word.stdout
     );
 }
 

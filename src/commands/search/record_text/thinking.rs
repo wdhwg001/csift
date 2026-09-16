@@ -3,8 +3,16 @@
 //! `[Thinking removed]` text the strip path can push - and the per-block facts that
 //! separate a block the API signed from one the client made.
 //!
-//! A STUB at the skeleton amendment: the dispatch is wired here, the family's own
-//! semantics are not. The body below is what the family lane replaces.
+//! THE RULE THE WHOLE FAMILY FOLLOWS: the BODY is the text the block actually holds, and
+//! everything csift says ABOUT a block that holds none rides the label zone instead. Two
+//! of the four leaves carry no text at all - `agent.thinking.omitted` because the API
+//! returned none, `agent.thinking.redacted` because the payload is ciphertext - so their
+//! bodies are EMPTY. That is not a display preference: a word rendered into the body is
+//! matchable text that is no substring of the raw line, which the SPEC 7d literal
+//! prefilter and the 7f whole-file gate both reason about, and the section 4 law admits
+//! such text only through a registered synthesized marker.
+//!
+//! The `data` ciphertext of a redacted block is rendered on no path but `--raw`.
 
 use std::borrow::Cow;
 
@@ -26,12 +34,6 @@ pub(crate) fn render(
     None
 }
 
-/// Render stand-in for a `redacted_thinking` block (GOLD §2 / oracle B3): the block carries
-/// only an opaque/encrypted `data` payload (no readable text), so it surfaces this placeholder
-/// while still classifying `agent.thinking` - so `-t agent.thinking` finds it without dumping
-/// the opaque blob.
-pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = "[redacted thinking]";
-
 /// What ONE thinking BLOCK says - the family's half of the per-block render seam.
 ///
 /// The block loop calls this instead of deciding the body itself, so what a thinking
@@ -40,14 +42,24 @@ pub(crate) const REDACTED_THINKING_PLACEHOLDER: &str = "[redacted thinking]";
 /// body; today it cannot be reached, because `thinking_block_leaf` already refused
 /// everything but these two before the loop gets here.
 ///
-/// A `Cow` because one arm borrows the block's own text and the other borrows a
-/// constant: the body of a redacted block is opaque ciphertext with no readable text at
-/// all, so it surfaces a placeholder rather than the blob, while every other thinking
-/// block surfaces its own text, empty included.
+/// TWO arms answer the EMPTY string, and they are the two leaves that hold no readable
+/// text. A `redacted_thinking` block's payload is base64 ciphertext, so rendering it
+/// would put a wall of opaque bytes where a reader expects reasoning and make the
+/// excerpt window meaningless - and the words that say what the block is belong in the
+/// label zone, where they are display-only, rather than in matchable text that no raw
+/// line carries. A `thinking` block whose text is only whitespace holds nothing readable
+/// either, and it is exactly the block `agent.thinking.omitted` is assigned to (that
+/// leaf's test is `trim().is_empty()`), so the empty body the leaf promises is empty
+/// rather than a run of spaces.
+///
+/// The `Cow` is the seam's shape and every arm borrows: the block's own text, or the
+/// empty string. It stays because the shared block loop's call site takes what this
+/// returns by reference, and that file is not this family's to edit.
 pub(crate) fn block_body(block: &Block) -> Option<Cow<'_, str>> {
     match block {
+        Block::Thinking { thinking, .. } if thinking.trim().is_empty() => Some(Cow::Borrowed("")),
         Block::Thinking { thinking, .. } => Some(Cow::Borrowed(thinking.as_str())),
-        Block::RedactedThinking { .. } => Some(Cow::Borrowed(REDACTED_THINKING_PLACEHOLDER)),
+        Block::RedactedThinking { .. } => Some(Cow::Borrowed("")),
         _ => None,
     }
 }
