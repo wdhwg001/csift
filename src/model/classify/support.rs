@@ -268,6 +268,27 @@ pub trait SpawnLookup {
     fn child_for_spawn_name(&self, name: &str) -> Option<String>;
 }
 
+/// Resolve a uuid ONE RECORD NAMES to the physical jsonl line of the record carrying it,
+/// supplied via [`ClassifyCtx`] the way [`SpawnLookup`] is.
+///
+/// Half the `for` edges in the taxonomy are a key naming another record of the same
+/// file (a `last-prompt` line's `leafUuid`, a file-history delta's `messageId`, a
+/// refusal's `refusedUserMessageUuid`), and an edge that renders the uuid alone makes a
+/// reader search for it. The lookup is backed by the chain's OWN uuid map
+/// ([`crate::model::UuidIndex`]), so it is not a second index and it answers the way the
+/// loader would: the surviving line wins a uuid two lines carry.
+///
+/// Behind a trait because the LINE lives in the surface's row space, not in the model:
+/// only the caller knows whether an index is a record or a spine row and what line it sat
+/// on. `None` from the lookup means "no record here carries that uuid", which is the
+/// honest answer for a wire id, another session's record, or a line a pre-boundary
+/// deletion removed.
+#[allow(dead_code)]
+pub trait LineOfUuid {
+    /// The 1-based jsonl line of the record this uuid names, or `None`.
+    fn line_of_uuid(&self, uuid: &str) -> Option<usize>;
+}
+
 /// Cross-record context [`Record::classify`] / [`Record::direction`] need that a single record
 /// cannot supply (GOLD §6). Construct with [`ClassifyCtx::top_level`] and set the relevant
 /// fields. **What P2 must populate per record:**
@@ -314,6 +335,12 @@ pub struct ClassifyCtx<'a> {
     /// `None` => the instant stays unknown (an honest null; the builds that write no fire
     /// record give the same answer).
     pub schedule_fires: Option<&'a ScheduleFireIndex>,
+    /// uuid -> jsonl LINE for this transcript ([`LineOfUuid`]), so a `for` edge a record
+    /// NAMES can render as an address instead of a bare id. `None` => every lookup
+    /// answers `None`, which is what a caller with no row space (a unit test, a
+    /// file-oriented surface) gets: an edge then renders its key alone rather than a
+    /// guessed line.
+    pub lines: Option<&'a dyn LineOfUuid>,
 }
 
 #[allow(dead_code)]
@@ -332,7 +359,16 @@ impl<'a> ClassifyCtx<'a> {
             resume_prompt_uuids: None,
             summarize: None,
             schedule_fires: None,
+            lines: None,
         }
+    }
+
+    /// The jsonl LINE of the record `uuid` names, or `None` - because no lookup was
+    /// supplied, or because no record of this transcript carries it. Both answers are
+    /// the same to a caller: render the key, not a line.
+    #[must_use]
+    pub fn line_of_uuid(&self, uuid: &str) -> Option<usize> {
+        self.lines?.line_of_uuid(uuid)
     }
 }
 
@@ -351,6 +387,7 @@ impl std::fmt::Debug for ClassifyCtx<'_> {
                 "resume_prompts",
                 &self.resume_prompt_uuids.map_or(0, HashSet::len),
             )
+            .field("has_line_lookup", &self.lines.is_some())
             .finish()
     }
 }

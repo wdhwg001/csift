@@ -98,3 +98,36 @@ fn a_sidecar_record_lands_after_every_scanned_row() {
         "the line-less record is last, not first"
     );
 }
+
+// ── The uuid -> LINE lookup over that same row space ──
+
+/// A uuid resolves to the PHYSICAL line of the row carrying it, whichever kind of row
+/// that is. A spine row is the interesting half: most records a `for` edge names are
+/// lines the prefilter dropped, so a lookup that only reached `Kept` rows would answer
+/// `None` for the majority of real edges.
+#[test]
+fn a_uuid_resolves_to_its_row_s_physical_line() {
+    use crate::model::LineOfUuid;
+    let kept = vec![kept_at(3)];
+    let spine = vec![spine_at(7)];
+    let rows = merge_rows(&kept, &spine);
+    let (_, index) = crate::model::Chain::build_by_indexed(&rows, |r| r.node(), None);
+    let lookup = RowLines::new(index, &rows);
+    assert_eq!(lookup.line_of_uuid("u3"), Some(3));
+    assert_eq!(lookup.line_of_uuid("x7"), Some(7));
+    assert_eq!(lookup.line_of_uuid("not-here"), None);
+}
+
+/// A merged elicitation-sidecar record has no physical line, so its uuid resolves to
+/// NOTHING rather than to `L0`. An address a reader cannot follow is worse than the bare
+/// id the caller falls back to.
+#[test]
+fn a_line_less_record_resolves_to_no_line_at_all() {
+    use crate::model::LineOfUuid;
+    let kept = vec![kept_at(0)];
+    let rows = merge_rows(&kept, &[]);
+    let (_, index) = crate::model::Chain::build_by_indexed(&rows, |r| r.node(), None);
+    let lookup = RowLines::new(index, &rows);
+    // The index DOES know the record (it is chain-admitted); the line is what is absent.
+    assert_eq!(lookup.line_of_uuid("u0"), None);
+}

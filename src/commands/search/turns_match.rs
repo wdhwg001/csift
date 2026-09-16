@@ -2,6 +2,10 @@
 
 use super::*;
 
+mod pairing;
+
+pub(crate) use pairing::*;
+
 /// Walk retained records in file order, delimit turns by genuine-user records, and
 /// for each turn decide whether it matches the filters + regex; emit a complete
 /// Exchange per matching turn.
@@ -42,7 +46,11 @@ pub(crate) fn reconstruct_and_match(
     // re-anchor's earlier copies, and where the chain was cut. It is computed EXPLICITLY
     // (not inside the deduped grouper) so the answer can be DISCLOSED and an addressed
     // abandoned record can still be fetched.
-    let chain = crate::model::Chain::build_by(rows, |r| r.node(), None);
+    let (chain, uuid_index) = crate::model::Chain::build_by_indexed(rows, |r| r.node(), None);
+    // The `uuid -> LINE` lookup a family's `for` edge resolves through. It is the chain's
+    // OWN map joined to the rows it was built over, so nothing here is a second index and
+    // a scan that never asks a uuid question pays one move.
+    let row_lines = RowLines::new(uuid_index, rows);
     // A replay copy's marker names the SURVIVING line, which only this layer can resolve
     // (the chain speaks in record indices, the render in physical jsonl lines).
     let survivor_lines: HashMap<usize, usize> = (0..rows.len())
@@ -99,6 +107,7 @@ pub(crate) fn reconstruct_and_match(
         resume_prompts: &resume_prompts,
         summarize: &summarize_index,
         schedule_fires,
+        lines: &row_lines,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -462,6 +471,10 @@ pub(crate) struct ClassifyEnv<'a> {
     /// `harness.schedule.fire` hit names lives on the `system`/`scheduled_task_fire`
     /// sibling, so the leaf reads its own instant through this per-file join.
     pub(crate) schedule_fires: &'a crate::model::ScheduleFireIndex,
+    /// uuid -> jsonl LINE over this transcript's own rows, so a family's `for` edge can
+    /// render an address rather than a bare id. `Sync` because the per-turn walk fans out
+    /// over rayon.
+    pub(crate) lines: &'a (dyn crate::model::LineOfUuid + Sync),
 }
 
 impl ClassifyEnv<'_> {
@@ -479,6 +492,7 @@ impl ClassifyEnv<'_> {
             resume_prompt_uuids: Some(self.resume_prompts),
             summarize: Some(self.summarize),
             schedule_fires: Some(self.schedule_fires),
+            lines: Some(self.lines),
         }
     }
 }
@@ -506,88 +520,4 @@ pub(crate) fn resume_prompt_uuids(rows: &[Row<'_>]) -> HashSet<String> {
         }
     }
     out
-}
-
-/// Gather the label-eligible, time-windowed, regex-matching hits inside a turn, plus the
-/// indices (into `turn.records`) of the records that produced at least one hit - so
-/// `--siblings` can exclude an already-matched record from the sibling rendering.
-/// Build the `tool_use_id → tool name` index for a file's records: every `tool_use` block's
-/// `{id, name}`. A later `tool_result` (which carries only the `tool_use_id`) looks its tool up
-/// here so a `tool-response` row can say WHICH tool it answers. First write wins (ids are unique).
-pub(crate) fn build_tool_name_index(rows: &[Row<'_>]) -> HashMap<String, String> {
-    let mut map: HashMap<String, String> = HashMap::new();
-    for k in rows.iter().filter_map(|r| r.kept()) {
-        if let Some(blocks) = k.rec.blocks() {
-            for b in blocks {
-                if let Block::ToolUse {
-                    id: Some(id),
-                    name: Some(name),
-                    ..
-                } = b
-                {
-                    map.entry(id.clone()).or_insert_with(|| name.clone());
-                }
-            }
-        }
-    }
-    map
-}
-
-/// The `▹` pairing id sets for a file (GOLD §7): every `tool_use` block's `id` and every
-/// `tool_result` block's `tool_use_id`. Joined GLOBALLY (membership, not contiguity) so a use
-/// pairs with its result across records / parallel calls.
-pub(crate) fn tool_pair_ids(rows: &[Row<'_>]) -> (HashSet<String>, HashSet<String>) {
-    let mut uses = HashSet::new();
-    let mut results = HashSet::new();
-    for k in rows.iter().filter_map(|r| r.kept()) {
-        if let Some(blocks) = k.rec.blocks() {
-            for b in blocks {
-                match b {
-                    Block::ToolUse { id: Some(id), .. } => {
-                        uses.insert(id.clone());
-                    }
-                    Block::ToolResult {
-                        tool_use_id: Some(id),
-                        ..
-                    } => {
-                        results.insert(id.clone());
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    (uses, results)
-}
-
-/// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7). Pairing is a
-/// property of the underlying tool_use/tool_result BLOCK, so it rides EVERY view of that
-/// block - the plain `agent.tool.*` views AND the communication views that supersede them
-/// under the richest-view law (a SendMessage/spawn `agent.communication.sent`/`.signal`
-/// rides a tool_use block; a subagent-return `agent.communication.inbox` rides a
-/// tool_result block). Without this, a FROZEN SendMessage (the dominant stuck-lane shape
-/// in a teams session) fell outside the `pairing` census whenever its comm view won the
-/// dedup. A use-side hit is paired iff its result-id is present (else pending - frozen /
-/// elicitation / unreturned); a result-side hit is paired iff its use-id is present (else
-/// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit:
-/// an inbound teammate-message, an idle signal section) stays `None` - outside the axis.
-pub(crate) fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &HashSet<String>) {
-    let Some(id) = h.tool_use_id.as_deref() else {
-        return;
-    };
-    h.pair = match h.class {
-        Some(Class::AgentToolUse | Class::CommSent | Class::CommSignal) => {
-            Some(if result_ids.contains(id) {
-                Pairing::Paired
-            } else {
-                Pairing::PendingNoResult
-            })
-        }
-        Some(Class::AgentToolResult | Class::CommInbox) => Some(if use_ids.contains(id) {
-            Pairing::Paired
-        } else {
-            Pairing::OrphanResult
-        }),
-        _ => None,
-    };
 }

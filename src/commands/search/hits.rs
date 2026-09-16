@@ -6,6 +6,9 @@ mod blocks;
 
 pub(crate) use blocks::*;
 
+/// Gather the label-eligible, time-windowed, regex-matching hits inside a turn, plus the
+/// indices (into `turn.records`) of the records that produced at least one hit - so
+/// `--siblings` can exclude an already-matched record from the sibling rendering.
 // Internal pipeline function: the arg list grew as `tool_names` (tool-response naming) and
 // `address` (--line/--uuid selector) were threaded through the per-turn scan. Bundling into a
 // struct would only relocate the same fields without simplifying the data flow.

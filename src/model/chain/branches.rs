@@ -12,12 +12,17 @@
 
 use super::*;
 
-pub(crate) fn finish(
-    b: Builder<'_>,
+/// Turn the walked builder into the [`Chain`], and hand back the uuid map it built.
+///
+/// The map is returned rather than dropped because the build always makes it and a
+/// caller resolving a uuid one record NAMES would otherwise have to build a second one
+/// over the same records. `Chain::build_by` drops it; `Chain::build_by_indexed` keeps it.
+pub(crate) fn finish<'a>(
+    b: Builder<'a>,
     leaf: Option<usize>,
     source: LeafSource,
     walked: walk::Walked,
-) -> Chain {
+) -> (Chain, UuidIndex<'a>) {
     let n = b.len();
     let survival = (0..n).map(|i| base_state(&b, i, walked.floor)).collect();
     let mut out = Chain {
@@ -59,7 +64,7 @@ pub(crate) fn finish(
         .filter(|k| matches!(k, Kind::Draft { .. }))
         .count();
     out.rewound_turns = out.kinds.len() - out.drafts;
-    out
+    (out, UuidIndex::from_map(b.map))
 }
 
 /// The state before the abandoned forest is read: everything the chain reached is Live

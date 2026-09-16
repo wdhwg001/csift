@@ -53,6 +53,7 @@ mod walk;
 
 pub(crate) use nodes::Builder;
 pub(crate) use nodes::ChainNode;
+use nodes::Slot;
 pub use view::{ChainView, TurnStamp};
 
 /// Where the chain's leaf came from - disclosed, because the leaf decides the whole
@@ -157,6 +158,44 @@ impl Kind {
     }
 }
 
+/// The uuid map the chain build already made, handed back rather than dropped: every
+/// chain-admitted uuid in one transcript, pointing at the record index that WINS it.
+///
+/// It answers the one cross-record question a family fact keeps asking ("this record
+/// NAMES a uuid; which line is that?"), and it answers it the way the loader would: the
+/// LAST line carrying a uuid is the survivor, so an id that a compaction re-anchor
+/// appended twice resolves to the copy a reader should be sent to, not to the dead one.
+/// Borrowed from the records, so no uuid is copied and the index costs one move.
+#[derive(Debug)]
+pub struct UuidIndex<'a> {
+    map: HashMap<&'a str, Slot>,
+}
+
+impl<'a> UuidIndex<'a> {
+    /// Take ownership of the build's own map. Crate-internal: nothing outside the chain
+    /// has one to hand over.
+    pub(crate) fn from_map(map: HashMap<&'a str, Slot>) -> UuidIndex<'a> {
+        UuidIndex { map }
+    }
+}
+
+impl UuidIndex<'_> {
+    /// The index of the record this uuid names, or `None` when no record here carries
+    /// it, which is the common answer for a uuid naming another session, a wire id, or a
+    /// record a pre-boundary deletion removed from disk.
+    #[must_use]
+    pub fn index_of(&self, uuid: &str) -> Option<usize> {
+        self.map.get(uuid).map(|slot| slot.last)
+    }
+
+    /// How many distinct uuids the map holds - the instrument that says this is the
+    /// build's own map rather than a second one built beside it.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+}
+
 /// The survival answer for one transcript's records, in the caller's own index space.
 #[derive(Debug, Default)]
 pub struct Chain {
@@ -211,6 +250,23 @@ impl Chain {
         node: impl Fn(&T) -> ChainNode<'_>,
         leaf_hint: Option<&str>,
     ) -> Chain {
+        Self::build_by_indexed(records, node, leaf_hint).0
+    }
+
+    /// [`Chain::build_by`], handing back the uuid map the build already made
+    /// ([`UuidIndex`]) instead of dropping it.
+    ///
+    /// The map is the loader's own: every chain-admitted record's uuid, pointing at the
+    /// line that WINS it. It is built on every chain build - the walk cannot run without
+    /// it - so a caller that needs to resolve a uuid ONE RECORD NAMES pays nothing here
+    /// beyond not dropping it, which is why this exists instead of a second index. The
+    /// borrow is the records', so the index is usable exactly as long as they are.
+    #[must_use]
+    pub fn build_by_indexed<'a, T>(
+        records: &'a [T],
+        node: impl Fn(&T) -> ChainNode<'_>,
+        leaf_hint: Option<&str>,
+    ) -> (Chain, UuidIndex<'a>) {
         let mut b = Builder::new(records, &node);
         let anchor = relink::apply(&mut b);
         b.index_children();

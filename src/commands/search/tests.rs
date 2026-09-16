@@ -49,6 +49,18 @@ fn test_env() -> ClassifyEnv<'static> {
         resume_prompts: &NO_RESUME_PROMPTS,
         summarize: EMPTY.get_or_init(crate::model::SummarizeIndex::default),
         schedule_fires: NO_FIRES.get_or_init(crate::model::ScheduleFireIndex::default),
+        // These fixtures resolve no uuid edge, so the neutral lookup answers `None` for
+        // every id - which is exactly what a caller with no row space gets in production.
+        lines: &NoLines,
+    }
+}
+
+/// The neutral `uuid -> line` lookup: no transcript behind it, so every id is absent.
+struct NoLines;
+
+impl crate::model::LineOfUuid for NoLines {
+    fn line_of_uuid(&self, _uuid: &str) -> Option<usize> {
+        None
     }
 }
 

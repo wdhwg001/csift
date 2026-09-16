@@ -574,3 +574,4 @@ mod branches;
 mod leafgates;
 mod nodes;
 mod repair;
+mod uuid_index;

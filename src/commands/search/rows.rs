@@ -100,6 +100,50 @@ impl<'a> Row<'a> {
     }
 }
 
+/// The `uuid -> jsonl LINE` answer for one transcript, in the search surface's own row
+/// space: the chain's uuid map ([`crate::model::UuidIndex`]) joined to the merged row
+/// list that map was built over.
+///
+/// It exists because the two halves of the question live in different places. The model
+/// layer knows which RECORD a uuid names (its map is what the walk runs on); only the
+/// surface knows what LINE that record sat on, because a row is either a record or a
+/// spine row and each carries its own line. Neither half builds anything new: the map is
+/// moved out of the build, and the rows are the ones already in hand.
+///
+/// A line of `0` reads as absent. That is the merged elicitation-sidecar record, which
+/// has no physical line at all - pointing a reader at `L0` would be worse than saying
+/// nothing.
+pub(crate) struct RowLines<'a> {
+    index: crate::model::UuidIndex<'a>,
+    rows: &'a [Row<'a>],
+}
+
+impl<'a> RowLines<'a> {
+    /// Join the build's map to the rows it was built over.
+    pub(crate) fn new(index: crate::model::UuidIndex<'a>, rows: &'a [Row<'a>]) -> Self {
+        RowLines { index, rows }
+    }
+}
+
+impl crate::model::LineOfUuid for RowLines<'_> {
+    fn line_of_uuid(&self, uuid: &str) -> Option<usize> {
+        let line = self.rows.get(self.index.index_of(uuid)?)?.line_no();
+        (line > 0).then_some(line)
+    }
+}
+
+// `RowLines` holds two shared borrows and no interior mutability, so it is Sync by
+// construction; the bound is spelled out because `ClassifyEnv` hands it to the rayon
+// walk and a future field could quietly break it.
+impl std::fmt::Debug for RowLines<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RowLines")
+            .field("uuids", &self.index.len())
+            .field("rows", &self.rows.len())
+            .finish()
+    }
+}
+
 /// Merge two ascending-by-line spine streams into one: the scan's own, and the rows the
 /// C-39 demotion produced from records the gates left unsearchable.
 pub(crate) fn merge_spine(
