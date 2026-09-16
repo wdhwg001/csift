@@ -67,7 +67,7 @@ use super::*;
         pattern it censuses the whole scope).\n\n\
         `--max-count` caps emitted exchanges but reports the dropped count (default: \
         unlimited; no cap); there is NO silent truncation anywhere.",
-    after_help = SEARCH_AFTER_HELP
+    after_help = SEARCH_AFTER_HELP.as_str()
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a

@@ -247,3 +247,77 @@ fn docs_do_not_resurrect_removed_tokens() {
         }
     }
 }
+
+use crate::cli::show_keys::{record_row_keys, Family, FAMILY_ORDER, RECORD_KEYS};
+
+// ── The per-family HELP sections ──
+
+/// `search --help`'s body is its section files joined in the fixed order, with nothing of
+/// the assembler's own between them.
+///
+/// The point of the split is that a family lane edits ONE file and cannot disturb the
+/// shared body, so what has to hold is the FRAME: the intro leads, the closing notes
+/// close, and the six family sections sit between them in order. A family filling its
+/// section changes the middle and nothing else, which is why the middle is compared as a
+/// join rather than pinned to a literal that would go stale the first time a lane wrote
+/// a sentence.
+#[test]
+fn the_search_help_body_is_its_sections_joined_in_order() {
+    let body = SEARCH_AFTER_HELP.as_str();
+    assert_eq!(body, crate::cli::search_help::SECTIONS.concat());
+    let intro = crate::cli::search_help::SECTIONS[0];
+    let outro = crate::cli::search_help::SECTIONS[7];
+    assert!(body.starts_with(intro), "the shared body no longer leads");
+    assert!(body.ends_with(outro), "the closing notes no longer close");
+    let middle = &body[intro.len()..body.len() - outro.len()];
+    assert_eq!(middle, crate::cli::search_help::SECTIONS[1..7].concat());
+    // The seam the split had to get right: a line continuation strips the NEXT line's
+    // leading whitespace inside ONE literal and cannot strip across two, so the intro
+    // has to end on its own space and the outro open on a non-space. Getting this wrong
+    // inserts eight spaces into the rendered help and nothing else complains.
+    assert!(
+        intro.ends_with(' '),
+        "the seam lost the continuation's space"
+    );
+    assert!(!outro.starts_with(' '), "the seam gained a literal indent");
+}
+
+/// `show --help`'s record-row key list is BUILT from the key table, not typed into the
+/// sentence - so a family adds a key to that row by adding a table row.
+#[test]
+fn the_show_record_keys_render_from_their_table() {
+    let rendered = record_row_keys();
+    assert!(rendered.starts_with('{') && rendered.ends_with('}'));
+    for key in RECORD_KEYS {
+        assert!(
+            rendered.contains(key.rendered),
+            "{} is in the table and not in the rendered list",
+            key.rendered
+        );
+    }
+    // The help carries exactly what the table renders, which is the whole contract: a
+    // consumer reads that list to know which keys exist.
+    assert!(
+        SHOW_AFTER_HELP.contains(&rendered),
+        "the help and the table disagree about the record row"
+    );
+    // Every row prints inside its own family's BLOCK: walking the rendered list, the
+    // family order index never goes backwards. Today every row is `Shared`, so this is
+    // the guard that keeps a later lane's rows from interleaving with another's.
+    let order = |f: Family| {
+        FAMILY_ORDER
+            .iter()
+            .position(|g| *g == f)
+            .expect("every family is in the render order")
+    };
+    let mut last = 0usize;
+    for name in rendered.trim_matches(['{', '}']).split(", ") {
+        let row = RECORD_KEYS
+            .iter()
+            .find(|r| r.rendered == name)
+            .expect("every rendered name comes from a table row");
+        let at = order(row.family);
+        assert!(at >= last, "{name} printed outside its family block");
+        last = at;
+    }
+}

@@ -3,24 +3,9 @@
 use super::*;
 
 /// `csift show`: fetch specific record(s) of ONE transcript, rendered full (or raw).
-#[derive(Args, Debug)]
-#[command(
-    about = "Fetch specific record(s) of ONE transcript by line / turn index / record uuid \
-            , rendered full, or verbatim raw jsonl with `--raw`; `--branch-points` reports \
-            where the conversation forked",
-    long_about = "Fetch the record(s) at specific 1-based jsonl line number(s) (the `Lnnnn` \
-        every csift surface prints) and/or record uuid(s), from exactly ONE transcript. \
-        Default output renders each record FULL (label + timestamp + complete text: the \
-        permission-friendly alternative to `Read`-ing the raw jsonl). `--raw` emits the \
-        VERBATIM raw jsonl line(s) instead: the escape hatch for inspecting fields csift \
-        does not render (usage tokens, stop_reason, model, …). `--branch-points` instead \
-        reports the transcript's conversation FORK facts: every record with more than one \
-        conversation child (a later parentUuid re-attach: a rewind, a retry, or a \
-        parallel lane), ranked by the widest inter-child time gap (a rewind usually shows \
-        a wide gap, a parallel lane near zero). Each fork names the LIVE child and gives \
-        every other child the conversation chain's verdict; beyond what that chain \
-        resolves csift does not guess.",
-    after_help = "EXAMPLES\n  \
+/// The `show --help` after-help body up to the record-row KEY LIST, which
+/// [`show_keys::record_row_keys`] renders from the table rather than from a sentence.
+const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
           csift show @<uuid> --line 46550                # the record at line 46550, full\n  \
           csift show @<uuid> --line 87,495..500,992      # several lines + ranges\n  \
           csift show @<agent-id> --line 88               # a SUBAGENT transcript (id from `csift agents`)\n  \
@@ -62,12 +47,10 @@ use super::*;
         JSON SCHEMA (per --format json)\n  \
           Envelope: {kind:\"header\", command:\"show\", session_id, is_subagent, \
         parent_session_id, path} → one {kind:\"record\", …} row per fetched record → \
-        {kind:\"summary\", …}. Record rows carry {session_id, is_subagent, parent_session_id, \
-        turn_index, line (null for a sidecar-merged record), uuid, label, labels:[…], \
-        tool_name, from, to, pairing (paired | pending | orphan | null), tool_use_id, \
-        source (\"elicitation-sidecar\" | null), survival (live | pre-cut | abandoned), \
-        abandoned_root_line, replay_copy_of, ts_utc, ts_local, text, body, \
-        image_ids:[…], mode, compact_metadata}. `text` is one line: whitespace runs are \
+        {kind:\"summary\", …}. Record rows carry ";
+
+/// The `show --help` after-help body after the record-row key list.
+const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         collapsed to single spaces, and it is FULL under a `--line`/`--uuid` address (which \
         lifts the excerpt cap) but CLIPPED to ~400 chars with the explicit `… (+N chars)` \
         marker under `--turn`, which is a window rather than an address. `body` carries the \
@@ -94,7 +77,37 @@ use super::*;
         conversation, and null with two (the chain's membership rules keep \
         same-message.id assistant siblings) means the text named both. Each child is \
         {line, uuid, record_type, survival (live | pre-cut | abandoned), verdict (live | \
-        rewound | draft | abandoned | pre-cut), ts_utc, ts_local}."
+        rewound | draft | abandoned | pre-cut), ts_utc, ts_local}.";
+
+/// The assembled `show --help` body. A `LazyLock<String>` because the key list is
+/// BUILT from [`show_keys::RECORD_KEYS`]: a family that adds a key to a record row adds
+/// a table row, and the help follows with no lane editing another lane's sentence.
+pub(crate) static SHOW_AFTER_HELP: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    format!(
+        "{SHOW_AFTER_HELP_HEAD}{}{SHOW_AFTER_HELP_TAIL}",
+        crate::cli::show_keys::record_row_keys()
+    )
+});
+
+#[derive(Args, Debug)]
+#[command(
+    about = "Fetch specific record(s) of ONE transcript by line / turn index / record uuid \
+            , rendered full, or verbatim raw jsonl with `--raw`; `--branch-points` reports \
+            where the conversation forked",
+    long_about = "Fetch the record(s) at specific 1-based jsonl line number(s) (the `Lnnnn` \
+        every csift surface prints) and/or record uuid(s), from exactly ONE transcript. \
+        Default output renders each record FULL (label + timestamp + complete text: the \
+        permission-friendly alternative to `Read`-ing the raw jsonl). `--raw` emits the \
+        VERBATIM raw jsonl line(s) instead: the escape hatch for inspecting fields csift \
+        does not render (usage tokens, stop_reason, model, …). `--branch-points` instead \
+        reports the transcript's conversation FORK facts: every record with more than one \
+        conversation child (a later parentUuid re-attach: a rewind, a retry, or a \
+        parallel lane), ranked by the widest inter-child time gap (a rewind usually shows \
+        a wide gap, a parallel lane near zero). Each fork names the LIVE child and gives \
+        every other child the conversation chain's verdict; beyond what that chain \
+        resolves csift does not guess.",
+    after_help = SHOW_AFTER_HELP.as_str()
+
 )]
 pub struct ShowArgs {
     /// ONE transcript: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | a `*.jsonl` path.

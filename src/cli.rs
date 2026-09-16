@@ -52,6 +52,7 @@ mod search_args;
 mod search_help;
 mod selectors;
 mod send_args;
+mod show_keys;
 mod show_stats_args;
 mod verbatim_whoami_args;
 
