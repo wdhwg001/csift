@@ -26,9 +26,19 @@ pub(crate) const SENTINEL_BLOCK_MARKER: &str = "family probe block";
 /// Pushed only when the unit carries NO leaf - the unmodeled addressed unit.
 pub(crate) const SENTINEL_LEAFLESS_MARKER: &str = "family probe leafless";
 
-/// The probe's per-unit facts and markers: one marker on every unit of a record carrying
-/// the sentinel session id, plus one per `Section` field so both halves are observable,
-/// and nothing at all on any other record.
+/// The FACT the probe pushes on every unit of a sentinel record, beside the markers.
+///
+/// A marker alone cannot pin the dispatch. `Hit.markers` and `Hit.facts` are separate
+/// fields filled by separate lines - the two `extend`s inside `family_facts`' `merge`, and
+/// the `.chain(family)` that folds the family facts in behind the shape fact at the
+/// addressed site - so a suite that reads only markers watches one of those lines and
+/// leaves the other free to be deleted. Both deletions survived the whole unit suite
+/// before this fact existed.
+pub(crate) const SENTINEL_FACT: &str = "family probe fact";
+
+/// The probe's per-unit facts and markers: one fact and one marker on every unit of a
+/// record carrying the sentinel session id, plus one marker per `Section` field so both
+/// halves are observable, and nothing at all on any other record.
 pub(crate) fn facts(
     rec: &Record,
     _raw: Option<&str>,
@@ -45,5 +55,5 @@ pub(crate) fn facts(
     if section.class.is_none() {
         markers.push(Marker::plain(SENTINEL_LEAFLESS_MARKER));
     }
-    (Vec::new(), markers)
+    (vec![HitFact::Probe(SENTINEL_FACT)], markers)
 }

@@ -69,6 +69,40 @@ fn marker_heads(hits: &[Hit]) -> Vec<Vec<&'static str>> {
         .collect()
 }
 
+/// Each unit's FACTS as a consumer reads them: the label-zone tag the fact projects (`-`
+/// when it projects none) and the `key=value` it appends to the hit's JSON object. Read
+/// through [`HitFact::label_zone`]/[`HitFact::json`] rather than off the enum, because
+/// those two are the whole surface a fact has - a variant that reached the hit and
+/// projects nothing is not carried anywhere.
+///
+/// A fact that never arrived projects an EMPTY list, which is exactly what deleting the
+/// fact half of `family_facts`' `merge`, or the `.chain(family)` in [`addressed_unit`],
+/// produces. Markers keep arriving under both deletions, so only this reads them.
+fn fact_projections(hits: &[Hit]) -> Vec<Vec<String>> {
+    hits.iter()
+        .map(|h| {
+            h.facts
+                .iter()
+                .map(|f| {
+                    let (key, value) = f.json();
+                    let zone = f.label_zone().unwrap_or_else(|| "-".to_string());
+                    format!("{zone} | {key}={value}")
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// What the probe's own fact projects, built from the sentinel constant rather than from a
+/// hit, so the assertion cannot pass by agreeing with whatever the code produced.
+fn probe_fact() -> String {
+    format!(
+        "{} | family_probe={}",
+        probe::SENTINEL_FACT,
+        serde_json::json!(probe::SENTINEL_FACT)
+    )
+}
+
 /// Emit every unit of one fixture record through the scan-side construction site.
 fn scanned(line: &str) -> Vec<Hit> {
     let mut hits = Vec::new();
@@ -105,6 +139,12 @@ fn the_scan_site_stamps_every_unit_a_record_produced() {
             vec![probe::SENTINEL_MARKER, probe::SENTINEL_BLOCK_MARKER],
         ]
     );
+    // The FACT half of the seam arrives on both units too. It is a separate field merged
+    // by a separate line, so the markers above say nothing about it.
+    assert_eq!(
+        fact_projections(&hits),
+        vec![vec![probe_fact()], vec![probe_fact()]]
+    );
 }
 
 /// A RECORD-LEVEL unit reaches the same site, and its `Section` says it came from no
@@ -115,6 +155,7 @@ fn a_record_level_unit_is_stamped_without_a_block() {
         r#"{"type":"user","uuid":"u1","sessionId":"family-facts-probe","message":{"role":"user","content":"hello"}}"#,
     );
     assert_eq!(marker_heads(&hits), vec![vec![probe::SENTINEL_MARKER]]);
+    assert_eq!(fact_projections(&hits), vec![vec![probe_fact()]]);
 }
 
 /// And the ADDRESSED unit reaches it too. Without this call a `show --line N` render
@@ -135,7 +176,16 @@ fn the_address_site_stamps_the_unmodeled_unit() {
         hit.markers.iter().map(|m| m.head).collect::<Vec<_>>(),
         vec![probe::SENTINEL_MARKER, probe::SENTINEL_LEAFLESS_MARKER]
     );
-    // The shape fact still leads the list, so `render_label` reads it as the label.
+    // And so does the FACT - behind the shape fact, which still leads so `render_label`
+    // reads it as the label. This is the assertion the `.chain(family)` line answers to:
+    // drop it and the markers above still arrive while the family's facts vanish.
+    assert_eq!(
+        fact_projections(std::slice::from_ref(&hit)),
+        vec![vec![
+            "- | unmodeled=\"future-thing\"".to_string(),
+            probe_fact()
+        ]]
+    );
     assert_eq!(render_label(&hit), "unmodeled: future-thing");
 }
 

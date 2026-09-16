@@ -176,6 +176,13 @@ pub enum HitFact {
     /// splits on one. Produced ONLY under an explicit address (a scan never emits an
     /// unmodeled unit), and it is what the label renders in place of a leaf path.
     Unmodeled(String),
+    /// The test-only sentinel `record_text::probe` pushes on a fixture record, so a unit
+    /// test can observe a FACT crossing the stamping site and not only a [`Marker`]. The
+    /// two travel on different fields and are merged by different lines, so a suite that
+    /// reads markers alone leaves half the seam unpinned. `#[cfg(test)]`, like the arm
+    /// that produces it: the built binary carries neither.
+    #[cfg(test)]
+    Probe(&'static str),
 }
 
 impl HitFact {
@@ -186,6 +193,8 @@ impl HitFact {
         match self {
             // The shape IS the label for an unmodeled unit, so it adds no second tag.
             HitFact::Unmodeled(_) => None,
+            #[cfg(test)]
+            HitFact::Probe(head) => Some((*head).to_string()),
         }
     }
 
@@ -194,6 +203,8 @@ impl HitFact {
     pub(crate) fn json(&self) -> (&'static str, serde_json::Value) {
         match self {
             HitFact::Unmodeled(shape) => ("unmodeled", serde_json::json!(shape)),
+            #[cfg(test)]
+            HitFact::Probe(head) => ("family_probe", serde_json::json!(head)),
         }
     }
 }
