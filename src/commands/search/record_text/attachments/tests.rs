@@ -470,14 +470,20 @@ fn a_leaf_outside_the_family_takes_no_marker() {
     );
 }
 
-/// The person's mid-turn steer takes the PAYLOAD source whatever the record carries,
-/// because its `user.message` unit is resolved by the opener renderer before this family
-/// is asked - so the fact never names a body the unit is not showing.
+/// The person's mid-turn steer takes the family's ordinary body rule, like every other
+/// view of an attachment line: the conversion the harness persisted, which is what the
+/// model received.
+///
+/// It used to be the ONE exception. `record_text_emission` resolved a `user.message` unit
+/// as the reconstructed opener text, then the verbatim payload, and only then the seam -
+/// so a steer whose record carried a conversion showed the payload JSON while an address
+/// on the same line showed the conversion, and the fact had to say `[payload]` to describe
+/// the body the unit was actually showing. The emission falls through to the seam now, so
+/// there is one body and one word for it.
 #[test]
-fn the_mid_turn_steer_reports_the_payload_even_when_a_conversion_exists() {
+fn the_mid_turn_steer_reports_the_conversion_the_model_received() {
     let line = r#"{"type":"attachment","attachment":{"type":"queued_command","origin":{"kind":"human"},"prompt":"stop"},"rendered":[{"content":"the converted copy"}]}"#;
     let r = rec(line);
-    // The family's own render still answers the conversion for every OTHER caller.
     assert_eq!(
         attachment_body(&r).map(|(_, s)| s),
         Some(BODY_RENDERED),
@@ -488,20 +494,35 @@ fn the_mid_turn_steer_reports_the_payload_even_when_a_conversion_exists() {
         .iter()
         .find(|f| matches!(f, HitFact::Attachments(Fact::Body(_))))
         .expect("a body source");
-    assert_eq!(f.label_zone().as_deref(), Some("[payload]"));
+    assert_eq!(f.label_zone().as_deref(), Some("[rendered]"));
 }
 
-/// A differing second conversion is reported only where the body IS the ordinary one:
-/// pairing `[human-turn render differs]` with a `[payload]` body would describe a
-/// difference from a text the unit is not showing.
+/// A differing second conversion is reported wherever the body IS the ordinary one, and
+/// the steer's body is that now - so the steer reports it too. The pairing rule is
+/// unchanged and still reads the body source rather than the leaf: `[human-turn render
+/// differs]` describes a difference from the text the unit shows.
 #[test]
-fn the_steer_does_not_report_a_difference_from_a_body_it_is_not_showing() {
+fn the_steer_reports_a_differing_second_conversion_like_any_other_view() {
     let line = r#"{"type":"attachment","attachment":{"type":"queued_command","origin":{"kind":"human"},"prompt":"stop"},"rendered":[{"content":"ordinary"}],"renderedInHumanTurn":[{"content":"human turn"}]}"#;
-    let (facts, _) = facts(&rec(line), Some(line), &section(Class::UserMessage), &ctx());
+    let (both, _) = facts(&rec(line), Some(line), &section(Class::UserMessage), &ctx());
     assert!(
-        !facts
+        both.iter()
+            .any(|f| matches!(f, HitFact::Attachments(Fact::HumanTurnRender))),
+        "the body is the ordinary conversion, so the second copy is a real difference: {both:?}"
+    );
+    // And a record whose body is the PAYLOAD still reports none: the rule keys on the
+    // body source, not on the leaf, so nothing about it moved.
+    let payload_only = r#"{"type":"attachment","attachment":{"type":"queued_command","origin":{"kind":"human"},"prompt":"stop"},"renderedInHumanTurn":[{"content":"human turn"}]}"#;
+    let (payload_facts, _) = facts(
+        &rec(payload_only),
+        Some(payload_only),
+        &section(Class::UserMessage),
+        &ctx(),
+    );
+    assert!(
+        !payload_facts
             .iter()
             .any(|f| matches!(f, HitFact::Attachments(Fact::HumanTurnRender))),
-        "no difference is reported beside a payload body: {facts:?}"
+        "no difference is reported beside a payload body: {payload_facts:?}"
     );
 }

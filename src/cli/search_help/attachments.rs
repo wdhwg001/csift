@@ -32,7 +32,8 @@ pub(crate) const SECTION: &str =
      other six outcome types), `[context <payload type>]` for the context leaves, \
      `[structured]` for a schema-bound subagent's own answer, and `[mid-turn]` for the \
      person's steer, which is a `user.message` that reached the model in the MIDDLE of a \
-     turn rather than opening one.\n  \
+     turn rather than opening one - and which takes the same body rule as every other \
+     view, so a steer whose record carries a conversion reads `[rendered]`.\n  \
      PROVENANCE, three facts on every attachment unit. Two are `for` edges in the shared \
      form: `attached_to` from the record's own `parentUuid` and `for_tool_use` from the \
      payload's inner `toolUseID`, rendering `[for: <kind> L<line>]` when the target is a \

@@ -251,7 +251,7 @@ pub(crate) fn facts(
     if section.class == Some(Class::CommChannel) {
         return (facts, markers);
     }
-    if let Some(source) = body_source(rec, section.class) {
+    if let Some(source) = body_source(rec) {
         facts.push(HitFact::Attachments(Fact::Body(source)));
         // The second conversion is reported only when it DIFFERS from the body, because an
         // identical copy tells a reader nothing - and only when the body IS the ordinary
@@ -271,26 +271,24 @@ pub(crate) fn facts(
     (facts, markers)
 }
 
-/// WHERE THE TEXT THIS UNIT SHOWS CAME FROM - which is not always what [`attachment_body`]
-/// would produce, because one view of an attachment record is rendered by the shared
-/// opener path rather than by this family's render.
+/// WHERE THE TEXT THIS UNIT SHOWS CAME FROM - [`attachment_body`]'s own answer, for every
+/// view of an attachment line.
 ///
-/// The person's mid-turn steer is that view. `record_text_emission` resolves a
-/// `user.message` unit as the reconstructed opener text, then the VERBATIM payload, and
-/// only then the seam this family answers at - so a steer whose record also carries a
-/// persisted conversion shows the payload JSON and a `[rendered]` fact on it would name a
-/// body the unit is not showing. The measured size of that gap, over one projects root
-/// counted one parse per non-blank line: 20 of the 164 `queued_command` lines whose
-/// payload `origin.kind` is `human` carry a `rendered`, and 0 of them carry the
-/// human-turn conversion at all.
+/// It carried an exception for one view and no longer does. The person's mid-turn steer
+/// is a `user.message` unit, and `record_text_emission` used to resolve that class as the
+/// reconstructed opener text, then the VERBATIM payload, and only then the seam this
+/// family answers at - so a steer whose record also carried a persisted conversion showed
+/// the payload JSON while every other view of the same line showed the conversion, and the
+/// fact had to say `[payload]` to describe the body the unit was actually showing. The
+/// emission now falls through to the seam instead, so there is one body and one word for
+/// it. Measured over one projects root, one parse per non-blank line: 20 of the 164
+/// `queued_command` lines whose payload `origin.kind` is `human` carry a `rendered`, and
+/// those 20 are the records the two views used to disagree about.
 ///
 /// `None` for a record with no body of its own, which is every non-attachment line.
-fn body_source(rec: &Record, class: Option<Class>) -> Option<&'static str> {
+fn body_source(rec: &Record) -> Option<&'static str> {
     let (_, source) = attachment_body(rec)?;
-    Some(match class {
-        Some(Class::UserMessage) => BODY_PAYLOAD,
-        _ => source,
-    })
+    Some(source)
 }
 
 /// What the unit IS, named for the label zone. Keyed on the unit's own leaf, because one

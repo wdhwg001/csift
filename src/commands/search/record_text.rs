@@ -156,22 +156,29 @@ pub(crate) fn record_text_emission(
             | Class::NotificationTask => rec.automation_label(),
             Class::UserMessage | Class::UserUnsent | Class::UserRewound | Class::CommInbox => rec
                 .reconstructed_user_text(Some(plan_index))
+                // TWO carriers reach this arm with no opener body to render, and the
+                // fallback is the RENDER SEAM for both - the one place a line's own family
+                // decides what it says.
+                //
                 // The person's mid-turn STEER rides an attachment (`queued_command` whose
                 // payload `origin.kind` is `human`), and an attachment carries no
-                // `message{}` for the opener render to read - so without this the record
-                // classified `user.message` and then emitted nothing at all: no hit, no
-                // census key, no `-t user` result, reachable only by address. The payload
-                // JSON is the same verbatim text `agent.message.structured` renders for the
-                // model's own answer on the same line type, and it is a byte substring of
-                // the raw line, so the 7d/7f prefilter laws hold with no synth marker.
-                // Returns `None` on every non-attachment record, so nothing else moves.
-                .or_else(|| rec.attachment_payload_text())
-                // The COORDINATOR relay is the same defect on a third carrier: an isMeta
-                // record carrying `agent.communication.inbox` opens no turn, so the
-                // opener render answers None, and it is no attachment either - so the
-                // record classified as a delivered message and emitted NOTHING. 141 such
-                // records over 89 files of one projects root reached a census as zero.
-                // Its own text is the message, exactly as a peer relay's is.
+                // `message{}` for the opener render to read - so without a fallback the
+                // record classified `user.message` and then emitted nothing at all: no
+                // hit, no census key, no `-t user` result, reachable only by address. The
+                // COORDINATOR relay is the same defect on a second carrier: an isMeta
+                // record carrying `agent.communication.inbox` opens no turn, so the opener
+                // render answers None, and it is no attachment either. 141 such records
+                // over 89 files of one projects root reached a census as zero.
+                //
+                // The seam answers BOTH, and it answers the steer BETTER than the payload
+                // text did: the attachment family's body rule prefers the conversion the
+                // harness persisted - what the model actually received - over the payload
+                // JSON it replaced, which is the same body every other view of that line
+                // renders. Calling `attachment_payload_text` first here bypassed the seam
+                // and pinned this ONE view to the payload, so a reader who found the steer
+                // under `-t user` read different bytes from a reader who addressed the
+                // same line. `record_raw_text` still falls through to the verbatim payload
+                // for a record no family answers for, so nothing that had a body loses one.
                 .or_else(|| record_raw_text(rec, raw, Some(c), ctx)),
             // A csift-channel delivery renders the envelope chunk VERBATIM (header line +
             // body), never a rewrite: the header is the receipt a reader audits, and a

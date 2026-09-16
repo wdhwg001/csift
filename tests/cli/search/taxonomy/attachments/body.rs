@@ -67,23 +67,33 @@ fn a_second_conversion_for_a_human_turn_is_reported_never_chosen() {
 }
 
 #[test]
-fn the_persons_mid_turn_steer_renders_its_payload_and_says_so() {
-    // The one attachment view another render answers for: `record_text_emission` resolves
-    // a `user.message` unit as the reconstructed opener text, then the VERBATIM payload,
-    // and only then the seam this family answers at - so a steer whose record ALSO carries
-    // a persisted conversion shows the payload JSON, and the body fact names the payload
-    // rather than a conversion the unit is not showing.
+fn the_persons_mid_turn_steer_renders_the_text_the_model_received() {
+    // The steer is a `user.message` unit on an attachment line, and it takes the family's
+    // ordinary body rule like every other view of that line: the conversion the harness
+    // persisted, which is what the model received. `record_text_emission` used to try the
+    // VERBATIM payload before falling through to the seam, so this ONE view showed the
+    // payload JSON while an address on the same line showed the conversion - two readers,
+    // two bodies, one record.
     let h = attachment_home();
     let out = h.run(&["search", "zzatt also map", &at_sess(), "--attachments"]);
     assert!(out.success, "stderr {}", out.stderr);
     let steer = line_with(&out.stdout, "user.message");
     assert!(
-        steer.contains(r#"{"type":"queued_command""#) && !steer.contains("ordinary turn"),
-        "the steer's body is its payload JSON:\n{steer}"
+        steer.contains("ordinary turn") && !steer.contains(r#"{"type":"queued_command""#),
+        "the steer's body is the conversion:\n{steer}"
     );
     assert!(
-        steer.contains("[payload]") && steer.contains("[mid-turn]"),
+        steer.contains("[rendered]") && steer.contains("[mid-turn]"),
         "and it says which copy that is, beside the mid-turn marker:\n{steer}"
+    );
+    // And the SAME line addressed directly renders the same body - which is the whole
+    // point of routing this view through the seam.
+    let addressed = h.run(&["show", &at_sess(), "--line", "8"]);
+    assert!(addressed.success, "stderr {}", addressed.stderr);
+    assert!(
+        addressed.stdout.contains("ordinary turn") && addressed.stdout.contains("[rendered]"),
+        "an address answers as the scan does:\n{}",
+        addressed.stdout
     );
 }
 

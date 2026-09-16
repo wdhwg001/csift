@@ -124,6 +124,12 @@ surface change bumps the PATCH.
   carries no inference wording.
 ### Changed
 
+- **The person's mid-turn steer renders the text the model received.** BREAKING: a
+  `queued_command` steer whose record carries a persisted conversion now shows that
+  conversion and reads `[rendered]`, where it showed the payload JSON and read `[payload]`.
+  Its `user.message` unit tried the verbatim payload before the render seam, so this one
+  view disagreed with an address on the same line. Measured: 20 of the 164 human-origin
+  `queued_command` lines on one projects root carry a conversion.
 - **The `for` array is named once on each help surface.** Four families each listed the
   shared provenance key in `show --help`'s record-row table under their own block, spelled
   four different ways, so a consumer reading that enumeration read four keys; it is one
