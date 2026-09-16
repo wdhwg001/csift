@@ -140,8 +140,10 @@ impl Marker {
 /// record text, the answered-AUQ dual, the elicitation marker) carries `None`, and a
 /// multi-block record hands each block in turn, because a per-block fact - the length of
 /// a thinking block's signature, say - is the BLOCK's and not the record's.
-// The THIRD targeted `dead_code` allow in the crate (AGENTS section 4 lists the other
-// two), and it is a fact about WHERE the readers live rather than about the fields. Both
+// The THIRD of the three allows AGENTS section 4 names by hand - beside the tolerant
+// `model::Record` fields and the `model::inventory` documentation surface - and, like
+// them, a surface that exists before its readers do rather than rot. It is a fact about
+// WHERE the readers live rather than about the fields. Both
 // are written by the emission engine on every unit and read by the family `facts()`
 // bodies in `record_text/`, which ship as stubs at the skeleton amendment and are filled
 // one family at a time. Without the allow the amendment cannot land the parameter the
