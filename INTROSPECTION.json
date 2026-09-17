@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2457",
+          "lines": "2459",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -35727,7 +35727,7 @@
     {
       "id": "MISC-006",
       "area": "misc",
-      "behavior": "A conversation FORK, rewind, retry or parallel lane leaves one plain DAG fact: some record has MORE THAN ONE conversation child (a later `parentUuid` re-attach). SIBLING SHAPE alone does not say which child is live - parallel tool results share a parent BY CONSTRUCTION, so `user` records carrying a `tool_result` block are not conversation children at all, and a repeated-uuid append run wears the same shape without being a fork. What DOES decide it comes from Claude Code rather than from the shape: the loader's own resume walk starts from a chosen leaf, reads `parentUuid` only, cycle-guarded, stops at a boundary's null parent (2.1.258 @166189523, guarded by `tengu_transcript_parent_cycle`) and never follows `logicalParentUuid`, none of whose 12 occurrences in that executable is a load-path reader. That walk reaches exactly one child of a fork, widened only by the two membership passes (MISC-034, MISC-035, MISC-036, MISC-038).",
+      "behavior": "A conversation FORK, rewind, retry or second session running in parallel leaves one plain DAG fact: some record has MORE THAN ONE conversation child (a later `parentUuid` re-attach). SIBLING SHAPE alone does not say which child is live - parallel tool results share a parent BY CONSTRUCTION, so `user` records carrying a `tool_result` block are not conversation children at all, and a repeated-uuid append run wears the same shape without being a fork. What DOES decide it comes from Claude Code rather than from the shape: the loader's own resume walk starts from a chosen leaf, reads `parentUuid` only, cycle-guarded, stops at a boundary's null parent (2.1.258 @166189523, guarded by `tengu_transcript_parent_cycle`) and never follows `logicalParentUuid`, none of whose 12 occurrences in that executable is a load-path reader. That walk reaches exactly one child of a fork, widened only by the two membership passes (MISC-034, MISC-035, MISC-036, MISC-038).",
       "depends": "`show --branch-points` reports the fork facts and ranks them by widest inter-child time gap, and it NAMES the live child - read off the chain, never guessed from sibling shape, which is why the shape-keyed prototype was refuted. Every other child carries the chain's verdict (`rewound` when an assistant record hangs below it, `draft` when none does, `abandoned` mid-branch, `pre-cut` above the chain FLOOR). How far that chain climbed is therefore part of the answer and is disclosed beside the tree: csift's walk steps over up to `--cross-compactions` compaction boundaries, so a child above a crossed cut gets a resolved verdict while one above the floor stays `pre-cut`. If the load rule moved, the live child and the verdicts would move with it; the fork rows themselves would not, since they are the plain DAG fact.",
       "code": [
         {
@@ -88288,7 +88288,7 @@
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "137-148",
+          "lines": "164-175",
           "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
@@ -88431,12 +88431,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "172-185",
+          "lines": "199-212",
           "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message_id())\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "221-232",
+          "lines": "248-259",
           "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
         }
       ],
@@ -88914,12 +88914,12 @@
       "id": "MISC-043",
       "area": "misc",
       "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The boundary's own `parentUuid` is null on every specimen (275 of 275 boundary records over the top-level transcripts of one projects root), so a reader that walks `parentUuid` ends on the boundary whatever the logical parent says, and the loader never reads the field. Nothing on the write path keeps the named record alive either: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 82 uuid-named top-level transcripts, one observation per boundary record: 275 `compact_boundary` records across 23 compacted files, every one of them naming a `logicalParentUuid`, of which 223 name a `uuid` that is on some line of their own file and 52 name one that is on no line of it, the 52 spread over 14 files. Per FILE: 9 of the 23 have every boundary resolvable, 4 have none.",
-      "depends": "csift's walk climbs `parentUuid` and, where that runs out on a boundary, follows `logicalParentUuid` under the `--cross-compactions` budget. This census is what decides whether that door opens: a boundary naming a record no line of the file carries cannot be crossed at ANY budget, so the walk ends there and reports the floor cause `unresolvable-boundary`, which tells a reader that raising the flag would change nothing. The other floor cause is `budget-exhausted`, and only that one moves with the flag. Above either floor an off-chain record is `pre-cut` and never `abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it. The boundary also EXPOSES that link as a `precedes` provenance edge, which is where the dangling share becomes a rendered answer: a predecessor still on disk resolves to its line, and one deleted with the region renders the id with `not in this file` rather than being dropped.",
+      "depends": "csift's walk climbs `parentUuid` and, where that runs out on a boundary, follows `logicalParentUuid` under the `--cross-compactions` budget. This census is what decides whether that door opens, and a shut door is THREE facts rather than one, each with its own floor cause: `unresolvable-boundary` when the named uuid is on no line of the file (the 52 this census counts), `relink-removed` when it names a record the file carries that the pre-boundary cut took out of the uuid map, and `boundary-loop` when it names a record the walk has already reached, whose door leads back into the conversation instead of above the cut. None of the three moves with the flag, which is what a reader needs to know; the fourth cause, `budget-exhausted`, is the one that can, and even there the report probes the boundary it stopped at before naming a value, because a budget can run out AT a door that is shut. Splitting them matters because two of the three leave a LINE a reader can open: telling them `names no record this file carries` about a record eight lines up sends them looking for something that is right there. Above either floor an off-chain record is `pre-cut` and never `abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. Above either floor an off-chain record is `pre-cut` and never `abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it. The boundary also EXPOSES that link as a `precedes` provenance edge, which is where the dangling share becomes a rendered answer: a predecessor still on disk resolves to its line, and one deleted with the region renders the id with `not in this file` rather than being dropped.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "110-125",
-          "snippet": "        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            out.floor_crossable = over.is_some();\n            break;\n        }\n        let Some(j) = over else {\n            out.cause = FloorCause::UnresolvableBoundary;\n            out.boundary = Some(i);\n            break;\n        };"
+          "lines": "150-159",
+          "snippet": "fn shut_door(b: &Builder<'_>, i: usize) -> FloorCause {\n    let Some(slot) = b.recs[i].logical_parent_uuid().and_then(|u| b.map_slot(u)) else {\n        return FloorCause::UnresolvableBoundary;\n    };\n    if b.cut_removed(slot) {\n        FloorCause::RelinkRemoved\n    } else {\n        FloorCause::BoundaryLoop\n    }\n}"
         },
         {
           "path": "src/model/chain/branches.rs",
@@ -88932,7 +88932,7 @@
           "snippet": "            rec.logical_parent_uuid.as_deref(),"
         }
       ],
-      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set and record whether its own `parentUuid` is null. Counting rule: one observation per boundary record; a file counts once if it holds at least one boundary and once again if it holds at least one dangling boundary. Then run `csift search '' <file> --no-subagents --format json --cross-compactions all` on a compacted transcript and read the summary's `floor_cause`: a file whose reachable boundary is dangling reports `unresolvable-boundary` with `boundaries_crossed` 0 however large the budget.",
+      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set and record whether its own `parentUuid` is null. Counting rule: one observation per boundary record; a file counts once if it holds at least one boundary and once again if it holds at least one dangling boundary. Then run `csift search '' <file> --no-subagents --format json --cross-compactions all` on a compacted transcript and read the summary's `floor_cause`: a file whose reachable boundary is dangling reports `unresolvable-boundary` with `boundaries_crossed` 0 however large the budget. The FLOOR-cause split is measured separately, because a uuid on a line is not the same as a uuid the chain can use: run `csift stats <file> --no-subagents --format json --cross-compactions all` over every uuid-named top-level transcript and census the session row's `floor_cause`, one observation per transcript path.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -88995,6 +88995,16 @@
           "observed": "82 top-level transcripts, 23 carrying at least one boundary, 275 boundary records; 275 of 275 carry a null `parentUuid` and 275 of 275 name a `logicalParentUuid`; 223 of those name a uuid on some line of the same file and 52 do not, the 52 over 14 files. Per file, 9 of 23 resolve every boundary and 4 resolve none. At `--cross-compactions all`, 4 of the 6 measured transcripts report `floor_cause` `unresolvable-boundary` with `boundaries_crossed` 0, one reports `head` with no boundary on the walk's path, and the landmark crosses 2 and then meets a dangling one with 77 boundaries still above its floor.",
           "rule": "One observation per boundary record; a file counts once per predicate it satisfies. One floor_cause per transcript, read from the trailing summary of a single-transcript scan.",
           "note": "The claim said csift does not cross a cut and that the `logicalParentUuid` arm is a guard for a shape with no specimens. csift now crosses under a budget, and this census is what separates the boundary a budget can step over from the one it cannot."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Censused the session row's `floor_cause` from `csift stats <file> --no-subagents --format json --cross-compactions all` over every uuid-named top-level transcript of the projects root, one observation per transcript path, and read the boundary at the two flagged floors back off the raw jsonl (its `logicalParentUuid` against the `uuid` of every line, and that line's own survival).",
+          "observed": "82 transcripts: 63 floors read `head`, 1 `no-leaf`, and 18 end on a compaction boundary. Of those 18, 9 name a uuid on no line of the file, 0 name one the pre-boundary cut removed from the map, and 9 name one the walk had ALREADY reached - so half the boundary floors were being reported as `names no record this file carries` about a record the file does carry. Two of them read back directly: the boundary at L1904 of one transcript names a uuid whose record is L1896 (an attachment, `survival` live under the same command), and the boundary at L2762 of another names a uuid whose record is L2752 (a user record). Both boundaries carry a `preservedSegment` whose `tailUuid` IS that logical parent, which is the mechanism: the relink re-parents the preserved set into the chain, the walk climbs it, and the boundary's door then points back at a record it has passed.",
+          "rule": "One observation per top-level transcript path (never a `subagents/` path); the floor cause is the session row's, at a budget large enough that no floor is the budget's doing.",
+          "note": "The disk census (275 boundaries, 52 naming a uuid on no line, over 14 files) is unchanged - it counts BOUNDARIES and this counts FLOORS. What changed is csift's reading: `unresolvable-boundary` used to absorb all three shut doors, so its printed reason was false on half of them."
         }
       ]
     },
@@ -96396,7 +96406,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3235"
+          "lines": "3237"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

@@ -119,7 +119,7 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
             break;
         }
         let Some(j) = over else {
-            out.cause = FloorCause::UnresolvableBoundary;
+            out.cause = shut_door(b, i);
             out.boundary = Some(i);
             break;
         };
@@ -129,6 +129,33 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
     rescue_message_id(b);
     rescue_leaf_descendants(b, leaf);
     out
+}
+
+/// WHY a boundary's door is shut, which is THREE different facts about the same file and
+/// not one. The `logicalParentUuid` can name a record on NO line of it (the pre-compaction
+/// records were deleted from disk - claim MISC-043); it can name a record the file DOES
+/// carry that the pre-boundary RELINK CUT removed from the uuid map; or it can name a record
+/// the walk has ALREADY reached, whose door therefore leads back into the conversation
+/// instead of above the cut. All three are floors at every budget, so none of them is a
+/// reason to re-run - but two of them leave a line a reader can open, and telling a reader
+/// "names no record this file carries" about a record sitting 8 lines up sends them looking
+/// for something that is right there.
+///
+/// Measured over the 82 top-level transcripts of one projects root at
+/// `--cross-compactions all`, 18 end on a boundary and the three facts split 9 / 0 / 9: nine
+/// name a uuid on no line, none name one the cut removed, and nine name one the walk had
+/// already reached (the relink re-parents a preserved set into the chain, the walk climbs
+/// it, and the boundary's own logical parent is that segment's tail). The other 64 floors
+/// are 63 heads and one file with no leaf at all.
+fn shut_door(b: &Builder<'_>, i: usize) -> FloorCause {
+    let Some(slot) = b.recs[i].logical_parent_uuid().and_then(|u| b.map_slot(u)) else {
+        return FloorCause::UnresolvableBoundary;
+    };
+    if b.cut_removed(slot) {
+        FloorCause::RelinkRemoved
+    } else {
+        FloorCause::BoundaryLoop
+    }
 }
 
 /// The parent repair: among UNVISITED records with the same `isSidechain`, the one whose

@@ -207,6 +207,8 @@ fn the_floor_cause_spellings_are_the_wire_and_the_prose() {
         (FloorCause::NoLeaf, "no-leaf"),
         (FloorCause::BudgetExhausted, "budget-exhausted"),
         (FloorCause::UnresolvableBoundary, "unresolvable-boundary"),
+        (FloorCause::RelinkRemoved, "relink-removed"),
+        (FloorCause::BoundaryLoop, "boundary-loop"),
         (FloorCause::DanglingParent, "dangling-parent"),
         (FloorCause::Cycle, "cycle"),
     ] {
@@ -233,6 +235,16 @@ fn every_floor_cause_prints_its_own_words() {
     assert_eq!(
         FloorCause::UnresolvableBoundary.reason(),
         "a compaction boundary whose logicalParentUuid names no record this file carries"
+    );
+    assert_eq!(
+        FloorCause::RelinkRemoved.reason(),
+        "a compaction boundary whose logicalParentUuid names a record the relink cut \
+         removed from the uuid map"
+    );
+    assert_eq!(
+        FloorCause::BoundaryLoop.reason(),
+        "a compaction boundary whose logicalParentUuid names a record the walk had \
+         already reached"
     );
     assert_eq!(
         FloorCause::DanglingParent.reason(),

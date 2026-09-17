@@ -120,10 +120,22 @@ pub enum FloorCause {
     /// A compaction boundary the crossing budget would not step over. Raising the budget
     /// moves this floor.
     BudgetExhausted,
-    /// A compaction boundary whose `logicalParentUuid` names no record the map still
-    /// holds - the pre-compaction records were deleted, or the boundary names none.
-    /// Raising the budget changes nothing here.
+    /// A compaction boundary whose `logicalParentUuid` names no record on any line of
+    /// this file - the pre-compaction records were deleted from disk, or the boundary
+    /// names nothing at all. Raising the budget changes nothing here.
     UnresolvableBoundary,
+    /// A compaction boundary whose `logicalParentUuid` names a record this file DOES
+    /// carry, on a line a reader can open, which the pre-boundary RELINK CUT took out of
+    /// the uuid map before any leaf was picked. On disk and off the map is a different
+    /// fact from gone, and a reader chasing the line number needs to be told which.
+    RelinkRemoved,
+    /// A compaction boundary whose `logicalParentUuid` names a record the walk has ALREADY
+    /// reached, so its door leads back into the conversation rather than above the cut.
+    /// Half of the boundary floors on real data: the relink re-parents a preserved set
+    /// into the chain, the walk climbs it, and the boundary's own logical parent is that
+    /// segment's tail - 9 of the 18 boundary floors over one projects root read this way
+    /// at `--cross-compactions all`.
+    BoundaryLoop,
     /// A `parentUuid` naming no record in this file, with no repair within the 5 s window.
     DanglingParent,
     /// The parent links loop back on themselves.
@@ -139,6 +151,8 @@ impl FloorCause {
             FloorCause::NoLeaf => "no-leaf",
             FloorCause::BudgetExhausted => "budget-exhausted",
             FloorCause::UnresolvableBoundary => "unresolvable-boundary",
+            FloorCause::RelinkRemoved => "relink-removed",
+            FloorCause::BoundaryLoop => "boundary-loop",
             FloorCause::DanglingParent => "dangling-parent",
             FloorCause::Cycle => "cycle",
         }
@@ -153,6 +167,14 @@ impl FloorCause {
             FloorCause::BudgetExhausted => "a compaction boundary the budget would not cross",
             FloorCause::UnresolvableBoundary => {
                 "a compaction boundary whose logicalParentUuid names no record this file carries"
+            }
+            FloorCause::RelinkRemoved => {
+                "a compaction boundary whose logicalParentUuid names a record the relink cut \
+                 removed from the uuid map"
+            }
+            FloorCause::BoundaryLoop => {
+                "a compaction boundary whose logicalParentUuid names a record the walk had \
+                 already reached"
             }
             FloorCause::DanglingParent => "a parentUuid naming no record in this file",
             FloorCause::Cycle => "a cycle in the parent links",
@@ -213,7 +235,14 @@ impl CrossingReport {
         !self.budget.is_off()
             && (self.boundaries_crossed > 0
                 || self.budget_exhausted
-                || self.cause == Some(FloorCause::UnresolvableBoundary))
+                || matches!(
+                    self.cause,
+                    Some(
+                        FloorCause::UnresolvableBoundary
+                            | FloorCause::RelinkRemoved
+                            | FloorCause::BoundaryLoop
+                    )
+                ))
     }
 
     /// Do the JSON keys ride this stream? Whenever crossing was ENABLED, so a machine
@@ -253,7 +282,8 @@ impl CrossingReport {
             // anyway: its logicalParentUuid names no record this file carries, so every
             // larger budget walks to this same record.
             Some(FloorCause::BudgetExhausted) => {
-                "raising the budget lands on this same record - the boundary it stopped at                  names no record this file carries"
+                "raising the budget lands on this same record - the boundary it stopped at \
+                 names no record this file carries"
                     .to_string()
             }
             // Every other cause prints its own words immediately before this clause, so the

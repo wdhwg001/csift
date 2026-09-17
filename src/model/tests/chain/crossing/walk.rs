@@ -82,6 +82,71 @@ fn a_boundary_naming_no_resolvable_record_is_a_floor_under_every_budget() {
 }
 
 #[test]
+fn a_shut_boundary_door_is_named_by_which_of_three_facts_shut_it() {
+    // Both floors are boundaries the walk cannot climb, and a reader is told which kind.
+    // Here the boundary's `logicalParentUuid` names `a0`, which IS on a line of this file -
+    // the pre-boundary relink cut took it out of the uuid map, because the compaction
+    // PRESERVED a later record and everything before the preserved set is dropped. Calling
+    // that "names no record this file carries" sends a reader looking for a line that is
+    // right there; calling it relink-removed tells them the record is on disk and off the
+    // map, which is the fact they need.
+    let r = recs(&[
+        &u("u0", "", "old prompt", "2026-06-07T05:00:00.000Z"),
+        &a("a0", "u0", "old reply", "2026-06-07T05:00:05.000Z"),
+        &u("u1", "a0", "kept prompt", "2026-06-07T05:00:10.000Z"),
+        &a("a1", "u1", "kept reply", "2026-06-07T05:00:15.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto","preservedMessages":{"anchorUuid":"u1","uuids":["u1","a1"],"allUuids":["u1","a1"]}}}"#,
+        r#"{"type":"user","uuid":"s1","parentUuid":"b1","isCompactSummary":true,"timestamp":"2026-06-07T05:10:01.000Z","message":{"role":"user","content":"summary"}}"#,
+        &u("u2", "s1", "new prompt", "2026-06-07T05:11:00.000Z"),
+        &a("a2", "u2", "new reply", "2026-06-07T05:11:05.000Z"),
+    ]);
+    let c = Chain::build(&r, None, CrossingBudget::Unbounded);
+    assert_eq!(c.floor_cause, FloorCause::RelinkRemoved);
+    assert_eq!(c.boundaries_crossed, 0, "the door is shut either way");
+    assert!(!c.budget_exhausted, "the budget was never the obstacle");
+    assert!(
+        c.crossing(Some(5), None).lines()[1].contains("removed from the uuid map"),
+        "{:?}",
+        c.crossing(Some(5), None).lines()
+    );
+
+    // THIRD shape, and the commonest of the three on real data: the boundary's logical
+    // parent is a record the walk has ALREADY reached, so its door leads back into the
+    // conversation rather than above the cut. Nothing is gone and nothing was removed - the
+    // link simply points downstream - and a reader told "names no record this file carries"
+    // about a line they can open learns the wrong thing.
+    let loops = recs(&[
+        &u("u0", "", "old prompt", "2026-06-07T05:00:00.000Z"),
+        &a("a0", "u0", "old reply", "2026-06-07T05:00:05.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"a1","timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
+        r#"{"type":"user","uuid":"s1","parentUuid":"b1","isCompactSummary":true,"timestamp":"2026-06-07T05:10:01.000Z","message":{"role":"user","content":"summary"}}"#,
+        &u("u1", "s1", "new prompt", "2026-06-07T05:11:00.000Z"),
+        &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
+    ]);
+    let c = Chain::build(&loops, None, CrossingBudget::Unbounded);
+    assert_eq!(c.floor_cause, FloorCause::BoundaryLoop);
+    assert_eq!(c.boundaries_crossed, 0);
+    assert!(
+        c.crossing(Some(3), None).lines()[1].contains("the walk had already reached"),
+        "{:?}",
+        c.crossing(Some(3), None).lines()
+    );
+
+    // The same shape with the logical parent naming a uuid on no line keeps the other name.
+    let gone = recs(&[
+        &u("u0", "", "old prompt", "2026-06-07T05:00:00.000Z"),
+        &a("a0", "u0", "old reply", "2026-06-07T05:00:05.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"deleted-from-disk","timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
+        &u("u1", "b1", "new prompt", "2026-06-07T05:11:00.000Z"),
+        &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
+    ]);
+    assert_eq!(
+        Chain::build(&gone, None, CrossingBudget::Unbounded).floor_cause,
+        FloorCause::UnresolvableBoundary
+    );
+}
+
+#[test]
 fn a_stack_of_five_boundaries_stops_after_three_under_budget_three() {
     // The counting rule the disclosure rests on: three stepped over, the fourth met with
     // no budget left (so it is the floor), and TWO boundaries remain uncrossed - the floor's

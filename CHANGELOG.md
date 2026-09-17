@@ -340,7 +340,9 @@ surface change bumps the PATCH.
   under it csift says nothing about crossing at all, neither a footer line nor a JSON key.
   The footer is never silent otherwise: it names how many boundaries were stepped over, how
   many were not, where the chain floor sits, WHY it sits there - a budget that ran out, or a
-  boundary naming a record no line of the file carries - and a flag value, but only after
+  boundary whose door is shut, named by which of three facts shut it: the record is on no
+  line of the file, it is on a line the pre-boundary cut took out of the map, or it is on a
+  line the walk had already reached - and a flag value, but only after
   probing whether one more unit of budget would actually move that floor: a budget can run
   out AT a boundary whose own logical parent is gone, and there every larger budget lands on
   the same record. JSON carries the same six facts as

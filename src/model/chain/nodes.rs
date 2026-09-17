@@ -318,6 +318,19 @@ impl<'a> Builder<'a> {
         (!self.removed[slot.last]).then_some(slot.last)
     }
 
+    /// WHY a uuid does not resolve, for a caller that needs to say so. [`Builder::resolve`]
+    /// answers `None` three different ways and a reader chasing the record needs to be told
+    /// which: the map never held the uuid at all, the map holds it for a record the
+    /// pre-boundary CUT removed, or it holds a live record the caller itself rules out.
+    pub(crate) fn map_slot(&self, uuid: &str) -> Option<usize> {
+        self.map.get(uuid).map(|slot| slot.last)
+    }
+
+    /// Was the record this uuid names taken out of the map by the pre-boundary cut?
+    pub(crate) fn cut_removed(&self, i: usize) -> bool {
+        self.removed[i]
+    }
+
     /// Is this line the survivor for its uuid (not an earlier replay copy)?
     pub(crate) fn is_survivor(&self, i: usize) -> bool {
         self.admit[i] && !self.replay_of.contains_key(&i)
