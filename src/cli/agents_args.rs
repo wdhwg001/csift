@@ -89,8 +89,10 @@ pub enum AgentKindFilter {
         only - `agents` is EXACTLY the number of {kind:\"agent\"} rows that follow it, and \
         the text tree prints that same set in that same order, so the two projections can \
         never disagree; two copies of one session whose contents DIFFER keep both sidecars \
-        in scope, so an agent with a copy under each gets a ROW PER COPY and they share an \
-        id - the `copies` line above says why); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
+        in scope, and the agent copies inside them take the same merge as any transcript - \
+        identical or prefix copies collapse to ONE row, only an agent whose OWN copies \
+        differ gets a row per copy, and those two share an id - the `copies` line above \
+        says why); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
         workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
         default_model, started_utc, started_local} row followed by its member agent rows \
         (a RUN row's `status` is the workflow journal's own last status VERBATIM: an OPEN \
@@ -101,7 +103,8 @@ pub enum AgentKindFilter {
         children[] array in JSON, the tree renders in TEXT mode); a closing \
         {kind:\"summary\", sessions, runs, agents} terminator. Agent-row fields: {agent_id, \
         path (the node's OWN transcript - two copies of one session carry two copies of \
-        each agent transcript and those rows share every other id, so the path is what \
+        each agent transcript, and where those copies diverge both rows survive sharing \
+        every other id, so the path is what \
         names which lane a row is; the text tree prints a `transcript` line for exactly \
         the ids that occur twice), \
         shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \

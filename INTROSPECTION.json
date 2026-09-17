@@ -10259,7 +10259,7 @@
       "code": [
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "117-120",
+          "lines": "120-123",
           "snippet": "        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \\\n        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \\\n        hours/days is overwhelmingly \\\"parent session ended, nobody is coming back\\\", not \\\n        in-flight work: weigh `pending_since_utc` against now yourself; \\"
         }
       ],
@@ -66641,7 +66641,7 @@
         },
         {
           "path": "src/subagent/topology.rs",
-          "lines": "387-396",
+          "lines": "388-397",
           "snippet": "    // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the\n    // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its\n    // parent's transcript, so the spawning tool_use sits in the child's own file and the\n    // graph join names the child as its own parent (measured: every depth-65 node was\n    // such a self-cycle before v0.10.1).\n    let not_self = |p: String| (p != subagent.agent_id).then_some(p);\n    let parent_agent_id = subagent\n        .meta_parent_agent_id\n        .clone()\n        .and_then(not_self)"
         },
         {
@@ -67475,7 +67475,7 @@
       "code": [
         {
           "path": "src/subagent/topology.rs",
-          "lines": "216-219",
+          "lines": "217-220",
           "snippet": "/// Read every top-level `<session>/workflows/wf_*.json` manifest (\u00a75) as a [`WorkflowRun`].\n/// Returns an empty vec when the session has no sidecar / no `workflows/` dir (never an\n/// error for the common no-workflow case). The `workflows/scripts/` subdir and any\n/// non-`wf_*.json` entry are ignored."
         },
         {
@@ -68547,7 +68547,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "139",
+          "lines": "142",
           "snippet": "\\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\"
         },
         {
@@ -68557,7 +68557,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "138-144",
+          "lines": "141-147",
           "snippet": "        SEMANTICS: it answers \\\"what did the ORCHESTRATOR record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
         }
       ],
@@ -75692,7 +75692,7 @@
       "code": [
         {
           "path": "src/subagent/topology.rs",
-          "lines": "99-102",
+          "lines": "100-103",
           "snippet": "/// Only a SHELL call can carry a dangerous removal, and only the `Bash` tool runs\n/// POSIX syntax: Windows ships a separate `PowerShell` tool whose commands these\n/// lexical layers do not model, so such a lane is awaiting-execution with no\n/// predicted reason rather than a verdict drawn from the wrong grammar."
         },
         {
@@ -77608,7 +77608,7 @@
       "code": [
         {
           "path": "src/subagent/topology.rs",
-          "lines": "99-102",
+          "lines": "100-103",
           "snippet": "/// Only a SHELL call can carry a dangerous removal, and only the `Bash` tool runs\n/// POSIX syntax: Windows ships a separate `PowerShell` tool whose commands these\n/// lexical layers do not model, so such a lane is awaiting-execution with no\n/// predicted reason rather than a verdict drawn from the wrong grammar."
         },
         {

@@ -97,8 +97,10 @@ pub(crate) fn render_json(
 /// The visited set keys on each node's POSITION in the set, not on its `agent_id`. Two
 /// copies of one session under two project directories whose contents DIVERGE stay in scope
 /// by the merge rule (§2.5), and they carry two copies of each agent transcript, which share
-/// an id by construction: keying on the id emitted one of the pair while the session row
-/// counted both, which is exactly the disagreement between the count and the rows. A
+/// an id by construction - identical copies merge away, a DIVERGENT pair does not, so the
+/// set can still hold two nodes under one id: keying on the id emitted one of the pair while
+/// the session row counted both, which is exactly the disagreement between the count and the
+/// rows. A
 /// position still guards the cycle a `parent_agent_id` chain can name, because a node is
 /// reached twice only through an edge and never through itself.
 pub(crate) fn preorder_depth<'a>(nodes: &[&'a SubagentNode]) -> Vec<(&'a SubagentNode, usize)> {

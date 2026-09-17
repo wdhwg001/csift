@@ -12,8 +12,9 @@ pub struct SubagentNode {
     /// Bare-hex canonical agent id (== record `agentId`).
     pub agent_id: String,
     /// Absolute path to this node's own transcript. Two copies of one session under two
-    /// project directories carry two copies of each agent transcript, and those nodes share
-    /// every id they have - the path is the only field that tells the lanes apart.
+    /// project directories carry two copies of each agent transcript, and where those copies
+    /// DIVERGE both survive the merge sharing every id they have - the path is the only
+    /// field that tells the lanes apart.
     pub path: PathBuf,
     pub kind: SubagentKind,
     pub parent_session_id: String,
