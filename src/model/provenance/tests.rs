@@ -279,30 +279,32 @@ fn inventory_edges(md: &str) -> Vec<&str> {
 /// This reads the help TEXT the way a person does and holds each tag word to `EdgeKind`.
 /// `<kind>` is skipped: it is the manuals' own placeholder for "any relation word", not a
 /// word.
+///
+/// It renders the WHOLE page through clap, for the root and for every subcommand, rather
+/// than reading the `after_help` blocks. Most of a rendered `--help` is the ARGUMENT docs,
+/// which those blocks do not contain: a stale tag in a flag's own doc comment - where the
+/// `hook run` spelling in fact survived - sits outside them entirely, and a guard that reads
+/// only the epilogue passes while the reader sees the wrong word. Rendering also costs
+/// nothing here and cannot drift from what ships, because it IS what ships.
 #[test]
 fn every_for_tag_the_help_renders_names_a_relation_of_the_vocabulary() {
     use clap::CommandFactory;
-    let cmd = crate::cli::Cli::command();
+    let mut cmd = crate::cli::Cli::command();
     let words: Vec<&'static str> = EdgeKind::ALL.iter().map(|k| k.as_str()).collect();
-    let mut seen = 0usize;
-    for name in ["search", "show"] {
-        let sub = cmd
-            .get_subcommands()
-            .find(|s| s.get_name() == name)
-            .unwrap_or_else(|| panic!("no `{name}` subcommand"));
-        let text = format!(
-            "{}\n{}",
-            sub.get_after_help()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            sub.get_after_long_help()
-                .map(ToString::to_string)
-                .unwrap_or_default()
-        );
+    let mut pages: Vec<(String, String)> =
+        vec![("csift".to_string(), cmd.render_long_help().to_string())];
+    for sub in cmd.get_subcommands_mut() {
+        pages.push((
+            sub.get_name().to_string(),
+            sub.render_long_help().to_string(),
+        ));
+    }
+    let mut found: Vec<String> = Vec::new();
+    for (name, text) in &pages {
         for (i, _) in text.match_indices("[for: ") {
             let rest = &text[i + "[for: ".len()..];
-            // The tag's word runs to the first space or the closing bracket; a help body is
-            // wrapped with `\`-continuations, so a word can be followed by a newline too.
+            // The tag's word runs to the first space or the closing bracket; a rendered page
+            // is wrapped, so a word can be followed by a newline too.
             let end = rest
                 .find(|c: char| c.is_whitespace() || c == ']')
                 .unwrap_or(rest.len());
@@ -310,17 +312,29 @@ fn every_for_tag_the_help_renders_names_a_relation_of_the_vocabulary() {
             if word == "<kind>" {
                 continue;
             }
-            seen += 1;
             assert!(
                 words.contains(&word),
-                "`{name} --help` renders [for: {word} ...], which is no relation of the \
-                 vocabulary: {words:?}"
+                "`csift {name} --help` renders [for: {word} ...], which is no relation of \
+                 the vocabulary: {words:?}"
             );
+            found.push(word.to_string());
         }
     }
+    found.sort();
+    found.dedup();
+    // A bare count would pass on one tag repeated, so the floor is on DISTINCT words, and
+    // `hook_run` is named outright: it is the word that drifted, the only two-part spelling
+    // the vocabulary ever had, and the one a reader of the rendered page cannot check
+    // against the enum.
     assert!(
-        seen >= 3,
-        "the two manuals rendered {seen} concrete `for` tags - the reader this guards is \
-         gone, or the extraction stopped matching"
+        found.iter().any(|w| w == "hook_run"),
+        "the rendered pages no longer show a `hook_run` tag, so the respelling this guard \
+         exists for is unwatched: {found:?}"
+    );
+    assert!(
+        found.len() >= 3,
+        "the rendered pages carried {} distinct `for` words ({found:?}) - the reader this \
+         guards is gone, or the extraction stopped matching",
+        found.len()
     );
 }
