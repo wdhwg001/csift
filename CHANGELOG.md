@@ -111,10 +111,14 @@ surface change bumps the PATCH.
   scope carries. Multi-key like `label`, distinct per record, counting a relation whether
   or not csift resolved its target.
 - **`--for <ADDR>`**, the reverse query: everything that is for one record, transitively.
-  The address is `L<line>` or a bare number (per file) or a record uuid (global). One query
+  The address is `L<line>` or a bare number (per file) or a record uuid, which finds its
+  record in whichever scanned transcript carries it; the closure itself is computed per
+  transcript. One query
   returns the reply a message drew, the results of the calls that reply made, and the
   `<task-notification>` that reports on one of those two turns later; the parent arm stops
-  at a turn boundary, so the person's next question does not come back. The summary gains
+  at a turn boundary, so the person's next question does not come back. Three structural
+  relations admit a row - the parent link, a result answering a member's call, a record
+  naming a member's call by id - and the rest of the vocabulary is not reverse-walked. The summary gains
   `for_of` (`address`, `records`, `transcripts`).
 - **Every non-transcript line type says what it holds.** The head-and-body law landed with
   twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
