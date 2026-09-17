@@ -299,7 +299,6 @@ surface change bumps the PATCH.
   with its own key. A drift test holds the table's `for[]` block to `EdgeKind` in both
   directions.
 
-
 ### Changed
 
 - **An unmodeled unit's excerpt elides an opaque `data` blob.** The key=value excerpt cuts

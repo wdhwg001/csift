@@ -89286,7 +89286,7 @@
       "id": "REC-102",
       "area": "record-model",
       "behavior": "A branch the conversation left behind stays on disk in full, and it is not small. Census over 75 top-level transcripts (834,912 lines, 672,983 uuid-bearing records, 0 unparsable): 1,481 abandoned roots in 44 of the 75 files - 1,307 user and 174 assistant - whose subtrees hold 11,142 records (1,912 user, 716 assistant, 8,391 attachment, 123 system) carrying 422 `tool_use` blocks. Of the 1,307 user roots, 57 have an assistant descendant (a branch that drew a reply before the conversation moved elsewhere) and 1,250 have none (a recalled prompt). The shape follows from the rewind writing nothing: the array is truncated in memory and the next prompt is chained onto the same parent, so the old branch simply stops being extended, with every one of its records still present, still addressable, and still the true account of what hit the disk at the time.",
-      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` when `parentUuid` is null, which is the census walk's rule and neither Claude Code's nor csift's: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader, and csift's own walk stops on that same record and flags what sits above it `pre-cut` rather than calling it abandoned. So the census partitions a compacted file differently from the shipped axis, and its counts are a statement about record shapes on disk, not a reproduction of the `survival` values csift prints.",
+      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` when `parentUuid` is null, which is the census walk's rule and neither Claude Code's nor csift's: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader, and csift's own walk stops on that same record and flags what sits above it `pre-cut` rather than calling it abandoned. So the census partitions a compacted file differently from the shipped axis, and its counts are a statement about record shapes on disk, not a reproduction of the `survival` values csift prints. Every record on such a branch also emits a `branches` provenance edge naming the branch HEAD, so the abandoned set is followable to the prompt it hangs off rather than only marked; the head names none, because an edge from a record to itself points at nothing.",
       "code": [
         {
           "path": "src/commands/show/branch.rs",
@@ -89297,6 +89297,11 @@
           "path": "src/commands/recover/scan.rs",
           "lines": "138-143",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
+        },
+        {
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "277-279",
+          "snippet": "            .abandoned_root(idx)\n            .filter(|&root| root != idx)\n            .and_then(|root| edge(crate::model::EdgeKind::Branches, Basis::Position, root)),"
         }
       ],
       "instrument": "One python pass per top-level transcript: build the uuid map, take the file-order LAST conversation record (type user or assistant) as the leaf, walk `parentUuid` upward with a cycle guard following `logicalParentUuid` when `parentUuid` is null, then count abandoned roots (a conversation record off that chain whose parent uuid is on it, where the child uuid and the parent uuid each occupy exactly one line) and walk each root's subtree downward through `parentUuid`, skipping chain members. Separately read the loader's own walk in the 2.1.258 executable and classify every occurrence of `logicalParentUuid`.",
@@ -94914,7 +94919,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/injections.rs",
-          "lines": "239-241",
+          "lines": "241-243",
           "snippet": "fn parent_edge(kind: EdgeKind, rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)\n}"
         },
         {
@@ -94988,7 +94993,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/injections.rs",
-          "lines": "253",
+          "lines": "255",
           "snippet": "fn image_only_blocks(rec: &Record, raw: Option<&str>) -> Option<(usize, usize)> {"
         },
         {

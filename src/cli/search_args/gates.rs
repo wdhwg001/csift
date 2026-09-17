@@ -188,12 +188,16 @@ impl SearchArgs {
 
     /// Does any reader of THIS scan project the ENGINE's own `for` edges?
     ///
-    /// `parent` and `result_of` ride JSON alone - `EdgeKind::rendered_in_label` is false
-    /// for exactly those two and for nothing else - so a scan whose output is TEXT and
-    /// which does not census them renders every byte it renders without either edge ever
-    /// being built. Building them anyway costs two string allocations and two map lookups
-    /// on every emitted hit, which on a wide-match row over a 397 MiB transcript measured
-    /// 0.05 s of 4.47 s CPU for facts nothing on that path can show.
+    /// SIX relations ride JSON alone - `parent`, `result_of` and the four SURVIVAL words
+    /// `supersedes` / `continues` / `replays` / `branches`, which is exactly the set
+    /// `EdgeKind::rendered_in_label` calls false - so a scan whose output is TEXT and which
+    /// does not census them renders every byte it renders without any of them ever being
+    /// built. This gate carries all six: the two one-hop edges are built under it in
+    /// `backfill_provenance`, the four survival ones beside the survival FIELDS in
+    /// `backfill_survival`, and both read this answer. Building them anyway costs a string
+    /// allocation and a map lookup apiece on every emitted hit, which for the two one-hop
+    /// edges on a wide-match row over a 397 MiB transcript measured 0.05 s of 4.47 s CPU
+    /// for facts nothing on that path can show.
     ///
     /// It is NOT a format test: the `for-kind` census is a TEXT surface that reads the
     /// edges, and keying on the format alone would empty two of its keys.

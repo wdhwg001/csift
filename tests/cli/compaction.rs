@@ -72,7 +72,7 @@ fn boundary_excerpt_carries_the_survivor_fields_on_search_and_show() {
 }
 
 #[test]
-fn a_legacy_boundary_renders_byte_for_byte_as_before() {
+fn a_four_scalar_boundary_renders_its_own_fields_and_its_summary_stays_untagged() {
     let h = summarize_home();
     let out = h.run(&[
         "search",

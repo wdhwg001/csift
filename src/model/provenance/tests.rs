@@ -72,14 +72,20 @@ fn every_edge_kind_has_its_own_word() {
 
 /// No word is empty and none carries a character a reader would have to quote to pass it
 /// back - the words are printed in a label zone and read back as census keys.
+///
+/// A SPACE is refused HERE, at the vocabulary, and not only where a fixture happens to
+/// render one: `--count-by for-kind` prints `<count>  <key>` per line, so a key carrying a
+/// space parses as two fields for every reader that splits that surface on whitespace. The
+/// census e2e can only fail for a relation some fixture emits, and a relation nothing in
+/// the suite produces would ship its broken key unnoticed - which is how `hook run` lived
+/// through a release cycle.
 #[test]
 fn every_word_is_printable_as_it_stands() {
     for k in EdgeKind::ALL {
         let w = k.as_str();
         assert!(!w.is_empty(), "{k:?} has no word");
         assert!(
-            w.chars()
-                .all(|c| c.is_ascii_lowercase() || c == '_' || c == ' '),
+            w.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
             "{k:?} renders {w:?}, which is not a bare relation word"
         );
     }

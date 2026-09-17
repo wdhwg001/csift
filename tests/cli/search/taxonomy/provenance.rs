@@ -13,8 +13,10 @@
 //! for the same reason - four leaves render no body and a pattern scan cannot reach them.
 //!
 //! A PAIRED ROOT, split four ways by WHAT IS BEING ASSERTED rather than by size. This file
-//! holds the FAMILY edge set - the rendered vocabulary of the shared 73-leaf fixture, as
-//! one equality - plus the fixture target and the reader every child runs through.
+//! holds the RENDERED edge set - every `for` tag the shared 73-leaf fixture prints, as one
+//! equality - plus the fixture target and the reader every child runs through. Rendered,
+//! not family-built: five of the engine's own relations render a tag and are in the set,
+//! and the six that ride JSON alone are the ones held out.
 //! `provenance/engine.rs` holds what the ENGINE answers for every unit instead of what a
 //! family states about one (the two one-hop relations, the survival ones, the root).
 //! `provenance/census.rs` holds the `--count-by for-kind` surface over that vocabulary.
@@ -176,9 +178,13 @@ const ENGINE_KINDS: [&str; 2] = ["parent", "result_of"];
 /// their own terms below.
 const SURVIVAL_KINDS: [&str; 4] = ["supersedes", "continues", "replays", "branches"];
 
-/// Everything the ENGINE builds: the two one-hop relations and the four survival ones. This
-/// is exactly the set that renders no label-zone tag, which is what makes the family pin a
-/// statement about the FAMILIES rather than about the whole vocabulary.
+/// The relations the engine builds that render NO label-zone tag: the two one-hop ones and
+/// the four survival ones.
+///
+/// NOT everything the engine builds - it owns five more (`pairs`, `precedes`, `preserves`,
+/// `repairs`, `reports`) which DO render, and those stay inside the set pin below beside
+/// the families' words, because what that pin is about is the rendered vocabulary rather
+/// than which layer minted each word.
 fn engine_built(kind: &str) -> bool {
     ENGINE_KINDS.contains(&kind) || SURVIVAL_KINDS.contains(&kind)
 }

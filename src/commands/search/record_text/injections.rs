@@ -164,11 +164,6 @@ pub(crate) fn facts(
         // it, so the prompt's parent IS the event it fired from (claim CLS-031) - which
         // is also the only mark the producer leaves on the prompt itself.
         Class::ScheduleFire => facts.push(parent_edge(EdgeKind::Fires, rec, ctx)),
-        // The notification FRAME is a second carrier of a `<task-notification>` pulse, and
-        // the `reports` edge it used to build is the ENGINE's now: the ORDINARY carrier is
-        // not isMeta and never reached this family at all, so a relation read here answered
-        // for 94 of the 4,007 pulse-carrying records on one projects root. One reader, both
-        // carriers (`search::hit_facts::reports_edge`).
         // The image record. When its content is BLOCKS and no text it renders nothing at
         // all, so the counts are what an address has to show instead of the head of a
         // base64 payload.
@@ -185,6 +180,13 @@ pub(crate) fn facts(
         Class::CommandCaveat | Class::ContextReminder | Class::ContextSkill => {
             facts.push(parent_edge(EdgeKind::AttachedTo, rec, ctx));
         }
+        // The five `harness.notification.*` leaves carry NO edge here, and that is a
+        // deliberate absence rather than a missing arm: the pulse's `reports` edge is the
+        // ENGINE's (`search::hit_facts::provenance::reports_edge`), because the ORDINARY
+        // carrier is not isMeta and never reaches this family's gate at all - a relation
+        // read here answered for 94 of the 4,007 pulse-carrying records on one projects
+        // root. One reader, both carriers.
+        //
         // Every OTHER leaf this family's classify file can assign - the two schedule
         // ticks and the resume repair prompt - carries no edge, because no key on those
         // records names a record they were written for. An empty arm rather than an
