@@ -290,3 +290,80 @@ fn an_unpaired_summary_names_the_reason_the_file_gives() {
         "{edge}"
     );
 }
+
+/// `--for` on a boundary returns its SUMMARY, whose `parent` edge stood down for `pairs`.
+///
+/// The reverse closure walks the LINKS, not the relation words. A summary's `parentUuid`
+/// names the boundary, so the parent arm admits it - and the summary's own hit prints no
+/// `parent` edge at all, because the one-relation-one-edge rule stands `parent` down
+/// wherever another edge on the unit already names that same target, which `pairs` does.
+///
+/// The two facts read as a contradiction to anyone holding only one of them, which is why
+/// `--for`'s help now says both, and why this pins them together: the help lists `precedes`
+/// and `preserves` among the relations the walk does not follow, and `pairs` is NOT in that
+/// list even though it is not one of the three structural arms either.
+#[test]
+fn a_for_query_on_a_boundary_returns_the_summary_whose_parent_stood_down() {
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"q0","parentUuid":null,"timestamp":"2026-06-10T01:00:00.000Z","message":{"role":"user","content":"zzfor hello"}}"#,
+            "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"q1","parentUuid":null,"logicalParentUuid":"q0","timestamp":"2026-06-10T01:01:00.000Z","compactMetadata":{"trigger":"auto","preTokens":100,"postTokens":10,"durationMs":5}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"q2","parentUuid":"q1","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"timestamp":"2026-06-10T01:02:00.000Z","message":{"role":"user","content":"zzfor the summary body"}}"#,
+            "\n",
+        ),
+    );
+    let sel = ["-t", "harness.compaction.*"];
+
+    // The summary's own edges: `pairs`, and NO `parent` - the stand-down.
+    let plain = h.run(
+        &[
+            &["search", "", &format!("@{LEAD_SESS}")][..],
+            &sel[..],
+            &["--format", "json", "--max-count", "0"][..],
+        ]
+        .concat(),
+    );
+    assert!(plain.success, "stderr: {}", plain.stderr);
+    let summary = json_rows(&plain.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .find(|hit| hit["line"].as_u64() == Some(3))
+        .unwrap_or_else(|| panic!("no summary hit:\n{}", plain.stdout));
+    let kinds: Vec<String> = summary["for"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|e| e["kind"].as_str().map(str::to_string))
+        .collect();
+    assert!(kinds.iter().any(|k| k == "pairs"), "{summary}");
+    assert!(
+        !kinds.iter().any(|k| k == "parent"),
+        "`parent` did not stand down for `pairs` on the summary: {summary}"
+    );
+
+    // And the reverse closure returns it anyway, off the parent LINK it still carries.
+    let reverse = h.run(
+        &[
+            &["search", "", &format!("@{LEAD_SESS}")][..],
+            &sel[..],
+            &["--for", "L2", "--format", "json", "--max-count", "0"][..],
+        ]
+        .concat(),
+    );
+    assert!(reverse.success, "stderr: {}", reverse.stderr);
+    let lines: Vec<u64> = json_rows(&reverse.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .filter_map(|hit| hit["line"].as_u64())
+        .collect();
+    assert!(
+        lines.contains(&3),
+        "`--for L2` did not return the summary at L3, so the help's caveat is false:\n{}",
+        reverse.stdout
+    );
+}

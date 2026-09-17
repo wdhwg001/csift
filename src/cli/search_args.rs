@@ -322,9 +322,18 @@ pub struct SearchArgs {
     /// vocabulary is not reverse-walked today, so `--for` on a record that only a
     /// non-structural relation points AT comes back empty - `versions`, `refused`,
     /// `interrupted`, `leaf`, `forked_from`, `continued_in`, `replies_to`, `armed_by`,
-    /// `banner`, `hook_run`, the four survival words, `pairs`, `precedes`, `preserves`
-    /// and `repairs`. That is a definitive absence about the three arms, not a claim
+    /// `banner`, `hook_run`, the four survival words, `precedes` and `preserves`.
+    /// That is a definitive absence about the three arms, not a claim
     /// that nothing points there.
+    /// TWO relations are in neither list and come back anyway, because the walk is over the
+    /// LINKS and not over the words: `pairs` on a compaction summary and `repairs` on a
+    /// paired resume placeholder both name the record ABOVE, which is their `parentUuid`,
+    /// so the parent arm returns them from an address on that record even though their hit
+    /// prints no `parent` edge. It prints none because of the ONE-RELATION-ONE-EDGE rule:
+    /// `parent` stands down whenever ANY OTHER edge on the same unit already names that
+    /// same TARGET - the test is on the target and never on who named it, so a family's
+    /// word and the engine's own both do it. No FIELD is removed by that; the record keeps
+    /// the parent it had, `for_root` still names its turn, and `--for` still walks it.
     /// The forward direction answers those: the `for[]` on the hit, or
     /// `--count-by for-kind`. The address may name a GATED line (a hook attachment, a bookkeeping
     /// line): the closure starts there either way, and the addressed record itself is
