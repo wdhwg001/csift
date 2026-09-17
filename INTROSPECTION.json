@@ -15999,12 +15999,12 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "306-313",
+          "lines": "311-318",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "319-330",
+          "lines": "324-335",
           "snippet": "    for line in mmap.split(|&b| b == b'\\n') {\n        if TS.find(line).is_none() {\n            continue;\n        }\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if rec.timestamp.is_some() {\n                let hit = rec.is_compact_boundary();\n                return Ok(hit\n                    .then(|| rec.uuid.clone().unwrap_or_default())\n                    .filter(|u| !u.is_empty()));\n            }\n        }"
         }
       ],
@@ -16110,7 +16110,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "309-312",
+          "lines": "314-317",
           "snippet": "/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -16288,7 +16288,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "335-343",
+          "lines": "340-348",
           "snippet": "/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary\n/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own\n/// uuid differs; a co-clone's head probe returns the same boundary uuid and is\n/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY\n/// when a clone was detected.\npub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -16518,7 +16518,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "306-312",
+          "lines": "311-317",
           "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
@@ -38653,7 +38653,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "340-343",
+          "lines": "345-348",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());\n    let entries = std::fs::read_dir(dir).ok()?;"
         }
       ],
@@ -42631,7 +42631,7 @@
       "id": "PATH-008",
       "area": "path-encoding",
       "behavior": "The cwd-to-directory map is many-to-one and Claude Code does not disambiguate collisions for any cwd of 200 encoded characters or fewer: two different cwds that encode identically share ONE projects directory, distinguishable only by the session uuid and by each record's own `cwd` field.",
-      "depends": "csift uses the encoded directory as the lookup key exactly as the harness does, and intends to keep, for a REAL-path target, only the files whose recorded cwd IS that path while an EXPLICIT encoded-dir token skips the filter. As of Claude Code 2.1.258 that filter no longer fires on real data: the harness now writes a session-state cache line as physical line 1 of every transcript, and read_first_cwd inspects only line 1, so the stored cwd reads as absent and every candidate is admitted under the absent-cwd keep. The mechanism is intact and testable only where line 1 carries cwd.",
+      "depends": "csift uses the encoded directory as the lookup key exactly as the harness does, and intends to keep, for a REAL-path target, only the files whose recorded cwd IS that path while an EXPLICIT encoded-dir token skips the filter. As of Claude Code 2.1.258 that filter no longer fires on real data: the harness now writes a session-state cache line as physical line 1 of every transcript, and read_first_cwd inspects only line 1, so the stored cwd reads as absent and every candidate is admitted under the absent-cwd keep. The mechanism is intact and testable only where line 1 carries cwd. That inert read has a SECOND consequence, and the two are one decision: because the stored cwd reads as absent, both copies of a session whose project was renamed are admitted under a REAL-path target - and widening the read to the first record that HAS a cwd would drop them instead, since their recorded cwd names the old path. PATH-014's duplicate merge therefore keeps its own probe for the first record carrying a cwd and uses it only to break an equal-size tie; the collision guard's line-1 read is untouched, so repairing one never silently changes the other.",
       "code": [
         {
           "path": "src/path/home.rs",
@@ -42640,12 +42640,12 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "347-352",
+          "lines": "390-395",
           "snippet": "/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved\n/// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only\n/// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the\n/// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does\n/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix\n/// keep decision."
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "369-375",
+          "lines": "412-418",
           "snippet": "    if let Some(want) = &pd.target_cwd {\n        if let Some(stored) = read_first_cwd(&p) {\n            if !cwd_equivalent(&stored, want) {\n                return;\n            }\n        }\n    }"
         }
       ],
@@ -42676,6 +42676,16 @@
           "observed": "complete producer trace: writer Bu - the directory is the encoded key, with no uniqueness check @157617252; gate Mb - no cwd comparison is reachable below the cap @157618771; trigger insertMessageChain - the first message record materializes the file @166104554; gate materializeSessionFile - metadata block first, queued records after @166103708; writer planReAppendSessionMetadata's entry pushes and the direct append @166091700. writer excerpt: function ia(){return S(Se(),\"projects\")}function Em(e){return Apr()??KA(e)}function Ctt(e){let n=KA(e);return n===Em(e)?void 0:n}function Bu(e){return S(ia(),Em(e))}function Mse(e,n){let r=E(e);return F(e)===ia specimen: 67 top-level transcripts; 0 carry a top-level cwd on physical line 1 (line-1 types: 62 last-prompt, 3 ai-title, 2 queue-operation). The first head line carrying a top-level cwd is line 3 in 3 files, line 4 in 55, line 5 in 1, line 6 in 6, and absent within 64 KiB in 2. On the live directory: 7 trans",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); Every top-level *.jsonl counted once, keyed on the presence of a top-level string cwd in the first physical line. Guard efficacy = rows returned for a real-path target divided by rows returned for the encoded-dir token over the same directory; row count = envelope lines whose kind is session. A collision is two DISTINCT cwd strings whose encodings are equal, not merely two cwd values in one directory.",
           "note": "Both halves now carry a producer and the on-disk half is measured: the harness writes the encoded key with no uniqueness check and never compares recorded cwds below the cap, and the first message record materializes the file by writing the session-state metadata block ahead of the queued records - which is exactly why 0 of 67 transcripts carry cwd on line 1 and csift's line-1-only filter has stop"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "python3 reading the first physical line of each copy of every duplicated basename under ~/.claude/projects and testing it for a `cwd` key; python3 encoding the first record that DOES carry a cwd in each of those files and comparing it against the basename of the directory the file sits in",
+          "observed": "6 files across 3 duplicated basenames; 0 of the 6 carry a `cwd` on physical line 1, so all 6 are admitted under the absent-cwd keep. The first record that DOES carry one encodes, in 6 of 6, to a project directory that exists under the root - and in 3 of the 6 that directory is NOT the one the copy sits in, so widening the line-1 read would drop exactly those 3 from a real-path target.",
+          "rule": "One observation per copy of a duplicated basename; physical line 1 is the bytes up to the first newline; the encoder is NFC plus one dash per UTF-16 code unit outside [A-Za-z0-9].",
+          "note": "The coupling between the collision guard's line-1 read and the copies of a renamed project is now stated in `depends`, so a later repair of the read cannot be made without seeing what it would drop."
         }
       ],
       "attribution": "end-to-end",
@@ -42733,7 +42743,7 @@
       "id": "PATH-009",
       "area": "path-encoding",
       "behavior": "A projects directory is keyed by the session's originalCwd SLOT, not by the tracked per-record cwd. The transcript path is built as `El(){let t=Hy()??fl(ye());return join(t, <sessionId>.jsonl)}` (159262439), where `ye()` reads the originalCwd slot and `Hy()` the explicit project-dir pin (156789931), and `fl` (159262301) joins the projects root with the ENCODING of that value. The slot is seeded once at session construction, with originalCwd, projectRoot and cwd all set to the same start value (156787331). A record's own cwd comes from a different lane: the record template stamps `cwd: ne()` (166074085) and `ne()` reads the async-local shell cwd that setCwd / Kse move (157582700), so a deep in-session `cd` and a subagent's cwd appear in the record data but never mint a directory of their own. The slot is NOT immutable, though. `DS` (156790400, `DS(e){Jtt({originalCwd:e})}`) is its sole setter FUNCTION, and a word-boundary grep of its call form returns TWELVE call sites beside the definition: EnterWorktree (164381648) and ExitWorktree (164387495), four worktree-resume arms (169641509, 169643521, 169644258, 169644925), a deep-link launch (170002474), a direct-arg repo selection (170272796), the worktree tool path (181727870), a worktree chdir at startup (182767224), and the directory move (185227970) with its rollback (185228225). One writer bypasses `DS`: a warm-spare claim passes a whole project object carrying originalCwd through the same updater (167436331). On the three worktree tool entries - EnterWorktree, ExitWorktree and the worktree tool path - and on the directory move, the re-key is followed by relocateSessionTranscript (166124296), which mkdirs the project directory for the NEW originalCwd, MOVES the transcript into it and writes a `{type:'relocated',sessionId,relocatedCwd}` record. So 'a directory implies the start cwd of its files' does not survive a relocation, while the operative asymmetry is unchanged and confirmed: an observed record `cwd` need not have a directory named after its encoding, and the count of observed cwds can exceed the count of directories. Corpus: 17 project directories hold 68 top-level transcripts carrying 34 distinct `cwd` values, of which 15 have a directory named after their encoding and 19 have none. A second way a directory can exist with no transcript: /add-dir mints one holding only a .session-aliases pointer file (recordSessionAlias, 166075030); there are 0 instances in this corpus.",
-      "depends": "csift never enumerates one directory per observed cwd; `list` captures a session's `cwd` off the FIRST user record its head scan reads (src/commands/session/summarize.rs) deliberately - the per-record cwd follows the tracked shell cwd, so a last-seen value can legitimately be a subdirectory - and first-seen is also the value the directory key was derived from at write time. A scoped command that assumed a directory exists for every seen cwd would report empty scopes. The relocation path is the disclosed edge: after a re-key the transcript is moved into the directory of the NEW originalCwd while its early records still carry the old one, so a first-record cwd can disagree with the directory the file was found in, and csift models no `relocated` line type.",
+      "depends": "csift never enumerates one directory per observed cwd; `list` captures a session's `cwd` off the FIRST user record its head scan reads (src/commands/session/summarize.rs) deliberately - the per-record cwd follows the tracked shell cwd, so a last-seen value can legitimately be a subdirectory - and first-seen is also the value the directory key was derived from at write time. A scoped command that assumed a directory exists for every seen cwd would report empty scopes. The relocation path is the disclosed edge: after a re-key the transcript is moved into the directory of the NEW originalCwd while its early records still carry the old one, so a first-record cwd can disagree with the directory the file was found in, and csift models no `relocated` line type. The relocation edge stays disclosed and stays unexercised: `\"type\":\"relocated\"` occurs in 0 of 9,839 jsonl files under one projects root and no file there is named `.superseded-` or `.orphaned-`, so nothing on that root was moved by the harness. The cross-directory duplication csift actually meets arrives from OUTSIDE the harness - a renamed project whose directory was copied - which is why the merge in PATH-014 is decided by the bytes rather than by which directory the recorded cwd names.",
       "code": [
         {
           "path": "src/commands/session/rows.rs",
@@ -42783,6 +42793,16 @@
           "observed": "14 `DS(` bytes: one in the constant pool, the definition at 156790510, and 12 call sites (164381648, 164387495, 169641509, 169643521, 169644258, 169644925, 170002474, 170272796, 181727870, 182767224, 185227970, 185228225). Corpus: 17 project directories hold 68 top-level transcripts carrying 34 distinct `cwd` values, 15 of which have a directory named after their encoding and 19 of which have none; 0 `.session-aliases` files. | A word-boundary grep of `DS(` returns 14 bytes - one constant-pool artefact, the definition, and twelve call sites including EnterWorktree at 164381648 and ExitWorktree at 164387495, each followed immediately by the relocation call.",
           "rule": "One observation per distinct `cwd` string value across the top-level transcripts of every project directory; a value counts as having a directory when its encoding equals a directory basename.",
           "note": "The operative half is confirmed at every hop: the transcript path takes `fl(ye())`, the originalCwd slot (159262439 with the readers at 156789931 and the joiner at 159262301), while the record template stamps `cwd: ne()`, the tracked shell cwd (166074085 over the lane and its setters at 157582700) - two disjoint lanes, which is why an in-session cd and a subagent cwd never mint a directory. What the hops refute is the leading clause 'keyed by the session's START cwd alone': the key is a SLOT, re-keyed at twelve call sites of its setter, and on four of those paths relocateSessionTranscript (166124296) mkdirs the new directory, moves the transcript into it and stamps a `relocated` record. Two counts are corrected against a word-boundary grep of the setter's call form: there are TWELVE call sites, not ten, and the two that were missing are EnterWorktree (164381648) and ExitWorktree (164387495), each calling the relocation immediately after the re-key; and `DS` is the sole setter FUNCTION rather than the only writer, since the warm-spare claim at 167436331 passes originalCwd through the same updater without it. The corpus asymmetry reproduces at 34 distinct cwd values against 17 directories, 19 of the values having none."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "python3 walking every *.jsonl at any depth under ~/.claude/projects and counting the files whose bytes carry `\"type\":\"relocated\"`, plus the files whose NAME carries `.superseded-` or `.orphaned-`",
+          "observed": "9839 jsonl files walked; 0 carry `\"type\":\"relocated\"`; 0 are named `.superseded-`; 0 are named `.orphaned-`. 18 files mention `.superseded-` and 3 mention `.orphaned-` inside their content, which is prose about the harness rather than a harness write.",
+          "rule": "One observation per *.jsonl file at any depth under the projects root; a file counts for a literal when the literal occurs at least once in its bytes, and for a name when the literal occurs in its basename.",
+          "note": "The relocation path is still the disclosed edge and is still unobserved on this corpus; the duplication csift handles has a different origin, and `depends` now says which."
         }
       ],
       "attribution": "end-to-end",
@@ -42951,7 +42971,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "449-458",
+          "lines": "492-501",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
@@ -43231,7 +43251,7 @@
       "id": "PATH-012",
       "area": "path-encoding",
       "behavior": "Inside a `<ENCODED>` project directory a transcript's filename basename IS the session id: over the whole live corpus, 66 top-level transcripts carried a top-level `sessionId` on at least one record, 0 files carried a `sessionId` that differed from the basename minus `.jsonl`, and 0 files carried more than one distinct `sessionId` value - so the filename and the in-record id are two spellings of one identity, and the id is recoverable without parsing a single line.",
-      "depends": "csift derives every row's id from the FILENAME and keeps the data-derived `sessionId` only as a fallback for a file whose name yields nothing; the live session-registry join then matches a registry row by its `sessionId` against that filename-derived id, so the two agreeing is what makes the join work at all. If the harness ever wrote a transcript under a name other than its session id, `list` rows would carry a re-feedable-looking id that addresses a different session.",
+      "depends": "csift derives every row's id from the FILENAME and keeps the data-derived `sessionId` only as a fallback for a file whose name yields nothing; the live session-registry join then matches a registry row by its `sessionId` against that filename-derived id, so the two agreeing is what makes the join work at all. If the harness ever wrote a transcript under a name other than its session id, `list` rows would carry a re-feedable-looking id that addresses a different session. The fact is now load-bearing a second time: PATH-014's duplicate merge keys on the BASENAME, so two files sharing one are two copies of one session rather than two sessions. That is the same key Claude Code's own cross-directory resume lookup uses, and if a transcript were ever written under a name other than its session id the merge would collapse two different sessions into one row.",
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
@@ -43271,6 +43291,16 @@
           "observed": "complete producer trace: trigger insertMessageChain @166104431; gate appendEntry file routing @166107132; gate namespaced path resolver Xo, case \"transcript\" @157720047; writer insertMessageChain record literal + appendEntry call @166105359; writer Gjt (per-record session-scope stamper) @166074085; writer fl (project dir) + El (current session file) @159262301; writer lm (session file for an arbitrary session id) @166068377; gate relocateSessionTranscript (sMe) @166124296. writer excerpt: let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};if(ke.type===\"user\"&&ke.toolUseResult!=null)ke.toolUseResult=Tor(ke.toolUseResult);if(await this.appendEntry(k specimen: files_scanned 67; lines_scanned 811308; files_with_sessionId 67; files_without_sessionId 0; basename_absent_from_set 0; files_with_multiple_distinct 0. (The claim's own check reported 66 files / 803946 lines on 2026-09-02; one new transcript and a day of appends account for the difference, and the t",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One observation per TOP-LEVEL transcript matching projects/<ENCODED>/<name>.jsonl (subagent lanes under <uuid>/subagents/ are excluded by the glob depth). Per file, collect the SET of top-level sessionId string values: a byte regex is the fast path, and any line whose regex hits are not all equal to the basename is re-parsed with json.loads so only the top-level key can enter the set (a sessionId quoted inside record content never counts). A file whose set is empty counts in neither column. mismatch = basename absent from the set; multi = set size > 1.",
           "note": "insertMessageChain binds one session id (`let C=f??Q()`, `let j=C`) and spends it twice in adjacent statements - `...Gjt(j)` writes it as the record's sessionId while the same C routes the append to the file the resolver names `${sessionId}.jsonl` - and a whole-corpus census finds 0 of 67 transcripts disagreeing."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "python3 collecting the set of top-level `sessionId` values in each copy of every duplicated basename under ~/.claude/projects and comparing it against the basename minus `.jsonl`",
+          "observed": "3 duplicated basenames, 6 files; every one of the 6 carries at least one top-level `sessionId`; 0 files carry a value differing from the basename; 0 files carry more than one distinct value - so the copies of a basename really are copies of ONE session and not two sessions that happen to share a file name.",
+          "rule": "One observation per copy of a duplicated basename; a file counts as a mismatch when the basename is absent from its set of top-level `sessionId` values.",
+          "note": "The merge key rests on this claim, so it is re-measured on exactly the files the merge acts on rather than on the corpus at large."
         }
       ],
       "attribution": "end-to-end",
@@ -64389,7 +64419,7 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "340-342",
+          "lines": "345-347",
           "snippet": "pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {\n    let dir = path.parent()?;\n    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());"
         }
       ],
@@ -75029,7 +75059,7 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "203-207",
+          "lines": "246-250",
           "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` \u2192 an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
@@ -90097,7 +90127,7 @@
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn cleared_line(s: &SessionSummary) -> String {",
-          "lines": "141"
+          "lines": "144"
         },
         {
           "path": "src/commands/session/rows.rs",
@@ -91793,7 +91823,7 @@
         {
           "path": "src/commands/session/run.rs",
           "snippet": "fn line_has_continued_in_key(line: &[u8]) -> bool {",
-          "lines": "152"
+          "lines": "187"
         },
         {
           "path": "src/commands/session/summarize.rs",
@@ -91972,12 +92002,12 @@
         {
           "path": "src/commands/session/summarize.rs",
           "snippet": "pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {",
-          "lines": "267"
+          "lines": "272"
         },
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn lane_line(s: &SessionSummary) -> String {",
-          "lines": "181"
+          "lines": "204"
         }
       ],
       "instrument": "Corpus: over every `*.jsonl` under the projects root, read each file as BYTES, split on `\\n` only, and count the lines whose `json.loads` yields a dict with `sessionKind` as a TOP-LEVEL key; report the total, the distinct values, the breakdown by the object's `type`, the number of files, the `version` histogram of the counted lines, and per file the first and last carrier's 1-based index among non-blank lines over that file's non-blank total - a file whose carrier count equals its non-blank total carries the key on every line, and one where it does not is the mixed shape the span exists for. Binary: in the build named by `verified_claude_code`, byte-count `sessionKind`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_SESSION_KIND:\"bg\"`, `sessionKind:Ij()` and `sessionKind:void 0`, and read every occurrence of the first two, sorting them into string-table entries, the one stamp, the one merge, the strippers, the readers and the telemetry sink. Version floor: byte-count `CLAUDE_CODE_SESSION_KIND:\"bg\"` in each cached native build.",
@@ -96223,7 +96253,7 @@
         {
           "path": "src/commands/session/summarize.rs",
           "snippet": "    pub(crate) minted_elsewhere: std::collections::BTreeSet<String>,",
-          "lines": "254"
+          "lines": "259"
         }
       ],
       "instrument": "Corpus: over each root count the lines carrying a snake-case `session_id` top-level, with the `type` breakdown; split them by whether the line also carries a STRING `sessionId` and whether the two values are equal; for each file holding a disagreement report the number of disagreeing lines, the number of distinct named ids, and for each named id whether `<id>.jsonl` exists in the same directory. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96565,6 +96595,103 @@
           "observed": "Each cited literal occurs exactly once in the build and the collector pushes a successful page as {base64, mediaType} with no number while recording {page, file, error} for a failure. Corpus: 708 image elements inside tool_result content arrays on the live root and 1,524 on the snapshot root, and on both roots every one of them joins to a tool_use block named Read - zero join to any other tool, so no REPL-carried page image exists in either corpus.",
           "rule": "One count per image element inside any tool_result content list, with the tool name taken from the tool_use block carrying the same id anywhere under the root.",
           "note": "The zero count is what makes the specimen leg open rather than closed; the gate that keeps csift's page derivation off this carrier reads the record's own result object, so it holds whether or not such a record ever lands."
+        }
+      ]
+    },
+    {
+      "id": "PATH-014",
+      "area": "path-encoding",
+      "behavior": "ONE session id can sit under TWO project directories at once, and Claude Code both reaches that state and refuses to resolve it. The project key is `Em(e)=Apr()??KA(e)` (157617292): `Apr` is the memoised read of the `CLAUDE_CODE_PROJECT_DIR_NAME` environment override (`function _(){return process.env.CLAUDE_CODE_PROJECT_DIR_NAME}`, 156662184, gated by a `^[A-Za-z0-9_-]{1,64}$` shape test and a reserved-device-name refusal) and `KA` the ordinary encoder; beside it `Ctt(e)` returns the NATURAL key whenever the override differs, and the directory enumeration ADDS that second directory to the list a session may live in (`let a=Ctt(e);if(a!==void 0){let l=S(ia(),a);try{await b(l),t.push(l)}catch{}return t}`, 157618887). The resume lookup then walks EVERY directory under the projects root for `<uuid>.jsonl` and, on finding a second one that has messages, returns null rather than choosing (`if(await eIn(o)!==\"has\")continue;if(a!==null)return null;a=o`, 157615066). The second harness door is `relocateSessionTranscript` (166124462), which mkdirs the new project directory and MOVES the transcript, writing a `{type:\"relocated\",sessionId,relocatedCwd}` record on the same-destination arm; its fallback mover can leave the source behind, in the harness's own words - `renameWithFallbacks: the session folder may also remain at ${e}; left in place` (166128344). THE OBSERVED SPECIMENS WERE NOT WRITTEN BY EITHER DOOR. Over one projects root: 30 encoded directories hold 81 top-level transcripts over 78 distinct basenames, so 3 basenames occur under two directories - two pairs byte-identical (99,499,361 bytes / 37,920 lines each, and 9,204 bytes / 17 lines each) and one pair where the shorter copy is a strict byte PREFIX of the longer (77,991,731 bytes / 38,870 lines against 78,613,081 / 39,192). A prefix is what copying a file that is still being appended to produces, and `\"type\":\"relocated\"` occurs in 0 of 9,839 jsonl files under that root and no file on it is named `.superseded-` or `.orphaned-`, so a relocation never ran there. The sidecar trees were copied with the transcripts: every duplicated `agent-<hex>.jsonl` basename on the root belongs to one of those sessions' two sidecars, and no agent basename is shared between two different sessions.",
+      "depends": "csift merges the copies at `path::resolve_session_files`, the one point every session-operating subcommand resolves through, and keys the merge on the basename (PATH-012: the basename IS the session id, which is also what the harness's own cross-directory lookup keys on). The relation decides whether a merge happens at all: IDENTICAL and PREFIX collapse onto the LONGEST copy, because a prefix copy is missing records the longer one carries, while DIVERGENT merges nothing - two files claiming one session id with contradictory content are not one session seen twice, and a turn number minted from one does not address the other. An mtime never enters the rule: the instants on such copies can be re-applied wholesale by a preserving copy, so they are not evidence about which copy the harness wrote; an equal-size tie is broken by the copy whose directory basename equals the encoding of the first record carrying a cwd, then by the smallest path so the answer is stable across runs and machines. Without the merge a duplicated session is counted twice by every spanning surface and its whole sidecar is walked twice; with it, the copies that were dropped are disclosed on stderr, in the JSON envelope header (`duplicate_transcripts`, `duplicate_records_dropped`) and on the `list` row (`also_at`, `duplicate_relation`). `show` is the exception that keeps refusing: it counts the UNMERGED set, so an address that names two files on disk still bails and names the paths, because no `@<uuid>` separates them.",
+      "code": [
+        {
+          "path": "src/path/dedup.rs",
+          "lines": "145-151",
+          "snippet": "        let verdict = if other[..n] != winner[..n] {\n            DuplicateRelation::Divergent\n        } else if other.len() == winner.len() {\n            DuplicateRelation::Identical\n        } else {\n            DuplicateRelation::Prefix\n        };"
+        },
+        {
+          "path": "src/path/dedup.rs",
+          "lines": "198-202",
+          "snippet": "    keyed.sort_by(|a, b| {\n        b.0.cmp(&a.0) // longest first\n            .then(b.1.cmp(&a.1)) // then the copy whose dir name encodes the recorded cwd\n            .then(a.2.cmp(&b.2)) // then deterministically by path\n    });"
+        },
+        {
+          "path": "src/path/resolver.rs",
+          "lines": "114-116",
+          "snippet": "        let (mut top_level, groups) = dedup_top_level(top_level);\n        emit_duplicate_notes(&groups);\n        duplicates = groups;"
+        },
+        {
+          "path": "src/commands/show/addr.rs",
+          "lines": "92-93",
+          "snippet": "    match (resolved.files.as_slice(), dropped.as_slice()) {\n        ([one], []) => Ok(one.clone()),"
+        }
+      ],
+      "instrument": "Census, one observation per `<basename>.jsonl` sitting DIRECTLY under an encoded project directory; a basename is duplicated when it occurs under more than one such directory: python over `~/.claude/projects/*/*.jsonl` grouping by basename, then for each duplicated basename compare the two files byte for byte up to min(size) and report IDENTICAL (equal sizes, no differing byte), PREFIX (no differing byte up to min(size), sizes differ) or DIVERGENT (a differing byte before min(size)), with sizes and newline counts. Relocation census, one observation per *.jsonl file at ANY depth under the same root, a file counting when the literal occurs at least once in its bytes: count the files carrying `\"type\":\"relocated\"` and the files NAMED `.superseded-` / `.orphaned-`. Binary hops: byte-compare the excerpts at the offsets in `producer_chain` against the build named by `verified_claude_code`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.13.0",
+        "source": "measured"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "residue": [
+        "A specimen minted by one of the two harness doors would be stronger than the copied-directory specimens this root carries: a live trial setting CLAUDE_CODE_PROJECT_DIR_NAME and resuming into the natural directory, or a worktree move that drives renameWithFallbacks onto its stranding arm."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the project-dir-name override",
+          "offset": 156662184,
+          "excerpt": "function _(){return process.env.CLAUDE_CODE_PROJECT_DIR_NAME}",
+          "note": "The environment value the project key prefers over the encoder, read once and memoised."
+        },
+        {
+          "role": "gate",
+          "name": "Em / Ctt / Bu",
+          "offset": 157617292,
+          "excerpt": "function Em(e){return Apr()??KA(e)}function Ctt(e){let n=KA(e);return n===Em(e)?void 0:n}function Bu(e){return S(ia(),Em(e))}",
+          "note": "The key is the override when there is one, and `Ctt` keeps the NATURAL key beside it - the harness itself holds two directory names for one cwd."
+        },
+        {
+          "role": "writer",
+          "name": "the dual-directory enumeration",
+          "offset": 157618887,
+          "excerpt": "let a=Ctt(e);if(a!==void 0){let l=S(ia(),a);try{await b(l),t.push(l)}catch{}return t}",
+          "note": "The natural directory is appended to the list of directories a session may live in, so both are searched."
+        },
+        {
+          "role": "gate",
+          "name": "the whole-root resume scan",
+          "offset": 157615066,
+          "excerpt": "if(await eIn(o)!==\"has\")continue;if(a!==null)return null;a=o",
+          "note": "Every project directory is walked for `<uuid>.jsonl`; a SECOND one that has messages makes the lookup return null rather than pick - the harness treats the shape as real and as ambiguous and does not resolve it."
+        },
+        {
+          "role": "writer",
+          "name": "relocateSessionTranscript",
+          "offset": 166124462,
+          "excerpt": "let _=Uf(o,`${r}.jsonl`);if(f===_){Xp(r,\"cd\",o);let v=ye();if(d.currentSessionRelocatedCwd!==v){d.currentSessionRelocatedCwd=v;let C={type:\"relocated\",sessionId:r,relocatedCwd:v};",
+          "note": "The same-destination arm, and the `relocated` record whose absence from a corpus says a relocation never ran there."
+        },
+        {
+          "role": "writer",
+          "name": "renameWithFallbacks stranding its source",
+          "offset": 166128344,
+          "excerpt": "renameWithFallbacks: the session folder may also remain at ${e}; left in place",
+          "note": "The mover's own warning: a fallback move can leave the source session folder behind, which is one transcript under two project directories."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "python3 grouping every `~/.claude/projects/*/*.jsonl` by basename and byte-comparing each duplicated basename's copies up to min(size); python3 walking every *.jsonl at any depth under the same root for the literals `\"type\":\"relocated\"`, `.superseded-` and `.orphaned-`; python3 byte-comparing each producer_chain excerpt against $CSIFT_LEDGER_BINARY at its recorded offset",
+          "observed": "encoded dirs 30, top-level jsonl 81, distinct basenames 78, duplicated basenames 3. Pair A IDENTICAL 99499361/99499361 bytes, 37920/37920 lines. Pair B PREFIX 77991731/78613081 bytes, 38870/39192 lines. Pair C IDENTICAL 9204/9204 bytes, 17/17 lines. Relocation census: 9839 jsonl files, 0 carrying `\"type\":\"relocated\"`, 0 named `.superseded-`, 0 named `.orphaned-` (18 and 3 files mention the two strings in prose). All six producer_chain excerpts byte-exact at their offsets, each occurring exactly once in the build.",
+          "rule": "One observation per `<basename>.jsonl` directly under an encoded project directory for the duplication census; one observation per *.jsonl file at any depth for the relocation census, a file counting when the literal occurs at least once in its bytes; lines are newline-terminated physical lines.",
+          "note": "The shape csift now merges. The corpus specimens are a copied project directory, not a harness write - the claim states that rather than implying the harness produced them."
         }
       ]
     }

@@ -101,12 +101,26 @@ pub fn resolve_targets_with_session_list(
     scope: SubagentScope,
     caller: Caller,
 ) -> Result<Vec<PathBuf>> {
+    Ok(
+        resolve_targets_with_session_list_reported(positionals, sessions_from, scope, caller)?
+            .files,
+    )
+}
+
+/// [`resolve_targets_with_session_list`] for a surface that DISCLOSES the resolution's
+/// duplicate report (§2 `dedup`) - the same assembly, returning [`Resolved`] whole.
+pub fn resolve_targets_with_session_list_reported(
+    positionals: &[PathBuf],
+    sessions_from: Option<&Path>,
+    scope: SubagentScope,
+    caller: Caller,
+) -> Result<Resolved> {
     let mut paths = positionals.to_vec();
     if let Some(src) = sessions_from {
         extend_with_session_list(&mut paths, src)?;
         if paths.is_empty() {
-            return Ok(Vec::new());
+            return Ok(Resolved::default());
         }
     }
-    resolve_session_files(&paths, scope, caller)
+    resolve_session_files_reported(&paths, scope, caller)
 }

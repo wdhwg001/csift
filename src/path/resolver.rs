@@ -1,6 +1,34 @@
-//! resolve_session_files: the @-grammar resolver + agent-subtree dispatch.
+//! resolve_session_files: the @-grammar resolver.
 
 use super::*;
+
+/// What one target resolution produced: the concrete transcripts to operate on, plus what
+/// the resolution had to DECIDE about them.
+///
+/// Today the only decision is the duplicate merge (§2, `dedup`): a session id can be on
+/// disk under more than one project directory, and collapsing those copies changes what
+/// every count downstream means. The no-silent-truncation law therefore makes the report
+/// part of the return value rather than a fact only the resolver knows - a surface that
+/// prints one row where the disk holds two transcripts has to be able to say so.
+#[derive(Debug, Clone, Default)]
+pub struct Resolved {
+    /// The concrete jsonl files to scan.
+    pub files: Vec<PathBuf>,
+    /// One entry per session id found under more than one project directory. Empty on
+    /// every ordinary resolution, which is nearly all of them.
+    pub duplicates: Vec<DuplicateGroup>,
+}
+
+/// [`resolve_session_files_reported`] for a caller that has nowhere to disclose the
+/// duplicate report. The merge still happens and the resolver still names it on stderr;
+/// only the machine-readable half is dropped.
+pub fn resolve_session_files(
+    paths: &[std::path::PathBuf],
+    scope: SubagentScope,
+    caller: Caller,
+) -> Result<Vec<PathBuf>> {
+    Ok(resolve_session_files_reported(paths, scope, caller)?.files)
+}
 
 /// Resolve positional targets into the concrete, sorted, de-duplicated list of session
 /// `*.jsonl` files to operate on, with the subagent span governed by `scope`.
@@ -21,11 +49,18 @@ use super::*;
 /// Bails (never returns an empty silent result) when a session id was pinned but no matching
 /// file exists under the resolved target(s). With no id pin, an empty result is allowed (the
 /// caller renders an honest "nothing found").
-pub fn resolve_session_files(
+///
+/// One session id can sit under TWO project directories (a renamed project whose directory
+/// was copied; the harness's own project-dir-name override and its relocation fallback mint
+/// the same shape). Such copies are MERGED here - at the one point every session-operating
+/// subcommand passes through - so a scope that spans them counts the session once, and the
+/// merge is reported in [`Resolved::duplicates`] and named on stderr. Copies whose contents
+/// DISAGREE are never merged (`dedup`).
+pub fn resolve_session_files_reported(
     paths: &[std::path::PathBuf],
     scope: SubagentScope,
     caller: Caller,
-) -> Result<Vec<PathBuf>> {
+) -> Result<Resolved> {
     let Targets {
         session_ids,
         session_prefixes,
@@ -56,13 +91,14 @@ pub fn resolve_session_files(
 
     let _ = caller; // reserved for future subcommand-aware guidance
     let mut files: Vec<PathBuf> = Vec::new();
+    let mut duplicates: Vec<DuplicateGroup> = Vec::new();
 
     // ── SESSION path: the top-level `<uuid>.jsonl` session files (+ subagents per scope).
     // Skipped for an AGENT-ONLY invocation (no session target), so `@<agent-hex>` alone does
     // not list every session - only the agent subtree below runs.
     let session_path_active = session_target || agent_hexes.is_empty();
     if session_path_active {
-        let (mut top_level, prefix_hits, prefix_agent_hits) =
+        let (top_level, prefix_hits, prefix_agent_hits) =
             scan_top_level(&dirs, &session_ids, &session_prefixes);
 
         resolve_prefix_uniqueness(
@@ -71,6 +107,13 @@ pub fn resolve_session_files(
             &prefix_agent_hits,
             &mut agent_hexes,
         )?;
+
+        // Collapse the copies of one session id BEFORE the subagents are gathered: a copied
+        // project directory carries the session's whole sidecar with it, so gathering from
+        // both would double every subagent transcript too.
+        let (mut top_level, groups) = dedup_top_level(top_level);
+        emit_duplicate_notes(&groups);
+        duplicates = groups;
 
         // Subagent transcripts of each selected top-level session (empty unless scoped in).
         let mut sub_files: Vec<PathBuf> = Vec::new();
@@ -104,7 +147,7 @@ pub fn resolve_session_files(
 
     files.sort();
     files.dedup();
-    Ok(files)
+    Ok(Resolved { files, duplicates })
 }
 
 /// The classified positional targets - one pass over the raw tokens.

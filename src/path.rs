@@ -34,6 +34,7 @@ use std::sync::OnceLock;
 use anyhow::{anyhow, bail, Context, Result};
 
 mod agent_subtree;
+mod dedup;
 mod home;
 mod ids;
 mod project_dirs;
@@ -49,6 +50,7 @@ mod targets;
 mod trap;
 
 pub(crate) use agent_subtree::*;
+pub(crate) use dedup::*;
 pub(crate) use home::*;
 pub(crate) use ids::*;
 pub(crate) use project_dirs::*;

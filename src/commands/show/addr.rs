@@ -75,20 +75,45 @@ pub(crate) fn count_lines(file: &std::path::Path) -> Result<usize> {
 /// transcript (never spans); `@<agent-id>` → that subagent transcript alone; a
 /// `*.jsonl` path → that file. Anything resolving to ≠1 file is a pointed error.
 pub(crate) fn resolve_single_transcript(target: &std::path::Path) -> Result<PathBuf> {
-    let files = path::resolve_session_files(
+    let resolved = path::resolve_session_files_reported(
         std::slice::from_ref(&target.to_path_buf()),
         SubagentScope::TopLevelOnly,
         path::Caller::Other,
     )?;
-    match files.as_slice() {
-        [one] => Ok(one.clone()),
-        many => bail!(
-            "show targets exactly ONE transcript — '{}' resolves to {}. Name one: \
-             `@<uuid>` (a top-level session) | `@<agent-id>` (a subagent, ids from \
-             `csift agents`) | a `*.jsonl` path.",
-            target.display(),
-            many.len()
-        ),
+    // `show` is a FETCH, so it counts the UNMERGED set: the resolver collapses two copies
+    // of one session id, but an address that names two files on disk must not pick one
+    // silently. A duplicate group therefore keeps the bail alive and names every copy,
+    // because `@<uuid>` cannot separate them - only a path can.
+    let dropped: Vec<&PathBuf> = resolved
+        .duplicates
+        .iter()
+        .flat_map(|g| g.dropped.iter())
+        .collect();
+    match (resolved.files.as_slice(), dropped.as_slice()) {
+        ([one], []) => Ok(one.clone()),
+        (files, dropped) => {
+            let every: Vec<String> = files
+                .iter()
+                .chain(dropped.iter().copied())
+                .map(|p| p.display().to_string())
+                .collect();
+            let how = if dropped.is_empty() {
+                "Name one: `@<uuid>` (a top-level session) | `@<agent-id>` (a subagent, \
+                 ids from `csift agents`) | a `*.jsonl` path."
+                    .to_string()
+            } else {
+                format!(
+                    "These are copies of ONE session id under different project \
+                     directories, so no `@<uuid>` separates them - name a path: {}",
+                    every.join(" | ")
+                )
+            };
+            bail!(
+                "show targets exactly ONE transcript — '{}' resolves to {}. {how}",
+                target.display(),
+                every.len()
+            )
+        }
     }
 }
 

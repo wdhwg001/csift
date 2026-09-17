@@ -1,0 +1,203 @@
+//! One session id under two project directories: the relation test and the winner rule.
+
+use super::*;
+
+/// A synthetic projects tree: `<root>/<encoded-dir>/<uuid>.jsonl`, all names generated.
+fn transcript(tree: &Tree, dir: &str, id: &str, body: &str) -> PathBuf {
+    tree.write(&format!("{dir}/{id}.jsonl"), body)
+}
+
+const ID: &str = "11111111-2222-4333-8444-555555555555";
+
+/// One record line carrying a `cwd`, so the tie-break has something to read.
+fn line(cwd: &str, n: usize) -> String {
+    format!("{{\"type\":\"user\",\"cwd\":\"{cwd}\",\"uuid\":\"u{n}\"}}\n")
+}
+
+#[test]
+fn a_session_id_under_one_directory_is_not_a_duplicate() {
+    let tree = Tree::new();
+    let a = transcript(&tree, "-Users-dev-proj", ID, &line("/Users/dev/proj", 1));
+    let (kept, groups) = dedup_top_level(vec![a.clone()]);
+    assert_eq!(kept, vec![a]);
+    assert!(groups.is_empty());
+}
+
+#[test]
+fn byte_identical_copies_merge_onto_the_directory_the_recorded_cwd_encodes() {
+    let tree = Tree::new();
+    let body = line("/Users/dev/proj", 1) + &line("/Users/dev/proj", 2);
+    // The SHORT-name directory is the one a rename leaves behind: it matches no record's
+    // cwd, so the tie-break sends the win to the directory the first cwd encodes.
+    let short = transcript(&tree, "-Users-dev-p", ID, &body);
+    let long = transcript(&tree, "-Users-dev-proj", ID, &body);
+
+    let (kept, groups) = dedup_top_level(vec![short.clone(), long.clone()]);
+    assert_eq!(kept, vec![long.clone()]);
+    assert_eq!(groups.len(), 1);
+    let g = &groups[0];
+    assert_eq!(g.session_id, ID);
+    assert_eq!(g.relation, DuplicateRelation::Identical);
+    assert_eq!(g.relation.slug(), "identical");
+    assert_eq!(g.kept, long);
+    assert_eq!(g.dropped, vec![short]);
+    // Two records in each copy, so the merge removed two lines from the scope.
+    assert_eq!(g.dropped_lines(), 2);
+}
+
+#[test]
+fn a_strict_byte_prefix_merges_onto_the_longer_copy() {
+    let tree = Tree::new();
+    let shorter = line("/Users/dev/proj", 1);
+    let longer = shorter.clone() + &line("/Users/dev/proj", 2) + &line("/Users/dev/proj", 3);
+    // The SHORT copy sits in the directory the cwd encodes, so if size did not decide
+    // first the tie-break would hand the win to the copy missing two records.
+    let cut = transcript(&tree, "-Users-dev-proj", ID, &shorter);
+    let whole = transcript(&tree, "-Users-dev-p", ID, &longer);
+
+    let (kept, groups) = dedup_top_level(vec![cut.clone(), whole.clone()]);
+    assert_eq!(kept, vec![whole.clone()]);
+    let g = &groups[0];
+    assert_eq!(g.relation, DuplicateRelation::Prefix);
+    assert_eq!(g.relation.slug(), "prefix");
+    assert_eq!(g.kept, whole);
+    assert_eq!(g.dropped, vec![cut]);
+    assert_eq!(g.dropped_lines(), 1);
+    assert_eq!(g.members[0].lines, 3);
+}
+
+#[test]
+fn copies_that_disagree_are_never_merged() {
+    let tree = Tree::new();
+    let a = transcript(&tree, "-Users-dev-one", ID, &line("/Users/dev/one", 1));
+    let b = transcript(&tree, "-Users-dev-two", ID, &line("/Users/dev/two", 9));
+
+    let (mut kept, groups) = dedup_top_level(vec![a.clone(), b.clone()]);
+    kept.sort();
+    let mut both = vec![a, b];
+    both.sort();
+    assert_eq!(kept, both, "a divergent group keeps every copy in scope");
+    let g = &groups[0];
+    assert_eq!(g.relation, DuplicateRelation::Divergent);
+    assert_eq!(g.relation.slug(), "divergent");
+    assert!(g.dropped.is_empty());
+    assert_eq!(g.dropped_lines(), 0);
+    assert_eq!(g.members.len(), 2);
+}
+
+#[test]
+fn one_diverging_copy_makes_the_whole_group_unmergeable() {
+    let tree = Tree::new();
+    let body = line("/Users/dev/proj", 1);
+    let a = transcript(&tree, "-Users-dev-a", ID, &body);
+    let b = transcript(&tree, "-Users-dev-b", ID, &body);
+    let c = transcript(&tree, "-Users-dev-c", ID, &line("/Users/dev/proj", 7));
+
+    let (kept, groups) = dedup_top_level(vec![a, b, c]);
+    assert_eq!(kept.len(), 3);
+    assert_eq!(groups[0].relation, DuplicateRelation::Divergent);
+    assert!(groups[0].dropped.is_empty());
+}
+
+#[test]
+fn an_equal_size_tie_no_cwd_can_break_falls_to_the_smallest_path() {
+    let tree = Tree::new();
+    // Neither directory name encodes the recorded cwd, so only the path ordering is left -
+    // and it has to be the same answer on every run and every machine.
+    let body = line("/Users/dev/elsewhere", 1);
+    let a = transcript(&tree, "-Users-dev-aaa", ID, &body);
+    let b = transcript(&tree, "-Users-dev-bbb", ID, &body);
+
+    let (kept, _) = dedup_top_level(vec![b.clone(), a.clone()]);
+    assert_eq!(kept, vec![a.clone()]);
+    let (kept_again, _) = dedup_top_level(vec![a.clone(), b]);
+    assert_eq!(kept_again, vec![a]);
+}
+
+#[test]
+fn the_first_cwd_probe_reads_past_a_record_that_carries_none() {
+    let tree = Tree::new();
+    // Physical line 1 of a real transcript is routinely a session-state line with no cwd;
+    // the tie-break reads on until a record carries one, which the line-1 collision-guard
+    // read deliberately does not.
+    let body =
+        "{\"type\":\"mode\",\"mode\":\"default\"}\n".to_string() + &line("/Users/dev/proj", 1);
+    let short = transcript(&tree, "-Users-dev-p", ID, &body);
+    let long = transcript(&tree, "-Users-dev-proj", ID, &body);
+
+    let (kept, _) = dedup_top_level(vec![short, long.clone()]);
+    assert_eq!(kept, vec![long]);
+}
+
+#[test]
+fn a_torn_final_line_still_counts_as_a_record() {
+    let tree = Tree::new();
+    // No trailing newline on the shorter copy: a crash-truncated tail is still a line the
+    // merge removed, so the disclosure has to count it.
+    let shorter = format!("{}{{\"type\":\"user\"", line("/Users/dev/proj", 1));
+    let longer = format!("{shorter}}}\n");
+    let cut = transcript(&tree, "-Users-dev-a", ID, &shorter);
+    let whole = transcript(&tree, "-Users-dev-b", ID, &longer);
+
+    let (_, groups) = dedup_top_level(vec![cut, whole]);
+    assert_eq!(groups[0].relation, DuplicateRelation::Prefix);
+    assert_eq!(groups[0].dropped_lines(), 2);
+}
+
+#[test]
+fn the_header_fields_sum_every_group() {
+    let tree = Tree::new();
+    let body = line("/Users/dev/proj", 1);
+    let id2 = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+    let a = transcript(&tree, "-Users-dev-a", ID, &body);
+    let b = transcript(&tree, "-Users-dev-b", ID, &body);
+    let c = transcript(&tree, "-Users-dev-a", id2, &body);
+    let d = transcript(&tree, "-Users-dev-b", id2, &body);
+
+    let (_, groups) = dedup_top_level(vec![a, b, c, d]);
+    assert_eq!(groups.len(), 2);
+    let fields = duplicate_header_fields(&groups);
+    assert_eq!(fields["duplicate_transcripts"], 2);
+    assert_eq!(fields["duplicate_records_dropped"], 2);
+}
+
+#[test]
+fn no_duplicate_reports_zero_rather_than_omitting_the_keys() {
+    let fields = duplicate_header_fields(&[]);
+    assert_eq!(fields["duplicate_transcripts"], 0);
+    assert_eq!(fields["duplicate_records_dropped"], 0);
+}
+
+#[test]
+fn the_note_names_the_kept_copy_the_dropped_one_and_how_they_relate() {
+    let tree = Tree::new();
+    let shorter = line("/Users/dev/proj", 1);
+    let longer = shorter.clone() + &line("/Users/dev/proj", 2);
+    let cut = transcript(&tree, "-Users-dev-a", ID, &shorter);
+    let whole = transcript(&tree, "-Users-dev-b", ID, &longer);
+
+    let (_, groups) = dedup_top_level(vec![cut.clone(), whole.clone()]);
+    let note = duplicate_note(&groups[0]);
+    assert!(note.contains(&ID[..8]), "{note}");
+    assert!(note.contains("PREFIX"), "{note}");
+    assert!(note.contains(&whole.display().to_string()), "{note}");
+    assert!(note.contains(&cut.display().to_string()), "{note}");
+}
+
+#[test]
+fn a_divergent_note_gives_both_record_counts_and_refuses_to_merge() {
+    let tree = Tree::new();
+    let a = transcript(&tree, "-Users-dev-a", ID, &line("/Users/dev/one", 1));
+    let b = transcript(
+        &tree,
+        "-Users-dev-b",
+        ID,
+        &(line("/Users/dev/two", 9) + &line("/Users/dev/two", 8)),
+    );
+
+    let (_, groups) = dedup_top_level(vec![a, b]);
+    let note = duplicate_note(&groups[0]);
+    assert!(note.contains("DIFFER"), "{note}");
+    assert!(note.contains("2 lines"), "{note}");
+    assert!(note.contains("1 lines"), "{note}");
+}

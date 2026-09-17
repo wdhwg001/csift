@@ -237,6 +237,11 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
         // two windows, so a window answer would be right on one file and silently empty on
         // the next. `lineage_scanned` says which of the two a consumer is looking at.
         minted_elsewhere: lineage.minted_elsewhere.into_iter().collect(),
+        // Filled by `run_list` from the resolver's duplicate report: the summariser reads
+        // ONE file and cannot know that a second copy of this id sits under another
+        // project directory.
+        also_at: Vec::new(),
+        duplicate_relation: None,
     })
 }
 

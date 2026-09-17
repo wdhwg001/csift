@@ -6,6 +6,7 @@ mod argv;
 mod channel;
 mod compaction;
 mod contracts;
+mod duplicates;
 mod elicitation;
 mod files;
 mod harness;

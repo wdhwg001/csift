@@ -126,6 +126,15 @@ pub struct SessionSummary {
     /// would be worse than naming the flag. `lineage_scanned` separates "not asked for"
     /// from "no carrier".
     pub minted_elsewhere: Vec<String>,
+    /// The OTHER copies of this session id on disk - the same basename under a different
+    /// project directory (§2 `dedup`). For a merged group these are the copies the
+    /// resolver dropped, so this row stands for all of them; for a DIVERGENT group
+    /// nothing merged, both copies have their own row, and each names the other here.
+    /// Empty for every ordinary session, which is nearly all of them.
+    pub also_at: Vec<String>,
+    /// How those copies relate byte for byte - `identical` | `prefix` | `divergent`.
+    /// `None` when there are none.
+    pub duplicate_relation: Option<&'static str>,
 }
 
 /// A short, timestamped preview of one message for the `list` view.

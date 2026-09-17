@@ -88,6 +88,9 @@ pub(crate) fn render_text(
         if !s.session_kind.is_empty() {
             println!("  lane     {}", lane_line(s));
         }
+        if !s.also_at.is_empty() {
+            println!("  copies   {}", copies_line(s));
+        }
         // The one lineage link a RECORD states about itself: a line whose snake-case
         // `session_id` names a different session than its own `sessionId` was minted
         // elsewhere and hydrated into this file through the bridge. Stated, so the row
@@ -168,6 +171,26 @@ pub(crate) fn cleared_line(s: &SessionSummary) -> String {
     }
 }
 
+/// The `copies` row's body: how many other copies of this session id are on disk, how they
+/// relate byte for byte, and where they are. A MERGED relation (`identical` / `prefix`)
+/// means this row stands for all of them and the others were dropped from the scope; a
+/// `divergent` one means nothing merged, so every copy has its own row and every count in
+/// this listing includes all of them.
+pub(crate) fn copies_line(s: &SessionSummary) -> String {
+    let rel = s.duplicate_relation.unwrap_or("unknown");
+    let fate = if rel == "divergent" {
+        "kept (contents differ, so nothing merged - each copy has its own row)"
+    } else {
+        "dropped from this scope (this row stands for them)"
+    };
+    format!(
+        "{} other cop{} of this session id, {rel}, {fate}: {}",
+        s.also_at.len(),
+        if s.also_at.len() == 1 { "y" } else { "ies" },
+        s.also_at.join(", ")
+    )
+}
+
 /// The `lane` row's body: the `sessionKind` values seen, then either the whole-file SPAN or
 /// the reason there is none. The stamp is a per-PROCESS fact, so a transcript appended to by
 /// a foreground process after a background lane carries the key only over part of its lines -
@@ -213,18 +236,21 @@ pub(crate) fn render_json(
     dropped: usize,
     scope_top: usize,
     scope_sub: usize,
+    duplicates: &[path::DuplicateGroup],
 ) -> Result<()> {
     use serde_json::json;
     // envelope v2: header (always) → kind-tagged session rows → summary (always).
     // Header scope = the PRE-CAP resolved range (the flood-guard caps ROWS, never the
     // scope numbers - R7 §2.4); the summary's `sessions` stays the emitted-row count.
+    // `sessions_in_scope` counts DISTINCT sessions because the resolver merged the copies
+    // of one id, so the two duplicate keys ride beside it saying what that cost.
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
             "list",
             scope_top,
             scope_sub,
-            json!({})
+            path::duplicate_header_fields(duplicates)
         ))?
     );
     let mut skipped_total = 0usize;
@@ -299,6 +325,14 @@ pub(crate) fn render_json(
             // separates from "scanned and found none".
             "minted_elsewhere": s.minted_elsewhere,
             "minted_elsewhere_count": s.minted_elsewhere.len(),
+            // The OTHER copies of this session id on disk (§2 `dedup`). With
+            // `duplicate_relation` `identical` / `prefix` the resolver merged them and
+            // this row stands for all of them; with `divergent` it merged none, every
+            // copy has its own row, and every count in this listing covers all of them.
+            // Empty + null for a session that occurs under one project directory.
+            "also_at": s.also_at,
+            "also_at_count": s.also_at.len(),
+            "duplicate_relation": s.duplicate_relation,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

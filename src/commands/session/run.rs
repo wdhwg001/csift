@@ -13,12 +13,13 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     //       set. Workflow `journal.jsonl` event logs are never transcripts and are excluded by the
     //       resolver.
     let scope = SubagentScope::from(args.want_subagents());
-    let mut session_files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         scope,
         path::Caller::Other,
     )?;
+    let mut session_files = resolved.files;
     session_files.sort();
     session_files.dedup();
 
@@ -29,6 +30,11 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
     // Deterministic order regardless of rayon completion order: by path.
     summaries.sort_by(|a, b| a.path.cmp(&b.path));
+    // A session on disk under more than one project directory gets ONE row (the merged
+    // copies) or one row per copy (a divergent group, which merges nothing) - either way
+    // the row names the copies it stands for, because a reader who sees one row where
+    // the disk holds two transcripts has to be told.
+    attach_duplicates(&mut summaries, &resolved.duplicates);
 
     // `--since`/`--until`: keep a session iff its [first-activity, last-activity] span
     // intersects the window. The span endpoints are the timestamps this index ALREADY reads
@@ -81,9 +87,38 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     // 4. Render.
     match args.format {
         OutputFormat::Text => render_text(&summaries, dropped, scope_top, scope_sub),
-        OutputFormat::Json => render_json(&summaries, dropped, scope_top, scope_sub)?,
+        OutputFormat::Json => {
+            render_json(
+                &summaries,
+                dropped,
+                scope_top,
+                scope_sub,
+                &resolved.duplicates,
+            )?;
+        }
     }
     Ok(())
+}
+
+/// Copy the resolver's duplicate report onto the rows it is about. A merged group has ONE
+/// row in scope (its winner), which names the dropped copies; a divergent group has a row
+/// per copy, and each names its siblings.
+fn attach_duplicates(summaries: &mut [SessionSummary], groups: &[path::DuplicateGroup]) {
+    for g in groups {
+        for s in summaries.iter_mut() {
+            if s.is_subagent || s.session_id != g.session_id {
+                continue;
+            }
+            s.duplicate_relation = Some(g.relation.slug());
+            s.also_at = g
+                .members
+                .iter()
+                .map(|m| &m.path)
+                .filter(|p| *p != &s.path)
+                .map(|p| p.display().to_string())
+                .collect();
+        }
+    }
 }
 
 /// Default `list` row cap for an UNSCOPED (all-projects) invocation - the flood guard.
