@@ -11,17 +11,17 @@ use super::*;
 /// was added to close it, and it did not: it forces an author to TOUCH this file, not to
 /// put the variant into the list, and a twentieth variant given an arm, a colliding word
 /// and no row in the array passed clippy and the whole suite.
-/// The vocabulary is TWENTY-THREE relations, and that is the claim every document makes.
+/// The vocabulary is TWENTY-SIX relations, and that is the claim every document makes.
 ///
 /// Asserted against the number rather than derived from the list, which would agree with
 /// itself whatever the list held - and since the list is generated from the enum, this is
 /// the enum's own variant count.
 #[test]
-fn the_vocabulary_is_twenty_three_relations() {
+fn the_vocabulary_is_twenty_six_relations() {
     assert_eq!(
         EdgeKind::ALL.len(),
-        23,
-        "the closed vocabulary is twenty-three relations"
+        26,
+        "the closed vocabulary is twenty-six relations"
     );
 }
 

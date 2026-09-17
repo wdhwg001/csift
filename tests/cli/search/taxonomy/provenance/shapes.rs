@@ -221,3 +221,167 @@ fn an_edge_naming_a_call_resolves_to_the_line_that_carries_it() {
         "and there is nothing to explain away: {call}"
     );
 }
+
+/// A compaction boundary carrying the WHOLE `compactMetadata` states three relations, and
+/// each of them resolves to a line.
+///
+/// The shared fixture's boundary carries only the four original scalars, which is the older
+/// shape and the one that falls back: its `pairs` is position and its `precedes` is the
+/// honest empty. This transcript is built around the current shape instead - the boundary
+/// names the summary in `anchorUuid`, the predecessor in `logicalParentUuid`, and both ends
+/// of the segment it kept - so the three relations are asserted where the KEYS exist.
+///
+/// `preserves` is TWO edges rather than one naming a range: an edge names one neighbour,
+/// and head and tail are both addresses a reader fetches.
+#[test]
+fn a_whole_compaction_boundary_names_its_summary_its_predecessor_and_what_it_kept() {
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"c1","parentUuid":null,"timestamp":"2026-06-08T02:00:00.000Z","message":{"role":"user","content":"zzcompact chart the lagoon"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"c2","parentUuid":"c1","timestamp":"2026-06-08T02:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzcompact charting"}]}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"c3","parentUuid":"c2","timestamp":"2026-06-08T02:01:00.000Z","message":{"role":"user","content":"zzcompact dredge the channel"}}"#,
+            "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"c4","parentUuid":null,"logicalParentUuid":"c3","timestamp":"2026-06-08T02:02:00.000Z","compactMetadata":{"trigger":"auto","preTokens":90000,"postTokens":9000,"durationMs":1200,"preservedSegment":{"headUuid":"c1","anchorUuid":"c5","tailUuid":"c3"}}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"c5","parentUuid":"c4","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"timestamp":"2026-06-08T02:02:01.000Z","message":{"role":"user","content":"zzcompact the summary of the work so far"}}"#,
+            "\n",
+        ),
+    );
+    // An EMPTY pattern: a boundary's rendered text is its own `[compact trigger=...]`
+    // head, so the words the fixture's records carry are not in it and a pattern scan
+    // reaches the summary alone.
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "-t",
+        "harness.compaction.*",
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits: Vec<serde_json::Value> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let edges_of = |line: u64| -> Vec<(String, String, Option<u64>)> {
+        hits.iter()
+            .filter(|h| h["line"].as_u64() == Some(line))
+            .flat_map(|h| h["for"].as_array().cloned().unwrap_or_default())
+            .map(|e| {
+                (
+                    e["kind"].as_str().unwrap_or_default().to_string(),
+                    e["basis"].as_str().unwrap_or("null").to_string(),
+                    e["target"]["line"].as_u64(),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        edges_of(4),
+        [
+            ("pairs".to_string(), "key".to_string(), Some(5)),
+            ("precedes".to_string(), "key".to_string(), Some(3)),
+            ("preserves".to_string(), "key".to_string(), Some(1)),
+            ("preserves".to_string(), "key".to_string(), Some(3)),
+        ],
+        "the boundary at L4:\n{}",
+        out.stdout
+    );
+    // The summary names the boundary BACK, and on position: no key of a summary names one.
+    assert_eq!(
+        edges_of(5),
+        [("pairs".to_string(), "position".to_string(), Some(4))],
+        "the summary at L5:\n{}",
+        out.stdout
+    );
+    // The three words RENDER - they are what a record states, not a reading of the file's
+    // shape, so they carry a label-zone tag like every other family edge.
+    let text = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "-t",
+        "harness.compaction.*",
+        "--max-count",
+        "0",
+    ]);
+    assert!(text.success, "{}", text.stderr);
+    for tag in [
+        "[for: pairs L5]",
+        "[for: precedes L3]",
+        "[for: preserves L1]",
+        "[for: preserves L3]",
+        "[for: pairs L4]",
+    ] {
+        assert!(
+            text.stdout.contains(tag),
+            "{tag} is missing from the text surface:\n{}",
+            text.stdout
+        );
+    }
+}
+
+/// A boundary whose `anchorUuid` is its OWN uuid pairs by POSITION, never with itself.
+///
+/// Claude Code's metadata builder takes the anchor as an argument and its two callers pass
+/// different things: the compaction path passes the last summary message's uuid, the
+/// `/rewind` summarize path passes the BOUNDARY's own uuid whenever the direction is not
+/// `up_to`. Read as a key, that second shape would make the boundary its own other half -
+/// an edge naming the record the reader is already looking at. It falls back to the summary
+/// that follows it, exactly as a boundary carrying no segment at all does.
+#[test]
+fn a_boundary_anchored_at_itself_pairs_with_the_summary_instead() {
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"w1","parentUuid":null,"timestamp":"2026-06-08T03:00:00.000Z","message":{"role":"user","content":"zzself chart the lagoon"}}"#,
+            "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"w2","parentUuid":null,"timestamp":"2026-06-08T03:01:00.000Z","compactMetadata":{"trigger":"manual","preTokens":900,"messagesSummarized":4,"preservedSegment":{"headUuid":"w1","anchorUuid":"w2","tailUuid":"w1"}}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"w3","parentUuid":"w2","isCompactSummary":true,"summarizeMetadata":{"direction":"from"},"timestamp":"2026-06-08T03:01:01.000Z","message":{"role":"user","content":"zzself the summary"}}"#,
+            "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "-t",
+        "harness.compaction.*",
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let boundary = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .find(|h| h["line"].as_u64() == Some(2))
+        .unwrap_or_else(|| panic!("the boundary at L2:\n{}", out.stdout));
+    let pairs = boundary["for"]
+        .as_array()
+        .expect("edges")
+        .iter()
+        .find(|e| e["kind"] == "pairs")
+        .unwrap_or_else(|| panic!("no pairs edge: {boundary}"));
+    assert_eq!(pairs["basis"], "position", "{boundary}");
+    assert_eq!(pairs["target"]["line"].as_u64(), Some(3), "{boundary}");
+    // The segment it kept is still read off the keys, which the self-anchor does not touch.
+    let preserves: Vec<Option<u64>> = boundary["for"]
+        .as_array()
+        .expect("edges")
+        .iter()
+        .filter(|e| e["kind"] == "preserves")
+        .map(|e| e["target"]["line"].as_u64())
+        .collect();
+    assert_eq!(preserves, [Some(1), Some(1)], "{boundary}");
+}

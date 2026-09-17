@@ -103,6 +103,15 @@ impl Record {
 #[derive(Debug, Default)]
 pub struct SummarizeIndex {
     by_boundary_uuid: HashMap<String, SummarizeMode>,
+    /// The PAIRING itself, both ways in one map: boundary uuid -> summary uuid AND summary
+    /// uuid -> boundary uuid.
+    ///
+    /// One map rather than two because the two directions are the same edge and a uuid
+    /// belongs to one record, so no key can mean both. The pairing is what the `pairs`
+    /// provenance relation renders, and it is worth keeping apart from the MODE above: a
+    /// summary whose `direction` csift does not model has no mode and is still the
+    /// boundary's other half, so a reader following the relation reaches it either way.
+    paired_uuid: HashMap<String, String>,
 }
 
 impl SummarizeIndex {
@@ -134,6 +143,7 @@ impl SummarizeIndex {
     /// string compare runs first.
     pub fn from_nodes<'a>(records: impl IntoIterator<Item = ChainNode<'a>>) -> Self {
         let mut by_boundary_uuid = HashMap::new();
+        let mut paired_uuid = HashMap::new();
         let mut pending: Option<&str> = None;
         for rec in records {
             if rec.subtype().is_some() && rec.is_compact_boundary() {
@@ -141,18 +151,39 @@ impl SummarizeIndex {
                 pending = rec.uuid();
                 continue;
             }
-            if let Some(mode) = rec.summary_compaction_mode() {
-                if let Some(uuid) = pending.take() {
-                    by_boundary_uuid.insert(uuid.to_string(), mode);
-                }
+            let Some(mode) = rec.summary_compaction_mode() else {
+                continue;
+            };
+            let Some(uuid) = pending.take() else {
+                continue;
+            };
+            by_boundary_uuid.insert(uuid.to_string(), mode);
+            // The PAIRING is recorded whether or not the summary carries a uuid of its own,
+            // because a summary with none still closes the boundary for the MODE above -
+            // only the edge back needs the id, and an absent one simply yields no entry.
+            if let Some(summary) = rec.uuid() {
+                paired_uuid.insert(uuid.to_string(), summary.to_string());
+                paired_uuid.insert(summary.to_string(), uuid.to_string());
             }
         }
-        SummarizeIndex { by_boundary_uuid }
+        SummarizeIndex {
+            by_boundary_uuid,
+            paired_uuid,
+        }
     }
 
     /// The mode paired to this boundary uuid; `None` when unpaired or unknown.
     #[must_use]
     pub fn mode_for_boundary(&self, uuid: Option<&str>) -> Option<SummarizeMode> {
         self.by_boundary_uuid.get(uuid?).copied()
+    }
+
+    /// The OTHER half of this compaction event: the summary for a boundary uuid, the
+    /// boundary for a summary uuid. `None` when this file left the record unpaired - no
+    /// summary after the boundary, a second boundary first, or a windowed read that never
+    /// saw the other half.
+    #[must_use]
+    pub fn paired_with(&self, uuid: Option<&str>) -> Option<&str> {
+        self.paired_uuid.get(uuid?).map(String::as_str)
     }
 }

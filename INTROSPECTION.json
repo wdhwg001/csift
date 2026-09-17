@@ -88894,7 +88894,7 @@
       "id": "MISC-043",
       "area": "misc",
       "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The boundary's own `parentUuid` is null on every specimen (260 of 260 boundary records over every transcript under one projects root), so a reader that walks `parentUuid` ends on the boundary whatever the logical parent says, and the loader never reads the field. Nothing on the write path keeps the named record alive either: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 77 uuid-named top-level transcripts under the projects root, one observation per boundary record: 255 `compact_boundary` records across the 21 compacted files, of which 52 carry a `logicalParentUuid` matching no `uuid` on ANY line of their own file, spread over 14 files.",
-      "depends": "csift does not stop READING at a compaction cut, and it does not cross one either: its walk ends on the boundary exactly where the loader's does, because the null `parentUuid` arm fires before any other field is consulted. The difference sits after the walk. csift keeps the region above the terminating record and flags it `PreCut` instead of dropping it, because an archive is asked what the model had read at the time. That terminating record is the FLOOR the survival axis carries: an off-chain record physically above it is `PreCut` and never `Abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. The walk's `logicalParentUuid` arm is a guard for one shape only, a boundary whose own `parentUuid` is non-null and resolves to no record, and no corpus boundary has that shape. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it.",
+      "depends": "csift does not stop READING at a compaction cut, and it does not cross one either: its walk ends on the boundary exactly where the loader's does, because the null `parentUuid` arm fires before any other field is consulted. The difference sits after the walk. csift keeps the region above the terminating record and flags it `PreCut` instead of dropping it, because an archive is asked what the model had read at the time. That terminating record is the FLOOR the survival axis carries: an off-chain record physically above it is `PreCut` and never `Abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. The walk's `logicalParentUuid` arm is a guard for one shape only, a boundary whose own `parentUuid` is non-null and resolves to no record, and no corpus boundary has that shape. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it. The boundary also EXPOSES that link as a `precedes` provenance edge, which is where the dangling share becomes a rendered answer: a predecessor still on disk resolves to its line, and one deleted with the region renders the id with `not in this file` rather than being dropped.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
@@ -88905,6 +88905,11 @@
           "path": "src/model/chain/branches.rs",
           "lines": "86-89",
           "snippet": "    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }"
+        },
+        {
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "348-348",
+          "snippet": "            rec.logical_parent_uuid.as_deref(),"
         }
       ],
       "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set and record whether its own `parentUuid` is null. Counting rule: one observation per boundary record; a file counts once if it holds at least one dangling boundary. To test whether the field reaches any shipped answer, build a twin of a compacted transcript with `\"logicalParentUuid\"` renamed and compare, twin against original, the per-hit `survival` counts and the trailing-summary fields of `csift search '' <file> --format json` and the chain totals of `csift stats <file> --format json`.",
@@ -96827,6 +96832,114 @@
           "observed": "Root one: 52 uuid sidecar directories, 7 with no transcript beside them, 0 carrying a subagents/ subtree, 0 agent-*.jsonl, direct children tool-results 5 and workflows 2. Root two: 116 uuid sidecar directories, 48 with no transcript beside them, 0 carrying a subagents/ subtree, 0 agent-*.jsonl, direct children workflows 16 and tool-results 5. Extra directories whose uuid also has a sidecar elsewhere: 2 + 16 = 18, and 18 of 18 have a basename equal to the encoding of a cwd in that session's own transcript; the 18 hold 81 files, all with extension .js, under `workflows/scripts/`, with 0 *.jsonl among them. All four producer_chain excerpts byte-exact at their offsets and occurring exactly once in the build.",
           "rule": "One observation per uuid-shaped directory sitting directly under an encoded project directory; a directory counts as transcript-less when the sibling `<name>.jsonl` does not exist; file tallies are one observation per file at any depth below such a directory, excluding `.DS_Store`; a directory counts as cwd-matched when its basename equals the encoder applied to at least one distinct `cwd` string in the session's transcript.",
           "note": "The split exists and is harmless to csift: what sits under the other project directory is workflow SCRIPTS, not transcripts, so the transcript-anchored walk loses nothing. The claim is recorded so a later reader does not widen discovery on the strength of the directory name."
+        }
+      ]
+    },
+    {
+      "id": "CMP-030",
+      "area": "compaction",
+      "behavior": "A compact_boundary's compactMetadata.preservedSegment carries THREE uuids and they point two different ways. headUuid and tailUuid are the first and last of the list of messages the compaction KEPT, taken as f[0] and f.at(-1) of that list by the one builder. anchorUuid is not part of that list at all: the builder takes it as an argument, and its two callers pass different values. The compaction path passes the last SUMMARY message's uuid, so the anchor names the isCompactSummary record that follows the boundary. The /rewind summarize path passes the boundary's OWN uuid unless the direction is up_to, in which case it passes the last summary message's uuid with the boundary uuid as the fallback - so on that path the anchor can be the boundary itself. Corpus, one row per compact_boundary line over one projects root with each member resolved against the uuid map of its own file (last line carrying a uuid wins): 275 boundaries, 275 carry preservedSegment, 275 anchors resolve and all 275 resolve to a record whose isCompactSummary is true, 0 to anything else and 0 to nothing. headUuid resolves above the boundary on 272 and below it on 3 (a later re-anchored copy wins the uuid map); tailUuid above on 223, below on 1 and to no line at all on 51, the record having been deleted with the region the compaction cut.",
+      "depends": "csift renders the boundary's `pairs` provenance edge from anchorUuid on basis `key`, and its `preserves` edges from headUuid and tailUuid on basis `key`. The self-anchor shape is guarded rather than trusted: an anchor equal to the boundary's own uuid is refused and the pairing falls back to the SummarizeIndex position pairing, because an edge naming its own record names no neighbour. If the anchor argument ever stopped being the summary on the compaction path, `pairs` would point at a preserved record instead of the summary and a reader following the relation would land inside the region the summary replaced.",
+      "code": [
+        {
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "336-337",
+          "snippet": "    let (anchor, basis) = match segment(\"anchorUuid\").filter(|a| Some(*a) != rec.uuid.as_deref()) {\n        Some(a) => (Some(a), Basis::Key),"
+        },
+        {
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "355-355",
+          "snippet": "            .map(|u| edge(crate::model::EdgeKind::Preserves, Basis::Key, Some(u))),"
+        }
+      ],
+      "instrument": "Over one projects root, for every jsonl line whose type is system and subtype is compact_boundary, build the uuid -> line map of that line's own file (last write wins) and resolve compactMetadata.preservedSegment.{headUuid,anchorUuid,tailUuid}. Count one row per boundary: whether preservedSegment is present, whether each member resolves, whether the anchor's record carries isCompactSummary true, and whether head and tail resolve above or below the boundary's own line. In the shipped binary, byte-search the literal preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)} for the one builder, then enumerate every occurrence of that builder's minified name and read each caller for the value it passes as the anchor.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4.12"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the compaction path's call to the metadata builder",
+          "offset": 163628583,
+          "excerpt": "Pe=$it(me,n.summaryMessages.at(-1).uuid,ke,r)",
+          "note": "The anchor argument on the ordinary compaction path is the LAST summary message's uuid, which is the isCompactSummary record the corpus census resolves every anchor to."
+        },
+        {
+          "role": "gate",
+          "name": "the summarize path's anchor ternary",
+          "offset": 164841011,
+          "excerpt": "let nt=_===\"up_to\"?Tn.at(-1)?.uuid??xt.uuid:xt.uuid;",
+          "note": "The other caller. Only the up_to direction reaches a summary message; every other direction passes the boundary marker's own uuid, which is the self-anchor shape csift refuses."
+        },
+        {
+          "role": "writer",
+          "name": "the preservedSegment object literal",
+          "offset": 164831304,
+          "excerpt": "preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}",
+          "note": "The one place the three members are written. head and tail come from the kept list; the anchor is the argument, which is why it names a different kind of record from the other two."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the builder's own definition",
+          "offset": 164831304,
+          "excerpt": "preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}",
+          "verdict": "The writer. Every preservedSegment on disk comes through here."
+        },
+        {
+          "site": "caller on the compaction path",
+          "offset": 163628583,
+          "excerpt": "Pe=$it(me,n.summaryMessages.at(-1).uuid,ke,r)",
+          "verdict": "Passes the last summary message's uuid as the anchor."
+        },
+        {
+          "site": "caller on the summarize path",
+          "offset": 164841011,
+          "excerpt": "let nt=_===\"up_to\"?Tn.at(-1)?.uuid??xt.uuid:xt.uuid;",
+          "verdict": "Passes a summary message's uuid only for the up_to direction, and the boundary marker's own uuid otherwise."
+        },
+        {
+          "site": "a same-named function in the plugin marketplace module",
+          "offset": 182232553,
+          "excerpt": "async function $it(e){let n=e.trim()",
+          "verdict": "A different function that happens to carry the same minified name: it parses a marketplace source string and writes no compaction metadata."
+        },
+        {
+          "site": "first caller of that marketplace parser",
+          "offset": 182297482,
+          "excerpt": "let k=await $it(o);",
+          "verdict": "Reaches the marketplace parser, not the metadata builder."
+        },
+        {
+          "site": "second caller of that marketplace parser",
+          "offset": 186015793,
+          "excerpt": "let Xe=await $it(Ce);",
+          "verdict": "Reaches the marketplace parser, not the metadata builder."
+        },
+        {
+          "site": "the boundary record factory",
+          "offset": 163581237,
+          "excerpt": "function Ugt(e){return{type:\"system\",subtype:\"compact_boundary\",content:\"Conversation compacted\"",
+          "verdict": "Builds the record the metadata rides on, from the metadata the builder above produced; it adds no preservedSegment of its own."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "Corpus census over one projects root, one row per compact_boundary line, each preservedSegment member resolved against the uuid map of its own file; plus a byte search of the shipped binary for the preservedSegment object literal and a read of every occurrence of the builder's minified name.",
+          "observed": "275 boundaries, 275 with preservedSegment; anchor resolves to an isCompactSummary record on 275 of 275, to another record on 0, to no line on 0. headUuid resolves above the boundary on 272, below on 3, nowhere on 0; tailUuid above on 223, below on 1, nowhere on 51. logicalParentUuid present on 275 and resolving in its own file on 223. In the binary the literal occurs once; the builder's name occurs 6 times, of which 2 are its callers, 1 its definition and 3 a same-named marketplace-source parser.",
+          "rule": "One row per jsonl line whose type is system and subtype is compact_boundary under one projects root; a member counts as resolved when its value equals the uuid of some line of the same file, taking the LAST such line.",
+          "note": "The self-anchor shape has no corpus specimen and is read from the binary alone, which is why csift guards it rather than waiting to meet one."
         }
       ]
     }

@@ -108,10 +108,20 @@ edge_kinds! {
         Interrupted => "interrupted",
         /// The record a `last-prompt` line's `leafUuid` names - the chain leaf at that write.
         Leaf => "leaf",
+        /// The OTHER half of one compaction event: a `compact_boundary` names the summary
+        /// that replaced the region it cut, and that summary names the boundary back.
+        Pairs => "pairs",
         /// The record this one hangs off in Claude Code's own conversation DAG - `parentUuid`,
         /// resolved to a line. The ENGINE's own edge: every record that names a parent carries
         /// it, unless a family already named that same target with a word of its own.
         Parent => "parent",
+        /// The record a compaction boundary re-links the conversation to: its
+        /// `logicalParentUuid`, the true predecessor its own null `parentUuid` cannot name.
+        Precedes => "precedes",
+        /// A record a compaction KEPT - the head and the tail of
+        /// `compactMetadata.preservedSegment`. It is the half the boundary STATES; what the
+        /// summary replaced is the complement, and no key names that.
+        Preserves => "preserves",
         /// The assistant turn a harness redo nudge sent back.
         Redoes => "redoes",
         /// The user message a model refusal was for.

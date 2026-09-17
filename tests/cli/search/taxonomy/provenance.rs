@@ -45,7 +45,7 @@ mod shapes;
 /// names an id no line here carries (a wire id, or a record another file holds), kept
 /// because the id is real; `session` = the target is a whole transcript and no record in
 /// it; `unknown` = the record names nothing, and the edge says so rather than vanishing.
-const EVERY_EDGE: [(&str, &str, &str, &str); 39] = [
+const EVERY_EDGE: [(&str, &str, &str, &str); 42] = [
     ("agent.communication.channel", "attached_to", "key", "line"),
     (
         "agent.communication.channel",
@@ -75,6 +75,12 @@ const EVERY_EDGE: [(&str, &str, &str, &str); 39] = [
     ("harness.bookkeeping.fork", "forked_from", "key", "line"),
     ("harness.bookkeeping.last-prompt", "leaf", "key", "line"),
     ("harness.command.caveat", "attached_to", "position", "line"),
+    // The fixture's boundary carries only the four original `compactMetadata` scalars, so
+    // its pairing falls to POSITION and it names no predecessor - the two older shapes.
+    // The key-carrying forms need a boundary built around them (`provenance/shapes.rs`).
+    ("harness.compaction.boundary", "pairs", "position", "line"),
+    ("harness.compaction.boundary", "precedes", "null", "unknown"),
+    ("harness.compaction.summary", "pairs", "position", "line"),
     ("harness.context.file", "attached_to", "key", "line"),
     ("harness.context.file", "for_tool_use", "null", "unknown"),
     ("harness.context.ide", "attached_to", "key", "line"),

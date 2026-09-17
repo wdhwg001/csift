@@ -276,8 +276,89 @@ pub(crate) fn survival_edges(
     out
 }
 
-/// Stamp the provenance answer onto every hit a record just produced: the turn root, and
-/// the engine's own one-hop edge.
+/// The THREE relations a COMPACTION boundary and its summary state about each other and
+/// about the region the event touched.
+///
+/// They sit with the engine rather than in a family because no family owns
+/// `harness.compaction`: the engine already reads the boundary's `compactMetadata` for the
+/// hit's own `compact_metadata` and `mode` fields, and a second reader of the same object
+/// would be a second answer to the same question.
+///
+/// `pairs` is the event's own two halves, and it is the one relation here whose BASIS
+/// depends on the record. A boundary carrying `preservedSegment` names the summary outright
+/// in `anchorUuid`, which is a key its producer wrote (measured: on one projects root, 275
+/// of 275 boundaries carry `preservedSegment`, and on all 275 the `anchorUuid` resolves to
+/// the `isCompactSummary` record). An older boundary that carries only the four original
+/// scalars names nothing, and there the pairing is POSITION - the first summary after the
+/// boundary and before the next one. A SUMMARY names no boundary on any key at all, so its
+/// half of the edge is always position.
+///
+/// `precedes` is the `logicalParentUuid` the boundary carries in place of the null
+/// `parentUuid` every boundary has - the true predecessor the compaction re-linked to. It
+/// resolves to nothing on the shape claim MISC-043 measured, where the predecessor was
+/// deleted from disk with the region it belonged to, and the builder's `not in this file`
+/// is the honest answer there rather than a dropped edge.
+///
+/// `preserves` names the head and the TAIL of the segment the compaction KEPT, as two
+/// edges. Two rather than one naming a range, because an edge names ONE neighbour and both
+/// ends are addresses a reader fetches; a range would need a fifth target shape for a
+/// relation that has exactly two useful points. What the summary REPLACED is the complement
+/// of that segment and no key on either record names it, so no edge claims it - the
+/// inventory records that absence rather than inventing a target for it.
+fn compaction_edges(class: Class, rec: &Record, env: &ClassifyEnv<'_>) -> Vec<HitFact> {
+    let edge = |kind, basis, uuid: Option<&str>| {
+        let line = uuid.and_then(|u| env.lines.line_of_uuid(u));
+        record_text::for_edge_at(kind, basis, uuid, None, line)
+    };
+    if class == Class::CompactionSummary {
+        return vec![edge(
+            crate::model::EdgeKind::Pairs,
+            Basis::Position,
+            env.summarize.paired_with(rec.uuid.as_deref()),
+        )];
+    }
+    if class != Class::CompactionBoundary {
+        return Vec::new();
+    }
+    let segment = |member: &str| -> Option<&str> {
+        rec.compact_metadata
+            .as_ref()?
+            .get("preservedSegment")?
+            .get(member)?
+            .as_str()
+    };
+    // The anchor is only the summary on the path that HAS one to point at. Claude Code's
+    // builder takes the anchor as an argument, and its two callers pass different things:
+    // the compaction path passes the last summary message's uuid, while the `/rewind`
+    // summarize path passes the BOUNDARY's own uuid whenever the direction is not `up_to`.
+    // An anchor equal to this record is a self-edge, which names no neighbour - so it falls
+    // back to the position pairing exactly as an older boundary with no segment at all does.
+    let (anchor, basis) = match segment("anchorUuid").filter(|a| Some(*a) != rec.uuid.as_deref()) {
+        Some(a) => (Some(a), Basis::Key),
+        None => (
+            env.summarize.paired_with(rec.uuid.as_deref()),
+            Basis::Position,
+        ),
+    };
+    let mut out = vec![
+        edge(crate::model::EdgeKind::Pairs, basis, anchor),
+        edge(
+            crate::model::EdgeKind::Precedes,
+            Basis::Key,
+            rec.logical_parent_uuid.as_deref(),
+        ),
+    ];
+    out.extend(
+        ["headUuid", "tailUuid"]
+            .into_iter()
+            .filter_map(segment)
+            .map(|u| edge(crate::model::EdgeKind::Preserves, Basis::Key, Some(u))),
+    );
+    out
+}
+
+/// Stamp the provenance answer onto every hit a record just produced: the turn root, the
+/// relations the engine reads off the record itself, and the engine's own one-hop edge.
 pub(crate) fn backfill_provenance(
     hits: &mut [Hit],
     turn: &Turn<'_>,
@@ -287,9 +368,16 @@ pub(crate) fn backfill_provenance(
 ) {
     let root = roots.link(turn, pos);
     let parent_uuid = turn.records[pos].node().parent_uuid();
+    let rec = turn.records[pos].kept().map(|k| &k.rec);
     for h in hits.iter_mut() {
         // The ROOT is on every unit under every format: the label zone prints it.
         h.for_root = root.clone();
+        // The record-stated relations no family owns. They RENDER, so they are built
+        // whatever the reader asked for - and each is gated on the unit's own leaf, so a
+        // hit of any other leaf pays one comparison.
+        if let (Some(class), Some(rec)) = (h.class, rec) {
+            h.facts.extend(compaction_edges(class, rec, env));
+        }
         // The two ONE-HOP edges ride JSON alone, so they are built only where a reader
         // projects or censuses them - the same gate the four survival relations take,
         // stamped beside the survival FIELDS where those belong. Nothing about the output

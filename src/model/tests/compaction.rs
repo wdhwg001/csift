@@ -133,4 +133,41 @@ fn a_summary_with_no_boundary_before_it_pairs_with_nothing() {
     let recs = [parse(&summary(r#""isVisibleInTranscriptOnly":true,"#))];
     let ix = SummarizeIndex::from_records(&recs);
     assert_eq!(ix.mode_for_boundary(Some("cb1")), None);
+    assert_eq!(ix.paired_with(Some("sum1")), None);
+}
+
+/// The PAIRING answers in BOTH directions, and it is a different question from the mode.
+///
+/// The mode is a property of the summary that the boundary borrows; the pairing is the
+/// event's own two halves, which is what the `pairs` relation renders. They come apart on a
+/// summary whose `direction` csift does not model: there is no mode to borrow, and the two
+/// records are still each other's other half.
+#[test]
+fn the_pairing_answers_both_ways_even_where_the_mode_is_unknown() {
+    let recs = [
+        parse(BOUNDARY),
+        parse(&summary(r#""isVisibleInTranscriptOnly":true,"#)),
+    ];
+    let ix = SummarizeIndex::from_records(&recs);
+    assert_eq!(ix.paired_with(Some("cb1")), Some("sum1"));
+    assert_eq!(ix.paired_with(Some("sum1")), Some("cb1"));
+    assert_eq!(ix.paired_with(Some("cb2")), None, "unpaired names nothing");
+    assert_eq!(ix.paired_with(None), None);
+
+    let unknown = [
+        parse(BOUNDARY),
+        parse(&summary(r#""summarizeMetadata":{"direction":"sideways"},"#)),
+    ];
+    let ix = SummarizeIndex::from_records(&unknown);
+    assert_eq!(
+        ix.mode_for_boundary(Some("cb1")),
+        None,
+        "an unmodeled gesture is no mode, never a guessed one"
+    );
+    assert_eq!(
+        ix.paired_with(Some("cb1")),
+        None,
+        "and a summary csift cannot read the gesture of closes no pairing either - the \
+         pairing is recorded where the mode is, so the two can never disagree"
+    );
 }
