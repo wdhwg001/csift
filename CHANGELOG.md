@@ -358,15 +358,17 @@ surface change bumps the PATCH.
   to four, five and six copies apiece; every retired spelling now lands in one section, so a
   caller who errored on one has a single address. Two statements that had gone stale are
   corrected against the binary: a text excerpt is one line per record, and sixteen of the
-  eighteen bookkeeping line types build their key=value head from their own bytes. The file
-  landed smaller than it started (56,687 tokens against 56,728, tiktoken `cl100k_base`
-  throughout) and ships at 57,608 after the correction round that followed - the retirement
-  table grown to every spelling the binary refuses, the crossing default's value, the fifteen
-  label-zone tags the file named nowhere, and the three empty-result stderr lines it had
-  never quoted. The two 73-row transparency tables and the relation inventory keep their
-  exact rows, so every drift test that pins them still holds in both directions. One header
-  line moved: the shape table's third column was the same escape-hatch command on all 73
-  rows, so it is stated once above the table and the drift test's literal moves with it.
+  eighteen bookkeeping line types build their key=value head from their own bytes. It ships
+  at 58,216 tokens, 1,488 over the 56,728 it replaced (tiktoken `cl100k_base` throughout).
+  The rewrite itself landed at 56,687, so its dedup and rider removal paid for every section
+  it added; two correction rounds bought the rest - the retirement table grown to every
+  spelling the binary refuses, the crossing default's value, the label-zone tags the file
+  named nowhere on `search`/`show` and on thirteen other commands, the three empty-result
+  stderr lines it had never quoted, and the third summary `whoami` can close with. The two
+  73-row transparency tables and the relation inventory keep their exact rows, so every drift
+  test that pins them still holds in both directions. One header line moved: the shape
+  table's third column was the same escape-hatch command on all 73 rows, so it is stated once
+  above the table and the drift test's literal moves with it.
 - **The survival walk now CROSSES a compaction boundary, under a budget, and every surface
   says what it crossed.** Claude Code's loader reads `parentUuid` only, so it stops at a
   `compact_boundary` and the whole history above the cut leaves the conversation; csift
