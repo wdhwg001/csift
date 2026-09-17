@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2372",
+          "lines": "2369",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -92007,7 +92007,7 @@
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn lane_line(s: &SessionSummary) -> String {",
-          "lines": "205"
+          "lines": "213"
         }
       ],
       "instrument": "Corpus: over every `*.jsonl` under the projects root, read each file as BYTES, split on `\\n` only, and count the lines whose `json.loads` yields a dict with `sessionKind` as a TOP-LEVEL key; report the total, the distinct values, the breakdown by the object's `type`, the number of files, the `version` histogram of the counted lines, and per file the first and last carrier's 1-based index among non-blank lines over that file's non-blank total - a file whose carrier count equals its non-blank total carries the key on every line, and one where it does not is the mixed shape the span exists for. Binary: in the build named by `verified_claude_code`, byte-count `sessionKind`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_SESSION_KIND:\"bg\"`, `sessionKind:Ij()` and `sessionKind:void 0`, and read every occurrence of the first two, sorting them into string-table entries, the one stamp, the one merge, the strippers, the readers and the telemetry sink. Version floor: byte-count `CLAUDE_CODE_SESSION_KIND:\"bg\"` in each cached native build.",
@@ -96306,7 +96306,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3029"
+          "lines": "3026"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96602,16 +96602,21 @@
       "id": "PATH-014",
       "area": "path-encoding",
       "behavior": "ONE session id can sit under TWO project directories at once, and Claude Code both reaches that state and refuses to resolve it. The project key is `Em(e)=Apr()??KA(e)` (157617292): `Apr` is the memoised read of the `CLAUDE_CODE_PROJECT_DIR_NAME` environment override (`function _(){return process.env.CLAUDE_CODE_PROJECT_DIR_NAME}`, 156662184, gated by a `^[A-Za-z0-9_-]{1,64}$` shape test and a reserved-device-name refusal) and `KA` the ordinary encoder; beside it `Ctt(e)` returns the NATURAL key whenever the override differs, and the directory enumeration ADDS that second directory to the list a session may live in (`let a=Ctt(e);if(a!==void 0){let l=S(ia(),a);try{await b(l),t.push(l)}catch{}return t}`, 157618887). The resume lookup then walks EVERY directory under the projects root for `<uuid>.jsonl` and, on finding a second one that has messages, returns null rather than choosing (`if(await eIn(o)!==\"has\")continue;if(a!==null)return null;a=o`, 157615066). The second harness door is `relocateSessionTranscript` (166124462), which mkdirs the new project directory and MOVES the transcript, writing a `{type:\"relocated\",sessionId,relocatedCwd}` record on the same-destination arm; its fallback mover can leave the source behind, in the harness's own words - `renameWithFallbacks: the session folder may also remain at ${e}; left in place` (166128344). THE OBSERVED SPECIMENS WERE NOT WRITTEN BY EITHER DOOR. Over one projects root: 30 encoded directories hold 81 top-level transcripts over 78 distinct basenames, so 3 basenames occur under two directories - two pairs byte-identical (99,499,361 bytes / 37,920 lines each, and 9,204 bytes / 17 lines each) and one pair where the shorter copy is a strict byte PREFIX of the longer (77,991,731 bytes / 38,870 lines against 78,613,081 / 39,192). A prefix is what copying a file that is still being appended to produces, and `\"type\":\"relocated\"` occurs in 0 of 9,839 jsonl files under that root and no file on it is named `.superseded-` or `.orphaned-`, so a relocation never ran there. The sidecar trees were copied with the transcripts: every duplicated `agent-<hex>.jsonl` basename on the root belongs to one of those sessions' two sidecars, and no agent basename is shared between two different sessions.",
-      "depends": "csift merges the copies at `path::resolve_session_files`, the one point every session-operating subcommand resolves through, and keys the merge on the basename (PATH-012: the basename IS the session id, which is also what the harness's own cross-directory lookup keys on). The relation decides whether a merge happens at all: IDENTICAL and PREFIX collapse onto the LONGEST copy, because a prefix copy is missing records the longer one carries, while DIVERGENT merges nothing - two files claiming one session id with contradictory content are not one session seen twice, and a turn number minted from one does not address the other. An mtime never enters the rule: the instants on such copies can be re-applied wholesale by a preserving copy, so they are not evidence about which copy the harness wrote; an equal-size tie is broken by the copy whose directory basename equals the encoding of the first record carrying a cwd, then by the smallest path so the answer is stable across runs and machines. Without the merge a duplicated session is counted twice by every spanning surface and its whole sidecar is walked twice; with it, the copies that were dropped are disclosed on stderr, in the JSON envelope header (`duplicate_transcripts`, `duplicate_records_dropped`) and on the `list` row (`also_at`, `duplicate_relation`). `show` is the exception that keeps refusing: it counts the UNMERGED set, so an address that names two files on disk still bails and names the paths, because no `@<uuid>` separates them.",
+      "depends": "csift merges the copies at `path::resolve_session_files`, the one point every session-operating subcommand resolves through, and keys the merge on the basename (PATH-012: the basename IS the session id, which is also what the harness's own cross-directory lookup keys on). The relation decides whether a merge happens at all: IDENTICAL and PREFIX collapse onto the LONGEST copy, because a prefix copy is missing records the longer one carries, while DIVERGENT merges nothing - two files claiming one session id with contradictory content are not one session seen twice, and a turn number minted from one does not address the other. A copy the map could not READ answers UNKNOWN before any comparison and merges nothing either: read as an empty file it is a prefix of every other copy and the largest by metadata, so the merge would announce the readable copy as dropped and the read failure would surface only when a later command died on the copy it kept; the note names that copy and the error. An mtime never enters the rule: the instants on such copies can be re-applied wholesale by a preserving copy, so they are not evidence about which copy the harness wrote; an equal-size tie is broken by the copy whose directory basename equals the encoding of the first record carrying a cwd, then by the smallest path so the answer is stable across runs and machines. Without the merge a duplicated session is counted twice by every spanning surface and its whole sidecar is walked twice; with it, the copies that were dropped are disclosed on stderr, in the JSON envelope header (`duplicate_transcripts`, `duplicate_records_dropped`) and on the `list` row (`also_at`, `duplicate_relation`). `show` is the exception that keeps refusing: it counts the UNMERGED set, so an address that names two files on disk still bails and names the paths, because no `@<uuid>` separates them.",
       "code": [
         {
           "path": "src/path/dedup.rs",
-          "lines": "145-151",
+          "lines": "181-185",
+          "snippet": "    let relation = if members.iter().any(|m| m.error.is_some()) {\n        DuplicateRelation::Unknown\n    } else {\n        classify_bytes(&bytes)\n    };"
+        },
+        {
+          "path": "src/path/dedup.rs",
+          "lines": "209-215",
           "snippet": "        let verdict = if other[..n] != winner[..n] {\n            DuplicateRelation::Divergent\n        } else if other.len() == winner.len() {\n            DuplicateRelation::Identical\n        } else {\n            DuplicateRelation::Prefix\n        };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "198-202",
+          "lines": "248-252",
           "snippet": "    let by_size = |a: &(u64, bool, PathBuf), b: &(u64, bool, PathBuf)| {\n        b.0.cmp(&a.0) // longest first\n            .then(b.1.cmp(&a.1)) // then the copy whose dir name encodes the recorded cwd\n            .then(a.2.cmp(&b.2)) // then deterministically by path\n    };"
         },
         {

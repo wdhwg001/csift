@@ -44,7 +44,9 @@ surface change bumps the PATCH.
   collapse at the shared resolver, decided by the BYTES: identical, or one a strict byte
   prefix of the other, merge onto the longest; copies that differ before the shorter one ends
   merge into nothing and both stay in scope, because a turn number minted from one does not
-  address the other. An mtime is never consulted. The resolver names every merge on stderr,
+  address the other; a copy csift could not READ reads `unknown` and merges nothing either,
+  naming that copy and the error the filesystem returned. An mtime is never consulted.
+  The resolver names every merge on stderr,
   `list`/`search`/`stats`/`files`/`recover`/`verbatim`/`image`/`agents` carry
   `duplicate_transcripts` and `duplicate_records_dropped` in their JSON header and a `copies`
   line in text, and a `list` row carries `also_at` plus `duplicate_relation`. `show` keeps

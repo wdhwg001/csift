@@ -100,6 +100,46 @@ fn one_diverging_copy_makes_the_whole_group_unmergeable() {
 }
 
 #[test]
+#[cfg(unix)]
+fn an_unreadable_copy_merges_nothing_and_the_note_names_it_with_the_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let tree = Tree::new();
+    let body = line("/Users/dev/proj", 1) + &line("/Users/dev/proj", 2);
+    // Two byte-identical copies - the shape that WOULD merge - with one of them
+    // unreadable. Read as `&[]` the locked copy is an EMPTY one, which is a prefix of
+    // every other copy and, being larger by metadata, wins the order: the note would then
+    // announce the readable copy as dropped and the command would die on the one it kept.
+    let open = transcript(&tree, "-Users-dev-proj", ID, &body);
+    let locked = transcript(&tree, "-Users-dev-p", ID, &body);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    // Root - and any filesystem that does not enforce modes - still opens it, and then
+    // there is no unreadable copy to test: skip rather than assert the opposite.
+    if std::fs::File::open(&locked).is_ok() {
+        return;
+    }
+
+    let (mut kept, groups) = dedup_top_level(vec![open.clone(), locked.clone()]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    kept.sort();
+    let mut both = vec![open, locked.clone()];
+    both.sort();
+    assert_eq!(kept, both, "a copy csift could not read merges nothing");
+    let g = &groups[0];
+    assert_eq!(g.relation, DuplicateRelation::Unknown);
+    assert_eq!(g.relation.slug(), "unknown");
+    assert!(!g.relation.merges());
+    assert!(g.dropped.is_empty());
+    assert_eq!(g.dropped_lines(), 0);
+
+    let note = duplicate_note(g);
+    assert!(note.contains("could not read"), "{note}");
+    assert!(note.contains(&locked.display().to_string()), "{note}");
+    // The error the filesystem returned, not a csift paraphrase of it.
+    assert!(note.contains("os error 13"), "{note}");
+    assert!(!note.contains("dropping"), "{note}");
+}
+
+#[test]
 fn an_equal_size_tie_no_cwd_can_break_falls_to_the_smallest_path() {
     let tree = Tree::new();
     // Neither directory name encodes the recorded cwd, so only the path ordering is left -

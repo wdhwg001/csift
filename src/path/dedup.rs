@@ -31,6 +31,11 @@ pub enum DuplicateRelation {
     /// A differing byte before the shorter copy's end - two files claiming one session id
     /// with contradictory content. NEVER merged.
     Divergent,
+    /// At least one copy could not be READ, so there are no bytes to compare it with.
+    /// NEVER merged: a read failure is a GAP in the evidence, not evidence of sameness,
+    /// and an unread copy that merged would be announced as dropped on the strength of a
+    /// comparison that never happened.
+    Unknown,
 }
 
 impl DuplicateRelation {
@@ -41,7 +46,19 @@ impl DuplicateRelation {
             DuplicateRelation::Identical => "identical",
             DuplicateRelation::Prefix => "prefix",
             DuplicateRelation::Divergent => "divergent",
+            DuplicateRelation::Unknown => "unknown",
         }
+    }
+
+    /// Whether this relation COLLAPSES the group onto one copy. The one rule: the
+    /// resolver's drop set and the `list` row's fate line both ask here, so a relation
+    /// that merges nothing can never be reported as having dropped something.
+    #[must_use]
+    pub fn merges(self) -> bool {
+        matches!(
+            self,
+            DuplicateRelation::Identical | DuplicateRelation::Prefix
+        )
     }
 }
 
@@ -51,7 +68,12 @@ pub struct DuplicateMember {
     pub path: PathBuf,
     /// Physical jsonl lines (newlines, plus a torn final fragment) - the same domain
     /// `show --line` addresses, and the unit every disclosure of a dropped copy counts in.
+    /// 0 for a copy csift could not read, whose `error` is the fact reported in its place;
+    /// such a group merges nothing, so that 0 is never summed into a disclosure.
     pub lines: usize,
+    /// Why this copy could not be read, when it could not. A member carrying one makes the
+    /// whole group [`DuplicateRelation::Unknown`].
+    pub error: Option<String>,
 }
 
 /// One session id resolved under more than one project directory.
@@ -60,10 +82,12 @@ pub struct DuplicateGroup {
     /// The shared basename - the session id itself.
     pub session_id: String,
     pub relation: DuplicateRelation,
-    /// The copy kept in scope. For a DIVERGENT group every member is kept and this names
-    /// the longest one only, so the disclosure has a subject.
+    /// The copy kept in scope. For a group that merges NOTHING (divergent, or unknown
+    /// because a copy could not be read) every member is kept and this names the longest
+    /// one only, so the disclosure has a subject.
     pub kept: PathBuf,
-    /// The copies the merge removed from the scope. EMPTY for a divergent group.
+    /// The copies the merge removed from the scope. EMPTY for every relation that does not
+    /// merge.
     pub dropped: Vec<PathBuf>,
     /// Every copy, longest first, with its size and line count.
     pub members: Vec<DuplicateMember>,
@@ -120,24 +144,64 @@ pub fn dedup_top_level(files: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<DuplicateGroup
 
 /// Build the report for ONE duplicated session id: order the copies (longest first), read
 /// each one's bytes once, compare every other copy against the longest, and derive the
-/// group's relation from the worst pairwise verdict.
+/// group's relation from the worst pairwise verdict - unless a copy could not be READ at
+/// all, which answers UNKNOWN before any comparison and merges nothing.
 fn classify_group(stem: &str, paths: Vec<PathBuf>) -> DuplicateGroup {
     let ordered = order_members(paths);
     // mmap, never a read-into-memory copy: a duplicated transcript runs to tens of
     // megabytes and both copies are compared byte for byte.
+    //
+    // A read FAILURE is kept as the error it returned rather than folded into an empty
+    // map: an unreadable copy read as `&[]` is an empty one, which compares as a prefix
+    // of every other copy and - being larger by metadata - wins the order, so the merge
+    // would announce the READABLE copy as dropped and the command would then die on the
+    // one it kept. An `Ok(None)` is different and stays: that is a genuinely EMPTY file,
+    // read successfully, and 0 bytes is the honest answer for it.
     let maps: Vec<_> = ordered
         .iter()
-        .map(|p| crate::parse::mmap_bytes(p).ok().flatten())
+        // The ROOT cause rather than the context chain: every sentence in that chain
+        // names this same path, and the disclosure prints the path itself beside it.
+        .map(|p| crate::parse::mmap_bytes(p).map_err(|e| e.root_cause().to_string()))
         .collect();
-    let bytes: Vec<&[u8]> = maps.iter().map(|m| m.as_deref().unwrap_or(&[])).collect();
+    let bytes: Vec<&[u8]> = maps
+        .iter()
+        .map(|m| m.as_ref().map_or(&[][..], |b| b.as_deref().unwrap_or(&[])))
+        .collect();
     let members: Vec<DuplicateMember> = ordered
         .into_iter()
-        .zip(&bytes)
-        .map(|(path, data)| DuplicateMember {
+        .zip(maps.iter().zip(&bytes))
+        .map(|(path, (map, data))| DuplicateMember {
             path,
+            // An unreadable copy has no bytes to count, so this is the `&[]` zero its own
+            // `error` accounts for rather than a measurement of the file.
             lines: line_count(data),
+            error: map.as_ref().err().cloned(),
         })
         .collect();
+    let relation = if members.iter().any(|m| m.error.is_some()) {
+        DuplicateRelation::Unknown
+    } else {
+        classify_bytes(&bytes)
+    };
+    let kept = members[0].path.clone();
+    let dropped = if relation.merges() {
+        members[1..].iter().map(|m| m.path.clone()).collect()
+    } else {
+        Vec::new()
+    };
+    DuplicateGroup {
+        session_id: stem.to_string(),
+        relation,
+        kept,
+        dropped,
+        members,
+    }
+}
+
+/// The byte verdict over copies that were ALL read: compare every other copy against the
+/// first (the longest) and take the WORST pairwise verdict - one divergent copy makes the
+/// whole group unmergeable, and one short copy makes it a prefix group.
+fn classify_bytes(bytes: &[&[u8]]) -> DuplicateRelation {
     let winner = bytes[0];
     let mut relation = DuplicateRelation::Identical;
     for other in &bytes[1..] {
@@ -149,8 +213,6 @@ fn classify_group(stem: &str, paths: Vec<PathBuf>) -> DuplicateGroup {
         } else {
             DuplicateRelation::Prefix
         };
-        // The group takes the WORST verdict: one divergent copy makes the whole group
-        // unmergeable, and one short copy makes it a prefix group.
         relation = match (relation, verdict) {
             (DuplicateRelation::Divergent, _) | (_, DuplicateRelation::Divergent) => {
                 DuplicateRelation::Divergent
@@ -161,19 +223,7 @@ fn classify_group(stem: &str, paths: Vec<PathBuf>) -> DuplicateGroup {
             _ => DuplicateRelation::Identical,
         };
     }
-    let kept = members[0].path.clone();
-    let dropped = if relation == DuplicateRelation::Divergent {
-        Vec::new()
-    } else {
-        members[1..].iter().map(|m| m.path.clone()).collect()
-    };
-    DuplicateGroup {
-        session_id: stem.to_string(),
-        relation,
-        kept,
-        dropped,
-        members,
-    }
+    relation
 }
 
 /// Order the copies so the WINNER is first: longest wins, because a shorter copy that is a
@@ -290,6 +340,25 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
     let n = g.members.len();
     let id = g.session_id.get(..8).unwrap_or(&g.session_id);
     match g.relation {
+        DuplicateRelation::Unknown => {
+            let unreadable: Vec<String> = g
+                .members
+                .iter()
+                .filter_map(|m| {
+                    m.error
+                        .as_ref()
+                        .map(|e| format!("{}: {e}", m.path.display()))
+                })
+                .collect();
+            format!(
+                "session {id} is on disk under {n} project directories and csift could not \
+                 read {} of them ({}) - with no bytes to compare, csift merges nothing, so \
+                 every copy stays in scope and every count below includes all of them. Fix \
+                 that copy's permissions, or target a `*.jsonl` path to read one alone.",
+                unreadable.len(),
+                unreadable.join("; ")
+            )
+        }
         DuplicateRelation::Divergent => {
             let counts: Vec<String> = g
                 .members

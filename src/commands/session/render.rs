@@ -175,19 +175,27 @@ pub(crate) fn cleared_line(s: &SessionSummary) -> String {
 /// relate byte for byte, and where they are. A MERGED relation (`identical` / `prefix`)
 /// means this row stands for all of them and the others were dropped from the scope; a
 /// `divergent` one means nothing merged, so every copy has its own row and every count in
-/// this listing includes all of them.
+/// this listing includes all of them; an `unknown` one means a copy could not be read, so
+/// there were no bytes to compare and nothing merged either.
 pub(crate) fn copies_line(s: &SessionSummary) -> String {
-    let rel = s.duplicate_relation.unwrap_or("unknown");
+    use crate::path::DuplicateRelation;
     let one = s.also_at.len() == 1;
-    let fate = match (rel == "divergent", one) {
-        (true, _) => "kept (contents differ, so nothing merged - each copy has its own row)",
-        (false, true) => "dropped from this scope (this row stands for it)",
-        (false, false) => "dropped from this scope (this row stands for them)",
+    // The fate follows the ONE merge rule rather than a second reading of the slug, so a
+    // relation that merges nothing can never be rendered as having dropped something.
+    let fate = match s.duplicate_relation {
+        Some(rel) if rel.merges() && one => "dropped from this scope (this row stands for it)",
+        Some(rel) if rel.merges() => "dropped from this scope (this row stands for them)",
+        Some(DuplicateRelation::Divergent) => {
+            "kept (contents differ, so nothing merged - each copy has its own row)"
+        }
+        _ => "kept (csift could not compare every copy, so nothing merged)",
     };
     format!(
-        "{} other cop{} of this session id, {rel}, {fate}: {}",
+        "{} other cop{} of this session id, {}, {fate}: {}",
         s.also_at.len(),
         if one { "y" } else { "ies" },
+        s.duplicate_relation
+            .map_or("unknown", DuplicateRelation::slug),
         s.also_at.join(", ")
     )
 }
@@ -329,11 +337,12 @@ pub(crate) fn render_json(
             // The OTHER copies of this session id on disk (§2 `dedup`). With
             // `duplicate_relation` `identical` / `prefix` the resolver merged them and
             // this row stands for all of them; with `divergent` it merged none, every
-            // copy has its own row, and every count in this listing covers all of them.
+            // copy has its own row, and every count in this listing covers all of them;
+            // with `unknown` a copy could not be read, so nothing merged either.
             // Empty + null for a session that occurs under one project directory.
             "also_at": s.also_at,
             "also_at_count": s.also_at.len(),
-            "duplicate_relation": s.duplicate_relation,
+            "duplicate_relation": s.duplicate_relation.map(crate::path::DuplicateRelation::slug),
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

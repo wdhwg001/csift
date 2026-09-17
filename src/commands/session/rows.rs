@@ -132,9 +132,10 @@ pub struct SessionSummary {
     /// nothing merged, both copies have their own row, and each names the other here.
     /// Empty for every ordinary session, which is nearly all of them.
     pub also_at: Vec<String>,
-    /// How those copies relate byte for byte - `identical` | `prefix` | `divergent`.
-    /// `None` when there are none.
-    pub duplicate_relation: Option<&'static str>,
+    /// How those copies relate byte for byte. `None` when there are none; the relation
+    /// itself rather than its slug, so the render asks `merges()` instead of re-reading
+    /// the word.
+    pub duplicate_relation: Option<crate::path::DuplicateRelation>,
 }
 
 /// A short, timestamped preview of one message for the `list` view.

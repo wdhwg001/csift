@@ -109,7 +109,7 @@ fn attach_duplicates(summaries: &mut [SessionSummary], groups: &[path::Duplicate
             if s.is_subagent || s.session_id != g.session_id {
                 continue;
             }
-            s.duplicate_relation = Some(g.relation.slug());
+            s.duplicate_relation = Some(g.relation);
             s.also_at = g
                 .members
                 .iter()
