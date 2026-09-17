@@ -147,9 +147,15 @@ fn a_tool_use_id_resolves_to_the_first_line_that_carried_it() {
     assert_eq!(ix.tool_use_at("toolu_01zz"), None);
 }
 
-/// The THREE root answers, each with its own shape, and none of them an absent field.
+/// The FOUR root answers, each with its own shape, and none of them an absent field.
+///
+/// The fourth is the one a real transcript meets first: a session opens with a synthetic
+/// pre-user lead the turn grouper folds into turn 0, and those units have no opener above
+/// them at all. It was constructed nowhere in this file while the test's own name said
+/// three, so the shape that the first lines of every live transcript produce was pinned by
+/// the e2e alone.
 #[test]
-fn the_root_has_three_answers_and_says_which_it_is() {
+fn the_root_has_four_answers_and_says_which_it_is() {
     let opener = RootLink::opener();
     assert_eq!(opener.line, None);
     assert_eq!(opener.hops, None);
@@ -176,6 +182,29 @@ fn the_root_has_three_answers_and_says_which_it_is() {
     );
     assert_eq!(chained.label_zone().as_deref(), Some("[root L12 +3]"));
     assert_eq!(placed.label_zone().as_deref(), Some("[root L12]"));
+
+    let lead = RootLink::no_opener();
+    assert_eq!(lead.line, None);
+    assert_eq!(lead.uuid, None);
+    assert_eq!(lead.hops, None);
+    assert_eq!(
+        lead.note,
+        Some(ROOT_NO_OPENER),
+        "there is nothing above this unit to name, which is a fact and not a gap"
+    );
+    assert_eq!(
+        lead.label_zone(),
+        None,
+        "no line, so no tag - the note carries the whole answer"
+    );
+
+    // The four notes are four DISTINCT values: a consumer switches on this field, so two
+    // answers sharing one would be one answer wearing two shapes.
+    let mut notes = vec![opener.note, chained.note, placed.note, lead.note];
+    let before = notes.len();
+    notes.sort_unstable();
+    notes.dedup();
+    assert_eq!(notes.len(), before, "two answers share a note: {notes:?}");
 }
 
 /// A root whose opener has NO physical line (a merged elicitation-sidecar record) carries

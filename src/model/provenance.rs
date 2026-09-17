@@ -167,14 +167,17 @@ impl ProvIndex {
 /// STATES about one neighbour; the root says what the record BELONGS to, which is what a
 /// reader holding one hit actually wants to know.
 ///
-/// THREE answers, and none of them is a silently absent field. A unit that IS the opener
+/// FOUR answers, and none of them is a silently absent field. A unit that IS the opener
 /// says so (`turn opener`) - it corresponds to nothing above it, which is a fact and not a
 /// gap. A unit the parent chain walks to the opener from carries the address AND the hop
 /// count, because the distance is what separates the reply to a question from a tool result
 /// forty calls into the same turn. A unit whose chain does not reach the opener still
 /// carries the opener's address - the turn grouping states it - with a null hop count and
 /// the reason, because csift knows WHICH turn it is in without being able to say how it got
-/// there.
+/// there. A unit with NO opener above it names none ([`ROOT_NO_OPENER`]): it belongs to the
+/// synthetic pre-user lead a real transcript opens with, or to an abandoned branch whose
+/// head opens no turn, and naming the opener BELOW it would point a reader the wrong way
+/// down the file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RootLink {
     /// The opening record's 1-based jsonl line, when there is an opener above this unit.
