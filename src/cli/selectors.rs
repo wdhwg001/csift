@@ -377,6 +377,12 @@ pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// `(the era it belonged to, its successors)` for a retired selector, else `None`.
+///
+/// A lookup over [`RETIRED_SELECTORS`] rather than a match, so the set stays WALKABLE:
+/// the table is what `SKILL.md` section 10 is held to, and a match arm could not be
+/// iterated. Linear over a table this size, on a path that only runs when a caller
+/// already typed a spelling csift refuses.
 fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
     RETIRED_SELECTORS
         .iter()

@@ -19,7 +19,7 @@ fn skill_stamp_matches_crate_version() {
     let want = format!("v{}", env!("CARGO_PKG_VERSION"));
     assert!(
         skill.contains(&want),
-        "SKILL.md must carry the surface stamp `{want}` (found none) — update the \
+        "SKILL.md must carry the surface stamp `{want}` (found none) - update the \
              stamp (and the surface docs) with every version bump"
     );
 }
