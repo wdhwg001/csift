@@ -227,8 +227,11 @@ pub struct Cli {
     /// `0` restores the loader's reading and makes csift say nothing about crossing at
     /// all; `all` follows every boundary a transcript carries. The footer names what was
     /// crossed, what was not, and what you can do about the rest - it offers a flag value
-    /// only where the BUDGET is what stopped the walk, since a boundary naming a record no
-    /// line of the file carries is a floor at every budget.
+    /// only where raising the flag would MOVE the floor, which needs both that the BUDGET
+    /// is what stopped the walk and that the boundary it stopped at still names a record
+    /// the file carries; a boundary naming a record no line carries is a floor at every
+    /// budget. What the offered value promises is that every boundary here gets TRIED, not
+    /// that every one of them opens.
     ///
     /// The DEFAULT is chosen by measurement against the performance contract and that
     /// measurement is still pending, so the shipped value is the candidate and may change

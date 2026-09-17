@@ -74525,17 +74525,17 @@
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "106-110",
+          "lines": "107-111",
           "snippet": "/// The blind-region rescue of the draft population: inside `PreCut`, an opener with a\n/// LATER opener sharing its `parentUuid` is still the recalled version.\nfn blind_region_openers(b: &Builder<'_>, out: &mut Chain, floor: usize) {\n    // The survivor is the LAST opener sharing a `parentUuid`, wherever it sits - a draft\n    // is usually recalled just below the floor and re-sent just above it, so restricting"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "112-122",
+          "lines": "113-123",
           "snippet": "    let mut last_by_parent: HashMap<&str, usize> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.opens[i] || out.replay_of.contains_key(&i) || !out.survival[i].selectable() {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            last_by_parent.insert(p, i);\n        }\n    }\n    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "121-131",
+          "lines": "122-132",
           "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         },
         {
@@ -74810,7 +74810,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "121-131",
+          "lines": "122-132",
           "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         }
       ],
@@ -86896,7 +86896,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "369-371",
+          "lines": "373-375",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {
@@ -88283,12 +88283,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "49",
+          "lines": "55",
           "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "126-137",
+          "lines": "137-148",
           "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
@@ -88431,12 +88431,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "161-174",
+          "lines": "172-185",
           "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message_id())\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "210-221",
+          "lines": "221-232",
           "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
         }
       ],
@@ -88559,7 +88559,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "80-93",
+          "lines": "81-94",
           "snippet": "fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {\n    if !b.admit[i] || b.is_sidechain(i) {\n        // Outside the loader's model (a promoted non-record line, a sidechain lane, a\n        // merged elicitation marker): the axis says nothing about it.\n        return Survival::Live;\n    }\n    if b.on_chain[i] {\n        return Survival::Live;\n    }\n    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }\n}"
         }
       ],
@@ -88672,7 +88672,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "171-184",
+          "lines": "172-185",
           "snippet": "fn assign_kinds(b: &Builder<'_>, out: &mut Chain, has_reply: &[bool]) {\n    let openers: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            matches!(out.survival(i), Survival::Abandoned { .. })\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n        })\n        .collect();\n    // The surviving opener per parent uuid, in ONE pass: a per-opener rescan would be\n    // O(records x abandoned openers), which on a session with hundreds of recalled drafts\n    // is the whole scan's cost over again.\n    let mut last_opener: HashMap<&str, usize> = HashMap::new();\n    for k in 0..b.len() {\n        if out.survival(k).selectable()"
         }
       ],
@@ -88768,7 +88768,7 @@
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "224-235",
+          "lines": "225-236",
           "snippet": "fn assistant_below(b: &Builder<'_>) -> Vec<bool> {\n    let mut out = vec![false; b.len()];\n    for i in (0..b.len()).rev() {\n        out[i] = b\n            .children_of(i)\n            .iter()\n            .any(|&c| out[c] || b.recs[c].kind() == Some(\"assistant\"));\n    }\n    out\n}\n\n/// The surviving opener that replaced an abandoned one: the chain's own child of the"
         },
         {
@@ -88918,12 +88918,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "100-113",
-          "snippet": "        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            break;\n        }\n        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        let Some(j) = over else {\n            out.cause = FloorCause::UnresolvableBoundary;\n            out.boundary = Some(i);\n            break;"
+          "lines": "110-125",
+          "snippet": "        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            out.floor_crossable = over.is_some();\n            break;\n        }\n        let Some(j) = over else {\n            out.cause = FloorCause::UnresolvableBoundary;\n            out.boundary = Some(i);\n            break;\n        };"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "89-92",
+          "lines": "90-93",
           "snippet": "    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }"
         },
         {
@@ -97006,8 +97006,8 @@
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "100-105",
-          "snippet": "        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            break;\n        }"
+          "lines": "110-120",
+          "snippet": "        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            out.floor_crossable = over.is_some();\n            break;\n        }"
         }
       ],
       "instrument": "Over every uuid-named top-level transcript under the projects root, count the `type:\"system\"` records with `subtype:\"compact_boundary\"` per file and, for each, whether its `logicalParentUuid` appears as a `uuid` on some line of that same file. Counting rule: one observation per boundary record; a file contributes one per-file count. Then, for a transcript at each budget, read `boundaries_crossed`, `boundaries_above_floor`, `budget_exhausted` and `floor_cause` from the trailing summary of `csift search '' <file> --no-subagents --format json --cross-compactions <N|all>`, and compare the whole stream at budget 0 against a build that predates the flag.",

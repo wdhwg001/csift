@@ -44,6 +44,12 @@ pub(crate) struct Walked {
     pub(crate) exhausted: bool,
     /// Why the walk ended where it did.
     pub(crate) cause: FloorCause,
+    /// The floor is a boundary the budget stopped at whose door is OPEN: its
+    /// `logicalParentUuid` resolves to a record the map still holds, so one more unit of
+    /// budget moves the floor. False for every other ending, the budget-exhausted stop at a
+    /// boundary whose door is shut included - there a bigger budget re-runs the same walk
+    /// to the same record, so a reader must not be sent to try it.
+    pub(crate) floor_crossable: bool,
 }
 
 pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {
@@ -53,6 +59,7 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
         crossed: 0,
         exhausted: false,
         cause: FloorCause::Head,
+        floor_crossable: false,
     };
     let Some(leaf) = leaf else {
         // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no
@@ -97,16 +104,20 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
             };
             break;
         }
-        if !budget.allows(out.crossed) {
-            out.exhausted = true;
-            out.cause = FloorCause::BudgetExhausted;
-            out.boundary = Some(i);
-            break;
-        }
+        // The door is probed BEFORE the budget test, because the budget-exhausted stop
+        // needs the same answer: a reader is told to raise the flag only where raising it
+        // would move the floor.
         let over = b.recs[i]
             .logical_parent_uuid()
             .and_then(|u| b.resolve(u))
             .filter(|&j| !b.visited[j]);
+        if !budget.allows(out.crossed) {
+            out.exhausted = true;
+            out.cause = FloorCause::BudgetExhausted;
+            out.boundary = Some(i);
+            out.floor_crossable = over.is_some();
+            break;
+        }
         let Some(j) = over else {
             out.cause = FloorCause::UnresolvableBoundary;
             out.boundary = Some(i);

@@ -60,7 +60,7 @@ fn the_remedy_is_named_off_the_floors_cause_and_never_promises_a_budget_that_can
     let r = five_boundaries();
     let capped = Chain::build(&r, None, CrossingBudget::Limited(3)).crossing(Some(7), None);
     assert!(
-        capped.lines()[1].contains("to reach them: --cross-compactions 5 (or all)"),
+        capped.lines()[1].contains("to try them: --cross-compactions 5 (or all)"),
         "{:?}",
         capped.lines()
     );
@@ -82,6 +82,52 @@ fn the_remedy_is_named_off_the_floors_cause_and_never_promises_a_budget_that_can
     assert!(
         !lines[1].contains("--cross-compactions"),
         "no flag value is offered where none would help: {lines:?}"
+    );
+}
+
+#[test]
+fn a_budget_that_stopped_at_a_shut_door_offers_no_value_because_a_bigger_one_lands_here_too() {
+    // The cause alone is not enough to promise anything. The walk can run out of budget AT a
+    // boundary whose own logicalParentUuid names a record no line of the file carries: the
+    // cause is `budget-exhausted`, which is honest about what stopped the walk, and a bigger
+    // budget still lands on this same record. Named off the cause alone, the line sent a
+    // reader to re-run the scan at a value that could not move the floor.
+    let r = two_crossed_then_a_dangling_floor();
+
+    // Budget 2 steps over b3 and b2 and then runs out AT b1, whose door is shut.
+    let shut = Chain::build(&r, None, CrossingBudget::Limited(2));
+    assert_eq!(shut.floor_cause, FloorCause::BudgetExhausted);
+    assert_eq!(shut.floor, 2, "b1 is the floor");
+    assert!(!shut.floor_crossable, "b1 names a record that is gone");
+    let lines = shut.crossing(Some(3), None).lines();
+    assert!(
+        !lines[1].contains("--cross-compactions"),
+        "no value is named where a bigger budget lands here too: {lines:?}"
+    );
+    assert!(
+        lines[1].contains("raising the budget lands on this same record"),
+        "{lines:?}"
+    );
+    // And the promise it refused to make would have been false: one more unit of budget
+    // walks to the very same record, only calling the stop by its other name.
+    let more = Chain::build(&r, None, CrossingBudget::Limited(3));
+    assert_eq!(more.floor, shut.floor, "the same record");
+    assert_eq!(more.floor_cause, FloorCause::UnresolvableBoundary);
+
+    // One unit less and the stop is at b2, whose logicalParentUuid IS on a line here - so
+    // the value is named, and it does move the floor.
+    let open = Chain::build(&r, None, CrossingBudget::Limited(1));
+    assert_eq!(open.floor_cause, FloorCause::BudgetExhausted);
+    assert!(open.floor_crossable, "b2 names a1, which is on a line here");
+    let lines = open.crossing(Some(7), None).lines();
+    assert!(
+        lines[1].contains("to try them: --cross-compactions 3 (or all)"),
+        "{lines:?}"
+    );
+    assert_eq!(
+        Chain::build(&r, None, CrossingBudget::Limited(2)).floor,
+        2,
+        "and the named value does move it"
     );
 }
 
@@ -238,6 +284,7 @@ fn a_floor_with_no_timestamp_still_prints_its_line() {
         budget_exhausted: true,
         boundaries_above_floor: 1,
         cause: Some(FloorCause::BudgetExhausted),
+        floor_crossable: true,
         floor_line: Some(88),
         floor_ts: None,
     };

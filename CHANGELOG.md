@@ -339,9 +339,11 @@ surface change bumps the PATCH.
   leaves the numbering. `--cross-compactions 0` restores the previous reading exactly, and
   under it csift says nothing about crossing at all, neither a footer line nor a JSON key.
   The footer is never silent otherwise: it names how many boundaries were stepped over, how
-  many were not, where the chain floor sits, WHY it sits there - a budget that ran out, which
-  raising the flag moves, or a boundary naming a record no line of the file carries, which it
-  does not - and the flag value that would reach the rest. JSON carries the same six facts as
+  many were not, where the chain floor sits, WHY it sits there - a budget that ran out, or a
+  boundary naming a record no line of the file carries - and a flag value, but only after
+  probing whether one more unit of budget would actually move that floor: a budget can run
+  out AT a boundary whose own logical parent is gone, and there every larger budget lands on
+  the same record. JSON carries the same six facts as
   `crossing_budget`, `boundaries_crossed`, `budget_exhausted`, `boundaries_above_floor`,
   `floor_line` and `floor_cause`.
 

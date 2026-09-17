@@ -195,7 +195,7 @@ fn every_survival_printing_surface_carries_the_same_crossing_facts() {
         );
         assert!(
             out.stdout
-                .contains("to reach them: --cross-compactions 2 (or all)"),
+                .contains("to try them: --cross-compactions 2 (or all)"),
             "{name} names the value that would reach the rest:\n{}",
             out.stdout
         );

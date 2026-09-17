@@ -40,6 +40,7 @@ pub(crate) fn finish<'a>(
         budget_exhausted: walked.exhausted,
         boundaries_above_floor: uncrossed_boundaries(&b, walked.floor),
         floor_cause: walked.cause,
+        floor_crossable: walked.floor_crossable,
         abandoned_records: 0,
         rewound_turns: 0,
         drafts: 0,
