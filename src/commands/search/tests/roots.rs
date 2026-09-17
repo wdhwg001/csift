@@ -135,18 +135,55 @@ fn a_group_with_no_opener_names_none_for_every_position() {
     }
 }
 
-/// ONE table per TURN, not one per PASS.
+/// ONE table per TURN, not one per PASS - asserted THROUGH the real path.
 ///
 /// A turn with both matched hits and siblings runs two passes over the same records, and
-/// each used to hold an `Option<TurnRoots>` of its own - so the table was built twice for a
-/// turn whose cost is stated as "built on its FIRST hit and not before". The cell is the
-/// caller's now, and the counter says the second pass reused what the first built.
+/// each used to hold an `Option<TurnRoots>` of its own, so the table was built twice for a
+/// turn whose cost is stated as "built on its FIRST hit and not before".
 ///
-/// The table is a function of the turn, so reuse cannot change an answer - which is the
-/// other half of this: every position answers the same under the shared table as under a
-/// table built from scratch.
+/// The count comes from `TurnRoots::build` itself and the driver is `reconstruct_and_match`
+/// with `--siblings`, because that is the only shape where both passes run: a pin that
+/// drove the cell directly and counted on the cell's own side passed BOTH mutations - an
+/// unconditional rebuild inside the cell, and reverting the fix so the sibling pass gets a
+/// fresh cell.
 #[test]
-fn both_passes_over_one_turn_share_a_single_root_table() {
+fn a_turn_with_hits_and_siblings_builds_one_root_table() {
+    // `carry` matches three records of turn 0 and none of turn 1, and turn 0's remaining
+    // records become siblings - so both passes run, over one turn, and the other turn is
+    // never touched.
+    let mut a = args("carry");
+    a.siblings = true;
+    TURN_ROOT_BUILDS.with(|n| n.set(0));
+    let ex = search(&fixture(), &a);
+    assert_eq!(ex.len(), 1, "one matching turn");
+    assert!(
+        ex[0].hits.len() >= 2,
+        "several records matched: {:?}",
+        ex[0].hits.len()
+    );
+    assert!(!ex[0].siblings.is_empty(), "and others did not");
+    assert_eq!(
+        TURN_ROOT_BUILDS.with(std::cell::Cell::get),
+        1,
+        "one table for the turn, not one per pass over it"
+    );
+}
+
+/// A turn that matched NOTHING pays nothing: the table is built on a turn's FIRST hit and
+/// not before, which is the other half of the cost sentence.
+#[test]
+fn a_turn_with_no_hits_builds_no_root_table() {
+    let mut a = args("zznothingmatchesthis");
+    a.siblings = true;
+    TURN_ROOT_BUILDS.with(|n| n.set(0));
+    assert!(search(&fixture(), &a).is_empty());
+    assert_eq!(TURN_ROOT_BUILDS.with(std::cell::Cell::get), 0);
+}
+
+/// Reuse cannot move an answer: the shared table answers every position exactly as a table
+/// built from scratch does.
+#[test]
+fn the_shared_table_answers_what_a_fresh_one_does() {
     let kept = [
         kept_at(LEAD, 1),
         kept_at(OPENER, 2),
@@ -157,21 +194,11 @@ fn both_passes_over_one_turn_share_a_single_root_table() {
     let turn = turn_of(&rows);
 
     let mut cell = TurnRootsCell::default();
-    assert_eq!(cell.builds(), 0, "a turn with no hit pays nothing");
-
-    // The matched pass asks first, the sibling pass second.
-    let first: Vec<crate::model::RootLink> = (0..rows.len())
+    let shared: Vec<crate::model::RootLink> = (0..rows.len())
         .map(|i| cell.get(&turn).link(&turn, i))
         .collect();
-    assert_eq!(cell.builds(), 1);
-    let second: Vec<crate::model::RootLink> = (0..rows.len())
-        .map(|i| cell.get(&turn).link(&turn, i))
-        .collect();
-    assert_eq!(cell.builds(), 1, "the second pass reused the first's table");
-
     let fresh = TurnRoots::build(&turn);
     let independent: Vec<crate::model::RootLink> =
         (0..rows.len()).map(|i| fresh.link(&turn, i)).collect();
-    assert_eq!(first, second, "the two passes agree");
-    assert_eq!(first, independent, "and both agree with a fresh table");
+    assert_eq!(shared, independent);
 }

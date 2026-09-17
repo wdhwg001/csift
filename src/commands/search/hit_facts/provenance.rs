@@ -37,9 +37,28 @@ pub(crate) struct TurnRoots {
     hops: Vec<Option<u32>>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many root TABLES this thread has built - the instrument behind the "once per
+    /// TURN, not once per pass" pin.
+    ///
+    /// Counted inside [`TurnRoots::build`] and nowhere else. A counter that observed the
+    /// cell's own `is_none()` would be a SECOND implementation of the property it checks,
+    /// and measurably a useless one: replacing the cell's body with an unconditional
+    /// rebuild left such a counter reading 1, because the slot was still filled once.
+    ///
+    /// THREAD-LOCAL rather than global: the unit tests run in parallel in one process and
+    /// several of them build tables, so a shared counter would read another test's work.
+    /// The turn loop that fills it runs on the calling thread whenever the per-file
+    /// fan-out is off, which is how the test drives it.
+    pub(crate) static TURN_ROOT_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl TurnRoots {
     /// Fill the table in ONE forward pass over the turn's rows.
     pub(crate) fn build(turn: &Turn<'_>) -> TurnRoots {
+        #[cfg(test)]
+        TURN_ROOT_BUILDS.with(|n| n.set(n.get() + 1));
         // Spine rows are in the position map too: an attachment chain runs through lines the
         // prefilter dropped, and a table that could not see them would stop at the first one.
         // A uuid a turn carries TWICE (a compaction re-anchor's replay copy) maps to the
@@ -112,28 +131,13 @@ impl TurnRoots {
 #[derive(Debug, Default)]
 pub(crate) struct TurnRootsCell {
     table: Option<TurnRoots>,
-    /// How many times the table was actually built. Test-only, because nothing in the
-    /// binary reads it and a field the release build cannot use is dead weight - but a
-    /// shared cell whose sharing nothing checks is exactly the claim that went wrong here.
-    #[cfg(test)]
-    builds: usize,
 }
 
 impl TurnRootsCell {
-    /// The table, building it on first use.
+    /// The table, building it on first use. What the cell is FOR is counted at the build
+    /// ([`TURN_ROOT_BUILDS`]), not here: a counter on this side would agree with itself.
     pub(crate) fn get(&mut self, turn: &Turn<'_>) -> &TurnRoots {
-        #[cfg(test)]
-        if self.table.is_none() {
-            self.builds += 1;
-        }
         self.table.get_or_insert_with(|| TurnRoots::build(turn))
-    }
-
-    /// How many times this cell built its table - 1 for a turn that produced a hit under
-    /// either pass, 0 for a turn that produced none.
-    #[cfg(test)]
-    pub(crate) fn builds(&self) -> usize {
-        self.builds
     }
 }
 

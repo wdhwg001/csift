@@ -62126,7 +62126,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "179-185",
+          "lines": "183-189",
           "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
@@ -94894,7 +94894,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "201-207",
+          "lines": "205-211",
           "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],
