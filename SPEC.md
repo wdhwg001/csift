@@ -2854,6 +2854,70 @@ build over the whole DAG, and both are what the answer is made of. An early stop
 key walk is impossible (REC-104, above), and a reverse scan from the line end lands within
 one percent of the forward walk on every shape.
 
+### 7i. The v0.13.0 provenance primitive: the cost is the OUTPUT it adds
+
+**What was measured.** The same rotated interleaved A/B as section 7h, run on an IDLE host
+(1-minute load average 3.34 at the start): arm A the pre-primitive tip, arm B this one, 30
+rows over three size classes - tiny, compacted, and the 397 MiB LANDMARK - 21 timed
+repetitions per cell, 84 pairs, plus the same-binary control band per class. Exit codes
+match on 84 of 84 pairs.
+
+**The bands, and the rows outside them.** The control band (the largest same-binary median
+drift) reads 0.0139 tiny, 0.0360 compacted, 0.0148 landmark. Outside: on the compacted
+class `C05` (`search '' {T} --format json`, the whole-scope dump) at 1.1169 and `E01` at
+1.0456; on the landmark `C05` at 1.1994, then `H03` (`search 'the'`) 1.0370, `B02` 1.0340,
+`B05` 1.0301, `H01` (`search 'x'`) 1.0255, `B06` 1.0249, `H06` 1.0237, `H08` 1.0188 - and
+`B10` 0.976 and `H07` 0.971 the other way. The tiny class scatters both ways at about five
+percent and is noise-limited at sub-10 ms runs.
+
+**The ratio tracks the BYTES, row for row.** Every row outside its band prints more, and
+the rows that are byte-identical are inside. Measured on the landmark, arm A against arm B,
+stdout bytes:
+
+| row | what it runs | output growth | measured ratio |
+|---|---|---|---|
+| `C05` | `search '' --format json` | +17.55% (349,793,042 -> 411,197,432 B) | 1.1994 |
+| `B05` | a wide literal | +3.19% | 1.0301 |
+| `H03` | `search 'the'` | +3.12% | 1.0370 |
+| `H01` | `search 'x'` | +3.01% | 1.0255 |
+| `H06` | `(a+)+b` | +2.81% | 1.0237 |
+| `B02` | the script-mention regex | +2.56% | 1.0340 |
+
+That is the primitive's own surface: `[root L<n> +<hops>]` in the label zone of every text
+hit, and `for_root` plus `for[]` on every JSON hit. The whole-scope dump emits 256,717 hits
+over 5,270 exchanges, and the two keys add 61.4 MB - 239 bytes per hit. A binary printing
+three percent more cannot sit inside a band measured on a binary printing the same bytes.
+
+**Where the time actually goes, by ablation.** Each probe is the shipped tip with ONE thing
+removed, built release and measured as user+sys CPU, medians of five to eleven interleaved
+reps:
+
+- the whole-scope JSON row with the two KEYS' projection removed and every bit of the
+  computation kept: 6.54 s against a base of 6.52 s and a tip of 7.13 s. The projection is
+  essentially the entire regression on that row.
+- the per-turn root table's uuid-to-position map removed: 7.20 s, which is the tip within
+  noise. The table is NOT the cost, on the row where the whole file is one hit after
+  another.
+- on the wide-match TEXT row, the engine's two edges removed: 4.42 s against a tip of 4.47 s
+  and a base of 4.34 s - about 40 percent of that row's regression.
+- the `tool_use_id` index, the label-zone tag's `format!`, and the root's per-hit uuid clone,
+  each removed alone: none moves its row outside the noise.
+
+**What was DONE about it.** The edges the ablation named are now built only where a reader
+exists (`SearchArgs::projects_engine_edges`): `parent` and `result_of` ride JSON alone, so a
+text scan that does not census them never builds them. Measured: the wide-match text row
+moves from 4.50 s to 4.44 s of a 4.34 s base, and the selective row `B08` returns to its
+base exactly (2.29 s both). Output is byte-identical either way - 70,800,770 bytes on the
+landmark wide-match row with and without the gate.
+
+**What is left, and why it stays.** The residue is the bytes: a per-hit tag the reader sees,
+and two per-hit JSON keys a consumer follows. `for_root` is answered for EVERY unit by
+design (section 4.12) - that is the primitive, not an implementation detail - so the floor
+for a wide-match row is the cost of printing it. At this tip the wide-match text rows pay
+about 2.3 percent of CPU for 3.1 percent more output, and the whole-scope JSON dump about
+9.2 percent of CPU for 17.6 percent more output: both SUB-LINEAR in the bytes they add,
+which is the strongest statement available while the fields ship.
+
 ### 7h. The v0.13.0 taxonomy: the INTEGRATION pass measured, the whole rewrite pending
 
 **What this section measures, and what it does not.** The taxonomy rewrite landed as six
