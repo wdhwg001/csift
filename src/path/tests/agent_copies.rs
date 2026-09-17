@@ -85,6 +85,29 @@ fn divergent_agent_copies_both_stay_in_scope() {
 }
 
 #[test]
+fn a_directory_named_twice_contributes_its_copy_once() {
+    let tree = Tree::new();
+    let body = rec(1, "child ask");
+    let dirs = two_copies(&tree, &body, &body);
+    // One invocation can name the same directory twice (an explicit `@<encoded>` token
+    // beside a real path that resolves to it). The copy under it is still ONE file, and
+    // probing it twice would hand the merge one file as two copies of a session - a
+    // fabricated duplicate with a fabricated dropped copy behind it.
+    let named_twice = vec![dirs[0].clone(), dirs[1].clone(), dirs[1].clone()];
+
+    let r = resolve(&named_twice);
+    assert_eq!(r.files.len(), 1, "{:?}", r.files);
+    let g = &r.duplicates[0];
+    assert_eq!(
+        g.members.len(),
+        2,
+        "one member per FILE, however often its directory is named: {:?}",
+        g.members
+    );
+    assert_eq!(g.dropped.len(), 1);
+}
+
+#[test]
 fn an_agent_under_one_directory_reports_no_duplicate() {
     let tree = Tree::new();
     let body = rec(1, "child ask");
