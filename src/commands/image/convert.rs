@@ -123,6 +123,7 @@ pub(crate) fn extract(
     out_path: &Path,
     args: &ImageArgs,
     skipped_lines: usize,
+    duplicates: &[crate::path::DuplicateGroup],
 ) -> Result<()> {
     let file_target = out_path
         .extension()
@@ -152,7 +153,10 @@ pub(crate) fn extract(
     }
 
     if matches!(args.format, OutputFormat::Json) {
-        println!("{}", crate::text::envelope_header("image", json!({})));
+        println!(
+            "{}",
+            crate::text::envelope_header("image", crate::path::duplicate_header_fields(duplicates))
+        );
     }
     let mut written = 0usize;
     let mut skipped_url = 0usize;

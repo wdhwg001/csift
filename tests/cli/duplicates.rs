@@ -313,6 +313,35 @@ fn every_spanning_surface_names_the_merge_in_its_text_output() {
 }
 
 #[test]
+fn the_image_extract_header_carries_them_too() {
+    // `image --out` writes its own header rather than going through the listing render,
+    // so the sweep above would leave it the one `image` invocation that stays silent.
+    let h = Home::new();
+    let img = format!(
+        "{{\"type\":\"user\",\"uuid\":\"i1\",\"timestamp\":\"2026-06-07T02:00:00.000Z\",\
+         \"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"image\",\"source\":\
+         {{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"{PNG_1X1}\"}}}}]}}}}\n"
+    );
+    let body = record(1, "first ask") + &img;
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &body);
+    h.write(&format!("{ENC_SHORT}/{SESS}.jsonl"), &body);
+
+    let out_dir = h.root.join("extracted");
+    let out = h.run(&[
+        "image",
+        &at(SESS),
+        "--out",
+        out_dir.to_str().expect("utf8 path"),
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "{}", out.stderr);
+    let header = json_rows(&out.stdout, "header");
+    assert_eq!(header[0]["duplicate_transcripts"], 1, "{}", header[0]);
+    assert_eq!(header[0]["duplicate_records_dropped"], 2, "{}", header[0]);
+}
+
+#[test]
 fn the_terminal_modes_keep_a_pure_stdout() {
     let h = identical_home();
     // `-c` is a bare integer and `-l` a pure id stream - the merge is disclosed on stderr

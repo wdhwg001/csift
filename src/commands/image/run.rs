@@ -96,7 +96,13 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     };
 
     if let Some(out_dir) = args.out.as_deref() {
-        extract(&selected, out_dir, args, skipped_lines)
+        extract(
+            &selected,
+            out_dir,
+            args,
+            skipped_lines,
+            &resolved.duplicates,
+        )
     } else {
         match args.format {
             OutputFormat::Json => render_json(
