@@ -140,6 +140,19 @@ impl Edge {
 /// is ABSENT.
 const ENGINE_KINDS: [&str; 2] = ["parent", "result_of"];
 
+/// The SURVIVAL relations, on the same footing for the same reason: the chain answers them
+/// for every record it walks, so their presence is a property of the fixture's shape rather
+/// than of a key a record carries. They are excluded from the family pin and asserted on
+/// their own terms below.
+const SURVIVAL_KINDS: [&str; 4] = ["supersedes", "continues", "replays", "branches"];
+
+/// Everything the ENGINE builds: the two one-hop relations and the four survival ones. This
+/// is exactly the set that renders no label-zone tag, which is what makes the family pin a
+/// statement about the FAMILIES rather than about the whole vocabulary.
+fn engine_built(kind: &str) -> bool {
+    ENGINE_KINDS.contains(&kind) || SURVIVAL_KINDS.contains(&kind)
+}
+
 /// Every `for` edge the reachability fixture renders, sorted and deduplicated.
 fn edges(h: &Home) -> Vec<Edge> {
     let mut argv: Vec<&str> = vec![
@@ -197,7 +210,7 @@ fn every_for_edge_the_taxonomy_renders() {
     let got = edges(&h);
     let have: Vec<(&str, &str, &str, &str)> = got
         .iter()
-        .filter(|e| !ENGINE_KINDS.contains(&e.kind.as_str()))
+        .filter(|e| !engine_built(&e.kind))
         .map(Edge::tuple)
         .collect();
 

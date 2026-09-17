@@ -56,6 +56,9 @@ fn test_env() -> ClassifyEnv<'static> {
         lines: &NoLines,
         // An EMPTY tool index, for the same reason: no call in these fixtures is looked up.
         tool_lines: NO_TOOLS.get_or_init(crate::model::ProvIndex::default),
+        // No row space either: these fixtures build hits directly rather than scanning a
+        // file, so the survival relations have no index to resolve against.
+        rows: &[],
         // The unit tests read the engine's edges directly, so the neutral env projects
         // them: the gate is a scan-policy answer, and a test that asserts an edge is its
         // own reader.

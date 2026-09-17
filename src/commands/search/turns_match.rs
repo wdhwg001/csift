@@ -120,6 +120,7 @@ pub(crate) fn reconstruct_and_match(
         schedule_fires,
         lines: &row_lines,
         tool_lines: &tools.prov,
+        rows,
         wants_engine_edges: engine_edges,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
@@ -504,6 +505,11 @@ pub(crate) struct ClassifyEnv<'a> {
     /// CALL resolves to an address instead of reporting a line it could not find. It is
     /// the map the one tool walk already produced; nothing here builds a second one.
     pub(crate) tool_lines: &'a crate::model::ProvIndex,
+    /// The file's own merged ROW list - the index space every [`crate::model::Chain`]
+    /// answer is addressed by. The four SURVIVAL relations name a record the chain found by
+    /// INDEX rather than by uuid, and only the rows can turn an index into the line and the
+    /// uuid an edge renders. Borrowed, so this costs one pointer per file.
+    pub(crate) rows: &'a [Row<'a>],
     /// Does a reader of this scan PROJECT the engine's own two edges
     /// ([`crate::cli::SearchArgs::projects_engine_edges`])? They ride JSON alone, so a
     /// text scan that does not census them can render its every byte without them - and

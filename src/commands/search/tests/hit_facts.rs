@@ -372,14 +372,104 @@ fn a_replay_pointer_at_a_line_that_cannot_exist_is_dropped() {
 
     let mut hits = scanned(lines[0]);
     let real: HashMap<usize, usize> = [(1usize, 42usize)].into_iter().collect();
-    backfill_survival(&mut hits, &chain, 0, &real);
+    backfill_survival(&mut hits, &chain, 0, &real, None);
     assert_eq!(hits[0].replay_copy_of, Some(42));
 
     let mut hits = scanned(lines[0]);
     let impossible: HashMap<usize, usize> = [(1usize, 0usize)].into_iter().collect();
-    backfill_survival(&mut hits, &chain, 0, &impossible);
+    backfill_survival(&mut hits, &chain, 0, &impossible, None);
     assert_eq!(
         hits[0].replay_copy_of, None,
         "L0 addresses nothing - the pointer is dropped, never rendered"
+    );
+}
+
+/// One transcript's rows, from its lines, at their own 1-based line numbers.
+fn rows_of(lines: &[&str]) -> Vec<Kept> {
+    lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| Kept {
+            rec: rec(l),
+            can_hit: true,
+            line_no: i + 1,
+            from_sidecar: false,
+            gated_raw: None,
+        })
+        .collect()
+}
+
+/// The FOUR survival relations, computed directly from the chain rather than read out of a
+/// rendered hit.
+///
+/// One fixture carries all four, because they are four readings of ONE walk and a fixture
+/// per relation would let three of them pass while the walk that feeds them moved. L1 and
+/// L2 share a uuid, so L1 is a replay copy of L2 (`replays`, basis KEY - the shared uuid is
+/// what the loader itself joins on). L4 is a prompt nothing answered, L5 one that WAS
+/// answered and then rewound past, and L7 the surviving opener that replaced both (all
+/// three share the parent L3) - so L4 `supersedes` and L5 `continues` name L7, while L6
+/// hangs off L5 on that abandoned branch and `branches` names its head.
+#[test]
+fn the_survival_relations_name_the_records_the_chain_found() {
+    let kept = rows_of(&[
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#,
+        r#"{"type":"user","uuid":"d1","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"dredge the chanel"}}"#,
+        r#"{"type":"user","uuid":"s1","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"dredge the channel"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"s1","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"dredging"}]}}"#,
+        r#"{"type":"user","uuid":"s2","parentUuid":"a0","timestamp":"2026-06-07T05:03:00.000Z","message":{"role":"user","content":"survey the shoal instead"}}"#,
+        r#"{"type":"assistant","uuid":"a2","parentUuid":"s2","timestamp":"2026-06-07T05:03:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"surveying"}]}}"#,
+    ]);
+    let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
+    let chain = crate::model::Chain::build_by(&rows, |r| r.node(), None);
+
+    // `(word, basis, target line)` for one record's edges - which relation, how it was
+    // found, and the address it resolves to, which is the whole content of the fact.
+    let at = |i: usize| -> Vec<(&'static str, &'static str, Option<usize>)> {
+        survival_edges(&chain, i, &rows)
+            .iter()
+            .map(|f| match f {
+                HitFact::For {
+                    kind,
+                    basis,
+                    target,
+                } => (kind.as_str(), basis.as_str(), target.line),
+                other => panic!("a survival relation resolved to nothing: {other:?}"),
+            })
+            .collect()
+    };
+    assert_eq!(at(0), [("replays", "key", Some(2))]);
+    assert_eq!(at(3), [("supersedes", "position", Some(7))]);
+    assert_eq!(at(4), [("continues", "position", Some(7))]);
+    assert_eq!(at(5), [("branches", "position", Some(5))]);
+    // The branch HEAD names no branch: an edge from a record to itself points at nothing,
+    // and the head's own `user.rewound` leaf already says what it is.
+    assert!(
+        !at(4).iter().any(|(k, _, _)| *k == "branches"),
+        "the head of a branch carries no edge to itself"
+    );
+    // A record on the surviving conversation carries none of the four.
+    assert_eq!(at(7), []);
+}
+
+/// A relation whose target row is absent answers nothing rather than pointing somewhere.
+///
+/// `survival_edges` resolves a chain INDEX against the row list, and the two always come
+/// from one scan - but this helper is where they could disagree, so the guard is pinned
+/// rather than assumed. A fabricated line here would be an address that fetches the wrong
+/// record, which is worse than no edge at all.
+#[test]
+fn a_survival_relation_whose_row_is_out_of_range_yields_no_edge() {
+    let kept = rows_of(&[
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+    ]);
+    let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
+    let chain = crate::model::Chain::build_by(&rows, |r| r.node(), None);
+    assert_eq!(chain.replay_of(0), Some(1), "the earlier line is the copy");
+    assert!(
+        survival_edges(&chain, 0, &rows[..1]).is_empty(),
+        "the survivor is not in the rows handed in, so there is no address to name"
     );
 }

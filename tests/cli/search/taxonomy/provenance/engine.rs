@@ -8,7 +8,34 @@
 
 use crate::harness::*;
 
-use super::{edges, Edge, ENGINE_KINDS, REACH_TARGET};
+use super::{edges, Edge, ENGINE_KINDS, REACH_TARGET, SURVIVAL_KINDS};
+
+/// The SURVIVAL relations the reachability fixture carries, and the leaves they sit on.
+///
+/// The fixture holds a rewound branch and a recalled draft, so three of the four appear here
+/// without the file being built for them - which is the point of asserting them in this
+/// suite as well as in the survival one: the vocabulary's cross-family view has to show them
+/// under the leaves a reader will meet them on. `replays` needs two lines carrying one uuid,
+/// which this fixture does not have and must not gain: it carries one line per LEAF, and a
+/// second copy of a line would double a leaf's census.
+#[test]
+fn the_survival_relations_sit_on_the_leaves_that_carry_them() {
+    let h = reachability_home();
+    let got = edges(&h);
+    let have: Vec<(&str, &str, &str, &str)> = got
+        .iter()
+        .filter(|e| SURVIVAL_KINDS.contains(&e.kind.as_str()))
+        .map(Edge::tuple)
+        .collect();
+    assert_eq!(
+        have,
+        [
+            ("agent.message.plain", "branches", "position", "line"),
+            ("user.rewound", "continues", "position", "line"),
+            ("user.unsent", "supersedes", "position", "line"),
+        ]
+    );
+}
 
 /// The ENGINE's own edges, on the terms that make them worth pinning.
 ///

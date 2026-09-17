@@ -111,7 +111,13 @@ pub(crate) fn collect_turn_hits(
         // Backfill the source record's address + survival onto every hit this record
         // produced.
         backfill_address(&mut hits[before..], kept);
-        backfill_survival(&mut hits[before..], chain, idx, survivor_lines);
+        backfill_survival(
+            &mut hits[before..],
+            chain,
+            idx,
+            survivor_lines,
+            env.wants_engine_edges.then_some(env.rows),
+        );
         if hits.len() > before {
             backfill_provenance(&mut hits[before..], turn, i, roots.get(turn), env);
             hit_idxs.push(i);

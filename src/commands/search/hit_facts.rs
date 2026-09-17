@@ -357,11 +357,19 @@ pub(crate) fn compaction_facts(rec: &Record, ctx: &ClassifyCtx) -> Option<Box<Co
 /// the conversation, is its branch a rewound one, and is the line an earlier copy of a
 /// record a later line carries. The replay pointer is rendered as the SURVIVOR's physical
 /// line, which is only resolvable here where the record list is in hand.
+///
+/// `edges` is the file's ROW LIST when a reader projects or censuses the four JSON-only
+/// survival relations ([`survival_edges`]), and `None` when none does. The two travel
+/// together deliberately: the fields and the edges are the same four answers in two shapes,
+/// so stamping them anywhere else would let a unit render `[abandoned]` while its `for[]`
+/// said nothing, or the reverse. The rows are optional rather than a second flag because
+/// they are exactly what the edges need and nothing else here reads them.
 pub(crate) fn backfill_survival(
     hits: &mut [Hit],
     chain: &crate::model::Chain,
     idx: usize,
     survivor_line: &HashMap<usize, usize>,
+    edges: Option<&[Row<'_>]>,
 ) {
     let survival = chain.survival(idx);
     let rewound = chain.on_rewound_branch(idx);
@@ -369,10 +377,14 @@ pub(crate) fn backfill_survival(
         .replay_of(idx)
         .and_then(|s| survivor_line.get(&s).copied())
         .filter(|&l| l > 0);
+    let facts = edges.map(|rows| survival_edges(chain, idx, rows));
     for h in hits.iter_mut() {
         h.survival = survival;
         h.rewound_branch = rewound;
         h.replay_copy_of = replay;
+        if let Some(facts) = &facts {
+            h.facts.extend(facts.iter().cloned());
+        }
     }
 }
 

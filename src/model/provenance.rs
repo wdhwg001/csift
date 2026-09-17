@@ -79,6 +79,12 @@ edge_kinds! {
         Banner => "banner",
         /// The assistant turn a Stop hook's feedback blocked.
         Blocked => "blocked",
+        /// The HEAD of the abandoned branch this record sits on - the opener the
+        /// conversation left behind. Read off the survival axis, never off a key.
+        Branches => "branches",
+        /// The surviving opener a REWOUND turn's prompt was replaced by: the conversation
+        /// was rewound past this one and continued from that one instead.
+        Continues => "continues",
         /// The child TRANSCRIPT a background handover moved to. The one relation whose target
         /// is a whole session and no record in it.
         ContinuedIn => "continued_in",
@@ -110,6 +116,9 @@ edge_kinds! {
         Redoes => "redoes",
         /// The user message a model refusal was for.
         Refused => "refused",
+        /// The SURVIVING line carrying this line's uuid - a compaction re-anchor appended
+        /// the record again, and the later copy is the one a reader should be sent to.
+        Replays => "replays",
         /// The message an inbound relay answers. No relay carries such a key, so this is
         /// always the honest empty - which is the point: the relation exists and the record
         /// does not state it.
@@ -120,6 +129,9 @@ edge_kinds! {
         /// ENGINE's other edge, and the one relation in the set that is not a uuid relation at
         /// all - which is why the index below exists.
         ResultOf => "result_of",
+        /// The surviving opener a recalled DRAFT was replaced by - the message the person
+        /// sent instead of the one they took back.
+        Supersedes => "supersedes",
         /// The prompt record a file-history line's `messageId` names.
         Versions => "versions",
         /// The slash-command record a delivered `local_command` is the output of.
@@ -132,15 +144,34 @@ impl EdgeKind {
     ///
     /// The label zone carries what a record SAYS about itself, and a family edge is exactly
     /// that: a key its producer wrote to name a target, on the few records whose shape has
-    /// one. The ENGINE's two edges are not. `parent` is on nearly every unit and names the
-    /// record above it, which a reader of a rendered transcript can already see;
-    /// `result_of` names the call a result answers, which the pairing glyph says in one
-    /// character. A tag per hit for either would cost a reader more than it tells them,
-    /// while the machine surface - where a consumer FOLLOWS edges rather than reads them -
-    /// carries both.
+    /// one. SIX relations are not, and all six are the ENGINE's own - read off the file's
+    /// shape rather than off a key, and each already rendered on the very unit that would
+    /// carry the tag.
+    ///
+    /// `parent` is on nearly every unit and names the record above it, which a reader of a
+    /// rendered transcript can already see; `result_of` names the call a result answers,
+    /// which the pairing glyph says in one character. The four SURVIVAL relations restate
+    /// the marker their own unit prints: `replays` restates `[replay copy of L<n>]`,
+    /// `branches` restates `[abandoned]` / `[rewound]`, and `supersedes` / `continues`
+    /// restate the draft-distance line the unit renders under its own hit (`rewound: the
+    /// conversation continued from L<n> instead`). A tag per hit for any of the six would
+    /// cost a reader more than it tells them, while the machine surface - where a consumer
+    /// FOLLOWS edges rather than reads them - carries all six.
+    ///
+    /// The set is also the gate: a relation that renders nothing is BUILT only where a
+    /// reader projects or censuses it (`SearchArgs::projects_engine_edges`), so a text scan
+    /// that does neither pays for none of them and renders every byte unchanged.
     #[must_use]
     pub fn rendered_in_label(self) -> bool {
-        !matches!(self, EdgeKind::Parent | EdgeKind::ResultOf)
+        !matches!(
+            self,
+            EdgeKind::Parent
+                | EdgeKind::ResultOf
+                | EdgeKind::Branches
+                | EdgeKind::Continues
+                | EdgeKind::Replays
+                | EdgeKind::Supersedes
+        )
     }
 }
 

@@ -5,33 +5,36 @@ use super::*;
 /// The vocabulary IS [`EdgeKind::ALL`], generated beside the enum by the `edge_kinds!`
 /// declaration, so a variant cannot exist outside it. The tests below walk that.
 ///
-/// It was a hand-kept array here, and twice that was not enough. First it held seventeen
-/// of the nineteen - `parent` and `result_of` absent - so the uniqueness and JSON-alone
+/// It was a hand-kept array here, and twice that was not enough. First it held all but two
+/// of the set - `parent` and `result_of` absent - so the uniqueness and JSON-alone
 /// tests were statements about a sample. Then an exhaustive variant-to-position `match`
 /// was added to close it, and it did not: it forces an author to TOUCH this file, not to
 /// put the variant into the list, and a twentieth variant given an arm, a colliding word
 /// and no row in the array passed clippy and the whole suite.
-/// The vocabulary is NINETEEN relations, and that is the claim every document makes.
+/// The vocabulary is TWENTY-THREE relations, and that is the claim every document makes.
 ///
 /// Asserted against the number rather than derived from the list, which would agree with
 /// itself whatever the list held - and since the list is generated from the enum, this is
 /// the enum's own variant count.
 #[test]
-fn the_vocabulary_is_nineteen_relations() {
+fn the_vocabulary_is_twenty_three_relations() {
     assert_eq!(
         EdgeKind::ALL.len(),
-        19,
-        "the closed vocabulary is nineteen relations"
+        23,
+        "the closed vocabulary is twenty-three relations"
     );
 }
 
-/// Exactly TWO relations ride JSON alone, and they are the engine's own.
+/// Exactly SIX relations ride JSON alone, and all six are the engine's own.
 ///
 /// A family edge exists because a record carries a key naming a target, which is what the
-/// label zone is for. The engine's two are on nearly every unit and repeat what a rendered
-/// transcript already shows, so they are the documented exception - and an exception worth
-/// stating is worth pinning, because a third one would quietly remove a relation from every
-/// text surface at once.
+/// label zone is for. The engine's six are read off the file's shape instead, and each
+/// already reaches a reader through the unit it sits on - `parent` through the record
+/// above, `result_of` through the pairing glyph, and the four SURVIVAL relations through
+/// `[replay copy of L<n>]`, `[abandoned]` / `[rewound]` and the draft-distance line. They
+/// are the documented exception, and an exception worth stating is worth pinning: a seventh
+/// would quietly remove a relation from every text surface at once, and a sixth removed
+/// would put a duplicate tag on every abandoned unit.
 #[test]
 fn only_the_engine_relations_ride_json_alone() {
     let hidden: Vec<&str> = EdgeKind::ALL
@@ -39,7 +42,17 @@ fn only_the_engine_relations_ride_json_alone() {
         .filter(|k| !k.rendered_in_label())
         .map(|k| k.as_str())
         .collect();
-    assert_eq!(hidden, ["parent", "result_of"]);
+    assert_eq!(
+        hidden,
+        [
+            "branches",
+            "continues",
+            "parent",
+            "replays",
+            "result_of",
+            "supersedes"
+        ]
+    );
 }
 
 /// Every relation word is DISTINCT.

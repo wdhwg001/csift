@@ -212,6 +212,70 @@ pub(crate) fn engine_edges(
     out
 }
 
+/// The FOUR relations the SURVIVAL AXIS already answers, as `for` edges.
+///
+/// Each one is a value [`crate::model::Chain`] computed for the record anyway and a field the
+/// hit already carries: `replay_copy_of`, the `[abandoned]` / `[rewound]` marker, the
+/// superseding line the draft-distance line names. The field stays exactly what it was - this
+/// ADDS the machine-followable form beside it, so a consumer walking `for[]` reaches the same
+/// four neighbours a reader reaches by eye, under words the vocabulary declares.
+///
+/// The BASIS splits, and the split is the honest part. `replays` is [`Basis::Key`]: the two
+/// lines carry the SAME uuid, which is the key the loader itself joins on. The other three are
+/// [`Basis::Position`]: a draft is recognised by a later opener sharing its `parentUuid`, a
+/// rewound turn by what hangs below it, a branch head by where the chain stopped reaching -
+/// readings of the file's shape, not targets a producer named.
+///
+/// They render NOTHING ([`EdgeKind::rendered_in_label`]), so this is called only where a
+/// reader projects or censuses them, and a text scan that does neither renders every byte
+/// without paying for any of it.
+pub(crate) fn survival_edges(
+    chain: &crate::model::Chain,
+    idx: usize,
+    rows: &[Row<'_>],
+) -> Vec<HitFact> {
+    // Every target below is a row the CHAIN located, and the chain locates a record by its
+    // uuid - so the uuid is present by construction and the line is the row's own. A line of
+    // 0 is the merged elicitation-sidecar record, which has no physical line at all: the edge
+    // then renders its uuid rather than pointing a reader at `L0`.
+    let edge = |kind, basis, i: usize| -> Option<HitFact> {
+        let row = rows.get(i)?;
+        let line = (row.line_no() > 0).then(|| row.line_no());
+        Some(record_text::for_edge_at(
+            kind,
+            basis,
+            row.uuid(),
+            None,
+            line,
+        ))
+    };
+    let mut out: Vec<HitFact> = Vec::new();
+    out.extend(
+        chain
+            .replay_of(idx)
+            .and_then(|s| edge(crate::model::EdgeKind::Replays, Basis::Key, s)),
+    );
+    out.extend(match chain.kind(idx) {
+        Some(crate::model::Kind::Draft { superseded_by }) => {
+            superseded_by.and_then(|s| edge(crate::model::EdgeKind::Supersedes, Basis::Position, s))
+        }
+        Some(crate::model::Kind::Rewound { resend }) => {
+            resend.and_then(|s| edge(crate::model::EdgeKind::Continues, Basis::Position, s))
+        }
+        None => None,
+    });
+    // The branch HEAD, and never on the head itself: an edge from a record to itself names
+    // no neighbour, and the head already says what it is through its own `user.unsent` /
+    // `user.rewound` leaf.
+    out.extend(
+        chain
+            .abandoned_root(idx)
+            .filter(|&root| root != idx)
+            .and_then(|root| edge(crate::model::EdgeKind::Branches, Basis::Position, root)),
+    );
+    out
+}
+
 /// Stamp the provenance answer onto every hit a record just produced: the turn root, and
 /// the engine's own one-hop edge.
 pub(crate) fn backfill_provenance(
@@ -226,11 +290,12 @@ pub(crate) fn backfill_provenance(
     for h in hits.iter_mut() {
         // The ROOT is on every unit under every format: the label zone prints it.
         h.for_root = root.clone();
-        // The two ENGINE edges ride JSON alone, so they are built only where a reader
-        // projects or censuses them. Nothing about the output moves either way - a text
-        // scan renders no tag for `parent` or `result_of` and never could
-        // (`EdgeKind::rendered_in_label` is false for exactly those two) - and what is
-        // saved is two string allocations and two map lookups on every emitted hit.
+        // The two ONE-HOP edges ride JSON alone, so they are built only where a reader
+        // projects or censuses them - the same gate the four survival relations take,
+        // stamped beside the survival FIELDS where those belong. Nothing about the output
+        // moves either way: a text scan renders no tag for `parent` or `result_of` and
+        // never could (`EdgeKind::rendered_in_label` is false for exactly the six), and
+        // what is saved is two string allocations and two map lookups per emitted hit.
         if env.wants_engine_edges {
             h.facts
                 .extend(engine_edges(h, parent_uuid, env.tool_lines, env.lines));
