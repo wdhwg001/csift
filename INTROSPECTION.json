@@ -16649,7 +16649,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "264-270",
+          "lines": "268-274",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -40033,7 +40033,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "53-57",
+          "lines": "57-61",
           "snippet": "    /// Narration-tagged thinking blocks per model (`agent.thinking.narration`: an\n    /// API-issued summary of the reasoning beside it). A BLOCK count only - the token\n    /// split is not derivable from the jsonl (usage is per MESSAGE and covers the\n    /// reasoning block and its narration sibling together).\n    narration_blocks: BTreeMap<String, usize>,"
         }
       ],
@@ -40124,12 +40124,12 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "58-60",
+          "lines": "62-64",
           "snippet": "    /// Thinking-signature tags that decoded to something OTHER than thinking or\n    /// narration - a new tag value surfaces here without a csift release.\n    unknown_thinking_tags: usize,"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "314-315",
+          "lines": "318-319",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41438,7 +41438,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "303-305",
+          "lines": "307-309",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -50617,7 +50617,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "48-52",
+          "lines": "52-56",
           "snippet": "    /// Whole-file census: every parseable physical line counted by its top-level `type`\n    /// value (`user`, `assistant`, `attachment`, `file-history-snapshot`, \u2026; `(untyped)`\n    /// when the field is absent). A FILE fact like `lines`: never windowed by\n    /// `--since`/`--turn`.\n    line_types: BTreeMap<String, usize>,"
         },
         {
@@ -51658,7 +51658,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "272-277",
+          "lines": "276-281",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51840,12 +51840,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "321",
+          "lines": "325",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "272-277",
+          "lines": "276-281",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -52153,17 +52153,17 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "264-270",
+          "lines": "268-274",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "272-277",
+          "lines": "276-281",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "321",
+          "lines": "325",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52238,12 +52238,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "264-270",
+          "lines": "268-274",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "321",
+          "lines": "325",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52794,7 +52794,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "254-257",
+          "lines": "258-261",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -54286,7 +54286,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "263-270",
+          "lines": "267-274",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54375,7 +54375,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "262-263",
+          "lines": "266-267",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54450,7 +54450,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "271",
+          "lines": "275",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55960,7 +55960,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "266-270",
+          "lines": "270-274",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -56056,8 +56056,8 @@
       "depends": "csift scopes the usage dedupe PER FILE (one row per transcript, the TOTAL merging rows), because each copy is a genuine per-transcript fact; a pooled dedupe would have to pick arbitrarily between the parent and child values and would under-report a spanning `stats` total.",
       "code": [
         {
-          "path": "src/commands/stats.rs",
-          "lines": "347-350",
+          "path": "src/commands/stats/render.rs",
+          "lines": "17-20",
           "snippet": "/// Scope law: usage dedupe is PER FILE (each row already deduped by message.id). The\n/// same id CAN recur across a session's transcripts - the spawn message is copied into\n/// each child's opening context with its own usage - and each copy is a genuine\n/// per-transcript fact, so the TOTAL row sums them; it never dedupes across files."
         }
       ],
@@ -64698,7 +64698,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "254-261",
+          "lines": "258-265",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -65816,7 +65816,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "272-277",
+          "lines": "276-281",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65904,7 +65904,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "321",
+          "lines": "325",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
