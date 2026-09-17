@@ -14,6 +14,7 @@ fn parse(argv: &[&str]) -> Result<Cli, clap::Error> {
 mod argv;
 mod command_args;
 mod docs;
+mod labelzone;
 mod manuals;
 mod selectors;
 mod targets;

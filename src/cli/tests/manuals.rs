@@ -128,19 +128,22 @@ fn skill_section_10_names_every_retired_selector_and_its_successors() {
     }
 }
 
-/// Every `[`-led MARKER WORD csift reads off a Claude Code record is quoted in `SKILL.md`.
+/// Every `[`-led marker word csift READS OFF A CLAUDE CODE RECORD is quoted in `SKILL.md`.
 ///
-/// The transparency law: csift may never speak a language the jsonl does not, so a reader
-/// who meets a bracketed word on screen can look it up and then go find it in the raw line.
-/// Section 7.4 states the set is CLOSED and that a tag it does not name means a stale copy;
-/// that sentence is only true while something holds it to the code, and nothing did - an
-/// earlier draft of the same sentence enumerated seven tags the binary already printed more
-/// than.
+/// SCOPE, stated exactly, because the name reads wider than the test is: this guards the
+/// HARNESS's own bracketed words - the two interrupt markers, the bracketed enforce and
+/// retry sentinels, the notification frame and the two image references - and nothing csift
+/// WRITES. Its whole domain is the string literals of `model::markers`, the one module where
+/// csift writes down a word Claude Code put on the line. What csift prints into the label
+/// zone is a different question with a different source tree, and `labelzone.rs` answers it.
 ///
-/// The set is WALKED out of `model::markers` rather than listed here, because a list here
-/// would be a second copy drifting at the same rate as the prose it guards. That module is
-/// the one place csift writes down the harness's own marker words; a new one lands there
-/// first, and this test fails until the manual carries it too.
+/// The transparency law is why both exist: csift may never speak a language the jsonl does
+/// not, so a reader who meets a bracketed word on screen can look it up and then go find it
+/// in the raw line.
+///
+/// The set is WALKED out of that module rather than listed here, because a list here would
+/// be a second copy drifting at the same rate as the prose it guards; a new harness marker
+/// lands there first, and this test fails until the manual carries it too.
 ///
 /// It reads the file's STRING LITERALS, skipping comment lines: a `[`-led word inside prose
 /// is a doc comment describing the const below it, and matching those would pin the module's
@@ -183,13 +186,19 @@ fn skill_names_every_bracketed_harness_marker() {
         }
     }
 
-    // A silently empty walk would pass every assertion below, so the floor is its own
-    // check: the module carries the two interrupt markers, the three bracketed enforce
-    // and retry sentinels, the notification frame and the two image references.
-    assert!(
-        found.len() >= 8,
-        "the marker walk found {} bracketed literals in model/markers.rs - the extraction \
-         broke, not the manual",
+    // A silently empty walk would pass every assertion below, so the count is its own
+    // check - and it is EXACT rather than a floor, because a `>=` equal to the current
+    // number is a floor that can never bite: the module carries the two interrupt markers,
+    // the three bracketed enforce and retry sentinels, the notification frame and the two
+    // image references, and nothing else. Adding a bracketed harness marker to
+    // `model::markers` means raising this number IN THE SAME EDIT that documents the marker
+    // in SKILL.md - the arithmetic is the reminder.
+    assert_eq!(
+        found.len(),
+        8,
+        "model/markers.rs carries {} bracketed literals, not 8: {found:?}. If you ADDED a \
+         harness marker, document it in SKILL.md and raise this count; if the extraction \
+         broke, fix the walk",
         found.len()
     );
     for marker in &found {
