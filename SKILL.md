@@ -198,6 +198,8 @@ A selector is a leaf path, a CATEGORY (`agent.message`, `harness.turn`), a ROLE 
 
 ### 7.2 Identity — what each leaf IS
 
+**One render rule spans the seven attachment-borne `harness.context.*` leaves**, so it is here and not on seven rows: the unit heads `[context <payload type>]` and shows the harness's converted text (`[rendered]`) or the payload JSON (`[payload]`), by §7.4's body rule. `harness.context.image` and `harness.context.skill` are outside it and say so in their own rows.
+
 | leaf | what | gate | LLM sees | human sees |
 |---|---|---|---|---|
 | `user.message` | the person's own message. ONE shape here is a person the HARNESS delivered rather than the prompt box: an isMeta record whose `origin.kind` reads `human`, a message relayed into a running lane. It is the person's own prose and it takes this leaf, marked `[relayed]` (JSON `relayed`), and because it is isMeta it opens NO turn, so it is searchable without moving the turn numbering; it carries `for: attached_to` -> the record it was delivered under. A `queued_command` attachment whose payload `origin.kind` is `human` is the same leaf reached MID-TURN and renders `[mid-turn]` over the attachment family's ordinary body: `[rendered]` when the record carries the harness's conversion, `[payload]` when it does not. The human column splits on the same line: a typed message is on the person's screen, a relayed one is not | default scan | yes | no / yes |
@@ -239,13 +241,13 @@ A selector is a leaf path, a CATEGORY (`agent.message`, `harness.turn`), a ROLE 
 | `harness.hook.context` | context a hook injected: a `type:"attachment"` record whose payload `type` is `hook_additional_context` (with `hookName`, `hookEvent` and a `content` string array). Renders `[hook <event> <name>]`; the body is the harness's own converted text (`[rendered]`) where the record carries one, else the joined `content` strings (`[payload]`) | -t or --attachments | yes | no |
 | `harness.hook.outcome` | a hook RUN's own record: a `type:"attachment"` whose payload `type` is one of the `hook_*` family (`hook_success`, `hook_blocking_error`, …) or `async_hook_response_batch`. Renders `[hook <event> <name> exit <code> <ms>ms]` for a `hook_success` and `[hook <payload type>]` for the other six; the body is the converted text (`[rendered]`) where there is one, else the run's own `stdout`, else the payload JSON (`[payload]`) | -t or --attachments | no | ? / verbose |
 | `harness.hook.feedback` | a blocking hook's feedback the model received: an `isMeta` `type:"user"` record whose content opens `<Name> hook feedback:` and then a NEWLINE — one builder joins the name, the suffix ` hook feedback:\n` and the body, over the four names `Stop`, `TeammateIdle`, `TaskCreated`, `TaskCompleted`; csift matches the prefix without the newline, and only `Stop` has a corpus specimen. Carries `for: blocked` -> the turn the hook stopped | default scan | yes | no |
-| `harness.context.reminder` | a nudge the harness re-injects each turn: the reminder attachment payloads, plus the isMeta `<system-reminder>` injections that match no more specific template, which carry `for: attached_to` -> the record they were injected under. An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments / default scan | yes | ? / no |
-| `harness.context.listing` | an inventory the harness injects (skills, agents, deferred tools). An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments | yes | ? |
-| `harness.context.prompt` | a persisted system-prompt section (instructions, date, environment, model, session context). An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments | yes | ? |
-| `harness.context.file` | file content the harness attached (a read, an edited snapshot, a compact file reference, nested memory, a plan file). An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments | yes | ? |
-| `harness.context.mode` | a mode transition the harness recorded (plan mode and its exits/re-entries, auto mode, command permissions). An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments | yes | ? |
-| `harness.context.ide` | IDE state the harness attached (the open file, the selection, diagnostics). An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments | yes | ? |
-| `harness.context.task` | task/goal/memory state the harness attached, including a `queued_command` that is NOT the human's own text. An attachment-borne unit renders `[context <payload type>]` over the converted text (`[rendered]`) or the payload JSON (`[payload]`) | -t or --attachments / default scan (own needle) | yes | ? |
+| `harness.context.reminder` | a nudge the harness re-injects each turn: the reminder attachment payloads, plus the isMeta `<system-reminder>` injections that match no more specific template, which carry `for: attached_to` -> the record they were injected under | -t or --attachments / default scan | yes | ? / no |
+| `harness.context.listing` | an inventory the harness injects (skills, agents, deferred tools) | -t or --attachments | yes | ? |
+| `harness.context.prompt` | a persisted system-prompt section (instructions, date, environment, model, session context) | -t or --attachments | yes | ? |
+| `harness.context.file` | file content the harness attached (a read, an edited snapshot, a compact file reference, nested memory, a plan file) | -t or --attachments | yes | ? |
+| `harness.context.mode` | a mode transition the harness recorded (plan mode and its exits/re-entries, auto mode, command permissions) | -t or --attachments | yes | ? |
+| `harness.context.ide` | IDE state the harness attached (the open file, the selection, diagnostics) | -t or --attachments | yes | ? |
+| `harness.context.task` | task/goal/memory state the harness attached, including a `queued_command` that is NOT the human's own text | -t or --attachments / default scan (own needle) | yes | ? |
 | `harness.context.image` | an image the harness referenced into the conversation: the isMeta reference records, whose text opens `[Image: ` or `[Image source: `, and the image-only isMeta records. `isMeta` is the condition, not a detail: an image-only `type:"user"` record WITHOUT it carries no leaf at all and an address renders it `? unmodeled: user/image`. The image-ONLY form is a picture with no text: the line is parsed and `show --line` renders it whole, but a pattern scan has nothing to match and a census counts no hit for it - `csift image` is the surface that lists and extracts it. BOTH forms are isMeta records the transcript render refuses, so the person never saw the record this leaf names. The image-only form renders its block counts in the label zone - `[context image-only: N image block(s), M document block(s)]`, JSON `image_only` - because it has no text of its own to show | default scan | yes | no |
 | `harness.context.skill` | an isMeta `type:"user"` record whose text OPENS with `Base directory for this skill:`, the instruction body a spawn builder preloaded rather than a skill anyone invoked this turn; on disk that body usually arrives as the first text block of an array; carries `for: attached_to` -> the record it was preloaded under | default scan | yes | no |
 | `harness.enforce.structured-output` | the redo nudge that tells the model it must call the StructuredOutput tool: an isMeta record whose content OPENS with the harness's sentinel `[structured-output-enforce]`, which then leads the rendered body | default scan | yes | no |
@@ -275,83 +277,83 @@ A selector is a leaf path, a CATEGORY (`agent.message`, `harness.turn`), a ROLE 
 | `harness.bookkeeping.queue` | a `type:"queue-operation"` line that is NOT the human's own content (a `dequeue`, or a harness rider); head `[queue-operation operation=... reason=...]`, the `reason` domain closed at six and riding `remove` alone | explicit -t | no | no |
 ### 7.3 Shape - where each leaf comes FROM on disk
 
-The third column is the same command on every row, because the escape hatch does not vary by leaf: `csift show @<id> --line N --raw` prints the line's own bytes, whatever csift called it.
+**The escape hatch does not vary by leaf**, so it is stated here and not on 73 rows: `csift show @<id> --line N --raw` prints the line's own bytes, whatever csift called it. **Nor does the notification CARRIER**: each of the five `harness.notification.*` leaves is a `<task-notification>` section, and each also arrives wrapped in the `[SYSTEM NOTIFICATION - NOT USER INPUT]` frame (2.1.252+) — an isMeta record where the envelope precedes the section. Both forms take the leaf the row names.
 
-| leaf | on disk | grab the raw bytes |
-|---|---|---|
-| `user.message` | type:"user" · type:"user" isMeta:true template:human-relay | `show --line N --raw` |
-| `user.answer` | a tool_result carrier's toolUseResult answers/response, not its line type | `show --line N --raw` |
-| `user.rejection` | a tool_result carrier's typed-instruction tail, not its line type | `show --line N --raw` |
-| `user.unsent` | assigned at the scan layer from the DAG: an opener with a later sibling and no assistant descendant | `show --line N --raw` |
-| `user.rewound` | assigned at the scan layer from the DAG: the same shape WITH an assistant descendant | `show --line N --raw` |
-| `user.queued` | a queue-operation line whose CONTENT is the human's own text, not its line type | `show --line N --raw` |
-| `agent.message.plain` | message.content[] type:"text" · "fallback" (a fallback-served turn has NO text section: it renders in full under an address and contributes no hit to a pattern scan or a census) | `show --line N --raw` |
-| `agent.message.structured` | type:"attachment" attachment.type:"structured_output" | `show --line N --raw` |
-| `agent.thinking.summary` | message.content[] type:"thinking" | `show --line N --raw` |
-| `agent.thinking.narration` | a thinking block whose base64 signature carries the narration tag | `show --line N --raw` |
-| `agent.thinking.omitted` | a thinking block whose own text is empty (the whitespace-only form takes this leaf too, and renders the same empty body) | `show --line N --raw` |
-| `agent.thinking.redacted` | message.content[] type:"redacted_thinking" | `show --line N --raw` |
-| `agent.tool.use` | message.content[] type:"tool_use" | `show --line N --raw` |
-| `agent.tool.result` | message.content[] type:"tool_result" | `show --line N --raw` |
-| `agent.communication.inbox` | type:"user" isMeta:true template:coordinator-relay | `show --line N --raw` |
-| `agent.communication.sent` | a tool_use block naming SendMessage or a spawn tool | `show --line N --raw` |
-| `agent.communication.signal` | a SendMessage whose input type is a control kind, or a peer control payload | `show --line N --raw` |
-| `agent.communication.channel` | a hook_additional_context payload whose FIRST content string opens with the csift envelope header | `show --line N --raw` |
-| `harness.notification.workflow` | a <task-notification> section whose summary names a workflow - or the same pulse inside the `[SYSTEM NOTIFICATION - NOT USER INPUT]` frame (2.1.252+), an isMeta record where the envelope precedes the section | `show --line N --raw` |
-| `harness.notification.monitor` | a <task-notification> section whose summary opens Monitor/Scheduled/cron - or the same pulse inside the `[SYSTEM NOTIFICATION - NOT USER INPUT]` frame (2.1.252+), an isMeta record where the envelope precedes the section | `show --line N --raw` |
-| `harness.notification.subagent` | a <task-notification> section for a spawned agent, or the plain-text agents-stopped notice - or the same pulse inside the `[SYSTEM NOTIFICATION - NOT USER INPUT]` frame (2.1.252+), an isMeta record where the envelope precedes the section | `show --line N --raw` |
-| `harness.notification.background-command` | a <task-notification> section for a backgrounded shell command - or the same pulse inside the `[SYSTEM NOTIFICATION - NOT USER INPUT]` frame (2.1.252+), an isMeta record where the envelope precedes the section | `show --line N --raw` |
-| `harness.notification.task` | any other <task-notification> section - or the same pulse inside the `[SYSTEM NOTIFICATION - NOT USER INPUT]` frame (2.1.252+), an isMeta record where the envelope precedes the section | `show --line N --raw` |
-| `harness.compaction.summary` | a type:"user" record carrying the isCompactSummary FLAG, not a line type | `show --line N --raw` |
-| `harness.compaction.boundary` | type:"system" subtype:"compact_boundary" | `show --line N --raw` |
-| `harness.command.invocation` | a user record whose text opens with a slash-command wrapper tag | `show --line N --raw` |
-| `harness.command.stdout` | a user record whose text opens with <local-command-stdout> | `show --line N --raw` |
-| `harness.command.caveat` | type:"user" isMeta:true template:local-command-caveat | `show --line N --raw` |
-| `harness.interrupt.user` | a user record whose text is exactly the interrupt marker | `show --line N --raw` |
-| `harness.interrupt.tool` | a user record whose text is exactly the tool-interrupt marker | `show --line N --raw` |
-| `harness.schedule.wakeup` | type:"user" isMeta:true template:schedule-wakeup | `show --line N --raw` |
-| `harness.schedule.event` | type:"system" subtype:"scheduled_task_fire" | `show --line N --raw` |
-| `harness.schedule.fire` | type:"user" isMeta:true, parentUuid -> a scheduled_task_fire record | `show --line N --raw` |
-| `harness.schedule.tick` | type:"user" isMeta:true template:schedule-tick | `show --line N --raw` |
-| `harness.resume.prompt` | type:"user" isMeta:true template:resume-prompt | `show --line N --raw` |
-| `harness.resume.placeholder` | an assistant record with the <synthetic> model and exactly the placeholder text | `show --line N --raw` |
-| `harness.hook.context` | type:"attachment" attachment.type:"hook_additional_context" | `show --line N --raw` |
-| `harness.hook.outcome` | type:"attachment" attachment.type:"hook_success" · "hook_blocking_error" · "hook_non_blocking_error" · "hook_cancelled" · "hook_stopped_continuation" · "hook_system_message" · "async_hook_response_batch" | `show --line N --raw` |
-| `harness.hook.feedback` | type:"user" isMeta:true template:stop-hook-feedback | `show --line N --raw` |
-| `harness.context.reminder` | type:"attachment" attachment.type:"total_tokens_reminder" · type:"attachment" attachment.type:"task_reminder" · type:"attachment" attachment.type:"silent_turn_reminder" · type:"attachment" attachment.type:"batching_reminder_sent" · type:"attachment" attachment.type:"ultrathink_effort" · type:"user" isMeta:true template:roster-reminder | `show --line N --raw` |
-| `harness.context.listing` | type:"attachment" attachment.type:"skill_listing" · "agent_listing_delta" · "deferred_tools_delta" · "deferred_tools_record" · "dynamic_skill" · "invoked_skills" | `show --line N --raw` |
-| `harness.context.prompt` | type:"attachment" attachment.type:"instructions" · "date" · "session_context" · "environment" · "model" · "prompt_snapshot" · "date_change" | `show --line N --raw` |
-| `harness.context.file` | type:"attachment" attachment.type:"file" · "edited_text_file" · "compact_file_reference" · "nested_memory" · "plan_file_reference" · "read_truncation_notice" · "bash_output_audience_note" | `show --line N --raw` |
-| `harness.context.mode` | type:"attachment" attachment.type:"plan_mode" · "plan_mode_exit" · "plan_mode_reentry" · "auto_mode" · "command_permissions" | `show --line N --raw` |
-| `harness.context.ide` | type:"attachment" attachment.type:"opened_file_in_ide" · "selected_lines_in_ide" · "diagnostics" | `show --line N --raw` |
-| `harness.context.task` | type:"attachment" attachment.type:"task_status" · type:"attachment" attachment.type:"queued_command" (attachment.origin.kind "human" = the person's own steer, `user.message`) · "workflow_keyword_request" · "goal_status" · "remote_session_change" · "relevant_memories" · "memory_update" · "thinking_stripped" | `show --line N --raw` |
-| `harness.context.image` | message.content[] type:"image" on an image-ONLY isMeta `type:"user"` record (the `[Image: ` reference is its text form); WITHOUT `isMeta` the same shape carries no leaf and reads `? unmodeled: user/image`, and beside TEXT it rides that record's own leaf · type:"user" isMeta:true template:image-reference. The image-only form has NO text section, so it renders in full under an address and contributes no hit to a pattern scan or a census; `csift image` reads the bytes | `show --line N --raw` |
-| `harness.context.skill` | type:"user" isMeta:true template:skill-body | `show --line N --raw` |
-| `harness.enforce.structured-output` | type:"user" isMeta:true template:enforce-structured-output | `show --line N --raw` |
-| `harness.enforce.brief` | type:"user" isMeta:true template:enforce-brief | `show --line N --raw` |
-| `harness.enforce.handback` | type:"user" isMeta:true template:enforce-handback | `show --line N --raw` |
-| `harness.enforce.retry` | type:"user" isMeta:true template:enforce-retry | `show --line N --raw` |
-| `harness.turn.duration` | type:"system" subtype:"turn_duration" | `show --line N --raw` |
-| `harness.turn.stop-hooks` | type:"system" subtype:"stop_hook_summary" | `show --line N --raw` |
-| `harness.turn.recap` | type:"system" subtype:"away_summary" | `show --line N --raw` |
-| `harness.system.refusal` | type:"system" subtype:"model_refusal_fallback" · "model_refusal_no_fallback" | `show --line N --raw` |
-| `harness.system.api-error` | type:"system" subtype:"api_error" | `show --line N --raw` |
-| `harness.system.notice` | type:"system" subtype:"informational" | `show --line N --raw` |
-| `harness.system.kill` | type:"system" subtype:"agents_killed" | `show --line N --raw` |
-| `harness.system.command` | type:"system" subtype:"local_command" | `show --line N --raw` |
-| `harness.bookkeeping.last-prompt` | type:"last-prompt" | `show --line N --raw` |
-| `harness.bookkeeping.mode` | type:"mode" · "permission-mode" | `show --line N --raw` |
-| `harness.bookkeeping.name` | type:"ai-title" · "agent-name" | `show --line N --raw` |
-| `harness.bookkeeping.atis` | type:"atis-latch" | `show --line N --raw` |
-| `harness.bookkeeping.bridge` | type:"bridge-session" | `show --line N --raw` |
-| `harness.bookkeeping.suppression` | type:"history-suppression" | `show --line N --raw` |
-| `harness.bookkeeping.pr-link` | type:"pr-link" | `show --line N --raw` |
-| `harness.bookkeeping.artifact` | type:"frame-link" · "artifact-comment-monitor" · "artifact-autoreact-ledger" | `show --line N --raw` |
-| `harness.bookkeeping.file-history` | type:"file-history-snapshot" · "file-history-delta" | `show --line N --raw` |
-| `harness.bookkeeping.cost` | type:"cost-state" | `show --line N --raw` |
-| `harness.bookkeeping.fork` | type:"fork-context-ref" | `show --line N --raw` |
-| `harness.bookkeeping.continued` | type:"continued-in" | `show --line N --raw` |
-| `harness.bookkeeping.queue` | type:"queue-operation" | `show --line N --raw` |
+| leaf | on disk |
+|---|---|
+| `user.message` | type:"user" · type:"user" isMeta:true template:human-relay |
+| `user.answer` | a tool_result carrier's toolUseResult answers/response, not its line type |
+| `user.rejection` | a tool_result carrier's typed-instruction tail, not its line type |
+| `user.unsent` | assigned at the scan layer from the DAG: an opener with a later sibling and no assistant descendant |
+| `user.rewound` | assigned at the scan layer from the DAG: the same shape WITH an assistant descendant |
+| `user.queued` | a queue-operation line whose CONTENT is the human's own text, not its line type |
+| `agent.message.plain` | message.content[] type:"text" · "fallback" (a fallback-served turn has NO text section: it renders in full under an address and contributes no hit to a pattern scan or a census) |
+| `agent.message.structured` | type:"attachment" attachment.type:"structured_output" |
+| `agent.thinking.summary` | message.content[] type:"thinking" |
+| `agent.thinking.narration` | a thinking block whose base64 signature carries the narration tag |
+| `agent.thinking.omitted` | a thinking block whose own text is empty (the whitespace-only form takes this leaf too, and renders the same empty body) |
+| `agent.thinking.redacted` | message.content[] type:"redacted_thinking" |
+| `agent.tool.use` | message.content[] type:"tool_use" |
+| `agent.tool.result` | message.content[] type:"tool_result" |
+| `agent.communication.inbox` | type:"user" isMeta:true template:coordinator-relay |
+| `agent.communication.sent` | a tool_use block naming SendMessage or a spawn tool |
+| `agent.communication.signal` | a SendMessage whose input type is a control kind, or a peer control payload |
+| `agent.communication.channel` | a hook_additional_context payload whose FIRST content string opens with the csift envelope header |
+| `harness.notification.workflow` | a <task-notification> section whose summary names a workflow |
+| `harness.notification.monitor` | a <task-notification> section whose summary opens Monitor/Scheduled/cron |
+| `harness.notification.subagent` | a <task-notification> section for a spawned agent, or the plain-text agents-stopped notice |
+| `harness.notification.background-command` | a <task-notification> section for a backgrounded shell command |
+| `harness.notification.task` | any other <task-notification> section |
+| `harness.compaction.summary` | a type:"user" record carrying the isCompactSummary FLAG, not a line type |
+| `harness.compaction.boundary` | type:"system" subtype:"compact_boundary" |
+| `harness.command.invocation` | a user record whose text opens with a slash-command wrapper tag |
+| `harness.command.stdout` | a user record whose text opens with <local-command-stdout> |
+| `harness.command.caveat` | type:"user" isMeta:true template:local-command-caveat |
+| `harness.interrupt.user` | a user record whose text is exactly the interrupt marker |
+| `harness.interrupt.tool` | a user record whose text is exactly the tool-interrupt marker |
+| `harness.schedule.wakeup` | type:"user" isMeta:true template:schedule-wakeup |
+| `harness.schedule.event` | type:"system" subtype:"scheduled_task_fire" |
+| `harness.schedule.fire` | type:"user" isMeta:true, parentUuid -> a scheduled_task_fire record |
+| `harness.schedule.tick` | type:"user" isMeta:true template:schedule-tick |
+| `harness.resume.prompt` | type:"user" isMeta:true template:resume-prompt |
+| `harness.resume.placeholder` | an assistant record with the <synthetic> model and exactly the placeholder text |
+| `harness.hook.context` | type:"attachment" attachment.type:"hook_additional_context" |
+| `harness.hook.outcome` | type:"attachment" attachment.type:"hook_success" · "hook_blocking_error" · "hook_non_blocking_error" · "hook_cancelled" · "hook_stopped_continuation" · "hook_system_message" · "async_hook_response_batch" |
+| `harness.hook.feedback` | type:"user" isMeta:true template:stop-hook-feedback |
+| `harness.context.reminder` | type:"attachment" attachment.type:"total_tokens_reminder" · type:"attachment" attachment.type:"task_reminder" · type:"attachment" attachment.type:"silent_turn_reminder" · type:"attachment" attachment.type:"batching_reminder_sent" · type:"attachment" attachment.type:"ultrathink_effort" · type:"user" isMeta:true template:roster-reminder |
+| `harness.context.listing` | type:"attachment" attachment.type:"skill_listing" · "agent_listing_delta" · "deferred_tools_delta" · "deferred_tools_record" · "dynamic_skill" · "invoked_skills" |
+| `harness.context.prompt` | type:"attachment" attachment.type:"instructions" · "date" · "session_context" · "environment" · "model" · "prompt_snapshot" · "date_change" |
+| `harness.context.file` | type:"attachment" attachment.type:"file" · "edited_text_file" · "compact_file_reference" · "nested_memory" · "plan_file_reference" · "read_truncation_notice" · "bash_output_audience_note" |
+| `harness.context.mode` | type:"attachment" attachment.type:"plan_mode" · "plan_mode_exit" · "plan_mode_reentry" · "auto_mode" · "command_permissions" |
+| `harness.context.ide` | type:"attachment" attachment.type:"opened_file_in_ide" · "selected_lines_in_ide" · "diagnostics" |
+| `harness.context.task` | type:"attachment" attachment.type:"task_status" · type:"attachment" attachment.type:"queued_command" (attachment.origin.kind "human" = the person's own steer, `user.message`) · "workflow_keyword_request" · "goal_status" · "remote_session_change" · "relevant_memories" · "memory_update" · "thinking_stripped" |
+| `harness.context.image` | message.content[] type:"image" on an image-ONLY isMeta `type:"user"` record (the `[Image: ` reference is its text form); WITHOUT `isMeta` the same shape carries no leaf and reads `? unmodeled: user/image`, and beside TEXT it rides that record's own leaf · type:"user" isMeta:true template:image-reference. The image-only form has NO text section, so it renders in full under an address and contributes no hit to a pattern scan or a census; `csift image` reads the bytes |
+| `harness.context.skill` | type:"user" isMeta:true template:skill-body |
+| `harness.enforce.structured-output` | type:"user" isMeta:true template:enforce-structured-output |
+| `harness.enforce.brief` | type:"user" isMeta:true template:enforce-brief |
+| `harness.enforce.handback` | type:"user" isMeta:true template:enforce-handback |
+| `harness.enforce.retry` | type:"user" isMeta:true template:enforce-retry |
+| `harness.turn.duration` | type:"system" subtype:"turn_duration" |
+| `harness.turn.stop-hooks` | type:"system" subtype:"stop_hook_summary" |
+| `harness.turn.recap` | type:"system" subtype:"away_summary" |
+| `harness.system.refusal` | type:"system" subtype:"model_refusal_fallback" · "model_refusal_no_fallback" |
+| `harness.system.api-error` | type:"system" subtype:"api_error" |
+| `harness.system.notice` | type:"system" subtype:"informational" |
+| `harness.system.kill` | type:"system" subtype:"agents_killed" |
+| `harness.system.command` | type:"system" subtype:"local_command" |
+| `harness.bookkeeping.last-prompt` | type:"last-prompt" |
+| `harness.bookkeeping.mode` | type:"mode" · "permission-mode" |
+| `harness.bookkeeping.name` | type:"ai-title" · "agent-name" |
+| `harness.bookkeeping.atis` | type:"atis-latch" |
+| `harness.bookkeeping.bridge` | type:"bridge-session" |
+| `harness.bookkeeping.suppression` | type:"history-suppression" |
+| `harness.bookkeeping.pr-link` | type:"pr-link" |
+| `harness.bookkeeping.artifact` | type:"frame-link" · "artifact-comment-monitor" · "artifact-autoreact-ledger" |
+| `harness.bookkeeping.file-history` | type:"file-history-snapshot" · "file-history-delta" |
+| `harness.bookkeeping.cost` | type:"cost-state" |
+| `harness.bookkeeping.fork` | type:"fork-context-ref" |
+| `harness.bookkeeping.continued` | type:"continued-in" |
+| `harness.bookkeeping.queue` | type:"queue-operation" |
 
 ### 7.4 Reading a unit: glyphs, the label zone, the body, the unmodeled
 

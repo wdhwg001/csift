@@ -59,7 +59,7 @@ fn both_skill_tables_list_every_leaf_exactly_once() {
     let want: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
     for head in [
         "| leaf | what | gate | LLM sees | human sees |",
-        "| leaf | on disk | grab the raw bytes |",
+        "| leaf | on disk |",
     ] {
         let got = leaf_column(&md, head);
         let mut sorted = got.clone();
@@ -184,7 +184,7 @@ fn every_shape_that_carries_a_leaf_is_named_in_that_leaf_row() {
 
 /// `(leaf, shape cell)` for every row of the shape table.
 fn shape_cells(md: &str) -> Vec<(String, String)> {
-    let head = "| leaf | on disk | grab the raw bytes |";
+    let head = "| leaf | on disk |";
     let start = md
         .find(head)
         .unwrap_or_else(|| panic!("SKILL.md carries no table headed {head:?}"));
