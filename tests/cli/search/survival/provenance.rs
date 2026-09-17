@@ -207,3 +207,49 @@ fn the_survival_relations_render_no_tag_and_the_census_still_sees_them() {
         );
     }
 }
+
+/// `--for` does not follow a survival relation, and that is worth pinning HERE because
+/// `supersedes` points FORWARD.
+///
+/// The reverse closure admits a row through three structural relations - the parent link, a
+/// result answering a member's call, and a record naming a member's call by id - and looks
+/// only downstream. Most of the vocabulary is excluded twice over, because its targets sit
+/// above the address anyway. `supersedes` does not: the message that replaced a recalled
+/// draft is BELOW it, so "not reverse-walked" is the only thing keeping it out, and a change
+/// to the closure's arms would silently start returning it.
+///
+/// A definitive absence, not an error: the query runs, exits 0 and answers with what the
+/// three arms reach.
+#[test]
+fn the_reverse_query_does_not_follow_the_forward_pointing_survival_edge() {
+    let h = branch_home();
+    let out = scan(&h);
+    assert_eq!(
+        edges_at(&out, 4),
+        [("supersedes".to_string(), "position".to_string(), Some(7))],
+        "the forward edge names L7:\n{out}"
+    );
+    let rev = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "--for",
+        "4",
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(rev.success, "stderr: {}", rev.stderr);
+    let lines: Vec<u64> = rows(&rev.stdout)
+        .iter()
+        .filter(|r| r["kind"] == "exchange")
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .filter_map(|h| h["line"].as_u64())
+        .collect();
+    assert!(
+        !lines.contains(&7),
+        "the closure followed a relation it does not walk: {lines:?}\n{}",
+        rev.stdout
+    );
+}
