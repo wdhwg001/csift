@@ -192,14 +192,23 @@ fn order_members(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
         .into_iter()
         .map(|p| {
             let size = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
-            (size, dir_matches_first_cwd(&p), p)
+            (size, false, p)
         })
         .collect();
-    keyed.sort_by(|a, b| {
+    let by_size = |a: &(u64, bool, PathBuf), b: &(u64, bool, PathBuf)| {
         b.0.cmp(&a.0) // longest first
             .then(b.1.cmp(&a.1)) // then the copy whose dir name encodes the recorded cwd
             .then(a.2.cmp(&b.2)) // then deterministically by path
-    });
+    };
+    keyed.sort_by(by_size);
+    // The cwd probe is a head READ, so it runs only when a size tie actually needs
+    // breaking: a prefix group is decided by size alone and pays nothing for it.
+    if keyed.windows(2).any(|w| w[0].0 == w[1].0) {
+        for k in &mut keyed {
+            k.1 = dir_matches_first_cwd(&k.2);
+        }
+        keyed.sort_by(by_size);
+    }
     keyed.into_iter().map(|(_, _, p)| p).collect()
 }
 
@@ -264,6 +273,16 @@ pub fn emit_duplicate_notes(groups: &[DuplicateGroup]) {
     }
 }
 
+/// `one`/`many` by count - the disclosure names small numbers of copies and lines, so a
+/// bare `{n} lines` reads as a machine's output on the one count a reader meets most.
+fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
+    if n == 1 {
+        one
+    } else {
+        many
+    }
+}
+
 /// The one wording of a duplicate disclosure, shared by the stderr note and the text
 /// footers so the two can never drift.
 #[must_use]
@@ -275,7 +294,14 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
             let counts: Vec<String> = g
                 .members
                 .iter()
-                .map(|m| format!("{} lines at {}", m.lines, m.path.display()))
+                .map(|m| {
+                    format!(
+                        "{} {} at {}",
+                        m.lines,
+                        plural(m.lines, "line", "lines"),
+                        m.path.display()
+                    )
+                })
                 .collect();
             format!(
                 "session {id} is on disk under {n} project directories whose contents DIFFER \
@@ -295,12 +321,15 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
             };
             format!(
                 "session {id} is on disk under {n} project directories ({how}); reading {} \
-                 ({} lines) and dropping {} copy ({} lines) at {}. Target that path directly \
-                 to read the dropped copy instead.",
+                 ({} {}) and dropping {} {} ({} {}) at {}. Target that path directly to read \
+                 the dropped copy instead.",
                 g.kept.display(),
                 g.members[0].lines,
+                plural(g.members[0].lines, "line", "lines"),
                 g.dropped.len(),
+                plural(g.dropped.len(), "copy", "copies"),
                 g.dropped_lines(),
+                plural(g.dropped_lines(), "line", "lines"),
                 dropped.join(", ")
             )
         }

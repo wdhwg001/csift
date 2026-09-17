@@ -178,15 +178,16 @@ pub(crate) fn cleared_line(s: &SessionSummary) -> String {
 /// this listing includes all of them.
 pub(crate) fn copies_line(s: &SessionSummary) -> String {
     let rel = s.duplicate_relation.unwrap_or("unknown");
-    let fate = if rel == "divergent" {
-        "kept (contents differ, so nothing merged - each copy has its own row)"
-    } else {
-        "dropped from this scope (this row stands for them)"
+    let one = s.also_at.len() == 1;
+    let fate = match (rel == "divergent", one) {
+        (true, _) => "kept (contents differ, so nothing merged - each copy has its own row)",
+        (false, true) => "dropped from this scope (this row stands for it)",
+        (false, false) => "dropped from this scope (this row stands for them)",
     };
     format!(
         "{} other cop{} of this session id, {rel}, {fate}: {}",
         s.also_at.len(),
-        if s.also_at.len() == 1 { "y" } else { "ies" },
+        if one { "y" } else { "ies" },
         s.also_at.join(", ")
     )
 }

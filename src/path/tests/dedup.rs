@@ -199,5 +199,5 @@ fn a_divergent_note_gives_both_record_counts_and_refuses_to_merge() {
     let note = duplicate_note(&groups[0]);
     assert!(note.contains("DIFFER"), "{note}");
     assert!(note.contains("2 lines"), "{note}");
-    assert!(note.contains("1 lines"), "{note}");
+    assert!(note.contains("1 line at"), "{note}");
 }
