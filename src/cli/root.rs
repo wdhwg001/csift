@@ -113,6 +113,14 @@ use super::*;
           Subagents    Most commands include a session's subagent transcripts automatically;\n               \
         `--no-subagents` restricts. `verbatim` is the one opt-in (`--subagents`, because its\n               \
         budget multiplies per session), and `agents` lists subagents instead of spanning.\n  \
+          Copies       One session id can be on disk under TWO project directories (a\n               \
+        renamed project whose directory was copied; Claude Code's own project-dir-name\n               \
+        override and its relocation fallback reach the same shape). csift merges the copies\n               \
+        and decides by the BYTES: identical, or one a strict byte PREFIX of the other,\n               \
+        collapse onto the LONGEST; copies that DIFFER merge into nothing and both stay in\n               \
+        scope. Every merge is named on stderr and counted in the JSON header\n               \
+        (`duplicate_transcripts`, `duplicate_records_dropped`). `show` still refuses an\n               \
+        address that resolves to two files: target a `*.jsonl` path to read one copy.\n  \
           Caps         No silent truncation, ever: every cap prints what was dropped and how\n               \
         to get the rest. `list` caps an unscoped run at 50 rows; `show` caps at 200 record\n               \
         units and prints the exact continuation command; `--max-count 0` = uncapped, always.\n  \

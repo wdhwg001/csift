@@ -16,7 +16,10 @@ const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
           `@<uuid>` / `@<uuid-prefix>` → that top-level transcript (never spans subagents); \
         `@<agent-id>` (from `csift agents`) → that subagent transcript; a `*.jsonl` path → \
         that file. A target resolving to more or fewer than one transcript is a hard error; \
-        line numbers address one file.\n\n\
+        line numbers address one file. That includes the COPIES case: when one session id \
+        sits under two project directories the spanning commands merge them, but `show` \
+        counts the UNMERGED set and refuses, naming every copy's path - no `@<uuid>` \
+        separates them, so name the `*.jsonl` you mean.\n\n\
         ADDRESSING + EXIT\n  \
           `--line` / `--turn` tokens take the shared range grammar: `N` · `A..B` · `N..` (to \
         the end) · `..N` · `-k` from the end (`--line -20..` = the last 20 lines, `--turn -3..` = \

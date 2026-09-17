@@ -32,6 +32,26 @@ surface change bumps the PATCH.
   record carries; the existing `[N images: ...]` annotation and its extraction hint are
   unchanged.
 
+
+- **One session id under two project directories is merged, and the merge says what it
+  dropped.** A renamed project whose directory was copied leaves one session id under two
+  encoded directories, and Claude Code reaches the same shape two ways of its own (the
+  `CLAUDE_CODE_PROJECT_DIR_NAME` override keeps the natural directory beside the overridden
+  one and searches both; a relocation whose fallback mover strands its source leaves the
+  transcript in the old place too) - its own resume lookup walks every project directory and
+  returns nothing rather than choose. csift used to resolve both copies and count the session
+  twice on every spanning surface, walking its whole sidecar twice with it. The copies now
+  collapse at the shared resolver, decided by the BYTES: identical, or one a strict byte
+  prefix of the other, merge onto the longest; copies that differ before the shorter one ends
+  merge into nothing and both stay in scope, because a turn number minted from one does not
+  address the other. An mtime is never consulted. The resolver names every merge on stderr,
+  `list`/`search`/`stats`/`files`/`recover`/`verbatim`/`image`/`agents` carry
+  `duplicate_transcripts` and `duplicate_records_dropped` in their JSON header and a `copies`
+  line in text, and a `list` row carries `also_at` plus `duplicate_relation`. `show` keeps
+  refusing an address that resolves to two files and now names the paths.
+- **`csift list` emits one row per session, not one per copy**, and `sessions_in_scope` counts
+  distinct sessions. BREAKING on a scope holding a duplicated session: the row count and every
+  spanning count change, and the header numbers with them.
 - **Every non-transcript line type says what it holds.** The head-and-body law landed with
   twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
   who named one still read raw JSON. Sixteen of the eighteen line types now build a

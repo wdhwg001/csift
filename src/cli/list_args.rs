@@ -44,13 +44,27 @@ use super::*;
         skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar, \
         minted_by, cleared_from, cleared_from_distance_ms, cleared_from_candidates, \
         continued_in, session_kind, session_kind_first_line, session_kind_last_line, \
-        lineage_scanned, minted_elsewhere, minted_elsewhere_count}, then \
+        lineage_scanned, minted_elsewhere, minted_elsewhere_count, also_at, \
+        also_at_count, duplicate_relation}, then \
         a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
         the re-feedable owning uuid (= session_id for a top-level row); never re-feed a \
         subagent `session_id`. The `first_user`/`last_user`/`last_agent` fields are {excerpt, \
         ts_utc, ts_local} sub-objects (or null when absent). `dropped_by_cap` > 0 when the \
         unscoped-flood cap trimmed rows (the most-recent 50 are kept).\n\n\
+        DUPLICATE COPIES (`also_at` / `duplicate_relation`, text row `copies`)\n  \
+          One session id can be on disk under TWO project directories - a renamed project \
+        whose directory was copied leaves that, and Claude Code's own project-dir-name \
+        override and its relocation fallback reach the same shape. The shared resolver \
+        merges the copies, decided by the BYTES and never by an mtime: `identical` (no \
+        differing byte, equal sizes) and `prefix` (one copy a strict byte prefix of the \
+        other - what copying a file still being written produces) collapse onto the LONGEST \
+        copy, which then carries `also_at` naming the dropped ones; `divergent` (a differing \
+        byte before the shorter copy ends) merges NOTHING, so both copies keep their own row \
+        and each names the other. `sessions_in_scope` counts DISTINCT sessions, with \
+        `duplicate_transcripts` and `duplicate_records_dropped` beside it in the header, and \
+        the resolver names every merge on stderr as well. To read a dropped copy, target its \
+        `*.jsonl` path.\n\n\
         CLEAR LINEAGE (an inference, and the row says so)\n  \
           A `/clear` mints a new session id inside the same process and writes no lineage \
         anywhere on disk, so a cleared transcript names no predecessor. csift reads two \
