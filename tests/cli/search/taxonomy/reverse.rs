@@ -34,6 +34,23 @@ const TRANSCRIPT: &str = concat!(
     "\n",
     r#"{"type":"assistant","uuid":"r7","parentUuid":"r6","timestamp":"2026-06-08T01:03:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzrev answering the different question"}]}}"#,
     "\n",
+    // L8 is an ATTACHMENT hanging off the call, and a default scan's prefilter drops it -
+    // so the closure meets it as a SPINE row, with a parent link and nothing else. L9
+    // hangs off L8 and answers a call that is in no set, so it can only be reached by
+    // CROSSING the attachment: a walk that stopped at a dropped line would lose it.
+    r#"{"type":"attachment","uuid":"a1","parentUuid":"r3","timestamp":"2026-06-08T01:00:04.000Z","attachment":{"type":"hook_additional_context","hookName":"zzrev-notes","hookEvent":"PostToolUse","toolUseID":"toolu_01other","content":["zzrev the hook added a note"]}}"#,
+    "\n",
+    r#"{"type":"user","uuid":"r9","parentUuid":"a1","timestamp":"2026-06-08T01:00:05.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01other","content":"zzrev the unrelated call came back"}]}}"#,
+    "\n",
+    // L10 answers the SAME call L3 made while hanging off the unrelated turn - the shape a
+    // late result takes. Only the call id reaches it; the parent link points outside the set.
+    r#"{"type":"user","uuid":"rA","parentUuid":"r6","timestamp":"2026-06-08T01:04:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01rev","content":"zzrev the late result of the background build"}]}}"#,
+    "\n",
+    // L11 is an attachment that NAMES the same call in its payload and hangs off the
+    // unrelated turn: reachable only when a selector admits attachment lines, which is when
+    // the closure sees it as a record rather than as a spine row.
+    r#"{"type":"attachment","uuid":"a2","parentUuid":"r6","timestamp":"2026-06-08T01:04:01.000Z","attachment":{"type":"hook_additional_context","hookName":"zzrev-notes","hookEvent":"PostToolUse","toolUseID":"toolu_01rev","content":["zzrev the hook saw the build finish"]}}"#,
+    "\n",
 );
 
 fn home() -> Home {
@@ -76,9 +93,10 @@ fn the_closure_follows_the_parent_link_the_call_and_the_pulse() {
     let h = home();
     assert_eq!(
         lines_for(&h, "L2"),
-        vec![2, 3, 4, 5],
-        "the addressed record, its reply, the result of its call, and the pulse that \
-         reports on that call"
+        vec![2, 3, 4, 5, 9, 10],
+        "the addressed record, its reply, the result of its call, the pulse that reports \
+         on that call, the record below the attachment the walk crossed, and the late \
+         result of the same call two turns down"
     );
 }
 
@@ -104,7 +122,7 @@ fn a_bare_number_is_a_line_address() {
 #[test]
 fn the_closure_starts_at_the_address_and_looks_only_downstream() {
     let h = home();
-    assert_eq!(lines_for(&h, "L3"), vec![3, 4, 5]);
+    assert_eq!(lines_for(&h, "L3"), vec![3, 4, 5, 9, 10]);
     assert_eq!(
         lines_for(&h, "L5"),
         vec![5],
@@ -137,7 +155,7 @@ fn the_summary_names_the_address_and_the_size_of_the_set() {
         sum["for_of"]["address"], "L2",
         "the canonical form, not the reader's spelling"
     );
-    assert_eq!(sum["for_of"]["records"], 4);
+    assert_eq!(sum["for_of"]["records"], 6);
     assert_eq!(sum["for_of"]["transcripts"], 1);
 }
 
@@ -222,4 +240,67 @@ fn the_closure_composes_with_the_label_filter() {
         .filter_map(|hit| hit["line"].as_u64())
         .collect();
     assert_eq!(lines, vec![3], "the one call inside the closure");
+}
+
+/// A DROPPED line is still a link. An attachment hangs off the call at L3 and a default
+/// scan's prefilter drops it, so the closure meets it as a SPINE row - a parent link and
+/// nothing else. L9 hangs off THAT and answers a call in no set, so the only way to it is
+/// through the dropped line; a walk that stopped there would lose it, and the attachment
+/// itself is never emitted because a spine row carries no message.
+#[test]
+fn the_closure_crosses_a_line_the_prefilter_dropped() {
+    let h = home();
+    let got = lines_for(&h, "L3");
+    assert!(got.contains(&9), "the record below the attachment: {got:?}");
+    assert!(
+        !got.contains(&8),
+        "the attachment itself is a spine row and emits nothing: {got:?}"
+    );
+}
+
+/// An ATTACHMENT that names a member's call by the payload's own `toolUseID` joins - once a
+/// selector admits attachment lines at all. Its parent points outside the set, so the id is
+/// the only way in, and that is the `for_tool_use` relation read structurally.
+#[test]
+fn an_attachment_naming_a_members_call_joins_when_attachments_are_admitted() {
+    let h = home();
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{SESS}"),
+        "--for",
+        "L3",
+        "--attachments",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let lines: Vec<u64> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .filter_map(|hit| hit["line"].as_u64())
+        .collect();
+    assert!(
+        lines.contains(&11),
+        "the attachment that names the call: {lines:?}"
+    );
+}
+
+/// An EMPTY address is a usage error: `--for ""` asks for the closure of nothing, and an
+/// empty answer would look like a record with no consequences rather than a question with
+/// no subject.
+#[test]
+fn an_empty_address_is_rejected() {
+    let h = home();
+    let out = h.run(&["search", "", &format!("@{SESS}"), "--for", ""]);
+    assert!(
+        !out.success,
+        "an empty address is not an address: {}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("an address is required"),
+        "the error says what one looks like: {}",
+        out.stderr
+    );
 }
