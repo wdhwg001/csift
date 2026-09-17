@@ -340,6 +340,14 @@ surface change bumps the PATCH.
   (`user.message`, `user.answer`, `user.rejection`) is flattened a layer earlier, in the
   model, so its `body` is flat too and `--raw` is the only way to its bytes. Help text is
   surface.
+- **`whoami --help` named one summary terminator where the stream has three.** An ordinary
+  run closes `{identities, live_child_lanes, other_live_lanes}`, `--to` closes
+  `{queued, refused}`, and `--peers` closes `{peers}` - three shapes sharing no key, so a
+  consumer reading the terminator has to know which mode produced it. The help described it
+  as `{kind:"summary", identities}`, one key of the five; `SKILL.md` named two of the three.
+  Both now name all three. The same edit adds the clause the newline correction left out:
+  the JSON `body` is null unless the excerpt cap was lifted (`--no-truncate`, or a
+  `show --line`/`--uuid` address). Help text is surface.
 - **`SKILL.md` is rewritten as the always-current mastery manual.** It had become a ledger:
   37 lines carried a csift version rider, so a reader had to work out which sentences
   described the binary in front of them. It carries none now, and the Surface line against

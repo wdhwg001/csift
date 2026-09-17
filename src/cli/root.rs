@@ -168,9 +168,12 @@ use super::*;
           - A text-mode excerpt is ONE LINE per record: whitespace runs collapse to single\n    \
         spaces, so a multiline Bash command renders flat and `--no-truncate` alone will\n    \
         not give a table or a paragraph break back. The JSON `body` keeps the newlines\n    \
-        of a render csift did not already flatten - an opener it RECONSTRUCTS (a user\n    \
-        message, an answered AskUserQuestion, a rejection) is flattened a layer earlier,\n    \
-        so its `body` is flat too and `--raw` is the only way to its bytes. To bound the\n    \
+        of a render csift did not already flatten, and it is NULL unless the excerpt cap\n    \
+        was lifted - `search --no-truncate`, or a `show --line`/`--uuid` address - so a\n    \
+        default stream carries a fragment per hit and not a second full copy of every\n    \
+        record. An opener csift RECONSTRUCTS (a user message, an answered\n    \
+        AskUserQuestion, a rejection) is flattened a layer earlier, so its `body` is flat\n    \
+        even there and `--raw` is the only way to its bytes. To bound the\n    \
         OUTPUT reach for `--max-count` rather than a pipe into `head`/`tail`: a capped\n    \
         run keeps every note and names what it dropped, while a pipe amputates one end\n    \
         of the ledger.\n\n\

@@ -520,9 +520,15 @@ impl VerbatimArgs {
           csift search \"<pattern>\" \"@$(csift whoami --format json | jq -r 'select(.kind==\"identity\").parent_session_id')\"\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: header → {kind:\"identity\", session_id, is_subagent, parent_session_id, \
-        depth, path} rows → a {kind:\"summary\", identities} terminator. One identity row for \
+        depth, path} rows → a summary terminator. One identity row for \
         a plain run; `@trap:<marker>` emits the full upstream chain, depth 0 (yourself) up \
-        to the top-level root. Select with `jq 'select(.kind==\"identity\")'`.\n\n\
+        to the top-level root. Select with `jq 'select(.kind==\"identity\")'`.\n  \
+          THREE terminators, one per mode, and they share no key: an ordinary run closes\n  \
+        {kind:\"summary\", identities, live_child_lanes, other_live_lanes} - `identities` is 1\n  \
+        where the caller resolved and 0 where detection failed, which is a different fact\n  \
+        from an empty scope; `--to` closes {kind:\"summary\", queued, refused} with `queued`\n  \
+        false by construction, since a prediction sends nothing; `--peers` closes\n  \
+        {kind:\"summary\", peers}, the row count.\n\n\
         SEE ALSO\n  \
           csift send @<lane> \"…\"      act on the prediction: queue a message for that lane\n  \
           csift msg                   the calling lane's channel ledger, newest first\n  \
