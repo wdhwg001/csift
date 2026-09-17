@@ -72339,6 +72339,11 @@
           "path": "src/model/predicates.rs",
           "lines": "304-312",
           "snippet": "    pub fn is_auq_answer_boundary(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
+        },
+        {
+          "path": "src/model/exchange.rs",
+          "lines": "235-238",
+          "snippet": "        self.blocks()?.iter().find_map(|b| match b {\n            Block::ToolResult { tool_use_id, .. } => tool_use_id.clone(),\n            _ => None,\n        })"
         }
       ],
       "instrument": "`csift search '' @<id> -t user.answer --format json | jq -r .line` and check each line carries `\"answers\":{` with at least one key and no `\"is_error\":true`. Counting rule: AUQ tool_result carriers, split by the three signals.",
@@ -72786,6 +72791,11 @@
           "path": "src/commands/search/matcher/synth.rs",
           "lines": "226-227",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
+        },
+        {
+          "path": "src/model/exchange.rs",
+          "lines": "232-234",
+          "snippet": "        if let Some((Some(id), _)) = self.plan_rejection_message() {\n            return Some(id);\n        }"
         }
       ],
       "instrument": "Over every jsonl under the projects root, take each type:\"user\" record's tool_result blocks with content flattened (a string, or the joined text of the block array) and keep those whose text STARTS with \"The user doesn't want to proceed with this tool use\"; split by whether the exact delimiter \"To tell you how to proceed, the user said:\" plus a newline appears in the body, and cross with lane (a subagents/ path component), is_error, toolDenialKind, the top-level userFeedback field and the memory-hint tail. Then `csift search '' -t user.rejection -c` must equal the typed count. Counting rule: one per tool_result block whose flattened text starts with the marker, so a mid-prose quotation does not count.",
