@@ -27,13 +27,14 @@ pub(crate) fn collect_turn_hits(
     address: Option<&AddressSet>,
     for_lines: Option<&BTreeSet<usize>>,
     env: &ClassifyEnv<'_>,
+    // The turn's ROOT TABLE, built on its FIRST hit and not before: most turns of a
+    // scanned file produce none, and a table built for every turn would be a per-record
+    // cost on the whole file to answer a question about the records that matched. The cell
+    // is the CALLER's, so the sibling pass over the same turn reuses this one.
+    roots: &mut TurnRootsCell,
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
-    // The turn's ROOT TABLE, built on its FIRST hit and not before: most turns of a
-    // scanned file produce none, and a table built for every turn would be a per-record
-    // cost on the whole file to answer a question about the records that matched.
-    let mut roots: Option<TurnRoots> = None;
     for (i, row) in turn.records.iter().enumerate() {
         // A SPINE row is not a record: it carries the chain-structural fields so the chain
         // can see the DAG, and nothing to match, classify or render.
@@ -112,8 +113,14 @@ pub(crate) fn collect_turn_hits(
         backfill_address(&mut hits[before..], kept);
         backfill_survival(&mut hits[before..], chain, idx, survivor_lines);
         if hits.len() > before {
-            let roots = roots.get_or_insert_with(|| TurnRoots::build(turn));
-            backfill_provenance(&mut hits[before..], turn, i, roots, tools, env.lines);
+            backfill_provenance(
+                &mut hits[before..],
+                turn,
+                i,
+                roots.get(turn),
+                tools,
+                env.lines,
+            );
             hit_idxs.push(i);
         }
     }
@@ -137,11 +144,13 @@ pub(crate) fn collect_turn_siblings(
     plan_index: &PlanIndex,
     tools: &ToolIndex,
     env: &ClassifyEnv<'_>,
+    // The SAME cell the matched pass filled: a sibling's root answer comes from the turn,
+    // not from which pass asked for it.
+    roots: &mut TurnRootsCell,
 ) -> (Vec<Hit>, usize) {
     let pure = Matcher::pure();
     let all = LabelFilter::all(); // every label is eligible - siblings ignore -t/-T
     let mut sibs = Vec::new();
-    let mut roots: Option<TurnRoots> = None;
     for (i, row) in turn.records.iter().enumerate() {
         let Some(kept) = row.kept() else {
             continue;
@@ -165,8 +174,14 @@ pub(crate) fn collect_turn_siblings(
         );
         backfill_address(&mut sibs[before..], kept);
         if sibs.len() > before {
-            let roots = roots.get_or_insert_with(|| TurnRoots::build(turn));
-            backfill_provenance(&mut sibs[before..], turn, i, roots, tools, env.lines);
+            backfill_provenance(
+                &mut sibs[before..],
+                turn,
+                i,
+                roots.get(turn),
+                tools,
+                env.lines,
+            );
         }
     }
     // FIXED policy (see [`sibling_cap`]): message classes always render; chattier

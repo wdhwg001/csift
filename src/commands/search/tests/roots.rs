@@ -134,3 +134,44 @@ fn a_group_with_no_opener_names_none_for_every_position() {
         assert_eq!(link.line, None, "pos {pos}");
     }
 }
+
+/// ONE table per TURN, not one per PASS.
+///
+/// A turn with both matched hits and siblings runs two passes over the same records, and
+/// each used to hold an `Option<TurnRoots>` of its own - so the table was built twice for a
+/// turn whose cost is stated as "built on its FIRST hit and not before". The cell is the
+/// caller's now, and the counter says the second pass reused what the first built.
+///
+/// The table is a function of the turn, so reuse cannot change an answer - which is the
+/// other half of this: every position answers the same under the shared table as under a
+/// table built from scratch.
+#[test]
+fn both_passes_over_one_turn_share_a_single_root_table() {
+    let kept = [
+        kept_at(LEAD, 1),
+        kept_at(OPENER, 2),
+        kept_at(REPLY, 3),
+        kept_at(DEEPER, 4),
+    ];
+    let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
+    let turn = turn_of(&rows);
+
+    let mut cell = TurnRootsCell::default();
+    assert_eq!(cell.builds(), 0, "a turn with no hit pays nothing");
+
+    // The matched pass asks first, the sibling pass second.
+    let first: Vec<crate::model::RootLink> = (0..rows.len())
+        .map(|i| cell.get(&turn).link(&turn, i))
+        .collect();
+    assert_eq!(cell.builds(), 1);
+    let second: Vec<crate::model::RootLink> = (0..rows.len())
+        .map(|i| cell.get(&turn).link(&turn, i))
+        .collect();
+    assert_eq!(cell.builds(), 1, "the second pass reused the first's table");
+
+    let fresh = TurnRoots::build(&turn);
+    let independent: Vec<crate::model::RootLink> =
+        (0..rows.len()).map(|i| fresh.link(&turn, i)).collect();
+    assert_eq!(first, second, "the two passes agree");
+    assert_eq!(first, independent, "and both agree with a fresh table");
+}

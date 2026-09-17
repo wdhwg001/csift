@@ -362,6 +362,7 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         None,
         None,
         &test_env(),
+        &mut TurnRootsCell::default(),
     );
     assert!(hits.is_empty(), "a can_hit=false record yields no hits");
     assert!(hit_idxs.is_empty(), "no record produced a hit");
@@ -400,7 +401,8 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         &ToolIndex::default(),
         None,
         None,
-        &test_env()
+        &test_env(),
+        &mut TurnRootsCell::default()
     )
     .0
     .is_empty());
@@ -419,7 +421,8 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         &ToolIndex::default(),
         None,
         None,
-        &test_env()
+        &test_env(),
+        &mut TurnRootsCell::default()
     )
     .0
     .is_empty());

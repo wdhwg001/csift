@@ -21,6 +21,7 @@ use super::*;
 /// costs the sum of the depths - N-squared over a turn whose records all match. Filling the
 /// table forward instead costs one hop per record, because a parent precedes its child in
 /// file order and its own answer is therefore already in the table.
+#[derive(Debug)]
 pub(crate) struct TurnRoots {
     /// The position of the record that OPENS this turn, or `None` when the group has none.
     ///
@@ -96,6 +97,43 @@ impl TurnRoots {
             opener.uuid().map(str::to_string),
             self.hops.get(pos).copied().flatten(),
         )
+    }
+}
+
+/// The ONE [`TurnRoots`] a turn's passes share, built on the turn's FIRST hit and not
+/// before.
+///
+/// TWO passes can need the table - the matched hits, and the siblings under `--siblings` -
+/// and each used to hold an `Option<TurnRoots>` of its own, so a turn with both built the
+/// same table twice. "Built on a turn's first hit" is the cost this axis is stated at, and
+/// the second build buys nothing: the table is a function of the turn, which neither pass
+/// changes. The cell is owned by the caller that owns the turn, so the sentence is true of
+/// the TURN rather than of each pass.
+#[derive(Debug, Default)]
+pub(crate) struct TurnRootsCell {
+    table: Option<TurnRoots>,
+    /// How many times the table was actually built. Test-only, because nothing in the
+    /// binary reads it and a field the release build cannot use is dead weight - but a
+    /// shared cell whose sharing nothing checks is exactly the claim that went wrong here.
+    #[cfg(test)]
+    builds: usize,
+}
+
+impl TurnRootsCell {
+    /// The table, building it on first use.
+    pub(crate) fn get(&mut self, turn: &Turn<'_>) -> &TurnRoots {
+        #[cfg(test)]
+        if self.table.is_none() {
+            self.builds += 1;
+        }
+        self.table.get_or_insert_with(|| TurnRoots::build(turn))
+    }
+
+    /// How many times this cell built its table - 1 for a turn that produced a hit under
+    /// either pass, 0 for a turn that produced none.
+    #[cfg(test)]
+    pub(crate) fn builds(&self) -> usize {
+        self.builds
     }
 }
 

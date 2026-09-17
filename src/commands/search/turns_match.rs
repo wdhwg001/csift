@@ -155,6 +155,10 @@ pub(crate) fn reconstruct_and_match(
             indices: idxs.to_vec(),
         };
 
+        // ONE root table per TURN, shared by both passes below: the matched hits build it
+        // on the turn's first hit, and the sibling pass reads that one rather than filling
+        // an identical table of its own.
+        let mut roots = TurnRootsCell::default();
         // Collect the hits in this turn that satisfy category + time + regex, plus the
         // turn-record indices that produced them (so siblings can exclude matched records).
         let (mut hits, hit_idxs) = collect_turn_hits(
@@ -171,6 +175,7 @@ pub(crate) fn reconstruct_and_match(
             address,
             for_lines.as_ref(),
             &env,
+            &mut roots,
         );
         if hits.is_empty() {
             return None;
@@ -188,6 +193,7 @@ pub(crate) fn reconstruct_and_match(
                 &plan_index,
                 &tools,
                 &env,
+                &mut roots,
             )
         } else {
             (Vec::new(), 0)

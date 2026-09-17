@@ -41328,7 +41328,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "358-360",
+          "lines": "364-366",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -55620,12 +55620,12 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "219-227",
+          "lines": "234-242",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "291-301",
+          "lines": "297-307",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
@@ -55635,7 +55635,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "382-386",
+          "lines": "397-401",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -62126,7 +62126,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "141-147",
+          "lines": "179-185",
           "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
@@ -74615,7 +74615,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "224-227",
+          "lines": "239-242",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -86871,7 +86871,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "219-227",
+          "lines": "234-242",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -88814,7 +88814,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "78-82",
+          "lines": "79-83",
           "snippet": "        let filter = filter.with_survival(chain.survival(idx).selectable());\n        collect_record_hits(\n            rec,\n            kept.gated_raw.as_deref(),\n            chain.opener_class(idx),"
         }
       ],
@@ -94661,7 +94661,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "242",
+          "lines": "257",
           "snippet": "    let resume_paired = rec.resume_paired(ctx);"
         }
       ],
@@ -94894,7 +94894,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "163-169",
+          "lines": "201-207",
           "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],
