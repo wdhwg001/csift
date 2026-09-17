@@ -157,6 +157,13 @@ fn copies_that_disagree_both_stay_in_scope_and_say_so() {
     assert_eq!(header[0]["duplicate_transcripts"], 0);
     assert_eq!(header[0]["duplicate_records_dropped"], 0);
     assert!(out.stderr.contains("DIFFER"), "{}", out.stderr);
+
+    // A divergent group drops nothing, so `show`'s refusal cannot key on what was dropped:
+    // a reader facing two copies needs the paths whether or not either was merged away.
+    let show = h.run(&["show", &at(SESS), "--line", "1"]);
+    assert!(!show.success, "{}", show.stdout);
+    assert!(show.stderr.contains("name a path"), "{}", show.stderr);
+    assert!(show.stderr.contains(ENC_SHORT), "{}", show.stderr);
 }
 
 #[test]

@@ -97,7 +97,10 @@ pub(crate) fn resolve_single_transcript(target: &std::path::Path) -> Result<Path
                 .chain(dropped.iter().copied())
                 .map(|p| p.display().to_string())
                 .collect();
-            let how = if dropped.is_empty() {
+            // The COPIES case is keyed on the duplicate report, not on what was dropped: a
+            // DIVERGENT group drops nothing and leaves both copies in `files`, and a reader
+            // facing those two needs the paths exactly as much.
+            let how = if resolved.duplicates.is_empty() {
                 "Name one: `@<uuid>` (a top-level session) | `@<agent-id>` (a subagent, \
                  ids from `csift agents`) | a `*.jsonl` path."
                     .to_string()
