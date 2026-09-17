@@ -44607,7 +44607,7 @@
       "code": [
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "332-342",
+          "lines": "363-373",
           "snippet": "#[test]\nfn plan_approval_is_not_a_boundary() {\n    // The approval path is the harness greenlight (no typed message, no is_error) -\n    // must NOT become a turn boundary.\n    let r = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t\",\"content\":\"User has approved your plan. You can now start coding. Your plan has been saved to: /Users/testuser/.claude/plans/elegant-scribbling-dream.md\"}]}}\"#,\n    );\n    assert!(!r.is_plan_rejection_boundary());\n    assert!(!r.is_auq_answer_boundary());\n    assert!(!r.opens_turn());\n}"
         }
       ],
@@ -44746,7 +44746,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "249-259",
+          "lines": "273-283",
           "snippet": "    /// - an answered AskUserQuestion \u2192 the full Q+options+answer unit\n    ///   ([`Record::auq_exchange`]);\n    /// - a tool-use rejection-with-message \u2192 the user's typed instruction, optionally\n    ///   suffixed with a `[plan: <path>]` pointer when `plan_index` resolves the rejected\n    ///   `tool_use_id` to an ExitPlanMode plan (\u00a74.2.4). `plan_index` may be `None` (no\n    ///   plan resolution attempted), in which case the rejection text is returned alone.\n    ///\n    /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout\n    /// (delegates to the codepoint-safe accessors).\n    #[must_use]\n    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {"
         },
         {
@@ -44756,7 +44756,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "305-310",
+          "lines": "329-334",
           "snippet": "    /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as\n    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`PlanIndex`] is built\n    /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields\n    /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty\n    /// for any record carrying no ExitPlanMode tool_use.\n    #[must_use]"
         }
       ],
@@ -48916,7 +48916,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "237-243",
+          "lines": "261-267",
           "snippet": "    #[must_use]\n    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         },
         {
@@ -53201,7 +53201,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "381-384",
+          "lines": "405-408",
           "snippet": "        let Content::Blocks(blocks) = content else {\n            // Assistant content is always a block array in CC 2.1.x; a bare string\n            // would be a genuine surprise - surface it rather than silently drop.\n            if let Content::Text(s) = content {"
         }
       ],
@@ -53779,7 +53779,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "337-344",
+          "lines": "361-368",
           "snippet": "    /// The persisted-output file path for this carrier (\u00a74.6), preferring the\n    /// structured `toolUseResult.persistedOutputPath` (exact - no regex) and falling\n    /// back to scraping the inline `Full output saved to: <path>` marker from a\n    /// `tool_result` block. Returns `None` when there is no persisted pointer.\n    #[must_use]\n    pub fn persisted_output_path(&self) -> Option<String> {\n        // Structured field first (SPEC \u00a74.6 resolution rule).\n        if let Some(probe) = self.tur_probe() {"
         },
         {
@@ -62126,7 +62126,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "493-499",
+          "lines": "502-508",
           "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
@@ -71130,7 +71130,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "259-274",
+          "lines": "283-298",
           "snippet": "    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {\n        if let Some(text) = self.genuine_user_text() {\n            return Some(text);\n        }\n        if let Some(unit) = self.auq_exchange() {\n            return Some(normalize_line(&unit));\n        }\n        if let Some((rejected_id, msg)) = self.plan_rejection_message() {\n            let mut out = normalize_line(&msg);\n            if let (Some(idx), Some(id)) = (plan_index, rejected_id.as_deref()) {\n                if let Some(path) = idx.plan_path(id) {\n                    out.push_str(&format!(\" [plan: {path}]\"));\n                }\n            }\n            return Some(out);\n        }"
         },
         {
@@ -71231,12 +71231,12 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "225-229",
+          "lines": "249-253",
           "snippet": "    /// The single boundary predicate (\u00a76.4): this record opens a new turn iff it is a\n    /// genuine human message, an ANSWERED AskUserQuestion (the answer is the user's\n    /// message), a tool-use rejection carrying a typed user instruction, OR an inbound\n    /// teammate/peer message. Every surface (turns / search / recover / files) keys turn\n    /// delimiting on THIS predicate so they never drift."
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "238-243",
+          "lines": "262-267",
           "snippet": "    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         }
       ],
@@ -72779,7 +72779,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "217-223",
+          "lines": "241-247",
           "snippet": "    /// True when this record is a tool-use rejection carrying a typed user instruction\n    /// (\u00a74.2.4) and so should open a turn. A rejection without a typed message is NOT a\n    /// boundary (see [`Record::plan_rejection_message`]).\n    #[must_use]\n    pub fn is_plan_rejection_boundary(&self) -> bool {\n        self.plan_rejection_message().is_some()\n    }"
         },
         {
@@ -72995,12 +72995,12 @@
       "code": [
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "333-335",
+          "lines": "364-366",
           "snippet": "fn plan_approval_is_not_a_boundary() {\n    // The approval path is the harness greenlight (no typed message, no is_error) -\n    // must NOT become a turn boundary."
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "238-243",
+          "lines": "262-267",
           "snippet": "    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         }
       ],
@@ -94894,7 +94894,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "515-521",
+          "lines": "524-530",
           "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],

@@ -214,6 +214,30 @@ impl Record {
         None
     }
 
+    /// The `tool_use_id` of the CALL this user-facing carrier answers - the
+    /// `AskUserQuestion` an answer answers, or the `tool_use` a rejection refused.
+    ///
+    /// Both duals ride a `tool_result` carrier, so the API's own id for the call is on the
+    /// record; what differs is WHICH block carries it. A rejection names the refused call
+    /// through [`Record::plan_rejection_message`], which finds the errored block carrying
+    /// the marker - a record can refuse one of several parallel calls, so the first block
+    /// is not the answer there. An AUQ answer has no such discriminator and needs none:
+    /// [`Record::is_auq_answer_boundary`] refuses a carrier with ANY errored result, so
+    /// every result on it belongs to the answered ask.
+    ///
+    /// `None` when the carrier names no id, which is a shape the model tolerates rather
+    /// than one it has seen: a `tool_result` with no `tool_use_id` parses fine.
+    #[must_use]
+    pub fn answered_call_id(&self) -> Option<String> {
+        if let Some((Some(id), _)) = self.plan_rejection_message() {
+            return Some(id);
+        }
+        self.blocks()?.iter().find_map(|b| match b {
+            Block::ToolResult { tool_use_id, .. } => tool_use_id.clone(),
+            _ => None,
+        })
+    }
+
     /// True when this record is a tool-use rejection carrying a typed user instruction
     /// (§4.2.4) and so should open a turn. A rejection without a typed message is NOT a
     /// boundary (see [`Record::plan_rejection_message`]).

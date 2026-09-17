@@ -439,12 +439,17 @@ pub(crate) fn collect_record_hits(
     };
     if let Some(class) = user_dual {
         if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
+            // The carrier NAMES the call it answers, so the dual carries that id like any
+            // other result-side unit: it is what makes the `result_of` provenance edge
+            // point at the AskUserQuestion the person answered, or at the tool_use they
+            // refused. Pairing is unaffected - `set_pairing` keys on the class and these
+            // two are outside its domain, which is the one thing the id must not move.
             emit(
                 class,
                 &text,
                 None,
                 None,
-                None,
+                rec.answered_call_id(),
                 None,
                 crate::model::TaskIds::default(),
                 None,

@@ -231,8 +231,10 @@ fn only_an_unknown_edge_carries_a_null_basis() {
 /// edge, which is the rule that keeps a reader from learning two words for the link
 /// between an injection and the turn it was written under.
 ///
-/// `result_of` is on a tool RESULT and on nothing else, and its basis is `key`, because
-/// the API itself wrote the `tool_use_id` that joins the two.
+/// `result_of` is on a unit that ANSWERS a call, and its basis is `key`, because the API
+/// itself wrote the `tool_use_id` that joins the two. Three leaves qualify: the plain
+/// `agent.tool.result`, and the two user-facing duals that ride one - an answered
+/// AskUserQuestion and a refused tool call are the person's message AND a result.
 #[test]
 fn the_engine_edges_are_on_the_units_that_have_them() {
     let h = reachability_home();
@@ -261,8 +263,9 @@ fn the_engine_edges_are_on_the_units_that_have_them() {
         .collect();
     assert_eq!(
         result_of,
-        ["agent.tool.result"],
-        "result_of belongs to a tool result and to nothing else"
+        ["agent.tool.result", "user.answer", "user.rejection"],
+        "result_of belongs to a unit that answers a call: the plain tool result, and the \
+         two user-facing duals that ride one"
     );
 
     // ONE RELATION, ONE EDGE: a leaf whose family already names the parent link carries
@@ -280,6 +283,74 @@ fn the_engine_edges_are_on_the_units_that_have_them() {
         assert!(
             got.iter().any(|e| e.leaf == leaf && e.basis == "position"),
             "{leaf} lost the family edge that made the engine stand down"
+        );
+    }
+}
+
+/// The two user-facing duals point at the CALL they answer, by line.
+///
+/// An answered AskUserQuestion and a refused tool call are the person's message and a tool
+/// result at once, and the person's half is the richer view - so the unit renders under
+/// `user.answer` / `user.rejection` and the tool-result view is deduped away. The API's own
+/// `tool_use_id` is on the carrier either way, which is what makes `result_of` answerable
+/// here: the answer names the ask, the rejection names the call it refused, and the reader
+/// gets the LINE rather than a wire id.
+///
+/// `parent` stands down on both, under the one-relation-one-edge rule: on these shapes the
+/// call is also the record above, so the two edges would resolve to the same line.
+#[test]
+fn the_user_facing_duals_name_the_call_they_answer() {
+    let h = reachability_home();
+    let mut argv: Vec<&str> = vec![
+        "search",
+        "",
+        REACH_TARGET,
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ];
+    argv.extend_from_slice(&EVERY_LEAF);
+    let out = h.run(&argv);
+    assert!(out.success, "scan failed: {}", out.stderr);
+
+    let hits: Vec<serde_json::Value> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    // The line each call was MADE on, read off the tool_use unit that carries the id.
+    let call_line = |id: &str| -> u64 {
+        hits.iter()
+            .find(|h| h["label"] == "agent.tool.use" && h["tool_use_id"] == id)
+            .and_then(|h| h["line"].as_u64())
+            .unwrap_or_else(|| panic!("no tool_use unit for {id}"))
+    };
+    for (leaf, id) in [
+        ("user.answer", "toolu_auq"),
+        ("user.rejection", "toolu_plan"),
+    ] {
+        let hit = hits
+            .iter()
+            .find(|h| h["label"] == leaf)
+            .unwrap_or_else(|| panic!("no {leaf} unit"));
+        assert_eq!(
+            hit["tool_use_id"], id,
+            "{leaf} carries the id of the call it answers"
+        );
+        let edges = hit["for"].as_array().cloned().unwrap_or_default();
+        let result_of = edges
+            .iter()
+            .find(|e| e["kind"] == "result_of")
+            .unwrap_or_else(|| panic!("{leaf} carries no result_of edge: {hit}"));
+        assert_eq!(result_of["basis"], "key");
+        assert_eq!(
+            result_of["target"]["line"].as_u64(),
+            Some(call_line(id)),
+            "{leaf} points at the line the call was made on"
+        );
+        assert!(
+            !edges.iter().any(|e| e["kind"] == "parent"),
+            "{leaf}: parent stands down where it would name the same line"
         );
     }
 }

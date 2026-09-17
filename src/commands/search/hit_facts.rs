@@ -462,14 +462,23 @@ impl TurnRoots {
 
 /// The ENGINE's own `for` edges for one hit: what this unit corresponds to, one hop up.
 ///
-/// TWO relations, and a unit can carry BOTH because they are different facts. A tool RESULT
-/// names the call it answers with the API's own `tool_use_id`, which is the only relation in
+/// TWO relations, and a unit can carry BOTH because they are different facts. A unit that
+/// ANSWERS a call names it with the API's own `tool_use_id`, which is the only relation in
 /// the vocabulary that is not a uuid relation - hence the [`crate::model::ProvIndex`] beside
 /// the chain's uuid map. Every record also hangs off `parentUuid`, which is where the record
 /// SITS rather than a target its producer chose, so that edge is [`Basis::Position`]. On the
 /// ordinary turn the two name the SAME record and only the specific word renders; on a LATE
 /// result - one that lands in a later turn, parented there - they name different records and
 /// dropping either would lose a relation the record states.
+///
+/// FOUR leaves answer a call, not one. Two are the plain result views (`agent.tool.result`
+/// and the `agent.communication.inbox` that supersedes it on a subagent return), and two are
+/// the USER-FACING duals: an answered AskUserQuestion and a refused tool call are the
+/// person's own message and a tool result at once, so they render under `user.answer` /
+/// `user.rejection` while still riding the carrier that names the call. The dual's hit
+/// carries that id ([`crate::model::Record::answered_call_id`]) for exactly this edge -
+/// `set_pairing` keys on the class and leaves both outside its domain, so the id moves
+/// provenance and nothing else.
 ///
 /// ONE RELATION, ONE EDGE decides which is dropped when they coincide: `parent` stands down
 /// when a family already named that uuid with a more specific word (`blocked`, `redoes`,

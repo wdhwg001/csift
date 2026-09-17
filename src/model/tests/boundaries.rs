@@ -317,6 +317,37 @@ fn plan_rejection_with_english_message_is_a_boundary() {
     );
 }
 
+/// The answered call is the one the carrier ANSWERS, and the two duals find it in
+/// different blocks: a rejection names the errored block carrying the marker, so a record
+/// refusing one of several parallel calls names the refused one rather than the first.
+#[test]
+fn a_rejection_names_the_call_it_refused_and_not_the_first_result() {
+    let r = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_ok","content":"a sibling call that returned"},{"type":"tool_result","tool_use_id":"toolu_refused","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\ntry the other order"}]}}"#,
+    );
+    assert_eq!(r.answered_call_id().as_deref(), Some("toolu_refused"));
+}
+
+/// An AUQ answer has no such discriminator and needs none: the boundary predicate refuses
+/// a carrier with ANY errored result, so every result on it belongs to the answered ask.
+#[test]
+fn an_auq_answer_names_the_ask_it_answers() {
+    let r = parse(
+        r#"{"type":"user","toolUseResult":{"answers":{"which lane?":"left"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_auq","content":"User has answered your questions: \"which lane?\"=\"left\". You can now continue."}]}}"#,
+    );
+    assert!(r.is_auq_answer_boundary());
+    assert_eq!(r.answered_call_id().as_deref(), Some("toolu_auq"));
+}
+
+/// A carrier that names no id answers with none - the tolerant read, not a fabricated id.
+#[test]
+fn a_carrier_with_no_id_answers_no_call() {
+    let r = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"a result with no id at all"}]}}"#,
+    );
+    assert!(r.answered_call_id().is_none());
+}
+
 #[test]
 fn plan_rejection_without_message_is_not_a_boundary() {
     // The `STOP what you are doing and wait…` form carries NO typed message → no
