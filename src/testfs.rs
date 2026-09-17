@@ -1,7 +1,7 @@
 //! Where a UNIT test's scratch files live, and why the name cannot repeat.
 //!
 //! A fixture tree under the system temp dir outlives a test binary that dies without
-//! unwinding (a timeout kill, an abort), and the names in this crate were
+//! unwinding (a timeout kill, an abort), and MOST of the names in this crate were
 //! `csift-<tag>-<pid>` or `csift-<tag>-<pid>-<counter>`: unique inside one process, but a
 //! pid is handed back out once the number space wraps, so a later run could be handed a
 //! name a leaked tree already occupies. `create_dir_all` returns Ok on a directory that is
@@ -12,13 +12,25 @@
 //! failed in a gate run and passed in isolation, its `csift-clear-self-<pid>-<counter>`
 //! directory having adopted a leaked sibling transcript.
 //!
-//! Two rules close it, the same two the e2e harness took (`tests/cli/harness/root.rs`):
+//! TWO fixtures were already out of that shape and came here for the OTHER rule: the
+//! channel and reconcile fixtures interpolated a per-CALL nanosecond reading beside the
+//! pid, so their names did not repeat across runs - but they still claimed the tree with
+//! `create_dir_all`, so a collision would have merged rather than failed.
+//!
+//! Three rules close it, the first two the e2e harness's (`tests/cli/harness/root.rs`):
 //! the name carries a token unique to this process INSTANCE, so the collision does not
-//! arise; and the tree is created with `create_dir`, so if one ever did arise it is a loud
-//! failure rather than a silent merge. A third rule keeps the leak from starting: the guard
-//! removes its tree on drop, so a clean run leaves nothing for a later one to adopt. The
-//! harness is a separate crate and cannot be imported here, so the rule is mirrored rather
-//! than shared and the two tests below pin this side of it.
+//! arise; the tree is created with `create_dir`, so if one ever did arise it is a loud
+//! failure rather than a silent merge; and the guard removes its tree on drop, so a clean
+//! run leaves nothing for a later one to adopt. The harness is a separate crate and cannot
+//! be imported here, so the rule is mirrored rather than shared and the two tests below pin
+//! this side of it.
+//!
+//! The SEQUENCE is the third field for a reason of its own, and it is about one run rather
+//! than about two: two fixtures built in the same nanosecond on parallel test threads would
+//! otherwise share a name, and the first one to finish would `remove_dir_all` the other's
+//! tree mid-test. That was a measured ~8% flake on the default parallel runner before the
+//! `subagent` fixture grew its counter, which is why the counter is process-wide and
+//! atomic rather than per-tag.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
