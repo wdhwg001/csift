@@ -323,6 +323,20 @@ surface change bumps the PATCH.
 
 ### Changed
 
+- **`SKILL.md` is rewritten as the always-current mastery manual.** It had become a ledger:
+  37 lines carried a csift version rider, so a reader had to work out which sentences
+  described the binary in front of them. It carries none now, and the Surface line against
+  `csift --version` is its only staleness detector. The order is orientation, then the
+  cross-cutting laws every command obeys (targeting, the five laws, labels, provenance,
+  survival), then the commands, then the machine surface, then the failure modes. Facts are
+  stated once and cross-referenced by section, which retires six duplicate clusters running
+  to four, five and six copies apiece; every retired spelling now lands in one section, so a
+  caller who errored on one has a single address. Two statements that had gone stale are
+  corrected against the binary: a text excerpt is one line per record, and sixteen of the
+  eighteen bookkeeping line types build their key=value head from their own bytes. The file
+  is smaller than before the rewrite (56,720 tokens against 56,728, tiktoken `cl100k_base`
+  both ways), and the two 73-row transparency tables and the relation inventory keep their
+  exact rows, so every drift test that pins them is unchanged.
 - **The survival walk now CROSSES a compaction boundary, under a budget, and every surface
   says what it crossed.** Claude Code's loader reads `parentUuid` only, so it stops at a
   `compact_boundary` and the whole history above the cut leaves the conversation; csift

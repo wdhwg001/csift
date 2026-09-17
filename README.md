@@ -92,7 +92,8 @@ csift is the missing tool it should have had.
 
 2. 🖼 **Images back out.**
 
-   `csift image` lists, dedups, and extracts them, addressable by the same `[Image #N]` handle the session uses. (`#N` was never a unique id. csift copes.)
+   `csift image` lists, dedups, and extracts them, addressable by the same `[Image #N]` handle the session uses. (`#N` was never a unique id. csift copes.) \
+   A PDF read page by page comes back the same way, each image labelled with the page it actually is.
 
 3. 📝 **Plan ↔ Session matched.**
 
@@ -103,11 +104,13 @@ csift is the missing tool it should have had.
 4. 📇 **Sessions you can tell apart.**
 
    `csift list` identifies every session by its first and last messages. \
-   It is the completion `claude --resume` never had.
+   It is the completion `claude --resume` never had. \
+   One id on disk in two project directories is merged by the bytes, never by a timestamp, and copies that genuinely differ are both kept and both named.
 
 5. 🧵 **Un-clip a compaction.**
 
-   A summary keeps task state and context. The conversation is a different axis, and `csift verbatim` reconstructs the clipped back-and-forth within a `--budget`. Wire it into a hook and every compaction arrives with the recent dialogue attached.
+   A summary keeps task state and context. The conversation is a different axis, and `csift verbatim` reconstructs the clipped back-and-forth within a `--budget`. Wire it into a hook and every compaction arrives with the recent dialogue attached. \
+   Claude Code's own loader stops dead at a compaction boundary. `--cross-compactions` steps over a bounded number of them, and every command says how many it crossed and where it stopped.
 
 6. 🏷 **Typed search.**
 
@@ -149,21 +152,27 @@ csift is the missing tool it should have had.
 
     A hit returns the whole exchange, rebuilt from the `uuid`/`parentUuid` graph: the matched tool call with its result, the user turn with the agent's reply. This is the context that `grep` or Claude's ad-hoc scripts can **never** reliably provide.
 
-11. 🌳 **Subagent topology.**
+11. 🧭 **What is this record even about?**
+
+    Every hit names the message it belongs to, and how many hops away that message sits. \
+    Where a record states a relation, the hit carries it as a typed edge from a closed list of 27 words. \
+    `csift search "" @<uuid> --for L42` runs the arrows backward: everything that message drew, transitively.
+
+12. 🌳 **Subagent topology.**
 
     Kind, lifecycle, and the parent→child tree of every spawned agent, plus detection of lanes frozen on a pending permission approval.
 
-12. 🤖 **Designed for humans and LLMs.**
+13. 🤖 **Designed for humans and LLMs.**
 
     Output is terse, re-feedable, and even structural. Simply install the skill and your Claude will gain the power.
 
-13. 🔒 **Local, no magic, and one place it writes.**
+14. 🔒 **Local, no magic, and one place it writes.**
 
     Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry, no hidden detections. \
     It reads files already on your disk and never touches your session histories. \
     The message channel is the single exception, and a narrow one: `send`, `deliver` and `ack` write into a `csift-channel` directory csift creates beside the session. Nothing else, anywhere, ever.
 
-14. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
+15. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
 
     200 MB transcripts and multi-GB corpora in **about a second**, quick enough to call from inside a hook without noticing.
 
@@ -214,6 +223,7 @@ npx skills add wdhwg001/csift
 | block until a session stops or asks                   | `csift wait @<uuid> --until stop --timeout 300`          |
 | find the message you esc-recalled and never sent      | `csift search "" @<uuid> -t user.unsent`                 |
 | see what record-types fill a session                  | `csift search "" @<uuid> --count-by label`               |
+| see everything one message drew, transitively         | `csift search "" @<uuid> --for L42`                      |
 | run the NEXT command over exactly what matched        | `csift search "X" -l \| csift stats --sessions-from -`   |
 | message a lane the official tool cannot reach         | `csift send @<lane> "TEXT"`                              |
 | check whether that message actually arrived           | `csift msg <id>`                                         |
@@ -226,7 +236,7 @@ Run `csift <command> --help` for the full flag set and examples.
 |                |                                                                                                                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`list`**     | fast "which session is this?" index: first/last user + last agent, per session; flags a background-job clone and names the session it forked from                                        |
-| **`search`**   | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `--count-by` censuses, `--attachments`, `-l` matching sessions, `--raw` verbatim lines)                                                      |
+| **`search`**   | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `--count-by` censuses, `--for` the reverse provenance closure, `--attachments`, `-l` matching sessions, `--raw` verbatim lines)                                                      |
 | **`show`**     | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes; `--branch-points` maps where the conversation forked |
 | **`stats`**    | one-scan aggregates per session: tokens by model (counted once per API message), tool calls, turns, span, compactions, narration blocks, a whole-file line-type census                                                                                                  |
 | **`agents`**   | a session's subagents: kind, lifecycle, status, and the parent→child topology                                                                                                           |
