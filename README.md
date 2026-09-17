@@ -109,8 +109,11 @@ csift is the missing tool it should have had.
 
 5. 🧵 **Un-clip a compaction.**
 
-   A summary keeps task state and context. The conversation is a different axis, and `csift verbatim` reconstructs the clipped back-and-forth within a `--budget`. Wire it into a hook and every compaction arrives with the recent dialogue attached. \
-   Claude Code's own loader stops dead at a compaction boundary. `--cross-compactions` steps over a bounded number of them, and every command says how many it crossed and where it stopped.
+   A summary keeps task state and context. \
+   The conversation is a different axis, and `csift verbatim` reconstructs the clipped back-and-forth within a `--budget`. \
+   Wire it into a hook and every compaction arrives with the recent dialogue attached. \
+   Claude Code's own loader stops dead at a compaction boundary. \
+   `--cross-compactions` steps over a bounded number of them, and every command says how many it crossed and where it stopped.
 
 6. 🏷 **Typed search.**
 
