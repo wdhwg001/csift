@@ -399,3 +399,96 @@ fn a_dangling_parent_that_is_not_a_boundary_names_its_own_cause() {
         "no boundary was involved, so there is nothing to disclose"
     );
 }
+
+#[test]
+fn every_floor_cause_prints_its_own_words() {
+    // The cause is the whole basis of the remedy, so each one's phrase is pinned by value
+    // rather than by "is not empty": a reader who is told the wrong reason draws the wrong
+    // conclusion about whether the flag would help.
+    assert_eq!(FloorCause::Head.reason(), "the conversation head");
+    assert_eq!(
+        FloorCause::NoLeaf.reason(),
+        "no leaf resolved, so nothing is on the chain"
+    );
+    assert_eq!(
+        FloorCause::BudgetExhausted.reason(),
+        "a compaction boundary the budget would not cross"
+    );
+    assert_eq!(
+        FloorCause::UnresolvableBoundary.reason(),
+        "a compaction boundary whose logicalParentUuid names no record this file carries"
+    );
+    assert_eq!(
+        FloorCause::DanglingParent.reason(),
+        "a parentUuid naming no record in this file"
+    );
+    assert_eq!(FloorCause::Cycle.reason(), "a cycle in the parent links");
+}
+
+#[test]
+fn the_report_speaks_for_each_of_its_three_reasons_alone() {
+    // `CrossingReport::any` is an OR over three independent facts and each is reason enough:
+    // read as an AND, a walk that crossed a boundary would disclose nothing unless it had
+    // ALSO exhausted its budget and ALSO stopped at a dangling one.
+    let on = CrossingBudget::Limited(3);
+    let crossed = CrossingReport {
+        budget: on,
+        boundaries_crossed: 1,
+        ..CrossingReport::default()
+    };
+    assert!(crossed.any(), "a boundary stepped over");
+    let exhausted = CrossingReport {
+        budget: on,
+        budget_exhausted: true,
+        ..CrossingReport::default()
+    };
+    assert!(exhausted.any(), "a budget that ran out");
+    let stuck = CrossingReport {
+        budget: on,
+        cause: Some(FloorCause::UnresolvableBoundary),
+        ..CrossingReport::default()
+    };
+    assert!(stuck.any(), "a floor no budget can move");
+    let quiet = CrossingReport {
+        budget: on,
+        cause: Some(FloorCause::Head),
+        ..CrossingReport::default()
+    };
+    assert!(!quiet.any(), "a walk that met no boundary says nothing");
+}
+
+#[test]
+fn a_floor_with_no_timestamp_still_prints_its_line() {
+    // The floor's INSTANT is the surface's to supply and a spine row can carry none, so the
+    // address degrades to the line alone rather than to nothing: a reader who cannot be told
+    // when can still be told where.
+    let rep = CrossingReport {
+        budget: CrossingBudget::Limited(1),
+        boundaries_crossed: 1,
+        budget_exhausted: true,
+        boundaries_above_floor: 1,
+        cause: Some(FloorCause::BudgetExhausted),
+        floor_line: Some(88),
+        floor_ts: None,
+    };
+    let lines = rep.lines();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines[1].starts_with("(the chain floor is L88 ("),
+        "{lines:?}"
+    );
+    assert!(
+        lines[1].contains("--cross-compactions 2 (or all)"),
+        "{lines:?}"
+    );
+    // ...and with neither, the line names the cause and the remedy and no address at all.
+    let bare = CrossingReport {
+        floor_line: None,
+        ..rep
+    };
+    assert!(
+        bare.lines()[1].starts_with("(the chain floor ("),
+        "{:?}",
+        bare.lines()
+    );
+}

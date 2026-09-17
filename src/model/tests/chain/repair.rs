@@ -114,3 +114,30 @@ fn a_tool_result_carrier_of_an_on_chain_assistant_is_rescued_by_its_message_id_g
         "the second carrier hangs off an assistant the walk reached"
     );
 }
+
+#[test]
+fn a_parent_that_resolves_to_an_already_visited_record_takes_the_repair_too() {
+    // The loader's rule has two triggers, not one: a parent naming no record, AND a parent
+    // naming one the walk has already been through. The second is what a cycle looks like
+    // from inside, and without it the walk would stop dead there instead of standing the
+    // record up on the nearest unvisited neighbour of its own lane.
+    //
+    // `x` and `y` point at each other, so the walk goes x -> y and then resolves y's parent
+    // back to the already-visited `x`. The repair scans backwards from `y`'s instant and
+    // finds `p0`, 2 s earlier on the same lane. Drop the visited test and the walk returns
+    // to `x`, breaks on the cycle guard, and `p0` is left off the conversation.
+    let r = recs(&[
+        &lane("user", "p0", "", false, "2026-06-07T05:00:00.000Z"),
+        &lane("user", "y", "x", false, "2026-06-07T05:00:02.000Z"),
+        &lane("assistant", "x", "y", false, "2026-06-07T05:00:03.000Z"),
+    ]);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
+    assert_eq!(c.leaf_index, Some(2), "the file tail is the leaf");
+    assert_eq!(
+        survivals(&c, r.len()),
+        vec!["live", "live", "live"],
+        "the repair carries the walk past the visited parent and onto p0"
+    );
+    assert_eq!(c.floor, 0, "so the floor is p0, not y");
+    assert_eq!(c.floor_cause, FloorCause::Head);
+}
