@@ -439,8 +439,12 @@ pub fn emit_duplicate_banner(groups: &[DuplicateGroup]) {
 ///   id because their copies disagree byte for byte. A merge that dropped nothing is not
 ///   the same as no duplicate on disk, and without this key a JSON reader saw the two
 ///   zeros above and could not tell the two apart.
-/// - `unreadable_transcripts` - how many copies csift could not READ at all, which is why
-///   their group merged nothing. A read failure is counted, never hidden.
+///
+/// There is deliberately NO key for the UNKNOWN relation. A copy csift cannot read is in
+/// scope like any other (that group merges nothing), and every surface reads what is in its
+/// scope - so the command dies on that copy before any header prints, the crate's fail-loud
+/// posture. What reports it is the resolver's stderr NOTE, which names the copy and the
+/// error at resolution, before the read that kills the command.
 #[must_use]
 pub fn duplicate_header_fields(groups: &[DuplicateGroup]) -> serde_json::Value {
     let divergent: usize = groups
@@ -448,15 +452,9 @@ pub fn duplicate_header_fields(groups: &[DuplicateGroup]) -> serde_json::Value {
         .filter(|g| g.relation == DuplicateRelation::Divergent)
         .map(|g| g.members.len().saturating_sub(1))
         .sum();
-    let unreadable: usize = groups
-        .iter()
-        .flat_map(|g| g.members.iter())
-        .filter(|m| m.error.is_some())
-        .count();
     serde_json::json!({
         "duplicate_transcripts": groups.iter().map(|g| g.dropped.len()).sum::<usize>(),
         "duplicate_records_dropped": groups.iter().map(DuplicateGroup::dropped_lines).sum::<usize>(),
         "divergent_transcripts": divergent,
-        "unreadable_transcripts": unreadable,
     })
 }

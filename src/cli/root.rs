@@ -118,11 +118,12 @@ use super::*;
         override and its relocation fallback reach the same shape). csift merges the copies\n               \
         and decides by the BYTES: identical, or one a strict byte PREFIX of the other,\n               \
         collapse onto the LONGEST; copies that DIFFER merge into nothing and both stay in\n               \
-        scope, and so does a copy csift could not READ. Every merge is named on stderr and\n               \
-        counted in the JSON header (`duplicate_transcripts`, `duplicate_records_dropped`),\n               \
-        beside the copies it did NOT merge (`divergent_transcripts`,\n               \
-        `unreadable_transcripts`). `show` still refuses an address that resolves to two\n               \
-        files: target a `*.jsonl` path to read one copy.\n  \
+        scope, and so does a copy csift could not READ (the stderr note names that one and\n               \
+        the error; a scope holding it then dies reading it, like any unreadable file).\n               \
+        Every merge is named on stderr and counted in the JSON header\n               \
+        (`duplicate_transcripts`, `duplicate_records_dropped`), beside the copies it did\n               \
+        NOT merge (`divergent_transcripts`). `show` still refuses an address that resolves\n               \
+        to two files: target a `*.jsonl` path to read one copy.\n  \
           Caps         No silent truncation, ever: every cap prints what was dropped and how\n               \
         to get the rest. `list` caps an unscoped run at 50 rows; `show` caps at 200 record\n               \
         units and prints the exact continuation command; `--max-count 0` = uncapped, always.\n  \

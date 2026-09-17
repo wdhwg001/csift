@@ -34,7 +34,6 @@ fn every_spanning_surface_says_a_divergent_pair_stayed_in_scope() {
             args, header[0]
         );
         assert_eq!(header[0]["duplicate_transcripts"], 0, "{:?}", args);
-        assert_eq!(header[0]["unreadable_transcripts"], 0, "{:?}", args);
     }
 }
 

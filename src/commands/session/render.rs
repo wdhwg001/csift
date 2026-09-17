@@ -175,27 +175,27 @@ pub(crate) fn cleared_line(s: &SessionSummary) -> String {
 /// relate byte for byte, and where they are. A MERGED relation (`identical` / `prefix`)
 /// means this row stands for all of them and the others were dropped from the scope; a
 /// `divergent` one means nothing merged, so every copy has its own row and every count in
-/// this listing includes all of them; an `unknown` one means a copy could not be read, so
-/// there were no bytes to compare and nothing merged either.
+/// this listing includes all of them.
 pub(crate) fn copies_line(s: &SessionSummary) -> String {
-    use crate::path::DuplicateRelation;
     let one = s.also_at.len() == 1;
     // The fate follows the ONE merge rule rather than a second reading of the slug, so a
     // relation that merges nothing can never be rendered as having dropped something.
     let fate = match s.duplicate_relation {
         Some(rel) if rel.merges() && one => "dropped from this scope (this row stands for it)",
         Some(rel) if rel.merges() => "dropped from this scope (this row stands for them)",
-        Some(DuplicateRelation::Divergent) => {
-            "kept (contents differ, so nothing merged - each copy has its own row)"
-        }
-        _ => "kept (csift could not compare every copy, so nothing merged)",
+        // Everything else kept every copy, and on a row that means the bytes disagree. The
+        // UNKNOWN relation never reaches a row at all: a scope holding a copy csift cannot
+        // read dies reading it (the crate's fail-loud posture, the same as any unreadable
+        // transcript), so what reports that one is the resolver's stderr note, which names
+        // the copy and the error before the read that kills the command.
+        _ => "kept (contents differ, so nothing merged - each copy has its own row)",
     };
     format!(
         "{} other cop{} of this session id, {}, {fate}: {}",
         s.also_at.len(),
         if one { "y" } else { "ies" },
         s.duplicate_relation
-            .map_or("unknown", DuplicateRelation::slug),
+            .map_or("unknown", crate::path::DuplicateRelation::slug),
         s.also_at.join(", ")
     )
 }
