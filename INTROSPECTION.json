@@ -1,6 +1,6 @@
 {
-  "schema": 1,
   "about": "Every Claude Code behavior csift depends on, one claim per entry. Each check names the instrument that ran, what it observed and the counting rule; the README badge version is admitted only when every claim carries a check at that version. Never bulk-edit the checks.",
+  "schema": 1,
   "verified_claude_code": "2.1.258",
   "claims": [
     {

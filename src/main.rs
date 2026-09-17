@@ -13,6 +13,9 @@ mod model;
 mod parse;
 mod path;
 mod subagent;
+/// Scratch-tree fixtures for the crate's unit tests (the e2e harness's rule, mirrored).
+#[cfg(test)]
+mod testfs;
 mod text;
 mod time_window;
 mod timez;
