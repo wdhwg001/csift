@@ -13249,7 +13249,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "472-480",
+          "lines": "478-486",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -13336,7 +13336,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "442-445",
+          "lines": "448-451",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -13463,7 +13463,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "458-463",
+          "lines": "464-469",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -17302,12 +17302,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "324-328",
+          "lines": "330-334",
           "snippet": "    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled\u2026` / `<tool_use_error>\u2026` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "347-357",
+          "lines": "353-363",
           "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes\n        // the text there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
         }
       ],
@@ -17847,7 +17847,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "338-346",
+          "lines": "344-352",
           "snippet": "        let mut has_non_errored_tool_result = false;\n        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }"
         },
         {
@@ -19654,7 +19654,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "871-876",
+          "lines": "872-877",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2451",
+          "lines": "2452",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20120,12 +20120,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "869",
+          "lines": "870",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "878-879",
+          "lines": "879-880",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -21060,12 +21060,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "835",
+          "lines": "836",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "857",
+          "lines": "858",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21226,7 +21226,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "471-477",
+          "lines": "477-483",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -21236,12 +21236,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "835",
+          "lines": "836",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "857",
+          "lines": "858",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21424,7 +21424,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "901",
+          "lines": "902",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21691,12 +21691,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "837",
+          "lines": "838",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "901",
+          "lines": "902",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21788,12 +21788,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "554",
+          "lines": "555",
           "snippet": "- Slicing (hook injection, \u226410000-char cap): `--slices N --slice i --window W` = fixed-fleet chunks, whole turns; out-of-range \u21d2 nothing, exit 0 (hook affordance). Text-only."
         },
         {
           "path": "SKILL.md",
-          "lines": "837",
+          "lines": "838",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "371-377",
+          "lines": "385-391",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -38548,12 +38548,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "829",
+          "lines": "830",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "837",
+          "lines": "838",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -53896,7 +53896,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "442-446",
+          "lines": "448-452",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -54071,17 +54071,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "464-471",
+          "lines": "470-477",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[\u2026],\u2026}` - the context a SessionStart /\n    /// UserPromptSubmit / \u2026 hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "472-479",
+          "lines": "478-485",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "484-488",
+          "lines": "490-494",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -54091,7 +54091,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "371-377",
+          "lines": "385-391",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -72332,12 +72332,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "316-328",
+          "lines": "322-334",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (\u00a74.4 / \u00a76.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary.\n    ///\n    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled\u2026` / `<tool_use_error>\u2026` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "330-338",
+          "lines": "336-344",
           "snippet": "    pub fn is_auq_answer_boundary(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
         },
         {
@@ -72445,7 +72445,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "339-349",
+          "lines": "345-355",
           "snippet": "        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }\n        if !has_non_errored_tool_result {\n            return false;\n        }"
         }
       ],
@@ -72553,7 +72553,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "316-322",
+          "lines": "322-328",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (\u00a74.4 / \u00a76.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary."
         }
       ],
@@ -77756,7 +77756,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "362-368",
+          "lines": "368-374",
           "snippet": "    pub(crate) fn has_auq_response(&self) -> bool {\n        self.tur_probe()\n            .as_ref()\n            .and_then(|p| p.response.as_ref())\n            .and_then(serde_json::Value::as_str)\n            .is_some_and(|s| !s.trim().is_empty())\n    }"
         },
         {
@@ -93203,7 +93203,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "423-427",
+          "lines": "429-433",
           "snippet": "pub fn converted_text(&self) -> Option<&ConversionText> {\n        self.conversion_parsed\n            .get_or_init(|| {\n                let rendered = conversion_text(self.rendered.as_deref());\n                let human_turn = conversion_text(self.rendered_in_human_turn.as_deref());"
         },
         {
@@ -94919,7 +94919,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "419-420",
+          "lines": "423-424",
           "snippet": "fn reports_edge(rec: &Record, env: &ClassifyEnv<'_>) -> HitFact {\n    let Some(id) = rec.pulse_tool_use_id() else {"
         },
         {
@@ -96351,7 +96351,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3195"
+          "lines": "3196"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

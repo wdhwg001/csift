@@ -275,7 +275,21 @@ pub struct SearchArgs {
     /// the unit already shows - `parent` the record above, `result_of` what the pairing
     /// glyph says, and the four survival words `supersedes` / `continues` / `replays` /
     /// `branches` the distance line and the `[abandoned]` / `[rewound]` /
-    /// `[replay copy of L<n>]` markers. This census reads them anyway). Records
+    /// `[replay copy of L<n>]` markers. This census reads them anyway. THE WORDS ARE NOT
+    /// THE WHOLE MAP: a relation whose target sits in ANOTHER transcript is a FIELD on the
+    /// surface that owns the join - `clone_of` / `cleared_from` / `continued_in` /
+    /// `minted_elsewhere` on `list`, `spawn_tool_use_id` / `parent_agent_id` on `agents`,
+    /// the verdict on `msg` - because an edge's target names a session without carrying the
+    /// re-feedable id trio beside it; and a relation whose target is not a RECORD at all is
+    /// a per-hit FACT with its own key - `produced_by` (a command), `checkpoint_closes_at`
+    /// (an instant), `peer_sender_task_id` (a lane), `image_ids` (an image handle),
+    /// `--resolve-persisted` (an external file). Some relations csift can NAME and nothing
+    /// on disk states: `summarizes` has no key for the region a compaction summary replaced
+    /// (the boundary names what it KEPT, `preserves`, and `csift verbatim` reconstructs the
+    /// rest), `steers` has none at all, `closes` resolves one hop through `hook_run` and
+    /// infers the rest from position, and `folds` is a csift RENDER decision rather than a
+    /// record address. SKILL's relation inventory is the same table with one row each).
+    /// Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
     /// the excluded count is reported; never silently. Honors `-t`/`-T`/time/turn/scope;
     /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis

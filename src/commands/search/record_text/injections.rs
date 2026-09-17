@@ -167,7 +167,7 @@ pub(crate) fn facts(
         // The notification FRAME is a second carrier of a `<task-notification>` pulse, and
         // the `reports` edge it used to build is the ENGINE's now: the ORDINARY carrier is
         // not isMeta and never reached this family at all, so a relation read here answered
-        // for 93 of the 3,997 pulse-carrying records on one projects root. One reader, both
+        // for 94 of the 4,007 pulse-carrying records on one projects root. One reader, both
         // carriers (`search::hit_facts::reports_edge`).
         // The image record. When its content is BLOCKS and no text it renders nothing at
         // all, so the counts are what an address has to show instead of the head of a

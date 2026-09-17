@@ -249,14 +249,20 @@ impl Record {
     /// ONE reader for BOTH carriers, which is the whole reason it sits on the record rather
     /// than in a family. The pulse arrives two ways - as an ordinary `type:"user"` record
     /// and, less often, wrapped in an isMeta notification FRAME - and only the second is an
-    /// isMeta injection. Measured over one projects root, one row per record whose textual
-    /// content carries the notification tag: 3,997 such records, of which 93 are the frame.
-    /// A relation read in the family that owns the frame therefore reached 2% of the pulses
-    /// on disk.
+    /// isMeta injection.
+    ///
+    /// MEASURED, with the file set stated so the numbers reproduce: one row per RECORD whose
+    /// textual `message.content` carries `<task-notification>`, over EVERY `*.jsonl` under
+    /// one projects root - the top-level transcripts AND the `<uuid>/subagents/**` sidecar
+    /// ones, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a
+    /// `csift-channel/` directory. 4,007 such records, of which 94 are the frame: a relation
+    /// read in the family that owns the frame reached 2% of the pulses on disk. Reading the
+    /// top-level transcripts ALONE misses the sidecars and does not reproduce those numbers.
     ///
     /// The value is a `tool_use` id, not a record uuid, so it resolves through the tool
-    /// index rather than the chain's uuid map. Measured on the same rows: 2,457 pulses carry
-    /// the tag and 2,449 of those name a `tool_use` block of the same file.
+    /// index rather than the chain's uuid map. On the same rows: 2,463 pulses carry the tag
+    /// and 2,453 of those name a `tool_use` block of the same file, which is 61% of all
+    /// pulses answered with an address.
     #[must_use]
     pub fn pulse_tool_use_id(&self) -> Option<String> {
         let Content::Text(s) = self.message.as_ref()?.content.as_ref()? else {

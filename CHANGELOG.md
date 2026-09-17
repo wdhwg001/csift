@@ -257,8 +257,10 @@ surface change bumps the PATCH.
   manuals stay at information parity with SKILL: an `ATTACHMENT LEAVES` region covering
   the two bodies, the markers, the provenance facts and the matching rule, and the record
   row's `body_source`, `human_turn_render_differs`, `produced_by` and `for` keys.
-- **Nine more provenance relations, all of them values csift already computed.** The closed
-  `for[]` vocabulary goes from nineteen words to twenty-seven. The SURVIVAL axis contributes
+- **Eight new provenance relations and one moved, all of them values csift already
+  computed.** The closed `for[]` vocabulary goes from nineteen words to twenty-seven: eight
+  are new words, and `reports` was already in the set and changed which records answer it
+  (the bullet below). The SURVIVAL axis contributes
   four: `supersedes` names the message that replaced a recalled draft, `continues` the one
   the conversation continued from after a rewind, `branches` the head of an abandoned
   branch, and `replays` the surviving line a replay copy's uuid also names. A COMPACTION
@@ -277,12 +279,14 @@ surface change bumps the PATCH.
 
 - **A notification pulse names the call it reports on, whichever carrier it rides.**
   `reports` was read in the isMeta injection family, whose gate is the authorship flag, so
-  it answered only for the pulse wrapped in a notification FRAME: 93 of the 3,997
+  it answered only for the pulse wrapped in a notification FRAME: 94 of the 4,007
   pulse-carrying records over one projects root. It is read at the engine now, off the
-  record's own text, so the 3,904 ordinary carriers answer too - and it resolves through the
+  record's own text, so the 3,913 ordinary carriers answer too - and it resolves through the
   tool index rather than printing a bare handle, because a `tool_use` id is a wire id and is
-  in no `uuid` field (2,457 pulses carry the tag; 2,449 of those name a call of the same
-  file). A pulse that names no tag says so rather than dropping the edge.
+  in no `uuid` field (2,463 pulses carry the tag; 2,453 of those name a call of the same
+  file, so 61% of pulses get an address). A pulse that names no tag says so rather than
+  dropping the edge; joining those through their `<task-id>` would reach 1,227 more, about
+  92%, and is a declared follow-on. COUNTING RULE: one row per RECORD whose textual `message.content` carries `<task-notification>`, over every `*.jsonl` under one projects root - the top-level transcripts AND the `<uuid>/subagents/**` sidecar ones, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory.
 
 - **The relation INVENTORY, in SPEC 4.12 and SKILL.** One table over every relation csift
   can answer about a record: the twenty-seven `for[]` words, the relations that ride a FIELD
