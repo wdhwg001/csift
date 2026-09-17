@@ -113,21 +113,20 @@ surface change bumps the PATCH.
 - **`tool_use_id` on the two user-facing duals.** An answered AskUserQuestion and a refused
   tool call are the person's message and a tool result at once, so their hit now carries the
   API's id for the call it ANSWERS, where it read null. That is what the `result_of` edge
-  resolves; `pairing`, `tool_name` and `is_error` stay null on both, being the tool view of a
-  record whose richer view is the person's.
+  resolves; `pairing`, `tool_name` and `is_error` stay null on both, being the tool view of
+  a record whose richer view is the person's.
 - **`--count-by for-kind`**, the census over that vocabulary: which provenance relations a
   scope carries. Multi-key like `label`, distinct per record, counting a relation whether
   or not csift resolved its target.
 - **`--for <ADDR>`**, the reverse query: everything that is for one record, transitively.
   The address is `L<line>` or a bare number (per file) or a record uuid, which finds its
   record in whichever scanned transcript carries it; the closure itself is computed per
-  transcript. One query
-  returns the reply a message drew, the results of the calls that reply made, and the
-  `<task-notification>` that reports on one of those two turns later; the parent arm stops
-  at a turn boundary, so the person's next question does not come back. Three structural
-  relations admit a row - the parent link, a result answering a member's call, a record
-  naming a member's call by id - and the rest of the vocabulary is not reverse-walked. The summary gains
-  `for_of` (`address`, `records`, `transcripts`).
+  transcript. One query returns the reply a message drew, the results of the calls that
+  reply made, and the `<task-notification>` that reports on one of those two turns later;
+  the parent arm stops at a turn boundary, so the person's next question does not come back.
+  Three structural relations admit a row - the parent link, a result answering a member's
+  call, a record naming a member's call by id - and the rest of the vocabulary is not
+  reverse-walked. The summary gains `for_of` (`address`, `records`, `transcripts`).
 - **Every non-transcript line type says what it holds.** The head-and-body law landed with
   twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
   who named one still read raw JSON. Sixteen of the eighteen line types now build a
