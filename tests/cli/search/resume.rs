@@ -149,6 +149,70 @@ fn the_placeholder_says_whether_it_closes_a_pair() {
     );
 }
 
+/// A PAIRED placeholder names the dangling prompt it was spliced in to answer, and an
+/// unpaired one names none.
+///
+/// `[paired]` says a repair happened; `[for: repairs L5]` says WHICH prompt was repaired,
+/// which is the address a reader needs and which the verdict alone never gave. The unpaired
+/// form is the discriminator: its parent is a real record and a real relation - an interrupt
+/// marker - and calling that a repair would make the verdict and the edge disagree, so it
+/// keeps the engine's generic `parent` and states no repair at all.
+#[test]
+fn a_paired_placeholder_names_the_prompt_it_repairs() {
+    let h = resume_home();
+    let out = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "harness.resume.placeholder",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits: Vec<serde_json::Value> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let edges = |line: u64| -> Vec<(String, String, Option<u64>)> {
+        hits.iter()
+            .filter(|h| h["line"].as_u64() == Some(line))
+            .flat_map(|h| h["for"].as_array().cloned().unwrap_or_default())
+            .map(|e| {
+                (
+                    e["kind"].as_str().unwrap_or_default().to_string(),
+                    e["basis"].as_str().unwrap_or("null").to_string(),
+                    e["target"]["line"].as_u64(),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        edges(6),
+        [("repairs".to_string(), "position".to_string(), Some(5))],
+        "the paired placeholder at L6:\n{}",
+        out.stdout
+    );
+    assert_eq!(
+        edges(9),
+        [("parent".to_string(), "position".to_string(), Some(8))],
+        "the unpaired one states no repair, only where it sits:\n{}",
+        out.stdout
+    );
+    // The word RENDERS: it names a target nothing else on the unit gives as an address.
+    let text = h.run(&["search", "", &at(SESS), "-t", "harness.resume.placeholder"]);
+    assert!(
+        text.stdout.contains("[paired] [for: repairs L5]"),
+        "the verdict and the address ride the same label zone:\n{}",
+        text.stdout
+    );
+    assert!(
+        !text.stdout.contains("[unpaired] [for: repairs"),
+        "an unpaired placeholder repairs nothing:\n{}",
+        text.stdout
+    );
+}
+
 #[test]
 fn the_census_counts_both_leaves_and_the_json_labels_agree() {
     let h = resume_home();

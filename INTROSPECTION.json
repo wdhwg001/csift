@@ -94682,7 +94682,7 @@
       "id": "CLS-038",
       "area": "classification",
       "behavior": "One writer produces every resume repair PLACEHOLDER, and it is not the writer of the repair PROMPT, so the two are not always a pair. The loader appends the prompt only when its tail classifier reads the dangling tail as an interrupted turn, while the placeholder splice fires whenever the last non-system record is a user record. On disk the appended prompt is the placeholder's `parentUuid` when both were written, so the pairing is observable from a transcript alone; an unpaired placeholder is parented to whatever user record ended the file - an interrupt marker, a slash-command wrapper, or a `<local-command-stdout>` echo. Measured over two projects roots, the PROMPT count equals the PAIRED count exactly in each, so every prompt the splice wrote is followed by a placeholder while the reverse does not hold.",
-      "depends": "csift keeps ONE leaf `harness.resume.placeholder` for both forms - both are the same loader text and both are sent to the model - and carries whether a placeholder closes a pair as a per-hit FACT (`resume_paired`, the `[paired]`/`[unpaired]` label-zone marker and JSON `resume_paired`) rather than splitting the leaf in two. Splitting would put the same sentence under two labels and make a census of the loader's repair depend on which record happened to end the file; the fact answers the question without moving the label. The verdict is `None` rather than `false` when no prompt index was built, so an unindexed read never fabricates an unpaired verdict.",
+      "depends": "csift keeps ONE leaf `harness.resume.placeholder` for both forms - both are the same loader text and both are sent to the model - and carries whether a placeholder closes a pair as a per-hit FACT (`resume_paired`, the `[paired]`/`[unpaired]` label-zone marker and JSON `resume_paired`) rather than splitting the leaf in two. Splitting would put the same sentence under two labels and make a census of the loader's repair depend on which record happened to end the file; the fact answers the question without moving the label. The verdict is `None` rather than `false` when no prompt index was built, so an unindexed read never fabricates an unpaired verdict. The verdict is also what gates the `repairs` provenance edge, which names the prompt a paired placeholder was spliced in to answer: an unpaired placeholder states no repair and keeps the generic parent link, so the field and the relation cannot say different things about one record.",
       "code": [
         {
           "path": "src/model/classify/resume.rs",
@@ -94693,6 +94693,11 @@
           "path": "src/commands/search/hits.rs",
           "lines": "249",
           "snippet": "    let resume_paired = rec.resume_paired(ctx);"
+        },
+        {
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "375-377",
+          "snippet": "    if rec.resume_paired(&env.ctx_for(kept)) != Some(true) {\n        return None;\n    }"
         }
       ],
       "instrument": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, json.loads each non-blank segment. A PLACEHOLDER is a record with type `assistant`, `isApiErrorMessage` not true, `message.model` equal to the `<synthetic>` sentinel and a single-text content exactly `No response requested.` (a bare string, or one lone text block). A PROMPT is a record with type `user`, `isMeta` true, not `isCompactSummary`, whose textual body - the bare string, or the first text block with non-whitespace content, and no tool_result block present - starts with `Continue from where you left off.` after a left trim. PAIRED means the placeholder's `parentUuid` is a prompt uuid IN THE SAME FILE; an unpaired placeholder is bucketed by the shape of the record its `parentUuid` names. One observation per record.",

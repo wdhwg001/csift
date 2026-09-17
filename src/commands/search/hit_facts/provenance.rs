@@ -357,6 +357,49 @@ fn compaction_edges(class: Class, rec: &Record, env: &ClassifyEnv<'_>) -> Vec<Hi
     out
 }
 
+/// The dangling prompt a RESUME REPAIR placeholder was spliced in to answer.
+///
+/// When Claude Code resumes a transcript whose last loaded record is a `type:"user"` one it
+/// appends a repair PROMPT and splices a stand-in assistant record under it. The two gates
+/// differ, so the pair is not always a pair: a placeholder whose parent is an interrupt
+/// marker or a slash-command wrapper is the same loader text with no prompt in front of it.
+/// `Record::resume_paired` is the ONE writer of that verdict and the hit already carries it,
+/// so the edge asks IT rather than re-testing the parent - the field and the relation cannot
+/// then disagree about what a placeholder closes.
+///
+/// [`Basis::Position`], because the link is the `parentUuid` the append path stamps from the
+/// running tail rather than a target the loader chose to name. An UNPAIRED placeholder gets
+/// no edge at all and keeps the engine's `parent`: its parent is a real record and a real
+/// relation, it is simply not a repair.
+fn resume_edge(rec: &Record, kept: &Kept, env: &ClassifyEnv<'_>) -> Option<HitFact> {
+    if rec.resume_paired(&env.ctx_for(kept)) != Some(true) {
+        return None;
+    }
+    let uuid = rec.parent_uuid.as_deref();
+    Some(record_text::for_edge_at(
+        crate::model::EdgeKind::Repairs,
+        Basis::Position,
+        uuid,
+        None,
+        uuid.and_then(|u| env.lines.line_of_uuid(u)),
+    ))
+}
+
+/// The relations the ENGINE states about a record because no family owns its leaf.
+///
+/// They RENDER, unlike the engine's one-hop pair and the survival four: each names a target
+/// nothing else on the unit already gives as an address. So they are built whatever the
+/// reader asked for, and each is gated on the unit's own leaf - a hit of any other leaf pays
+/// one comparison and leaves with an empty vector, which allocates nothing.
+fn record_edges(class: Class, kept: &Kept, env: &ClassifyEnv<'_>) -> Vec<HitFact> {
+    let rec = &kept.rec;
+    match class {
+        Class::CompactionBoundary | Class::CompactionSummary => compaction_edges(class, rec, env),
+        Class::ResumePlaceholder => resume_edge(rec, kept, env).into_iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Stamp the provenance answer onto every hit a record just produced: the turn root, the
 /// relations the engine reads off the record itself, and the engine's own one-hop edge.
 pub(crate) fn backfill_provenance(
@@ -368,15 +411,12 @@ pub(crate) fn backfill_provenance(
 ) {
     let root = roots.link(turn, pos);
     let parent_uuid = turn.records[pos].node().parent_uuid();
-    let rec = turn.records[pos].kept().map(|k| &k.rec);
+    let kept = turn.records[pos].kept();
     for h in hits.iter_mut() {
         // The ROOT is on every unit under every format: the label zone prints it.
         h.for_root = root.clone();
-        // The record-stated relations no family owns. They RENDER, so they are built
-        // whatever the reader asked for - and each is gated on the unit's own leaf, so a
-        // hit of any other leaf pays one comparison.
-        if let (Some(class), Some(rec)) = (h.class, rec) {
-            h.facts.extend(compaction_edges(class, rec, env));
+        if let (Some(class), Some(kept)) = (h.class, kept) {
+            h.facts.extend(record_edges(class, kept, env));
         }
         // The two ONE-HOP edges ride JSON alone, so they are built only where a reader
         // projects or censuses them - the same gate the four survival relations take,

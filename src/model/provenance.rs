@@ -126,6 +126,8 @@ edge_kinds! {
         Redoes => "redoes",
         /// The user message a model refusal was for.
         Refused => "refused",
+        /// The dangling prompt a resume repair PLACEHOLDER was spliced in to answer.
+        Repairs => "repairs",
         /// The SURVIVING line carrying this line's uuid - a compaction re-anchor appended
         /// the record again, and the later copy is the one a reader should be sent to.
         Replays => "replays",
