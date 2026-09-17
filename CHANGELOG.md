@@ -110,6 +110,11 @@ surface change bumps the PATCH.
   landed first. Rendered bytes did move elsewhere in this version: an edge naming a CALL
   now resolves through the tool index and prints the call's line where it used to print
   the wire id with `not in this file`.
+- **`tool_use_id` on the two user-facing duals.** An answered AskUserQuestion and a refused
+  tool call are the person's message and a tool result at once, so their hit now carries the
+  API's id for the call it ANSWERS, where it read null. That is what the `result_of` edge
+  resolves; `pairing`, `tool_name` and `is_error` stay null on both, being the tool view of a
+  record whose richer view is the person's.
 - **`--count-by for-kind`**, the census over that vocabulary: which provenance relations a
   scope carries. Multi-key like `label`, distinct per record, counting a relation whether
   or not csift resolved its target.

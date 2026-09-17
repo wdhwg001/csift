@@ -126,11 +126,17 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // Comm direction (`agent.communication.*`); null on a non-comm hit.
         "from": from,
         "to": to,
-        // Tool-pairing (§7): the use↔result join state + the joining `tool_use_id`; null on a
-        // non-tool hit.
+        // Tool-pairing (§7): the use<->result join state; null on a non-tool hit, which the
+        // two USER-FACING duals are - the pairing verdict keys on the leaf and
+        // `user.answer` / `user.rejection` have always been outside its domain.
         "pairing": pairing,
         "is_error": h.is_error,
         "denial_kind": h.denial_kind,
+        // The API's own id for the call this unit is about: the block's id on a tool unit,
+        // and on the two user-facing duals the CALL THEY ANSWER (the AskUserQuestion, or
+        // the refused `tool_use`). It is what the `result_of` edge resolves, so it is
+        // non-null there while `pairing`, `tool_name` and `is_error` stay null - those
+        // three are the tool VIEW of the record, and the dual is the person's.
         "tool_use_id": h.tool_use_id,
         // v0.10.0 queue facts (a `user.queued` hit); null on every other hit.
         "queue_operation": h.queue_operation,

@@ -2972,7 +2972,13 @@ One reading idiom serves everything: `jq 'select(.kind=="<row>")'`; the summary 
 key is `line` (everywhere; `--file-lines` is the one FILE-line flag); a transcript's
 shape is `shape`; a boundary's what-changed classifier is `cause`; an automation
 pulse's class is its `trigger`; a tool hit's pairing state is the closed enum `pairing`
-∈ `paired` | `pending` | `orphan` | `null` (non-tool records). Every spanning row carries
+∈ `paired` | `pending` | `orphan` | `null` (non-tool records). `tool_use_id` is the API's
+own id for the call a unit is ABOUT, which is wider than the tool views: on `user.answer`
+and `user.rejection` (v0.13.0) it names the CALL THE UNIT ANSWERS - the AskUserQuestion the
+person answered, the `tool_use` they refused - because those two are the person's message
+and a tool result at once, and it is what the `result_of` edge resolves. On those two
+`pairing`, `tool_name` and `is_error` stay null: they are the tool VIEW of the record, and
+the dual is the person's. Every spanning row carries
 the id trio (`session_id`/`is_subagent`/`parent_session_id`). **Timestamp PAIR LAW:** every
 machine instant is a `_utc`+`_local` PAIR — a record's OWN instant is `ts_utc`+`ts_local`;
 a NAMED instant is `<name>_utc`+`<name>_local` (`first_*`, `last_*`, `trigger_*`,
