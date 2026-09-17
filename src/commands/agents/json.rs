@@ -94,44 +94,44 @@ pub(crate) fn render_json(
 /// forged parent cycle) is APPENDED at the end rather than dropped - a projection must
 /// never lose a node (the old nested shape silently omitted such nodes).
 ///
-/// The visited set keys on node IDENTITY, not on `agent_id`. Two copies of one session
-/// under two project directories whose contents DIVERGE stay in scope by the merge rule
-/// (§2.5), and they carry two copies of each agent transcript, which share an id by
-/// construction: keying on the id emitted one of the pair while the session row counted
-/// both, which is exactly the disagreement between the count and the rows. Identity still
-/// guards the cycle a `parent_agent_id` chain can name, because a node is reached twice
-/// only through an edge and never through itself.
+/// The visited set keys on each node's POSITION in the set, not on its `agent_id`. Two
+/// copies of one session under two project directories whose contents DIVERGE stay in scope
+/// by the merge rule (§2.5), and they carry two copies of each agent transcript, which share
+/// an id by construction: keying on the id emitted one of the pair while the session row
+/// counted both, which is exactly the disagreement between the count and the rows. A
+/// position still guards the cycle a `parent_agent_id` chain can name, because a node is
+/// reached twice only through an edge and never through itself.
 pub(crate) fn preorder_depth<'a>(nodes: &[&'a SubagentNode]) -> Vec<(&'a SubagentNode, usize)> {
     use std::collections::{BTreeMap, HashSet};
     let ids: HashSet<&str> = nodes.iter().map(|n| n.agent_id.as_str()).collect();
-    let mut kids: BTreeMap<&str, Vec<&'a SubagentNode>> = BTreeMap::new();
-    let mut roots: Vec<&'a SubagentNode> = Vec::new();
-    for &n in nodes {
+    let by_id = |i: &usize| nodes[*i].agent_id.as_str();
+    let mut kids: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    let mut roots: Vec<usize> = Vec::new();
+    for (i, n) in nodes.iter().enumerate() {
         match n.parent_agent_id.as_deref() {
-            Some(p) if ids.contains(p) => kids.entry(p).or_default().push(n),
-            _ => roots.push(n),
+            Some(p) if ids.contains(p) => kids.entry(p).or_default().push(i),
+            _ => roots.push(i),
         }
     }
-    roots.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
+    roots.sort_by_key(by_id);
     let mut out: Vec<(&'a SubagentNode, usize)> = Vec::new();
-    let mut seen: HashSet<*const SubagentNode> = HashSet::new();
-    let mut stack: Vec<(&'a SubagentNode, usize)> =
-        roots.into_iter().rev().map(|n| (n, 0usize)).collect();
-    while let Some((n, depth)) = stack.pop() {
-        if !seen.insert(std::ptr::from_ref(n)) {
+    let mut seen: HashSet<usize> = HashSet::new();
+    let mut stack: Vec<(usize, usize)> = roots.into_iter().rev().map(|i| (i, 0usize)).collect();
+    while let Some((i, depth)) = stack.pop() {
+        if !seen.insert(i) {
             continue;
         }
-        out.push((n, depth));
-        if let Some(cs) = kids.get(n.agent_id.as_str()) {
+        out.push((nodes[i], depth));
+        if let Some(cs) = kids.get(nodes[i].agent_id.as_str()) {
             let mut cs = cs.clone();
-            cs.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
+            cs.sort_by_key(by_id);
             for c in cs.into_iter().rev() {
                 stack.push((c, depth + 1));
             }
         }
     }
-    for &n in nodes {
-        if !seen.contains(&std::ptr::from_ref(n)) {
+    for (i, n) in nodes.iter().enumerate() {
+        if !seen.contains(&i) {
             out.push((n, 0));
         }
     }
