@@ -86896,7 +86896,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "375-377",
+          "lines": "376-378",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {
@@ -88283,12 +88283,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "60",
+          "lines": "62",
           "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "169-180",
+          "lines": "171-182",
           "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
@@ -88441,12 +88441,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "204-217",
+          "lines": "206-219",
           "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message_id())\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "253-264",
+          "lines": "255-266",
           "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
         }
       ],
@@ -88928,7 +88928,7 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "155-164",
+          "lines": "157-166",
           "snippet": "fn shut_door(b: &Builder<'_>, i: usize) -> FloorCause {\n    let Some(slot) = b.recs[i].logical_parent_uuid().and_then(|u| b.map_slot(u)) else {\n        return FloorCause::UnresolvableBoundary;\n    };\n    if b.cut_removed(slot) {\n        FloorCause::RelinkRemoved\n    } else {\n        FloorCause::BoundaryLoop\n    }\n}"
         },
         {
@@ -97026,8 +97026,8 @@
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "115-125",
-          "snippet": "        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            out.floor_crossable = over.is_some();\n            break;\n        }"
+          "lines": "117-127",
+          "snippet": "        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            out.floor_shut = over.is_none().then(|| shut_door(b, i));\n            break;\n        }"
         }
       ],
       "instrument": "Over every uuid-named top-level transcript under the projects root, count the `type:\"system\"` records with `subtype:\"compact_boundary\"` per file and, for each, whether its `logicalParentUuid` appears as a `uuid` on some line of that same file. Counting rule: one observation per boundary record; a file contributes one per-file count. Then, for a transcript at each budget, read `boundaries_crossed`, `boundaries_above_floor`, `budget_exhausted` and `floor_cause` from the trailing summary of `csift search '' <file> --no-subagents --format json --cross-compactions <N|all>`, and compare the whole stream at budget 0 against a build that predates the flag.",

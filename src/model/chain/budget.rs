@@ -209,10 +209,11 @@ pub struct CrossingReport {
     /// scope has as many floors as it has files and naming one of them would name the wrong
     /// one. This is the rule `boundary_cut_line` already follows.
     pub cause: Option<FloorCause>,
-    /// Raising the budget would MOVE this floor: it is a boundary the budget stopped at
-    /// and the record its `logicalParentUuid` names is still on a line of this file. A
-    /// single-transcript fact, dropped with the cause the moment a second one folds in.
-    pub floor_crossable: bool,
+    /// Under a `budget-exhausted` cause, WHICH of the three facts shut the door of the
+    /// boundary the walk stopped at - None when that door was open, which is the one case
+    /// where raising the budget moves this floor. A single-transcript fact, dropped with
+    /// the cause the moment a second one folds in.
+    pub floor_shut: Option<FloorCause>,
     /// The floor record's 1-based jsonl line, when the surface can name one.
     pub floor_line: Option<usize>,
     /// The floor record's own timestamp, raw, for the local render.
@@ -281,26 +282,28 @@ impl CrossingReport {
     /// shut. That is the honest promise, because whether a door opens is a property of what
     /// is on disk rather than of the flag.
     fn remedy(&self) -> String {
-        match self.cause {
-            Some(FloorCause::BudgetExhausted) if self.floor_crossable => format!(
+        match (self.cause, self.floor_shut) {
+            (Some(FloorCause::BudgetExhausted), None) => format!(
                 "to try them: --cross-compactions {} (or all)",
                 self.resolving_budget()
             ),
-            // The budget stopped the walk at a boundary a budget could not have got past
-            // anyway: its logicalParentUuid names no record this file carries, so every
-            // larger budget walks to this same record.
-            Some(FloorCause::BudgetExhausted) => {
-                "raising the budget lands on this same record - the boundary it stopped at \
-                 names no record this file carries"
-                    .to_string()
-            }
+            // The budget ran out AT a boundary a budget could not have got past anyway, so
+            // every larger budget walks to this same record - and the reason is the door's
+            // own, not a guess about which of the three doors it was. Named from the cause
+            // alone this printed "names no record this file carries" on all three, so the
+            // same boundary was described one way when the budget ran out at it and another
+            // when the walk reached it with budget left: two answers about one record.
+            (Some(FloorCause::BudgetExhausted), Some(door)) => format!(
+                "raising the budget lands on this same record: it is {}",
+                door.reason()
+            ),
             // Every other cause prints its own words immediately before this clause, so the
             // remedy says only what a reader can DO and never repeats the reason.
-            Some(_) => "raising the budget reaches none of them".to_string(),
+            (Some(_), _) => "raising the budget reaches none of them".to_string(),
             // A scope of several transcripts has several floors and several causes; the
             // budget is the one remedy that applies to whichever of them it made, and the
             // per-transcript probe is exactly the fact a fold cannot carry.
-            None => format!(
+            (None, _) => format!(
                 "to try them where a budget can: --cross-compactions {} (or all)",
                 self.resolving_budget()
             ),
@@ -422,12 +425,12 @@ impl CrossingReport {
         self.budget_exhausted |= other.budget_exhausted;
         if first {
             self.cause = other.cause;
-            self.floor_crossable = other.floor_crossable;
+            self.floor_shut = other.floor_shut;
             self.floor_line = other.floor_line;
             self.floor_ts.clone_from(&other.floor_ts);
         } else {
             self.cause = None;
-            self.floor_crossable = false;
+            self.floor_shut = None;
             self.floor_line = None;
             self.floor_ts = None;
         }

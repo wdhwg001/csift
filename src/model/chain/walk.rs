@@ -49,12 +49,14 @@ pub(crate) struct Walked {
     pub(crate) exhausted: bool,
     /// Why the walk ended where it did.
     pub(crate) cause: FloorCause,
-    /// The floor is a boundary the budget stopped at whose door is OPEN: its
-    /// `logicalParentUuid` resolves to a record the map still holds, so one more unit of
-    /// budget moves the floor. False for every other ending, the budget-exhausted stop at a
-    /// boundary whose door is shut included - there a bigger budget re-runs the same walk
-    /// to the same record, so a reader must not be sent to try it.
-    pub(crate) floor_crossable: bool,
+    /// WHICH of the three facts shut the door of the boundary the BUDGET stopped at, or
+    /// None when that door was open and the budget was the only obstacle. Meaningful only
+    /// under `FloorCause::BudgetExhausted`; every other ending leaves it None and no reader
+    /// consults it there. One field rather than a bool beside a cause, because "the door is
+    /// shut" and "this is why" cannot then disagree - and a reader told that a bigger budget
+    /// lands on the same record needs the same WHY as a reader whose walk stopped one
+    /// boundary later.
+    pub(crate) floor_shut: Option<FloorCause>,
 }
 
 pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {
@@ -64,7 +66,7 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
         crossed: 0,
         exhausted: false,
         cause: FloorCause::Head,
-        floor_crossable: false,
+        floor_shut: None,
     };
     let Some(leaf) = leaf else {
         // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no
@@ -120,7 +122,7 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
             out.exhausted = true;
             out.cause = FloorCause::BudgetExhausted;
             out.boundary = Some(i);
-            out.floor_crossable = over.is_some();
+            out.floor_shut = over.is_none().then(|| shut_door(b, i));
             break;
         }
         let Some(j) = over else {

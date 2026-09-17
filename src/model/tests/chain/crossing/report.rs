@@ -98,7 +98,11 @@ fn a_budget_that_stopped_at_a_shut_door_offers_no_value_because_a_bigger_one_lan
     let shut = Chain::build(&r, None, CrossingBudget::Limited(2));
     assert_eq!(shut.floor_cause, FloorCause::BudgetExhausted);
     assert_eq!(shut.floor, 2, "b1 is the floor");
-    assert!(!shut.floor_crossable, "b1 names a record that is gone");
+    assert_eq!(
+        shut.floor_shut,
+        Some(FloorCause::UnresolvableBoundary),
+        "the walk carries WHICH door it stopped at, not just that one was shut"
+    );
     let lines = shut.crossing(Some(3), None).lines();
     assert!(
         !lines[1].contains("--cross-compactions"),
@@ -118,7 +122,10 @@ fn a_budget_that_stopped_at_a_shut_door_offers_no_value_because_a_bigger_one_lan
     // the value is named, and it does move the floor.
     let open = Chain::build(&r, None, CrossingBudget::Limited(1));
     assert_eq!(open.floor_cause, FloorCause::BudgetExhausted);
-    assert!(open.floor_crossable, "b2 names a1, which is on a line here");
+    assert_eq!(
+        open.floor_shut, None,
+        "b2 names a1, which is on a line here - the door is open"
+    );
     let lines = open.crossing(Some(7), None).lines();
     assert!(
         lines[1].contains("to try them: --cross-compactions 3 (or all)"),
@@ -129,6 +136,79 @@ fn a_budget_that_stopped_at_a_shut_door_offers_no_value_because_a_bigger_one_lan
         2,
         "and the named value does move it"
     );
+}
+
+#[test]
+fn a_shut_door_is_described_the_same_way_whichever_budget_stopped_the_walk_on_it() {
+    // A boundary is ONE record and gets ONE description. The walk can reach it with budget
+    // left, in which case the floor's CAUSE is the door's own name, or run out standing on
+    // it, in which case the cause is `budget-exhausted` and the door is carried beside it -
+    // and the sentence about what raising the budget would do has to name the same fact
+    // either way. Written from the cause alone it hard-coded ONE door's words, so a
+    // boundary-loop floor read "names no record this file carries" at the budget that
+    // stopped on it and "names a record the walk had already reached" at the next one up:
+    // two contradictory answers about one record, chosen by where the budget ran out.
+    for door in [
+        FloorCause::UnresolvableBoundary,
+        FloorCause::RelinkRemoved,
+        FloorCause::BoundaryLoop,
+    ] {
+        let stopped_on_it = CrossingReport {
+            budget: CrossingBudget::Limited(1),
+            boundaries_crossed: 1,
+            budget_exhausted: true,
+            boundaries_above_floor: 2,
+            cause: Some(FloorCause::BudgetExhausted),
+            floor_shut: Some(door),
+            floor_line: Some(40),
+            floor_ts: None,
+        };
+        let reached_it = CrossingReport {
+            budget: CrossingBudget::Limited(2),
+            boundaries_crossed: 1,
+            budget_exhausted: false,
+            boundaries_above_floor: 2,
+            cause: Some(door),
+            floor_shut: None,
+            floor_line: Some(40),
+            floor_ts: None,
+        };
+        let stopped_line = stopped_on_it.lines()[1].clone();
+        let reached_line = reached_it.lines()[1].clone();
+
+        // The door's own words appear in both, and they are the door's rather than a
+        // hard-coded copy of one door's: `FloorCause::reason` is the single spelling.
+        assert!(
+            stopped_line.contains(door.reason()),
+            "{door:?} stopped on: {stopped_line}"
+        );
+        assert!(
+            reached_line.contains(door.reason()),
+            "{door:?} reached: {reached_line}"
+        );
+        // Neither offers a flag value: a bigger budget lands on this same record.
+        assert!(
+            !stopped_line.contains("--cross-compactions"),
+            "{door:?} stopped on: {stopped_line}"
+        );
+        assert!(
+            !reached_line.contains("--cross-compactions"),
+            "{door:?} reached: {reached_line}"
+        );
+        // And no door borrows another's words.
+        for other in [
+            FloorCause::UnresolvableBoundary,
+            FloorCause::RelinkRemoved,
+            FloorCause::BoundaryLoop,
+        ] {
+            if other != door {
+                assert!(
+                    !stopped_line.contains(other.reason()),
+                    "{door:?} described as {other:?}: {stopped_line}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -296,7 +376,7 @@ fn a_floor_with_no_timestamp_still_prints_its_line() {
         budget_exhausted: true,
         boundaries_above_floor: 1,
         cause: Some(FloorCause::BudgetExhausted),
-        floor_crossable: true,
+        floor_shut: None,
         floor_line: Some(88),
         floor_ts: None,
     };

@@ -240,9 +240,10 @@ pub struct Chain {
     pub boundaries_above_floor: usize,
     /// Why the walk ended where it did.
     pub floor_cause: FloorCause,
-    /// One more unit of budget would move the floor: it is a boundary the budget stopped
-    /// at AND its `logicalParentUuid` still resolves here.
-    pub floor_crossable: bool,
+    /// Under `FloorCause::BudgetExhausted`, which of the three facts shut the door of the
+    /// boundary the walk stopped at - or None when the door was open, which is the one case
+    /// where one more unit of budget moves this floor.
+    pub floor_shut: Option<FloorCause>,
     /// Records classified `Abandoned` (the footer + summary count).
     pub abandoned_records: usize,
     /// Abandoned openers with an assistant descendant.
@@ -319,7 +320,7 @@ impl Chain {
             budget_exhausted: self.budget_exhausted,
             boundaries_above_floor: self.boundaries_above_floor,
             cause: Some(self.floor_cause),
-            floor_crossable: self.floor_crossable,
+            floor_shut: self.floor_shut,
             floor_line,
             floor_ts,
         }
