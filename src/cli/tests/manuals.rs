@@ -128,6 +128,80 @@ fn skill_section_10_names_every_retired_selector_and_its_successors() {
     }
 }
 
+/// Every `[`-led MARKER WORD csift reads off a Claude Code record is quoted in `SKILL.md`.
+///
+/// The transparency law: csift may never speak a language the jsonl does not, so a reader
+/// who meets a bracketed word on screen can look it up and then go find it in the raw line.
+/// Section 7.4 states the set is CLOSED and that a tag it does not name means a stale copy;
+/// that sentence is only true while something holds it to the code, and nothing did - an
+/// earlier draft of the same sentence enumerated seven tags the binary already printed more
+/// than.
+///
+/// The set is WALKED out of `model::markers` rather than listed here, because a list here
+/// would be a second copy drifting at the same rate as the prose it guards. That module is
+/// the one place csift writes down the harness's own marker words; a new one lands there
+/// first, and this test fails until the manual carries it too.
+///
+/// It reads the file's STRING LITERALS, skipping comment lines: a `[`-led word inside prose
+/// is a doc comment describing the const below it, and matching those would pin the module's
+/// own commentary rather than what the classifier tests. An ESCAPE is kept verbatim (the
+/// backslash and the character after it) instead of decoded, so a marker carrying one is
+/// compared in the spelling the source uses rather than in a shortened form the manual might
+/// contain by accident.
+#[test]
+fn skill_names_every_bracketed_harness_marker() {
+    let markers = include_str!("../../model/markers.rs");
+    let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
+        .expect("SKILL.md at the repo root");
+
+    let mut found: Vec<String> = Vec::new();
+    for line in markers.lines() {
+        if line.trim_start().starts_with("//") {
+            continue;
+        }
+        let mut chars = line.chars();
+        while let Some(c) = chars.next() {
+            if c != '"' {
+                continue;
+            }
+            let mut lit = String::new();
+            loop {
+                match chars.next() {
+                    None | Some('"') => break,
+                    Some('\\') => {
+                        lit.push('\\');
+                        if let Some(n) = chars.next() {
+                            lit.push(n);
+                        }
+                    }
+                    Some(ch) => lit.push(ch),
+                }
+            }
+            if lit.starts_with('[') {
+                found.push(lit);
+            }
+        }
+    }
+
+    // A silently empty walk would pass every assertion below, so the floor is its own
+    // check: the module carries the two interrupt markers, the three bracketed enforce
+    // and retry sentinels, the notification frame and the two image references.
+    assert!(
+        found.len() >= 8,
+        "the marker walk found {} bracketed literals in model/markers.rs - the extraction \
+         broke, not the manual",
+        found.len()
+    );
+    for marker in &found {
+        assert!(
+            skill.contains(marker.as_str()),
+            "SKILL.md quotes no `{marker}` - csift matches that marker word on a record and \
+             the manual never names it, so a reader meets it on screen with nowhere to look \
+             it up"
+        );
+    }
+}
+
 /// The root help names EVERY `floor_cause` slug, and no token shaped like one that is not.
 ///
 /// The eight slugs are a closed enum a consumer branches on, and they live in three
