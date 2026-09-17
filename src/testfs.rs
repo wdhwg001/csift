@@ -24,16 +24,19 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
+/// The clock the token is a reading of. One function, so the test that checks the token
+/// against "now" asks the same clock the mint asked rather than a second one.
+fn clock_nanos() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos())
+}
+
 /// The per-process half of a scratch name: the pid, plus the instant this process first
 /// asked. The pid alone repeats across runs; the pair does not.
 fn run_token() -> &'static str {
     static TOKEN: OnceLock<String> = OnceLock::new();
-    TOKEN.get_or_init(|| {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        format!("{}-{nanos:x}", std::process::id())
-    })
+    TOKEN.get_or_init(|| format!("{}-{:x}", std::process::id(), clock_nanos()))
 }
 
 /// The directory the `seq`-th scratch tree of this process claims under `tag`.
@@ -136,6 +139,24 @@ mod tests {
         assert!(
             !token.is_empty(),
             "the pid alone is not the key - a repeated pid must not repeat the name: {na}"
+        );
+        // The token must be the CLOCK, not merely some second field: a constant one would
+        // repeat across runs exactly as the pid does, and that repeat is what this whole
+        // module exists to prevent. So read it back as the hex reading it is and hold it
+        // against the same clock the mint asked. The window is the documented semantics,
+        // not a measurement: the token is minted at this process's FIRST scratch call, so
+        // it lies within this process's own lifetime of now, and a day is past any test
+        // binary's life while a constant literal misses the current era by decades.
+        // Symmetric, because the system clock may step either way in between.
+        const TOKEN_WINDOW_NANOS: u128 = 24 * 60 * 60 * 1_000_000_000;
+        let minted = u128::from_str_radix(token, 16)
+            .unwrap_or_else(|e| panic!("the token is a hex clock reading: {token:?} ({e})"));
+        let now = clock_nanos();
+        assert!(
+            now.abs_diff(minted) < TOKEN_WINDOW_NANOS,
+            "the token is a reading of this clock taken during this run: minted {minted}, \
+             now {now}, apart {} ns (window {TOKEN_WINDOW_NANOS})",
+            now.abs_diff(minted)
         );
 
         let kept = a.to_path_buf();
