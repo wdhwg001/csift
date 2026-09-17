@@ -99,7 +99,7 @@ fn superseded_drafts_collapse_same_parent_edit_resend() {
         .map(|l| parse(l))
         .collect();
 
-    let chain = Chain::build(&records, None);
+    let chain = Chain::build(&records, None, CrossingBudget::NONE);
     assert_eq!(
         chain.drafts, 2,
         "the two earlier same-parent drafts are abandoned"
@@ -118,7 +118,7 @@ fn superseded_drafts_collapse_same_parent_edit_resend() {
     );
     assert_eq!(chain.superseding(3), Some(4));
 
-    let turns = group_turn_indices_deduped(&records, |r| ChainNode::Full(r));
+    let turns = group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE);
     assert_eq!(
         turns,
         vec![vec![0, 1], vec![4, 5]],
@@ -141,7 +141,7 @@ fn superseded_drafts_exact_duplicate_collapses_to_one() {
         .collect();
     // Leading assistant (idx0) is a synthetic lead that folds into the first real turn.
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE),
         vec![vec![0, 3]],
         "3 identical drafts → 1 turn (opener idx3)"
     );
@@ -160,9 +160,9 @@ fn superseded_drafts_distinct_parents_not_merged() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    assert_eq!(Chain::build(&records, None).drafts, 0);
+    assert_eq!(Chain::build(&records, None, CrossingBudget::NONE).drafts, 0);
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE),
         vec![vec![0, 1], vec![2]]
     );
 }
@@ -178,9 +178,9 @@ fn superseded_drafts_null_parent_never_grouped() {
     .iter()
     .map(|l| parse(l))
     .collect();
-    assert_eq!(Chain::build(&records, None).drafts, 0);
+    assert_eq!(Chain::build(&records, None, CrossingBudget::NONE).drafts, 0);
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE),
         vec![vec![0], vec![1]]
     );
 }
@@ -207,14 +207,14 @@ fn a_replayed_same_uuid_opener_is_not_a_draft() {
         .collect();
     // v0.12.0 flips the DIRECTION and keeps the effect: the loader's map holds the LAST
     // line carrying a uuid, so index 3 is the survivor and index 1 is the earlier copy.
-    let c = Chain::build(&records, None);
+    let c = Chain::build(&records, None, CrossingBudget::NONE);
     assert_eq!(c.drafts, 0, "a replayed copy supersedes nothing");
     assert_eq!(c.replay_of(1), Some(3), "index 1 is the earlier copy");
     assert!(!c.opens(1), "the earlier copy never opens a turn");
     assert!(c.opens(3));
     // ONE turn for the message, and the earlier copy stays a member rather than vanishing.
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE),
         vec![vec![0, 1, 2, 3, 4]],
         "one turn; the earlier copy folds in as a member"
     );
@@ -232,7 +232,7 @@ fn a_genuine_edit_resend_is_still_a_draft_when_the_uuids_differ() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    let c = Chain::build(&records, None);
+    let c = Chain::build(&records, None, CrossingBudget::NONE);
     assert_eq!(c.superseding(1), Some(2), "d1 -> its survivor u1");
     assert_eq!(c.opener_class(1), Some(Class::UserUnsent));
     assert_eq!(c.replay_copies, 0);
@@ -252,7 +252,7 @@ fn a_replayed_pair_still_marks_a_later_real_resend() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    let c = Chain::build(&records, None);
+    let c = Chain::build(&records, None, CrossingBudget::NONE);
     assert_eq!(c.replay_of(1), Some(2), "index 1 is the earlier copy of u1");
     // The surviving u1 line (idx2) is itself replaced by the real later sibling u2, and
     // d2 (idx3) is too. The earlier copy is neither a draft nor a survivor.
@@ -276,7 +276,8 @@ fn deduped_grouping_matches_plain_when_no_drafts() {
         .map(|l| parse(l))
         .collect();
     let plain = group_turn_indices(&records, |r| r.opens_turn());
-    let deduped = group_turn_indices_deduped(&records, |r| ChainNode::Full(r));
+    let deduped =
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE);
     assert_eq!(plain, deduped);
     assert_eq!(deduped, vec![vec![0, 1], vec![2]]);
 }

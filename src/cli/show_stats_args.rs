@@ -288,7 +288,12 @@ impl ShowArgs {
         skipped_lines}. The summary adds the scope totals ({sessions, line_types, tokens, \
         narration_blocks, unknown_thinking_tags, tools, turns, abandoned_turns, \
         rewound_turns, replay_copies, \
-        dropped_by_cap, skipped_lines}): `tail -1 | jq .tokens` is the one-liner for total \
+        dropped_by_cap, skipped_lines}). Both rows ALSO carry the crossing set \
+        {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor, \
+        floor_line, floor_cause} whenever `--cross-compactions` is non-zero - how many \
+        compaction boundaries the survival walk stepped over, how many it did not, and \
+        where the chain floor sits; under `--cross-compactions 0` csift crossed nothing \
+        and the keys are absent. `tail -1 | jq .tokens` is the one-liner for total \
         burn. `skipped_lines` here is a FULL-SCAN census (stats parses every line): the \
         corruption-census authority for \"does this transcript carry a torn/corrupt line \
         anywhere\"; `list`'s same-named field covers only the head/tail lines list reads."

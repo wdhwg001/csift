@@ -58,6 +58,9 @@ pub(crate) struct FileResult {
     /// This transcript's genuine-user turn count - so a `--turn` spec resolves its
     /// open/from-end forms (`N..`, `-3..`) against THIS file's turns, not a global count.
     pub(crate) turn_count: usize,
+    /// What the walk did with this transcript's compaction boundaries (C-42) - the rows'
+    /// survival markers are read off that chain, so how far it climbed is disclosed.
+    pub(crate) crossing: crate::model::CrossingReport,
 }
 
 /// The compiled `--regex` / `--glob` path predicates. Both are OPTIONAL and ANDed: a path is

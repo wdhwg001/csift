@@ -3,12 +3,12 @@
 //! each one.
 //!
 //! Two guards keep the answer honest where the walk could not reach. A record physically
-//! ABOVE the walk's terminating record sits in a region the chain did not resolve, usually
-//! because the walk ended on a `compact_boundary`, whose own `parentUuid` is null on every
-//! corpus specimen - so it is `PreCut`, never `Abandoned`. And inside that blind region the
-//! measured same-parent opener rule still applies: an opener with a LATER opener sharing
-//! its `parentUuid` was recalled and re-sent, which is a fact about the two records alone
-//! and needs no chain.
+//! ABOVE the walk's terminating record sits in a region the chain did not resolve - because
+//! the crossing budget ran out at a `compact_boundary`, or because that boundary's
+//! `logicalParentUuid` reached nothing - so it is `PreCut`, never `Abandoned`. And inside
+//! that blind region the measured same-parent opener rule still applies: an opener with a
+//! LATER opener sharing its `parentUuid` was recalled and re-sent, which is a fact about
+//! the two records alone and needs no chain.
 
 use super::*;
 
@@ -22,6 +22,7 @@ pub(crate) fn finish<'a>(
     leaf: Option<usize>,
     source: LeafSource,
     walked: walk::Walked,
+    budget: CrossingBudget,
 ) -> (Chain, UuidIndex<'a>) {
     let n = b.len();
     let survival = (0..n).map(|i| base_state(&b, i, walked.floor)).collect();
@@ -34,6 +35,11 @@ pub(crate) fn finish<'a>(
         leaf_source: source,
         boundary_cut: walked.boundary,
         floor: walked.floor,
+        boundaries_crossed: walked.crossed,
+        budget,
+        budget_exhausted: walked.exhausted,
+        boundaries_above_floor: uncrossed_boundaries(&b, walked.floor),
+        floor_cause: walked.cause,
         abandoned_records: 0,
         rewound_turns: 0,
         drafts: 0,
@@ -67,9 +73,10 @@ pub(crate) fn finish<'a>(
     (out, UuidIndex::from_map(b.map))
 }
 
-/// The state before the abandoned forest is read: everything the chain reached is Live
-/// (PreCut above a boundary it stepped over), everything above the floor is PreCut, and
-/// the rest is a candidate for abandonment.
+/// The state before the abandoned forest is read: everything the chain reached is Live -
+/// a crossed boundary is a resolved region, not a blind one - everything the relink cut
+/// removed or that sits above the floor is PreCut, and the rest is a candidate for
+/// abandonment.
 fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {
     if !b.admit[i] || b.is_sidechain(i) {
         // Outside the loader's model (a promoted non-record line, a sidechain lane, a
@@ -77,16 +84,23 @@ fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {
         return Survival::Live;
     }
     if b.on_chain[i] {
-        return if b.precut[i] {
-            Survival::PreCut
-        } else {
-            Survival::Live
-        };
+        return Survival::Live;
     }
     if b.removed[i] || i < floor {
         return Survival::PreCut;
     }
     Survival::Abandoned { root: i }
+}
+
+/// The compaction boundaries the walk did NOT step over: every admitted survivor boundary
+/// at or above the floor index, the floor's own included. A replay copy of a boundary is
+/// not counted twice (`is_survivor`), and with no leaf at all the floor is past the end,
+/// so every boundary in the file counts - which is the honest answer there.
+fn uncrossed_boundaries(b: &Builder<'_>, floor: usize) -> usize {
+    (0..b.len())
+        .take(floor.saturating_add(1))
+        .filter(|&i| b.admit[i] && b.is_survivor(i) && b.is_boundary(i))
+        .count()
 }
 
 /// The blind-region rescue of the draft population: inside `PreCut`, an opener with a

@@ -496,14 +496,18 @@ pub(crate) fn image_ids_for_record(rec: &Record, line_no: usize) -> Vec<String> 
 /// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte
 /// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the
 /// images and the malformed-line count (surfaced, never hidden).
-pub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {
+pub(crate) fn images_in_file(
+    path: &Path,
+    with_data: bool,
+    cross: CrossingBudget,
+) -> Result<(Vec<ImageRef>, usize, crate::model::CrossingReport)> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
     let Some(mmap) = mmap_bytes(path)? else {
-        return Ok((Vec::new(), 0));
+        return Ok((Vec::new(), 0, crate::model::CrossingReport::default()));
     };
     // The image prefilter keeps only image-bearing lines, so the SURVIVAL AXIS is fed the
     // structural spine of everything else in the same pass. Nothing here needs turn
@@ -511,7 +515,7 @@ pub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageR
     // reach this record", which the spine alone answers.
     let (records, spine, skipped) =
         crate::parse::parse_candidates_with_spine(&mmap, line_is_image_candidate);
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, cross);
 
     let mut out = Vec::new();
     for (i, (line_no, rec)) in records.iter().enumerate() {
@@ -528,5 +532,5 @@ pub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageR
     }
     // Stable order: by line, then image ordinal.
     out.sort_by(|a, b| (a.line_no, a.img_index).cmp(&(b.line_no, b.img_index)));
-    Ok((out, skipped))
+    Ok((out, skipped, view.crossing().clone()))
 }

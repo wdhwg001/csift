@@ -111,7 +111,12 @@ fn a_uuid_resolves_to_its_row_s_physical_line() {
     let kept = vec![kept_at(3)];
     let spine = vec![spine_at(7)];
     let rows = merge_rows(&kept, &spine);
-    let (_, index) = crate::model::Chain::build_by_indexed(&rows, |r| r.node(), None);
+    let (_, index) = crate::model::Chain::build_by_indexed(
+        &rows,
+        |r| r.node(),
+        None,
+        crate::model::CrossingBudget::NONE,
+    );
     let lookup = RowLines::new(index, &rows);
     assert_eq!(lookup.line_of_uuid("u3"), Some(3));
     assert_eq!(lookup.line_of_uuid("x7"), Some(7));
@@ -126,7 +131,12 @@ fn a_line_less_record_resolves_to_no_line_at_all() {
     use crate::model::LineOfUuid;
     let kept = vec![kept_at(0)];
     let rows = merge_rows(&kept, &[]);
-    let (_, index) = crate::model::Chain::build_by_indexed(&rows, |r| r.node(), None);
+    let (_, index) = crate::model::Chain::build_by_indexed(
+        &rows,
+        |r| r.node(),
+        None,
+        crate::model::CrossingBudget::NONE,
+    );
     let lookup = RowLines::new(index, &rows);
     // The index DOES know the record (it is chain-admitted); the line is what is absent.
     assert_eq!(lookup.line_of_uuid("u0"), None);

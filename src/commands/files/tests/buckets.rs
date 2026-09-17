@@ -97,6 +97,7 @@ fn distinct_file_count() {
         turn_range: None,
         time_window_bounded: false,
         duplicates: Vec::new(),
+        crossing: crate::model::CrossingReport::default(),
         scope_top: 1,
         scope_sub: 0,
     };

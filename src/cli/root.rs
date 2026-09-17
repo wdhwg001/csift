@@ -211,6 +211,30 @@ pub struct Cli {
     /// `.claude` equivalent: transcripts are read from `<DIR>/projects/<encoded>/*.jsonl`.
     #[arg(long = "claude-home", value_name = "DIR", global = true)]
     pub claude_home: Option<PathBuf>,
+
+    /// How many compaction boundaries the survival walk may step OVER, following the
+    /// `logicalParentUuid` each boundary records. Applies to EVERY chain-walking
+    /// subcommand (`search`, `show`, `stats`, `files`, `recover`, `verbatim`, `image`),
+    /// since any of them can be asked about a session that compacted.
+    ///
+    /// Claude Code's own loader never crosses: it reads `parentUuid` only, which is null
+    /// on a boundary, so on resume the model sees the summary and not the turns above it.
+    /// csift crosses because a transcript is an archive and the turns above the cut were
+    /// real - a subagent dispatched before a compaction returns after it. Above a CROSSED
+    /// boundary records resolve by the ordinary rules (live / abandoned); above the FLOOR
+    /// where the walk stopped they stay `pre-cut`, exactly as before.
+    ///
+    /// `0` restores the loader's reading and makes csift say nothing about crossing at
+    /// all; `all` follows every boundary a transcript carries. The footer names what was
+    /// crossed, what was not and the value that would reach the rest.
+    #[arg(
+        long = "cross-compactions",
+        value_name = "N|all",
+        global = true,
+        default_value_t = crate::model::CROSS_COMPACTIONS_DEFAULT,
+        value_parser = crate::model::CrossingBudget::parse
+    )]
+    pub cross_compactions: crate::model::CrossingBudget,
 }
 
 #[derive(Debug, Subcommand)]

@@ -257,7 +257,7 @@ fn scan_one_file_empty_is_safe() {
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::File::create(&p).unwrap();
-    let fr = scan_one_file(&p).expect("scan empty");
+    let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan empty");
     std::fs::remove_file(&p).ok();
     assert!(fr.mutations.is_empty());
     assert_eq!(fr.skipped_lines, 0);
@@ -273,7 +273,7 @@ fn scan_one_file_extracts_mutations_and_counts_skips() {
         r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/tmp/scan.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#,
         r#"{"name":"Write" this is broken json after the marker}"#,
     ]);
-    let fr = scan_one_file(&p).expect("scan");
+    let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan");
     std::fs::remove_file(&p).ok();
     assert_eq!(fr.mutations.len(), 1, "one Write mutation");
     assert_eq!(fr.mutations[0].mutation.path, "/tmp/scan.md");
@@ -289,7 +289,7 @@ fn scan_one_file_skips_non_candidate_noise_lines() {
         r#"{"type":"attachment","data":{"x":1}}"#,
         r#"{"type":"file-history-snapshot","snapshot":{}}"#,
     ]);
-    let fr = scan_one_file(&p).expect("scan");
+    let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan");
     std::fs::remove_file(&p).ok();
     assert!(fr.mutations.is_empty());
     assert_eq!(
@@ -315,7 +315,7 @@ fn subagent_mutation_carries_is_subagent_and_refeedable_parent_in_grouped_views(
         writeln!(f, r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"go"}}}}"#).unwrap();
         writeln!(f, r#"{{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"w1","name":"Write","input":{{"file_path":"/tmp/sub.md","content":"x"}}}}]}}}}"#).unwrap();
     }
-    let fr = scan_one_file(&p).expect("scan subagent");
+    let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan subagent");
     std::fs::remove_file(&p).ok();
     assert_eq!(fr.mutations.len(), 1);
     let m = &fr.mutations[0];

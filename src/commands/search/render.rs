@@ -477,6 +477,9 @@ pub(crate) fn emit_chain_disclosure(c: &ChainCounts) {
              keeps reading above it — Claude Code's own loader stops there)"
         );
     }
+    for line in c.crossing.lines() {
+        println!("{line}");
+    }
     if let Some(src) = c.leaf_source.filter(|_| c.any()) {
         println!("(chain leaf: {src})");
     }

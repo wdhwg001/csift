@@ -23,6 +23,7 @@ use crate::cli::{OutputFormat, ShowArgs};
 use crate::commands::search::{
     fetch_records, merged_any_sidecar, print_record_line, role_glyph, Exchange,
 };
+use crate::model::CrossingBudget;
 use crate::parse::{mmap_bytes, scan_lines_bytes};
 use crate::path::{self, SubagentScope};
 use crate::timez::{format_local_compact, local_iso};

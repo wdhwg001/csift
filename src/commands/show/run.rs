@@ -3,7 +3,7 @@
 use super::*;
 
 /// Entry point for `csift show`.
-pub fn run_show(args: &ShowArgs) -> Result<()> {
+pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
     // Reject the (hidden, no-op) span pair with the pointed rule instead of letting
     // `allow_hyphen_values` feed it to the TARGET parser as a mistyped-flag guess (R7 §2.3).
     if let Some(msg) = args.span_flag_error() {
@@ -45,7 +45,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
     };
     let file = resolve_single_transcript(target)?;
     if args.branch_points {
-        return run_branch_points(&file, args.format);
+        return run_branch_points(&file, args.format, cross);
     }
     if parsed.is_empty() && uuids.is_empty() && turn_spec.is_none() {
         bail!(
@@ -61,7 +61,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
     let specs = resolve_line_specs(&parsed, count_lines(&file)?);
 
     if args.raw {
-        return run_raw(&file, &specs, &uuids, turn_spec, args.max_count);
+        return run_raw(&file, &specs, &uuids, turn_spec, args.max_count, cross);
     }
     run_rendered(
         &file,
@@ -70,6 +70,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
         turn_spec,
         args.format,
         args.max_count,
+        cross,
     )
 }
 
@@ -81,6 +82,7 @@ pub(crate) fn run_raw(
     uuids: &BTreeSet<String>,
     turn_range: Option<crate::text::RangeSpec>,
     max_count: Option<usize>,
+    cross: CrossingBudget,
 ) -> Result<()> {
     let Some(mmap) = mmap_bytes(file)? else {
         bail!("transcript {} is empty", file.display());
@@ -96,7 +98,7 @@ pub(crate) fn run_raw(
     // grouping, so the turn numbering matches `search`), then emit those lines verbatim.
     if let Some(spec) = turn_range {
         let (exchanges, _, turn_count) =
-            fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec))?;
+            fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec), cross)?;
         // An EXPLICIT turn (`N` / `A..B`) is an address - zero records = miss (law 1).
         if turn_spec_is_explicit(&spec) && exchanges.is_empty() {
             return Err(turn_miss_error(&spec, turn_count));
@@ -208,9 +210,10 @@ pub(crate) fn run_rendered(
     turn_range: Option<crate::text::RangeSpec>,
     format: OutputFormat,
     max_count: Option<usize>,
+    cross: CrossingBudget,
 ) -> Result<()> {
     let (mut exchanges, skipped, turn_count) =
-        fetch_records(file, specs.all(), uuids.clone(), turn_range)?;
+        fetch_records(file, specs.all(), uuids.clone(), turn_range, cross)?;
 
     // Turn address-miss: an EXPLICIT `--turn N` / `--turn A..B` is an ADDRESS (law 1) -
     // resolving to zero records is a hard error naming the transcript's turn domain,

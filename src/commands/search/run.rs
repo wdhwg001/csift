@@ -87,7 +87,7 @@ fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> 
     Ok(())
 }
 
-pub fn run_search(args: &SearchArgs) -> Result<()> {
+pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // The retired `--additional-context` (v0.13.0). A hard error, never a quiet no-op:
     // a run that silently scanned fewer lines than the caller asked for would read as a
     // definitive absence, which is the one thing csift promises an empty result means.
@@ -207,6 +207,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 inner_parallel,
                 for_addr.as_ref(),
                 args.projects_engine_edges(),
+                cross,
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -431,6 +432,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                         // The probe counts LABELS, never edges: it feeds `label_census`
                         // alone, so nothing it builds would be read.
                         false,
+                        cross,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;

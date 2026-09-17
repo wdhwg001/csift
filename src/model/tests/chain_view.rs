@@ -67,7 +67,7 @@ fn split_fixture() -> Split {
 #[test]
 fn the_spine_is_merged_by_line_number_and_answers_land_in_surface_indices() {
     let (records, spine) = split_fixture();
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, CrossingBudget::NONE);
     // The chain only resolves at all because the spine put L2/L3 between L1 and L4 - the
     // resend's parent is the ATTACHMENT, which the surface never kept.
     assert_eq!(view.survival(0), Survival::Live, "the first opener");
@@ -88,7 +88,7 @@ fn the_spine_is_merged_by_line_number_and_answers_land_in_surface_indices() {
 #[test]
 fn an_abandoned_record_still_carries_the_live_turn_it_follows() {
     let (records, spine) = split_fixture();
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, CrossingBudget::NONE);
     // The ordering key exists so a `--turn` window on a DISK surface can admit the row: the
     // rewound branch physically follows live turn 0.
     assert_eq!(view.order_turn(0), 0);
@@ -99,7 +99,7 @@ fn an_abandoned_record_still_carries_the_live_turn_it_follows() {
 #[test]
 fn the_groups_are_the_live_turns_then_one_per_abandoned_branch() {
     let (records, spine) = split_fixture();
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, CrossingBudget::NONE);
     assert_eq!(view.turn_count(), 2, "two live turns survive the rewind");
     // Turn 0's members in SURFACE space are just its opener: L2 and L3 are spine rows and
     // belong to no surface index at all.
@@ -120,7 +120,7 @@ fn a_turn_opened_by_a_real_record_keeps_that_record_in_surface_space() {
     // anchor is the pre-first-user LEAD seed, which any record can take - see the next two
     // tests for the shapes where that one survives as an empty group.
     let (records, spine) = split_fixture();
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, CrossingBudget::NONE);
     for (i, group) in view.turns().iter().enumerate() {
         assert!(
             !group.is_empty(),
@@ -143,7 +143,7 @@ fn an_all_spine_lead_group_is_kept_empty_rather_than_renumbered() {
     // consumers are written for it: `turns/build.rs` skips an empty group (nothing to
     // replay), `files`/`recover` iterate members, and `image` never reads `turns()`.
     let (_, spine) = split_fixture();
-    let view = ChainView::build(&[], &spine);
+    let view = ChainView::build(&[], &spine, CrossingBudget::NONE);
     assert_eq!(
         view.turns(),
         &[Vec::<usize>::new()],
@@ -170,7 +170,7 @@ fn a_surface_holding_only_an_abandoned_opener_still_numbers_the_live_turns() {
         r#"{"type":"user","uuid":"u2","parentUuid":"x0","timestamp":"2026-06-07T05:02:00.000Z"}"#,
     ));
     full_spine.sort_by_key(crate::parse::SpineRow::line);
-    let view = ChainView::build(&only_abandoned, &full_spine);
+    let view = ChainView::build(&only_abandoned, &full_spine, CrossingBudget::NONE);
     assert!(
         matches!(view.survival(0), Survival::Abandoned { .. }),
         "the one kept record is still off the chain: {:?}",
@@ -194,7 +194,7 @@ fn an_empty_spine_is_the_degenerate_case_and_still_answers() {
     // A surface whose prefilter kept everything hands in no spine at all; the view must
     // behave exactly like the plain chain then.
     let (records, _) = split_fixture();
-    let view = ChainView::build(&records, &[]);
+    let view = ChainView::build(&records, &[], CrossingBudget::NONE);
     assert_eq!(view.turn_count(), view.turns().len());
     // With L2/L3 absent the resend's parent uuid resolves to nothing, so the chain cannot
     // see the fork - which is precisely why the spine exists.

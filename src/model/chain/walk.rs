@@ -1,20 +1,21 @@
 //! The walk itself, its two repairs and the two membership rules that widen it past
 //! plain ancestry.
 //!
-//! `parentUuid` ONLY - `logicalParentUuid` is never read by the loader, so a
-//! `compact_boundary` (whose own `parentUuid` is null) ends the reconstruction and every
-//! record above it is gone from the resumed conversation. csift's walk ends on that same
-//! record: the null-parent arm below breaks before any other field is consulted, and
-//! every corpus boundary carries a null `parentUuid` (260 of 260 over one projects root).
-//! What csift does differently sits AFTER the walk - it keeps the region above the
-//! terminating record and flags it `PreCut` instead of dropping it.
+//! `parentUuid` FIRST - that is the only link Claude Code's own loader reads, so a
+//! `compact_boundary` (whose `parentUuid` is null on 260 of 260 corpus specimens) ends
+//! the loader's reconstruction and every record above it is gone from the resumed
+//! conversation. csift climbs the same link and then asks one more question the loader
+//! never asks: the boundary names the record it re-linked from, in `logicalParentUuid`,
+//! and under a CROSSING BUDGET ([`CrossingBudget`]) the walk steps over the cut and
+//! carries on. What it reaches above a crossed boundary is resolved by the ordinary rules
+//! - Live where the chain reaches it, Abandoned where it does not.
 //!
-//! The `logicalParentUuid` arm below is a GUARD, not the path: it is reached only when a
-//! boundary's OWN `parentUuid` is non-null and resolves to no record, a shape with zero
-//! corpus specimens, and renaming the field on five compacted transcripts moves no output
-//! byte. Claim MISC-043 is what it would meet: 52 of 255 boundary records name a
-//! `logicalParentUuid` on no line of their own file. Either way the terminating record is
-//! a FLOOR: everything physically above it is unresolved - never abandoned, only `PreCut`.
+//! The walk ends on a boundary anyway in two cases, and both leave a FLOOR: the budget ran
+//! out, or the `logicalParentUuid` names no record the map still holds (claim MISC-043: 52
+//! of 255 boundary records, the pre-compaction lines having been deleted from disk; a
+//! relink cut removes more). Everything physically above the floor is unresolved - never
+//! abandoned, only `PreCut` - and [`CrossingReport`] states which of the two it was, how
+//! many boundaries are still above, and the flag value that would reach them.
 //!
 //! Repairs and rescues, each mirroring one loader hop: a parent uuid that names no
 //! record (or one already visited) falls back to the nearest UNVISITED record with the
@@ -34,53 +35,81 @@ pub(crate) struct Walked {
     pub(crate) floor: usize,
     /// The newest boundary the walk stopped at or stepped over.
     pub(crate) boundary: Option<usize>,
+    /// Compaction boundaries stepped over.
+    pub(crate) crossed: usize,
+    /// The walk met a boundary with no budget left.
+    pub(crate) exhausted: bool,
+    /// Why the walk ended where it did.
+    pub(crate) cause: FloorCause,
 }
 
-pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {
+pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {
     let mut out = Walked {
         floor: leaf.unwrap_or(0),
         boundary: None,
+        crossed: 0,
+        exhausted: false,
+        cause: FloorCause::Head,
     };
     let Some(leaf) = leaf else {
         // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no
         // record is on the chain, and the survival pass turns that into PreCut.
         out.floor = b.len();
+        out.cause = FloorCause::NoLeaf;
         return out;
     };
-    let mut crossed = false;
     let mut cur = Some(leaf);
     while let Some(i) = cur {
         if b.visited[i] {
-            break; // cycle guard
+            out.cause = FloorCause::Cycle;
+            break;
         }
         b.visited[i] = true;
         b.on_chain[i] = true;
-        b.precut[i] = crossed;
         out.floor = i;
-        let Some(pu) = b.parent[i] else {
-            if b.is_boundary(i) {
-                out.boundary.get_or_insert(i);
-            }
-            break;
-        };
-        b.chain_child.entry(pu).or_insert(i);
-        let next = match b.resolve(pu) {
-            Some(j) if !b.visited[j] => Some(j),
-            _ => repair(b, i),
-        };
-        let next = match next {
-            Some(j) => Some(j),
-            None if b.is_boundary(i) => {
-                out.boundary.get_or_insert(i);
-                crossed = true;
-                b.recs[i]
-                    .logical_parent_uuid()
-                    .and_then(|u| b.resolve(u))
-                    .filter(|&j| !b.visited[j])
+        // The parent link, which is all the loader reads. A null `parentUuid` (every
+        // corpus boundary) and one naming no record the repair could stand in for both
+        // arrive here as None.
+        let climbed = match b.parent[i] {
+            Some(pu) => {
+                b.chain_child.entry(pu).or_insert(i);
+                match b.resolve(pu) {
+                    Some(j) if !b.visited[j] => Some(j),
+                    _ => repair(b, i),
+                }
             }
             None => None,
         };
-        cur = next;
+        if let Some(j) = climbed {
+            cur = Some(j);
+            continue;
+        }
+        // Nothing above by the parent link. Only a compaction boundary offers the second
+        // door, and only while the budget lasts.
+        if !b.is_boundary(i) {
+            out.cause = if b.parent[i].is_some() {
+                FloorCause::DanglingParent
+            } else {
+                FloorCause::Head
+            };
+            break;
+        }
+        out.boundary.get_or_insert(i);
+        if !budget.allows(out.crossed) {
+            out.exhausted = true;
+            out.cause = FloorCause::BudgetExhausted;
+            break;
+        }
+        let over = b.recs[i]
+            .logical_parent_uuid()
+            .and_then(|u| b.resolve(u))
+            .filter(|&j| !b.visited[j]);
+        let Some(j) = over else {
+            out.cause = FloorCause::UnresolvableBoundary;
+            break;
+        };
+        out.crossed += 1;
+        cur = Some(j);
     }
     rescue_message_id(b);
     rescue_leaf_descendants(b, leaf);

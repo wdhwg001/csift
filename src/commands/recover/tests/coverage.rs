@@ -33,7 +33,7 @@ fn line_number_counter_is_one_to_one_with_jsonl_lines() {
     .unwrap();
     f.flush().unwrap();
 
-    let sr = scan_one_file(&p, Some("/p/a.rs")).expect("scan");
+    let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan");
     std::fs::remove_file(&p).ok();
     // Two read events; their line numbers are the TRUE jsonl lines (3 and 5), with the
     // blank + malformed lines counted in between (so 5, not 4).
@@ -210,7 +210,7 @@ fn scan_one_file_empty_is_safe() {
     // A zero-byte file → mmap None → empty ScanResult (the early-return arm).
     let p = std::env::temp_dir().join(format!("csift-recover-empty-{}.jsonl", std::process::id()));
     std::fs::File::create(&p).unwrap();
-    let sr = scan_one_file(&p, Some("/p/a.rs")).expect("scan empty");
+    let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan empty");
     std::fs::remove_file(&p).ok();
     assert!(sr.events.is_empty());
     assert_eq!(sr.skipped_lines, 0);

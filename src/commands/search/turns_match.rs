@@ -28,6 +28,7 @@ pub(crate) fn reconstruct_and_match(
     // than read off `args`, because `show` reaches this through `fetch_records` with a
     // DEFAULT `SearchArgs` and still projects them in its JSON rows.
     engine_edges: bool,
+    cross: CrossingBudget,
 ) -> (Vec<Exchange>, usize, ChainCounts) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -51,7 +52,8 @@ pub(crate) fn reconstruct_and_match(
     // re-anchor's earlier copies, and where the chain was cut. It is computed EXPLICITLY
     // (not inside the deduped grouper) so the answer can be DISCLOSED and an addressed
     // abandoned record can still be fetched.
-    let (chain, uuid_index) = crate::model::Chain::build_by_indexed(rows, |r| r.node(), None);
+    let (chain, uuid_index) =
+        crate::model::Chain::build_by_indexed(rows, |r| r.node(), None, cross);
     // The `uuid -> LINE` lookup a family's `for` edge resolves through. It is the chain's
     // OWN map joined to the rows it was built over, so nothing here is a second index and
     // a scan that never asks a uuid question pays one move.
@@ -319,6 +321,14 @@ pub(crate) fn reconstruct_and_match(
         replay_copies: chain.replay_copies,
         boundary_cut_line: chain.boundary_cut.map(|i| rows[i].line_no()),
         leaf_source: Some(chain.leaf_source.as_str()),
+        // The chain answers in row indices; only this layer knows which jsonl line and
+        // instant the floor is. A floor past the end (no leaf at all) names neither.
+        crossing: chain.crossing(
+            rows.get(chain.floor).map(|r| r.line_no()),
+            rows.get(chain.floor)
+                .and_then(|r| r.node().timestamp())
+                .map(str::to_string),
+        ),
     };
     // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
     (out, index_turns.len(), counts)

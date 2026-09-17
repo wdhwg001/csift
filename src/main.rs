@@ -53,18 +53,23 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<()> {
+    // The global crossing budget, handed to the SEVEN chain-walking subcommands and to
+    // nobody else. It is threaded rather than installed as a process-global (the way
+    // `--claude-home` is) so every `Chain::build` / `ChainView::build` site states the
+    // reading it runs under and a hard-coded one is visible where it sits.
+    let cross = cli.cross_compactions;
     match cli.command {
         Command::List(args) => commands::session::run_list(&args),
-        Command::Search(args) => commands::search::run_search(&args),
-        Command::Show(args) => commands::show::run_show(&args),
-        Command::Stats(args) => commands::stats::run_stats(&args),
+        Command::Search(args) => commands::search::run_search(&args, cross),
+        Command::Show(args) => commands::show::run_show(&args, cross),
+        Command::Stats(args) => commands::stats::run_stats(&args, cross),
         Command::Whoami(args) => commands::whoami::run_whoami(&args),
         Command::Agents(args) => commands::agents::run_agents(&args),
-        Command::Files(args) => commands::files::run_files(&args),
-        Command::Recover(args) => commands::recover::run_recover(&args),
+        Command::Files(args) => commands::files::run_files(&args, cross),
+        Command::Recover(args) => commands::recover::run_recover(&args, cross),
         Command::Plan(args) => commands::plan::run_plan(&args),
-        Command::Verbatim(args) => commands::turns::run_verbatim(&args),
-        Command::Image(args) => commands::image::run_image(&args),
+        Command::Verbatim(args) => commands::turns::run_verbatim(&args, cross),
+        Command::Image(args) => commands::image::run_image(&args, cross),
         Command::Status(args) => commands::live::run_status(&args),
         Command::Wait(args) => commands::live::run_wait(&args),
         Command::Send(args) => commands::live::channel::run_send(&args),

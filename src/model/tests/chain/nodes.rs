@@ -15,7 +15,7 @@ fn a_merged_elicitation_marker_is_outside_the_chain_and_takes_no_one_with_it() {
         &a("a0", "u0", "working", "2026-06-07T05:00:05.000Z"),
         r#"{"type":"assistant","uuid":"e-toolu_1","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_1","name":"AskUserQuestion","input":{"questions":[{"question":"deploy now?"}]}}]},"csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"toolu_1"}"#,
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         survivals(&c, r.len()),
         vec!["live", "live", "live"],
@@ -26,17 +26,12 @@ fn a_merged_elicitation_marker_is_outside_the_chain_and_takes_no_one_with_it() {
 }
 
 #[test]
-fn a_boundary_the_walk_cannot_climb_crosses_the_cut_through_its_logical_parent() {
-    // The step-over is what separates a region csift RESOLVED from one it could not: with
-    // it the walk reaches the head, the floor drops to the top of the file, and a branch
-    // left behind up there is `abandoned` - a rewound turn, named as one. Without it the
-    // walk ends on the boundary, everything above is below the floor, and the same branch
-    // reads `pre-cut`, because csift never calls a record abandoned where it could not see.
-    //
-    // On the SHAPE: every `compact_boundary` Claude Code writes carries `parentUuid: null`,
-    // and the walk breaks on a null parent before this arm is reached (the plain-boundary
-    // test in the parent file pins that path). This arm is the guard for a boundary the
-    // walk reaches with a parent it cannot resolve, and it is where the crossing lives.
+fn a_boundary_reached_with_an_unresolvable_parent_takes_the_same_crossing_door() {
+    // There are TWO ways the walk arrives at a boundary with nowhere to climb: the null
+    // `parentUuid` every Claude Code boundary carries (the ordinary path, pinned in
+    // `crossing.rs`), and a boundary whose own parent is SET and resolves to no record.
+    // Both reach the one crossing rule, so both consult the budget and both follow
+    // `logicalParentUuid` - there is no second arm to drift.
     let r = recs(&[
         &u("u0", "", "chart the lagoon", "2026-06-07T05:00:00.000Z"),
         &a("a0", "u0", "charting", "2026-06-07T05:00:05.000Z"),
@@ -46,25 +41,35 @@ fn a_boundary_the_walk_cannot_climb_crosses_the_cut_through_its_logical_parent()
         &u("u1", "b1", "dredge the channel", "2026-06-07T05:11:00.000Z"),
         &a("a1", "u1", "dredging", "2026-06-07T05:11:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
-    assert_eq!(c.boundary_cut, Some(4), "the crossing still names the cut");
+    let off = Chain::build(&r, None, CrossingBudget::NONE);
+    assert_eq!(off.boundary_cut, Some(4), "the cut is named either way");
+    assert_eq!(off.boundaries_crossed, 0);
     assert_eq!(
-        survivals(&c, r.len()),
+        survivals(&off, r.len()),
+        vec!["pre-cut", "pre-cut", "pre-cut", "pre-cut", "live", "live", "live"],
+        "with no budget the boundary is the floor and nothing above it is resolved"
+    );
+    assert_eq!(off.abandoned_records, 0);
+
+    let on = Chain::build(&r, None, CrossingBudget::Limited(1));
+    assert_eq!(on.boundaries_crossed, 1);
+    assert_eq!(
+        survivals(&on, r.len()),
         vec![
-            "pre-cut",
-            "pre-cut",
+            "live",
+            "live",
             "abandoned",
             "abandoned",
             "live",
             "live",
             "live"
         ],
-        "the crossed history is read and flagged; the branch off it is resolved as abandoned"
+        "the crossed history is resolved; the branch off it is abandoned"
     );
-    assert_eq!(c.abandoned_records, 2);
-    assert_eq!(c.rewound_turns, 1, "the abandoned opener drew a reply");
+    assert_eq!(on.abandoned_records, 2);
+    assert_eq!(on.rewound_turns, 1, "the abandoned opener drew a reply");
     assert!(
-        matches!(c.kind(2), Some(Kind::Rewound { .. })),
+        matches!(on.kind(2), Some(Kind::Rewound { .. })),
         "an answered abandoned opener above the cut is a rewind, not a draft"
     );
 }

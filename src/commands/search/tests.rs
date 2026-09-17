@@ -128,6 +128,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         None,
         // The unit fixtures read the engine's edges off the hits they get back.
         true,
+        crate::model::CrossingBudget::NONE,
     );
     exchanges
 }

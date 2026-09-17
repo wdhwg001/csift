@@ -50,13 +50,31 @@ fn merged_counts<'a>(
 /// The SURVIVAL-AXIS line: openers the conversation chain no longer reaches, and lines a
 /// compaction re-anchor re-appended. Printed only when there is something to say, so an
 /// ordinary transcript's block is unchanged.
-fn chain_line(abandoned: usize, rewound: usize, replays: usize) {
+fn chain_line(abandoned: usize, rewound: usize, replays: usize, crossing: &CrossingReport) {
+    let mut parts: Vec<String> = Vec::new();
     if abandoned > 0 || replays > 0 {
-        println!(
-            "  chain  abandoned turns {abandoned} ({rewound} rewound) · replay copy lines \
-             {replays}  (whole-file facts, outside `turns`)"
-        );
+        parts.push(format!(
+            "abandoned turns {abandoned} ({rewound} rewound) · replay copy lines {replays}"
+        ));
     }
+    parts.extend(crossing.compact());
+    if parts.is_empty() {
+        return;
+    }
+    println!(
+        "  chain  {}  (whole-file facts, outside `turns`)",
+        parts.join(" · ")
+    );
+}
+
+/// The scope TOTAL's crossing: the same fold `search` runs across transcripts, so the
+/// single-transcript facts (the floor's own line) drop as soon as a second one contributes.
+fn merged_crossing(rows: &[SessionStats]) -> CrossingReport {
+    let mut out = CrossingReport::default();
+    for (i, r) in rows.iter().enumerate() {
+        out.add(&r.crossing, i == 0);
+    }
+    out
 }
 
 /// Count-desc `key×n` census line (`types` rows; the small closed-ish type space needs no
@@ -95,7 +113,12 @@ pub(super) fn render_text(
         if !r.line_types.is_empty() {
             println!("  types  {}", line_types_line(&r.line_types));
         }
-        chain_line(r.abandoned_turns, r.rewound_turns, r.replay_copies);
+        chain_line(
+            r.abandoned_turns,
+            r.rewound_turns,
+            r.replay_copies,
+            &r.crossing,
+        );
         if let (Some(f), Some(l)) = (r.first_utc.as_deref(), r.last_utc.as_deref()) {
             println!(
                 "  span   {}  →  {}  ({})",
@@ -161,6 +184,7 @@ pub(super) fn render_text(
             rows.iter().map(|r| r.abandoned_turns).sum(),
             rows.iter().map(|r| r.rewound_turns).sum(),
             rows.iter().map(|r| r.replay_copies).sum(),
+            &merged_crossing(rows),
         );
         for (model, t) in &tokens {
             println!(
@@ -235,7 +259,7 @@ pub(super) fn render_json(
         ))?
     );
     for r in rows {
-        let obj = json!({
+        let mut obj = json!({
             "kind": "session",
             "session_id": r.session_id,
             "is_subagent": r.is_subagent,
@@ -259,9 +283,12 @@ pub(super) fn render_json(
             "last_local": r.last_utc.as_deref().and_then(local_iso),
             "skipped_lines": r.skipped_lines,
         });
+        for (k, v) in r.crossing.json_fields() {
+            obj[k] = v;
+        }
         println!("{}", serde_json::to_string(&obj)?);
     }
-    let summary = crate::text::envelope_summary(json!({
+    let mut summary_fields = json!({
         "sessions": rows.len(),
         "line_types": merged_counts(rows, |r| &r.line_types),
         "turns": rows.iter().map(|r| r.turns).sum::<usize>(),
@@ -274,7 +301,11 @@ pub(super) fn render_json(
         "unknown_thinking_tags": rows.iter().map(|r| r.unknown_thinking_tags).sum::<usize>(),
         "skipped_lines": rows.iter().map(|r| r.skipped_lines).sum::<usize>(),
         "dropped_by_cap": dropped,
-    }));
+    });
+    for (k, v) in merged_crossing(rows).json_fields() {
+        summary_fields[k] = v;
+    }
+    let summary = crate::text::envelope_summary(summary_fields);
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }

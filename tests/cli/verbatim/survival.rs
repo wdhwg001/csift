@@ -147,7 +147,10 @@ fn a_pre_cut_unit_is_still_reconstructed_and_flagged() {
             r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:11:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"surveying the southern shoal"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["verbatim", at(VSESS).as_str()]);
+    // Crossing OFF: the walk stops at the boundary as Claude Code's loader does, and the
+    // turn above it is reconstructed and FLAGGED rather than dropped. (The same fixture at
+    // the default budget is the test below: the boundary's logicalParentUuid resolves.)
+    let out = h.run(&["verbatim", at(VSESS).as_str(), "--cross-compactions", "0"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("chart the lagoon"),
@@ -159,7 +162,14 @@ fn a_pre_cut_unit_is_still_reconstructed_and_flagged() {
         "a cut is not an abandonment:\n{}",
         out.stdout
     );
-    let j = h.run(&["verbatim", at(VSESS).as_str(), "--format", "json"]);
+    let j = h.run(&[
+        "verbatim",
+        at(VSESS).as_str(),
+        "--format",
+        "json",
+        "--cross-compactions",
+        "0",
+    ]);
     let units = rows(&j.stdout);
     let pre = units
         .iter()
@@ -176,6 +186,35 @@ fn a_pre_cut_unit_is_still_reconstructed_and_flagged() {
         .find(|v| v["kind"] == "summary")
         .expect("summary row");
     assert_eq!(summary["abandoned_turns"], 0, "{}", j.stdout);
+
+    // The default budget steps over the same cut: the unit is the SAME unit at the same
+    // line, reconstructed as before, and only its survival moves to `live`. The footer says
+    // so, and the summary carries the counts.
+    let crossed = h.run(&["verbatim", at(VSESS).as_str()]);
+    assert!(crossed.success, "stderr: {}", crossed.stderr);
+    assert!(
+        crossed.stdout.contains("chart the lagoon"),
+        "{}",
+        crossed.stdout
+    );
+    assert!(
+        crossed.stdout.contains("1 boundary(s) stepped over"),
+        "the crossing is never silent:\n{}",
+        crossed.stdout
+    );
+    let jc = h.run(&["verbatim", at(VSESS).as_str(), "--format", "json"]);
+    let units = rows(&jc.stdout);
+    let pre = units
+        .iter()
+        .find(|v| v["kind"] == "turn" && v["line"] == 1)
+        .expect("the opener above the cut");
+    assert_eq!(pre["survival"], "live", "{}", jc.stdout);
+    let summary = units
+        .iter()
+        .find(|v| v["kind"] == "summary")
+        .expect("summary row");
+    assert_eq!(summary["boundaries_crossed"], 1, "{}", jc.stdout);
+    assert_eq!(summary["boundaries_above_floor"], 0, "{}", jc.stdout);
 }
 
 #[test]

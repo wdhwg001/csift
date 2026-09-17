@@ -127,6 +127,7 @@ fn scan_named(session_id: &str) -> ScanResult {
         summaries: Vec::new(),
         abandoned_openers: Vec::new(),
         skipped_lines: 0,
+        crossing: crate::model::CrossingReport::default(),
     }
 }
 

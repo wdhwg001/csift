@@ -244,6 +244,9 @@ pub(crate) fn render_text(
         if let Some(note) = abandoned_note(sr) {
             println!("{note}");
         }
+        for line in sr.crossing.lines() {
+            println!("  {line}");
+        }
         println!("  {}", "─".repeat(60));
 
         // Walk the ascending selected set, inserting boundary banners as

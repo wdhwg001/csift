@@ -8,6 +8,7 @@ pub(crate) fn render_text(
     transcripts: usize,
     skipped_lines: usize,
     duplicates: &[crate::path::DuplicateGroup],
+    crossing: &crate::model::CrossingReport,
 ) {
     crate::path::emit_duplicate_banner(duplicates);
     if selected.is_empty() {
@@ -89,6 +90,11 @@ pub(crate) fn render_text(
         ));
     }
     println!("{tail}");
+    // Each row's survival marker is read off the chain, so how far that chain climbed is
+    // part of what the marker means.
+    for line in crossing.lines() {
+        println!("{line}");
+    }
 }
 
 /// JSON listing: one object per image, then a trailing summary object.
@@ -97,6 +103,7 @@ pub(crate) fn render_json(
     transcripts: usize,
     skipped_lines: usize,
     duplicates: &[crate::path::DuplicateGroup],
+    crossing: &crate::model::CrossingReport,
 ) {
     println!(
         "{}",
@@ -129,10 +136,9 @@ pub(crate) fn render_json(
             })
         );
     }
-    println!(
-        "{}",
-        crate::text::envelope_summary(
-            json!({ "images": selected.len(), "transcripts": transcripts, "skipped_lines": skipped_lines })
-        )
-    );
+    let mut summary_fields = json!({ "images": selected.len(), "transcripts": transcripts, "skipped_lines": skipped_lines });
+    for (k, v) in crossing.json_fields() {
+        summary_fields[k] = v;
+    }
+    println!("{}", crate::text::envelope_summary(summary_fields));
 }

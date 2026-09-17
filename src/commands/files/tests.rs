@@ -12,7 +12,7 @@ fn view_of(records: &[Record]) -> ChainView {
         .enumerate()
         .map(|(i, r)| (i + 1, r))
         .collect();
-    ChainView::build(&pairs, &[])
+    ChainView::build(&pairs, &[], CrossingBudget::NONE)
 }
 
 fn extract(records: &[Record]) -> Vec<TaggedMutation> {
@@ -103,6 +103,7 @@ fn outcome(detail: FilesDetail, muts: Vec<TaggedMutation>) -> Outcome {
         turn_range: None,
         time_window_bounded: false,
         duplicates: Vec::new(),
+        crossing: crate::model::CrossingReport::default(),
         scope_top,
         scope_sub,
     }

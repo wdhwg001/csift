@@ -86,6 +86,10 @@ pub struct ChainView {
     /// The physical lines of the abandoned turn OPENERS (a recalled draft or a rewound
     /// turn), ascending - what a footer counts and points at.
     abandoned_openers: Vec<usize>,
+    /// What the walk did with this transcript's compaction boundaries, with the floor's
+    /// own jsonl line and instant already resolved (the view holds the line map, its
+    /// caller does not).
+    crossing: CrossingReport,
 }
 
 impl ChainView {
@@ -93,7 +97,11 @@ impl ChainView {
     /// the lines the surface's prefilter dropped. Both slices must be in file order (every
     /// producer in the tree is); they are merged by line number.
     #[must_use]
-    pub fn build(records: &[(usize, Record)], spine: &[SpineRow]) -> ChainView {
+    pub fn build(
+        records: &[(usize, Record)],
+        spine: &[SpineRow],
+        budget: CrossingBudget,
+    ) -> ChainView {
         let n = records.len();
         let total = n + spine.len();
         let mut combined: Vec<ChainNode<'_>> = Vec::with_capacity(total);
@@ -120,7 +128,7 @@ impl ChainView {
             }
         }
 
-        let chain = Chain::build_by(&combined, |r| *r, None);
+        let chain = Chain::build_by(&combined, |r| *r, None, budget);
         let index_turns = group_turn_indices_chained(&combined, |r| *r, &chain);
         // (the projector is the identity: `combined` already holds the ONE node shape)
 
@@ -164,6 +172,14 @@ impl ChainView {
             }
         }
 
+        let crossing = chain.crossing(
+            combined_line.get(chain.floor).copied(),
+            combined
+                .get(chain.floor)
+                .and_then(|n| n.timestamp())
+                .map(str::to_string),
+        );
+
         ChainView {
             survival,
             stamp,
@@ -171,6 +187,7 @@ impl ChainView {
             turns,
             branches: branch_by_root.into_iter().collect(),
             abandoned_openers,
+            crossing,
         }
     }
 
@@ -236,5 +253,12 @@ impl ChainView {
     #[must_use]
     pub fn abandoned_openers(&self) -> &[usize] {
         &self.abandoned_openers
+    }
+
+    /// What this transcript's walk did with its compaction boundaries - the disclosure
+    /// every file-oriented surface prints and projects.
+    #[must_use]
+    pub fn crossing(&self) -> &CrossingReport {
+        &self.crossing
     }
 }

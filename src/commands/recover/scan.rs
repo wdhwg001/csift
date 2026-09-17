@@ -10,6 +10,7 @@ pub(crate) fn scan_one_file_multi(
     targets: &[String],
     ac: &aho_corasick::AhoCorasick,
     always: &[usize],
+    cross: CrossingBudget,
 ) -> Result<Vec<(usize, ScanResult)>> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -35,7 +36,7 @@ pub(crate) fn scan_one_file_multi(
 
     let (records, spine, skipped) =
         crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, cross);
     // Scope accounting is per TRANSCRIPT (target-independent): collect once, share.
     let opaque = collect_opaque_commands(&session_id, &records, &view);
 
@@ -55,6 +56,7 @@ pub(crate) fn scan_one_file_multi(
                     opaque: opaque.clone(),
                     merged_line_origin: std::collections::BTreeMap::new(),
                     skipped_lines: skipped,
+                    crossing: view.crossing().clone(),
                 },
             ));
         }
@@ -212,7 +214,11 @@ pub(crate) fn window_admits(
 /// Scan one session file: mmap → forward line-numbered scan → extract `--file` events.
 /// The forward `scan_lines_bytes` path is mandatory (NOT head/tail): it visits every line
 /// including blanks, so the local counter == the true jsonl line.
-pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
+pub(crate) fn scan_one_file(
+    path: &Path,
+    target_file: Option<&str>,
+    cross: CrossingBudget,
+) -> Result<ScanResult> {
     // Bare-hex canonical id for a subagent transcript (strip the `agent-` filename
     // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
     // - id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
@@ -234,6 +240,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
             opaque: Vec::new(),
             merged_line_origin: std::collections::BTreeMap::new(),
             skipped_lines: 0,
+            crossing: crate::model::CrossingReport::default(),
         });
     };
     let bytes: &[u8] = &mmap;
@@ -259,6 +266,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
                 opaque: Vec::new(),
                 merged_line_origin: std::collections::BTreeMap::new(),
                 skipped_lines: 0,
+                crossing: crate::model::CrossingReport::default(),
             });
         }
     }
@@ -273,7 +281,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
     // numbered into a live turn it never belonged to.
     let (records, spine, skipped) =
         crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, cross);
     let (mut events, stamps) = extract_with_turns(&records, &view, target_file);
     // v0.9.4: attach mtime-verified file-history content to version-change markers
     // so the replay can detect and rebase across tool-record-less writes.
@@ -288,6 +296,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
         opaque,
         merged_line_origin: std::collections::BTreeMap::new(),
         skipped_lines: skipped,
+        crossing: view.crossing().clone(),
     })
 }
 

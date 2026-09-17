@@ -3,7 +3,7 @@
 use super::*;
 
 /// Entry point for `csift files`.
-pub fn run_files(args: &FilesArgs) -> Result<()> {
+pub fn run_files(args: &FilesArgs, cross: CrossingBudget) -> Result<()> {
     // `--turn` and `--since`/`--until` INTERSECT (AND) - the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
@@ -36,15 +36,17 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<FileResult> = session_files
         .par_iter()
-        .map(|p| scan_one_file(p))
+        .map(|p| scan_one_file(p, cross))
         .collect::<Result<Vec<_>>>()?;
 
     // ── Merge + filter by turn / time-window per mutation + boundary ──
     let mut mutations: Vec<TaggedMutation> = Vec::new();
     let mut boundaries: Vec<TaggedBoundary> = Vec::new();
     let mut skipped_lines = 0usize;
-    for fr in per_file {
+    let mut crossing = crate::model::CrossingReport::default();
+    for (fi, fr) in per_file.into_iter().enumerate() {
         skipped_lines += fr.skipped_lines;
+        crossing.add(&fr.crossing, fi == 0);
         // Resolve the `--turn` spec against THIS file's turn count (0-based), so
         // open/from-end forms (`N..`, `-3..` = the last 3) window each transcript's own turns.
         let turn_bounds = turn_range.map(|spec| spec.resolve(fr.turn_count, false));
@@ -94,6 +96,7 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         scope_top,
         scope_sub,
         duplicates: resolved.duplicates,
+        crossing,
     };
 
     match args.format {
@@ -104,13 +107,14 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
 }
 
 /// Scan one session file: mmap → prefilter → parse → delimit turns → extract + join.
-pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
+pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
             mutations: Vec::new(),
             boundaries: Vec::new(),
             skipped_lines: 0,
             turn_count: 0,
+            crossing: crate::model::CrossingReport::default(),
         });
     };
     let bytes: &[u8] = &mmap;
@@ -137,7 +141,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
     // would disagree with `search`'s.
     let (recs, spine, skipped) =
         crate::parse::parse_candidates_with_spine(bytes, line_is_files_candidate);
-    let view = ChainView::build(&recs, &spine);
+    let view = ChainView::build(&recs, &spine, cross);
     let line_nos: Vec<usize> = recs.iter().map(|(ln, _)| *ln).collect();
     let records: Vec<Record> = recs.into_iter().map(|(_, rec)| rec).collect();
 
@@ -172,6 +176,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
         boundaries,
         skipped_lines: skipped,
         turn_count,
+        crossing: view.crossing().clone(),
     })
 }
 

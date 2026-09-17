@@ -176,8 +176,6 @@ pub(crate) struct Builder<'a> {
     /// Removed from the map by the preserved-messages cut - unreachable, and PreCut.
     pub(crate) removed: Vec<bool>,
     pub(crate) on_chain: Vec<bool>,
-    /// On the chain but ABOVE a boundary the walk stepped over.
-    pub(crate) precut: Vec<bool>,
     pub(crate) visited: Vec<bool>,
     /// Earlier line -> the later line carrying the same uuid.
     pub(crate) replay_of: HashMap<usize, usize>,
@@ -257,7 +255,6 @@ impl<'a> Builder<'a> {
             map,
             removed: vec![false; n],
             on_chain: vec![false; n],
-            precut: vec![false; n],
             visited: vec![false; n],
             replay_of,
             chain_child: HashMap::new(),

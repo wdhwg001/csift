@@ -160,10 +160,18 @@ pub(crate) fn render_json(
     // NOT part of the reconstruction (the summariser never saw them either), so the count is
     // the disclosure - fetch one with `csift show @<id> --line <n>`.
     let abandoned_turns: usize = sessions.iter().map(|sr| sr.abandoned_openers.len()).sum();
-    let term = crate::text::envelope_summary(json!({
+    let mut term_fields = json!({
         "skipped_lines": ctx.skipped_lines,
         "abandoned_turns": abandoned_turns,
-    }));
+    });
+    let mut crossing = crate::model::CrossingReport::default();
+    for (i, sr) in sessions.iter().enumerate() {
+        crossing.add(&sr.crossing, i == 0);
+    }
+    for (k, v) in crossing.json_fields() {
+        term_fields[k] = v;
+    }
+    let term = crate::text::envelope_summary(term_fields);
     println!("{}", serde_json::to_string(&term)?);
     if let Some(p) = out_path {
         crate::commands::recover::write_out_guarded(p, &out_blob)?;

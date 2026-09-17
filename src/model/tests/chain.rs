@@ -44,7 +44,7 @@ fn a_linear_transcript_is_entirely_live() {
         &u("u1", "x0", "second", "2026-06-07T05:01:01.000Z"),
         &a("a1", "u1", "two", "2026-06-07T05:01:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(survivals(&c, r.len()), vec!["live"; 5]);
     assert_eq!(c.abandoned_records, 0);
     assert_eq!(c.leaf_source, LeafSource::Tail);
@@ -62,7 +62,7 @@ fn a_recalled_draft_is_abandoned_and_names_its_resend() {
         &u("u1", "a0", "resend", "2026-06-07T05:02:00.000Z"),
         &a("a1", "u1", "two", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         survivals(&c, r.len()),
         vec!["live", "live", "abandoned", "live", "live"]
@@ -78,7 +78,7 @@ fn a_recalled_draft_is_abandoned_and_names_its_resend() {
     assert_eq!(c.rewound_turns, 0);
     assert_eq!(c.abandoned_root(2), Some(2));
     // Turn numbering skips it entirely.
-    let turns = group_turn_indices_deduped(&r, |x| ChainNode::Full(x));
+    let turns = group_turn_indices_deduped(&r, |x| ChainNode::Full(x), CrossingBudget::NONE);
     assert_eq!(turns, vec![vec![0, 1], vec![3, 4]]);
 }
 
@@ -98,7 +98,7 @@ fn a_rewound_turn_carries_its_own_leaf_and_takes_its_subtree_with_it() {
         &u("u2", "a0", "the resend", "2026-06-07T05:02:00.000Z"),
         &a("a4", "u2", "two", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         survivals(&c, r.len()),
         vec![
@@ -131,7 +131,7 @@ fn a_rewound_turn_carries_its_own_leaf_and_takes_its_subtree_with_it() {
     // it drops the superseded OPENER and keeps every other record as a member. A
     // turn-keyed consumer built on it therefore loses no row.
     assert_eq!(
-        group_turn_indices_deduped(&r, |x| ChainNode::Full(x)),
+        group_turn_indices_deduped(&r, |x| ChainNode::Full(x), CrossingBudget::NONE),
         vec![vec![0, 1, 3, 4, 5], vec![6, 7]]
     );
 }
@@ -146,7 +146,7 @@ fn a_rewind_with_no_resend_leaves_the_branch_live() {
         &u("u1", "a0", "second", "2026-06-07T05:01:00.000Z"),
         &a("a1", "u1", "two", "2026-06-07T05:01:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(survivals(&c, r.len()), vec!["live"; 4]);
     assert_eq!(c.abandoned_records, 0);
 }
@@ -163,7 +163,7 @@ fn two_rewinds_from_one_parent_are_two_branches() {
         &u("u3", "a0", "the one that stuck", "2026-06-07T05:03:00.000Z"),
         &a("a3", "u3", "answer three", "2026-06-07T05:03:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.rewound_turns, 2);
     assert_eq!(c.kind(2), Some(Kind::Rewound { resend: Some(6) }));
     assert_eq!(c.kind(4), Some(Kind::Rewound { resend: Some(6) }));
@@ -184,7 +184,7 @@ fn a_replayed_block_keeps_the_last_copy_and_flags_the_earlier_line() {
         &u("u0", "", "first", "2026-06-07T05:01:00.000Z"),
         &a("a0", "u0", "one", "2026-06-07T05:01:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.replay_of(0),
         Some(2),
@@ -212,7 +212,7 @@ fn a_plain_boundary_cuts_the_chain_and_the_history_above_it_is_pre_cut() {
         &u("u1", "s1", "new prompt", "2026-06-07T05:11:00.000Z"),
         &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.boundary_cut, Some(2), "the walk stops at the boundary");
     // The walk ends on the boundary (a null parentUuid breaks it before any other field
     // is read), so the records above are PRE-CUT by the floor rule, never abandoned - the
@@ -238,7 +238,7 @@ fn a_boundary_with_preserved_messages_keeps_the_listed_records_and_cuts_the_rest
         &u("u1", "k2", "new prompt", "2026-06-07T05:11:00.000Z"),
         &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let s = survivals(&c, r.len());
     assert_eq!(
         s[0], "pre-cut",
@@ -269,7 +269,7 @@ fn the_last_prompt_leaf_hint_needs_no_uuid_of_its_own() {
         &a("a0", "u0", "one", "2026-06-07T05:00:05.000Z"),
         r#"{"type":"last-prompt","leafUuid":"a0","sessionId":"s","lastPrompt":"first"}"#,
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_source, LeafSource::LastPrompt);
     assert_eq!(c.leaf_index, Some(1));
 }
@@ -281,7 +281,7 @@ fn a_leaf_hint_naming_no_record_falls_back_to_the_file_tail() {
         &a("a0", "u0", "one", "2026-06-07T05:00:05.000Z"),
         r#"{"type":"last-prompt","leafUuid":"not-in-this-file","sessionId":"s"}"#,
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_source, LeafSource::TailLeafAbsent);
     assert_eq!(
         c.leaf_index,
@@ -303,7 +303,7 @@ fn a_recorded_leaf_that_is_an_ancestor_of_the_tail_yields_to_the_tail() {
         &u("u1", "a0", "second", "2026-06-07T05:01:00.000Z"),
         &a("a1", "u1", "two", "2026-06-07T05:01:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(4));
     assert_eq!(c.abandoned_records, 0, "the tail turn is not abandoned");
 }
@@ -317,7 +317,7 @@ fn a_compact_boundary_wipes_an_earlier_recorded_leaf() {
         r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
         &u("u1", "b1", "after", "2026-06-07T05:11:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.leaf_source,
         LeafSource::Tail,
@@ -333,7 +333,7 @@ fn a_non_conversation_leaf_is_walked_up_to_a_conversation_record() {
         &a("a0", "u0", "one", "2026-06-07T05:00:05.000Z"),
         &att("x0", "a0", "2026-06-07T05:00:06.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(1), "the attachment walked up to a0");
     // ...and the trailing attachment is still live: it hangs below the leaf.
     assert_eq!(survivals(&c, r.len()), vec!["live"; 3]);
@@ -347,7 +347,7 @@ fn an_explicit_leaf_hint_overrides_the_recorded_one() {
         &u("u1", "a0", "second", "2026-06-07T05:01:00.000Z"),
         &a("a1", "u1", "two", "2026-06-07T05:01:05.000Z"),
     ]);
-    let c = Chain::build(&r, Some("a0"));
+    let c = Chain::build(&r, Some("a0"), CrossingBudget::NONE);
     // a0 is a proper ancestor of the tail, so the tail wins - the same gate the recorded
     // form goes through.
     assert_eq!(c.leaf_index, Some(3));
@@ -368,7 +368,7 @@ fn same_message_id_assistant_siblings_and_their_tool_results_are_live() {
         r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:08.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#,
         &a("a1", "c0", "done", "2026-06-07T05:00:09.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         survivals(&c, r.len()),
         vec!["live"; 6],
@@ -385,13 +385,13 @@ fn a_parent_cycle_stops_the_walk_without_hanging() {
         &a("a0", "u0", "one", "2026-06-07T05:00:05.000Z"),
         &u("u1", "a0", "second", "2026-06-07T05:01:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(survivals(&c, r.len()), vec!["live"; 3]);
 }
 
 #[test]
 fn an_empty_record_set_yields_an_empty_chain() {
-    let c = Chain::build(&[], None);
+    let c = Chain::build(&[], None, CrossingBudget::NONE);
     assert_eq!(c.abandoned_records, 0);
     assert!(c.leaf_index.is_none());
     assert_eq!(c.survival(0), Survival::Live);
@@ -412,7 +412,7 @@ fn a_null_parent_boundary_ends_the_walk_and_the_history_above_it_reads_pre_cut()
         &u("u1", "b1", "new prompt", "2026-06-07T05:11:00.000Z"),
         &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.boundary_cut, Some(2));
     assert_eq!(
         survivals(&c, r.len()),
@@ -439,7 +439,7 @@ fn a_boundary_naming_an_absent_logical_parent_leaves_a_blind_region_that_still_f
         &u("u1", "b1", "new prompt", "2026-06-07T05:11:00.000Z"),
         &a("a2", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.boundary_cut, Some(5), "the walk ends on the boundary");
     let s = survivals(&c, r.len());
     assert_eq!(
@@ -478,7 +478,7 @@ fn an_explicit_null_leaf_empties_the_set_and_the_newest_record_becomes_the_leaf(
         r#"{"type":"last-prompt","leafUuid":null,"explicit":true,"sessionId":"s"}"#,
         r#"{"type":"assistant","uuid":"a2","parentUuid":"u1","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"assistant","id":"m-a1","content":[{"type":"text","text":"the same message, second block"}]}}"#,
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_source, LeafSource::Cleared);
     assert_eq!(
         c.leaf_index,
@@ -502,7 +502,7 @@ fn with_no_tip_at_all_the_leaf_is_the_newest_by_timestamp_not_the_file_tail() {
         &a("z9", "u0", "the newest record", "2026-06-07T05:09:05.000Z"),
         &att("x1", "names-no-record-here", "2026-06-07T05:00:01.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.leaf_index,
         Some(1),
@@ -535,10 +535,12 @@ fn a_reserialized_transcript_yields_the_same_chain_as_the_compact_one() {
     let a_chain = Chain::build(
         &recs(&compact.iter().map(String::as_str).collect::<Vec<_>>()),
         None,
+        CrossingBudget::NONE,
     );
     let b_chain = Chain::build(
         &recs(&spaced.iter().map(String::as_str).collect::<Vec<_>>()),
         None,
+        CrossingBudget::NONE,
     );
     assert_eq!(survivals(&a_chain, 5), survivals(&b_chain, 5));
     assert_eq!(a_chain.kind(2), b_chain.kind(2));
@@ -561,7 +563,7 @@ fn a_sidechain_record_is_outside_the_axis() {
         &a("a0", "u0", "one", "2026-06-07T05:00:05.000Z"),
         r#"{"type":"user","uuid":"s0","parentUuid":"nowhere","isSidechain":true,"timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"user","content":"a subagent lane"}}"#,
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.survival(2),
         Survival::Live,
@@ -571,6 +573,7 @@ fn a_sidechain_record_is_outside_the_axis() {
 
 // -- the loader hops that need their own fixtures --
 mod branches;
+mod crossing;
 mod leafgates;
 mod nodes;
 mod repair;

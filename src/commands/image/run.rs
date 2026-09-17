@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub fn run_image(args: &ImageArgs) -> Result<()> {
+pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
     let extracting = args.out.is_some();
     let selection = parse_id_selection(&args.id)?;
 
@@ -16,16 +16,18 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
 
     // Scan across files (rayon - each is an independent mmap + prefilter scan).
     use rayon::prelude::*;
-    let per_file: Vec<(Vec<ImageRef>, usize)> = session_files
+    let per_file: Vec<(Vec<ImageRef>, usize, crate::model::CrossingReport)> = session_files
         .par_iter()
-        .map(|p| images_in_file(p, extracting))
+        .map(|p| images_in_file(p, extracting, cross))
         .collect::<Result<Vec<_>>>()?;
 
     let mut images: Vec<ImageRef> = Vec::new();
     let mut skipped_lines = 0usize;
-    for (refs, skipped) in per_file {
+    let mut crossing = crate::model::CrossingReport::default();
+    for (fi, (refs, skipped, rep)) in per_file.into_iter().enumerate() {
         images.extend(refs);
         skipped_lines += skipped;
+        crossing.add(&rep, fi == 0);
     }
     // Combined stable order: chronological by record ts, then line/index; ts-less last.
     images.sort_by(|a, b| {
@@ -63,7 +65,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
             );
         }
         if let Some(path) = pinned_path(&session_files, &images) {
-            let turn_of = transcript_line_info(path)?.turn_of;
+            let turn_of = transcript_line_info(path, cross)?.turn_of;
             // Resolve open/from-end forms against this transcript's turn count.
             let turn_count = turn_of.values().copied().max().map_or(0, |m| m + 1);
             let (lo, hi) = spec.resolve(turn_count, false);
@@ -92,7 +94,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
                  {distinct_transcripts} transcripts — pin it with `@<uuid> --no-subagents`"
             );
         }
-        resolve_selection(&selection, &images, &session_files)?
+        resolve_selection(&selection, &images, &session_files, cross)?
     };
 
     if let Some(out_dir) = args.out.as_deref() {
@@ -110,12 +112,14 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
                 distinct_transcripts,
                 skipped_lines,
                 &resolved.duplicates,
+                &crossing,
             ),
             OutputFormat::Text => render_text(
                 &selected,
                 distinct_transcripts,
                 skipped_lines,
                 &resolved.duplicates,
+                &crossing,
             ),
         }
         Ok(())

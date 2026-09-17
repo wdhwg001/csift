@@ -248,6 +248,10 @@ pub(crate) struct ScanResult {
     /// displayed location stays a real, inspectable transcript line.
     pub(crate) merged_line_origin: std::collections::BTreeMap<usize, (String, usize)>,
     pub(crate) skipped_lines: usize,
+    /// What the walk did with this transcript's compaction boundaries (C-42). An event's
+    /// turn stamp is read off that chain, so how far it climbed belongs beside the
+    /// abandoned-branch note.
+    pub(crate) crossing: crate::model::CrossingReport,
 }
 
 impl ScanResult {

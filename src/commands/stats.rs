@@ -14,7 +14,9 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use crate::cli::{OutputFormat, StatsArgs};
-use crate::model::{group_turn_indices_chained, Block, Chain, ChainNode, Record};
+use crate::model::{
+    group_turn_indices_chained, Block, Chain, ChainNode, CrossingBudget, CrossingReport, Record,
+};
 use crate::parse::{line_type_and_spine, mmap_bytes};
 use crate::path::{self, SubagentScope};
 use crate::time_window::TimeWindow;
@@ -69,10 +71,13 @@ struct SessionStats {
     abandoned_turns: usize,
     rewound_turns: usize,
     replay_copies: usize,
+    /// What the walk did with this file's compaction boundaries (C-42). A whole-file fact
+    /// like the three above; silent under `--cross-compactions 0`.
+    crossing: crate::model::CrossingReport,
 }
 
 /// Entry point for `csift stats`.
-pub fn run_stats(args: &StatsArgs) -> Result<()> {
+pub fn run_stats(args: &StatsArgs, cross: CrossingBudget) -> Result<()> {
     let window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
     let turn_range = args
         .turn_range
@@ -88,7 +93,7 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     let files = resolved.files;
     let mut rows: Vec<SessionStats> = files
         .par_iter()
-        .map(|p| stats_one_file(p, &window, turn_range))
+        .map(|p| stats_one_file(p, &window, turn_range, cross))
         .collect::<Result<Vec<_>>>()?;
     rows.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
@@ -137,6 +142,7 @@ fn stats_one_file(
     path: &Path,
     window: &TimeWindow,
     turn_range: Option<crate::text::RangeSpec>,
+    cross: CrossingBudget,
 ) -> Result<SessionStats> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -195,6 +201,9 @@ fn stats_one_file(
         }
     }
     let mut rows: Vec<ChainNode<'_>> = Vec::with_capacity(records.len() + spine.len());
+    // The jsonl line of each merged row, so the crossing report can name the floor's own
+    // line; the chain answers in row indices and nothing else here carries the mapping.
+    let mut line_at: Vec<usize> = Vec::with_capacity(records.len() + spine.len());
     let (mut a, mut b) = (0usize, 0usize);
     while a < records.len() || b < spine.len() {
         let take_record = match (records.get(a), spine.get(b)) {
@@ -204,9 +213,11 @@ fn stats_one_file(
         };
         if take_record {
             rows.push(ChainNode::Full(&records[a].1));
+            line_at.push(records[a].0);
             a += 1;
         } else {
             rows.push(ChainNode::Spine(spine[b]));
+            line_at.push(spine[b].line());
             b += 1;
         }
     }
@@ -214,10 +225,16 @@ fn stats_one_file(
     // ONE chain, ONE grouping (§3.3): `turns` counts LIVE numbered turns - the exact
     // numbering `search` prints as `·tN` and `show --turn` addresses - and the three
     // survival totals are whole-file facts read straight off the chain.
-    let chain = Chain::build_by(&rows, |r| *r, None);
+    let chain = Chain::build_by(&rows, |r| *r, None, cross);
     out.abandoned_turns = chain.drafts + chain.rewound_turns;
     out.rewound_turns = chain.rewound_turns;
     out.replay_copies = chain.replay_copies;
+    out.crossing = chain.crossing(
+        line_at.get(chain.floor).copied(),
+        rows.get(chain.floor)
+            .and_then(|r| r.timestamp())
+            .map(str::to_string),
+    );
     let groups = group_turn_indices_chained(&rows, |r| *r, &chain);
 
     // `--turn`: per-record membership on the FULL transcript's LIVE turn order, computed

@@ -187,6 +187,7 @@ fn external_edit_detail_gains_the_formatter_clue_when_one_ran() {
         opaque,
         merged_line_origin: std::collections::BTreeMap::new(),
         skipped_lines: 0,
+        crossing: crate::model::CrossingReport::default(),
     };
     let b = Boundary {
         line_no: 9,

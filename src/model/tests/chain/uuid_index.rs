@@ -17,8 +17,9 @@ fn the_indexed_build_is_the_same_chain() {
         &a("a1", "u1", "reply", "2026-06-07T05:00:01.000Z"),
         &u("u2", "a1", "two", "2026-06-07T05:00:02.000Z"),
     ]);
-    let plain = Chain::build(&r, None);
-    let (indexed, _) = Chain::build_by_indexed(&r, |x| ChainNode::Full(x), None);
+    let plain = Chain::build(&r, None, CrossingBudget::NONE);
+    let (indexed, _) =
+        Chain::build_by_indexed(&r, |x| ChainNode::Full(x), None, CrossingBudget::NONE);
     let states: Vec<_> = (0..r.len()).map(|i| plain.survival(i)).collect();
     let same: Vec<_> = (0..r.len()).map(|i| indexed.survival(i)).collect();
     assert_eq!(states, same);
@@ -38,7 +39,8 @@ fn the_index_holds_exactly_the_chain_admitted_uuids() {
         &att("t1", "a1", "2026-06-07T05:00:02.000Z"),
         r#"{"type":"last-prompt","leafUuid":"a1","lastPrompt":"one"}"#,
     ]);
-    let (_, index) = Chain::build_by_indexed(&r, |x| ChainNode::Full(x), None);
+    let (_, index) =
+        Chain::build_by_indexed(&r, |x| ChainNode::Full(x), None, CrossingBudget::NONE);
     assert_eq!(index.len(), 3);
     assert_eq!(index.index_of("u1"), Some(0));
     assert_eq!(index.index_of("a1"), Some(1));
@@ -58,7 +60,8 @@ fn a_replayed_uuid_resolves_to_the_surviving_line() {
         &a("a1", "u1", "first copy", "2026-06-07T05:00:01.000Z"),
         &a("a1", "u1", "second copy", "2026-06-07T05:00:02.000Z"),
     ]);
-    let (_, index) = Chain::build_by_indexed(&r, |x| ChainNode::Full(x), None);
+    let (_, index) =
+        Chain::build_by_indexed(&r, |x| ChainNode::Full(x), None, CrossingBudget::NONE);
     assert_eq!(index.index_of("a1"), Some(2));
 }
 

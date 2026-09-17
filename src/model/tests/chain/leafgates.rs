@@ -44,7 +44,7 @@ fn the_newest_fallback_skips_the_other_lane_and_the_replay_copies_and_keeps_the_
         &a("dup", "u0", "its survivor", "2026-06-07T05:00:01.000Z"),
         &last_prompt(None, Some(true)),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.leaf_source,
         LeafSource::Cleared,
@@ -71,7 +71,7 @@ fn a_removed_record_never_wins_the_newest_fallback() {
         &u("u1", "k1", "new prompt", "2026-06-07T05:03:00.000Z"),
         &last_prompt(None, Some(true)),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_source, LeafSource::Cleared);
     assert_eq!(
         c.leaf_index,
@@ -97,7 +97,7 @@ fn one_explicit_last_prompt_pins_the_leaf_and_a_repeat_keeps_it_pinned() {
         let mut lines: Vec<&str> = base.iter().map(String::as_str).collect();
         lines.extend(tail.iter().map(String::as_str));
         let r: Vec<Record> = lines.iter().map(|l| parse(l)).collect();
-        Chain::build(&r, None)
+        Chain::build(&r, None, CrossingBudget::NONE)
     };
 
     let one = build(&[last_prompt(Some("a0"), Some(true))]);
@@ -152,7 +152,7 @@ fn an_empty_leaf_uuid_clears_the_set_and_a_bare_line_leaves_it_alone() {
         let mut lines: Vec<&str> = base.iter().map(String::as_str).collect();
         lines.extend(tail.iter().map(String::as_str));
         let r: Vec<Record> = lines.iter().map(|l| parse(l)).collect();
-        Chain::build(&r, None)
+        Chain::build(&r, None, CrossingBudget::NONE)
     };
 
     let emptied = build(&[last_prompt(Some(""), Some(true))]);
@@ -185,7 +185,7 @@ fn only_a_compaction_boundary_wipes_the_recorded_leaf() {
         &u("u1", "a0", "sound the reef", "2026-06-07T05:01:00.000Z"),
         &a("a1", "u1", "sounding", "2026-06-07T05:01:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.leaf_source,
         LeafSource::Explicit,
@@ -217,7 +217,7 @@ fn a_relink_anchor_skips_a_recorded_leaf_that_was_never_pinned() {
         &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
         &last_prompt(Some("d1"), None),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.leaf_index,
         Some(8),

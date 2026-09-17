@@ -11,7 +11,7 @@ fn rec(line: &str) -> Record {
 /// The survival view over a COMPLETE fixture record list - every line is a record here,
 /// so the spine is empty and the chain sees the whole DAG already.
 fn view_of(records: &[(usize, Record)]) -> ChainView {
-    ChainView::build(records, &[])
+    ChainView::build(records, &[], CrossingBudget::NONE)
 }
 
 fn extract_events(records: &[(usize, Record)], file: &str) -> Vec<FileEvent> {

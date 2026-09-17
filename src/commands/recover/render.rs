@@ -207,6 +207,10 @@ pub(crate) fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<
             opaque,
             merged_line_origin,
             skipped_lines: 0,
+            // The merge folds several transcripts into one synthetic stream; each source's
+            // own crossing was already disclosed beside its own note, and a folded floor
+            // line would name a transcript this result no longer identifies.
+            crossing: crate::model::CrossingReport::default(),
         });
     }
     out

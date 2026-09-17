@@ -74,7 +74,9 @@ use memchr::memmem;
 use rayon::prelude::*;
 
 use crate::cli::{OutputFormat, VerbatimArgs};
-use crate::model::{normalize_line, Block, ChainView, Content, PlanIndex, Record, SummarizeMode};
+use crate::model::{
+    normalize_line, Block, ChainView, Content, CrossingBudget, PlanIndex, Record, SummarizeMode,
+};
 use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;

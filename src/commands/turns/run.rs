@@ -3,7 +3,7 @@
 use super::*;
 
 /// Entry point for `csift verbatim`.
-pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
+pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
     // `--turn` and `--since`/`--until` INTERSECT (AND) - the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
@@ -88,7 +88,7 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
     // Parallel scan across files (default rayon pool = CPU count).
     let per_file: Vec<ScanResult> = session_files
         .par_iter()
-        .map(|p| scan_one_file(p))
+        .map(|p| scan_one_file(p, cross))
         .collect::<Result<Vec<_>>>()?;
 
     let mut skipped_lines = 0usize;
@@ -205,7 +205,7 @@ pub(crate) fn window_admits(
 /// `TurnSlice`s + the per-summary dedup sets. The forward `scan_lines_bytes` path is
 /// mandatory (NOT head/tail): it visits every line including blanks, so the local
 /// counter == the true jsonl line (the recover discipline, reused verbatim).
-pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
+pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<ScanResult> {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `turns` subagent unit's `session_id` is joinable to
     // `files`/`search`/`recover`/`agents` (id-form unification; a top-level uuid is
@@ -227,6 +227,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
             summaries: Vec::new(),
             abandoned_openers: Vec::new(),
             skipped_lines: 0,
+            crossing: crate::model::CrossingReport::default(),
         });
     };
     let bytes: &[u8] = &mmap;
@@ -244,7 +245,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
     // had ever read it.
     let (records, spine, mut skipped) =
         crate::parse::parse_candidates_with_spine(bytes, line_is_turn_candidate);
-    let view = ChainView::build(&records, &spine);
+    let view = ChainView::build(&records, &spine, cross);
 
     // ── Transparent elicitation-sidecar merge (§3.10) ──
     // A TOP-LEVEL session's unresolved-pending elicitations (AskUserQuestion/ExitPlanMode/MCP)
@@ -269,6 +270,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
         summaries,
         abandoned_openers: view.abandoned_openers().to_vec(),
         skipped_lines: skipped,
+        crossing: view.crossing().clone(),
     })
 }
 

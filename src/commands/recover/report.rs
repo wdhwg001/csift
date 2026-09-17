@@ -131,6 +131,9 @@ pub(crate) fn print_boundary_lines(s: &ScanResult, boundaries: &[Boundary]) {
 /// that the reconstruction is wrong - the opposite: those writes reached the disk, so they
 /// are replayed, and this line says how many and where to look.
 pub(crate) fn print_abandoned_note(s: &ScanResult) {
+    for line in s.crossing.lines() {
+        println!("  {line}");
+    }
     let n = s.abandoned_events();
     if n == 0 {
         return;

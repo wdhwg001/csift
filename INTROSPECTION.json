@@ -13669,7 +13669,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "124-128",
+          "lines": "127-131",
           "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,"
         },
         {
@@ -16649,7 +16649,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "271-277",
+          "lines": "288-294",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2452",
+          "lines": "2457",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -23229,12 +23229,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "138-143",
+          "lines": "140-145",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "331-337",
+          "lines": "340-346",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -24287,7 +24287,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "331-337",
+          "lines": "340-346",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -28825,7 +28825,7 @@
         },
         {
           "path": "src/commands/image/selection.rs",
-          "lines": "283-288",
+          "lines": "286-291",
           "snippet": "        msg.push_str(&format!(\n            \"--id #{n} is ambiguous: it names {} different images in this transcript (Claude Code \\\n             reuses `#N` across prompts). Pick one by its exact `--id L<line>i<n>`, or narrow the \\\n             scope with --since/--until (a time window) / --turn / --uuid:\",\n            occs.len()\n        ));"
         }
       ],
@@ -28907,12 +28907,12 @@
       "code": [
         {
           "path": "src/commands/image/selection.rs",
-          "lines": "154-156",
+          "lines": "156-158",
           "snippet": "        // Name the handles that DO exist: `#N` is inherited from CC's paste-time\n        // `[Image #N]` numbering, so a transcript's handles can start past #1 and carry\n        // holes - a bare \"matched no image\" reads like a csift drop when it is a source gap."
         },
         {
           "path": "src/commands/image/selection.rs",
-          "lines": "185-189",
+          "lines": "187-191",
           "snippet": "            \"--id matched no image: {} \u2014 {inventory}. `#N` handles are inherited from Claude \\\n             Code's paste-time `[Image #N]` numbering, NOT a dense 1..N index csift assigns, \\\n             so a transcript's handles can start past #1 and carry holes; a missing number is \\\n             a source gap (that number's image never landed in this transcript), not a \\\n             dropped image. Run `csift image` on the same target to see the full listing.\","
         }
       ],
@@ -29258,8 +29258,8 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "496-499",
-          "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
+          "lines": "496-503",
+          "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(\n    path: &Path,\n    with_data: bool,\n    cross: CrossingBudget,\n) -> Result<(Vec<ImageRef>, usize, crate::model::CrossingReport)> {"
         }
       ],
       "instrument": "`csift image @<uuid> --format json | jq -c '{handle, seq, line, media_type}'`. Counting rule: 528 counted one per `{type:\"image\"}` block before content dedup; 159 of 774 counted one per human-turn record carrying at least one such block, in a single transcript.",
@@ -30027,8 +30027,8 @@
       "code": [
         {
           "path": "src/commands/image/refs.rs",
-          "lines": "496-499",
-          "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)> {"
+          "lines": "496-503",
+          "snippet": "/// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte\n/// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the\n/// images and the malformed-line count (surfaced, never hidden).\npub(crate) fn images_in_file(\n    path: &Path,\n    with_data: bool,\n    cross: CrossingBudget,\n) -> Result<(Vec<ImageRef>, usize, crate::model::CrossingReport)> {"
         },
         {
           "path": "src/commands/image/refs.rs",
@@ -35728,7 +35728,7 @@
       "id": "MISC-006",
       "area": "misc",
       "behavior": "A conversation FORK, rewind, retry or parallel lane leaves one plain DAG fact: some record has MORE THAN ONE conversation child (a later `parentUuid` re-attach). SIBLING SHAPE alone does not say which child is live - parallel tool results share a parent BY CONSTRUCTION, so `user` records carrying a `tool_result` block are not conversation children at all, and a repeated-uuid append run wears the same shape without being a fork. What DOES decide it comes from Claude Code rather than from the shape: the loader's own resume walk starts from a chosen leaf, reads `parentUuid` only, cycle-guarded, stops at a boundary's null parent (2.1.258 @166189523, guarded by `tengu_transcript_parent_cycle`) and never follows `logicalParentUuid`, none of whose 12 occurrences in that executable is a load-path reader. That walk reaches exactly one child of a fork, widened only by the two membership passes (MISC-034, MISC-035, MISC-036, MISC-038).",
-      "depends": "`show --branch-points` reports the fork facts and ranks them by widest inter-child time gap, and it NAMES the live child - read off the chain, never guessed from sibling shape, which is why the shape-keyed prototype was refuted. Every other child carries the chain's verdict (`rewound` when an assistant record hangs below it, `draft` when none does, `abandoned` mid-branch, `pre-cut` above a compaction cut). If the load rule moved, the live child and the verdicts would move with it; the fork rows themselves would not, since they are the plain DAG fact.",
+      "depends": "`show --branch-points` reports the fork facts and ranks them by widest inter-child time gap, and it NAMES the live child - read off the chain, never guessed from sibling shape, which is why the shape-keyed prototype was refuted. Every other child carries the chain's verdict (`rewound` when an assistant record hangs below it, `draft` when none does, `abandoned` mid-branch, `pre-cut` above the chain FLOOR). How far that chain climbed is therefore part of the answer and is disclosed beside the tree: csift's walk steps over up to `--cross-compactions` compaction boundaries, so a child above a crossed cut gets a resolved verdict while one above the floor stays `pre-cut`. If the load rule moved, the live child and the verdicts would move with it; the fork rows themselves would not, since they are the plain DAG fact.",
       "code": [
         {
           "path": "src/commands/show/branch.rs",
@@ -35783,6 +35783,16 @@
           "observed": "75 top-level transcripts, 33 carrying at least one fork, 745 fork rows over 1,799 children - and those four numbers held across both passes. The live/abandoned SPLIT did not: live children per row read 0 on 679 rows, 1 on 65 and 2 on 1 in the first pass and 0 on 686, 1 on 58, 2 on 1 in the second; child verdicts read draft 871, pre-cut 824, live 67, rewound 36 and then draft 873, pre-cut 831, live 60, rewound 35. One fork-bearing transcript was written between the passes, which is exactly the expected direction: appending moves the leaf, the leaf decides the chain, and the chain decides which child of a fork is live - while the fork itself, a plain parentUuid fact, does not move. So the stable reading is the frame plus the shape of the split: most forks have NO live child (679 and 686 of 745), because they sit above a compaction cut - 824 and then 831 of the children read pre-cut - and exactly one row has TWO, the membership widening that keeps a same-message.id assistant sibling.",
           "rule": "One row per record with >=2 conversation children under the predicate above; one live count per row from the children whose `survival` reads `live`; one verdict per child. Every figure is a snapshot of a live, monotone-growing corpus, not a constant: two passes are reported so the moving quantities are visible as moving. The row count differs from REC-033's by one transcript's growth between instrument runs, not by a difference in rule.",
           "note": "The behavior's 'which side is live is NOT computable from the jsonl' was refuted: it is computable, because Claude Code itself computes it on every load, and the surface now prints the answer. What the refuted prototype actually showed is narrower and is what the claim now says - sibling SHAPE does not decide it. The behavior and depends clauses were rewritten into one statement of the later state, and the code site follows the rewritten module doc."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": null,
+          "verdict": "refined",
+          "instrument": "Ran `csift show <file> --branch-points --format json --cross-compactions <b>` for b in 0, 3 and all over five 9-21 MB compacted transcripts and the 415 MB landmark, and counted the per-child `survival` values at each budget.",
+          "observed": "The fork rows are budget-independent on all six transcripts. The child verdicts move on one of them: the landmark reads 1 live / 443 pre-cut / 305 abandoned at budget 0 and 8 live / 436 pre-cut / 305 abandoned at budget 3 and at all, while the other five are unchanged across the three budgets (2/0/0, 2/1/4, 0/7/5, 0/2/3, 0/2/2).",
+          "rule": "One observation per child row of one branch-point row; three runs per transcript, one per budget.",
+          "note": "The claim's `pre-cut above a compaction cut` is now `pre-cut above the chain floor`: a cut the walk stepped over is a resolved region and its children carry real verdicts."
         }
       ],
       "attribution": "end-to-end",
@@ -36792,7 +36802,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "332-334",
+          "lines": "335-337",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy\n/// document is NOT 3\u00d7 over-counted the way a byte budget would). A line longer than the"
         }
       ],
@@ -38355,7 +38365,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "301",
+          "lines": "310",
           "snippet": "    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         }
       ],
@@ -39048,12 +39058,12 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "182-187",
+          "lines": "187-192",
           "snippet": "pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant\n    // coverage rides the tool-name needles below, so admitting every assistant\n    // text record here would repeal this prefilter). Finders built ONCE (per-line\n    // hot path - the stateless form rebuilt its searcher every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 6]> ="
         },
         {
           "path": "src/commands/files/run.rs",
-          "lines": "190-195",
+          "lines": "195-200",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),\n                // Settings-family external writes read the snapshot version sequence.\n                memmem::Finder::new(b\"file-history-snapshot\"),"
         }
       ],
@@ -39149,12 +39159,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "297-301",
+          "lines": "306-310",
           "snippet": "pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only, like files').\n    // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher\n    // every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "304-313",
+          "lines": "313-322",
           "snippet": "                memmem::Finder::new(b\"toolUseResult\"),\n                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Read\"),\n                memmem::Finder::new(b\"Bash\"),\n                // The opaque accounting counts PowerShell tool calls; an assistant\n                // record carrying one matches no other needle, so without this the\n                // P count silently missed the assistant-side records.\n                memmem::Finder::new(b\"PowerShell\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -40033,7 +40043,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "57-61",
+          "lines": "59-63",
           "snippet": "    /// Narration-tagged thinking blocks per model (`agent.thinking.narration`: an\n    /// API-issued summary of the reasoning beside it). A BLOCK count only - the token\n    /// split is not derivable from the jsonl (usage is per MESSAGE and covers the\n    /// reasoning block and its narration sibling together).\n    narration_blocks: BTreeMap<String, usize>,"
         }
       ],
@@ -40124,12 +40134,12 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "62-64",
+          "lines": "64-66",
           "snippet": "    /// Thinking-signature tags that decoded to something OTHER than thinking or\n    /// narration - a new tag value surfaces here without a csift release.\n    unknown_thinking_tags: usize,"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "321-322",
+          "lines": "338-339",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41328,7 +41338,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "370-372",
+          "lines": "380-382",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -41438,7 +41448,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "310-312",
+          "lines": "327-329",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -50052,7 +50062,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "251-253",
+          "lines": "254-256",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         },
         {
@@ -50617,7 +50627,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "52-56",
+          "lines": "54-58",
           "snippet": "    /// Whole-file census: every parseable physical line counted by its top-level `type`\n    /// value (`user`, `assistant`, `attachment`, `file-history-snapshot`, \u2026; `(untyped)`\n    /// when the field is absent). A FILE fact like `lines`: never windowed by\n    /// `--since`/`--turn`.\n    line_types: BTreeMap<String, usize>,"
         },
         {
@@ -51658,7 +51668,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "279-284",
+          "lines": "296-301",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51840,12 +51850,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "328",
+          "lines": "345",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "279-284",
+          "lines": "296-301",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -52153,17 +52163,17 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "271-277",
+          "lines": "288-294",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "279-284",
+          "lines": "296-301",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "328",
+          "lines": "345",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52238,12 +52248,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "271-277",
+          "lines": "288-294",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "328",
+          "lines": "345",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52794,7 +52804,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "261-264",
+          "lines": "278-281",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -53784,7 +53794,7 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "245-252",
+          "lines": "246-253",
           "snippet": "/// Scrape the inline persisted-output pointer (\u00a74.6 fallback): the line\n/// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.\n/// Returns the trimmed path, or `None` if the marker is absent.\npub(crate) fn scrape_persisted_path(text: &str) -> Option<String> {\n    const MARKER: &str = \"Full output saved to:\";\n    let idx = text.find(MARKER)?;\n    let rest = &text[idx + MARKER.len()..];\n    // The path runs to end-of-line."
         },
         {
@@ -54286,7 +54296,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "270-277",
+          "lines": "287-294",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54375,7 +54385,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "269-270",
+          "lines": "286-287",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54450,7 +54460,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "278",
+          "lines": "295",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55516,12 +55526,12 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "103-110",
+          "lines": "105-112",
           "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "413-414",
+          "lines": "416-417",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55625,7 +55635,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "303-313",
+          "lines": "305-315",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
@@ -55960,7 +55970,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "273-277",
+          "lines": "290-294",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -61161,12 +61171,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "441",
+          "lines": "450",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "450-455",
+          "lines": "459-464",
           "snippet": "                        if has_structured_result {\n                            ids_with_result.insert(id.clone());\n                        }\n                        if *is_error == Some(true) {\n                            failed_ids.insert(id.clone());\n                        }"
         }
       ],
@@ -62121,7 +62131,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "421-423",
+          "lines": "430-432",
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
@@ -63863,7 +63873,7 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "190-193",
+          "lines": "195-198",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -64703,7 +64713,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "261-268",
+          "lines": "278-285",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -64878,7 +64888,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "27-28",
+          "lines": "28-29",
           "snippet": "    let address = AddressSet { lines, uuids };\n    let use_address = !(address.lines.is_empty() && address.uuids.is_empty());"
         },
         {
@@ -64972,7 +64982,7 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "129-137",
+          "lines": "131-139",
           "snippet": "            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {\n                if slot.is_none() && finder.find(line).is_some() {\n                    // Confirm structurally: the record's OWN uuid must equal it (a body\n                    // merely quoting the uuid must not satisfy the address).\n                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                        if rec.uuid.as_deref() == Some(u.as_str()) {\n                            *slot = Some(line_no);\n                            want = true;\n                        }"
         },
         {
@@ -65072,12 +65082,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "164-166",
+          "lines": "166-168",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "251-253",
+          "lines": "254-256",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         }
       ],
@@ -65821,7 +65831,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "279-284",
+          "lines": "296-301",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65909,7 +65919,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "328",
+          "lines": "345",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -69939,7 +69949,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "424-430",
+          "lines": "433-439",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -70104,7 +70114,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "424-428",
+          "lines": "433-437",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover)."
         }
       ],
@@ -70309,7 +70319,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "424-430",
+          "lines": "433-439",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -70419,7 +70429,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "441-448",
+          "lines": "450-457",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();\n            if let Some(blocks) = rec.blocks() {\n                for b in blocks {\n                    if let Block::ToolResult {\n                        tool_use_id: Some(id),\n                        is_error,\n                        ..\n                    } = b"
         }
       ],
@@ -74510,27 +74520,27 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "127-138",
+          "lines": "135-146",
           "snippet": "/// What an ABANDONED turn-opener was. The discriminator is whether anything under it\n/// ever answered: a recalled prompt has no assistant descendant, a rewound turn does.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Kind {\n    /// A prompt that was recalled into the input box (or otherwise left behind) and never\n    /// drew a reply. `superseded_by` is the surviving opener that replaced it, when the\n    /// two share a `parentUuid`.\n    Draft { superseded_by: Option<usize> },\n    /// A prompt that WAS answered, and the conversation was later rewound past it.\n    /// `resend` is the surviving opener the conversation continued from instead.\n    Rewound { resend: Option<usize> },\n}"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "92-96",
+          "lines": "106-110",
           "snippet": "/// The blind-region rescue of the draft population: inside `PreCut`, an opener with a\n/// LATER opener sharing its `parentUuid` is still the recalled version.\nfn blind_region_openers(b: &Builder<'_>, out: &mut Chain, floor: usize) {\n    // The survivor is the LAST opener sharing a `parentUuid`, wherever it sits - a draft\n    // is usually recalled just below the floor and re-sent just above it, so restricting"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "98-108",
+          "lines": "112-122",
           "snippet": "    let mut last_by_parent: HashMap<&str, usize> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.opens[i] || out.replay_of.contains_key(&i) || !out.survival[i].selectable() {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            last_by_parent.insert(p, i);\n        }\n    }\n    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "107-117",
+          "lines": "121-131",
           "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "136-149",
+          "lines": "137-150",
           "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    node: impl Fn(&T) -> ChainNode<'_>,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(\n        records,\n        |i, x| node(x).opens_turn() && chain.opens(i),\n        &skip,\n    )\n}"
         }
       ],
@@ -74722,7 +74732,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "153-157",
+          "lines": "161-165",
           "snippet": "    pub fn class(self) -> Class {\n        match self {\n            Kind::Draft { .. } => Class::UserUnsent,\n            Kind::Rewound { .. } => Class::UserRewound,\n        }"
         }
       ],
@@ -74800,7 +74810,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "107-117",
+          "lines": "121-131",
           "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         }
       ],
@@ -75712,7 +75722,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "377-385",
+          "lines": "386-394",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -77499,7 +77509,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "377-385",
+          "lines": "386-394",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -80305,7 +80315,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "109-116",
+          "lines": "112-119",
           "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
@@ -86802,12 +86812,12 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "234-243",
+          "lines": "232-241",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "59-63",
+          "lines": "61-65",
           "snippet": "    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();"
         }
       ],
@@ -86886,7 +86896,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "325-327",
+          "lines": "364-366",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {
@@ -88123,12 +88133,12 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "203-214",
+          "lines": "201-212",
           "snippet": "pub(crate) fn chain_admits(r: ChainNode<'_>) -> bool {\n    if r.is_elicitation_marker() {\n        return false;\n    }\n    if r.uuid().is_none_or(str::is_empty) {\n        return false;\n    }\n    matches!(\n        r.kind(),\n        Some(\"user\" | \"assistant\" | \"attachment\" | \"system\")\n    )\n}"
         },
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "234-243",
+          "lines": "232-241",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
@@ -88269,20 +88279,20 @@
       "id": "MISC-036",
       "area": "misc",
       "behavior": "The reconstruction walk reads `parentUuid` and nothing else (2.1.258 @166143634). A record with no parentUuid ends it, which is why a `compact_boundary` - whose own parentUuid is null - is an absolute cut: `logicalParentUuid` sits on that record but no reader on the load path consults it. Two repairs ride the walk: a cycle is detected by a visited set and stops it with a partial transcript (the message literal at @166143713), and a parent that names no record, or one already visited, falls back to the nearest UNVISITED record with the SAME `isSidechain` whose timestamp is at most 5000 ms earlier and closest (@166145374).",
-      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader, and it ends on a `compact_boundary` for the same reason the loader does. It departs in ONE documented way, and the departure sits after the walk rather than inside it: csift keeps every record the walk did not reach and flags everything above the terminating record as `pre-cut` instead of dropping it, because \"what the model saw at the time\" is the question a transcript archive answers. Its walk does carry a `logicalParentUuid` arm, but that arm is a guard for a boundary whose OWN `parentUuid` is non-null and resolves to no record, and no corpus boundary has that shape. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record - off the chain in a region the walk did resolve - is skipped by a bare role selector.",
+      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader everywhere the loader has an answer. It departs at ONE record, deliberately and under a budget: where the parent link runs out on a `compact_boundary`, csift reads the `logicalParentUuid` the loader ignores and carries on, up to `--cross-compactions` boundaries. Above a boundary it STEPPED OVER the ordinary rules apply, so a record there is Live where the chain reaches it and Abandoned where it does not; above the FLOOR - the record the walk ended on, because the budget ran out or the logical parent named nothing the map still holds - every off-chain record is `pre-cut` and none is called abandoned. `--cross-compactions 0` is the loader's own reading and csift then says nothing about crossing at all. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record is skipped by a bare role selector.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "39-76",
-          "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {\n    let mut out = Walked {\n        floor: leaf.unwrap_or(0),\n        boundary: None,\n    };\n    let Some(leaf) = leaf else {\n        // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no\n        // record is on the chain, and the survival pass turns that into PreCut.\n        out.floor = b.len();\n        return out;\n    };\n    let mut crossed = false;\n    let mut cur = Some(leaf);\n    while let Some(i) = cur {\n        if b.visited[i] {\n            break; // cycle guard\n        }\n        b.visited[i] = true;\n        b.on_chain[i] = true;\n        b.precut[i] = crossed;\n        out.floor = i;\n        let Some(pu) = b.parent[i] else {\n            if b.is_boundary(i) {\n                out.boundary.get_or_insert(i);\n            }\n            break;\n        };\n        b.chain_child.entry(pu).or_insert(i);\n        let next = match b.resolve(pu) {\n            Some(j) if !b.visited[j] => Some(j),\n            _ => repair(b, i),\n        };\n        let next = match next {\n            Some(j) => Some(j),\n            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]"
+          "lines": "46",
+          "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "93-104",
+          "lines": "122-133",
           "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
-      "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line` and the `survival` values above and below it. To confirm the arm csift carries is never taken, rename `\"logicalParentUuid\"` in a twin of that transcript and confirm the per-hit `survival` census and the `stats` chain totals do not move.",
+      "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line`, `floor_line`, `floor_cause` and the `survival` values above and below it at `--cross-compactions 0`, at the default and at `all`; counting rule: one survival observation per emitted search hit. The budget-0 run must reproduce, byte for byte, a build that predates the flag.",
       "located": {
         "claude_code": "2.1.258",
         "csift": "0.12.0",
@@ -88336,6 +88346,16 @@
           "observed": "The loader reads `parentUuid` only. csift's walk takes the null-parent break before the arm that would read `logicalParentUuid`, and every boundary record in the corpus carries a null `parentUuid` (260 of 260), so that arm never runs. Five renamed twins of 9 to 21 MB produced `survival` censuses and chain totals identical to their originals.",
           "rule": "One read per hop; one comparison per twin file.",
           "note": "The claim said csift departs from the loader by stepping over the cut. The departure is the retention of what the walk does not reach, not a link followed across the boundary."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": null,
+          "verdict": "refined",
+          "instrument": "Re-read the walk at 2.1.258 @166143634 and the 5 s repair at @166145374, then ran the budgeted walk at 0, 3 and all over five 9-21 MB compacted transcripts and the 415 MB landmark, capturing `search '' <file> --no-subagents --format json`, `search '' <file> --no-subagents --count-by label`, `stats <file> --no-subagents --format json` and `show <file> --branch-points --format json` for each, and byte-comparing every budget-0 stream against a build that predates the flag.",
+          "observed": "The loader reads `parentUuid` only and ends on a boundary's null parent. Budget 0 reproduced the pre-flag build on 24 of 24 streams (6 transcripts x 4 streams), byte for byte. At budget 3 the walk stepped over 2 boundaries on the landmark and 0 on the other five; 490 of the landmark's 31,000 emitted top-level hits moved `pre-cut` to `live` (83 live / 30,612 pre-cut / 305 abandoned at budget 0, against 573 / 30,122 / 305 at budget 3), and its `show --branch-points` child verdicts moved from 1 live / 443 pre-cut to 8 live / 436 pre-cut. Budget `all` gave output identical to budget 3 on all six.",
+          "rule": "One read per hop. One byte comparison per (transcript, stream). One survival observation per emitted search hit whose `is_subagent` is false; one verdict observation per branch-point child row.",
+          "note": "The claim said csift's `logicalParentUuid` arm was a guard that never runs. It is now the crossing, taken on purpose and bounded; the text states the budget, the two floor causes and the budget-0 equivalence."
         }
       ]
     },
@@ -88411,12 +88431,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "128-141",
+          "lines": "157-170",
           "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message_id())\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "177-188",
+          "lines": "206-217",
           "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
         }
       ],
@@ -88539,8 +88559,8 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "73-90",
-          "snippet": "fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {\n    if !b.admit[i] || b.is_sidechain(i) {\n        // Outside the loader's model (a promoted non-record line, a sidechain lane, a\n        // merged elicitation marker): the axis says nothing about it.\n        return Survival::Live;\n    }\n    if b.on_chain[i] {\n        return if b.precut[i] {\n            Survival::PreCut\n        } else {\n            Survival::Live\n        };\n    }\n    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }\n}"
+          "lines": "80-93",
+          "snippet": "fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {\n    if !b.admit[i] || b.is_sidechain(i) {\n        // Outside the loader's model (a promoted non-record line, a sidechain lane, a\n        // merged elicitation marker): the axis says nothing about it.\n        return Survival::Live;\n    }\n    if b.on_chain[i] {\n        return Survival::Live;\n    }\n    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }\n}"
         }
       ],
       "instrument": "Read the diagnostic and its message at 2.1.258 @166144509 and confirm the two conditions that fire it. For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it.",
@@ -88606,7 +88626,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "94-106",
+          "lines": "102-114",
           "snippet": "/// One record's place in the surviving conversation.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub enum Survival {\n    /// On the chain the loader walks (or rescued onto it).\n    #[default]\n    Live,\n    /// Above a cut the loader stops at, or in a region csift could not resolve. Kept and\n    /// selectable exactly as before - only flagged.\n    PreCut,\n    /// Off the chain, in a region the chain resolved. `root` is the index of the\n    /// abandoned branch's topmost record (the branch head a reader should look at).\n    Abandoned { root: usize },\n}\n"
         }
       ],
@@ -88652,7 +88672,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "157-170",
+          "lines": "171-184",
           "snippet": "fn assign_kinds(b: &Builder<'_>, out: &mut Chain, has_reply: &[bool]) {\n    let openers: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            matches!(out.survival(i), Survival::Abandoned { .. })\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n        })\n        .collect();\n    // The surviving opener per parent uuid, in ONE pass: a per-opener rescan would be\n    // O(records x abandoned openers), which on a session with hundreds of recalled drafts\n    // is the whole scan's cost over again.\n    let mut last_opener: HashMap<&str, usize> = HashMap::new();\n    for k in 0..b.len() {\n        if out.survival(k).selectable()"
         }
       ],
@@ -88748,7 +88768,7 @@
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "210-221",
+          "lines": "224-235",
           "snippet": "fn assistant_below(b: &Builder<'_>) -> Vec<bool> {\n    let mut out = vec![false; b.len()];\n    for i in (0..b.len()).rev() {\n        out[i] = b\n            .children_of(i)\n            .iter()\n            .any(|&c| out[c] || b.recs[c].kind() == Some(\"assistant\"));\n    }\n    out\n}\n\n/// The surviving opener that replaced an abandoned one: the chain's own child of the"
         },
         {
@@ -88796,7 +88816,7 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "136-149",
+          "lines": "137-150",
           "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    node: impl Fn(&T) -> ChainNode<'_>,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(\n        records,\n        |i, x| node(x).opens_turn() && chain.opens(i),\n        &skip,\n    )\n}"
         }
       ],
@@ -88893,17 +88913,17 @@
     {
       "id": "MISC-043",
       "area": "misc",
-      "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The boundary's own `parentUuid` is null on every specimen (260 of 260 boundary records over every transcript under one projects root), so a reader that walks `parentUuid` ends on the boundary whatever the logical parent says, and the loader never reads the field. Nothing on the write path keeps the named record alive either: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 77 uuid-named top-level transcripts under the projects root, one observation per boundary record: 255 `compact_boundary` records across the 21 compacted files, of which 52 carry a `logicalParentUuid` matching no `uuid` on ANY line of their own file, spread over 14 files.",
-      "depends": "csift does not stop READING at a compaction cut, and it does not cross one either: its walk ends on the boundary exactly where the loader's does, because the null `parentUuid` arm fires before any other field is consulted. The difference sits after the walk. csift keeps the region above the terminating record and flags it `PreCut` instead of dropping it, because an archive is asked what the model had read at the time. That terminating record is the FLOOR the survival axis carries: an off-chain record physically above it is `PreCut` and never `Abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. The walk's `logicalParentUuid` arm is a guard for one shape only, a boundary whose own `parentUuid` is non-null and resolves to no record, and no corpus boundary has that shape. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it. The boundary also EXPOSES that link as a `precedes` provenance edge, which is where the dangling share becomes a rendered answer: a predecessor still on disk resolves to its line, and one deleted with the region renders the id with `not in this file` rather than being dropped.",
+      "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The boundary's own `parentUuid` is null on every specimen (275 of 275 boundary records over the top-level transcripts of one projects root), so a reader that walks `parentUuid` ends on the boundary whatever the logical parent says, and the loader never reads the field. Nothing on the write path keeps the named record alive either: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 82 uuid-named top-level transcripts, one observation per boundary record: 275 `compact_boundary` records across 23 compacted files, every one of them naming a `logicalParentUuid`, of which 223 name a `uuid` that is on some line of their own file and 52 name one that is on no line of it, the 52 spread over 14 files. Per FILE: 9 of the 23 have every boundary resolvable, 4 have none.",
+      "depends": "csift's walk climbs `parentUuid` and, where that runs out on a boundary, follows `logicalParentUuid` under the `--cross-compactions` budget. This census is what decides whether that door opens: a boundary naming a record no line of the file carries cannot be crossed at ANY budget, so the walk ends there and reports the floor cause `unresolvable-boundary`, which tells a reader that raising the flag would change nothing. The other floor cause is `budget-exhausted`, and only that one moves with the flag. Above either floor an off-chain record is `pre-cut` and never `abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it. The boundary also EXPOSES that link as a `precedes` provenance edge, which is where the dangling share becomes a rendered answer: a predecessor still on disk resolves to its line, and one deleted with the region renders the id with `not in this file` rather than being dropped.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "72-79",
-          "snippet": "            Some(j) => Some(j),\n            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]\n                    .logical_parent_uuid()\n                    .and_then(|u| b.resolve(u))\n                    .filter(|&j| !b.visited[j])"
+          "lines": "97-110",
+          "snippet": "        out.boundary.get_or_insert(i);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            break;\n        }\n        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        let Some(j) = over else {\n            out.cause = FloorCause::UnresolvableBoundary;\n            break;\n        };"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "86-89",
+          "lines": "89-92",
           "snippet": "    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }"
         },
         {
@@ -88912,7 +88932,7 @@
           "snippet": "            rec.logical_parent_uuid.as_deref(),"
         }
       ],
-      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set and record whether its own `parentUuid` is null. Counting rule: one observation per boundary record; a file counts once if it holds at least one dangling boundary. To test whether the field reaches any shipped answer, build a twin of a compacted transcript with `\"logicalParentUuid\"` renamed and compare, twin against original, the per-hit `survival` counts and the trailing-summary fields of `csift search '' <file> --format json` and the chain totals of `csift stats <file> --format json`.",
+      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set and record whether its own `parentUuid` is null. Counting rule: one observation per boundary record; a file counts once if it holds at least one boundary and once again if it holds at least one dangling boundary. Then run `csift search '' <file> --no-subagents --format json --cross-compactions all` on a compacted transcript and read the summary's `floor_cause`: a file whose reachable boundary is dangling reports `unresolvable-boundary` with `boundaries_crossed` 0 however large the budget.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -88965,6 +88985,16 @@
           "observed": "260 of 260 `compact_boundary` records carry `\"parentUuid\":null`, none a non-null value and none an absent key. Restricted to the 77 uuid-named top-level transcripts: 255 boundary records over the 21 compacted files, 52 of them naming a `logicalParentUuid` absent from every line of their own file, across 14 files. On all five twins the per-hit `survival` counts, the summary `boundary_cut_line`, `abandoned_records`, `rewound_turns`, `replay_copies` and `superseded_drafts`, and the `stats` `turns`, `abandoned_turns`, `rewound_turns` and `replay_copies` were identical to the original's.",
           "rule": "One observation per boundary record for both censuses; a file counts once if it holds at least one dangling boundary. One comparison per twin file, a difference in any compared field counting as a difference.",
           "note": "The text said the step over the cut was csift's path and that the step's failure was the reason for the floor. The walk ends on the boundary before that field is read, so the floor follows from the null `parentUuid` alone and the `logicalParentUuid` arm is a guard with no corpus specimen. The dangling census is unchanged in kind and re-counted on the current corpus; the coverage split it carried moves to residue because it measures a walk that consults the field where the shipped one stops."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": null,
+          "verdict": "refined",
+          "instrument": "Re-ran the dangling-boundary census over every top-level transcript of the projects root, then read the `floor_cause` and `boundaries_crossed` of `csift search '' <file> --no-subagents --format json --cross-compactions all` on the five 9-21 MB compacted transcripts and the 415 MB landmark.",
+          "observed": "82 top-level transcripts, 23 carrying at least one boundary, 275 boundary records; 275 of 275 carry a null `parentUuid` and 275 of 275 name a `logicalParentUuid`; 223 of those name a uuid on some line of the same file and 52 do not, the 52 over 14 files. Per file, 9 of 23 resolve every boundary and 4 resolve none. At `--cross-compactions all`, 4 of the 6 measured transcripts report `floor_cause` `unresolvable-boundary` with `boundaries_crossed` 0, one reports `head` with no boundary on the walk's path, and the landmark crosses 2 and then meets a dangling one with 77 boundaries still above its floor.",
+          "rule": "One observation per boundary record; a file counts once per predicate it satisfies. One floor_cause per transcript, read from the trailing summary of a single-transcript scan.",
+          "note": "The claim said csift does not cross a cut and that the `logicalParentUuid` arm is a guard for a shape with no specimens. csift now crosses under a budget, and this census is what separates the boundary a budget can step over from the one it cannot."
         }
       ]
     },
@@ -89286,7 +89316,7 @@
       "id": "REC-102",
       "area": "record-model",
       "behavior": "A branch the conversation left behind stays on disk in full, and it is not small. Census over 75 top-level transcripts (834,912 lines, 672,983 uuid-bearing records, 0 unparsable): 1,481 abandoned roots in 44 of the 75 files - 1,307 user and 174 assistant - whose subtrees hold 11,142 records (1,912 user, 716 assistant, 8,391 attachment, 123 system) carrying 422 `tool_use` blocks. Of the 1,307 user roots, 57 have an assistant descendant (a branch that drew a reply before the conversation moved elsewhere) and 1,250 have none (a recalled prompt). The shape follows from the rewind writing nothing: the array is truncated in memory and the next prompt is chained onto the same parent, so the old branch simply stops being extended, with every one of its records still present, still addressable, and still the true account of what hit the disk at the time.",
-      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` when `parentUuid` is null, which is the census walk's rule and neither Claude Code's nor csift's: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader, and csift's own walk stops on that same record and flags what sits above it `pre-cut` rather than calling it abandoned. So the census partitions a compacted file differently from the shipped axis, and its counts are a statement about record shapes on disk, not a reproduction of the `survival` values csift prints. Every record on such a branch also emits a `branches` provenance edge naming the branch HEAD, so the abandoned set is followable to the prompt it hangs off rather than only marked; the head names none, because an edge from a record to itself points at nothing.",
+      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` whenever `parentUuid` is null, which is neither Claude Code's rule nor csift's default: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader, and csift follows the field only as far as the `--cross-compactions` budget allows. The census walk is therefore csift at `--cross-compactions all`, and its counts are a statement about record shapes on disk rather than a reproduction of the `survival` values a default scan prints. So the census partitions a compacted file differently from the shipped axis, and its counts are a statement about record shapes on disk, not a reproduction of the `survival` values csift prints. Every record on such a branch also emits a `branches` provenance edge naming the branch HEAD, so the abandoned set is followable to the prompt it hangs off rather than only marked; the head names none, because an edge from a record to itself points at nothing.",
       "code": [
         {
           "path": "src/commands/show/branch.rs",
@@ -89295,7 +89325,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "138-143",
+          "lines": "140-145",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         },
         {
@@ -89358,6 +89388,16 @@
           "observed": "Every boundary carries a null `parentUuid` (260 of 260), so the shipped walk ends on the boundary while the census walk continues through `logicalParentUuid`. The abandoned-root counts stand as a census of record shapes on disk and are not the `survival` partition csift prints.",
           "rule": "One observation per boundary record.",
           "note": "The text attributed the census walk's step to csift. The step belongs to the census instrument alone."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": null,
+          "verdict": "refined",
+          "instrument": "Compared the census walk's rule against the shipped one by running `csift stats <file> --no-subagents --format json` and `csift search '' <file> --no-subagents --count-by label` at `--cross-compactions` 0, 3 and all over five 9-21 MB compacted transcripts and the 415 MB landmark, reading `abandoned_turns`, `rewound_turns`, `replay_copies` and the two survival leaf counts at each budget.",
+          "observed": "Every chain total is budget-independent on all six transcripts: the landmark reads turns 1424, abandoned_turns 305, rewound_turns 6, replay_copies 464 at each of the three budgets, and the five others are likewise unchanged (abandoned_turns 5, 0, 4, 3, 2). The two survival leaf populations do not move either (landmark user.unsent 299 and user.rewound 6 at every budget). What moves is where a record sits relative to the floor, not whether it is abandoned.",
+          "rule": "One stats session row per transcript, matched by session id; one label census row per leaf; three runs per transcript, one per budget.",
+          "note": "The claim said csift's walk stops on the boundary. It crosses under a budget now, which is the census walk's own rule at `all`; the abandoned counts the census reports are unaffected either way, which the three-budget comparison is what shows."
         }
       ]
     },
@@ -89369,7 +89409,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "138-143",
+          "lines": "140-145",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         }
       ],
@@ -96356,7 +96396,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3222"
+          "lines": "3235"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96950,6 +96990,53 @@
           "observed": "275 boundaries, 275 with preservedSegment; anchor resolves to an isCompactSummary record on 275 of 275, to another record on 0, to no line on 0. headUuid resolves above the boundary on 272, below on 3, nowhere on 0; tailUuid above on 223, below on 1, nowhere on 51. logicalParentUuid present on 275 and resolving in its own file on 223. In the binary the literal occurs once; the builder's name occurs 6 times, of which 2 are its callers, 1 its definition and 3 a same-named marketplace-source parser.",
           "rule": "One row per jsonl line whose type is system and subtype is compact_boundary under one projects root; a member counts as resolved when its value equals the uuid of some line of the same file, taking the LAST such line.",
           "note": "The self-anchor shape has no corpus specimen and is read from the binary alone, which is why csift guards it rather than waiting to meet one."
+        }
+      ]
+    },
+    {
+      "id": "MISC-046",
+      "area": "misc",
+      "behavior": "How many `compact_boundary` records one transcript carries is long-tailed rather than uniform, and each one is separately crossable or not. Censused over the 82 uuid-named top-level transcripts of one projects root, one observation per boundary record: 23 files carry at least one, 275 records in all, every one with a null `parentUuid` and every one naming a `logicalParentUuid`. The per-file counts are 1 seven times, 2 three times, then 4, 5, 6 twice, 7 twice, 12, 15, 27, 28, 32, 33 and 80 - so 10 of the 23 carry at most two while one carries 80, which is a lane that ran long enough to compact eighty times. Crossability is the second axis: 223 of the 275 name a record still on a line of their own file and 52 do not (MISC-043), and per file 9 of the 23 resolve every boundary while 4 resolve none.",
+      "depends": "The global `--cross-compactions` flag decides how many of those boundaries csift's survival walk steps over, and its DEFAULT is chosen against this shape: a small count resolves the ordinary compacted transcript (10 of 23 carry at most two boundaries) while the eighty-compaction lane is not traced by default, and what was left uncrossed is named in the footer with the flag value that would reach it. `0` restores Claude Code's own reading byte for byte and makes csift say nothing about crossing. Measured over the five 9-21 MB compacted transcripts and the 415 MB landmark, the default and `all` produce identical output on all six, because on every one of them the walk stops for a reason the budget does not control - a dangling logical parent, or a head record with the remaining boundaries off the walk's path.",
+      "code": [
+        {
+          "path": "src/model/chain/budget.rs",
+          "lines": "30",
+          "snippet": "pub const CROSS_COMPACTIONS_DEFAULT: CrossingBudget = CrossingBudget::Limited(3);"
+        },
+        {
+          "path": "src/model/chain/walk.rs",
+          "lines": "97-102",
+          "snippet": "        out.boundary.get_or_insert(i);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            break;\n        }"
+        }
+      ],
+      "instrument": "Over every uuid-named top-level transcript under the projects root, count the `type:\"system\"` records with `subtype:\"compact_boundary\"` per file and, for each, whether its `logicalParentUuid` appears as a `uuid` on some line of that same file. Counting rule: one observation per boundary record; a file contributes one per-file count. Then, for a transcript at each budget, read `boundaries_crossed`, `boundaries_above_floor`, `budget_exhausted` and `floor_cause` from the trailing summary of `csift search '' <file> --no-subagents --format json --cross-compactions <N|all>`, and compare the whole stream at budget 0 against a build that predates the flag.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4 (the survival axis) and section 7 (the performance contract)"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The producer of the DISTRIBUTION is not traced: what decides how often a session compacts is the context-window trigger and the operator's own `/compact`, and neither is read in the shipped binary here. Reading the auto-compaction threshold and its trigger branch would close it.",
+        "The cost half of the default is unmeasured. The rule is that the default is the largest of 3, 1, 0 whose medians sit inside the same-binary control band on every chain-walking row of the acid set, over a compacted transcript and the performance landmark at 21 reps, and that measurement needs a host whose one-minute load is under 4, which this run did not have. Running the control band and then the A/B on an idle host closes it."
+      ],
+      "residue": [
+        "The corpus is one projects root on one machine, so the per-file distribution is that machine's working pattern as much as Claude Code's. A second root would say how much of the long tail is general."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": null,
+          "verdict": "refined",
+          "instrument": "Ran the per-file boundary census over the 82 top-level transcripts of the projects root, then ran `csift search '' <file> --no-subagents --format json --cross-compactions <b>` for b in 0, 3 and all over the five 9-21 MB compacted transcripts and the 415 MB landmark, diffing the three streams per transcript and byte-comparing the budget-0 stream against a build that predates the flag.",
+          "observed": "23 of 82 transcripts carry a boundary; 275 records; per-file counts 1x7, 2x3, 4, 5, 6x2, 7x2, 12, 15, 27, 28, 32, 33, 80; 223 of 275 resolvable, 52 not; 9 of 23 files fully resolvable, 4 not at all. Budget 3 and budget all produced byte-identical streams on all six measured transcripts, and budget 0 reproduced the pre-flag build on all six. Crossings at budget 3: 2 on the landmark, 0 on the other five; boundaries left above the floor: 77, 2, 2, 1, 1 and 0.",
+          "rule": "One observation per boundary record for the census; one stream comparison per (transcript, budget pair).",
+          "note": "The census half is closed. The cost half of the default is the open leg: the flag ships with its default documented as chosen pending that measurement."
         }
       ]
     }

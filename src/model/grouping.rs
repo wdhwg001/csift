@@ -117,8 +117,9 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 pub fn group_turn_indices_deduped<T>(
     records: &[T],
     node: impl Fn(&T) -> ChainNode<'_>,
+    budget: CrossingBudget,
 ) -> Vec<Vec<usize>> {
-    let chain = Chain::build_by(records, &node, None);
+    let chain = Chain::build_by(records, &node, None, budget);
     let skip: std::collections::HashSet<usize> = (0..records.len())
         .filter(|&i| chain.kind(i).is_some())
         .collect();

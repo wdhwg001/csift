@@ -23,6 +23,9 @@ pub(crate) struct Outcome {
     /// the merged copies are named beside the scope banner and counted in the JSON header,
     /// because every mutation count above was taken after the merge removed them.
     pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
+    /// The scope's crossing report (per-transcript reports folded the way `search` folds
+    /// them: counts add, the floor's own address drops past the first transcript).
+    pub(crate) crossing: crate::model::CrossingReport,
 }
 
 impl Outcome {

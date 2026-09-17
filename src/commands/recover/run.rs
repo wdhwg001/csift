@@ -3,14 +3,14 @@
 use super::*;
 
 /// Entry point for `csift recover`.
-pub fn run_recover(args: &RecoverArgs) -> Result<()> {
+pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     // STORE LISTING: reads CC's file-history checkpoint store, no transcript scan.
     if args.list_backups {
         return super::backups::run_list_backups(args);
     }
     // BATCH MODE: many files in one corpus scan (parse each transcript ONCE).
     if args.files_from.is_some() {
-        return run_recover_batch(args);
+        return run_recover_batch(args, cross);
     }
     // ── Validate window mutual-exclusion (same rule + wording as `files`/`search`) ──
     let mode = args.mode();
@@ -74,7 +74,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<ScanResult> = session_files
         .par_iter()
-        .map(|p| scan_one_file(p, target_file))
+        .map(|p| scan_one_file(p, target_file, cross))
         .collect::<Result<Vec<_>>>()?;
 
     // ── Merge, keeping each session's events grouped (ordering inside a session is the
@@ -217,7 +217,7 @@ pub(crate) fn raw_needle_safe(base: &str) -> bool {
     !base.is_empty() && base.bytes().all(|b| b >= 0x20 && b != b'"' && b != b'\\')
 }
 
-pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
+pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     let manifest = args
         .files_from
         .as_deref()
@@ -282,7 +282,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
     // ── ONE parse per transcript; extract every present target from its shared turn grouping. ──
     let per_file: Vec<Vec<(usize, ScanResult)>> = session_files
         .par_iter()
-        .map(|p| scan_one_file_multi(p, &targets, &ac, &always))
+        .map(|p| scan_one_file_multi(p, &targets, &ac, &always, cross))
         .collect::<Result<Vec<_>>>()?;
 
     let mut by_target: Vec<Vec<ScanResult>> = (0..targets.len()).map(|_| Vec::new()).collect();

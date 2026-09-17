@@ -212,6 +212,9 @@ pub(crate) fn print_footer(outcome: &Outcome) {
         outcome.boundaries.len()
     );
     println!("(Bash mutations are heuristic — parsed from the command string.)");
+    for line in outcome.crossing.lines() {
+        println!("{line}");
+    }
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
@@ -330,7 +333,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
                 .map(|b| b.parent_session_id.as_str()),
         )
         .collect();
-    let summary = crate::text::envelope_summary(json!({
+    let mut summary_fields = json!({
         "sessions": sessions.len(),
         "distinct_files": outcome.distinct_files(),
         "total_mutations": outcome.mutations.len(),
@@ -342,7 +345,11 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             FilesDetail::ByFile => "file",
             FilesDetail::Timeline => "timeline",
         },
-    }));
+    });
+    for (k, v) in outcome.crossing.json_fields() {
+        summary_fields[k] = v;
+    }
+    let summary = crate::text::envelope_summary(summary_fields);
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }

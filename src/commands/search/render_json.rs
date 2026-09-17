@@ -284,6 +284,13 @@ pub(crate) fn render_json(
         // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
     });
+    // C-42, the BOUNDED CROSSING: present whenever crossing was ENABLED, so a machine
+    // reader can tell "asked to cross, nothing to cross" from "asked not to cross". Under
+    // `--cross-compactions 0` csift crossed nothing on purpose and the keys are absent,
+    // which keeps that run byte-identical to the reading before the budget existed.
+    for (k, v) in outcome.chain.crossing.json_fields() {
+        summary_fields[k] = v;
+    }
     // `--for <ADDR>`: what the emitted set IS. Present only under the flag, because on an
     // ordinary search there is no closure and a null would read as one that found nothing.
     // `records` counts distinct RECORDS (a record whose several sections matched is one),

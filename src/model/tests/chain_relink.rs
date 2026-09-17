@@ -50,7 +50,7 @@ fn the_tips_fallback_takes_the_one_record_nothing_points_at() {
         &u("u2", "x1", "survey the shoal", "2026-06-07T05:02:00.000Z"),
         &att("x9", "not-in-this-file", "2026-06-07T05:09:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(2), "the tip, not the newest record");
     let s = survivals(&c, r.len());
     assert_eq!(
@@ -82,7 +82,7 @@ fn two_tips_climbing_to_one_ancestor_are_one_candidate() {
         &att("x2", "a0", "2026-06-07T05:03:00.000Z"),
         &att("x9", "not-in-this-file", "2026-06-07T05:09:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(1), "the shared ancestor wins outright");
     let s = survivals(&c, r.len());
     assert_eq!(
@@ -112,7 +112,7 @@ fn a_replay_copy_is_no_tip_of_its_own() {
         &u("d1", "a0", "sound the reef", "2026-06-07T05:04:00.000Z"),
         &att("x9", "not-in-this-file", "2026-06-07T05:09:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         c.leaf_index,
         Some(4),
@@ -141,7 +141,7 @@ fn a_preserved_segment_is_walked_from_its_tail_up_to_its_head() {
         &u("u1", "k2", "new prompt", "2026-06-07T05:11:00.000Z"),
         &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let s = survivals(&c, r.len());
     assert_eq!(s[0], "pre-cut", "the segment cut ran");
     assert_eq!(s[1], "pre-cut");
@@ -166,7 +166,7 @@ fn the_orphan_reparent_is_conversation_records_only() {
         r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto","preservedMessages":{"anchorUuid":"a0","uuids":["k1","k2"]}}}"#,
         &att("x1", "u0", "2026-06-07T05:11:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert!(
         c.leaf_index.is_none(),
         "no record climbs to a conversation record, so there is no leaf"
@@ -196,7 +196,7 @@ fn a_cut_record_and_a_line_the_loader_never_admits_are_both_outside_the_tip_sear
         r#"{"type":"file-history-snapshot","uuid":"fh1","parentUuid":"a1","timestamp":"2026-06-07T05:12:00.000Z","messageId":"m-1"}"#,
         &att("x9", "not-in-this-file", "2026-06-07T05:15:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(6), "the one tip after the cut");
     let s = survivals(&c, r.len());
     assert_eq!(&s[0..2], ["pre-cut", "pre-cut"], "the cut still cuts");

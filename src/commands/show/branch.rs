@@ -24,7 +24,7 @@
 //! fork prints the parent's line AND type.
 
 use super::*;
-use crate::model::{Block, Chain, Kind, Record, Survival};
+use crate::model::{Block, Chain, CrossingBudget, Kind, Record, Survival};
 use serde_json::json;
 
 /// One parsed jsonl line: a full record, or the structural [`crate::parse::spine_record`]
@@ -160,7 +160,11 @@ fn widest_gap(children: &[Child]) -> Option<i64> {
     widest
 }
 
-pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) -> Result<()> {
+pub(crate) fn run_branch_points(
+    file: &std::path::Path,
+    format: OutputFormat,
+    cross: CrossingBudget,
+) -> Result<()> {
     let session_id = crate::subagent::session_id_from_path(file);
     let is_subagent = crate::subagent::is_subagent_path(file);
     let parent_session_id =
@@ -215,7 +219,15 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
 
     // Claude Code's own conversation chain over the SAME rows: which child of a fork the
     // conversation continued from, and what became of the others.
-    let chain = Chain::build_by(&rows, |r| r.node(), None);
+    let chain = Chain::build_by(&rows, |r| r.node(), None, cross);
+    // The floor's own address: the chain answers in row indices, and these rows carry the
+    // jsonl lines (a spine row's line included), so this is the one layer that can name it.
+    let crossing = chain.crossing(
+        rows.get(chain.floor).map(|r| r.line()),
+        rows.get(chain.floor)
+            .and_then(|r| r.node().timestamp())
+            .map(str::to_string),
+    );
 
     // uuid → (own line, own type), over EVERY parsed line - a fork parent can be an
     // attachment, a turn_duration system record, or any other line the loader admits.
@@ -292,7 +304,13 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
 
     match format {
         OutputFormat::Text => {
-            render_branch_text(&session_id, conversation_records, &points, skipped);
+            render_branch_text(
+                &session_id,
+                conversation_records,
+                &points,
+                skipped,
+                &crossing,
+            );
         }
         OutputFormat::Json => render_branch_json(
             &session_id,
@@ -301,6 +319,7 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
             conversation_records,
             &points,
             skipped,
+            &crossing,
         )?,
     }
     Ok(())
@@ -328,6 +347,7 @@ fn render_branch_text(
     conversation_records: usize,
     points: &[BranchPoint],
     skipped: usize,
+    crossing: &crate::model::CrossingReport,
 ) {
     println!("BRANCH POINTS  {session_id}");
     println!(
@@ -377,6 +397,12 @@ fn render_branch_text(
              and beyond what that chain resolves csift does not guess."
         );
     }
+    // Every child verdict is read off the chain, so how far that chain climbed is part of
+    // the answer: a `pre-cut` verdict above the floor means "not resolved here", not "not
+    // resolved at all".
+    for line in crossing.lines() {
+        println!("  {line}");
+    }
     if skipped > 0 {
         println!("  ({})", crate::text::malformed_note(skipped));
     }
@@ -389,6 +415,7 @@ fn render_branch_json(
     conversation_records: usize,
     points: &[BranchPoint],
     skipped: usize,
+    crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
     let header = crate::text::envelope_header(
         "show",
@@ -434,11 +461,15 @@ fn render_branch_json(
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
-    let summary = crate::text::envelope_summary(json!({
+    let mut summary_fields = json!({
         "branch_points": points.len(),
         "conversation_records": conversation_records,
         "skipped_lines": skipped,
-    }));
+    });
+    for (k, v) in crossing.json_fields() {
+        summary_fields[k] = v;
+    }
+    let summary = crate::text::envelope_summary(summary_fields);
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }

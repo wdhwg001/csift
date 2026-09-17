@@ -18,6 +18,7 @@ pub(crate) fn fetch_records(
     lines: BTreeSet<usize>,
     uuids: BTreeSet<String>,
     turn_range: Option<crate::text::RangeSpec>,
+    cross: CrossingBudget,
 ) -> Result<(Vec<Exchange>, usize, usize)> {
     let args = SearchArgs::default();
     let matcher = Matcher::pure();
@@ -49,6 +50,7 @@ pub(crate) fn fetch_records(
         // DEFAULT `SearchArgs`, so the answer is stated here rather than read off a format
         // that is not show's. An address fetches at most a capped handful of records.
         true,
+        cross,
     )?;
     Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
 }
@@ -67,6 +69,7 @@ pub(crate) fn search_one_file(
     inner_parallel: bool,
     for_addr: Option<&ForAddr>,
     engine_edges: bool,
+    cross: CrossingBudget,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -430,6 +433,7 @@ pub(crate) fn search_one_file(
         &schedule_fires,
         for_addr,
         engine_edges,
+        cross,
     );
 
     // `--raw`: backfill each hit's VERBATIM source line from this file's mmap - one pass

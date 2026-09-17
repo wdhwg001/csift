@@ -209,6 +209,9 @@ pub(crate) struct ScanResult {
     /// reconstruction that no model ever read. They are counted and pointed at instead.
     pub(crate) abandoned_openers: Vec<usize>,
     pub(crate) skipped_lines: usize,
+    /// What the walk did with this transcript's compaction boundaries (C-42). Verbatim
+    /// replays LIVE turns, so how far the chain climbed decides which turns exist at all.
+    pub(crate) crossing: crate::model::CrossingReport,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

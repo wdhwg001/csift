@@ -120,6 +120,7 @@ pub(crate) fn resolve_selection<'a>(
     selection: &[Sel],
     images: &'a [ImageRef],
     session_files: &[PathBuf],
+    cross: CrossingBudget,
 ) -> Result<Vec<&'a ImageRef>> {
     let mut sel = Vec::new();
     let mut unresolved = Vec::new();
@@ -148,6 +149,7 @@ pub(crate) fn resolve_selection<'a>(
         return Err(ambiguity_error(
             &ambiguous,
             pinned_path(session_files, images),
+            cross,
         ));
     }
     if !unresolved.is_empty() {
@@ -201,7 +203,7 @@ pub(crate) struct LineInfo {
     pub(crate) text: HashMap<usize, String>,
 }
 
-pub(crate) fn transcript_line_info(path: &Path) -> Result<LineInfo> {
+pub(crate) fn transcript_line_info(path: &Path, cross: CrossingBudget) -> Result<LineInfo> {
     let mut info = LineInfo {
         turn_of: HashMap::new(),
         text: HashMap::new(),
@@ -232,7 +234,7 @@ pub(crate) fn transcript_line_info(path: &Path) -> Result<LineInfo> {
     // already holds the whole DAG and needs no spliced spine rows. A record the chain no longer
     // reaches belongs to no numbered turn, so it gets NO entry here - which is exactly how a
     // `--turn` window leaves an abandoned image out while the flat listing still carries it.
-    let view = ChainView::build(&records, &[]);
+    let view = ChainView::build(&records, &[], cross);
     for (ti, group) in view.turns().iter().enumerate() {
         for &ri in group {
             info.turn_of.insert(records[ri].0, ti);
@@ -273,8 +275,9 @@ pub(crate) fn excerpt_around(text: &str, needle: &str, radius: usize) -> String 
 pub(crate) fn ambiguity_error(
     ambiguous: &[(usize, Vec<&ImageRef>)],
     path: Option<&Path>,
+    cross: CrossingBudget,
 ) -> anyhow::Error {
-    let info = path.and_then(|p| transcript_line_info(p).ok());
+    let info = path.and_then(|p| transcript_line_info(p, cross).ok());
     let mut msg = String::new();
     for (n, occs) in ambiguous {
         if !msg.is_empty() {

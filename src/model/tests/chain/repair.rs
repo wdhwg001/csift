@@ -42,7 +42,7 @@ fn the_parent_repair_takes_the_nearest_unvisited_record_of_the_same_lane() {
             "2026-06-07T05:00:03.000Z",
         ),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(2), "the file tail is the leaf");
     let s = survivals(&c, r.len());
     assert_eq!(s[2], "live");
@@ -68,7 +68,7 @@ fn the_repair_window_includes_its_own_edge_and_stops_past_it() {
             "2026-06-07T05:00:05.000Z",
         ),
     ]);
-    let c = Chain::build(&at_edge, None);
+    let c = Chain::build(&at_edge, None, CrossingBudget::NONE);
     assert_eq!(
         survivals(&c, at_edge.len()),
         vec!["live", "live"],
@@ -85,7 +85,7 @@ fn the_repair_window_includes_its_own_edge_and_stops_past_it() {
             "2026-06-07T05:00:06.000Z",
         ),
     ]);
-    let c = Chain::build(&past_edge, None);
+    let c = Chain::build(&past_edge, None, CrossingBudget::NONE);
     let s = survivals(&c, past_edge.len());
     assert_eq!(s[1], "live", "the tail is still the leaf");
     assert_eq!(
@@ -107,7 +107,7 @@ fn a_tool_result_carrier_of_an_on_chain_assistant_is_rescued_by_its_message_id_g
         r#"{"type":"user","uuid":"c0b","parentUuid":"a0","timestamp":"2026-06-07T05:00:07.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t9","content":"also ok"}]}}"#,
         &a("a1", "c0", "done", "2026-06-07T05:00:08.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(
         survivals(&c, r.len()),
         vec!["live"; 5],

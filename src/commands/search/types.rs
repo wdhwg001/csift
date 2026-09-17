@@ -49,6 +49,10 @@ pub struct ChainCounts {
     pub boundary_cut_line: Option<usize>,
     /// How the chain's leaf was chosen, when exactly one transcript is in scope.
     pub leaf_source: Option<&'static str>,
+    /// What the walk did with this scope's compaction boundaries: how many it stepped
+    /// over, how many it did not, and where the floor sits. Silent under
+    /// `--cross-compactions 0`, which is the reading csift gave before the budget existed.
+    pub crossing: crate::model::CrossingReport,
 }
 
 impl ChainCounts {
@@ -61,6 +65,7 @@ impl ChainCounts {
         self.drafts += other.drafts;
         self.rewound_turns += other.rewound_turns;
         self.replay_copies += other.replay_copies;
+        self.crossing.add(&other.crossing, first);
         if first {
             self.boundary_cut_line = other.boundary_cut_line;
             self.leaf_source = other.leaf_source;
@@ -77,7 +82,10 @@ impl ChainCounts {
     /// Is there anything to disclose at all?
     #[must_use]
     pub fn any(&self) -> bool {
-        self.abandoned_records > 0 || self.replay_copies > 0 || self.boundary_cut_line.is_some()
+        self.abandoned_records > 0
+            || self.replay_copies > 0
+            || self.boundary_cut_line.is_some()
+            || self.crossing.any()
     }
 }
 

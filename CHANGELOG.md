@@ -323,6 +323,28 @@ surface change bumps the PATCH.
 
 ### Changed
 
+- **The survival walk now CROSSES a compaction boundary, under a budget, and every surface
+  says what it crossed.** Claude Code's loader reads `parentUuid` only, so it stops at a
+  `compact_boundary` and the whole history above the cut leaves the conversation; csift
+  stopped there too and flagged that region `pre-cut`. But the boundary names the record the
+  compaction re-anchored onto, in `logicalParentUuid`, and the conversation genuinely
+  continues across a compaction - a subagent dispatched before one returns after it. The
+  walk now follows that link, up to N boundaries, set by the new GLOBAL flag
+  `--cross-compactions <N|all>` and honoured by every chain-walking command: `search`,
+  `show`, `stats`, `files`, `recover`, `verbatim`, `image`. Above a boundary it CROSSED the
+  ordinary rules apply, so a turn the operator rewound past above a cut is finally named for
+  what it is rather than filed as unresolved history; above the FLOOR everything off-chain
+  stays `pre-cut`. This is a surface change on a compacted transcript: a record's `survival`
+  can move from `pre-cut` to `live` or to `abandoned`, and a turn that becomes abandoned
+  leaves the numbering. `--cross-compactions 0` restores the previous reading exactly, and
+  under it csift says nothing about crossing at all, neither a footer line nor a JSON key.
+  The footer is never silent otherwise: it names how many boundaries were stepped over, how
+  many were not, where the chain floor sits, WHY it sits there - a budget that ran out, which
+  raising the flag moves, or a boundary naming a record no line of the file carries, which it
+  does not - and the flag value that would reach the rest. JSON carries the same six facts as
+  `crossing_budget`, `boundaries_crossed`, `budget_exhausted`, `boundaries_above_floor`,
+  `floor_line` and `floor_cause`.
+
 - **An unmodeled unit's excerpt elides an opaque `data` blob.** The key=value excerpt cuts
   each value at 80 characters, so a base64 image source or a `redacted_thinking`
   ciphertext swallowed the whole budget and the sibling keys that say what the shape is -

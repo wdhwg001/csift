@@ -14,9 +14,12 @@ fn survival_rows(out: &str) -> Vec<serde_json::Value> {
 
 /// A transcript whose history sits ABOVE a compaction cut: L1-L3 write the target, L4 is
 /// the `compact_boundary` (its own parentUuid null, `logicalParentUuid` naming L3), L5 the
-/// summary, L6-L8 the post-cut turn that edits the same file. Claude Code's loader stops at
-/// the boundary and so does csift's walk; csift keeps reading the file above it and flags
-/// those records `pre-cut`.
+/// summary, L6-L8 the post-cut turn that edits the same file.
+///
+/// The boundary's `logicalParentUuid` RESOLVES here, so the reading depends on the crossing
+/// budget: at `--cross-compactions 0` the walk stops at the boundary exactly as Claude
+/// Code's loader does and the region above is `pre-cut`, and at the default budget the walk
+/// steps over and resolves it. Both are pinned below, on the same fixture.
 fn pre_cut_home() -> Home {
     let h = Home::new();
     h.write(
@@ -44,11 +47,27 @@ fn pre_cut_home() -> Home {
 fn a_pre_cut_region_costs_files_no_row_and_recover_no_coverage() {
     let h = pre_cut_home();
     let t = at(SURV_SESS);
-    let files = h.run(&["files", t.as_str(), "--by", "timeline"]);
+    let files = h.run(&[
+        "files",
+        t.as_str(),
+        "--by",
+        "timeline",
+        "--cross-compactions",
+        "0",
+    ]);
     assert!(files.success, "stderr: {}", files.stderr);
     let muts: Vec<serde_json::Value> = survival_rows(
-        &h.run(&["files", t.as_str(), "--by", "timeline", "--format", "json"])
-            .stdout,
+        &h.run(&[
+            "files",
+            t.as_str(),
+            "--by",
+            "timeline",
+            "--format",
+            "json",
+            "--cross-compactions",
+            "0",
+        ])
+        .stdout,
     )
     .into_iter()
     .filter(|v| v["kind"] == "mutation")
@@ -79,6 +98,8 @@ fn a_pre_cut_region_costs_files_no_row_and_recover_no_coverage() {
         "--coverage",
         "--format",
         "json",
+        "--cross-compactions",
+        "0",
     ]);
     let row = survival_rows(&cov.stdout)
         .into_iter()
@@ -89,6 +110,76 @@ fn a_pre_cut_region_costs_files_no_row_and_recover_no_coverage() {
         row["abandoned_events"], 0,
         "a pre-cut event is not an abandoned one: {}",
         cov.stdout
+    );
+}
+
+/// The SAME fixture under the crossing budget: the boundary names a record this file still
+/// carries, so the walk steps over it and the region above stops being a blind one. The row
+/// is the same row - same line, same turn number, same file - and only its `survival` moves,
+/// which is exactly what the budget is for.
+#[test]
+fn the_crossing_budget_resolves_the_same_pre_cut_region_to_live() {
+    let h = pre_cut_home();
+    let t = at(SURV_SESS);
+    let out = h.run(&[
+        "files",
+        t.as_str(),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+        "--cross-compactions",
+        "1",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let above = survival_rows(&out.stdout)
+        .into_iter()
+        .find(|v| v["kind"] == "mutation" && v["line"] == 2)
+        .expect("the write above the cut");
+    assert_eq!(above["survival"], "live", "{}", out.stdout);
+    assert_eq!(above["turn_index"], 0, "{}", out.stdout);
+    let summary = survival_rows(&out.stdout)
+        .into_iter()
+        .find(|v| v["kind"] == "summary")
+        .expect("a summary row");
+    assert_eq!(summary["boundaries_crossed"], 1, "{}", out.stdout);
+    assert_eq!(summary["crossing_budget"], 1, "{}", out.stdout);
+    assert_eq!(summary["budget_exhausted"], false, "{}", out.stdout);
+    assert_eq!(summary["boundaries_above_floor"], 0, "{}", out.stdout);
+    assert_eq!(summary["floor_cause"], "head", "{}", out.stdout);
+
+    // Crossing OFF says nothing about crossing at all: no keys, no footer line.
+    let off = h.run(&[
+        "files",
+        t.as_str(),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+        "--cross-compactions",
+        "0",
+    ]);
+    let summary_off = survival_rows(&off.stdout)
+        .into_iter()
+        .find(|v| v["kind"] == "summary")
+        .expect("a summary row");
+    assert!(
+        summary_off.get("boundaries_crossed").is_none(),
+        "budget 0 is the reading csift gave before the budget existed: {}",
+        off.stdout
+    );
+    let text_off = h.run(&[
+        "files",
+        t.as_str(),
+        "--by",
+        "timeline",
+        "--cross-compactions",
+        "0",
+    ]);
+    assert!(
+        !text_off.stdout.contains("compaction crossing"),
+        "{}",
+        text_off.stdout
     );
 }
 

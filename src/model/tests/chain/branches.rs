@@ -39,7 +39,7 @@ fn the_survivor_of_a_draft_is_an_opener_and_not_merely_the_newest_record_sharing
         r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"soundings"}]}}"#,
         &a("a2", "c0", "sounding", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let kind = c.kind(2).expect("the recalled prompt has a kind");
     assert!(
         matches!(kind, Kind::Draft { .. }),
@@ -72,7 +72,7 @@ fn the_chains_own_child_wins_over_the_last_opener_sharing_the_parent() {
         &auq_answer("q2", "a0", "t2", "2026-06-07T05:02:00.000Z"),
         &a("a2", "q1", "sounding", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let kind = c.kind(2).expect("the recalled prompt has a kind");
     assert_eq!(
         kind.survivor(),
@@ -94,7 +94,7 @@ fn the_survivor_is_named_from_the_chains_own_child_only_when_that_child_opens_a_
         r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"soundings"}]}}"#,
         &a("a2", "c0", "read them", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let kind = c.kind(2).expect("the abandoned prompt has a kind");
     assert_eq!(
         kind.survivor(),
@@ -127,7 +127,7 @@ fn a_replay_copy_below_an_opener_does_not_make_it_a_rewound_turn() {
         ),
         &a("dup", "u2", "its survivor", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let kind = c.kind(2).expect("the recalled prompt has a kind");
     assert!(
         matches!(kind, Kind::Draft { .. }),
@@ -164,7 +164,7 @@ fn every_child_of_one_parent_is_indexed_not_just_the_first() {
         ),
         &a("a2", "u2", "sounding", "2026-06-07T05:02:05.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     let kind = c.kind(2).expect("the rewound prompt has a kind");
     assert!(
         matches!(kind, Kind::Rewound { .. }),
@@ -191,7 +191,7 @@ fn the_relink_re_points_the_anchors_other_children_at_the_preserved_tail() {
         r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto","preservedMessages":{"anchorUuid":"a0","uuids":["k1","k2"]}}}"#,
         &att("x1", "a0", "2026-06-07T05:11:00.000Z"),
     ]);
-    let c = Chain::build(&r, None);
+    let c = Chain::build(&r, None, CrossingBudget::NONE);
     assert_eq!(c.leaf_index, Some(3), "the preserved tail is the leaf");
     let s = survivals(&c, r.len());
     assert_eq!(&s[0..2], ["pre-cut", "pre-cut"], "the cut still cuts");

@@ -26,31 +26,39 @@
 //! descendant of the leaf is Live.
 //!
 //! FAIL-OPEN, always - and the reason is where the walk STOPS. Claude Code's walk ends at
-//! a `compact_boundary` (its `parentUuid` is null and the loader never reads
-//! `logicalParentUuid`), and csift's walk ends on the same record: every corpus boundary
-//! carries a null `parentUuid`, so the null-parent arm fires first and the walk's
-//! `logicalParentUuid` arm stays a guard for a shape with no specimens. Claim MISC-043
-//! measures what that guard would meet if it fired: 52 of 255 boundary records, over 14 of
-//! the 21 compacted transcripts, name a `logicalParentUuid` matching no `uuid` on ANY line
-//! of their own file. csift keeps the region above the terminating record and flags it
-//! instead of dropping it, which is the whole difference, and that region is not empty.
+//! a `compact_boundary`: its `parentUuid` is null (260 of 260 corpus specimens) and the
+//! loader never reads `logicalParentUuid`, the field naming the record the compaction
+//! re-linked from. csift follows that field under a CROSSING BUDGET ([`CrossingBudget`],
+//! the global `--cross-compactions` flag), because the conversation genuinely continues
+//! across a compaction - a subagent dispatched before one returns after it - and a reader
+//! asking what a session did wants the turns above the cut resolved rather than declared
+//! unreadable. What the walk reaches above a crossed boundary takes the ordinary rules:
+//! Live where the chain reaches it, Abandoned where it does not.
 //!
-//! So the walk's terminating record is a FLOOR: an off-chain record physically above it
-//! is `PreCut`, never `Abandoned` - csift declines to call a record abandoned in a region
-//! it could not resolve. In that blind region the measured same-parent opener rule (an
-//! opener with a LATER opener sharing its `parentUuid` was recalled and re-sent) still
-//! applies, so draft detection never depends on the chain reaching that far.
+//! The walk still ends ON a boundary two ways, and both leave a FLOOR: the budget ran out,
+//! or the `logicalParentUuid` reached no record the map still holds (claim MISC-043: 52 of
+//! 255 boundary records, over 14 of the 21 compacted transcripts, name a
+//! `logicalParentUuid` matching no `uuid` on ANY line of their own file; a relink cut
+//! removes more). An off-chain record physically above the floor is `PreCut`, never
+//! `Abandoned` - csift declines to call a record abandoned in a region it could not
+//! resolve - and [`CrossingReport`] states which cause it was, how many boundaries remain
+//! above and the flag value that would reach them. In that blind region the measured
+//! same-parent opener rule (an opener with a LATER opener sharing its `parentUuid` was
+//! recalled and re-sent) still applies, so draft detection never depends on the chain
+//! reaching that far.
 
 use super::*;
 use std::collections::{HashMap, HashSet};
 
 mod branches;
+mod budget;
 mod leaf;
 mod nodes;
 mod relink;
 mod view;
 mod walk;
 
+pub use budget::{CrossingBudget, CrossingReport, FloorCause, CROSS_COMPACTIONS_DEFAULT};
 pub(crate) use nodes::Builder;
 pub(crate) use nodes::ChainNode;
 use nodes::Slot;
@@ -214,8 +222,17 @@ pub struct Chain {
     /// `boundary_cut_line` is derived from it.
     pub boundary_cut: Option<usize>,
     /// The walk's terminating index - the floor below which `Abandoned` is claimed.
-    #[allow(dead_code)]
     pub floor: usize,
+    /// Compaction boundaries the walk stepped over.
+    pub boundaries_crossed: usize,
+    /// The budget it ran under.
+    pub budget: CrossingBudget,
+    /// The walk met a boundary with no budget left.
+    pub budget_exhausted: bool,
+    /// Boundaries the walk did NOT cross (the floor's own included).
+    pub boundaries_above_floor: usize,
+    /// Why the walk ended where it did.
+    pub floor_cause: FloorCause,
     /// Records classified `Abandoned` (the footer + summary count).
     pub abandoned_records: usize,
     /// Abandoned openers with an assistant descendant.
@@ -233,10 +250,14 @@ impl Chain {
     /// `last-prompt` leaf; passing `None` (the production path) makes the chain find it
     /// among the records themselves - a `last-prompt` spine row - which is also the only
     /// way to honour the loader's rule that a `compact_boundary` seen afterwards WIPES it.
+    ///
+    /// `budget` is how many compaction boundaries the walk may step over
+    /// ([`CrossingBudget`]); it is never defaulted inside the chain, so every caller states
+    /// the reading it wants and a hard-coded one is visible at the call site.
     #[allow(dead_code)]
     #[must_use]
-    pub fn build(records: &[Record], leaf_hint: Option<&str>) -> Chain {
-        Self::build_by(records, |r| ChainNode::Full(r), leaf_hint)
+    pub fn build(records: &[Record], leaf_hint: Option<&str>, budget: CrossingBudget) -> Chain {
+        Self::build_by(records, |r| ChainNode::Full(r), leaf_hint, budget)
     }
 
     /// [`Chain::build`] over any wrapper (a `&Record`, a search `Row`, a stats row) via a
@@ -249,8 +270,9 @@ impl Chain {
         records: &[T],
         node: impl Fn(&T) -> ChainNode<'_>,
         leaf_hint: Option<&str>,
+        budget: CrossingBudget,
     ) -> Chain {
-        Self::build_by_indexed(records, node, leaf_hint).0
+        Self::build_by_indexed(records, node, leaf_hint, budget).0
     }
 
     /// [`Chain::build_by`], handing back the uuid map the build already made
@@ -266,13 +288,30 @@ impl Chain {
         records: &'a [T],
         node: impl Fn(&T) -> ChainNode<'_>,
         leaf_hint: Option<&str>,
+        budget: CrossingBudget,
     ) -> (Chain, UuidIndex<'a>) {
         let mut b = Builder::new(records, &node);
         let anchor = relink::apply(&mut b);
         b.index_children();
         let (leaf, source) = leaf::pick(&b, leaf_hint, anchor);
-        let out = walk::run(&mut b, leaf);
-        branches::finish(b, leaf, source, out)
+        let out = walk::run(&mut b, leaf, budget);
+        branches::finish(b, leaf, source, out, budget)
+    }
+
+    /// The crossing disclosure, with the FLOOR's address filled in by the caller: the chain
+    /// answers in record indices and only the surface knows which jsonl line and instant
+    /// those are.
+    #[must_use]
+    pub fn crossing(&self, floor_line: Option<usize>, floor_ts: Option<String>) -> CrossingReport {
+        CrossingReport {
+            budget: self.budget,
+            boundaries_crossed: self.boundaries_crossed,
+            budget_exhausted: self.budget_exhausted,
+            boundaries_above_floor: self.boundaries_above_floor,
+            cause: Some(self.floor_cause),
+            floor_line,
+            floor_ts,
+        }
     }
 
     /// This record's survival. An index past the end reads `Live` (nothing is claimed

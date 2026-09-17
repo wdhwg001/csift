@@ -367,7 +367,7 @@ fn a_replay_pointer_at_a_line_that_cannot_exist_is_dropped() {
         r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"first"}}"#,
     ];
     let records: Vec<Record> = lines.iter().map(|l| rec(l)).collect();
-    let chain = crate::model::Chain::build(&records, None);
+    let chain = crate::model::Chain::build(&records, None, CrossingBudget::NONE);
     assert_eq!(chain.replay_of(0), Some(1), "the earlier line is the copy");
 
     let mut hits = scanned(lines[0]);
@@ -422,7 +422,12 @@ fn the_survival_relations_name_the_records_the_chain_found() {
         r#"{"type":"assistant","uuid":"a2","parentUuid":"s2","timestamp":"2026-06-07T05:03:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"surveying"}]}}"#,
     ]);
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
-    let chain = crate::model::Chain::build_by(&rows, |r| r.node(), None);
+    let chain = crate::model::Chain::build_by(
+        &rows,
+        |r| r.node(),
+        None,
+        crate::model::CrossingBudget::NONE,
+    );
 
     // `(word, basis, target line)` for one record's edges - which relation, how it was
     // found, and the address it resolves to, which is the whole content of the fact.
@@ -466,7 +471,12 @@ fn a_survival_relation_whose_row_is_out_of_range_yields_no_edge() {
         r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
     ]);
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
-    let chain = crate::model::Chain::build_by(&rows, |r| r.node(), None);
+    let chain = crate::model::Chain::build_by(
+        &rows,
+        |r| r.node(),
+        None,
+        crate::model::CrossingBudget::NONE,
+    );
     assert_eq!(chain.replay_of(0), Some(1), "the earlier line is the copy");
     assert!(
         survival_edges(&chain, 0, &rows[..1]).is_empty(),
@@ -503,7 +513,12 @@ fn a_survival_target_with_no_physical_line_names_its_uuid() {
         })
         .collect();
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
-    let chain = crate::model::Chain::build_by(&rows, |r| r.node(), None);
+    let chain = crate::model::Chain::build_by(
+        &rows,
+        |r| r.node(),
+        None,
+        crate::model::CrossingBudget::NONE,
+    );
     assert_eq!(chain.replay_of(0), Some(1), "the earlier line is the copy");
     let facts = survival_edges(&chain, 0, &rows);
     let HitFact::For { kind, target, .. } = &facts[0] else {
