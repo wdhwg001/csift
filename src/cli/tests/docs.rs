@@ -204,50 +204,6 @@ fn the_subcommands_block_matches_the_command_enum() {
     );
 }
 
-/// SKILL.md's surface stamp must match the crate version - forces the LLM-facing
-/// skill to be (at least) OPENED on every release, so the "re-read this file on an
-/// unexpected error" recovery path always lands on current truth.
-#[test]
-fn skill_stamp_matches_crate_version() {
-    let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
-        .expect("SKILL.md at the repo root");
-    let want = format!("v{}", env!("CARGO_PKG_VERSION"));
-    assert!(
-        skill.contains(&want),
-        "SKILL.md must carry the surface stamp `{want}` (found none) — update the \
-             stamp (and the surface docs) with every version bump"
-    );
-}
-
-/// The four repo docs must never resurrect a token this cleanup removed. SPEC's
-/// `>`-quoted change LEDGER lines are exempt (they record the renames themselves).
-#[test]
-fn docs_do_not_resurrect_removed_tokens() {
-    let deny: &[&str] = &[
-        "--include-subagents",
-        "agents --kind",
-        "--by-file",
-        "--line A-B",
-        "category=",
-    ];
-    for doc in ["SKILL.md", "AGENTS.md", "SPEC.md", "README.md"] {
-        let path = format!("{}/{doc}", env!("CARGO_MANIFEST_DIR"));
-        let body = std::fs::read_to_string(&path).expect("repo doc");
-        for (i, line) in body.lines().enumerate() {
-            if line.starts_with('>') {
-                continue; // SPEC change-ledger lines legitimately name old spellings
-            }
-            for tok in deny {
-                assert!(
-                    !line.contains(tok),
-                    "{doc}:{} resurrects the removed token `{tok}`: {line}",
-                    i + 1
-                );
-            }
-        }
-    }
-}
-
 use crate::cli::show_keys::{k, record_row_keys, Family, FAMILY_ORDER, RECORD_KEYS};
 
 // ── The per-family HELP sections ──

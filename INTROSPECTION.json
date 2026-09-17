@@ -19654,7 +19654,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1250-1255",
+          "lines": "1267-1272",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -20120,12 +20120,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1248",
+          "lines": "1265",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "1257-1258",
+          "lines": "1274-1275",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -21060,12 +21060,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1214",
+          "lines": "1231",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "1236",
+          "lines": "1253",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21236,12 +21236,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "1214",
+          "lines": "1231",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "1236",
+          "lines": "1253",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21424,7 +21424,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1280",
+          "lines": "1297",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21691,12 +21691,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1216",
+          "lines": "1233",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "1280",
+          "lines": "1297",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21788,12 +21788,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "759",
+          "lines": "776",
           "snippet": "- **Slicing** (hook injection, \u226410000-char cap): `--slices N --slice i --window W` gives fixed-fleet chunks of whole turns; out-of-range prints nothing and exits 0, which is a hook affordance. Text-only. \u00a724 recipe 1 is the working script."
         },
         {
           "path": "SKILL.md",
-          "lines": "1216",
+          "lines": "1233",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -38558,12 +38558,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1208",
+          "lines": "1225",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "1216",
+          "lines": "1233",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],

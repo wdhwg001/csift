@@ -523,11 +523,28 @@ Over 82 top-level transcripts at `--cross-compactions all`, the three shut-door 
 
 There is no alias and no forwarding arm anywhere in csift: a retired spelling is a HARD ERROR whose text names its successor. This is the only section that lists them, so a caller who errored on one lands here and finds where those records went.
 
+Thirteen retired SELECTORS, each with the successor string its own error prints:
+
 | you typed | what happened to it |
 |---|---|
-| `-t harness.meta` and every `harness.meta.*` path | split by PRODUCER into the categories that now own those records: `harness.hook.*`, `harness.context.*`, `harness.command.caveat`, `harness.schedule.tick`, `harness.turn.*`, `harness.bookkeeping.file-history`, `harness.system.*` |
-| `-t thinking` · `-t tool` · `-t tool-response` (flat, pre-dotted) | `-t agent.thinking` · `-t agent.tool.use` · `-t agent.tool.result` |
-| `-t harness.schedule.continuation` | the schedule category's four current leaves: `harness.schedule.{wakeup, event, fire, tick}` |
+| `thinking` | `agent.thinking` |
+| `tool` | `agent.tool` (the CATEGORY - it covers `use` and `result`) |
+| `tool-response` | `agent.tool.result` |
+| `harness.schedule.continuation` | `harness.resume.prompt`. Not a schedule leaf at all: the record comes from the RESUME LOADER, never from the scheduler, and v0.12.0 moved it to the family that writes it |
+| `harness.meta` | split by PRODUCER into TEN: `harness.hook.*` · `harness.command.caveat` · `harness.enforce.retry` · `harness.schedule.tick` · `harness.schedule.event` · `harness.context.*` · `harness.turn.*` · `harness.system.*` · `harness.bookkeeping.*` · `agent.message.structured` |
+| `harness.meta.hook` | `harness.hook.context` (hook-injected text) · `harness.hook.feedback` (a blocking hook's feedback) · `harness.command.caveat` · `harness.enforce.retry` (the edit-failed-retry nudge) |
+| `harness.meta.loop` | `harness.schedule.tick` |
+| `harness.meta.attachment` | `harness.context.*` (the injected payloads) · `harness.hook.outcome` (a hook run's own record) · `agent.message.structured` (a subagent's structured answer) |
+| `harness.meta.turn-duration` | `harness.turn.duration` |
+| `harness.meta.away-summary` | `harness.turn.recap` |
+| `harness.meta.stop-hooks` | `harness.turn.stop-hooks` |
+| `harness.meta.snapshot` | `harness.bookkeeping.file-history` |
+| `harness.meta.system` | `harness.system.{refusal,api-error,notice,kill,command}` · `harness.schedule.event` (the scheduler's fire record) |
+
+A retired prefix plus `.*` is the same retirement and looks up bare, so `-t 'harness.meta.*'` errors with the `harness.meta` row above. TWO more retirements are not selectors:
+
+| you typed | what happened to it |
+|---|---|
 | `search --additional-context` | it gated ONE leaf and the leaf has a name: `-t harness.hook.context`. `--attachments` is untouched and keeps its wide meaning (§11) |
 | `csift turns …` | renamed `csift verbatim` (§13). Plain turn READING was never what it did: that is `csift show <target> --turn -3..` |
 

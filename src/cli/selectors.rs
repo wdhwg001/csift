@@ -301,44 +301,85 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
 /// UI events. Two more entries are LEAF spellings that became CATEGORIES rather than
 /// disappearing: `agent.message` and `agent.thinking` are still valid selectors, so they
 /// never reach this table - only the paths below do.
+/// The table itself: `(retired selector, the era it belonged to, its successors)`.
+///
+/// A TABLE rather than a match, so the set is WALKABLE. `SKILL.md` section 10 is the one
+/// place a stale caller is sent to, and the only way to keep it from drifting away from
+/// these strings is a test that iterates them - which a match arm cannot offer.
+pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
+    ("thinking", "pre-v0.5 flat spelling", "agent.thinking"),
+    ("tool", "pre-v0.5 flat spelling", "agent.tool"),
+    (
+        "tool-response",
+        "pre-v0.5 flat spelling",
+        "agent.tool.result",
+    ),
+    // v0.12.0 renamed the resume repair prompt out of the schedule family: the record
+    // comes from the resume loader, never from the scheduler. Same predicate, same
+    // records, new path.
+    (
+        "harness.schedule.continuation",
+        "pre-v0.12.0 name",
+        "harness.resume.prompt",
+    ),
+    (
+        "harness.meta",
+        "pre-v0.13.0 catch-all category",
+        "harness.hook.* · harness.command.caveat · harness.enforce.retry · \
+         harness.schedule.tick · harness.schedule.event · harness.context.* · \
+         harness.turn.* · harness.system.* · harness.bookkeeping.* · \
+         agent.message.structured",
+    ),
+    (
+        "harness.meta.hook",
+        "pre-v0.13.0 name",
+        "harness.hook.context (hook-injected text) · harness.hook.feedback (a \
+         blocking hook's feedback, content opening <Name> hook feedback: and a \
+         newline) · harness.command.caveat (<local-command-caveat>) · \
+         harness.enforce.retry (the edit-failed-retry nudge)",
+    ),
+    (
+        "harness.meta.loop",
+        "pre-v0.13.0 name",
+        "harness.schedule.tick",
+    ),
+    (
+        "harness.meta.attachment",
+        "pre-v0.13.0 catch-all",
+        "harness.context.* (the injected payloads) · harness.hook.outcome (a hook \
+         run's own record) · agent.message.structured (a subagent's structured answer)",
+    ),
+    (
+        "harness.meta.turn-duration",
+        "pre-v0.13.0 name",
+        "harness.turn.duration",
+    ),
+    (
+        "harness.meta.away-summary",
+        "pre-v0.13.0 name",
+        "harness.turn.recap",
+    ),
+    (
+        "harness.meta.stop-hooks",
+        "pre-v0.13.0 name",
+        "harness.turn.stop-hooks",
+    ),
+    (
+        "harness.meta.snapshot",
+        "pre-v0.13.0 name",
+        "harness.bookkeeping.file-history",
+    ),
+    (
+        "harness.meta.system",
+        "pre-v0.13.0 catch-all",
+        "harness.system.{refusal,api-error,notice,kill,command} · \
+         harness.schedule.event (the scheduler's fire record)",
+    ),
+];
+
 fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
-    Some(match selector {
-        "thinking" => ("pre-v0.5 flat spelling", "agent.thinking"),
-        "tool" => ("pre-v0.5 flat spelling", "agent.tool"),
-        "tool-response" => ("pre-v0.5 flat spelling", "agent.tool.result"),
-        // v0.12.0 renamed the resume repair prompt out of the schedule family: the record
-        // comes from the resume loader, never from the scheduler. Same predicate, same
-        // records, new path.
-        "harness.schedule.continuation" => ("pre-v0.12.0 name", "harness.resume.prompt"),
-        "harness.meta" => (
-            "pre-v0.13.0 catch-all category",
-            "harness.hook.* · harness.command.caveat · harness.enforce.retry · \
-             harness.schedule.tick · harness.schedule.event · harness.context.* · \
-             harness.turn.* · harness.system.* · harness.bookkeeping.* · \
-             agent.message.structured",
-        ),
-        "harness.meta.hook" => (
-            "pre-v0.13.0 name",
-            "harness.hook.context (hook-injected text) · harness.hook.feedback (a \
-             blocking hook's feedback, content opening <Name> hook feedback: and a \
-             newline) · harness.command.caveat (<local-command-caveat>) · \
-             harness.enforce.retry (the edit-failed-retry nudge)",
-        ),
-        "harness.meta.loop" => ("pre-v0.13.0 name", "harness.schedule.tick"),
-        "harness.meta.attachment" => (
-            "pre-v0.13.0 catch-all",
-            "harness.context.* (the injected payloads) · harness.hook.outcome (a hook \
-             run's own record) · agent.message.structured (a subagent's structured answer)",
-        ),
-        "harness.meta.turn-duration" => ("pre-v0.13.0 name", "harness.turn.duration"),
-        "harness.meta.away-summary" => ("pre-v0.13.0 name", "harness.turn.recap"),
-        "harness.meta.stop-hooks" => ("pre-v0.13.0 name", "harness.turn.stop-hooks"),
-        "harness.meta.snapshot" => ("pre-v0.13.0 name", "harness.bookkeeping.file-history"),
-        "harness.meta.system" => (
-            "pre-v0.13.0 catch-all",
-            "harness.system.{refusal,api-error,notice,kill,command} · \
-             harness.schedule.event (the scheduler's fire record)",
-        ),
-        _ => return None,
-    })
+    RETIRED_SELECTORS
+        .iter()
+        .find(|(s, _, _)| *s == selector)
+        .map(|(_, era, to)| (*era, *to))
 }
