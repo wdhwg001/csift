@@ -8,16 +8,17 @@ use super::*;
 /// per `scope`: `TopLevelOnly` = the agent alone; `WithSubagents` = the agent + descendants.
 /// Errors when no such agent exists in scope.
 ///
-/// EVERY owning directory is collected, not the first one found, and the result goes through
-/// the same [`dedup_copies`] merge the session path takes: a copied project directory carries
-/// the whole sidecar with it, so one agent hex can be owned by two copies of one session.
-/// Returning the first hit picked a copy by `read_dir` order - possibly the very copy the
-/// session path would have dropped - and disclosed nothing.
+/// EVERY copy is returned, not the first one found: a copied project directory carries the
+/// whole sidecar with it, so one agent hex can be owned by two copies of one session, and
+/// returning the first hit picked a copy by `read_dir` order - possibly the very copy the
+/// session path would have dropped - with nothing said about it. The copies are handed back
+/// UNMERGED, because the ONE merge runs over the resolver's whole union: two rules deciding
+/// two halves of the same basename is what put both copies of one transcript in scope.
 pub(crate) fn resolve_agent_subtree(
     dirs: &[ProjectDir],
     hex: &str,
     scope: SubagentScope,
-) -> Result<Resolved> {
+) -> Result<Vec<PathBuf>> {
     let mut found: Vec<PathBuf> = Vec::new();
     let mut owner: Option<PathBuf> = None;
     'scan: for pd in dirs {
@@ -53,9 +54,7 @@ pub(crate) fn resolve_agent_subtree(
         }
     }
     if !found.is_empty() {
-        let (files, duplicates) = dedup_copies(found);
-        emit_duplicate_notes(&duplicates);
-        return Ok(Resolved { files, duplicates });
+        return Ok(found);
     }
     // Exact id matched nothing. A collision-lengthened `search` header token is a PREFIX of a
     // bare-hex agent id (12 hex chars routes here as an exact-id shape), so before giving up,

@@ -117,21 +117,13 @@ pub fn resolve_session_files_reported(
 
         // Subagent transcripts of each selected top-level session (empty unless scoped in).
         let mut sub_files: Vec<PathBuf> = Vec::new();
+        // The gathered sidecars are NOT merged here: the ONE merge over the whole union
+        // runs at the end of this function, so a sidecar copy and an `@<agent-id>` copy of
+        // the same transcript cannot be decided by two rules that pick different winners.
         if matches!(scope, SubagentScope::WithSubagents) {
             for sf in &top_level {
                 sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
             }
-        }
-        // The gathered sidecars take the SAME merge. A MERGED session pair never reaches
-        // here twice - the merge above ran first precisely so a dropped copy's whole
-        // sidecar is never walked - but a DIVERGENT pair keeps both sessions in scope, and
-        // their two sidecars can still hold byte-identical copies of one agent transcript.
-        // That is one agent seen twice, which every count below would otherwise double.
-        if !sub_files.is_empty() {
-            let (kept, groups) = dedup_copies(sub_files);
-            emit_duplicate_notes(&groups);
-            duplicates.extend(groups);
-            sub_files = kept;
         }
         let session_files: Vec<PathBuf> = match scope {
             SubagentScope::TopLevelOnly => top_level,
@@ -153,16 +145,36 @@ pub fn resolve_session_files_reported(
     // ── AGENT path: each `@<agent-hex>` resolves to the subagent + (unless `--no-subagents`)
     // its TOPOLOGICAL descendants. Errors when no such agent exists in scope.
     for hex in &agent_hexes {
-        // The agent path runs the SAME merge (a copied project directory carries the whole
-        // sidecar, so an agent hex can be owned by two copies of one session), and its
-        // report joins the session path's rather than replacing it.
-        let resolved = resolve_agent_subtree(&dirs, hex, scope)?;
-        files.extend(resolved.files);
-        duplicates.extend(resolved.duplicates);
+        // Every copy the agent owns, unmerged: the union merge below decides them together
+        // with whatever the session path gathered for the same transcript.
+        files.extend(resolve_agent_subtree(&dirs, hex, scope)?);
     }
 
+    // ONE merge over the whole UNION, and the reason is the invocation that names a session
+    // and one of its agents at once (`list @<uuid> @<agent-hex>`). Two paths reached the
+    // same `agent-<hex>.jsonl` under two project directories, each merged its own half, and
+    // they chose different winners - the session path inherits the SESSION winner while the
+    // agent path decides on its own bytes and, at equal sizes with no `cwd` on an agent
+    // record, falls to the smallest path. Both survivors then passed the path-level dedup
+    // (different paths), so the scope carried the transcript twice while every row claimed
+    // the other copy had been dropped. The path-level dedup runs FIRST, so one file named
+    // twice is one file here rather than a fabricated pair of copies.
     files.sort();
     files.dedup();
+    let (mut files, groups) = dedup_copies(files);
+    // A group the top-level pass already reported reaches this one AGAIN whenever it merged
+    // NOTHING - a divergent or unreadable pair keeps every member in scope, so the second
+    // pass sees the same two copies and decides them the same way. One group is one note and
+    // one row in the header count, so only what THIS pass newly decided is reported.
+    let seen: std::collections::BTreeSet<String> =
+        duplicates.iter().map(|g| g.session_id.clone()).collect();
+    let fresh: Vec<DuplicateGroup> = groups
+        .into_iter()
+        .filter(|g| !seen.contains(&g.session_id))
+        .collect();
+    emit_duplicate_notes(&fresh);
+    duplicates.extend(fresh);
+    files.sort();
     Ok(Resolved { files, duplicates })
 }
 

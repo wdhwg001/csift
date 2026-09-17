@@ -31,8 +31,17 @@ fn two_copies(tree: &Tree, under_a: &str, under_b: &str) -> Vec<ProjectDir> {
         .collect()
 }
 
-fn resolve(dirs: &[ProjectDir]) -> Resolved {
+/// What the agent path COLLECTS - every copy it found, unmerged.
+fn found(dirs: &[ProjectDir]) -> Vec<PathBuf> {
     resolve_agent_subtree(dirs, HEX, SubagentScope::TopLevelOnly).expect("the agent resolves")
+}
+
+/// What the RESOLVER then does with it: the ONE shared merge over the union. The two halves
+/// are kept apart here for the same reason they are kept apart in the resolver - collecting
+/// the copies is this module's job, deciding them is `dedup_copies`'.
+fn resolve(dirs: &[ProjectDir]) -> Resolved {
+    let (files, duplicates) = dedup_copies(found(dirs));
+    Resolved { files, duplicates }
 }
 
 #[test]
@@ -95,16 +104,16 @@ fn a_directory_named_twice_contributes_its_copy_once() {
     // fabricated duplicate with a fabricated dropped copy behind it.
     let named_twice = vec![dirs[0].clone(), dirs[1].clone(), dirs[1].clone()];
 
+    let collected = found(&named_twice);
+    assert_eq!(
+        collected.len(),
+        2,
+        "one path per FILE, however often its directory is named: {collected:?}"
+    );
     let r = resolve(&named_twice);
     assert_eq!(r.files.len(), 1, "{:?}", r.files);
-    let g = &r.duplicates[0];
-    assert_eq!(
-        g.members.len(),
-        2,
-        "one member per FILE, however often its directory is named: {:?}",
-        g.members
-    );
-    assert_eq!(g.dropped.len(), 1);
+    assert_eq!(r.duplicates[0].members.len(), 2);
+    assert_eq!(r.duplicates[0].dropped.len(), 1);
 }
 
 #[test]

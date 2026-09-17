@@ -173,6 +173,45 @@ fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
 }
 
 #[test]
+fn a_session_and_its_agent_in_one_invocation_resolve_one_copy_of_that_agent() {
+    // TWO paths reach the same `agent-<hex>.jsonl`: the session target gathers it from the
+    // sidecar of the session it kept, the agent target finds it under both directories.
+    // They used to merge separately and pick DIFFERENT winners - the session path inherits
+    // the session's winner, the agent path decides on its own bytes and, at equal sizes
+    // with no `cwd` on an agent record, takes the smallest path - so both copies survived
+    // the path-level dedup and every row claimed the other had been dropped.
+    let child = agent_record(1, "child ask");
+    let h = agent_home(&child, &child);
+    let out = h.run(&["list", &at(SESS), &at(AGENT), "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+
+    let rows = json_rows(&out.stdout, "session");
+    let agents: Vec<_> = rows.iter().filter(|r| r["is_subagent"] == true).collect();
+    assert_eq!(
+        agents.len(),
+        1,
+        "one row per agent transcript, not one per path that found it: {}",
+        out.stdout
+    );
+    let header = json_rows(&out.stdout, "header");
+    // One session copy dropped and one agent copy dropped - 2 transcripts, and the lines
+    // are the 2 of the session copy plus the 1 of the agent copy.
+    assert_eq!(header[0]["duplicate_transcripts"], 2, "{}", header[0]);
+    assert_eq!(header[0]["duplicate_records_dropped"], 3, "{}", header[0]);
+    // ONE note per duplicated id, not one per path that decided it.
+    assert_eq!(
+        out.stderr.matches("project directories").count(),
+        2,
+        "one note per group:\n{}",
+        out.stderr
+    );
+
+    // The merged truth, from a surface that counts records rather than rows.
+    let count = h.run(&["search", "ask", &at(SESS), &at(AGENT), "-c"]);
+    assert_eq!(count.stdout.trim(), "3", "{}", count.stderr);
+}
+
+#[test]
 fn the_sidecars_of_a_divergent_pair_still_merge_their_identical_agents() {
     // The sessions DIFFER, so neither is dropped and BOTH sidecars are walked - and those
     // hold one agent transcript twice, which every count would otherwise double.
