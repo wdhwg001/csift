@@ -144,6 +144,7 @@ mod hit_facts;
 mod hits;
 mod keys;
 mod matcher;
+mod pairing;
 mod record_text;
 mod render;
 mod reverse;
