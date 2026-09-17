@@ -67495,7 +67495,7 @@
         },
         {
           "path": "src/subagent/tests.rs",
-          "lines": "34",
+          "lines": "33",
           "snippet": "/// A top-level `workflows/wf_abc.json` manifest is also written (NOT under"
         }
       ],

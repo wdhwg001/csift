@@ -2,7 +2,6 @@ use super::*;
 use std::io::Write;
 
 /// A scratch projects-root mimicking the real on-disk layout, removed on drop.
-#[derive(Debug)]
 struct Fixture {
     root: crate::testfs::Scratch,
 }
