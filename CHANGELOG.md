@@ -91,6 +91,30 @@ surface change bumps the PATCH.
 - **`csift list` emits one row per session, not one per copy**, and `sessions_in_scope` counts
   distinct sessions. BREAKING on a scope holding a duplicated session: the row count and every
   spanning count change, and the header numbers with them.
+
+- **`for` provenance on every emitted unit.** A `for` edge existed only where a record
+  carried a key naming a target, so an assistant reply, a thinking block, a tool call and
+  its result - most of a transcript - had no provenance at all. `for_root` now names the
+  record that opened a unit's turn plus the parent hops up to it, rendering `[root L12 +3]`
+  and nothing on the opener itself; its JSON is always `{line, uuid, hops, note}`, because
+  "this unit IS the opener", "the chain walked there in N hops" and "the grouping placed it
+  and the links did not carry it" are three facts a missing key could not separate. Two
+  engine relations join the vocabulary and ride JSON alone: `parent` (the `parentUuid`
+  link, which stands down when a family already named that target with a more specific
+  word) and `result_of` (a tool result's `tool_use_id`).
+- **The relation vocabulary is closed** (`EdgeKind`, nineteen words). Every family wrote
+  its word as a bare string at the call site, so the set was whatever six files happened to
+  contain - unenumerable, and impossible to census. Output did not move a byte; the
+  cross-family pin that says so landed first.
+- **`--count-by for-kind`**, the census over that vocabulary: which provenance relations a
+  scope carries. Multi-key like `label`, distinct per record, counting a relation whether
+  or not csift resolved its target.
+- **`--for <ADDR>`**, the reverse query: everything that is for one record, transitively.
+  The address is `L<line>` or a bare number (per file) or a record uuid (global). One query
+  returns the reply a message drew, the results of the calls that reply made, and the
+  `<task-notification>` that reports on one of those two turns later; the parent arm stops
+  at a turn boundary, so the person's next question does not come back. The summary gains
+  `for_of` (`address`, `records`, `transcripts`).
 - **Every non-transcript line type says what it holds.** The head-and-body law landed with
   twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
   who named one still read raw JSON. Sixteen of the eighteen line types now build a
