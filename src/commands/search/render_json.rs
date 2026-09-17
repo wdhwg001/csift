@@ -16,12 +16,13 @@ pub(crate) fn pairing_json(p: Option<Pairing>) -> serde_json::Value {
 }
 
 /// WHICH MESSAGE a unit corresponds to, on the wire: the opener's address, the parent-hop
-/// distance up to it, and the note that says which of the three answers this is.
+/// distance up to it, and the note that says which of the four answers this is.
 ///
-/// Always an object, never a null and never an absent key. All three answers are facts:
+/// Always an object, never a null and never an absent key. All four answers are facts:
 /// this unit IS the opener, or the chain walks to the opener in N hops, or the grouping
-/// places it in the turn while the chain does not reach the opener. A consumer that had to
-/// tell them apart from a missing key could not.
+/// places it in the turn while the chain does not reach the opener, or there is no opener
+/// above the unit at all (the synthetic lead a real transcript opens with, the head of an
+/// abandoned branch). A consumer that had to tell them apart from a missing key could not.
 pub(crate) fn for_root_json(r: &crate::model::RootLink) -> serde_json::Value {
     serde_json::json!({
         "line": r.line,

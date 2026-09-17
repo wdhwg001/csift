@@ -276,8 +276,11 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         carries one - and `for_root` the message the unit corresponds to: \
         `{line, uuid, hops, note}` on EVERY hit, naming the record that opened its turn \
         and the parent hops up to it, with `note: \"turn opener\"` when the unit IS that \
-        record and `note: \"not reached by the parent chain\"` when the turn grouping \
-        places it but the parent links do not carry it there, `refetch` is the ready-to-run `csift show` \
+        record, `note: \"not reached by the parent chain\"` when the turn grouping \
+        places it but the parent links do not carry it there, and \
+        `note: \"no opener above this unit\"` when there is no opener above it at all \
+        (the synthetic lead a transcript opens with, the head of an abandoned branch), \
+        `refetch` is the ready-to-run `csift show` \
         command addressed at the RIGHT id (run it verbatim), and `refetch_uuid` its \
         uuid-addressed twin: a line number is a durable address only while the transcript \
         is append-only, and Claude Code rewrites a live transcript in place on a stream \
