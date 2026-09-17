@@ -12,7 +12,7 @@
 //! [`attach_facts`], the one rule for folding facts onto a JSON object.
 
 use crate::commands::search::record_text;
-use crate::model::{Block, Class};
+use crate::model::{Block, Class, EdgeKind};
 
 /// A display-only note in a hit's LABEL ZONE: a `[head]` or `[head detail]` tag after
 /// the leaf path, rendered in PUSH ORDER after the specific markers `render_label`
@@ -210,8 +210,8 @@ pub enum HitFact {
     /// SHARED rather than per-family because four of the six families carry edges, and
     /// four separate renders of one idea is what a reader would then have to learn.
     For {
-        /// The relation word - `attached_to`, `refused`, `closes`, ...
-        kind: &'static str,
+        /// The relation this edge names, from the closed provenance vocabulary.
+        kind: EdgeKind,
         /// How the edge was resolved.
         basis: Basis,
         /// What it points at.
@@ -222,8 +222,8 @@ pub enum HitFact {
     /// never omitted - a silently absent edge reads as "there is no such relation", which
     /// is a different claim from "this record does not say".
     ForUnknown {
-        /// The relation word the edge would have carried.
-        kind: &'static str,
+        /// The relation the edge would have carried.
+        kind: EdgeKind,
         /// Why there is no target.
         reason: String,
     },
@@ -259,9 +259,9 @@ impl HitFact {
         match self {
             // The shape IS the label for an unmodeled unit, so it adds no second tag.
             HitFact::Unmodeled(_) => None,
-            HitFact::For { kind, target, .. } => Some(target.label_zone(kind)),
+            HitFact::For { kind, target, .. } => Some(target.label_zone(kind.as_str())),
             HitFact::ForUnknown { kind, reason } => {
-                Some(format!("[for: {kind} unknown ({reason})]"))
+                Some(format!("[for: {} unknown ({reason})]", kind.as_str()))
             }
             HitFact::Bookkeeping(f) => f.label_zone(),
             HitFact::Attachments(f) => f.label_zone(),
@@ -293,7 +293,7 @@ impl HitFact {
             } => vec![(
                 "for",
                 serde_json::json!([{
-                    "kind": kind,
+                    "kind": kind.as_str(),
                     "basis": basis.as_str(),
                     "target": target.json(),
                     "reason": serde_json::Value::Null,
@@ -302,7 +302,7 @@ impl HitFact {
             HitFact::ForUnknown { kind, reason } => vec![(
                 "for",
                 serde_json::json!([{
-                    "kind": kind,
+                    "kind": kind.as_str(),
                     "basis": serde_json::Value::Null,
                     "target": serde_json::Value::Null,
                     "reason": reason,

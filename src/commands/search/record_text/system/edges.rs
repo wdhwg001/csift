@@ -32,7 +32,7 @@ pub(crate) fn edge(
         Class::SystemRefusal => {
             let key = p.and_then(|m| str_field(m, "refusedUserMessageUuid"));
             Some(super::super::for_edge(
-                "refused",
+                EdgeKind::Refused,
                 Basis::Key,
                 key.as_deref(),
                 None,
@@ -47,7 +47,7 @@ pub(crate) fn edge(
         Class::SystemCommand => {
             let parent = rec.parent_uuid.as_deref().filter(|u| !u.is_empty());
             Some(super::super::for_edge(
-                "wraps",
+                EdgeKind::Wraps,
                 Basis::Position,
                 parent,
                 None,
@@ -62,7 +62,7 @@ pub(crate) fn edge(
         // both this record and the arming call. The `/loop` wakeup arm arms no task and
         // carries no such key at all.
         Class::ScheduleEvent => Some(HitFact::ForUnknown {
-            kind: "armed_by",
+            kind: EdgeKind::ArmedBy,
             reason: match p.and_then(|m| str_field(m, "taskId")) {
                 Some(_) => "the arming call is joined by taskId, not by a record uuid - \
                             search the id"

@@ -374,7 +374,7 @@ fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
     // to. ONE hop: the walk to the first conversation record is a provenance index's work,
     // not a per-unit fact's.
     let attached_to = super::for_edge(
-        "attached_to",
+        EdgeKind::AttachedTo,
         Basis::Key,
         rec.parent_uuid.as_deref(),
         None,
@@ -386,7 +386,7 @@ fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
     // word for exactly this case, and better than a second index csift would have to build
     // to pretend otherwise.
     let for_tool_use = super::for_edge(
-        "for_tool_use",
+        EdgeKind::ForToolUse,
         Basis::Key,
         payload_str(rec, "toolUseID"),
         None,

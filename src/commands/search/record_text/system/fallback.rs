@@ -68,7 +68,7 @@ pub(crate) fn notes(rec: &Record) -> (Vec<HitFact>, Vec<Marker>) {
             // reason rather than omitted - a reader learns that the banner exists, that
             // it names this record, and which way to look.
             HitFact::ForUnknown {
-                kind: "banner",
+                kind: EdgeKind::Banner,
                 reason: "the banner names this record, not the reverse; a one-to-many \
                          descent needs the provenance index"
                     .to_string(),

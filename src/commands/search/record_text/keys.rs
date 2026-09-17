@@ -286,17 +286,23 @@ fn for_edges(rec: &Record, section: &Section<'_>, ctx: &ClassifyCtx) -> Option<H
         .exposed_keys()
         .and_then(|k| k.interrupted_message_id.as_deref())
     {
-        return Some(for_edge("interrupted", Basis::Key, Some(id), None, ctx));
+        return Some(for_edge(
+            EdgeKind::Interrupted,
+            Basis::Key,
+            Some(id),
+            None,
+            ctx,
+        ));
     }
     if let Some(id) = rec.hook_run_id() {
-        return Some(for_edge("hook run", Basis::Key, Some(id), None, ctx));
+        return Some(for_edge(EdgeKind::HookRun, Basis::Key, Some(id), None, ctx));
     }
     // The edge is owed by the LEAF here, not by a key: every Stop-hook summary measured
     // names its run, so one that does not is a shape worth saying out loud rather than a
     // hit that quietly carries one fewer field.
     if section.class == Some(Class::TurnStopHooks) {
         return Some(HitFact::ForUnknown {
-            kind: "hook run",
+            kind: EdgeKind::HookRun,
             reason: NO_HOOK_RUN_REASON.to_string(),
         });
     }

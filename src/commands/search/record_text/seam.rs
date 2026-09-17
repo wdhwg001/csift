@@ -207,6 +207,12 @@ pub(crate) fn render_leaf(rec: &Record) -> Option<Class> {
 /// Build the ONE `for` EDGE fact from a uuid a record names - the only place the
 /// uuid-to-line lookup happens, so every family's edge resolves and renders alike.
 ///
+/// The relation is an [`EdgeKind`] and not a string, so the words a family may use are a
+/// CLOSED set a reader can be handed a list of. A bare string at the call site made the
+/// vocabulary whatever the six family files happened to contain: nothing could enumerate
+/// it, two families could spell one relation differently without either noticing, and a
+/// census over it would have been a census over an open set.
+///
 /// THREE answers, and the difference between them is the whole point of the helper:
 /// - the record names a uuid this transcript carries -> [`HitFact::For`] with the LINE,
 ///   which is an address a reader can fetch;
@@ -227,7 +233,7 @@ pub(crate) fn render_leaf(rec: &Record) -> Option<Class> {
 /// the map answers uuid to line in one direction only. A family that owns one builds
 /// [`HitFact::ForUnknown`] with that as the reason.
 pub(crate) fn for_edge(
-    kind: &'static str,
+    kind: EdgeKind,
     basis: Basis,
     uuid: Option<&str>,
     session: Option<&str>,

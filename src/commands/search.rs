@@ -37,8 +37,8 @@ use regex::bytes::Regex as BytesRegex;
 
 use crate::cli::{system_line_leaves, LabelFilter, OutputFormat, SearchArgs};
 use crate::model::{
-    normalize_line, tool_result_content_text, Block, Class, ClassifyCtx, Content, PlanIndex,
-    Record, SpawnLookup,
+    normalize_line, tool_result_content_text, Block, Class, ClassifyCtx, Content, EdgeKind,
+    PlanIndex, Record, SpawnLookup,
 };
 use crate::parse::mmap_bytes;
 use crate::path::{self};

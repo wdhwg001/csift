@@ -89,7 +89,7 @@ fn ctx_with(lookup: &dyn crate::model::LineOfUuid) -> ClassifyCtx<'_> {
 fn a_resolved_edge_renders_the_line_it_points_at() {
     let lookup = OneLine("target-uuid", 42);
     let fact = for_edge(
-        "refused",
+        EdgeKind::Refused,
         Basis::Key,
         Some("target-uuid"),
         None,
@@ -118,7 +118,7 @@ fn a_resolved_edge_renders_the_line_it_points_at() {
 fn an_unresolved_edge_keeps_the_id_and_says_the_line_is_elsewhere() {
     let lookup = OneLine("some-other-record", 7);
     let fact = for_edge(
-        "attached_to",
+        EdgeKind::AttachedTo,
         Basis::Position,
         Some("abcdef0123456789"),
         None,
@@ -153,17 +153,23 @@ fn an_unresolved_edge_keeps_the_id_and_says_the_line_is_elsewhere() {
 /// claim from "this record does not say".
 #[test]
 fn an_absent_key_renders_the_honest_empty_with_its_reason() {
-    let fact = for_edge("closes", Basis::Key, None, None, &ClassifyCtx::top_level());
+    let fact = for_edge(
+        EdgeKind::Blocked,
+        Basis::Key,
+        None,
+        None,
+        &ClassifyCtx::top_level(),
+    );
     assert_eq!(
         fact.label_zone().as_deref(),
-        Some("[for: closes unknown (the record carries no such key)]")
+        Some("[for: blocked unknown (the record carries no such key)]")
     );
     assert_eq!(
         fact.json(),
         vec![(
             "for",
             serde_json::json!([{
-                "kind": "closes",
+                "kind": "blocked",
                 "basis": null,
                 "target": null,
                 "reason": "the record carries no such key",
@@ -185,13 +191,13 @@ fn two_edges_on_one_unit_accumulate_under_the_one_key() {
         &mut obj,
         &[
             for_edge(
-                "attached_to",
+                EdgeKind::AttachedTo,
                 Basis::Position,
                 Some("parent-uuid"),
                 None,
                 &ctx,
             ),
-            for_edge("for_tool_use", Basis::Key, None, None, &ctx),
+            for_edge(EdgeKind::ForToolUse, Basis::Key, None, None, &ctx),
         ],
     );
     let edges = obj["for"].as_array().expect("the edges ride one array");
@@ -211,7 +217,7 @@ fn two_edges_on_one_unit_accumulate_under_the_one_key() {
 #[test]
 fn an_edge_built_without_a_row_space_renders_the_id_not_a_line() {
     let fact = for_edge(
-        "fires",
+        EdgeKind::Fires,
         Basis::Inferred,
         Some("11111111-2222-4333-8444-555555555555"),
         None,
@@ -235,7 +241,7 @@ fn an_edge_built_without_a_row_space_renders_the_id_not_a_line() {
 #[test]
 fn a_target_that_is_a_whole_transcript_renders_the_session_alone() {
     let fact = for_edge(
-        "continued_in",
+        EdgeKind::ContinuedIn,
         Basis::Key,
         None,
         Some("88888888-7777-4666-8555-444444444444"),
@@ -267,7 +273,7 @@ fn a_target_that_is_a_whole_transcript_renders_the_session_alone() {
     // With NEITHER a uuid nor a session the answer is still the honest empty, so the new
     // arm widened the builder rather than replacing its `None` case.
     let none = for_edge(
-        "continued_in",
+        EdgeKind::ContinuedIn,
         Basis::Key,
         None,
         None,
@@ -293,7 +299,7 @@ fn a_target_that_is_a_whole_transcript_renders_the_session_alone() {
 fn an_unresolved_target_renders_what_it_has_and_no_more() {
     let zone = |t: ForTarget| {
         HitFact::For {
-            kind: "closes",
+            kind: EdgeKind::Blocked,
             basis: Basis::Position,
             target: t,
         }
@@ -305,7 +311,7 @@ fn an_unresolved_target_renders_what_it_has_and_no_more() {
             ..ForTarget::default()
         })
         .as_deref(),
-        Some("[for: closes unknown (the parent link names no record)]")
+        Some("[for: blocked unknown (the parent link names no record)]")
     );
     assert_eq!(
         zone(ForTarget {
@@ -316,7 +322,7 @@ fn an_unresolved_target_renders_what_it_has_and_no_more() {
         })
         .as_deref(),
         Some(
-            "[for: closes @11111111-2222-4333-8444-555555555555 abcdef0123456789 \
+            "[for: blocked @11111111-2222-4333-8444-555555555555 abcdef0123456789 \
              (not in this file)]"
         )
     );
@@ -326,7 +332,7 @@ fn an_unresolved_target_renders_what_it_has_and_no_more() {
             ..ForTarget::default()
         })
         .as_deref(),
-        Some("[for: closes abcdef0123456789]"),
+        Some("[for: blocked abcdef0123456789]"),
         "no note, no parenthesis"
     );
 }
@@ -346,7 +352,7 @@ fn an_unresolved_target_renders_what_it_has_and_no_more() {
 fn only_a_uuid_shaped_target_is_cut_to_its_handle() {
     let zone = |uuid: &str| {
         HitFact::For {
-            kind: "for_tool_use",
+            kind: EdgeKind::ForToolUse,
             basis: Basis::Key,
             target: ForTarget {
                 uuid: Some(uuid.to_string()),

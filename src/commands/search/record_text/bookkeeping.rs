@@ -335,12 +335,12 @@ fn edge(line_type: &str, raw: Option<&str>, ctx: &ClassifyCtx) -> Option<HitFact
     let obj = v.as_object()?;
     let at = |k: &str| obj.get(k).and_then(serde_json::Value::as_str);
     Some(match line_type {
-        "last-prompt" => super::for_edge("leaf", Basis::Key, at("leafUuid"), None, ctx),
+        "last-prompt" => super::for_edge(EdgeKind::Leaf, Basis::Key, at("leafUuid"), None, ctx),
         "file-history-snapshot" | "file-history-delta" => {
-            super::for_edge("versions", Basis::Key, at("messageId"), None, ctx)
+            super::for_edge(EdgeKind::Versions, Basis::Key, at("messageId"), None, ctx)
         }
         "fork-context-ref" => super::for_edge(
-            "forked_from",
+            EdgeKind::ForkedFrom,
             Basis::Key,
             at("parentLastUuid"),
             at("parentSessionId"),
@@ -348,7 +348,7 @@ fn edge(line_type: &str, raw: Option<&str>, ctx: &ClassifyCtx) -> Option<HitFact
         ),
         // No uuid at all: a handover names the child TRANSCRIPT, and nothing in it.
         "continued-in" => super::for_edge(
-            "continued_in",
+            EdgeKind::ContinuedIn,
             Basis::Key,
             None,
             at("continuedInSessionId"),

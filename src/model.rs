@@ -48,6 +48,7 @@ mod mutation;
 mod narration;
 mod peer;
 mod predicates;
+mod provenance;
 mod record;
 mod taxonomy;
 
@@ -70,6 +71,7 @@ pub(crate) use peer::*;
 // `predicates` is otherwise an `impl Record` block, but it also declares the shape its
 // one memoised accessor hands back, which `Record`'s own field type names.
 pub(crate) use predicates::ConversionText;
+pub(crate) use provenance::*;
 pub(crate) use record::*;
 pub(crate) use taxonomy::*;
 

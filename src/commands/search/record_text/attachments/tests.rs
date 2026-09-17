@@ -228,7 +228,9 @@ fn edge_of<'a>(facts: &'a [HitFact], kind: &str) -> &'a HitFact {
     facts
         .iter()
         .find(|f| match f {
-            HitFact::For { kind: k, .. } | HitFact::ForUnknown { kind: k, .. } => *k == kind,
+            HitFact::For { kind: k, .. } | HitFact::ForUnknown { kind: k, .. } => {
+                k.as_str() == kind
+            }
             _ => false,
         })
         .unwrap_or_else(|| panic!("no {kind} edge among {facts:?}"))

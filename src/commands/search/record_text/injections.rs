@@ -144,7 +144,7 @@ pub(crate) fn facts(
         Class::UserMessage if rec.origin_kind() == Some("human") => {
             markers.push(Marker::plain("relayed"));
             facts.push(HitFact::Injections(Fact::Relayed));
-            facts.push(parent_edge("attached_to", rec, ctx));
+            facts.push(parent_edge(EdgeKind::AttachedTo, rec, ctx));
         }
         // An inbound message like a peer's or a coordinator's. The edge is `replies_to`
         // and BOTH shapes answer it empty - but for DIFFERENT reasons, which is why this
@@ -157,14 +157,14 @@ pub(crate) fn facts(
         Class::EnforceStructuredOutput
         | Class::EnforceBrief
         | Class::EnforceHandback
-        | Class::EnforceRetry => facts.push(parent_edge("redoes", rec, ctx)),
+        | Class::EnforceRetry => facts.push(parent_edge(EdgeKind::Redoes, rec, ctx)),
         // A blocking hook's feedback closes an assistant turn that tried to end, so its
         // parent is the record the hook BLOCKED.
-        Class::HookFeedback => facts.push(parent_edge("blocked", rec, ctx)),
+        Class::HookFeedback => facts.push(parent_edge(EdgeKind::Blocked, rec, ctx)),
         // The scheduler appends the fire RECORD and then submits the armed prompt under
         // it, so the prompt's parent IS the event it fired from (claim CLS-031) - which
         // is also the only mark the producer leaves on the prompt itself.
-        Class::ScheduleFire => facts.push(parent_edge("fires", rec, ctx)),
+        Class::ScheduleFire => facts.push(parent_edge(EdgeKind::Fires, rec, ctx)),
         // The notification FRAME is a second carrier of a `<task-notification>` pulse,
         // and the pulse names the tool_use it reports on.
         Class::NotificationWorkflow
@@ -179,14 +179,14 @@ pub(crate) fn facts(
             if let Some((images, documents)) = image_only_blocks(rec, raw) {
                 facts.push(HitFact::Injections(Fact::ImageOnly { images, documents }));
             }
-            facts.push(parent_edge("attached_to", rec, ctx));
+            facts.push(parent_edge(EdgeKind::AttachedTo, rec, ctx));
         }
         // Everything else the harness injects under a turn: the caveat the slash-command
         // executor writes, a reminder, a skill body preloaded into a lane's opening
         // array. Each was written under a particular record, and that is what the edge
         // says.
         Class::CommandCaveat | Class::ContextReminder | Class::ContextSkill => {
-            facts.push(parent_edge("attached_to", rec, ctx));
+            facts.push(parent_edge(EdgeKind::AttachedTo, rec, ctx));
         }
         // Every OTHER leaf this family's classify file can assign - the two schedule
         // ticks and the resume repair prompt - carries no edge, because no key on those
@@ -210,7 +210,7 @@ pub(crate) fn facts(
 fn inbox_facts(rec: &Record, facts: &mut Vec<HitFact>) {
     match rec.origin_kind() {
         Some("coordinator") => facts.push(HitFact::ForUnknown {
-            kind: "replies_to",
+            kind: EdgeKind::RepliesTo,
             reason: "a coordinator relay's origin carries only its kind".to_string(),
         }),
         Some("peer") => {
@@ -222,7 +222,7 @@ fn inbox_facts(rec: &Record, facts: &mut Vec<HitFact>) {
                 facts.push(HitFact::Injections(Fact::PeerSender(task.to_string())));
             }
             facts.push(HitFact::ForUnknown {
-                kind: "replies_to",
+                kind: EdgeKind::RepliesTo,
                 reason: "a peer relay names the lane that sent it, not a message it answers"
                     .to_string(),
             });
@@ -239,7 +239,7 @@ fn inbox_facts(rec: &Record, facts: &mut Vec<HitFact>) {
 /// [`Basis::Position`] and not `Key`, because the parent link says where the record SITS
 /// rather than naming a target the producer chose - the append path stamps it from the
 /// running tail of the transcript (claim CLS-049), so what it names is the record above.
-fn parent_edge(kind: &'static str, rec: &Record, ctx: &ClassifyCtx) -> HitFact {
+fn parent_edge(kind: EdgeKind, rec: &Record, ctx: &ClassifyCtx) -> HitFact {
     super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)
 }
 
@@ -254,7 +254,7 @@ fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {
     let id = rec
         .raw_message_text()
         .and_then(|s| extract_xml_tag(&s, "tool-use-id"));
-    super::for_edge("reports", Basis::Key, id.as_deref(), None, ctx)
+    super::for_edge(EdgeKind::Reports, Basis::Key, id.as_deref(), None, ctx)
 }
 
 /// The image and document block counts of a TEXTLESS block record, or `None` when the

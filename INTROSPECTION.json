@@ -94090,7 +94090,7 @@
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
           "lines": "342-348",
-          "snippet": "        \"fork-context-ref\" => super::for_edge(\n            \"forked_from\",\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
+          "snippet": "        \"fork-context-ref\" => super::for_edge(\n            EdgeKind::ForkedFrom,\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
       "instrument": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
@@ -94274,7 +94274,7 @@
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
           "lines": "350-356",
-          "snippet": "        \"continued-in\" => super::for_edge(\n            \"continued_in\",\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
+          "snippet": "        \"continued-in\" => super::for_edge(\n            EdgeKind::ContinuedIn,\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],
       "instrument": "Byte-find `function MYn(e,t){return{type:\"continued-in\"` for the writer and `function T9t(e){` immediately after it for the tail scan that reads it back. Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter. For the two person-facing effects, byte-find `filtered from /resume: continued in ${o.continuedInSessionId}` (the developer log, followed immediately by the `superseded` assignment) and `Your most recent conversation is running in the background (session ` (the startup sentence).",
@@ -94875,16 +94875,16 @@
         {
           "path": "src/commands/search/record_text/injections.rs",
           "lines": "242-244",
-          "snippet": "fn parent_edge(kind: &'static str, rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)\n}"
+          "snippet": "fn parent_edge(kind: EdgeKind, rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)\n}"
         },
         {
           "path": "src/commands/search/record_text/injections.rs",
           "lines": "253-258",
-          "snippet": "fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    let id = rec\n        .raw_message_text()\n        .and_then(|s| extract_xml_tag(&s, \"tool-use-id\"));\n    super::for_edge(\"reports\", Basis::Key, id.as_deref(), None, ctx)\n}"
+          "snippet": "fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {\n    let id = rec\n        .raw_message_text()\n        .and_then(|s| extract_xml_tag(&s, \"tool-use-id\"));\n    super::for_edge(EdgeKind::Reports, Basis::Key, id.as_deref(), None, ctx)\n}"
         },
         {
           "path": "src/commands/search/record_text/seam.rs",
-          "lines": "256-260",
+          "lines": "262-266",
           "snippet": "    let line = ctx.line_of_uuid(uuid);\n    HitFact::For {\n        kind,\n        basis,\n        target: ForTarget {"
         }
       ],
@@ -95073,7 +95073,7 @@
         {
           "path": "src/commands/search/record_text/attachments.rs",
           "lines": "376-382",
-          "snippet": "    let attached_to = super::for_edge(\n        \"attached_to\",\n        Basis::Key,\n        rec.parent_uuid.as_deref(),\n        None,\n        ctx,\n    );"
+          "snippet": "    let attached_to = super::for_edge(\n        EdgeKind::AttachedTo,\n        Basis::Key,\n        rec.parent_uuid.as_deref(),\n        None,\n        ctx,\n    );"
         },
         {
           "path": "tests/cli/search/taxonomy/attachments/edges.rs",
@@ -95117,7 +95117,7 @@
         {
           "path": "src/commands/search/record_text/attachments.rs",
           "lines": "388-394",
-          "snippet": "    let for_tool_use = super::for_edge(\n        \"for_tool_use\",\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        None,\n        ctx,\n    );"
+          "snippet": "    let for_tool_use = super::for_edge(\n        EdgeKind::ForToolUse,\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        None,\n        ctx,\n    );"
         },
         {
           "path": "src/commands/search/record_text/attachments.rs",
@@ -95126,7 +95126,7 @@
         },
         {
           "path": "src/commands/search/record_text/attachments/tests.rs",
-          "lines": "341",
+          "lines": "343",
           "snippet": "fn a_top_level_tool_use_id_is_not_the_payloads() {"
         }
       ],
@@ -96084,8 +96084,8 @@
       "code": [
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "snippet": "        return Some(for_edge(\"interrupted\", Basis::Key, Some(id), None, ctx));",
-          "lines": "289"
+          "snippet": "        return Some(for_edge(\n            EdgeKind::Interrupted,\n            Basis::Key,\n            Some(id),\n            None,\n            ctx,\n        ));",
+          "lines": "289-295"
         }
       ],
       "instrument": "Corpus: over each root, for every file, build the set of `uuid` values and the set of `message.id` values; then for each line carrying `interruptedMessageId` top-level record the value's prefix before the first underscore, whether the value is in that file's uuid set, whether it is in that file's message-id set, and the carrier's `type` and `isSidechain`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -96167,7 +96167,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(HitFact::ForUnknown {",
-          "lines": "298"
+          "lines": "304"
         }
       ],
       "instrument": "Corpus: over each root, per file build the set of `uuid` values; then for each line carrying `toolUseID` top-level record the object's `subtype`, whether the value matches the uuid shape (length 36 with four dashes), and whether it is in that file's uuid set. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
