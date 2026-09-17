@@ -95,7 +95,7 @@ fn the_engine_edges_are_on_the_units_that_have_them() {
         );
         assert!(
             got.iter().any(|e| e.leaf == leaf && e.basis == "position"),
-            "{leaf} lost the family edge that made the engine stand down"
+            "{leaf} lost the family edge whose TARGET stands the engine's parent edge down"
         );
     }
 }

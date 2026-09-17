@@ -113,7 +113,11 @@ edge_kinds! {
         Pairs => "pairs",
         /// The record this one hangs off in Claude Code's own conversation DAG - `parentUuid`,
         /// resolved to a line. The ENGINE's own edge: every record that names a parent carries
-        /// it, unless a family already named that same target with a word of its own.
+        /// it, unless ANY OTHER edge on the same unit already names that same TARGET - a
+        /// family's word, or one of the engine's own (`Pairs` on a compaction summary,
+        /// `Repairs` on a paired resume placeholder, both of which name the record above).
+        /// The test is on the target, never on who named it, so the stand-down is not a
+        /// family privilege.
         Parent => "parent",
         /// The record a compaction boundary re-links the conversation to: its
         /// `logicalParentUuid`, the true predecessor its own null `parentUuid` cannot name.

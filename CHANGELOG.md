@@ -101,8 +101,9 @@ surface change bumps the PATCH.
   the links did not carry it" and "there is no opener above this unit" are four facts a
   missing key could not separate. Two
   engine relations join the vocabulary and ride JSON alone: `parent` (the `parentUuid`
-  link, which stands down when a family already named that target with a more specific
-  word) and `result_of` (a tool result's `tool_use_id`).
+  link, which stands down when ANY OTHER edge on the same unit already names that same
+  TARGET - the test is on the target, never on who named it) and `result_of` (a tool
+  result's `tool_use_id`).
 - **The relation vocabulary is closed** (`EdgeKind`, nineteen words). Every family wrote
   its word as a bare string at the call site, so the set was whatever six files happened to
   contain - unenumerable, and impossible to census. No relation was renamed - every word is
@@ -270,7 +271,17 @@ surface change bumps the PATCH.
   compaction kept, as two edges. A paired resume placeholder gains `repairs`, naming the
   dangling prompt it was spliced in to answer.
 
-  No field moves. Each edge is the machine-followable form of an answer the unit already
+  No field moves, but one edge KIND does. `parent` stands down when ANY OTHER edge on the
+  same unit already names that same TARGET - the test is on the target, never on who named
+  it, so the engine's own `pairs` and `repairs` stand it down exactly as a family's word
+  does, both of them naming the record above. One relation, one edge. On the landmark
+  transcript that moves 83 units, `parent` 169,180 to 169,097, against 80 compaction
+  summaries and 3 paired resume placeholders; the `parentUuid` FIELD is untouched on every
+  one of them and `for_root` still names the turn each belongs to. COUNTING RULE: the
+  `--count-by for-kind` census over the whole transcript with an empty pattern, one row per
+  record per distinct relation word its edges name.
+
+  Each edge is the machine-followable form of an answer the unit already
   rendered for a person, so a consumer can walk `for[]` instead of parsing a marker word.
   The four survival relations render no label-zone tag at all - each restates
   `[abandoned]` / `[rewound]` / `[replay copy of L<n>]` or the draft-distance line - so they
