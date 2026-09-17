@@ -186,6 +186,22 @@ pub struct CrossingReport {
 }
 
 impl CrossingReport {
+    /// A report for a walk that crossed nothing, under the budget the RUN was given.
+    ///
+    /// The budget is a property of the invocation, never of a file, so every report a
+    /// surface builds for itself - an empty transcript, a file the whole-file gate pruned,
+    /// a scan that found no target, the accumulator a fold starts from - is built here
+    /// rather than by `default()`. A `default()` report carries `Limited(0)`, and folding
+    /// one in used to make the SCOPE read as "crossing off": the keys and both footer
+    /// lines vanished for every transcript because one file in the set had nothing to say.
+    #[must_use]
+    pub fn new(budget: CrossingBudget) -> CrossingReport {
+        CrossingReport {
+            budget,
+            ..CrossingReport::default()
+        }
+    }
+
     /// Is there anything to say? Nothing at all under budget 0 (csift crossed nothing on
     /// purpose), and nothing on a transcript whose walk never met a compaction boundary.
     #[must_use]
@@ -321,12 +337,29 @@ impl CrossingReport {
         ]
     }
 
+    /// Fold a whole scope's per-transcript reports into one total under the RUN's budget.
+    /// The one place the fold rule lives, so the six surfaces that need a scope total cannot
+    /// disagree about it; an empty scope yields a report that crossed nothing.
+    #[must_use]
+    pub fn fold<'a>(
+        budget: CrossingBudget,
+        members: impl IntoIterator<Item = &'a CrossingReport>,
+    ) -> CrossingReport {
+        let mut out = CrossingReport::new(budget);
+        for (i, m) in members.into_iter().enumerate() {
+            out.add(m, i == 0);
+        }
+        out
+    }
+
     /// Fold another transcript's report into a scope total. The COUNTS add; the two facts
     /// that name ONE record (the floor's line and its instant) are dropped the moment a
     /// second transcript contributes, the same rule `boundary_cut_line` follows - a line
     /// number from an unnamed file is worse than silence.
     pub fn add(&mut self, other: &CrossingReport, first: bool) {
-        self.budget = other.budget;
+        // The budget is NOT folded: it is the run's, the accumulator already carries it,
+        // and reading it off a member would let one default-built report turn the whole
+        // scope's disclosure off.
         self.boundaries_crossed += other.boundaries_crossed;
         self.boundaries_above_floor += other.boundaries_above_floor;
         self.budget_exhausted |= other.budget_exhausted;

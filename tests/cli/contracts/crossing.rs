@@ -368,3 +368,195 @@ fn a_scope_of_two_transcripts_folds_the_counts_and_drops_the_one_floor_it_cannot
         assert_eq!(r["floor_cause"], "budget-exhausted", "{r}");
     }
 }
+
+/// A second transcript in the same project carrying no compaction boundary at all, and (when
+/// `mentions_pattern` is false) not even the word the scan looks for, so the section 7f
+/// whole-file gate prunes it before any chain is built. Its id sorts AFTER the crossing
+/// fixture's, which is what makes it the LAST report folded into the scope's total.
+fn add_quiet_sibling(h: &Home, id: &str, mentions_pattern: bool) {
+    let body = if mentions_pattern {
+        concat!(
+            r#"{"type":"user","uuid":"q0","parentUuid":null,"timestamp":"2026-06-07T07:00:00.000Z","message":{"role":"user","content":"dredge the channel again"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"q1","parentUuid":"q0","timestamp":"2026-06-07T07:00:05.000Z","message":{"role":"assistant","id":"qm","content":[{"type":"text","text":"dredging again"}]}}"#,
+            "\n",
+        )
+    } else {
+        concat!(
+            r#"{"type":"user","uuid":"q0","parentUuid":null,"timestamp":"2026-06-07T07:00:00.000Z","message":{"role":"user","content":"unrelated errand"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"q1","parentUuid":"q0","timestamp":"2026-06-07T07:00:05.000Z","message":{"role":"assistant","id":"qm","content":[{"type":"text","text":"running the errand"}]}}"#,
+            "\n",
+        )
+    };
+    h.write(&format!("{XENC}/{id}.jsonl"), body);
+}
+
+#[test]
+fn a_transcript_with_nothing_to_say_cannot_turn_the_scopes_disclosure_off() {
+    // THE BUDGET IS THE RUN'S, never a file's. Every per-file report is BUILT carrying it, so a
+    // file the whole-file gate pruned and a file with no records at all both fold in as
+    // "crossed nothing under budget B" rather than as "crossing off". Read off the LAST member
+    // instead, one such file deleted both footer lines and all six JSON keys for the whole
+    // scope - and whether it did depended on where its name sorted.
+    let h = crossing_home();
+    add_quiet_sibling(&h, "6d5c4b3a-2928-4776-8554-3322ffee0099", false);
+    h.write(
+        &format!("{XENC}/7e6d5c4b-3a39-4887-8665-4433ffee0099.jsonl"),
+        "",
+    );
+
+    let out = h.run(&[
+        "search",
+        "dredge",
+        XENC,
+        "--no-subagents",
+        "--format",
+        "json",
+        "--cross-compactions",
+        "1",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let s = summary(&out.stdout);
+    assert_eq!(s["crossing_budget"], 1, "{s}");
+    assert_eq!(
+        s["boundaries_crossed"], 1,
+        "the one compacted transcript still counts: {s}"
+    );
+    assert_eq!(s["boundaries_above_floor"], 1, "{s}");
+    assert_eq!(s["budget_exhausted"], true, "{s}");
+
+    let text = h.run(&[
+        "search",
+        "dredge",
+        XENC,
+        "--no-subagents",
+        "--cross-compactions",
+        "1",
+    ]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    assert!(
+        text.stdout
+            .contains("(compaction crossing: 1 boundary(s) stepped over"),
+        "the footer survives a pruned sibling:\n{}",
+        text.stdout
+    );
+}
+
+#[test]
+fn every_spanning_surface_keeps_the_keys_with_an_empty_transcript_in_scope() {
+    // The same rule on every surface that spans sessions, through the path that produces a
+    // report for a file holding no records at all (each surface's own early return).
+    let h = crossing_home();
+    h.write(
+        &format!("{XENC}/7e6d5c4b-3a39-4887-8665-4433ffee0099.jsonl"),
+        "",
+    );
+    let b = ["--cross-compactions", "1"];
+    let cases: Vec<(&str, Vec<&str>)> = vec![
+        (
+            "search",
+            vec!["search", "", XENC, "--no-subagents", "--format", "json"],
+        ),
+        (
+            "stats",
+            vec!["stats", XENC, "--no-subagents", "--format", "json"],
+        ),
+        (
+            "files",
+            vec!["files", XENC, "--no-subagents", "--format", "json"],
+        ),
+        (
+            "image",
+            vec!["image", XENC, "--no-subagents", "--format", "json"],
+        ),
+        ("verbatim", vec!["verbatim", XENC, "--format", "json"]),
+        (
+            "recover",
+            vec![
+                "recover",
+                XENC,
+                "--no-subagents",
+                "--file",
+                "/Users/dev/chart.md",
+                "--coverage",
+                "--format",
+                "json",
+            ],
+        ),
+    ];
+    for (name, mut argv) in cases {
+        argv.extend_from_slice(&b);
+        let out = h.run(&argv);
+        assert!(out.success, "{name} stderr: {}", out.stderr);
+        let s = summary(&out.stdout);
+        assert_eq!(s["crossing_budget"], 1, "{name}: {s}");
+        assert_eq!(s["boundaries_crossed"], 1, "{name}: {s}");
+        assert_eq!(s["budget_exhausted"], true, "{name}: {s}");
+    }
+}
+
+#[test]
+fn the_scope_names_one_floor_only_when_it_holds_one_transcript() {
+    // The fold's first-member test is an explicit COUNTER, not a predicate over the very fields
+    // the fold clears. Read off those fields it answered "first" again on every OTHER member,
+    // so an ODD-sized scope published one transcript's floor as the whole scope's while an
+    // even one published none - the same scope, two different answers, decided by parity.
+    let h = crossing_home();
+    let body = std::fs::read_to_string(
+        h.root
+            .join(".claude/projects")
+            .join(XENC)
+            .join(format!("{XSESS}.jsonl")),
+    )
+    .expect("the first transcript");
+    let ids = [
+        "6d5c4b3a-2928-4776-8554-3322ffee0099",
+        "7e6d5c4b-3a39-4887-8665-4433ffee0099",
+        "8f7e6d5c-4b4a-4998-8776-5544ffee0099",
+    ];
+
+    // `search` folds through the counts that carry the pre-existing twins of this rule
+    // (`boundary_cut_line` and `leaf_source`), so its summary is where parity showed.
+    let scope = |h: &Home| -> serde_json::Value {
+        let out = h.run(&[
+            "search",
+            "",
+            XENC,
+            "--no-subagents",
+            "--format",
+            "json",
+            "--cross-compactions",
+            "1",
+        ]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        summary(&out.stdout)
+    };
+
+    // One transcript: the scope IS that transcript, so its floor is the scope's.
+    let one = scope(&h);
+    assert_eq!(one["floor_line"], 5, "{one}");
+    assert_eq!(one["floor_cause"], "budget-exhausted", "{one}");
+    assert_eq!(one["boundary_cut_line"], 9, "{one}");
+    assert!(one["leaf_source"].is_string(), "{one}");
+
+    for (n, id) in ids.iter().enumerate() {
+        h.write(&format!("{XENC}/{id}.jsonl"), &body);
+        let total = n + 2; // the crossing fixture plus the copies added so far
+        let s = scope(&h);
+        assert_eq!(
+            s["boundaries_crossed"], total,
+            "{total} transcripts each cross one: {s}"
+        );
+        assert!(
+            s["floor_line"].is_null(),
+            "{total} transcripts name no single floor: {s}"
+        );
+        assert!(s["floor_cause"].is_null(), "{total} transcripts: {s}");
+        assert!(
+            s["boundary_cut_line"].is_null(),
+            "{total} transcripts, the same rule on the older twin: {s}"
+        );
+        assert!(s["leaf_source"].is_null(), "{total} transcripts: {s}");
+    }
+}

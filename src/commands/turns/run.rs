@@ -164,6 +164,7 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
         skipped_lines,
         cfg,
         duplicates: resolved.duplicates,
+        cross,
     };
 
     match args.format {
@@ -227,7 +228,7 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<ScanRe
             summaries: Vec::new(),
             abandoned_openers: Vec::new(),
             skipped_lines: 0,
-            crossing: crate::model::CrossingReport::default(),
+            crossing: crate::model::CrossingReport::new(cross),
         });
     };
     let bytes: &[u8] = &mmap;

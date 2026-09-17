@@ -164,10 +164,8 @@ pub(crate) fn render_json(
         "skipped_lines": ctx.skipped_lines,
         "abandoned_turns": abandoned_turns,
     });
-    let mut crossing = crate::model::CrossingReport::default();
-    for (i, sr) in sessions.iter().enumerate() {
-        crossing.add(&sr.crossing, i == 0);
-    }
+    let crossing =
+        crate::model::CrossingReport::fold(ctx.cross, sessions.iter().map(|sr| &sr.crossing));
     for (k, v) in crossing.json_fields() {
         term_fields[k] = v;
     }

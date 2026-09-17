@@ -116,8 +116,10 @@ pub fn run_stats(args: &StatsArgs, cross: CrossingBudget) -> Result<()> {
     let (top, sub) =
         crate::subagent::scope_span(rows.iter().map(|r| (r.session_id.clone(), r.is_subagent)));
     match args.format {
-        OutputFormat::Text => render_text(&rows, top, sub, dropped, &resolved.duplicates),
-        OutputFormat::Json => render_json(&rows, top, sub, dropped, &resolved.duplicates)?,
+        OutputFormat::Text => render_text(&rows, top, sub, dropped, cross, &resolved.duplicates),
+        OutputFormat::Json => {
+            render_json(&rows, top, sub, dropped, cross, &resolved.duplicates)?;
+        }
     }
     Ok(())
 }

@@ -507,7 +507,7 @@ pub(crate) fn images_in_file(
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
     let Some(mmap) = mmap_bytes(path)? else {
-        return Ok((Vec::new(), 0, crate::model::CrossingReport::default()));
+        return Ok((Vec::new(), 0, crate::model::CrossingReport::new(cross)));
     };
     // The image prefilter keeps only image-bearing lines, so the SURVIVAL AXIS is fed the
     // structural spine of everything else in the same pass. Nothing here needs turn

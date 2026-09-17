@@ -66,6 +66,8 @@ pub(crate) struct RenderCtx {
     /// the merged copies are named beside the scope banner and counted in the JSON header,
     /// so a reconstruction assembled from one copy says the other was dropped.
     pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
+    /// The RUN's crossing budget (see the twin field on `verbatim`'s context).
+    pub(crate) cross: crate::model::CrossingBudget,
 }
 
 /// Restrict a `(line_no, text)` known-line vector to the `--file-lines` range, if any. The
@@ -141,7 +143,10 @@ pub(crate) fn cmp_ts(a: &Option<String>, b: &Option<String>) -> std::cmp::Orderi
 /// whose events are the union, stably sorted by wall-clock timestamp, with `line_no`
 /// re-stamped to a monotonic 1..N over the merged order so `--at` cutoffs (`@line` / `@turn`
 /// / datetime) and `replay`'s cutoff stay well-defined across the merged stream.
-pub(crate) fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<ScanResult> {
+pub(crate) fn merge_groups_for_reconstruction(
+    sessions: Vec<ScanResult>,
+    budget: crate::model::CrossingBudget,
+) -> Vec<ScanResult> {
     // Group by parent id, preserving BTreeMap key order (== session_id order for top-level
     // sessions, since a top-level's parent_session_id is its own id) for determinism.
     let mut groups: BTreeMap<String, Vec<ScanResult>> = BTreeMap::new();
@@ -207,10 +212,11 @@ pub(crate) fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<
             opaque,
             merged_line_origin,
             skipped_lines: 0,
-            // The merge folds several transcripts into one synthetic stream; each source's
-            // own crossing was already disclosed beside its own note, and a folded floor
-            // line would name a transcript this result no longer identifies.
-            crossing: crate::model::CrossingReport::default(),
+            // The merge folds several transcripts into one synthetic stream, so the crossing
+            // folds with them: a default here would have made the merged result say the
+            // crossing was off, which is what every `recover` mode that goes through this
+            // merge then printed.
+            crossing: crate::model::CrossingReport::fold(budget, group.iter().map(|s| &s.crossing)),
         });
     }
     out

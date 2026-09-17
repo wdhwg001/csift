@@ -23,7 +23,7 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
 
     let mut images: Vec<ImageRef> = Vec::new();
     let mut skipped_lines = 0usize;
-    let mut crossing = crate::model::CrossingReport::default();
+    let mut crossing = crate::model::CrossingReport::new(cross);
     for (fi, (refs, skipped, rep)) in per_file.into_iter().enumerate() {
         images.extend(refs);
         skipped_lines += skipped;

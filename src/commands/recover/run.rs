@@ -157,7 +157,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
         mode,
         RecoverMode::At | RecoverMode::Coverage | RecoverMode::Restore | RecoverMode::Salvage
     ) {
-        merge_groups_for_reconstruction(sessions)
+        merge_groups_for_reconstruction(sessions, cross)
     } else {
         sessions
     };
@@ -171,6 +171,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
         scope_top,
         scope_sub,
         duplicates: resolved.duplicates,
+        cross,
     };
 
     match args.format {
@@ -336,7 +337,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
             });
         }
         scans.retain(|s| !s.events.is_empty());
-        let Some(best) = reconstruct_best(scans, &when)? else {
+        let Some(best) = reconstruct_best(scans, &when, cross)? else {
             outcomes.push(BatchOutcome {
                 target,
                 status: "no-history",

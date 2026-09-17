@@ -271,7 +271,9 @@ fn folding_a_second_transcript_drops_the_floor_and_keeps_the_counts() {
     let r = five_boundaries();
     let one = Chain::build(&r, None, CrossingBudget::Limited(3))
         .crossing(Some(7), Some("2026-06-07T06:02:00.000Z".to_string()));
-    let mut total = CrossingReport::default();
+    // The accumulator carries the RUN's budget - a fold never reads one off a member, so a
+    // transcript with nothing to say cannot turn the scope's disclosure off.
+    let mut total = CrossingReport::new(CrossingBudget::Limited(3));
     total.add(&one, true);
     assert_eq!(total.floor_line, Some(7));
     assert_eq!(total.cause, Some(FloorCause::BudgetExhausted));

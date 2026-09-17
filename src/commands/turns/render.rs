@@ -15,6 +15,10 @@ pub(crate) struct RenderCtx {
     /// the merged copies are named beside the scope banner and counted in the JSON header.
     /// `--slice` skips the banner, as it skips every other piece of operational chrome.
     pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
+    /// The RUN's crossing budget. It rides the context rather than being read off a
+    /// per-session report, because the budget is a property of the invocation and an empty
+    /// scope has no report to read it from.
+    pub(crate) cross: crate::model::CrossingBudget,
 }
 
 /// How many abandoned openers a session's note lists by line before it elides the rest.

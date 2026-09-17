@@ -76,7 +76,7 @@ pub(crate) fn search_one_file(
             exchanges: Vec::new(),
             skipped_lines: 0,
             turn_count: 0,
-            chain: ChainCounts::default(),
+            chain: ChainCounts::new(cross),
         });
     };
     let bytes: &[u8] = &mmap;
@@ -236,7 +236,7 @@ pub(crate) fn search_one_file(
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped,
                     turn_count: 0,
-                    chain: ChainCounts::default(),
+                    chain: ChainCounts::new(cross),
                 });
             }
             let (pending, pending_skipped) =
@@ -246,7 +246,7 @@ pub(crate) fn search_one_file(
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped + pending_skipped,
                     turn_count: 0,
-                    chain: ChainCounts::default(),
+                    chain: ChainCounts::new(cross),
                 });
             }
         }

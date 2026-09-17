@@ -344,10 +344,8 @@ pub(crate) fn render_json(
     });
     // The crossing, folded over the sessions this run read: every turn stamp above is read
     // off the chain, so how far that chain climbed belongs on the same line as the counts.
-    let mut crossing = crate::model::CrossingReport::default();
-    for (i, s) in sessions.iter().enumerate() {
-        crossing.add(&s.crossing, i == 0);
-    }
+    let crossing =
+        crate::model::CrossingReport::fold(ctx.cross, sessions.iter().map(|s| &s.crossing));
     for (k, v) in crossing.json_fields() {
         summary_fields[k] = v;
     }

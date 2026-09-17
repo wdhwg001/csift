@@ -86,8 +86,9 @@ pub(crate) struct BestReconstruction {
 pub(crate) fn reconstruct_best(
     scans: Vec<ScanResult>,
     when: &str,
+    cross: CrossingBudget,
 ) -> Result<Option<BestReconstruction>> {
-    let merged = merge_groups_for_reconstruction(scans);
+    let merged = merge_groups_for_reconstruction(scans, cross);
     let mut best: Option<(BestReconstruction, Option<String>)> = None;
     for s in &merged {
         if s.events.is_empty() {
@@ -240,7 +241,7 @@ pub(crate) fn scan_one_file(
             opaque: Vec::new(),
             merged_line_origin: std::collections::BTreeMap::new(),
             skipped_lines: 0,
-            crossing: crate::model::CrossingReport::default(),
+            crossing: crate::model::CrossingReport::new(cross),
         });
     };
     let bytes: &[u8] = &mmap;
@@ -266,7 +267,7 @@ pub(crate) fn scan_one_file(
                 opaque: Vec::new(),
                 merged_line_origin: std::collections::BTreeMap::new(),
                 skipped_lines: 0,
-                crossing: crate::model::CrossingReport::default(),
+                crossing: crate::model::CrossingReport::new(cross),
             });
         }
     }

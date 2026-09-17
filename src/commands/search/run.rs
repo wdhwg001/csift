@@ -230,6 +230,9 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         scope_top,
         scope_sub,
         duplicates: resolved.duplicates,
+        // The accumulator carries the RUN's budget; the fold never reads one off a member,
+        // so a pruned or empty file cannot turn the scope's disclosure off.
+        chain: ChainCounts::new(cross),
         // The CANONICAL form of the address, not the reader's spelling: `--for 42` and
         // `--for L42` name one record, and a summary that echoed both back verbatim would
         // read as two different queries.

@@ -49,6 +49,12 @@ pub struct ChainCounts {
     pub boundary_cut_line: Option<usize>,
     /// How the chain's leaf was chosen, when exactly one transcript is in scope.
     pub leaf_source: Option<&'static str>,
+    /// How many transcripts have folded in. An explicit counter, because the predicate it
+    /// replaced (`boundary_cut_line.is_none() && leaf_source.is_none()`) tested the very
+    /// fields the fold sets to None: it read "first" again on every OTHER transcript, so an
+    /// ODD-sized scope ended up naming one file's floor as the scope's, with the
+    /// single-transcript remedy wording, while an even one correctly named none.
+    pub folded: usize,
     /// What the walk did with this scope's compaction boundaries: how many it stepped
     /// over, how many it did not, and where the floor sits. Silent under
     /// `--cross-compactions 0`, which is the reading csift gave before the budget existed.
@@ -56,11 +62,24 @@ pub struct ChainCounts {
 }
 
 impl ChainCounts {
+    /// Counts for a file the scan learned nothing about - an empty transcript, or one the
+    /// section 7f whole-file gate pruned - under the RUN's crossing budget. The budget is
+    /// the invocation's, so a file with nothing to say must still carry it: folded as a
+    /// `default()` it read as "crossing off" and took the whole scope's disclosure with it.
+    #[must_use]
+    pub fn new(budget: crate::model::CrossingBudget) -> ChainCounts {
+        ChainCounts {
+            crossing: crate::model::CrossingReport::new(budget),
+            ..ChainCounts::default()
+        }
+    }
+
     /// Fold one transcript's counts into the scope total. The two SINGLE-transcript
     /// facts (`boundary_cut_line`, `leaf_source`) are dropped the moment a second
     /// transcript contributes: a line number from an unnamed file is worse than silence.
     pub(crate) fn add(&mut self, other: &ChainCounts) {
-        let first = self.is_empty();
+        let first = self.folded == 0;
+        self.folded += 1;
         self.abandoned_records += other.abandoned_records;
         self.drafts += other.drafts;
         self.rewound_turns += other.rewound_turns;
@@ -73,10 +92,6 @@ impl ChainCounts {
             self.boundary_cut_line = None;
             self.leaf_source = None;
         }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.boundary_cut_line.is_none() && self.leaf_source.is_none()
     }
 
     /// Is there anything to disclose at all?

@@ -69,12 +69,8 @@ fn chain_line(abandoned: usize, rewound: usize, replays: usize, crossing: &Cross
 
 /// The scope TOTAL's crossing: the same fold `search` runs across transcripts, so the
 /// single-transcript facts (the floor's own line) drop as soon as a second one contributes.
-fn merged_crossing(rows: &[SessionStats]) -> CrossingReport {
-    let mut out = CrossingReport::default();
-    for (i, r) in rows.iter().enumerate() {
-        out.add(&r.crossing, i == 0);
-    }
-    out
+fn merged_crossing(rows: &[SessionStats], cross: CrossingBudget) -> CrossingReport {
+    CrossingReport::fold(cross, rows.iter().map(|r| &r.crossing))
 }
 
 /// Count-desc `key×n` census line (`types` rows; the small closed-ish type space needs no
@@ -93,6 +89,7 @@ pub(super) fn render_text(
     top: usize,
     sub: usize,
     dropped: usize,
+    cross: CrossingBudget,
     duplicates: &[crate::path::DuplicateGroup],
 ) {
     crate::text::emit_scope_banner(top, sub);
@@ -184,7 +181,7 @@ pub(super) fn render_text(
             rows.iter().map(|r| r.abandoned_turns).sum(),
             rows.iter().map(|r| r.rewound_turns).sum(),
             rows.iter().map(|r| r.replay_copies).sum(),
-            &merged_crossing(rows),
+            &merged_crossing(rows, cross),
         );
         for (model, t) in &tokens {
             println!(
@@ -247,6 +244,7 @@ pub(super) fn render_json(
     top: usize,
     sub: usize,
     dropped: usize,
+    cross: CrossingBudget,
     duplicates: &[crate::path::DuplicateGroup],
 ) -> Result<()> {
     println!(
@@ -302,7 +300,7 @@ pub(super) fn render_json(
         "skipped_lines": rows.iter().map(|r| r.skipped_lines).sum::<usize>(),
         "dropped_by_cap": dropped,
     });
-    for (k, v) in merged_crossing(rows).json_fields() {
+    for (k, v) in merged_crossing(rows, cross).json_fields() {
         summary_fields[k] = v;
     }
     let summary = crate::text::envelope_summary(summary_fields);

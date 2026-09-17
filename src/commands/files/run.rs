@@ -43,7 +43,7 @@ pub fn run_files(args: &FilesArgs, cross: CrossingBudget) -> Result<()> {
     let mut mutations: Vec<TaggedMutation> = Vec::new();
     let mut boundaries: Vec<TaggedBoundary> = Vec::new();
     let mut skipped_lines = 0usize;
-    let mut crossing = crate::model::CrossingReport::default();
+    let mut crossing = crate::model::CrossingReport::new(cross);
     for (fi, fr) in per_file.into_iter().enumerate() {
         skipped_lines += fr.skipped_lines;
         crossing.add(&fr.crossing, fi == 0);
@@ -114,7 +114,7 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<FileRe
             boundaries: Vec::new(),
             skipped_lines: 0,
             turn_count: 0,
-            crossing: crate::model::CrossingReport::default(),
+            crossing: crate::model::CrossingReport::new(cross),
         });
     };
     let bytes: &[u8] = &mmap;

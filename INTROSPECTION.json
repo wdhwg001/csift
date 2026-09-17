@@ -16649,7 +16649,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "288-294",
+          "lines": "290-296",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -21808,7 +21808,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "87-89",
+          "lines": "91-93",
           "snippet": "        let cap_override = slices.map(|_| window.saturating_sub(SLICE_BODY_HEADROOM).max(1));\n        let doc = build_document_body(sessions, plans, &ctx.cfg, cap_override);\n        let chunks = slice_into_windows(&doc, window);"
         }
       ],
@@ -23229,12 +23229,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "140-145",
+          "lines": "141-146",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "340-346",
+          "lines": "341-347",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -24287,7 +24287,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "340-346",
+          "lines": "341-347",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -36802,7 +36802,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "335-337",
+          "lines": "339-341",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy\n/// document is NOT 3\u00d7 over-counted the way a byte budget would). A line longer than the"
         }
       ],
@@ -36957,7 +36957,7 @@
       "code": [
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "72",
+          "lines": "76",
           "snippet": "    // inject it under the 10,000-char additionalContext cap. Two sub-modes:"
         }
       ],
@@ -38365,7 +38365,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "310",
+          "lines": "311",
           "snippet": "    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         }
       ],
@@ -39159,12 +39159,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "306-310",
+          "lines": "307-311",
           "snippet": "pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only, like files').\n    // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher\n    // every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "313-322",
+          "lines": "314-323",
           "snippet": "                memmem::Finder::new(b\"toolUseResult\"),\n                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Read\"),\n                memmem::Finder::new(b\"Bash\"),\n                // The opaque accounting counts PowerShell tool calls; an assistant\n                // record carrying one matches no other needle, so without this the\n                // P count silently missed the assistant-side records.\n                memmem::Finder::new(b\"PowerShell\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -40139,7 +40139,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "338-339",
+          "lines": "340-341",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41338,7 +41338,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "380-382",
+          "lines": "382-384",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -41448,7 +41448,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "327-329",
+          "lines": "329-331",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -51668,7 +51668,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "296-301",
+          "lines": "298-303",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51850,12 +51850,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "345",
+          "lines": "347",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "296-301",
+          "lines": "298-303",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -52163,17 +52163,17 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "288-294",
+          "lines": "290-296",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "296-301",
+          "lines": "298-303",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "345",
+          "lines": "347",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52248,12 +52248,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "288-294",
+          "lines": "290-296",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "345",
+          "lines": "347",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52804,7 +52804,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "278-281",
+          "lines": "280-283",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -54296,7 +54296,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "287-294",
+          "lines": "289-296",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54385,7 +54385,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "286-287",
+          "lines": "288-289",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54460,7 +54460,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "295",
+          "lines": "297",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55970,7 +55970,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "290-294",
+          "lines": "292-296",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -61171,12 +61171,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "450",
+          "lines": "451",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "459-464",
+          "lines": "460-465",
           "snippet": "                        if has_structured_result {\n                            ids_with_result.insert(id.clone());\n                        }\n                        if *is_error == Some(true) {\n                            failed_ids.insert(id.clone());\n                        }"
         }
       ],
@@ -62131,7 +62131,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "430-432",
+          "lines": "431-433",
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
@@ -64713,7 +64713,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "278-285",
+          "lines": "280-287",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -65831,7 +65831,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "296-301",
+          "lines": "298-303",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65919,7 +65919,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "345",
+          "lines": "347",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -69949,7 +69949,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "433-439",
+          "lines": "434-440",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -70114,7 +70114,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "433-437",
+          "lines": "434-438",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover)."
         }
       ],
@@ -70319,7 +70319,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "433-439",
+          "lines": "434-440",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -70429,7 +70429,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "450-457",
+          "lines": "451-458",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();\n            if let Some(blocks) = rec.blocks() {\n                for b in blocks {\n                    if let Block::ToolResult {\n                        tool_use_id: Some(id),\n                        is_error,\n                        ..\n                    } = b"
         }
       ],
@@ -75722,7 +75722,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "386-394",
+          "lines": "387-395",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -77509,7 +77509,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "386-394",
+          "lines": "387-395",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -89325,7 +89325,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "140-145",
+          "lines": "141-146",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         },
         {
@@ -89409,7 +89409,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "140-145",
+          "lines": "141-146",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         }
       ],

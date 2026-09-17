@@ -321,6 +321,8 @@ pub(crate) fn reconstruct_and_match(
         replay_copies: chain.replay_copies,
         boundary_cut_line: chain.boundary_cut.map(|i| rows[i].line_no()),
         leaf_source: Some(chain.leaf_source.as_str()),
+        // One transcript's own counts: nothing has folded into them yet.
+        folded: 0,
         // The chain answers in row indices; only this layer knows which jsonl line and
         // instant the floor is. A floor past the end (no leaf at all) names neither.
         crossing: chain.crossing(
