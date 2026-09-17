@@ -351,8 +351,11 @@ surface change bumps the PATCH.
   caller who errored on one has a single address. Two statements that had gone stale are
   corrected against the binary: a text excerpt is one line per record, and sixteen of the
   eighteen bookkeeping line types build their key=value head from their own bytes. The file
-  is smaller than before the rewrite (56,720 tokens against 56,728, tiktoken `cl100k_base`
-  both ways), and the two 73-row transparency tables and the relation inventory keep their
+  landed smaller than it started (56,687 tokens against 56,728, tiktoken `cl100k_base`
+  throughout) and ships at 57,582 after the correction round that followed - the retirement
+  table grown to every spelling the binary refuses, the crossing default's value, the fifteen
+  label-zone tags the file named nowhere, and the three empty-result stderr lines it had
+  never quoted. The two 73-row transparency tables and the relation inventory keep their
   exact rows, so every drift test that pins them still holds in both directions. One header
   line moved: the shape table's third column was the same escape-hatch command on all 73
   rows, so it is stated once above the table and the drift test's literal moves with it.
