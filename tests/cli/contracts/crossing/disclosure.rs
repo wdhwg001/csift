@@ -29,6 +29,7 @@ fn every_survival_printing_surface_carries_the_same_crossing_facts() {
             ],
         ),
         ("image", vec!["image", t.as_str(), "--no-subagents"]),
+        ("show --line", vec!["show", t.as_str(), "--line", "1..12"]),
     ];
     for (name, mut argv) in text_surfaces {
         argv.extend_from_slice(&b);
@@ -103,6 +104,26 @@ fn every_survival_printing_surface_carries_the_same_crossing_facts() {
             "image",
             vec!["image", t.as_str(), "--no-subagents", "--format", "json"],
         ),
+        // The two surfaces that MOVE with the budget and used to say nothing: an ADDRESS
+        // (the record it names reads live at one budget and pre-cut at another) and a
+        // CENSUS (crossing a cut resolves records above it, so every axis counts differently).
+        (
+            "show --line",
+            vec!["show", t.as_str(), "--line", "1..12", "--format", "json"],
+        ),
+        (
+            "search --count-by",
+            vec![
+                "search",
+                "",
+                t.as_str(),
+                "--no-subagents",
+                "--count-by",
+                "label",
+                "--format",
+                "json",
+            ],
+        ),
     ];
     for (name, mut argv) in json_surfaces {
         argv.extend_from_slice(&b);
@@ -131,6 +152,7 @@ fn budget_zero_says_nothing_about_crossing_on_any_surface() {
         vec!["verbatim", t.as_str()],
         vec!["files", t.as_str(), "--no-subagents"],
         vec!["image", t.as_str(), "--no-subagents"],
+        vec!["show", t.as_str(), "--line", "1..12"],
     ];
     for mut argv in argvs {
         let name = argv[0];
@@ -385,4 +407,123 @@ fn the_scope_names_one_floor_only_when_it_holds_one_transcript() {
         );
         assert!(s["leaf_source"].is_null(), "{total} transcripts: {s}");
     }
+}
+
+#[test]
+fn an_address_and_a_census_both_move_with_the_budget_and_both_say_so() {
+    // Neither surface is a scan over survival, and both ANSWER differently under the flag:
+    // `show` renders one record's `survival`, and a census counts records the crossing
+    // resolved. Silent, each was a reading with no way to tell which budget produced it.
+    let h = crossing_home();
+    let t = at(XSESS);
+
+    // The rewound branch at L3 is `pre-cut` until the walk reaches it, then `abandoned`.
+    let survival_at = |b: &str| -> String {
+        let out = h.run(&[
+            "show",
+            t.as_str(),
+            "--line",
+            "3",
+            "--format",
+            "json",
+            "--cross-compactions",
+            b,
+        ]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        rows(&out.stdout)
+            .into_iter()
+            .find(|v| v["kind"] == "record")
+            .and_then(|v| v["survival"].as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    assert_eq!(survival_at("0"), "pre-cut");
+    assert_eq!(survival_at("2"), "abandoned", "the address moved");
+
+    // And the summary that carried no way to tell those two runs apart now does.
+    let out = h.run(&[
+        "show",
+        t.as_str(),
+        "--line",
+        "3",
+        "--format",
+        "json",
+        "--cross-compactions",
+        "2",
+    ]);
+    let s = summary(&out.stdout);
+    assert_eq!(s["crossing_budget"], 2, "{s}");
+    assert_eq!(s["boundaries_crossed"], 2, "{s}");
+
+    // The census counts the same records under a label; the keys ride its summary and the
+    // two lines ride its stderr, beside the census's own accounting note.
+    let census = h.run(&[
+        "search",
+        "",
+        t.as_str(),
+        "--no-subagents",
+        "--count-by",
+        "label",
+        "--cross-compactions",
+        "1",
+    ]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        census
+            .stderr
+            .contains("(compaction crossing: 1 boundary(s) stepped over"),
+        "the census discloses on stderr, keeping its table parseable:\n{}",
+        census.stderr
+    );
+    assert!(
+        !census.stdout.contains("compaction crossing"),
+        "stdout stays the table:\n{}",
+        census.stdout
+    );
+}
+
+#[test]
+fn a_raw_turn_window_discloses_on_stderr_and_a_line_address_has_nothing_to_say() {
+    // `--raw` prints the file's own bytes and nothing else, so its disclosure rides stderr.
+    // A `--turn` window is resolved through the chain and moves with the budget; a `--line`
+    // address names its lines outright, crosses nothing to find them, and says nothing.
+    let h = crossing_home();
+    let t = at(XSESS);
+    let turns = h.run(&[
+        "show",
+        t.as_str(),
+        "--turn",
+        "..",
+        "--raw",
+        "--cross-compactions",
+        "1",
+    ]);
+    assert!(turns.success, "stderr: {}", turns.stderr);
+    assert!(
+        turns
+            .stderr
+            .contains("(compaction crossing: 1 boundary(s) stepped over"),
+        "{}",
+        turns.stderr
+    );
+    assert!(
+        turns.stdout.starts_with('{'),
+        "stdout is the file's own jsonl:\n{}",
+        turns.stdout
+    );
+
+    let lines = h.run(&[
+        "show",
+        t.as_str(),
+        "--line",
+        "1..4",
+        "--raw",
+        "--cross-compactions",
+        "1",
+    ]);
+    assert!(lines.success, "stderr: {}", lines.stderr);
+    assert!(
+        !lines.stderr.contains("compaction crossing"),
+        "a line address crossed nothing to find its lines:\n{}",
+        lines.stderr
+    );
 }

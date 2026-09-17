@@ -13669,7 +13669,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "127-131",
+          "lines": "135-139",
           "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,"
         },
         {
@@ -50062,7 +50062,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "254-256",
+          "lines": "263-265",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         },
         {
@@ -55531,7 +55531,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "416-417",
+          "lines": "424-425",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -64982,7 +64982,7 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "131-139",
+          "lines": "133-141",
           "snippet": "            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {\n                if slot.is_none() && finder.find(line).is_some() {\n                    // Confirm structurally: the record's OWN uuid must equal it (a body\n                    // merely quoting the uuid must not satisfy the address).\n                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                        if rec.uuid.as_deref() == Some(u.as_str()) {\n                            *slot = Some(line_no);\n                            want = true;\n                        }"
         },
         {
@@ -65082,12 +65082,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "166-168",
+          "lines": "168-170",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "254-256",
+          "lines": "263-265",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         }
       ],
@@ -80315,7 +80315,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "112-119",
+          "lines": "120-127",
           "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],

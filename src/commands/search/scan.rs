@@ -19,7 +19,7 @@ pub(crate) fn fetch_records(
     uuids: BTreeSet<String>,
     turn_range: Option<crate::text::RangeSpec>,
     cross: CrossingBudget,
-) -> Result<(Vec<Exchange>, usize, usize)> {
+) -> Result<(Vec<Exchange>, usize, usize, crate::model::CrossingReport)> {
     let args = SearchArgs::default();
     let matcher = Matcher::pure();
     // A line/uuid ADDRESS restricts to named records; a `--turn` range (address empty) selects
@@ -52,7 +52,15 @@ pub(crate) fn fetch_records(
         true,
         cross,
     )?;
-    Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
+    // The crossing report rides back with the records: `show` MOVES with the budget - an
+    // addressed record's `survival` changes under it - so it discloses what it crossed on
+    // the same terms every other survival-printing surface does.
+    Ok((
+        fr.exchanges,
+        fr.skipped_lines,
+        fr.turn_count,
+        fr.chain.crossing,
+    ))
 }
 
 /// Scan a single session file: prefilter → parse → delimit turns → match → stitch.

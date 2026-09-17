@@ -96,9 +96,11 @@ pub(crate) fn run_raw(
     let mut wanted_lines = specs.all();
     // `--turn --raw`: resolve the turn range to its records' physical lines (via the shared
     // grouping, so the turn numbering matches `search`), then emit those lines verbatim.
+    let mut crossing = crate::model::CrossingReport::new(cross);
     if let Some(spec) = turn_range {
-        let (exchanges, _, turn_count) =
+        let (exchanges, _, turn_count, report) =
             fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec), cross)?;
+        crossing = report;
         // An EXPLICIT turn (`N` / `A..B`) is an address - zero records = miss (law 1).
         if turn_spec_is_explicit(&spec) && exchanges.is_empty() {
             return Err(turn_miss_error(&spec, turn_count));
@@ -198,6 +200,13 @@ pub(crate) fn run_raw(
              --max-count 0 (uncapped)"
         );
     }
+    // A `--turn` window is resolved through the chain, so which lines these ARE moves with
+    // the crossing budget. `--line`/`--uuid` name their lines outright and the report stays
+    // the empty one, which says nothing. Stderr either way: stdout here is the file's own
+    // bytes and nothing else.
+    for line in crossing.lines() {
+        eprintln!("{line}");
+    }
     Ok(())
 }
 
@@ -212,7 +221,7 @@ pub(crate) fn run_rendered(
     max_count: Option<usize>,
     cross: CrossingBudget,
 ) -> Result<()> {
-    let (mut exchanges, skipped, turn_count) =
+    let (mut exchanges, skipped, turn_count, crossing) =
         fetch_records(file, specs.all(), uuids.clone(), turn_range, cross)?;
 
     // Turn address-miss: an EXPLICIT `--turn N` / `--turn A..B` is an ADDRESS (law 1) -
@@ -328,6 +337,7 @@ pub(crate) fn run_rendered(
                 cap,
                 remainder_cmd.as_deref(),
                 non_record_lines,
+                &crossing,
             );
         }
         OutputFormat::Json => render_json(
@@ -340,6 +350,7 @@ pub(crate) fn run_rendered(
             dropped,
             remainder_cmd.as_deref(),
             non_record_lines,
+            &crossing,
         )?,
     }
     Ok(())

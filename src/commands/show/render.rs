@@ -13,6 +13,7 @@ pub(crate) fn render_text(
     cap: usize,
     remainder_cmd: Option<&str>,
     non_record_lines: usize,
+    crossing: &crate::model::CrossingReport,
 ) {
     if is_subagent {
         println!("SUBAGENT {session_id} · parent SESSION {parent_session_id}");
@@ -78,6 +79,12 @@ pub(crate) fn render_text(
     if merged_any_sidecar(exchanges) {
         println!("with elicitation sidecar");
     }
+    // An ADDRESS moves with the crossing budget - the record it names reads `live` at one
+    // budget and `pre-cut` at another - so `show` discloses what the walk crossed to decide
+    // that, in the same two lines every other survival-printing surface prints.
+    for line in crossing.lines() {
+        println!("{line}");
+    }
     if skipped > 0 {
         println!("({})", crate::text::malformed_note(skipped));
     }
@@ -94,6 +101,7 @@ pub(crate) fn render_json(
     dropped: usize,
     remainder_cmd: Option<&str>,
     non_record_lines: usize,
+    crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
     use serde_json::json;
     let header = json!({
@@ -192,7 +200,7 @@ pub(crate) fn render_json(
             println!("{}", serde_json::to_string(&row)?);
         }
     }
-    let summary = json!({
+    let mut summary = json!({
         "kind": "summary",
         "records": units,
         "dropped_by_cap": dropped,
@@ -201,6 +209,11 @@ pub(crate) fn render_json(
         "skipped_lines": skipped,
         "with_elicitation_sidecar": merged_any_sidecar(exchanges),
     });
+    // The same six keys the scanning surfaces carry, and for the same reason: a machine
+    // reader of an ADDRESS needs to know which budget produced the `survival` it just read.
+    for (k, v) in crossing.json_fields() {
+        summary[k] = v;
+    }
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }

@@ -324,6 +324,13 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                     "csift: {records} matched record(s) across {} {slug} key(s){excl}{drop}",
                     rows.len()
                 );
+                // A census MOVES with the budget - crossing a cut resolves records above it,
+                // which changes what every axis counts - so it discloses the crossing too.
+                // On stderr, beside the census's own accounting note and for the same
+                // reason: stdout in a terminal mode is the table a consumer parses.
+                for line in outcome.chain.crossing.lines() {
+                    eprintln!("{line}");
+                }
             }
             OutputFormat::Json => {
                 let header = crate::text::envelope_scope_header(
@@ -342,7 +349,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                     });
                     println!("{}", serde_json::to_string(&obj)?);
                 }
-                let summary = crate::text::envelope_summary(serde_json::json!({
+                let mut summary = crate::text::envelope_summary(serde_json::json!({
                     "axis": slug,
                     "matched_records": records,
                     "distinct_keys": rows.len(),
@@ -350,6 +357,9 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                     "dropped_by_cap": outcome.dropped_by_cap,
                     "skipped_lines": outcome.skipped_lines,
                 }));
+                for (k, v) in outcome.chain.crossing.json_fields() {
+                    summary[k] = v;
+                }
                 println!("{}", serde_json::to_string(&summary)?);
             }
         }
