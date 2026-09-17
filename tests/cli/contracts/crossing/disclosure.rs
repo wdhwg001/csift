@@ -1,5 +1,5 @@
 //! What every SURFACE says about a crossing: the sweep over each one, the silence at
-//! budget 0, and the two modes whose answer is a datum rather than a report.
+//! budget 0, and the three modes whose answer is a datum rather than a report.
 
 use super::*;
 
@@ -337,10 +337,21 @@ fn every_recover_mode_discloses_what_the_walk_crossed() {
         argv.extend_from_slice(&["--cross-compactions", "1"]);
         let out = h.run(&argv);
         assert!(out.success, "{name} stderr: {}", out.stderr);
-        let both = format!("{}{}", out.stdout, out.stderr);
+        // Asserted per STREAM, not over the two joined: which stream a line lands on IS the
+        // contract here - restore's stdout is the restored file and a status line in it would
+        // corrupt the artifact - and a check over `stdout + stderr` passes either way round.
+        let (spoken, silent) = if name == "restore" {
+            (&out.stderr, &out.stdout)
+        } else {
+            (&out.stdout, &out.stderr)
+        };
         assert!(
-            both.contains("(compaction crossing: 1 boundary(s) stepped over"),
-            "{name}:\n{both}"
+            spoken.contains("(compaction crossing: 1 boundary(s) stepped over"),
+            "{name}:\n{spoken}"
+        );
+        assert!(
+            !silent.contains("compaction crossing"),
+            "{name} put the disclosure on the other stream too:\n{silent}"
         );
 
         let mut jargv = argv.clone();
