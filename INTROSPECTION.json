@@ -19654,7 +19654,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "821-826",
+          "lines": "871-876",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2399",
+          "lines": "2451",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20120,12 +20120,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "819",
+          "lines": "869",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "828-829",
+          "lines": "878-879",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -21060,12 +21060,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "785",
+          "lines": "835",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "807",
+          "lines": "857",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21236,12 +21236,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "785",
+          "lines": "835",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "807",
+          "lines": "857",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21424,7 +21424,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "851",
+          "lines": "901",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21691,12 +21691,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "787",
+          "lines": "837",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "851",
+          "lines": "901",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21788,12 +21788,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "504",
+          "lines": "554",
           "snippet": "- Slicing (hook injection, \u226410000-char cap): `--slices N --slice i --window W` = fixed-fleet chunks, whole turns; out-of-range \u21d2 nothing, exit 0 (hook affordance). Text-only."
         },
         {
           "path": "SKILL.md",
-          "lines": "787",
+          "lines": "837",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "360-366",
+          "lines": "371-377",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -38548,12 +38548,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "779",
+          "lines": "829",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "787",
+          "lines": "837",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -54091,7 +54091,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "360-366",
+          "lines": "371-377",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -96351,7 +96351,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3143"
+          "lines": "3195"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",

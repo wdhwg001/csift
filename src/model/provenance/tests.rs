@@ -185,3 +185,77 @@ fn no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line() {
     assert_eq!(r.line, Some(12), "the address a reader can fetch");
     assert_eq!(r.label_zone().as_deref(), Some("[root L12 +1]"));
 }
+
+/// The RELATION INVENTORY in both manuals lists every edge of the vocabulary, exactly once,
+/// and lists nothing under `for[]` that is not one.
+///
+/// The inventory is the reader's whole map of what csift can answer about a record: the
+/// closed vocabulary, the relations that ride a FIELD on some other surface instead, and the
+/// ones nothing on disk names. Only the first block is derivable, and that is precisely the
+/// block that rots silently - a relation added here renders on every hit at once while the
+/// table a reader was handed still lists the old set.
+///
+/// BOTH DIRECTIONS, which is two different failures. A MISSING row is a word csift prints
+/// and neither manual explains. An EXTRA `for[]` row is a word the manual promises and no
+/// edge can ever carry, which sends a reader looking for a census key that does not exist.
+///
+/// The non-edge rows are deliberately outside the comparison: what carries `clone_of` or
+/// `produced_by` is a sentence a person wrote about another surface, and nothing in this
+/// crate can derive it. The `for[]` marker in the last cell is what separates the two, so
+/// the row that says where a relation rides is also what makes this test possible.
+#[test]
+fn both_manuals_list_every_relation_of_the_vocabulary_exactly_once() {
+    let mut want: Vec<&str> = EdgeKind::ALL.iter().map(|k| k.as_str()).collect();
+    want.sort_unstable();
+    for doc in ["SKILL.md", "SPEC.md"] {
+        let md = std::fs::read_to_string(format!("{}/{doc}", env!("CARGO_MANIFEST_DIR")))
+            .unwrap_or_else(|e| panic!("{doc} at the repo root: {e}"));
+        let mut got = inventory_edges(&md);
+        let before = got.len();
+        got.sort_unstable();
+        got.dedup();
+        assert_eq!(
+            got.len(),
+            before,
+            "{doc}: the inventory lists a relation twice: {got:?}"
+        );
+        assert_eq!(
+            got, want,
+            "{doc}: the relation inventory and the vocabulary disagree"
+        );
+    }
+}
+
+/// The relation word of every inventory row whose LAST cell marks it as a `for[]` edge.
+///
+/// The table is found by its own first column header, and the walk stops at the first line
+/// that is not a table row - so this reads ONE table rather than every backticked word in
+/// the manual. A row's relation is the backticked word in its first cell; `answers` /
+/// `rejects` sits in a first cell as two words and is not a `for[]` row, so the last-cell
+/// marker is what keeps it out rather than the shape of the first.
+fn inventory_edges(md: &str) -> Vec<&str> {
+    let head = "| relation | what it joins | basis | where it rides |";
+    let start = md
+        .find(head)
+        .unwrap_or_else(|| panic!("no relation inventory table (looked for {head:?})"));
+    let mut out = Vec::new();
+    for line in md[start..].lines().skip(1) {
+        if !line.starts_with('|') {
+            if out.is_empty() {
+                continue; // the `|---|` separator under the head
+            }
+            break;
+        }
+        let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+        let (Some(first), Some(last)) = (cells.first(), cells.last()) else {
+            continue;
+        };
+        if !last.starts_with("`for[]`") {
+            continue;
+        }
+        if let Some(w) = first.strip_prefix('`').and_then(|c| c.strip_suffix('`')) {
+            out.push(w);
+        }
+    }
+    out
+}

@@ -266,7 +266,16 @@ pub struct SearchArgs {
     /// (an attachment names its parent AND the call it belongs to). A relation counts
     /// whether or not csift resolved its target - the census answers which relations
     /// EXIST, and a hit's own `for[]` says what each one resolved to. A record carrying no
-    /// edge is excluded and counted). Records
+    /// edge is excluded and counted. THE KEY SPACE is the closed vocabulary, twenty-seven
+    /// words: `armed_by` `attached_to` `banner` `blocked` `branches` `continued_in`
+    /// `continues` `fires` `for_tool_use` `forked_from` `hook_run` `interrupted` `leaf`
+    /// `pairs` `parent` `precedes` `preserves` `redoes` `refused` `repairs` `replays`
+    /// `replies_to` `reports` `result_of` `supersedes` `versions` `wraps`. Six of them
+    /// ride JSON alone and never render a label-zone tag, because each restates something
+    /// the unit already shows - `parent` the record above, `result_of` what the pairing
+    /// glyph says, and the four survival words `supersedes` / `continues` / `replays` /
+    /// `branches` the distance line and the `[abandoned]` / `[rewound]` /
+    /// `[replay copy of L<n>]` markers. This census reads them anyway). Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
     /// the excluded count is reported; never silently. Honors `-t`/`-T`/time/turn/scope;
     /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis
@@ -296,10 +305,12 @@ pub struct SearchArgs {
     /// the parent link - `attached_to`, `blocked`, `redoes`, `fires`, `wraps`), it carries
     /// a `tool_result` answering a member's call (`result_of`), or it names a member's
     /// call by id in its own text or payload (`reports`, `for_tool_use`). The rest of the
-    /// vocabulary is not reverse-walked today, so `--for` on a record that only
-    /// `versions`, `refused`, `interrupted`, `leaf`, `forked_from`, `continued_in`,
-    /// `replies_to`, `armed_by`, `banner` or `hook_run` points AT comes back empty - a
-    /// definitive absence about the three arms, not a claim that nothing points there.
+    /// vocabulary is not reverse-walked today, so `--for` on a record that only a
+    /// non-structural relation points AT comes back empty - `versions`, `refused`,
+    /// `interrupted`, `leaf`, `forked_from`, `continued_in`, `replies_to`, `armed_by`,
+    /// `banner`, `hook_run`, the four survival words, `pairs`, `precedes`, `preserves`
+    /// and `repairs`. That is a definitive absence about the three arms, not a claim
+    /// that nothing points there.
     /// The forward direction answers those: the `for[]` on the hit, or
     /// `--count-by for-kind`. The address may name a GATED line (a hook attachment, a bookkeeping
     /// line): the closure starts there either way, and the addressed record itself is
