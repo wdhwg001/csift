@@ -86896,7 +86896,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "376-378",
+          "lines": "378-380",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {

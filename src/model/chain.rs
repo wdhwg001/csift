@@ -321,6 +321,8 @@ impl Chain {
             boundaries_above_floor: self.boundaries_above_floor,
             cause: Some(self.floor_cause),
             floor_shut: self.floor_shut,
+            movable_floor: self.floor_cause == FloorCause::BudgetExhausted
+                && self.floor_shut.is_none(),
             floor_line,
             floor_ts,
         }

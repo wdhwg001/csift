@@ -160,6 +160,7 @@ fn a_shut_door_is_described_the_same_way_whichever_budget_stopped_the_walk_on_it
             boundaries_above_floor: 2,
             cause: Some(FloorCause::BudgetExhausted),
             floor_shut: Some(door),
+            movable_floor: false,
             floor_line: Some(40),
             floor_ts: None,
         };
@@ -170,6 +171,7 @@ fn a_shut_door_is_described_the_same_way_whichever_budget_stopped_the_walk_on_it
             boundaries_above_floor: 2,
             cause: Some(door),
             floor_shut: None,
+            movable_floor: false,
             floor_line: Some(40),
             floor_ts: None,
         };
@@ -209,6 +211,67 @@ fn a_shut_door_is_described_the_same_way_whichever_budget_stopped_the_walk_on_it
             }
         }
     }
+}
+
+#[test]
+fn a_scope_whose_floors_are_all_shut_offers_no_value_either() {
+    // The fold drops the cause and the door, because a scope has as many floors as it has
+    // files. Movability is the one fact about them that is the SCOPE's: "would re-running
+    // this at a larger budget move anything here". Dropped with the rest, the folded line
+    // named `crossed + above` unconditionally - so two transcripts whose floors are both
+    // shut doors were handed a value that moves neither, and the receipt is real: the
+    // landmark folded with a transcript whose single boundary is dangling printed
+    // `--cross-compactions 80`, and 80 moves neither floor.
+    let shut_one = CrossingReport {
+        budget: CrossingBudget::Limited(3),
+        boundaries_crossed: 2,
+        budget_exhausted: false,
+        boundaries_above_floor: 77,
+        cause: Some(FloorCause::UnresolvableBoundary),
+        floor_shut: None,
+        movable_floor: false,
+        floor_line: Some(120_332),
+        floor_ts: None,
+    };
+    let shut_two = CrossingReport {
+        boundaries_crossed: 0,
+        boundaries_above_floor: 1,
+        cause: Some(FloorCause::BoundaryLoop),
+        floor_line: Some(1904),
+        ..shut_one.clone()
+    };
+    let all_shut = CrossingReport::fold(CrossingBudget::Limited(3), [&shut_one, &shut_two]);
+    assert!(!all_shut.movable_floor);
+    let lines = all_shut.lines();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines[1].contains("raising the budget reaches none of them"),
+        "{lines:?}"
+    );
+    assert!(
+        !lines[1].contains("--cross-compactions"),
+        "no value where none of the scope's floors would move: {lines:?}"
+    );
+
+    // One movable floor in the scope is enough to offer the value again - it is an answer
+    // about the scope, and there IS something in it a larger budget would reach.
+    let movable = CrossingReport {
+        boundaries_crossed: 1,
+        budget_exhausted: true,
+        boundaries_above_floor: 2,
+        cause: Some(FloorCause::BudgetExhausted),
+        floor_shut: None,
+        movable_floor: true,
+        floor_line: Some(7),
+        ..shut_one.clone()
+    };
+    let mixed = CrossingReport::fold(CrossingBudget::Limited(3), [&shut_one, &movable]);
+    assert!(mixed.movable_floor);
+    assert!(
+        mixed.lines()[1].contains("to try them where a budget can: --cross-compactions"),
+        "{:?}",
+        mixed.lines()
+    );
 }
 
 #[test]
@@ -377,6 +440,7 @@ fn a_floor_with_no_timestamp_still_prints_its_line() {
         boundaries_above_floor: 1,
         cause: Some(FloorCause::BudgetExhausted),
         floor_shut: None,
+        movable_floor: true,
         floor_line: Some(88),
         floor_ts: None,
     };

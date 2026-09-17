@@ -214,6 +214,13 @@ pub struct CrossingReport {
     /// where raising the budget moves this floor. A single-transcript fact, dropped with
     /// the cause the moment a second one folds in.
     pub floor_shut: Option<FloorCause>,
+    /// At least one floor in this report's scope is one raising the budget would MOVE.
+    /// Unlike the cause and the door it SURVIVES the fold, ORed across the members, because
+    /// the question it answers - is there any point in re-running this scan at a larger
+    /// budget - belongs to the scope rather than to one of its files. Without it a scope
+    /// whose floors are every one of them shut still named a value, because the fold had
+    /// dropped the only fact that said otherwise.
+    pub movable_floor: bool,
     /// The floor record's 1-based jsonl line, when the surface can name one.
     pub floor_line: Option<usize>,
     /// The floor record's own timestamp, raw, for the local render.
@@ -300,13 +307,16 @@ impl CrossingReport {
             // Every other cause prints its own words immediately before this clause, so the
             // remedy says only what a reader can DO and never repeats the reason.
             (Some(_), _) => "raising the budget reaches none of them".to_string(),
-            // A scope of several transcripts has several floors and several causes; the
-            // budget is the one remedy that applies to whichever of them it made, and the
-            // per-transcript probe is exactly the fact a fold cannot carry.
-            (None, _) => format!(
+            // A scope of several transcripts has several floors and several causes. The
+            // budget is the one remedy that applies to whichever of them it made - and only
+            // where at least one of those floors is one it could move. Named without that
+            // test, a scope whose floors are ALL shut doors offered a value that moves none
+            // of them, which is the same over-promise the single-transcript arm had.
+            (None, _) if self.movable_floor => format!(
                 "to try them where a budget can: --cross-compactions {} (or all)",
                 self.resolving_budget()
             ),
+            (None, _) => "raising the budget reaches none of them".to_string(),
         }
     }
 
@@ -423,6 +433,8 @@ impl CrossingReport {
         self.boundaries_crossed += other.boundaries_crossed;
         self.boundaries_above_floor += other.boundaries_above_floor;
         self.budget_exhausted |= other.budget_exhausted;
+        // The one movability fact that is the SCOPE's rather than one file's.
+        self.movable_floor |= other.movable_floor;
         if first {
             self.cause = other.cause;
             self.floor_shut = other.floor_shut;
