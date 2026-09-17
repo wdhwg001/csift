@@ -43,12 +43,13 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
     // ── Resolve targets → session files (spanning subagents by default) ──
-    let session_files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
+    let session_files = resolved.files;
 
     // ── `--file @plan`: substitute the session-bound plan file (the `plan_mode` attachment's
     //    `planFilePath`) as the real target, then reconstruct it exactly like any file - every
@@ -169,6 +170,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         skipped_lines,
         scope_top,
         scope_sub,
+        duplicates: resolved.duplicates,
     };
 
     match args.format {

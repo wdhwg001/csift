@@ -70,8 +70,15 @@ fn line_types_line(types: &BTreeMap<String, usize>) -> String {
         .join(" · ")
 }
 
-pub(super) fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
+pub(super) fn render_text(
+    rows: &[SessionStats],
+    top: usize,
+    sub: usize,
+    dropped: usize,
+    duplicates: &[crate::path::DuplicateGroup],
+) {
     crate::text::emit_scope_banner(top, sub);
+    crate::path::emit_duplicate_banner(duplicates);
     for r in rows {
         if r.is_subagent {
             println!(
@@ -216,6 +223,7 @@ pub(super) fn render_json(
     top: usize,
     sub: usize,
     dropped: usize,
+    duplicates: &[crate::path::DuplicateGroup],
 ) -> Result<()> {
     println!(
         "{}",
@@ -223,7 +231,7 @@ pub(super) fn render_json(
             "stats",
             top,
             sub,
-            json!({})
+            crate::path::duplicate_header_fields(duplicates)
         ))?
     );
     for r in rows {

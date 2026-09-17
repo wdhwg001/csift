@@ -63,10 +63,13 @@ pub(crate) fn render_json(
     let chars_used: usize = plans.iter().map(|p| p.rendered_chars).sum();
     let boundaries_spanned: usize = plans.iter().map(|p| p.spanned_boundaries).sum();
     let boundaries_total: usize = sessions.iter().map(|sr| sr.summaries.len()).sum();
+    let dup = crate::path::duplicate_header_fields(&ctx.duplicates);
     let header = json!({
         "kind": "header",
         "command": "turns",
         "sessions_in_scope": sc.in_scope,
+        "duplicate_transcripts": dup["duplicate_transcripts"],
+        "duplicate_records_dropped": dup["duplicate_records_dropped"],
         "sessions_rendered": sc.rendered,
         "top_level_sessions": sc.in_scope_top,
         "subagent_sessions": sc.in_scope_sub,

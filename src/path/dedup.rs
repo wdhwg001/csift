@@ -307,6 +307,19 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
     }
 }
 
+/// The shared TEXT disclosure, one line per duplicated session id, printed beside the scope
+/// banner rather than as a trailing footer: the merge is a fact about the resolved SCOPE,
+/// like the span line it sits under, and the banner is the one place every spanning surface
+/// already discloses that - always reached, even on an empty result. Silent when nothing
+/// was duplicated, and never called from the `-c` / `-l` terminal modes, whose stdout is a
+/// bare number or a pure id stream (the resolver's stderr note carries those).
+pub fn emit_duplicate_banner(groups: &[DuplicateGroup]) {
+    for g in groups {
+        println!("copies {}", duplicate_note(g));
+        println!();
+    }
+}
+
 /// The shared JSON disclosure every spanning surface carries in its envelope header:
 /// how many transcripts the merge removed from the scope, and how many physical jsonl
 /// lines went with them. Both 0 when no session id was duplicated.

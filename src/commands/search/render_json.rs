@@ -179,7 +179,7 @@ pub(crate) fn render_json(
             "search",
             outcome.scope_top,
             outcome.scope_sub,
-            json!({})
+            crate::path::duplicate_header_fields(&outcome.duplicates)
         ))?
     );
     for ex in &outcome.exchanges {

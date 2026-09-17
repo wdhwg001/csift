@@ -19,6 +19,10 @@ pub(crate) struct Outcome {
     /// shared SCOPE banner / JSON `session_header`, suppressed when `scope_sub == 0`.
     pub(crate) scope_top: usize,
     pub(crate) scope_sub: usize,
+    /// Session ids the resolver found under more than one project directory (§2 `dedup`):
+    /// the merged copies are named beside the scope banner and counted in the JSON header,
+    /// because every mutation count above was taken after the merge removed them.
+    pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
 }
 
 impl Outcome {

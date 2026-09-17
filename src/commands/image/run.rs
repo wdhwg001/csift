@@ -6,12 +6,13 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     let extracting = args.out.is_some();
     let selection = parse_id_selection(&args.id)?;
 
-    let session_files = crate::path::resolve_targets_with_session_list(
+    let resolved = crate::path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         args.want_subagents().into(),
         crate::path::Caller::Other,
     )?;
+    let session_files = resolved.files;
 
     // Scan across files (rayon - each is an independent mmap + prefilter scan).
     use rayon::prelude::*;
@@ -98,8 +99,18 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         extract(&selected, out_dir, args, skipped_lines)
     } else {
         match args.format {
-            OutputFormat::Json => render_json(&selected, distinct_transcripts, skipped_lines),
-            OutputFormat::Text => render_text(&selected, distinct_transcripts, skipped_lines),
+            OutputFormat::Json => render_json(
+                &selected,
+                distinct_transcripts,
+                skipped_lines,
+                &resolved.duplicates,
+            ),
+            OutputFormat::Text => render_text(
+                &selected,
+                distinct_transcripts,
+                skipped_lines,
+                &resolved.duplicates,
+            ),
         }
         Ok(())
     }

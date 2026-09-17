@@ -77,12 +77,13 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
         );
     }
 
-    let session_files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
+    let session_files = resolved.files;
 
     // Parallel scan across files (default rayon pool = CPU count).
     let per_file: Vec<ScanResult> = session_files
@@ -162,6 +163,7 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
         rt_fraction: args.round_trip_fraction,
         skipped_lines,
         cfg,
+        duplicates: resolved.duplicates,
     };
 
     match args.format {

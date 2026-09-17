@@ -96,6 +96,7 @@ fn distinct_file_count() {
         skipped_lines: 0,
         turn_range: None,
         time_window_bounded: false,
+        duplicates: Vec::new(),
         scope_top: 1,
         scope_sub: 0,
     };

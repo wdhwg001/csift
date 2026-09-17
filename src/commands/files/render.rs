@@ -6,6 +6,7 @@ pub(crate) fn render_text(outcome: &Outcome) {
     // SCOPE banner FIRST (before the empty check) so a fan-out that touched no files still
     // announces it spanned N subagents - the same up-front disclosure `list`/`turns` give.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
+    crate::path::emit_duplicate_banner(&outcome.duplicates);
     if outcome.mutations.is_empty() && outcome.boundaries.is_empty() {
         println!("no file mutations found");
         print_footer(outcome);
@@ -236,7 +237,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             "files",
             outcome.scope_top,
             outcome.scope_sub,
-            json!({})
+            crate::path::duplicate_header_fields(&outcome.duplicates)
         ))?
     );
     match outcome.detail {

@@ -62,6 +62,10 @@ pub(crate) struct RenderCtx {
     /// announces the true `1 top-level + N subagent` fan-out).
     pub(crate) scope_top: usize,
     pub(crate) scope_sub: usize,
+    /// Session ids the resolver found under more than one project directory (§2 `dedup`):
+    /// the merged copies are named beside the scope banner and counted in the JSON header,
+    /// so a reconstruction assembled from one copy says the other was dropped.
+    pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
 }
 
 /// Restrict a `(line_no, text)` known-line vector to the `--file-lines` range, if any. The
@@ -379,6 +383,7 @@ pub(crate) fn render_text(
         return render_restore(ctx, sessions, out_path, false);
     }
     crate::text::emit_scope_banner(ctx.scope_top, ctx.scope_sub);
+    crate::path::emit_duplicate_banner(&ctx.duplicates);
     match ctx.mode {
         RecoverMode::Restore => unreachable!("handled above"),
         RecoverMode::Coverage => render_coverage_text(ctx, sessions),

@@ -79,12 +79,13 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
         .as_deref()
         .map(|s| crate::text::parse_range_spec(s, "--turn", false))
         .transpose()?;
-    let files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         SubagentScope::from(args.want_subagents()),
         path::Caller::Other,
     )?;
+    let files = resolved.files;
     let mut rows: Vec<SessionStats> = files
         .par_iter()
         .map(|p| stats_one_file(p, &window, turn_range))
@@ -108,8 +109,8 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     let sub = rows.iter().filter(|r| r.is_subagent).count();
     let top = rows.len() - sub;
     match args.format {
-        OutputFormat::Text => render_text(&rows, top, sub, dropped),
-        OutputFormat::Json => render_json(&rows, top, sub, dropped)?,
+        OutputFormat::Text => render_text(&rows, top, sub, dropped, &resolved.duplicates),
+        OutputFormat::Json => render_json(&rows, top, sub, dropped, &resolved.duplicates)?,
     }
     Ok(())
 }

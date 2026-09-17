@@ -172,7 +172,7 @@ pub(crate) fn render_json(
             "recover",
             ctx.scope_top,
             ctx.scope_sub,
-            json!({})
+            crate::path::duplicate_header_fields(&ctx.duplicates)
         ))?
     );
 

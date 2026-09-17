@@ -20,12 +20,13 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
 
     // ── Resolve targets → session files (subagent span per --no-subagents; default spans
     //    subagents, matching every other default-on command) ──
-    let session_files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         path::SubagentScope::from(args.want_subagents()),
         path::Caller::Files,
     )?;
+    let session_files = resolved.files;
 
     // SCOPE span of the resolved set (every transcript, incl. mutation-free subagents) so the
     // fan-out is announced from the true file set, not just the mutation-bearing subset.
@@ -95,6 +96,7 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         time_window_bounded: !time_window.is_unbounded(),
         scope_top,
         scope_sub,
+        duplicates: resolved.duplicates,
     };
 
     match args.format {

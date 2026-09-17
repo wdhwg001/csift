@@ -11,6 +11,10 @@ pub(crate) struct RenderCtx {
     /// The richness configuration - the renderer walks the same `select_agent_messages`
     /// survivor set the plan budgeted, so emitted == costed.
     pub(crate) cfg: RichnessCfg,
+    /// Session ids the resolver found under more than one project directory (§2 `dedup`):
+    /// the merged copies are named beside the scope banner and counted in the JSON header.
+    /// `--slice` skips the banner, as it skips every other piece of operational chrome.
+    pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
 }
 
 /// How many abandoned openers a session's note lists by line before it elides the rest.
@@ -110,6 +114,7 @@ pub(crate) fn render_text(
     // read as `0 top-level`. Printed whenever more than one session is in scope OR some
     // in-scope session was skipped by the budget; a lone session that rendered cleanly stays
     // silent (the common single-thread recovery case, zero added noise).
+    crate::path::emit_duplicate_banner(&ctx.duplicates);
     let sc = scope_summary(sessions, plans);
     let any_skipped = sc.rendered < sc.in_scope;
     if sc.in_scope > 1 || any_skipped {

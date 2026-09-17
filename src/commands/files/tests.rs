@@ -102,6 +102,7 @@ fn outcome(detail: FilesDetail, muts: Vec<TaggedMutation>) -> Outcome {
         skipped_lines: 0,
         turn_range: None,
         time_window_bounded: false,
+        duplicates: Vec::new(),
         scope_top,
         scope_sub,
     }

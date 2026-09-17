@@ -44,7 +44,7 @@ fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> 
                 "search",
                 outcome.scope_top,
                 outcome.scope_sub,
-                serde_json::json!({}),
+                crate::path::duplicate_header_fields(&outcome.duplicates),
             );
             println!("{}", serde_json::to_string(&header)?);
             let summary = crate::text::envelope_summary(serde_json::json!({ "matched": total }));
@@ -141,12 +141,13 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.)
     //    Resolution runs BEFORE the advisory notes below: an unreachable target must fail
     //    first, not after a scope warning about a run that was never going to happen (R9). ──
-    let session_files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.targets(),
         args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
+    let session_files = resolved.files;
 
     emit_advisory_notes(
         args,
@@ -219,6 +220,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     let mut outcome = SearchOutcome {
         scope_top,
         scope_sub,
+        duplicates: resolved.duplicates,
         ..SearchOutcome::default()
     };
     let mut all: Vec<Exchange> = Vec::new();
@@ -312,7 +314,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                     "search",
                     outcome.scope_top,
                     outcome.scope_sub,
-                    serde_json::json!({}),
+                    crate::path::duplicate_header_fields(&outcome.duplicates),
                 );
                 println!("{}", serde_json::to_string(&header)?);
                 for (key, n) in &rows {

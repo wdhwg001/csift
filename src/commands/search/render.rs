@@ -252,6 +252,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // SCOPE banner FIRST (before the empty check) so a bare `csift search '' <uuid>` fan-out
     // announces it spanned N subagents up front - same disclosure as list/files/turns.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
+    crate::path::emit_duplicate_banner(&outcome.duplicates);
     if outcome.exchanges.is_empty() {
         println!("no matching exchanges");
         if outcome.skipped_lines > 0 {

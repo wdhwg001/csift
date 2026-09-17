@@ -20,12 +20,13 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // project is scanned - the same target model as list/search. `agents` discovers each
     // session's subagents itself, so it never spans subagent TRANSCRIPT files here - pass
     // `false` (⇒ `SubagentScope::TopLevelOnly`).
-    let session_files = path::resolve_targets_with_session_list(
+    let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
         false.into(),
         path::Caller::Other,
     )?;
+    let session_files = resolved.files;
 
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
@@ -100,8 +101,10 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     };
 
     match args.format {
-        OutputFormat::Text => render_text(&nodes, &workflow_runs, args, &view),
-        OutputFormat::Json => render_json(&nodes, &workflow_runs, &view)?,
+        OutputFormat::Text => {
+            render_text(&nodes, &workflow_runs, args, &view, &resolved.duplicates);
+        }
+        OutputFormat::Json => render_json(&nodes, &workflow_runs, &view, &resolved.duplicates)?,
     }
     Ok(())
 }

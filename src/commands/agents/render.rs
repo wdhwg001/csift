@@ -7,7 +7,9 @@ pub(crate) fn render_text(
     workflow_runs: &[WorkflowRun],
     args: &AgentsArgs,
     view: &View,
+    duplicates: &[crate::path::DuplicateGroup],
 ) {
+    crate::path::emit_duplicate_banner(duplicates);
     if nodes.is_empty() {
         println!("no subagents found");
         return;

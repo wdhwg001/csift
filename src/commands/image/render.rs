@@ -3,7 +3,13 @@
 use super::*;
 
 /// Text listing: a session-label table (declared once), then one row per image.
-pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize) {
+pub(crate) fn render_text(
+    selected: &[&ImageRef],
+    transcripts: usize,
+    skipped_lines: usize,
+    duplicates: &[crate::path::DuplicateGroup],
+) {
+    crate::path::emit_duplicate_banner(duplicates);
     if selected.is_empty() {
         println!("no images found");
         if skipped_lines > 0 {
@@ -86,8 +92,16 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
 }
 
 /// JSON listing: one object per image, then a trailing summary object.
-pub(crate) fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize) {
-    println!("{}", crate::text::envelope_header("image", json!({})));
+pub(crate) fn render_json(
+    selected: &[&ImageRef],
+    transcripts: usize,
+    skipped_lines: usize,
+    duplicates: &[crate::path::DuplicateGroup],
+) {
+    println!(
+        "{}",
+        crate::text::envelope_header("image", crate::path::duplicate_header_fields(duplicates))
+    );
     for img in selected {
         println!(
             "{}",

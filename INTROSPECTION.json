@@ -16649,7 +16649,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "268-274",
+          "lines": "269-275",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -21808,7 +21808,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "83-85",
+          "lines": "87-89",
           "snippet": "        let cap_override = slices.map(|_| window.saturating_sub(SLICE_BODY_HEADROOM).max(1));\n        let doc = build_document_body(sessions, plans, &ctx.cfg, cap_override);\n        let chunks = slice_into_windows(&doc, window);"
         }
       ],
@@ -36792,7 +36792,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "327-329",
+          "lines": "332-334",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy\n/// document is NOT 3\u00d7 over-counted the way a byte budget would). A line longer than the"
         }
       ],
@@ -36947,7 +36947,7 @@
       "code": [
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "68",
+          "lines": "72",
           "snippet": "    // inject it under the 10,000-char additionalContext cap. Two sub-modes:"
         }
       ],
@@ -39048,12 +39048,12 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "183-188",
+          "lines": "185-190",
           "snippet": "pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant\n    // coverage rides the tool-name needles below, so admitting every assistant\n    // text record here would repeal this prefilter). Finders built ONCE (per-line\n    // hot path - the stateless form rebuilt its searcher every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 6]> ="
         },
         {
           "path": "src/commands/files/run.rs",
-          "lines": "191-196",
+          "lines": "193-198",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),\n                // Settings-family external writes read the snapshot version sequence.\n                memmem::Finder::new(b\"file-history-snapshot\"),"
         }
       ],
@@ -40129,7 +40129,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "318-319",
+          "lines": "319-320",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41438,7 +41438,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "307-309",
+          "lines": "308-310",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -51658,7 +51658,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "276-281",
+          "lines": "277-282",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51840,12 +51840,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "325",
+          "lines": "326",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "276-281",
+          "lines": "277-282",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -52153,17 +52153,17 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "268-274",
+          "lines": "269-275",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "276-281",
+          "lines": "277-282",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "325",
+          "lines": "326",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52238,12 +52238,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "268-274",
+          "lines": "269-275",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "325",
+          "lines": "326",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52794,7 +52794,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "258-261",
+          "lines": "259-262",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -54286,7 +54286,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "267-274",
+          "lines": "268-275",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54375,7 +54375,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "266-267",
+          "lines": "267-268",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54450,7 +54450,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "275",
+          "lines": "276",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55960,7 +55960,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "270-274",
+          "lines": "271-275",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -63858,7 +63858,7 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "191-194",
+          "lines": "193-196",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -64698,7 +64698,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "258-265",
+          "lines": "259-266",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -64798,7 +64798,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "68",
+          "lines": "69",
           "snippet": "        nodes.retain(|n| window_admits(n, &time_window, args.order_by));"
         }
       ],
@@ -65816,7 +65816,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "276-281",
+          "lines": "277-282",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65904,7 +65904,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "325",
+          "lines": "326",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -68666,7 +68666,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "234-239",
+          "lines": "237-242",
           "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = \"note: teammate rows are in-process Agent subagents \u2014 address one BY NAME (the `(@name)` shown) \\\nvia SendMessage to steer it, and `message:{\\\"type\\\":\\\"shutdown_request\\\"}` to terminate it.\";\npub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =\n    \"      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \\\nbuilds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \\\nteammate has no separate OS process (it shares the orchestrator PID \u2014 `pkill` won't help).\";"
         }
       ],

@@ -421,4 +421,8 @@ pub struct SearchOutcome {
     /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).
     pub scope_top: usize,
     pub scope_sub: usize,
+    /// Session ids the resolver found under more than one project directory (§2 `dedup`).
+    /// Empty on an ordinary scope; when not, the merged copies are disclosed beside the
+    /// scope banner and in the JSON header, because the counts above changed with them.
+    pub duplicates: Vec<crate::path::DuplicateGroup>,
 }

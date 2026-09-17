@@ -6,6 +6,7 @@ pub(crate) fn render_json(
     nodes: &[SubagentNode],
     workflow_runs: &[WorkflowRun],
     view: &View,
+    duplicates: &[crate::path::DuplicateGroup],
 ) -> Result<()> {
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -19,7 +20,7 @@ pub(crate) fn render_json(
         "{}",
         serde_json::to_string(&crate::text::envelope_header(
             "agents",
-            serde_json::json!({})
+            crate::path::duplicate_header_fields(duplicates)
         ))?
     );
     let mut by_session: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
