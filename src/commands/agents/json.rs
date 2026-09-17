@@ -104,9 +104,8 @@ pub(crate) fn render_json(
 /// an id by construction - identical copies merge away, a DIVERGENT pair does not, so the
 /// set can still hold two nodes under one id: keying on the id emitted one of the pair while
 /// the session row counted both, which is exactly the disagreement between the count and the
-/// rows. A
-/// position still guards the cycle a `parent_agent_id` chain can name, because a node is
-/// reached twice only through an edge and never through itself.
+/// rows. A position still guards the cycle a `parent_agent_id` chain can name, because a
+/// node is reached twice only through an edge and never through itself.
 pub(crate) fn preorder_depth<'a>(nodes: &[&'a SubagentNode]) -> Vec<(&'a SubagentNode, usize)> {
     use std::collections::{BTreeMap, HashSet};
     let ids: HashSet<&str> = nodes.iter().map(|n| n.agent_id.as_str()).collect();

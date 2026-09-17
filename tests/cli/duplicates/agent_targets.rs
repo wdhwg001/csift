@@ -386,6 +386,19 @@ fn two_sessions_that_share_a_run_id_keep_a_row_each() {
         .collect();
     assert!(owners.contains(&SESS), "{owners:?}");
     assert!(owners.contains(&other), "{owners:?}");
+
+    // The TEXT tree takes the same owner test, and it is the projection where getting it
+    // wrong is silent: a run whose owner is the other session still has an in-scope agent
+    // naming that workflow id here, so without the owner it prints under BOTH sessions and
+    // the tree shows one run twice.
+    let text = h.run(&["agents"]);
+    assert!(text.success, "{}", text.stderr);
+    let headers = text
+        .stdout
+        .lines()
+        .filter(|l| l.starts_with("  WORKFLOW  wf_same"))
+        .count();
+    assert_eq!(headers, 2, "one run header per session:\n{}", text.stdout);
 }
 
 #[test]
