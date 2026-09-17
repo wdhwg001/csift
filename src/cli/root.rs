@@ -240,6 +240,18 @@ pub struct Cli {
     /// budget. What the offered value promises is that every boundary here gets TRIED, not
     /// that every one of them opens.
     ///
+    /// The floor's own reason rides JSON as `floor_cause`, over EIGHT values. Only
+    /// `budget-exhausted` is one a larger budget can move, and only when that boundary's
+    /// door is open. THREE are a boundary whose door is shut, and each names which fact
+    /// shut it: `unresolvable-boundary` (its `logicalParentUuid` is on no line of this
+    /// file), `relink-removed` (it is on a line, which you can open, that the pre-boundary
+    /// relink cut took out of the uuid map) and `boundary-loop` (it names a record the walk
+    /// had already reached, so its door leads back into the conversation rather than above
+    /// the cut). The remaining four mean the walk ended BELOW the boundaries and never
+    /// reached them at all: `head` (the conversation's own head), `dangling-parent` (a
+    /// `parentUuid` naming no record here), `cycle` (the parent links loop) and `no-leaf`
+    /// (nothing resolved, so there is no walk to extend).
+    ///
     /// The DEFAULT is chosen by measurement against the performance contract and that
     /// measurement is still pending, so the shipped value is the candidate and may change
     /// in a later release. Pass the number explicitly wherever you need it stable.

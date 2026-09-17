@@ -323,6 +323,11 @@ surface change bumps the PATCH.
 
 ### Changed
 
+- **The root `--help` names every `floor_cause` value.** `floor_cause` was named as a key on
+  seven help pages and its value domain on none, which left `--help` thinner than `SKILL.md`
+  on a closed enum a consumer branches on. The global `--cross-compactions` doc now names all
+  eight, sorted by what a reader can do about each: only `budget-exhausted` is one a larger
+  budget can move, and only when that boundary's door is open. Help text is surface.
 - **`SKILL.md` is rewritten as the always-current mastery manual.** It had become a ledger:
   37 lines carried a csift version rider, so a reader had to work out which sentences
   described the binary in front of them. It carries none now, and the Surface line against
