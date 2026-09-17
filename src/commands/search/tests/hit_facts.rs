@@ -473,3 +473,47 @@ fn a_survival_relation_whose_row_is_out_of_range_yields_no_edge() {
         "the survivor is not in the rows handed in, so there is no address to name"
     );
 }
+
+/// A survival relation whose target has NO physical line renders its uuid, never `L0`.
+///
+/// The one record csift holds with no line is a merged elicitation-sidecar record, which
+/// carries `line_no: 0` because there is no jsonl line to name. `L0` addresses nothing -
+/// `csift show --line 0` fetches no record - so an edge that printed it would hand a reader
+/// a command that cannot work, in place of the id that at least identifies the target.
+///
+/// Asserted on the EDGE rather than on the guard, because the guard is one comparison and
+/// what matters is the wire shape it produces: a target with a uuid, no line, and the
+/// builder's own `not in this file` note.
+#[test]
+fn a_survival_target_with_no_physical_line_names_its_uuid() {
+    let lines = [
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+    ];
+    // The SURVIVOR carries no line, which is the shape the guard is for.
+    let kept: Vec<Kept> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| Kept {
+            rec: rec(l),
+            can_hit: true,
+            line_no: if i == 1 { 0 } else { 1 },
+            from_sidecar: i == 1,
+            gated_raw: None,
+        })
+        .collect();
+    let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
+    let chain = crate::model::Chain::build_by(&rows, |r| r.node(), None);
+    assert_eq!(chain.replay_of(0), Some(1), "the earlier line is the copy");
+    let facts = survival_edges(&chain, 0, &rows);
+    let HitFact::For { kind, target, .. } = &facts[0] else {
+        panic!("a resolved edge: {facts:?}");
+    };
+    assert_eq!(kind.as_str(), "replays");
+    assert_eq!(
+        target.line, None,
+        "L0 addresses nothing, so no line is named"
+    );
+    assert_eq!(target.uuid.as_deref(), Some("u0"));
+    assert_eq!(target.note.as_deref(), Some("not in this file"));
+}
