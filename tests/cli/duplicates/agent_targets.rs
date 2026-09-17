@@ -171,3 +171,35 @@ fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
         text.stdout
     );
 }
+
+#[test]
+fn the_sidecars_of_a_divergent_pair_still_merge_their_identical_agents() {
+    // The sessions DIFFER, so neither is dropped and BOTH sidecars are walked - and those
+    // hold one agent transcript twice, which every count would otherwise double.
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &record(1, "another branch"),
+    );
+    let child = agent_record(1, "child ask");
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &child,
+    );
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &child,
+    );
+
+    let count = h.run(&["search", "child ask", &at(SESS), "-c"]);
+    assert_eq!(count.stdout.trim(), "1", "{}", count.stderr);
+    let json = h.run(&["search", "child", &at(SESS), "--format", "json"]);
+    let header = json_rows(&json.stdout, "header");
+    assert_eq!(
+        header[0]["duplicate_transcripts"], 1,
+        "the merged agent copy is disclosed like any other: {}",
+        header[0]
+    );
+    assert_eq!(header[0]["duplicate_records_dropped"], 1);
+}

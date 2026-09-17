@@ -122,6 +122,17 @@ pub fn resolve_session_files_reported(
                 sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
             }
         }
+        // The gathered sidecars take the SAME merge. A MERGED session pair never reaches
+        // here twice - the merge above ran first precisely so a dropped copy's whole
+        // sidecar is never walked - but a DIVERGENT pair keeps both sessions in scope, and
+        // their two sidecars can still hold byte-identical copies of one agent transcript.
+        // That is one agent seen twice, which every count below would otherwise double.
+        if !sub_files.is_empty() {
+            let (kept, groups) = dedup_copies(sub_files);
+            emit_duplicate_notes(&groups);
+            duplicates.extend(groups);
+            sub_files = kept;
+        }
         let session_files: Vec<PathBuf> = match scope {
             SubagentScope::TopLevelOnly => top_level,
             SubagentScope::WithSubagents => {
