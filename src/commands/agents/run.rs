@@ -60,13 +60,14 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     if !agent_groups.is_empty() {
         let keep: std::collections::BTreeSet<std::path::PathBuf> = kept.into_iter().collect();
         nodes.retain(|n| keep.contains(&n.path));
-        // A copied project directory carries the whole sidecar, MANIFESTS included, so the
-        // same workflow run is discovered once per session copy. One run is one row.
-        workflow_runs.sort_by(|a, b| a.run_id.cmp(&b.run_id));
-        workflow_runs.dedup_by(|a, b| a.run_id == b.run_id);
         path::emit_duplicate_notes(&agent_groups);
         duplicates.extend(agent_groups);
     }
+    // A copied project directory carries the whole sidecar, its workflow MANIFESTS included,
+    // so the same run is discovered once per session copy. One run is one row: the first
+    // occurrence stays, which keeps the tree's run order exactly as the scan produced it.
+    let mut seen_runs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    workflow_runs.retain(|r| seen_runs.insert(r.run_id.clone()));
 
     // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--order-by time
     // window AND the --shape filter (a known id should resolve regardless of when it ran or

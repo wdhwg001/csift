@@ -64798,7 +64798,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "88",
+          "lines": "89",
           "snippet": "        nodes.retain(|n| window_admits(n, &time_window, args.order_by));"
         }
       ],
@@ -68666,7 +68666,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "273-278",
+          "lines": "274-279",
           "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = \"note: teammate rows are in-process Agent subagents \u2014 address one BY NAME (the `(@name)` shown) \\\nvia SendMessage to steer it, and `message:{\\\"type\\\":\\\"shutdown_request\\\"}` to terminate it.\";\npub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =\n    \"      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \\\nbuilds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \\\nteammate has no separate OS process (it shares the orchestrator PID \u2014 `pkill` won't help).\";"
         }
       ],
