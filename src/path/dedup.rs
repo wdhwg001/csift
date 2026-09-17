@@ -94,6 +94,25 @@ pub struct DuplicateGroup {
 }
 
 impl DuplicateGroup {
+    /// How a disclosure NAMES this group. A session id is cut to the eight-character handle
+    /// every surface prints; an AGENT group's id is the shared basename `agent-<hex>`, whose
+    /// first eight characters are `agent-ab` - the prefix every agent group on disk shares
+    /// and nothing a reader can act on - so a subagent is named by the canonical id csift
+    /// prints everywhere else and re-accepts as `@<id>`. The kind is read from the PATH
+    /// through the shared helpers, never by re-splitting the stem here.
+    #[must_use]
+    pub fn subject(&self) -> String {
+        if crate::subagent::is_subagent_path(&self.kept) {
+            format!(
+                "subagent {}",
+                crate::subagent::session_id_from_path(&self.kept)
+            )
+        } else {
+            let id = self.session_id.get(..8).unwrap_or(&self.session_id);
+            format!("session {id}")
+        }
+    }
+
     /// Physical jsonl lines carried by the copies the merge removed (0 for a divergent
     /// group, which drops nothing).
     #[must_use]
@@ -348,7 +367,7 @@ fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
 #[must_use]
 pub fn duplicate_note(g: &DuplicateGroup) -> String {
     let n = g.members.len();
-    let id = g.session_id.get(..8).unwrap_or(&g.session_id);
+    let subject = g.subject();
     match g.relation {
         DuplicateRelation::Unknown => {
             let unreadable: Vec<String> = g
@@ -361,7 +380,7 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
                 })
                 .collect();
             format!(
-                "session {id} is on disk under {n} project directories and csift could not \
+                "{subject} is on disk under {n} project directories and csift could not \
                  read {} of them ({}) - with no bytes to compare, csift merges nothing, so \
                  every copy stays in scope and every count below includes all of them. Fix \
                  that copy's permissions, or target a `*.jsonl` path to read one alone.",
@@ -383,7 +402,7 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
                 })
                 .collect();
             format!(
-                "session {id} is on disk under {n} project directories whose contents DIFFER \
+                "{subject} is on disk under {n} project directories whose contents DIFFER \
                  ({}) - csift merges neither, so both stay in scope and every count below \
                  includes both. A turn number minted from one copy does not address the \
                  other; target a `*.jsonl` path to read one alone.",
@@ -399,7 +418,7 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
                  still being written"
             };
             format!(
-                "session {id} is on disk under {n} project directories ({how}); keeping {} \
+                "{subject} is on disk under {n} project directories ({how}); keeping {} \
                  ({} {}) and dropping {} {} ({} {}) at {}. Target that path directly to read \
                  the dropped copy instead.",
                 g.kept.display(),

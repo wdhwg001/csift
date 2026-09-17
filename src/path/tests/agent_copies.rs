@@ -62,6 +62,23 @@ fn identical_agent_copies_merge_onto_one() {
 }
 
 #[test]
+fn an_agent_group_is_named_as_a_subagent_not_a_session() {
+    let tree = Tree::new();
+    let body = rec(1, "child ask");
+    let r = resolve(&two_copies(&tree, &body, &body));
+    let g = &r.duplicates[0];
+
+    // The group's id is the shared BASENAME, `agent-<hex>`, so cutting it to eight
+    // characters yields `agent-ab` - what every agent group on disk starts with, and
+    // nothing a reader can feed back to csift.
+    assert_eq!(g.session_id, format!("agent-{HEX}"));
+    assert_eq!(g.subject(), format!("subagent {HEX}"));
+    let note = duplicate_note(g);
+    assert!(note.starts_with(&format!("subagent {HEX} ")), "{note}");
+    assert!(!note.contains("session agent-"), "{note}");
+}
+
+#[test]
 fn a_prefix_agent_copy_merges_onto_the_longer_one() {
     let tree = Tree::new();
     let shorter = rec(1, "child ask");

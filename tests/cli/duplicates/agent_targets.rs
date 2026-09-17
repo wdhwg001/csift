@@ -277,6 +277,14 @@ fn agents_merges_its_own_sidecar_copies_and_agrees_with_list_and_search() {
         "and named on stderr like any other merge:\n{}",
         out.stderr
     );
+    // An agent group is NAMED as one: its id is the shared basename `agent-<hex>`, whose
+    // first eight characters are the prefix every agent group shares.
+    assert!(
+        out.stderr.contains(&format!("subagent {AGENT}")),
+        "the note names the subagent by its canonical id:\n{}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains("session agent-"), "{}", out.stderr);
 
     // The three surfaces agree, which is the whole point of the item.
     let list = h.run(&["list", &sess, "--format", "json"]);
