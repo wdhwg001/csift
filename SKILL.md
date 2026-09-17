@@ -1126,7 +1126,10 @@ csift search "X" -l | csift stats --sessions-from -
 - a line framing the result as `0 matches — a DEFINITIVE absence (exit 0), NOT an error`;
 - the ACTIVE FILTERS, so you can see what you actually asked;
 - the malformed-line count when it is above zero, because the absence is definitive for PARSEABLE lines only;
-- and when a `-t`/`-T` label filter was active, an ACTIVE PROBE: a re-scan of the SAME pattern and scope with the label filter DROPPED, which NAMES the label(s) the pattern DOES occur under — `⚠ but "X" DOES occur — N record(s) under: agent.tool.use`. That probe costs nothing unless the query both matched nothing and carried a label filter.
+- and when a `-t`/`-T` label filter was active, an ACTIVE PROBE: a re-scan of the SAME pattern and scope with the label filter DROPPED, which NAMES the label(s) the pattern DOES occur under — `⚠ but "X" DOES occur — N record(s) under: agent.tool.use ×2 · …` (six labels, then `(+N more label(s))`). That probe costs nothing unless the query both matched nothing and carried a label filter;
+- its NEGATIVE, the STRONGER answer: when that probe finds nothing either, `(even without the -t/-T filter, "X" has 0 matches here — genuinely absent in this scope, not a label mistake.)` — the filter is exonerated, so widen the SCOPE or change the pattern. With no label filter the line is a pointer instead, at `search "" <target> --count-by label`;
+- `-t <face> selects no LLM-visible leaf; use <face>.* or a leaf`, once per bare face that selects nothing by the law (§7.1);
+- and `note: the gated leaves (<all of them, named>) are scanned only under a -t that reaches them - this absence does not cover those lines`, whenever no selector reached one. It fires on almost every scan, since a default scan reaches none; the list is derived from the gate set, so it cannot name a stale leaf.
 
 JSON echoes all of it in the summary: `definitive_absence:true`, `active_filters`, `excluded_by_label` (`{records, by_label}`, null when no label filter), `empty_visible_face` (you named a category whose whole face is invisible — §7.1) and `gated_leaves_unreached` (true when no selector reached a gated promoted leaf, so those lines were never scanned at all).
 
