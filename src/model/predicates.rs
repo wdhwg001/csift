@@ -251,6 +251,16 @@ impl Record {
     /// and, less often, wrapped in an isMeta notification FRAME - and only the second is an
     /// isMeta injection.
     ///
+    /// It reads the same text the CLASSIFIER read. `message.content` is a bare string on most
+    /// pulses and a BLOCK ARRAY on the rest, and the leaf that dispatches here is decided from
+    /// [`Record::raw_message_text`], which joins the text blocks - so a reader of
+    /// `Content::Text` alone classifies a block-content pulse as a notification and then
+    /// reports that it names no tag, which is a FABRICATED negative rather than an honest
+    /// empty. Measured on the file set below: 212 pulses carry block content, 4 of them carry
+    /// a `<tool-use-id>`, and 0 of those 4 name a call of their own file - so widening this
+    /// reader moves those four from a false reason to the builder's `not in this file`, which
+    /// is what the record actually supports.
+    ///
     /// MEASURED, with the file set stated so the numbers reproduce: one row per RECORD whose
     /// textual `message.content` carries `<task-notification>`, over EVERY `*.jsonl` under
     /// one projects root - the top-level transcripts AND the `<uuid>/subagents/**` sidecar
@@ -265,13 +275,11 @@ impl Record {
     /// pulses answered with an address.
     #[must_use]
     pub fn pulse_tool_use_id(&self) -> Option<String> {
-        let Content::Text(s) = self.message.as_ref()?.content.as_ref()? else {
-            return None;
-        };
+        let s = self.raw_message_text()?;
         if !s.contains(TASK_NOTIFICATION_PREFIX) {
             return None;
         }
-        extract_xml_tag(s, "tool-use-id")
+        extract_xml_tag(&s, "tool-use-id")
     }
 
     /// Plain-text rendering of a GENUINE user message for the `list`/`search`

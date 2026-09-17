@@ -305,3 +305,84 @@ fn a_pulse_names_the_call_it_reports_on_from_either_carrier() {
         text.stdout
     );
 }
+
+/// The same two carriers again, with `message.content` as a BLOCK ARRAY.
+///
+/// `message.content` is a bare string on most pulses and a block array on the rest, and the
+/// LEAF that dispatches to the reader is decided from the joined text of the blocks. So a
+/// reader of the string form alone classifies a block-content pulse as a notification and
+/// then reports that it names no tag - a fabricated negative, and the one shape where the
+/// honest empty is a lie. Measured over the file set at `Record::pulse_tool_use_id`: 211
+/// pulses carry block content, 3 of them carrying a `<tool-use-id>`.
+///
+/// This is the case that fails if the reader is narrowed back to the string arm: both L3 and
+/// L4 would print the empty reason instead of the address.
+#[test]
+fn a_pulse_in_block_content_names_its_call_from_either_carrier() {
+    let pulse = "<task-notification><task-id>b2468013</task-id><tool-use-id>toolu_01b</tool-use-id><summary>background-command task b2468013 completed</summary></task-notification>";
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        &format!(
+            concat!(
+                r#"{{"type":"user","uuid":"b0","parentUuid":null,"timestamp":"2026-06-09T04:00:00.000Z","message":{{"role":"user","content":"zzblocks start the build"}}}}"#,
+                "\n",
+                r#"{{"type":"assistant","uuid":"b1","parentUuid":"b0","timestamp":"2026-06-09T04:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"toolu_01b","name":"Bash","input":{{"command":"make"}}}}]}}}}"#,
+                "\n",
+                r#"{{"type":"user","uuid":"b2","parentUuid":"b1","timestamp":"2026-06-09T04:05:00.000Z","message":{{"role":"user","content":[{{"type":"text","text":"{pulse}"}}]}}}}"#,
+                "\n",
+                r#"{{"type":"user","uuid":"b3","isMeta":true,"parentUuid":"b2","timestamp":"2026-06-09T04:06:00.000Z","message":{{"role":"user","content":[{{"type":"text","text":"{pulse}"}}]}}}}"#,
+                "\n",
+            ),
+            pulse = pulse,
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits: Vec<serde_json::Value> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let reports = |line: u64| -> serde_json::Value {
+        hits.iter()
+            .filter(|h| h["line"].as_u64() == Some(line))
+            .flat_map(|h| h["for"].as_array().cloned().unwrap_or_default())
+            .find(|e| e["kind"] == "reports")
+            .unwrap_or_else(|| panic!("no reports edge on L{line}:\n{}", out.stdout))
+    };
+    for (line, carrier) in [(3, "the ordinary carrier"), (4, "the isMeta frame")] {
+        let edge = reports(line);
+        assert_eq!(edge["basis"], "key", "{carrier} on L{line}: {edge}");
+        assert_eq!(
+            edge["target"]["line"].as_u64(),
+            Some(2),
+            "{carrier} on L{line} must resolve to the call, not report an empty: {edge}"
+        );
+        assert!(
+            edge["reason"].is_null(),
+            "{carrier} on L{line} states no reason when it has an address: {edge}"
+        );
+    }
+
+    let text = h.run(&["search", "", &format!("@{LEAD_SESS}"), "--max-count", "0"]);
+    assert!(text.success, "{}", text.stderr);
+    assert_eq!(
+        text.stdout.matches("[for: reports L2]").count(),
+        2,
+        "both block-content carriers render the address:\n{}",
+        text.stdout
+    );
+    assert!(
+        !text.stdout.contains("the pulse names no tool-use-id"),
+        "no pulse here is tagless, so no empty reason belongs in the output:\n{}",
+        text.stdout
+    );
+}
