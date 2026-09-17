@@ -56,6 +56,24 @@ surface change bumps the PATCH.
   refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
   target takes the same merge: a copied project directory carries the whole sidecar, so one
   `agent-<hex>.jsonl` is on disk under two directories too.
+- **The merge runs once over the whole resolved set, so one transcript is one file however
+  many targets reached it.** `list @<uuid> @<agent-hex>` reaches one `agent-<hex>.jsonl`
+  down two paths - gathered from the session's sidecar, and found by the agent target under
+  both project directories - and merging each half separately let the two halves pick
+  different winners, so both copies survived and each row named the other as dropped. A
+  first pass still runs before the sidecars are gathered, so a dropped copy's whole sidecar
+  is never walked; everything that pass produced then goes through one final merge, which
+  reports only what it newly decided (a group that merged nothing is still there for it to
+  find, and one group is one note). The agent lookup collects every copy instead of the
+  first one the directory listing yields, and it finds them by probing each project
+  directory for the owning session's basename rather than walking every sidecar twice.
+- **One workflow run is one `kind:"run"` row, however many copies of the session discovered
+  it** - and a run's identity is the pair (session, run id), not the id alone. A copied
+  project directory carries the workflow manifests with it, so the same run was read once
+  per copy and printed once per copy. A run id is unique inside the session that minted it
+  and nothing makes it unique across sessions, so both the fold and the session a run
+  renders under now key on the owning session: two sessions naming one workflow id keep a
+  row each, where keying on the id alone dropped the second as though it were a copy.
 - **`csift agents` merges duplicated agent transcripts, like every other surface.** It
   resolves top-level-only and walks the sidecars itself, so the resolver's merge never saw
   them: a divergent session pair whose two sidecars held one byte-identical agent transcript
