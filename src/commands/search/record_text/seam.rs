@@ -239,7 +239,13 @@ pub(crate) fn for_edge(
     session: Option<&str>,
     ctx: &ClassifyCtx,
 ) -> HitFact {
-    let line = uuid.and_then(|u| ctx.line_of_uuid(u));
+    // TWO maps, one answer. The uuid map is the chain's own and answers for a record id;
+    // the tool map answers for a `tool_use_id`, which is a WIRE id and is in no `uuid`
+    // field. An edge naming a call (`for_tool_use`, `reports`) resolved to nothing and said
+    // `not in this file` about a call three lines up - the ONE-INDEX LAW read from the wrong
+    // index. Neither map can answer for the other's ids, so the order costs nothing and
+    // cannot mis-resolve.
+    let line = uuid.and_then(|u| ctx.line_of_uuid(u).or_else(|| ctx.line_of_tool_use(u)));
     for_edge_at(kind, basis, uuid, session, line)
 }
 

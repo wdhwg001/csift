@@ -147,9 +147,7 @@ impl ProvIndex {
     /// are unique by construction, so a second sighting is a replay copy of the same record
     /// and the call as it was MADE is the one a result should be sent to.
     pub fn insert_tool_use(&mut self, id: &str, line: usize) {
-        if !self.tool_use_at.contains_key(id) {
-            self.tool_use_at.insert(id.to_string(), line);
-        }
+        self.tool_use_at.entry(id.to_string()).or_insert(line);
     }
 
     /// The line carrying the `tool_use` block this id names, or `None` when this transcript
@@ -194,6 +192,12 @@ pub struct RootLink {
 pub const ROOT_IS_OPENER: &str = "turn opener";
 /// The note a unit whose parent chain does not reach its turn opener carries.
 pub const ROOT_UNCHAINED: &str = "not reached by the parent chain";
+/// The note a unit with NO opener above it carries: it is part of the synthetic pre-user
+/// lead the turn grouper folds into turn 0 (a SessionStart hook attachment, a
+/// `<local-command-caveat>`, a compaction boundary), or of an abandoned branch whose head
+/// opens no turn. Naming the opener BELOW such a unit would point a reader the wrong way
+/// down the file, so the answer is that there is nothing above it to name.
+pub const ROOT_NO_OPENER: &str = "no opener above this unit";
 
 impl RootLink {
     /// The answer for a unit that opens its own turn.
@@ -201,6 +205,15 @@ impl RootLink {
     pub fn opener() -> RootLink {
         RootLink {
             note: Some(ROOT_IS_OPENER),
+            ..RootLink::default()
+        }
+    }
+
+    /// The answer for a unit with no opener ABOVE it in its group.
+    #[must_use]
+    pub fn no_opener() -> RootLink {
+        RootLink {
+            note: Some(ROOT_NO_OPENER),
             ..RootLink::default()
         }
     }

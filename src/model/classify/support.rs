@@ -344,6 +344,13 @@ pub struct ClassifyCtx<'a> {
     /// file-oriented surface) gets: an edge then renders its key alone rather than a
     /// guessed line.
     pub lines: Option<&'a dyn LineOfUuid>,
+    /// `tool_use` id -> jsonl LINE for this transcript ([`crate::model::ProvIndex`]), the
+    /// ONE join the uuid map cannot make: a `tool_use_id` is a wire id and appears in no
+    /// `uuid` field, so a `for` edge naming one (an attachment's `toolUseID`, a
+    /// notification's `<tool-use-id>`) resolved to nothing and printed `not in this file`
+    /// about a call that is three lines up. `None` => that fallback answers `None`, which
+    /// is the pre-index behaviour and what a caller with no row space gets.
+    pub tool_lines: Option<&'a ProvIndex>,
 }
 
 #[allow(dead_code)]
@@ -363,7 +370,15 @@ impl<'a> ClassifyCtx<'a> {
             summarize: None,
             schedule_fires: None,
             lines: None,
+            tool_lines: None,
         }
+    }
+
+    /// The jsonl LINE of the record carrying the `tool_use` block this id names, or `None`.
+    /// The SECOND half of an edge's resolution, tried only when the uuid map has no answer.
+    #[must_use]
+    pub fn line_of_tool_use(&self, id: &str) -> Option<usize> {
+        self.tool_lines?.tool_use_at(id)
     }
 
     /// The jsonl LINE of the record `uuid` names, or `None` - because no lookup was
@@ -391,6 +406,7 @@ impl std::fmt::Debug for ClassifyCtx<'_> {
                 &self.resume_prompt_uuids.map_or(0, HashSet::len),
             )
             .field("has_line_lookup", &self.lines.is_some())
+            .field("has_tool_lookup", &self.tool_lines.is_some())
             .finish()
     }
 }

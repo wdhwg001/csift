@@ -97,8 +97,9 @@ surface change bumps the PATCH.
   its result - most of a transcript - had no provenance at all. `for_root` now names the
   record that opened a unit's turn plus the parent hops up to it, rendering `[root L12 +3]`
   and nothing on the opener itself; its JSON is always `{line, uuid, hops, note}`, because
-  "this unit IS the opener", "the chain walked there in N hops" and "the grouping placed it
-  and the links did not carry it" are three facts a missing key could not separate. Two
+  "this unit IS the opener", "the chain walked there in N hops", "the grouping placed it and
+  the links did not carry it" and "there is no opener above this unit" are four facts a
+  missing key could not separate. Two
   engine relations join the vocabulary and ride JSON alone: `parent` (the `parentUuid`
   link, which stands down when a family already named that target with a more specific
   word) and `result_of` (a tool result's `tool_use_id`).

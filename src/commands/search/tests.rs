@@ -41,6 +41,7 @@ fn test_env() -> ClassifyEnv<'static> {
     static EMPTY: std::sync::OnceLock<crate::model::SummarizeIndex> = std::sync::OnceLock::new();
     static NO_FIRES: std::sync::OnceLock<crate::model::ScheduleFireIndex> =
         std::sync::OnceLock::new();
+    static NO_TOOLS: std::sync::OnceLock<crate::model::ProvIndex> = std::sync::OnceLock::new();
     ClassifyEnv {
         owner_id: "0a1b2c3d-0000-0000-0000-000000000000",
         is_subagent: false,
@@ -53,6 +54,8 @@ fn test_env() -> ClassifyEnv<'static> {
         // These fixtures resolve no uuid edge, so the neutral lookup answers `None` for
         // every id - which is exactly what a caller with no row space gets in production.
         lines: &NoLines,
+        // An EMPTY tool index, for the same reason: no call in these fixtures is looked up.
+        tool_lines: NO_TOOLS.get_or_init(crate::model::ProvIndex::default),
     }
 }
 

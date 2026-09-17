@@ -41328,7 +41328,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "357-359",
+          "lines": "358-360",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -55625,7 +55625,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "290-300",
+          "lines": "291-301",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
@@ -62126,8 +62126,8 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "460-466",
-          "snippet": "            return Some(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                tools.prov.tool_use_at(id),\n            ));"
+          "lines": "493-499",
+          "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
       "instrument": "python3 walk of every *.jsonl under the projects root: per file record the line index of every tool_use block id and of the FIRST tool_result echoing it as tool_use_id, plus the indices of every turn-opener candidate, then bucket each join by whether an opener index lies strictly between call and result and count results whose id has no call in the same file. Counting rule: one count per (file, tool_use id) pair resolved within the same file, first result wins; the turn-opener predicate is the one stated in the specimen rule.",
@@ -94889,13 +94889,13 @@
         },
         {
           "path": "src/commands/search/record_text/seam.rs",
-          "lines": "242-244",
-          "snippet": "    let line = uuid.and_then(|u| ctx.line_of_uuid(u));\n    for_edge_at(kind, basis, uuid, session, line)\n}"
+          "lines": "248-250",
+          "snippet": "    let line = uuid.and_then(|u| ctx.line_of_uuid(u).or_else(|| ctx.line_of_tool_use(u)));\n    for_edge_at(kind, basis, uuid, session, line)\n}"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "476-482",
-          "snippet": "    Some(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        lines.line_of_uuid(parent),\n    ))"
+          "lines": "515-521",
+          "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],
       "instrument": "Byte-search the 2.1.258 build for `let ke={parentUuid:me?null:_e,logicalParentUuid:` (one occurrence) and read 300 bytes back to recover the loop that computes `_e` and the two telemetry calls. Corpus side, over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`; for each file collect the set of `uuid` values on its lines, then keep the objects with `type == \"user\"` and truthy `isMeta`, flatten the text the way the model layer does, and bucket each record by the FIRST template of csift's arm order its left-trimmed text opens with - plus the two buckets the arm order decides on the content SHAPE rather than on text, a textless image-only record and a textless document-only one. Per bucket count the records carrying a `parentUuid` and the subset whose parent is in that file's uuid set; a record no bucket claims is the residue and is counted apart. For the frame bucket, additionally count the records whose text matches `<tool-use-id>([^<]*)</tool-use-id>`.",

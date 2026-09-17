@@ -78,7 +78,7 @@ pub(crate) fn reconstruct_and_match(
     // result came back (the `▹` pairing join, GOLD §7 - membership and not contiguity, so a
     // use pairs with its result across records and parallel calls), and which LINE carries
     // the call (the `result_of` provenance edge, the one join the chain's uuid map cannot
-    // make). Three walks over the same blocks answered the first two; the third rides along.
+    // make). TWO walks over the same blocks answered the first two; the third rides along.
     let tools = build_tool_index(rows);
     // `--for <ADDR>`: the transitive closure of "is for the addressed record", as the set
     // of LINES this transcript contributes. Computed ONCE per file and only under the flag
@@ -115,6 +115,7 @@ pub(crate) fn reconstruct_and_match(
         summarize: &summarize_index,
         schedule_fires,
         lines: &row_lines,
+        tool_lines: &tools.prov,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -488,6 +489,10 @@ pub(crate) struct ClassifyEnv<'a> {
     /// `Sync` by construction today - and a field added to it later that is not would fail
     /// on this line, naming the reason, instead of somewhere down in the walk.
     pub(crate) lines: &'a (dyn crate::model::LineOfUuid + Sync),
+    /// `tool_use` id -> jsonl LINE over this transcript's own rows, so an edge naming a
+    /// CALL resolves to an address instead of reporting a line it could not find. It is
+    /// the map the one tool walk already produced; nothing here builds a second one.
+    pub(crate) tool_lines: &'a crate::model::ProvIndex,
 }
 
 impl ClassifyEnv<'_> {
@@ -506,6 +511,7 @@ impl ClassifyEnv<'_> {
             summarize: Some(self.summarize),
             schedule_fires: Some(self.schedule_fires),
             lines: Some(self.lines),
+            tool_lines: Some(self.tool_lines),
         }
     }
 }

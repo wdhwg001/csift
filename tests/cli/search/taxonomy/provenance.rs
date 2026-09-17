@@ -12,6 +12,12 @@
 //! with an EMPTY pattern and the full selector set, the same way the leaf census does and
 //! for the same reason - four leaves render no body and a pattern scan cannot reach them.
 //!
+//! A PAIRED ROOT: this file holds everything the SHARED 73-leaf fixture can answer - the
+//! whole rendered vocabulary at once, the census over it, the root every unit carries.
+//! `provenance/shapes.rs` holds the cases that need a transcript built around ONE
+//! structural question instead, which that fixture cannot carry without becoming a second
+//! fixture inside the first.
+//!
 //! WHY THE SHAPE AND NOT THE VALUE: a line number moves the day the fixture gains a line
 //! above the edge, and a test that pinned it would fail on an unrelated edit while saying
 //! nothing about provenance. What must not move is which of the builder's four answers an
@@ -23,6 +29,8 @@ use crate::harness::*;
 
 /// The full-census target: the top-level transcript AND its subagent lane.
 const REACH_TARGET: &str = "@3a1b2c3d-4e5f-4061-8273-849506a7b8c9";
+
+mod shapes;
 
 /// Every `(leaf, kind, basis, target shape)` the reachability fixture renders, sorted.
 ///
@@ -276,12 +284,17 @@ fn the_engine_edges_are_on_the_units_that_have_them() {
     }
 }
 
-/// EVERY emitted unit carries a root, and its three answers are the three shapes.
+/// EVERY emitted unit carries a root, and its FOUR answers are four shapes.
 ///
 /// The root is the primitive's own question (which message does this thing correspond to),
 /// so it is the one provenance field with no "only on records that state it" clause. A
 /// consumer that had to tell "this unit opens its turn" from "csift did not look" out of a
 /// missing key could not, which is why the object is always there.
+///
+/// The fourth shape is the one a real transcript meets first: the turn grouper folds a
+/// synthetic pre-user LEAD into turn 0 (a SessionStart hook attachment, a
+/// `<local-command-caveat>`, a compaction boundary - this fixture's head is the last of
+/// those), so those units sit ABOVE the opener and there is nothing above THEM to name.
 #[test]
 fn every_unit_carries_a_root_and_names_which_answer_it_is() {
     let h = reachability_home();
@@ -298,20 +311,44 @@ fn every_unit_carries_a_root_and_names_which_answer_it_is() {
     let out = h.run(&argv);
     assert!(out.success, "scan failed: {}", out.stderr);
 
-    let (mut openers, mut chained, mut placed) = (0, 0, 0);
+    let (mut openers, mut chained, mut placed, mut lead) = (0, 0, 0, 0);
     for row in json_rows(&out.stdout, "exchange") {
         for hit in row["hits"].as_array().cloned().unwrap_or_default() {
             let r = &hit["for_root"];
             assert!(r.is_object(), "every hit carries a root object: {hit}");
-            match (r["note"].as_str(), r["line"].as_u64(), r["hops"].as_u64()) {
-                (Some("turn opener"), None, None) => openers += 1,
-                (None, Some(_), Some(_)) => chained += 1,
-                (Some("not reached by the parent chain"), Some(_), None) => placed += 1,
-                other => panic!("a fourth root shape: {other:?} in {r}"),
+            // Keyed on the NOTE, because the note is what NAMES the answer; `line` can be
+            // null on a chained root too (an opener merged from the elicitation sidecar has
+            // no physical line), and a test that read the answer off the null-ness of a
+            // field would call that shape a fifth one.
+            match r["note"].as_str() {
+                Some("turn opener") => {
+                    assert!(r["line"].is_null() && r["hops"].is_null(), "{r}");
+                    openers += 1;
+                }
+                None => {
+                    assert!(
+                        r["hops"].as_u64().is_some(),
+                        "a reached root names its distance: {r}"
+                    );
+                    chained += 1;
+                }
+                Some("not reached by the parent chain") => {
+                    assert!(r["hops"].is_null(), "{r}");
+                    placed += 1;
+                }
+                Some("no opener above this unit") => {
+                    assert!(r["line"].is_null() && r["hops"].is_null(), "{r}");
+                    lead += 1;
+                }
+                other => panic!("a fifth root shape: {other:?} in {r}"),
             }
         }
     }
     assert!(openers > 0, "no unit opened its own turn");
+    assert!(
+        lead > 0,
+        "the fixture opens with a compaction boundary, so turn 0 carries a folded lead"
+    );
     assert!(chained > 0, "no unit reached its opener through the chain");
     assert!(
         placed > 0,

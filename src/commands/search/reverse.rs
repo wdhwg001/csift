@@ -7,9 +7,16 @@
 //!
 //! It is a CLOSURE and not a filter, which is what makes it worth a pass of its own: a
 //! record is in the answer when it is for the address OR for something already in the
-//! answer, so the set grows until it stops. One forward pass computes it, because a parent
-//! precedes its child in file order (claim REC-075) - so by the time a row is read, every
-//! ancestor that could have admitted it has been.
+//! answer, so the set grows until it stops.
+//!
+//! ONE FORWARD PASS computes it, and that is a bound with a known cost. A parent is stamped
+//! from the running tail of the transcript (claim CLS-049), so every ancestor of a row has
+//! been read by the time the row is, and the parent arm is exact. The CALL arm is not: claim
+//! REC-075 measured four corpus joins where a tool result's line sits 1-2 lines ABOVE its
+//! call, and such a result is read before the call that would have admitted it and is
+//! therefore MISSED - four joins out of 243,386 resolved within one file. A fixpoint would
+//! close it and would cost a second pass over every row of every file in scope for a shape
+//! that occurs at that rate, so the pass stays single and the limit is written down here.
 //!
 //! The cost is paid ONLY under the flag: nothing here runs on an ordinary scan.
 
@@ -38,6 +45,9 @@ impl ForAddr {
     /// answer. A uuid is taken as written: csift does not check its shape here, because an
     /// address that resolves to nothing already reports itself as nothing found.
     pub(crate) fn parse(s: &str) -> Result<ForAddr> {
+        // TRIMMED first: `--for ' 42 '` is a line, not a uuid that happens to have spaces
+        // in it. No id csift resolves carries one, so the trim can lose nothing.
+        let s = s.trim();
         let digits = s
             .strip_prefix('L')
             .or_else(|| s.strip_prefix('l'))
@@ -51,7 +61,7 @@ impl ForAddr {
             }
             return Ok(ForAddr::Line(n));
         }
-        if s.trim().is_empty() {
+        if s.is_empty() {
             anyhow::bail!("--for: an address is required - `L<line>` or a record uuid");
         }
         Ok(ForAddr::Uuid(s.to_string()))

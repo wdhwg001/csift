@@ -18,12 +18,17 @@ fn emit_advisory_notes(
             args.pattern
         );
     }
+    // `--for` is a FILTER and the narrowest one there is - it names ONE record and returns
+    // what is for it - so an empty pattern beside it is the documented way to ask for the
+    // whole closure, not an unfiltered scan. Without this the flag's own recipe printed a
+    // warning that was false, and `active_filters_str` already counted it as a filter.
     if matcher.is_pure_filter()
         && args.labels.is_empty()
         && args.labels_not.is_empty()
         && !has_turn_range
         && time_window.is_unbounded()
         && !has_session_filter
+        && args.for_addr.is_none()
     {
         eprintln!(
             "csift: warning: empty pattern with no category/time/turn/session filter \
