@@ -15,6 +15,7 @@ use crate::harness::*;
 mod budget;
 mod disclosure;
 mod help;
+mod scope;
 
 const XENC: &str = "-Users-dev-example-project";
 
