@@ -80,7 +80,13 @@ use super::*;
           --by timeline : one object per mutation: {session_id, is_subagent, parent_session_id,\n             \
                        path, op, ts_utc, ts_local, turn_index, survival, abandoned_root_line,\n             \
                        is_create, heuristic, resolution, path_verbatim, command_errored} + a\n             \
-                       trailing summary object. (`survival` is live | pre-cut | abandoned; an\n             \
+                       trailing summary object, which carries the crossing set\n             \
+                       {crossing_budget, boundaries_crossed, budget_exhausted,\n             \
+                       boundaries_above_floor, floor_line, floor_cause} whenever\n             \
+                       `--cross-compactions` is non-zero (what the walk stepped over to\n             \
+                       decide each row's `survival`, and where it stopped); at\n             \
+                       `--cross-compactions 0` those keys are absent. (`survival` is\n             \
+                       live | pre-cut | abandoned; an\n             \
                        ABANDONED mutation - one made on a branch the conversation was later\n             \
                        rewound past - has a NULL turn_index and an abandoned_root_line naming\n             \
                        its branch head's jsonl line. It is never dropped: the write hit the\n             \

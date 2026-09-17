@@ -207,6 +207,11 @@ use super::*;
           {kind:\"compaction_boundary\", line, summary_chars, mode} / {kind:\"collapsed_agents\",\n  \
           agent_messages, tool_calls, failed, first_line, last_line, collapsed_chars,\n  \
           collapsed_previews[{line, excerpt}], refetch};\n  \
+          the trailing summary carries the crossing set {crossing_budget,\n  \
+          boundaries_crossed, budget_exhausted, boundaries_above_floor, floor_line,\n  \
+          floor_cause} whenever `--cross-compactions` is non-zero - what the survival walk\n  \
+          stepped over to decide each unit's `survival`, and where it stopped; at\n  \
+          `--cross-compactions 0` the keys are absent;\n  \
           a summarize-mode boundary also names its gesture in the text banner\n  \
           (`… summary at L<n> · summarize <direction> · …`) - a `/rewind` summarize IS a\n  \
           compaction, so the turns it clipped are reconstructed exactly like any other's;\n  \

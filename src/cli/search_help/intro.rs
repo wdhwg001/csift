@@ -302,7 +302,14 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         evidence). A trailing footer object {matched, sessions, transcript_ids, dropped_by_cap, \
         skipped_lines, with_elicitation_sidecar, excerpts_truncated, superseded_drafts, \
         abandoned_records, rewound_turns, replay_copies, boundary_cut_line, leaf_source} \
-        closes the stream, plus \
+        closes the stream. It ALSO carries the crossing set {crossing_budget, \
+        boundaries_crossed, budget_exhausted, boundaries_above_floor, floor_line, \
+        floor_cause} whenever `--cross-compactions` is non-zero - how many compaction \
+        boundaries the survival walk stepped over, how many it did not, and where the chain \
+        floor sits and why; under `--cross-compactions 0` csift crossed nothing and the keys \
+        are absent. The `--count-by` census summary carries the same six (its two text \
+        lines ride stderr, beside the census's own accounting note, so the table stays \
+        parseable). Plus \
         {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached} on a \
         ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts and \
         `resume_paired` the `harness.resume.placeholder` one, null \

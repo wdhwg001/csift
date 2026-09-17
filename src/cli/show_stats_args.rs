@@ -84,7 +84,14 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         boundary's own object verbatim, including the `preservedMessages` uuid lists the \
         one-line excerpt only counts. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
-        non_record_lines, skipped_lines, with_elicitation_sidecar}.\n\n  \
+        non_record_lines, skipped_lines, with_elicitation_sidecar}, plus the crossing set \
+        {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor, \
+        floor_line, floor_cause} whenever `--cross-compactions` is non-zero. An ADDRESS \
+        moves with that budget - the record it names can read `live` under one and \
+        `pre-cut` under another - so the keys say which reading you are holding; under \
+        `--cross-compactions 0` they are absent. `--raw` prints the same disclosure on \
+        stderr, and only for a `--turn` window (a `--line`/`--uuid` address crosses nothing \
+        to find its lines).\n\n  \
           Under `--branch-points` the rows are {kind:\"branch-point\", uuid, line, \
         parent_line, parent_type, live_child_line, children:[…], widest_gap_seconds} and \
         the summary is {branch_points, conversation_records, skipped_lines}. `line` and \

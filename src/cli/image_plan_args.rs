@@ -60,7 +60,11 @@ use super::*;
         PDF page and null for every other image, `pdf_path` the document it came from, \
         verbatim - null beside a null page). With `--out`, each written file adds {kind:\"extract\", handle, \
         seq, id, session_id, is_subagent, parent_session_id, path, bytes, media_type, \
-        source_media_type, converted, notes}."
+        source_media_type, converted, notes}. The summary carries the crossing set \
+        {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor, \
+        floor_line, floor_cause} whenever `--cross-compactions` is non-zero - what the \
+        survival walk stepped over to decide each row's `survival`, and where it stopped; \
+        at `--cross-compactions 0` the keys are absent."
 )]
 pub struct ImageArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images,

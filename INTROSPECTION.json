@@ -21803,7 +21803,7 @@
         },
         {
           "path": "src/cli/verbatim_whoami_args.rs",
-          "lines": "353-356",
+          "lines": "358-361",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
         },
         {
@@ -36797,7 +36797,7 @@
       "code": [
         {
           "path": "src/cli/verbatim_whoami_args.rs",
-          "lines": "353-356",
+          "lines": "358-361",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
         },
         {
@@ -48936,7 +48936,7 @@
         },
         {
           "path": "src/cli/show_stats_args.rs",
-          "lines": "157-161",
+          "lines": "164-168",
           "snippet": "    /// `42..` = turn 42 \u2192 the end). Fetches every user and assistant record of the named\n    /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn\n    /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong\n    /// to no turn fetch: address them by `--line`/`--uuid`, or name their leaf -\n    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`."
         }
       ],

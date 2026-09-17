@@ -162,7 +162,13 @@ use super::*;
         JSON SCHEMA (per --format json)\n  \
           EVERY mode (restore included) emits the envelope: one `{kind:\"header\",…}` \
         line first, one `{kind:\"summary\", file, mode, sessions, skipped_lines}` line \
-        last. RESTORE emits one `{kind:\"restore\", file, complete, lines, \
+        last, and that summary carries the crossing set {crossing_budget, \
+        boundaries_crossed, budget_exhausted, boundaries_above_floor, floor_line, \
+        floor_cause} whenever `--cross-compactions` is non-zero - what the survival walk \
+        stepped over to decide which replayed events are on the surviving conversation, and \
+        where it stopped; at `--cross-compactions 0` the keys are absent. The text form is \
+        two lines in every mode: on stdout in the four reporting modes, on STDERR in the \
+        default restore mode, whose stdout is the restored file. RESTORE emits one `{kind:\"restore\", file, complete, lines, \
         boundaries, bash_events, opaque_commands, powershell_commands, \
         suggested_search}` row carrying `content` (or `path` + `wrote` with `--out`); \
         a partial or no-history run still emits its `{kind:\"restore\", complete:false, \
