@@ -227,7 +227,12 @@ pub struct Cli {
     /// where the walk stopped they stay `pre-cut`, exactly as before.
     ///
     /// `0` restores the loader's reading and makes csift say nothing about crossing at
-    /// all; `all` follows every boundary a transcript carries. The footer names what was
+    /// all; `all` follows every boundary a transcript carries. `0` also reproduces csift
+    /// before this flag existed, byte for byte on all 32 measured streams, with ONE known
+    /// exception: a boundary whose OWN `parentUuid` is non-null and names no record was
+    /// crossed by the old build's guard and is not crossed at `0`; no transcript of the
+    /// measured corpus carries that shape, so compare rather than assume if you need the
+    /// old reading exactly on one that does. The footer names what was
     /// crossed, what was not, and what you can do about the rest - it offers a flag value
     /// only where raising the flag would MOVE the floor, which needs both that the BUDGET
     /// is what stopped the walk and that the boundary it stopped at still names a record
