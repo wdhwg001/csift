@@ -535,7 +535,7 @@ Thirteen retired SELECTORS, each with the successor string its own error prints:
 | `thinking` | `agent.thinking` |
 | `tool` | `agent.tool` (the CATEGORY - it covers `use` and `result`) |
 | `tool-response` | `agent.tool.result` |
-| `harness.schedule.continuation` | `harness.resume.prompt`. Not a schedule leaf at all: the record comes from the RESUME LOADER, never from the scheduler, and v0.12.0 moved it to the family that writes it |
+| `harness.schedule.continuation` | `harness.resume.prompt`. Not a schedule leaf at all: the record comes from the RESUME LOADER, never from the scheduler, so it lives under the family that writes it |
 | `harness.meta` | split by PRODUCER into TEN: `harness.hook.*` · `harness.command.caveat` · `harness.enforce.retry` · `harness.schedule.tick` · `harness.schedule.event` · `harness.context.*` · `harness.turn.*` · `harness.system.*` · `harness.bookkeeping.*` · `agent.message.structured` |
 | `harness.meta.hook` | `harness.hook.context` (hook-injected text) · `harness.hook.feedback` (a blocking hook's feedback) · `harness.command.caveat` · `harness.enforce.retry` (the edit-failed-retry nudge) |
 | `harness.meta.loop` | `harness.schedule.tick` |
