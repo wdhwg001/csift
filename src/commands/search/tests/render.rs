@@ -453,3 +453,39 @@ fn a_marker_and_a_fact_each_project_themselves() {
         vec![("unmodeled", serde_json::json!("system/progress"))]
     );
 }
+
+/// The chain footer's gate is an OR over four independent facts, and each one is reason
+/// enough on its own: read as an AND, a transcript would disclose nothing unless all four
+/// were true at once. Pinned on the predicate itself rather than through a rendered footer,
+/// because the footer's other lines would keep printing and hide the loss.
+#[test]
+fn the_chain_disclosure_gate_answers_to_each_of_its_four_facts_alone() {
+    use crate::model::{CrossingBudget, CrossingReport};
+
+    let base = ChainCounts::default();
+    assert!(!base.any(), "an ordinary transcript discloses nothing");
+
+    let mut abandoned = base.clone();
+    abandoned.abandoned_records = 1;
+    assert!(abandoned.any(), "records off the conversation");
+
+    let mut replays = base.clone();
+    replays.replay_copies = 1;
+    assert!(replays.any(), "a compaction re-anchor's copies");
+
+    let mut cut = base.clone();
+    cut.boundary_cut_line = Some(42);
+    assert!(cut.any(), "a compaction cut");
+
+    let mut crossed = base.clone();
+    crossed.crossing = CrossingReport {
+        budget: CrossingBudget::Limited(1),
+        boundaries_crossed: 1,
+        ..CrossingReport::default()
+    };
+    assert!(crossed.any(), "a boundary the walk stepped over");
+    assert!(
+        !base.crossing.any(),
+        "and the default report says nothing, which is what makes the fourth fact a fact"
+    );
+}

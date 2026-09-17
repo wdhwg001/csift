@@ -330,7 +330,7 @@ pub(crate) fn render_json(
     }
 
     // envelope v2 summary (flat - the old nested {"summary":{…}} wrapper is gone).
-    let summary = crate::text::envelope_summary(json!({
+    let mut summary_fields = json!({
         "sessions": session_count,
         "file": ctx.file,
         "mode": match ctx.mode {
@@ -341,7 +341,17 @@ pub(crate) fn render_json(
             RecoverMode::Restore => "restore",
         },
         "skipped_lines": ctx.skipped_lines,
-    }));
+    });
+    // The crossing, folded over the sessions this run read: every turn stamp above is read
+    // off the chain, so how far that chain climbed belongs on the same line as the counts.
+    let mut crossing = crate::model::CrossingReport::default();
+    for (i, s) in sessions.iter().enumerate() {
+        crossing.add(&s.crossing, i == 0);
+    }
+    for (k, v) in crossing.json_fields() {
+        summary_fields[k] = v;
+    }
+    let summary = crate::text::envelope_summary(summary_fields);
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
