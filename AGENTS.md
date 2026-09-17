@@ -274,7 +274,11 @@ main.rs            # binary entrypoint: parse_argv -> install --claude-home over
 # ── the BASE LAYER, at the crate root ─────────────────────────────────────────
 cli/               # clap surface: argv (the P0 normalize_argv machinery), root (Cli + Command),
                    #   selectors (-t/-T label machinery), formats, one *_args file per
-                   #   command family, search_help + search_help/ (a PAIRED ROOT: the
+                   #   command family - search_args is a PAIRED ROOT, the flag surface
+                   #   beside search_args/gates, which holds the inventory-derived leaf
+                   #   sets and the SearchArgs predicates that read a selector against
+                   #   them (the candidate gate and the 7f whole-file gate key on those,
+                   #   so they are one place) - search_help + search_help/ (a PAIRED ROOT: the
                    #   after_help body is the byte-join of intro, its closing notes, and
                    #   one column-0 region per taxonomy family - each family owns one
                    #   file, and an empty one renders nothing), show_keys

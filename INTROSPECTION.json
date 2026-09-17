@@ -48316,8 +48316,8 @@
       "depends": "csift promotes the record to the LLM-invisible leaf `harness.turn.recap` and words it as shown in the UI, not in the surviving conversation; the leaf is gated, so a bare scan, a bare role selector and a flagless census never parse it. With the drop predicate located, that wording is no longer an inference from a census: csift can name the mechanism - the harness removes the record when it builds the API messages, and only a `local_command` system record survives that filter - and keep the recurrence census as corroboration. Treating a model-generated recap as delivered context would inflate every accounting of what the assistant actually received. The doc comment at src/model/taxonomy.rs still describes the leaf as generated when the operator returns after 5+ minutes away and cites a 1,196/1,198 recurrence figure; both are superseded - the recap is written while the terminal is blurred, after a remote-configured idle delay defaulting to three minutes, and the recurrence census reads 1,690 of 1,691.",
       "code": [
         {
-          "path": "src/cli/search_args.rs",
-          "lines": "512-514",
+          "path": "src/cli/search_args/gates.rs",
+          "lines": "136-138",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -87187,8 +87187,8 @@
           "snippet": "    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        if !keeps_face_against_delivery(path) {\n            return d;\n        }\n    }"
         },
         {
-          "path": "src/cli/search_args.rs",
-          "lines": "535-540",
+          "path": "src/cli/search_args/gates.rs",
+          "lines": "159-164",
           "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],
