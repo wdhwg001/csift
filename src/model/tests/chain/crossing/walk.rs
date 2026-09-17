@@ -219,16 +219,31 @@ fn a_draft_above_a_crossed_boundary_is_named_by_the_chain_itself() {
 
 #[test]
 fn a_file_with_no_leaf_at_all_reports_every_boundary_as_uncrossed() {
-    // An empty record set has no leaf, so nothing is on the chain and the floor sits past
-    // the end. Counting boundaries "at or above the floor" then covers the whole file,
-    // which is the honest answer: none of them was crossed.
-    let c = Chain::build(&[], None, CrossingBudget::Limited(3));
+    // No leaf means nothing is on the chain, so the floor sits past the END of the file and
+    // the "at or above the floor" count covers every boundary in it - which is the honest
+    // answer: the walk crossed none of them because it never started. The fixture has to
+    // CARRY boundaries for that to be measured at all; over an empty record set the count
+    // reads 0 whatever the rule is, and the test named a property it was not testing.
+    let r = recs(&[
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"gone","timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto"},"isSidechain":true}"#,
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b2","parentUuid":null,"logicalParentUuid":"gone","timestamp":"2026-06-07T05:20:00.000Z","compactMetadata":{"trigger":"auto"},"isSidechain":true}"#,
+    ]);
+    let c = Chain::build(&r, None, CrossingBudget::Limited(3));
     assert_eq!(c.floor_cause, FloorCause::NoLeaf);
     assert_eq!(c.boundaries_crossed, 0);
     assert_eq!(
-        c.boundaries_above_floor, 0,
-        "no boundaries in an empty file"
+        c.boundaries_above_floor, 2,
+        "the floor is past the end, so BOTH boundaries are above it and uncrossed"
     );
+    assert_eq!(
+        c.abandoned_records, 0,
+        "nothing is claimed abandoned in a file the walk never entered"
+    );
+
+    // And the empty file keeps its own answer: no boundaries, so none above the floor.
+    let empty = Chain::build(&[], None, CrossingBudget::Limited(3));
+    assert_eq!(empty.floor_cause, FloorCause::NoLeaf);
+    assert_eq!(empty.boundaries_above_floor, 0);
 }
 
 #[test]
