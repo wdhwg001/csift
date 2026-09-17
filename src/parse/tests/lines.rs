@@ -224,8 +224,11 @@ fn read_range_and_read_tail_are_plain_reads_that_tolerate_a_shrink() {
         .unwrap();
     assert_eq!(read_range(&p, 0, 18).unwrap(), b"0123");
     assert!(read_range(&p, 11, 18).unwrap().is_empty());
-    // a missing file is an error with the path in its context, never a fault
-    let missing = std::env::temp_dir().join("csift-read-range-missing-7d3a.jsonl");
+    // a missing file is an error with the path in its context, never a fault. The tree is
+    // this run's own, so nothing can have left a file at that name (a fixed name under the
+    // bare temp dir could be occupied by anything, which is the whole adoption hazard one
+    // level down - see crate::testfs).
+    let (_missing_dir, missing) = Scratch::file("read-range-missing", "missing.jsonl");
     let e = read_range(&missing, 0, 10).unwrap_err();
     assert!(format!("{e:#}").contains("cannot open"), "{e:#}");
     let e = read_tail(&missing, 10).unwrap_err();
