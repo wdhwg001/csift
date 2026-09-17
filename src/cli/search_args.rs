@@ -260,7 +260,13 @@ pub struct SearchArgs {
     /// (per tool-result error state, `ok` | `error` - `pairing` answers "did a result
     /// come back", `result` answers "was it good": "any failed reads?" is
     /// `search "" T --count-by result`; errored results also render an inline `[error]`
-    /// and carry JSON `is_error`). Records
+    /// and carry JSON `is_error`) · `for-kind` (per PROVENANCE relation - which `for`
+    /// edges the scope carries. MULTI-KEY like `label`: a record counts once under every
+    /// distinct relation word its edges name, because one unit can carry several at once
+    /// (an attachment names its parent AND the call it belongs to). A relation counts
+    /// whether or not csift resolved its target - the census answers which relations
+    /// EXIST, and a hit's own `for[]` says what each one resolved to. A record carrying no
+    /// edge is excluded and counted). Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
     /// the excluded count is reported; never silently. Honors `-t`/`-T`/time/turn/scope;
     /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis

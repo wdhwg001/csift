@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "327-333",
+          "lines": "333-339",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -48317,7 +48317,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "489-491",
+          "lines": "495-497",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -54091,7 +54091,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "327-333",
+          "lines": "333-339",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -87188,7 +87188,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "512-517",
+          "lines": "518-523",
           "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],
@@ -87481,7 +87481,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "247-252",
+          "lines": "267-272",
           "snippet": "pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {\n    eprintln!(\n        \"csift: 0 matches \u2014 a DEFINITIVE absence (exit 0), NOT an error. \\\n         Scope: {} session(s). Active filters: {}.\",\n        diag.sessions_in_scope, diag.active_filters\n    );"
         },
         {
@@ -87659,7 +87659,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "189-192",
+          "lines": "209-212",
           "snippet": "/// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare \"no matching\n/// exchanges\" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;\n/// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the\n/// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)"
         },
         {

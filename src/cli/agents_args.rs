@@ -341,6 +341,12 @@ pub enum CountAxis {
     /// Per tool-result error state (`ok` | `error`; non-result records excluded +
     /// counted). Pairing answers "did a result come back"; this answers "was it good".
     Result,
+    /// Per PROVENANCE relation: which `for` edges the scope carries. A record counts once
+    /// under every distinct relation word its edges name, the way the `label` axis counts
+    /// it under every leaf, and whether or not csift could resolve the target - the census
+    /// answers which relations exist, and a hit's own `for[]` says what each resolved to.
+    /// A record carrying no edge at all is excluded and counted.
+    ForKind,
 }
 
 impl CountAxis {
@@ -356,6 +362,7 @@ impl CountAxis {
             CountAxis::Attachment => "attachment",
             CountAxis::Version => "version",
             CountAxis::Result => "result",
+            CountAxis::ForKind => "for-kind",
         }
     }
 }

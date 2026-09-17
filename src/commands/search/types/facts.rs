@@ -278,6 +278,20 @@ impl HitFact {
         }
     }
 
+    /// The RELATION this fact names, when it is a provenance edge - resolved or not,
+    /// because both say the relation exists. `None` for every other kind of fact.
+    ///
+    /// The reader is the `--count-by for-kind` census, which is why this is a method on the
+    /// enum rather than a match at the census: a family adding an edge reaches the axis with
+    /// no edit there, exactly as it reaches the label zone and JSON with none.
+    #[must_use]
+    pub(crate) fn edge_kind(&self) -> Option<EdgeKind> {
+        match self {
+            HitFact::For { kind, .. } | HitFact::ForUnknown { kind, .. } => Some(*kind),
+            _ => None,
+        }
+    }
+
     /// The JSON key(s) and value(s) this fact adds to its hit object. A list rather than
     /// one pair because a family fact can be several keys, and because the `for` edges
     /// all project the SAME key and accumulate into one array ([`attach_facts`]).

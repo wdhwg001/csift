@@ -319,3 +319,71 @@ fn every_unit_carries_a_root_and_names_which_answer_it_is() {
          harness lines hang off records the prefilter drops, so some must be"
     );
 }
+
+/// `--count-by for-kind` censuses the PROVENANCE vocabulary: one key per relation the
+/// scope carries, counted once per record.
+///
+/// The axis is what the closed vocabulary buys. Over an open set of relation words a
+/// census would report whatever strings the family files happened to contain, with no way
+/// to tell a relation from a typo; here the keys are a list a reader can be handed.
+///
+/// MULTI-KEY like `label`, because one unit carries several relations at once: an
+/// attachment names its parent AND the call it belongs to, so a census that took the first
+/// would report a vocabulary narrower than the one in use.
+#[test]
+fn count_by_for_kind_censuses_the_relations_the_scope_carries() {
+    let h = reachability_home();
+    let mut argv: Vec<&str> = vec![
+        "search",
+        "",
+        REACH_TARGET,
+        "--count-by",
+        "for-kind",
+        "--format",
+        "json",
+    ];
+    argv.extend_from_slice(&EVERY_LEAF);
+    let out = h.run(&argv);
+    assert!(out.success, "census failed: {}", out.stderr);
+    let rows = json_rows(&out.stdout, "census");
+    let got: Vec<(&str, u64)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r["key"].as_str().unwrap_or_default(),
+                r["records"].as_u64().unwrap_or_default(),
+            )
+        })
+        .collect();
+
+    for (_, n) in &got {
+        assert!(*n >= 1, "a census key with no records: {got:?}");
+    }
+    // Every relation word the family pin says the fixture renders IS a key here, and the
+    // engine's two are keys as well: the census sees exactly what the hits carry.
+    for (_, kind, _, _) in EVERY_EDGE {
+        assert!(
+            got.iter().any(|(k, _)| *k == kind),
+            "{kind} is rendered on a hit but missing from the for-kind census: {got:?}"
+        );
+    }
+    for kind in ENGINE_KINDS {
+        assert!(
+            got.iter().any(|(k, _)| *k == kind),
+            "the engine's {kind} edge is missing from the census: {got:?}"
+        );
+    }
+    let sum = json_summary(&out.stdout);
+    assert_eq!(sum["axis"], "for-kind");
+    assert_eq!(
+        sum["distinct_keys"].as_u64().unwrap_or_default() as usize,
+        got.len(),
+        "the summary's key count is the row count"
+    );
+    // A record carrying no edge at all is EXCLUDED and counted, never silently dropped -
+    // the chain head has no parent to point at, so the fixture has at least one.
+    assert!(
+        sum["excluded_records"].as_u64().unwrap_or_default() >= 1,
+        "no record was excluded, so the domain rule is untested: {sum}"
+    );
+}

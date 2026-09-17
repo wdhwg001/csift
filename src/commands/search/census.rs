@@ -153,6 +153,26 @@ pub(crate) fn axis_census(
                     Some(false) => *counts.entry("ok".to_string()).or_insert(0) += 1,
                     None => excluded += 1,
                 },
+                // MULTI-KEY like `label`, and for the same reason: a record can carry
+                // several relations at once (an attachment names its parent AND the call it
+                // belongs to), and counting only the first would report a vocabulary
+                // narrower than the one the scope actually uses. DISTINCT per record, so a
+                // record whose several sections each carry the same relation counts once.
+                A::ForKind => {
+                    let mut seen: Vec<&'static str> = group
+                        .iter()
+                        .flat_map(|h| h.facts.iter())
+                        .filter_map(|f| f.edge_kind().map(crate::model::EdgeKind::as_str))
+                        .collect();
+                    seen.sort_unstable();
+                    seen.dedup();
+                    if seen.is_empty() {
+                        excluded += 1;
+                    }
+                    for k in seen {
+                        *counts.entry(k.to_string()).or_insert(0) += 1;
+                    }
+                }
             }
         }
     }
