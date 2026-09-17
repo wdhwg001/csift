@@ -299,6 +299,55 @@ fn agents_merges_its_own_sidecar_copies_and_agrees_with_list_and_search() {
 }
 
 #[test]
+fn an_ordinary_listing_names_no_transcript_and_one_run_stays_one_row() {
+    // The `transcript` line exists to separate two blocks that share an id. With one copy
+    // of everything there is nothing to separate, and a path per agent would be one line of
+    // noise per agent - so the ordinary listing prints none.
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &body_two());
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &agent_record(1, "child ask"),
+    );
+    let plain = h.run(&["agents", &at(SESS)]);
+    assert!(plain.success, "{}", plain.stderr);
+    assert!(
+        !plain.stdout.contains("transcript "),
+        "no id occurs twice, so nothing needs separating:\n{}",
+        plain.stdout
+    );
+
+    // A copied project directory carries the workflow MANIFESTS too, so the same run is
+    // discovered once per session copy. One run is one row.
+    let run = "{\"runId\":\"wf_dup1\",\"workflowName\":\"demo\",\"status\":\"completed\",\
+               \"agentCount\":1}";
+    let h2 = Home::new();
+    h2.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
+    h2.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &record(1, "another branch"),
+    );
+    for enc in [ENC, ENC_SHORT] {
+        h2.write(&format!("{enc}/{SESS}/workflows/wf_dup1.json"), run);
+        h2.write(
+            &format!("{enc}/{SESS}/subagents/workflows/wf_dup1/agent-{AGENT}.jsonl"),
+            &agent_record(1, "child ask"),
+        );
+    }
+    let out = h2.run(&["agents", &at(SESS), "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+    let runs = json_rows(&out.stdout, "run");
+    assert_eq!(
+        runs.len(),
+        1,
+        "one run, not one per session copy: {}",
+        out.stdout
+    );
+    let session = json_rows(&out.stdout, "session");
+    assert_eq!(session[0]["runs"], 1, "{}", out.stdout);
+}
+
+#[test]
 fn the_sidecars_of_a_divergent_pair_still_merge_their_identical_agents() {
     // The sessions DIFFER, so neither is dropped and BOTH sidecars are walked - and those
     // hold one agent transcript twice, which every count would otherwise double.

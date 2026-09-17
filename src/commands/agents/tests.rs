@@ -42,6 +42,31 @@ fn node(
     }
 }
 
+/// A node with the given id and parent, everything else at its default.
+fn linked(id: &str, parent: Option<&str>) -> SubagentNode {
+    let mut n = node(None, None, None, SubagentKind::BuiltinTask);
+    n.agent_id = id.to_string();
+    n.parent_agent_id = parent.map(str::to_string);
+    n
+}
+
+#[test]
+fn a_node_whose_parent_is_out_of_set_is_a_root_not_an_orphan() {
+    // `parent_agent_id` can name an agent this set does not hold - a filter dropped it, or
+    // the spawn graph reaches outside the scope - and such a node is a ROOT: it renders at
+    // the base indent and takes its place in the id order. Treating it as a child of a
+    // parent nothing visits would leave it to the unreachable-node sweep, which appends
+    // AFTER the walk, so the same tree would print in a different order.
+    let orphaned = linked("a", Some("zzzz-not-here"));
+    let root = linked("b", None);
+    let child = linked("c", Some("b"));
+    let set = vec![&orphaned, &root, &child];
+
+    let out = preorder_depth(&set);
+    let seen: Vec<(&str, usize)> = out.iter().map(|(n, d)| (n.agent_id.as_str(), *d)).collect();
+    assert_eq!(seen, vec![("a", 0), ("b", 0), ("c", 1)], "{seen:?}");
+}
+
 #[test]
 fn kind_filter_empty_allows_all() {
     assert!(kind_allowed(SubagentKind::BuiltinTask, &[]));
