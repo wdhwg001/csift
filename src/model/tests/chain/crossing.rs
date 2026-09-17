@@ -217,6 +217,40 @@ fn budget_zero_says_nothing_about_crossing_and_every_other_budget_does() {
 }
 
 #[test]
+fn the_remedy_is_named_off_the_floors_cause_and_never_promises_a_budget_that_cannot_move_it() {
+    // Only a floor the BUDGET made can be raised. A boundary naming a record no line of the
+    // file carries is a floor at every budget, and a walk that ended at a head never reached
+    // the boundaries above it - promising `--cross-compactions N` in either case sends a
+    // reader to re-run a scan that cannot move.
+    let r = five_boundaries();
+    let capped = Chain::build(&r, None, CrossingBudget::Limited(3)).crossing(Some(7), None);
+    assert!(
+        capped.lines()[1].contains("to reach them: --cross-compactions 5 (or all)"),
+        "{:?}",
+        capped.lines()
+    );
+
+    let dangling = recs(&[
+        &u("u0", "", "old prompt", "2026-06-07T05:00:00.000Z"),
+        &a("a0", "u0", "old reply", "2026-06-07T05:00:05.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"deleted-from-disk","timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
+        &u("u1", "b1", "new prompt", "2026-06-07T05:11:00.000Z"),
+        &a("a1", "u1", "new reply", "2026-06-07T05:11:05.000Z"),
+    ]);
+    let stuck = Chain::build(&dangling, None, CrossingBudget::Unbounded).crossing(Some(3), None);
+    let lines = stuck.lines();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines[1].contains("raising the budget reaches none of them"),
+        "{lines:?}"
+    );
+    assert!(
+        !lines[1].contains("--cross-compactions"),
+        "no flag value is offered where none would help: {lines:?}"
+    );
+}
+
+#[test]
 fn a_report_with_nothing_above_the_floor_prints_the_counts_alone() {
     // The second line is the FLOOR's address and the remedy; with nothing left uncrossed
     // there is no remedy to name, so it is not printed at all.

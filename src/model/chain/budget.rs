@@ -14,7 +14,9 @@
 //! asked about. So the walk carries a budget of N boundaries; when it runs out - or when a
 //! boundary's `logicalParentUuid` names no record the map still holds - the walk ends there
 //! and that record is the FLOOR, exactly as before. [`CrossingReport`] is what the surfaces
-//! print about it: what was crossed, what was not, where the floor is and how to raise it.
+//! print about it: what was crossed, what was not, where the floor is, WHY it is there, and
+//! whether raising the budget would move it - which for a boundary naming a deleted record
+//! it would not.
 //!
 //! Budget 0 is Claude Code's own rule, and under it csift discloses NOTHING about crossing,
 //! because it crossed nothing: a `--cross-compactions 0` run is byte-for-byte the reading
@@ -170,7 +172,7 @@ pub struct CrossingReport {
     pub budget_exhausted: bool,
     /// Compaction boundaries the walk did NOT cross: every admitted survivor boundary at
     /// or above the floor index, the floor's own included. `boundaries_crossed` plus this
-    /// is the budget that would resolve the whole file.
+    /// is the budget at which the budget stops being the obstacle.
     pub boundaries_above_floor: usize,
     /// Why the walk stopped where it did - a SINGLE-transcript fact, so it is dropped
     /// (with the floor's address) the moment a second transcript folds into the total: one
@@ -201,10 +203,35 @@ impl CrossingReport {
         !self.budget.is_off()
     }
 
-    /// The budget that would leave no boundary uncrossed.
+    /// The budget at which the BUDGET is no longer the obstacle - every boundary in the
+    /// file gets tried. Whether the walk then reaches them is a different question, and it
+    /// is the one [`CrossingReport::remedy`] answers off the floor's cause.
     #[must_use]
     pub fn resolving_budget(&self) -> usize {
         self.boundaries_crossed + self.boundaries_above_floor
+    }
+
+    /// What a reader can DO about the boundaries above the floor. Only a floor the budget
+    /// made says "raise the flag": a boundary whose logical parent names nothing is a floor
+    /// at every budget, and a walk that ended at the head or at a dangling parent never
+    /// reached the boundaries above it at all - promising `--cross-compactions N` there
+    /// would send a reader to re-run a scan that cannot move.
+    fn remedy(&self) -> String {
+        match self.cause {
+            Some(FloorCause::BudgetExhausted) => format!(
+                "to reach them: --cross-compactions {} (or all)",
+                self.resolving_budget()
+            ),
+            // Every other cause prints its own words immediately before this clause, so the
+            // remedy says only what a reader can DO and never repeats the reason.
+            Some(_) => "raising the budget reaches none of them".to_string(),
+            // A scope of several transcripts has several floors and several causes; the
+            // budget is the one remedy that applies to whichever of them it made.
+            None => format!(
+                "to reach them where a budget can: --cross-compactions {} (or all)",
+                self.resolving_budget()
+            ),
+        }
     }
 
     /// The footer lines every survival-printing surface emits, in order. Empty unless
@@ -241,9 +268,8 @@ impl CrossingReport {
                 .map(|c| format!(" ({})", c.reason()))
                 .unwrap_or_default();
             out.push(format!(
-                "(the chain floor{at}{why}; records above it read pre-cut - to reach them: \
-                 --cross-compactions {} (or all))",
-                self.resolving_budget()
+                "(the chain floor{at}{why}; records above it read pre-cut - {})",
+                self.remedy()
             ));
         }
         out

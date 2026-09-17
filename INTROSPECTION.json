@@ -97001,7 +97001,7 @@
       "code": [
         {
           "path": "src/model/chain/budget.rs",
-          "lines": "30",
+          "lines": "32",
           "snippet": "pub const CROSS_COMPACTIONS_DEFAULT: CrossingBudget = CrossingBudget::Limited(3);"
         },
         {
