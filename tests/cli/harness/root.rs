@@ -17,8 +17,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// The clock the token is a reading of. One function, so the test that checks the token
-/// against "now" asks the same clock the mint asked rather than a second one.
+/// The MINT's clock reading, named so the mint says what it reads.
+///
+/// The token test deliberately does NOT call this: it reads the clock itself. A check that
+/// went through this function would compare the mint against its own reading, so a mint
+/// whose clock is broken would agree with itself and pass (measured: with this function
+/// returning a constant, the token test passed).
 fn clock_nanos() -> u128 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -76,16 +80,23 @@ fn scratch_roots_are_distinct_and_carry_the_run_token() {
     // The extra field must be the CLOCK, not merely some second field: a constant one
     // would repeat across runs exactly as the pid does, and that repeat is the collision
     // this rule exists to prevent. So read it back as the hex reading it is and hold it
-    // against the same clock the mint asked. The window is the documented semantics, not a
-    // measurement: the token is minted at this process's FIRST scratch call, so it lies
-    // within this process's own lifetime of now, and a day is past any test binary's life
-    // while a constant literal misses the current era by decades. Symmetric, because the
-    // system clock may step either way in between.
+    // against the clock READ HERE - this expression, never the module's own
+    // `clock_nanos()`. The test's clock must be independent of the mint's, or a broken mint
+    // is checked against its own breakage and passes: measured, with `clock_nanos()`
+    // returning a constant, both sides read that constant and this test went green.
+    //
+    // The window is the documented semantics, not a measurement: the token is minted at
+    // this process's FIRST scratch call, so it lies within this process's own lifetime of
+    // now, and a day is past any test binary's life while a constant literal misses the
+    // current era by decades. Symmetric, because the system clock may step either way.
     const TOKEN_WINDOW_NANOS: u128 = 24 * 60 * 60 * 1_000_000_000;
     let token = rest.rsplit_once('-').expect("a counter suffix").0;
     let minted = u128::from_str_radix(token, 16)
         .unwrap_or_else(|e| panic!("the token is a hex clock reading: {token:?} ({e})"));
-    let now = clock_nanos();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a system clock at or after the epoch")
+        .as_nanos();
     assert!(
         now.abs_diff(minted) < TOKEN_WINDOW_NANOS,
         "the token is a reading of this clock taken during this run: minted {minted}, \
