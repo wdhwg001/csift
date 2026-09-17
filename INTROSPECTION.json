@@ -20029,8 +20029,8 @@
       "code": [
         {
           "path": "src/subagent/discover.rs",
-          "lines": "5-14",
-          "snippet": "/// The sidecar directory `<ENCODED>/<session-uuid>/` for a top-level session jsonl,\n/// or `None` if the session has no sidecar. The sidecar is named after the session\n/// uuid (the jsonl basename without `.jsonl`).\n#[must_use]\npub fn sidecar_dir_for_session(session_jsonl: &Path) -> Option<PathBuf> {\n    let stem = session_jsonl.file_stem()?.to_str()?;\n    let parent = session_jsonl.parent()?;\n    let dir = parent.join(stem);\n    dir.is_dir().then_some(dir)\n}"
+          "lines": "20-25",
+          "snippet": "pub fn sidecar_dir_for_session(session_jsonl: &Path) -> Option<PathBuf> {\n    let stem = session_jsonl.file_stem()?.to_str()?;\n    let parent = session_jsonl.parent()?;\n    let dir = parent.join(stem);\n    dir.is_dir().then_some(dir)\n}"
         },
         {
           "path": "src/commands/live/wait.rs",
@@ -66355,7 +66355,7 @@
       "code": [
         {
           "path": "src/subagent/discover.rs",
-          "lines": "18-21",
+          "lines": "29-32",
           "snippet": "/// Walks `<session-uuid>/subagents/` for built-in `agent-<hex>.jsonl` and\n/// `<session-uuid>/subagents/workflows/wf_*/agent-<hex>.jsonl` for workflow agents.\n/// **`journal.jsonl` is excluded** (it is an event log, not a transcript), as is any\n/// non-`agent-*.jsonl` or `.meta.json` file. Returns an empty vec when the session"
         },
         {
@@ -66631,7 +66631,7 @@
         },
         {
           "path": "src/subagent/discover.rs",
-          "lines": "69-72",
+          "lines": "80-83",
           "snippet": "    // (C) DEFENSIVE recursion (insurance, not a present-data fix). Verified 2026-06-07:\n    // across all 2348 subagent transcripts on disk there are ZERO sub-sub-agents - the\n    // real layout is single-level FLAT (a child of a general-purpose subagent would land\n    // flat in this SAME `subagents/` dir, already covered by (A)). But if a FUTURE Claude"
         },
         {
@@ -96692,6 +96692,76 @@
           "observed": "encoded dirs 30, top-level jsonl 81, distinct basenames 78, duplicated basenames 3. Pair A IDENTICAL 99499361/99499361 bytes, 37920/37920 lines. Pair B PREFIX 77991731/78613081 bytes, 38870/39192 lines. Pair C IDENTICAL 9204/9204 bytes, 17/17 lines. Relocation census: 9839 jsonl files, 0 carrying `\"type\":\"relocated\"`, 0 named `.superseded-`, 0 named `.orphaned-` (18 and 3 files mention the two strings in prose). All six producer_chain excerpts byte-exact at their offsets, each occurring exactly once in the build.",
           "rule": "One observation per `<basename>.jsonl` directly under an encoded project directory for the duplication census; one observation per *.jsonl file at any depth for the relocation census, a file counting when the literal occurs at least once in its bytes; lines are newline-terminated physical lines.",
           "note": "The shape csift now merges. The corpus specimens are a copied project directory, not a harness write - the claim states that rather than implying the harness produced them."
+        }
+      ]
+    },
+    {
+      "id": "PATH-015",
+      "area": "path-encoding",
+      "behavior": "A session's WORKFLOW SCRIPT directory is keyed on a different cwd from its transcript, so one session's data can sit under two project directories with a transcript in only one of them. The transcript path is `function El(){let t=Hy()??fl(ye());return o(t,`${Q()}.jsonl`)}` (159262439), where `ye()` is the session's originalCwd SLOT (PATH-009). The workflow script path is `function wr(){return Ld(Bu(ne()),Q(),\"workflows\",\"scripts\")+xd}` (159465305), where `Bu` is the project directory of `ne()` - the async-local SHELL cwd, the same lane a record's own `cwd` field comes from - joined with the session id and the two fixed segments; the file is named `function vd(e,n){return`${wr()}${rj(e)}-${n}.js`}` (159465368) and written by `await yd(f,r,{encoding:\"utf-8\",mode:384})` (159465860). A deep in-session `cd` therefore mints `<other-encoded-dir>/<uuid>/workflows/scripts/<name>-<n>.js` while the transcript stays put. Measured over two projects roots: 168 `<uuid>/` directories sit directly under an encoded project directory, 55 of them with no `<uuid>.jsonl` beside them; the direct children of those 55 are only `workflows` (18) and `tool-results` (10), the rest being empty. Of the 18 whose uuid ALSO has a sidecar under another project directory, 18 of 18 have a basename equal to the encoding of a `cwd` observed in that session's own transcript, and they hold 81 files between them - all `.js` under `workflows/scripts/`, 0 `*.jsonl` and 0 `agent-*.jsonl`. NONE of the 55 carries a `subagents/` subtree at all.",
+      "depends": "csift anchors sidecar and subagent discovery at the transcript's OWN directory (`sidecar_dir_for_session` joins the transcript's parent with its stem), and the measurement says that is the correct reading rather than a gap: the directories a session owns elsewhere hold workflow SCRIPTS and externalised tool output, neither of which discovery walks for - a persisted-output pointer is resolved by the absolute path the record carries, not by a directory walk. Widening the walk to every project directory whose basename encodes a cwd the transcript carries would cost a cross-directory scan per session and find no transcript, so the absence is deliberate and stated where the walk is anchored. What would change the reading is a single `agent-*.jsonl` under such a directory; the census instrument below is what detects one.",
+      "code": [
+        {
+          "path": "src/subagent/discover.rs",
+          "lines": "20-25",
+          "snippet": "pub fn sidecar_dir_for_session(session_jsonl: &Path) -> Option<PathBuf> {\n    let stem = session_jsonl.file_stem()?.to_str()?;\n    let parent = session_jsonl.parent()?;\n    let dir = parent.join(stem);\n    dir.is_dir().then_some(dir)\n}"
+        },
+        {
+          "path": "src/subagent/discover.rs",
+          "lines": "44-47",
+          "snippet": "    let subagents_dir = sidecar.join(\"subagents\");\n    if !subagents_dir.is_dir() {\n        return Ok(Vec::new());\n    }"
+        }
+      ],
+      "instrument": "python3 over each projects root: for every encoded project directory, take each child directory whose name is uuid-shaped (8-4-4-4-12 hex) - one observation per such directory - and split on whether the sibling `<name>.jsonl` exists. For the ones with no sibling transcript, list their direct children, walk them for `*.jsonl` and for `agent-*.jsonl`, and report the counts by file extension. For the subset whose uuid also appears under another project directory, encode every distinct `cwd` in that session's own transcript (NFC, then one dash per UTF-16 code unit outside [A-Za-z0-9]) and count the extra directories whose basename is in that set. Binary hops: byte-compare each `producer_chain` excerpt against the build named by `verified_claude_code` at its offset.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.13.0",
+        "source": "measured"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the transcript path, for contrast",
+          "offset": 159262439,
+          "excerpt": "function El(){let t=Hy()??fl(ye());return o(t,`${Q()}.jsonl`)}",
+          "note": "The transcript is keyed on `ye()`, the originalCwd slot - the other half of the asymmetry."
+        },
+        {
+          "role": "gate",
+          "name": "the workflow-script directory",
+          "offset": 159465305,
+          "excerpt": "function wr(){return Ld(Bu(ne()),Q(),\"workflows\",\"scripts\")+xd}",
+          "note": "Built from `Bu(ne())` - the project directory of the SHELL cwd - plus the session id and the two fixed segments, so a deep `cd` sends it under another project directory."
+        },
+        {
+          "role": "writer",
+          "name": "the script file name",
+          "offset": 159465368,
+          "excerpt": "function vd(e,n){return`${wr()}${rj(e)}-${n}.js`}",
+          "note": "The `.js` name under that directory - the only file kind the census finds there."
+        },
+        {
+          "role": "writer",
+          "name": "the write",
+          "offset": 159465860,
+          "excerpt": "await yd(f,r,{encoding:\"utf-8\",mode:384})",
+          "note": "The append that puts the script on disk."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.13.0",
+          "date": "2026-09-17",
+          "verdict": "holds",
+          "instrument": "python3 over two projects roots enumerating every uuid-shaped child directory of an encoded project directory, splitting on whether the sibling `<uuid>.jsonl` exists, walking the transcript-less ones for their direct children, their `*.jsonl` and their `agent-*.jsonl`, and tallying their files by extension; plus, for the subset whose uuid has a sidecar under another project directory, encoding every distinct `cwd` in that session's transcript and matching it against the extra directory's basename; plus python3 byte-comparing the four producer_chain excerpts against $CSIFT_LEDGER_BINARY",
+          "observed": "Root one: 52 uuid sidecar directories, 7 with no transcript beside them, 0 carrying a subagents/ subtree, 0 agent-*.jsonl, direct children tool-results 5 and workflows 2. Root two: 116 uuid sidecar directories, 48 with no transcript beside them, 0 carrying a subagents/ subtree, 0 agent-*.jsonl, direct children workflows 16 and tool-results 5. Extra directories whose uuid also has a sidecar elsewhere: 2 + 16 = 18, and 18 of 18 have a basename equal to the encoding of a cwd in that session's own transcript; the 18 hold 81 files, all with extension .js, under `workflows/scripts/`, with 0 *.jsonl among them. All four producer_chain excerpts byte-exact at their offsets and occurring exactly once in the build.",
+          "rule": "One observation per uuid-shaped directory sitting directly under an encoded project directory; a directory counts as transcript-less when the sibling `<name>.jsonl` does not exist; file tallies are one observation per file at any depth below such a directory, excluding `.DS_Store`; a directory counts as cwd-matched when its basename equals the encoder applied to at least one distinct `cwd` string in the session's transcript.",
+          "note": "The split exists and is harmless to csift: what sits under the other project directory is workflow SCRIPTS, not transcripts, so the transcript-anchored walk loses nothing. The claim is recorded so a later reader does not widen discovery on the strength of the directory name."
         }
       ]
     }

@@ -5,6 +5,17 @@ use super::*;
 /// The sidecar directory `<ENCODED>/<session-uuid>/` for a top-level session jsonl,
 /// or `None` if the session has no sidecar. The sidecar is named after the session
 /// uuid (the jsonl basename without `.jsonl`).
+///
+/// ANCHORED AT THE TRANSCRIPT'S OWN DIRECTORY, and that is measured rather than assumed
+/// (PATH-015). A session CAN have a `<uuid>/` directory under ANOTHER project directory:
+/// the harness builds the workflow-SCRIPT path from the project directory of the shell cwd
+/// in force at the time, while the transcript path comes from the session's originalCwd
+/// slot, so the two need not agree. Those extra directories hold `workflows/scripts/*.js`
+/// and nothing else - over two projects roots, 55 `<uuid>/` directories sit beside no
+/// transcript and 0 of them carry a `subagents/` subtree or a single `agent-*.jsonl`. There
+/// is therefore nothing of this function's kind to find there, and widening the walk to
+/// other project directories on the strength of the directory name would buy a
+/// cross-directory scan per session for no transcript at all.
 #[must_use]
 pub fn sidecar_dir_for_session(session_jsonl: &Path) -> Option<PathBuf> {
     let stem = session_jsonl.file_stem()?.to_str()?;
