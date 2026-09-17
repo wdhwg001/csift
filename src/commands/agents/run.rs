@@ -48,6 +48,25 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         nodes.extend(t.nodes);
         workflow_runs.extend(t.workflow_runs);
     }
+    let mut duplicates = resolved.duplicates;
+    // The sidecar copies `agents` gathers take the SAME merge as every other surface.
+    // `agents` resolves TopLevelOnly and walks the sidecars ITSELF, so the resolver's union
+    // merge never sees them - and without this the one command whose whole job is counting
+    // agents was the one that double-counted them: a divergent session pair whose two
+    // sidecars hold ONE byte-identical agent transcript printed two lanes under a header
+    // saying nothing was duplicated, while `list` showed one row and `search -c` counted the
+    // records once.
+    let (kept, agent_groups) = path::dedup_copies(nodes.iter().map(|n| n.path.clone()).collect());
+    if !agent_groups.is_empty() {
+        let keep: std::collections::BTreeSet<std::path::PathBuf> = kept.into_iter().collect();
+        nodes.retain(|n| keep.contains(&n.path));
+        // A copied project directory carries the whole sidecar, MANIFESTS included, so the
+        // same workflow run is discovered once per session copy. One run is one row.
+        workflow_runs.sort_by(|a, b| a.run_id.cmp(&b.run_id));
+        workflow_runs.dedup_by(|a, b| a.run_id == b.run_id);
+        path::emit_duplicate_notes(&agent_groups);
+        duplicates.extend(agent_groups);
+    }
 
     // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--order-by time
     // window AND the --shape filter (a known id should resolve regardless of when it ran or
@@ -113,9 +132,9 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 
     match args.format {
         OutputFormat::Text => {
-            render_text(&nodes, &workflow_runs, args, &view, &resolved.duplicates);
+            render_text(&nodes, &workflow_runs, args, &view, &duplicates);
         }
-        OutputFormat::Json => render_json(&nodes, &workflow_runs, &view, &resolved.duplicates)?,
+        OutputFormat::Json => render_json(&nodes, &workflow_runs, &view, &duplicates)?,
     }
     Ok(())
 }

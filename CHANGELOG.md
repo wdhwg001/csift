@@ -55,6 +55,11 @@ surface change bumps the PATCH.
   refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
   target takes the same merge: a copied project directory carries the whole sidecar, so one
   `agent-<hex>.jsonl` is on disk under two directories too.
+- **`csift agents` merges duplicated agent transcripts, like every other surface.** It
+  resolves top-level-only and walks the sidecars itself, so the resolver's merge never saw
+  them: a divergent session pair whose two sidecars held one byte-identical agent transcript
+  printed two lanes under a header saying nothing was duplicated, while `list` showed one row
+  and `search -c` counted the records once. All three agree now.
 - **Every `csift agents` row names its own transcript** (`path`, and a `transcript` line in
   the text tree for the ids that occur twice). Two copies of one session carry two copies of
   each agent transcript, and those rows are identical in every other field - the agent id

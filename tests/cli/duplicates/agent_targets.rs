@@ -232,6 +232,65 @@ fn a_session_and_its_agent_in_one_invocation_resolve_one_copy_of_that_agent() {
 }
 
 #[test]
+fn agents_merges_its_own_sidecar_copies_and_agrees_with_list_and_search() {
+    // `agents` resolves TopLevelOnly and walks the sidecars itself, so the resolver's merge
+    // never sees them - and this is the shape where that mattered: the sessions DIFFER so
+    // both stay, and their two sidecars hold ONE byte-identical agent transcript. The
+    // command whose whole job is counting agents used to be the one that counted this twice.
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &record(1, "another branch"),
+    );
+    let child = agent_record(1, "child ask");
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &child,
+    );
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &child,
+    );
+    let sess = at(SESS);
+
+    let out = h.run(&["agents", &sess, "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+    let agents = json_rows(&out.stdout, "agent");
+    assert_eq!(
+        agents.len(),
+        1,
+        "one lane, not one per session copy: {}",
+        out.stdout
+    );
+    let session = json_rows(&out.stdout, "session");
+    assert_eq!(session[0]["agents"], 1, "{}", out.stdout);
+    let header = json_rows(&out.stdout, "header");
+    assert_eq!(
+        header[0]["duplicate_transcripts"], 1,
+        "the merge it performed is in its OWN header: {}",
+        header[0]
+    );
+    assert_eq!(header[0]["duplicate_records_dropped"], 1, "{}", header[0]);
+    assert!(
+        out.stderr.contains("project directories"),
+        "and named on stderr like any other merge:\n{}",
+        out.stderr
+    );
+
+    // The three surfaces agree, which is the whole point of the item.
+    let list = h.run(&["list", &sess, "--format", "json"]);
+    let sub_rows = json_rows(&list.stdout, "session");
+    let subs = sub_rows.iter().filter(|r| r["is_subagent"] == true).count();
+    assert_eq!(subs, 1, "{}", list.stdout);
+    let count = h.run(&["search", "child ask", &sess, "-c"]);
+    assert_eq!(count.stdout.trim(), "1", "{}", count.stderr);
+
+    let text = h.run(&["agents", &sess]);
+    assert!(text.stdout.contains("1 subagent(s)"), "{}", text.stdout);
+}
+
+#[test]
 fn the_sidecars_of_a_divergent_pair_still_merge_their_identical_agents() {
     // The sessions DIFFER, so neither is dropped and BOTH sidecars are walked - and those
     // hold one agent transcript twice, which every count would otherwise double.
