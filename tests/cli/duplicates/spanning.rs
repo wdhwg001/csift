@@ -73,6 +73,67 @@ fn every_spanning_surface_counts_a_divergent_pair_as_one_session() {
     }
 }
 
+/// Two copies of one session that DIFFER, each carrying its own Edit - the shape where
+/// nothing merges, both stay in scope, and a surface counting TRANSCRIPTS instead of
+/// session ids answers two.
+fn divergent_home_with_writes() -> Home {
+    let h = Home::new();
+    let edit = |uuid: &str, body: &str| {
+        format!(
+            "{{\"type\":\"user\",\"uuid\":\"{uuid}\",\"timestamp\":\"2026-06-07T03:00:00.000Z\",\
+             \"toolUseResult\":{{\"type\":\"create\",\"filePath\":\"/p/note.md\",\"content\":\"{body}\\n\"}},\
+             \"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"tool_result\",\
+             \"tool_use_id\":\"w0\",\"content\":\"ok\"}}]}}}}\n"
+        )
+    };
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{}{}", record(1, "one branch"), edit("c0", "one")),
+    );
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &format!("{}{}", record(1, "another branch"), edit("c1", "other")),
+    );
+    h
+}
+
+#[test]
+fn recover_counts_a_divergent_pair_as_one_session_in_scope() {
+    // `recover` reads ONE file target, so the sweep above cannot reach it - and it keeps its
+    // own copy of the scope span, taken over its per-session scan results rather than paths.
+    let h = divergent_home_with_writes();
+    let out = h.run(&[
+        "recover",
+        &at(SESS),
+        "--file",
+        "/p/note.md",
+        "--coverage",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "{}", out.stderr);
+    let header = json_rows(&out.stdout, "header");
+    assert_eq!(header[0]["sessions_in_scope"], 1, "{}", header[0]);
+    assert_eq!(header[0]["top_level_sessions"], 1, "{}", header[0]);
+}
+
+#[test]
+fn verbatim_renders_a_divergent_pair_as_one_session() {
+    // `verbatim` prints the sessions it RENDERED beside the ones in scope and compares the
+    // two to decide whether anything was skipped, so the rendered half has to count the same
+    // way - or a two-copy session renders more sessions than its scope says exist.
+    let h = divergent_home_with_writes();
+    let out = h.run(&["verbatim", &at(SESS), "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+    let header = json_rows(&out.stdout, "header");
+    assert_eq!(header[0]["sessions_in_scope"], 1, "{}", header[0]);
+    assert_eq!(
+        header[0]["sessions_rendered"], 1,
+        "the rendered count is a session census too: {}",
+        header[0]
+    );
+}
+
 /// A fixture with one Edit in each copy, so `recover` and `files` have something to replay.
 fn identical_home_with_a_write() -> Home {
     let h = Home::new();
