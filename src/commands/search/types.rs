@@ -435,4 +435,11 @@ pub struct SearchOutcome {
     /// Empty on an ordinary scope; when not, the merged copies are disclosed beside the
     /// scope banner and in the JSON header, because the counts above changed with them.
     pub duplicates: Vec<crate::path::DuplicateGroup>,
+    /// The `--for <ADDR>` address this run answered, verbatim as the reader gave it.
+    ///
+    /// `None` on an ordinary search. It rides the OUTCOME rather than being re-read from
+    /// the args at the projector, because what it labels is the emitted set: a reader
+    /// holding the output must be able to see which record it is the closure OF without
+    /// reconstructing the command line.
+    pub for_addr: Option<String>,
 }

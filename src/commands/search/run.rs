@@ -184,6 +184,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // thousands of files the across-files fan-out already saturates every worker, and
     // nested fan-out just adds steal churn (measured: broad-match wall +0.2s, sys +0.13s).
     let inner_parallel = session_files.len() <= rayon::current_num_threads() * 2;
+    // The `--for <ADDR>` address, parsed ONCE: a bad address is a usage error and must be
+    // reported before any file is read, not once per file.
+    let for_addr = args.for_addr.as_deref().map(ForAddr::parse).transpose()?;
     let per_file: Vec<FileResult> = session_files
         .par_iter()
         .map(|p| {
@@ -197,6 +200,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 want_siblings,
                 &spawn_map,
                 inner_parallel,
+                for_addr.as_ref(),
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -219,6 +223,10 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         scope_top,
         scope_sub,
         duplicates: resolved.duplicates,
+        // The CANONICAL form of the address, not the reader's spelling: `--for 42` and
+        // `--for L42` name one record, and a summary that echoed both back verbatim would
+        // read as two different queries.
+        for_addr: for_addr.as_ref().map(ForAddr::as_str),
         ..SearchOutcome::default()
     };
     let mut all: Vec<Exchange> = Vec::new();
@@ -409,6 +417,11 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                         false,
                         &spawn_map,
                         inner_parallel,
+                        // The zero-match probe re-runs the SAME query with the label filter
+                        // dropped, so it keeps every other filter - the reverse closure
+                        // included, or the probe would name labels outside the set the
+                        // reader asked about.
+                        for_addr.as_ref(),
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;

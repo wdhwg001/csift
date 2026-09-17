@@ -283,6 +283,19 @@ pub struct SearchArgs {
     )]
     pub count_by: Option<CountAxis>,
 
+    /// Print everything that is FOR one record, TRANSITIVELY: the reverse provenance
+    /// query. `<ADDR>` is `L<line>` (per FILE, so pair it with a target that names one) or
+    /// a record UUID (global - the closure can start in one transcript and continue in
+    /// another). The answer is ordinary hits in file order, the addressed record at the
+    /// head, and it grows: a record is in it when it is for the address OR for something
+    /// already in it - so a call's result, the notification a background task it launched
+    /// sent two turns later, and the attachments written for any of those all come back
+    /// from one query. Composes with `-t`/`-T`/time/scope; the PATTERN still applies, so
+    /// use an empty pattern for the whole set. JSON: the summary gains `for_of`
+    /// (`address`, `records`, `transcripts`).
+    #[arg(long = "for", value_name = "ADDR")]
+    pub for_addr: Option<String>,
+
     /// Also render the SIBLING records of every matched turn: the rest of the
     /// back-and-forth, not only the matched line, so a matched USER question surfaces
     /// WITH the agent's reply (answers "I said X, what did you say back?"). FIXED policy,

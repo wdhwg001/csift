@@ -277,6 +277,18 @@ pub(crate) fn render_json(
         // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
     });
+    // `--for <ADDR>`: what the emitted set IS. Present only under the flag, because on an
+    // ordinary search there is no closure and a null would read as one that found nothing.
+    // `records` counts distinct RECORDS (a record whose several sections matched is one),
+    // and `transcripts` how many files contributed - a uuid address can start the walk in
+    // one and continue it in another.
+    if let Some(addr) = &outcome.for_addr {
+        summary_fields["for_of"] = json!({
+            "address": addr,
+            "records": reverse_record_count(&outcome.exchanges),
+            "transcripts": distinct_session_count(&outcome.exchanges),
+        });
+    }
     // Zero-match self-diagnosis (§T0.1): make the empty result machine-legible as a definitive
     // absence (never a syntax error), echo the active filters, and - when a `-t`/`-T` filter hid
     // otherwise-matching records - carry the excluded labels so a consumer can self-correct.

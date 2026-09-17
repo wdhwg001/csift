@@ -25,6 +25,7 @@ pub(crate) fn collect_turn_hits(
     plan_index: &PlanIndex,
     tools: &ToolIndex,
     address: Option<&AddressSet>,
+    for_lines: Option<&BTreeSet<usize>>,
     env: &ClassifyEnv<'_>,
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
@@ -44,6 +45,15 @@ pub(crate) fn collect_turn_hits(
         // prefilter so an addressed record is fetched regardless of the pattern literal.)
         if let Some(addr) = address {
             if !addr.addresses(kept) {
+                continue;
+            }
+        }
+        // `--for <ADDR>`: only the records the reverse closure reached are eligible. It
+        // gates like the address above and unlike it in one way that matters - a record
+        // outside the closure is simply not a hit, and no unmodeled unit is emitted for
+        // one, because `--for` is a query over a scope and a scan never emits one.
+        if let Some(lines) = for_lines {
+            if !lines.contains(&kept.line_no) {
                 continue;
             }
         }

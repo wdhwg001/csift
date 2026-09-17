@@ -256,6 +256,12 @@ pub(crate) fn active_filters_str(args: &SearchArgs) -> String {
     if args.attachments {
         parts.push("--attachments".to_string());
     }
+    // The REVERSE query is a filter like any other, and the one most worth echoing: a
+    // zero-match `--for` means the closure reached nothing, which reads very differently
+    // from a pattern that matched nothing.
+    if let Some(a) = &args.for_addr {
+        parts.push(format!("--for {a}"));
+    }
     if parts.is_empty() {
         "none".to_string()
     } else {

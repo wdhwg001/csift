@@ -360,6 +360,7 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         &PlanIndex::default(),
         &ToolIndex::default(),
         None,
+        None,
         &test_env(),
     );
     assert!(hits.is_empty(), "a can_hit=false record yields no hits");
@@ -398,6 +399,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         &PlanIndex::default(),
         &ToolIndex::default(),
         None,
+        None,
         &test_env()
     )
     .0
@@ -415,6 +417,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         EXCERPT_MAX,
         &PlanIndex::default(),
         &ToolIndex::default(),
+        None,
         None,
         &test_env()
     )

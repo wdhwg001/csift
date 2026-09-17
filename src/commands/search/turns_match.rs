@@ -23,6 +23,7 @@ pub(crate) fn reconstruct_and_match(
     inner_parallel: bool,
     head_is_fork: bool,
     schedule_fires: &crate::model::ScheduleFireIndex,
+    for_addr: Option<&ForAddr>,
 ) -> (Vec<Exchange>, usize, ChainCounts) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -79,6 +80,12 @@ pub(crate) fn reconstruct_and_match(
     // the call (the `result_of` provenance edge, the one join the chain's uuid map cannot
     // make). Three walks over the same blocks answered the first two; the third rides along.
     let tools = build_tool_index(rows);
+    // `--for <ADDR>`: the transitive closure of "is for the addressed record", as the set
+    // of LINES this transcript contributes. Computed ONCE per file and only under the flag
+    // - a scan that did not ask pays nothing - and applied as a per-record gate beside the
+    // `-t`/time/pattern filters rather than as an address, so the excerpt cap stays at its
+    // default and no unmodeled unit is emitted: `--for` is a scan, not an address.
+    let for_lines = for_addr.map(|addr| for_closure(rows, addr));
     // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
     // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is HOISTED
     // (GOLD §3): `run_search` built one `DiscoveredSpawns` per DISTINCT discovery-root up front, so
@@ -161,6 +168,7 @@ pub(crate) fn reconstruct_and_match(
             &plan_index,
             &tools,
             address,
+            for_lines.as_ref(),
             &env,
         );
         if hits.is_empty() {

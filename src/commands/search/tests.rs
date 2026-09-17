@@ -25,6 +25,7 @@ fn args(pattern: &str) -> SearchArgs {
         additional_context: false,
         attachments: false,
         no_subagents: false,
+        for_addr: None,
         format: OutputFormat::Text,
     }
 }
@@ -114,6 +115,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         false,
         false,
         &crate::model::ScheduleFireIndex::default(),
+        None,
     );
     exchanges
 }

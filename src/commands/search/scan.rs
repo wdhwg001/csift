@@ -42,6 +42,9 @@ pub(crate) fn fetch_records(
         &spawn_map,
         // ONE transcript - nothing else fills the pool, so the inner fan-out is free.
         true,
+        // `show` fetches the records an address NAMES; the reverse provenance query is a
+        // scan over a scope and lives on `search` alone.
+        None,
     )?;
     Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
 }
@@ -58,6 +61,7 @@ pub(crate) fn search_one_file(
     want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
+    for_addr: Option<&ForAddr>,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -419,6 +423,7 @@ pub(crate) fn search_one_file(
         inner_parallel,
         head_is_fork,
         &schedule_fires,
+        for_addr,
     );
 
     // `--raw`: backfill each hit's VERBATIM source line from this file's mmap - one pass
