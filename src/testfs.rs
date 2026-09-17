@@ -49,6 +49,12 @@ fn claim(root: &Path) -> std::io::Result<()> {
     std::fs::create_dir(root)
 }
 
+/// The refusal message, so the test that exercises it and the code that raises it spell
+/// it once. It names the DIRECTORY: a reader who hits this needs the path to go look.
+fn not_ours(root: &Path, e: &std::io::Error) -> String {
+    format!("scratch tree {} is not this run's own: {e}", root.display())
+}
+
 /// A scratch directory tree, removed on drop.
 ///
 /// Hold it for the whole test body: dropping it deletes the tree, so a fixture helper
@@ -60,15 +66,23 @@ pub(crate) struct Scratch {
 }
 
 impl Scratch {
-    /// Claim a fresh tree tagged `tag`. Panics, naming the directory, when one is already
-    /// there: that can only be a tree leaked by another run, and starting a test on someone
-    /// else's fixtures is a wrong answer rather than a slow one.
+    /// Claim a fresh tree tagged `tag`, at this process's next sequence number.
     pub(crate) fn dir(tag: &str) -> Scratch {
         static SEQ: AtomicU64 = AtomicU64::new(0);
-        let root = scratch_path(tag, SEQ.fetch_add(1, Ordering::Relaxed));
-        claim(&root).unwrap_or_else(|e| {
-            panic!("scratch tree {} is not this run's own: {e}", root.display())
-        });
+        Scratch::dir_at(tag, SEQ.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Claim the tree `tag` and `seq` name. Panics, naming the directory, when one is
+    /// already there: that can only be a tree leaked by another run, and starting a test on
+    /// someone else's fixtures is a wrong answer rather than a slow one.
+    ///
+    /// The sequence is a parameter so the refusal is TESTABLE. `dir` draws it from a
+    /// process-global counter, so the name of its next tree cannot be predicted from
+    /// outside - another test on another thread may take it first - and a collision test
+    /// written against `dir` would be a race rather than a pin.
+    fn dir_at(tag: &str, seq: u64) -> Scratch {
+        let root = scratch_path(tag, seq);
+        claim(&root).unwrap_or_else(|e| panic!("{}", not_ours(&root, &e)));
         Scratch { root }
     }
 
@@ -104,15 +118,31 @@ mod tests {
     #[test]
     fn a_scratch_tree_that_already_exists_is_refused_rather_than_adopted() {
         // u64::MAX is past any sequence a run reaches, so this name belongs to no live tree.
+        // The claim runs through the guard's own constructor, so what is pinned is the arm
+        // a test actually hits - the panic - rather than the `create_dir` one layer under it.
         let taken = scratch_path("guard", u64::MAX);
         let _ = std::fs::remove_dir_all(&taken);
-        claim(&taken).expect("the first claim succeeds");
+        let held = Scratch::dir_at("guard", u64::MAX);
         assert!(
-            claim(&taken).is_err(),
-            "a second claim on an existing tree must fail, not adopt it: {}",
+            held.is_dir(),
+            "the first claim succeeds: {}",
             taken.display()
         );
-        std::fs::remove_dir_all(&taken).unwrap();
+
+        // The second claim panics; the test prints its message, which is expected output.
+        let refused = std::panic::catch_unwind(|| Scratch::dir_at("guard", u64::MAX));
+        let Err(payload) = refused else {
+            panic!("a second claim on an existing tree must fail, not adopt it");
+        };
+        let said = payload
+            .downcast_ref::<String>()
+            .map_or_else(String::new, Clone::clone);
+        assert!(
+            said.contains(&taken.display().to_string()),
+            "the refusal names the directory so a reader can go look: {said:?}"
+        );
+        drop(held);
+        assert!(!taken.exists(), "the guard took its tree with it");
     }
 
     #[test]
