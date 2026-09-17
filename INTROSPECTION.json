@@ -35787,7 +35787,7 @@
         {
           "claude_code": "2.1.258",
           "csift": null,
-          "date": null,
+          "date": "2026-09-17",
           "verdict": "refined",
           "instrument": "Ran `csift show <file> --branch-points --format json --cross-compactions <b>` for b in 0, 3 and all over five 9-21 MB compacted transcripts and the 415 MB landmark, and counted the per-child `survival` values at each budget.",
           "observed": "The fork rows are budget-independent on all six transcripts. The child verdicts move on one of them: the landmark reads 1 live / 443 pre-cut / 305 abandoned at budget 0 and 8 live / 436 pre-cut / 305 abandoned at budget 3 and at all, while the other five are unchanged across the three budgets (2/0/0, 2/1/4, 0/7/5, 0/2/3, 0/2/2).",
@@ -88350,7 +88350,7 @@
         {
           "claude_code": "2.1.258",
           "csift": null,
-          "date": null,
+          "date": "2026-09-17",
           "verdict": "refined",
           "instrument": "Re-read the walk at 2.1.258 @166143634 and the 5 s repair at @166145374, then ran the budgeted walk at 0, 3 and all over five 9-21 MB compacted transcripts and the 415 MB landmark, capturing `search '' <file> --no-subagents --format json`, `search '' <file> --no-subagents --count-by label`, `stats <file> --no-subagents --format json` and `show <file> --branch-points --format json` for each, and byte-comparing every budget-0 stream against a build that predates the flag.",
           "observed": "The loader reads `parentUuid` only and ends on a boundary's null parent. Budget 0 reproduced the pre-flag build on 24 of 24 streams (6 transcripts x 4 streams), byte for byte. At budget 3 the walk stepped over 2 boundaries on the landmark and 0 on the other five; 490 of the landmark's 31,000 emitted top-level hits moved `pre-cut` to `live` (83 live / 30,612 pre-cut / 305 abandoned at budget 0, against 573 / 30,122 / 305 at budget 3), and its `show --branch-points` child verdicts moved from 1 live / 443 pre-cut to 8 live / 436 pre-cut. Budget `all` gave output identical to budget 3 on all six.",
@@ -88989,7 +88989,7 @@
         {
           "claude_code": "2.1.258",
           "csift": null,
-          "date": null,
+          "date": "2026-09-17",
           "verdict": "refined",
           "instrument": "Re-ran the dangling-boundary census over every top-level transcript of the projects root, then read the `floor_cause` and `boundaries_crossed` of `csift search '' <file> --no-subagents --format json --cross-compactions all` on the five 9-21 MB compacted transcripts and the 415 MB landmark.",
           "observed": "82 top-level transcripts, 23 carrying at least one boundary, 275 boundary records; 275 of 275 carry a null `parentUuid` and 275 of 275 name a `logicalParentUuid`; 223 of those name a uuid on some line of the same file and 52 do not, the 52 over 14 files. Per file, 9 of 23 resolve every boundary and 4 resolve none. At `--cross-compactions all`, 4 of the 6 measured transcripts report `floor_cause` `unresolvable-boundary` with `boundaries_crossed` 0, one reports `head` with no boundary on the walk's path, and the landmark crosses 2 and then meets a dangling one with 77 boundaries still above its floor.",
@@ -89402,7 +89402,7 @@
         {
           "claude_code": "2.1.258",
           "csift": null,
-          "date": null,
+          "date": "2026-09-17",
           "verdict": "refined",
           "instrument": "Compared the census walk's rule against the shipped one by running `csift stats <file> --no-subagents --format json` and `csift search '' <file> --no-subagents --count-by label` at `--cross-compactions` 0, 3 and all over five 9-21 MB compacted transcripts and the 415 MB landmark, reading `abandoned_turns`, `rewound_turns`, `replay_copies` and the two survival leaf counts at each budget.",
           "observed": "Every chain total is budget-independent on all six transcripts: the landmark reads turns 1424, abandoned_turns 305, rewound_turns 6, replay_copies 464 at each of the three budgets, and the five others are likewise unchanged (abandoned_turns 5, 0, 4, 3, 2). The two survival leaf populations do not move either (landmark user.unsent 299 and user.rewound 6 at every budget). What moves is where a record sits relative to the floor, not whether it is abandoned.",
@@ -97041,7 +97041,7 @@
         {
           "claude_code": "2.1.258",
           "csift": null,
-          "date": null,
+          "date": "2026-09-17",
           "verdict": "refined",
           "instrument": "Ran the per-file boundary census over the 82 top-level transcripts of the projects root, then ran `csift search '' <file> --no-subagents --format json --cross-compactions <b>` for b in 0, 3 and all over the five 9-21 MB compacted transcripts and the 415 MB landmark, diffing the three streams per transcript and byte-comparing the budget-0 stream against a build that predates the flag.",
           "observed": "23 of 82 transcripts carry a boundary; 275 records; per-file counts 1x7, 2x3, 4, 5, 6x2, 7x2, 12, 15, 27, 28, 32, 33, 80; 223 of 275 resolvable, 52 not; 9 of 23 files fully resolvable, 4 not at all. Budget 3 and budget all produced byte-identical streams on all six measured transcripts, and budget 0 reproduced the pre-flag build on all six. Crossings at budget 3: 2 on the landmark, 0 on the other five; boundaries left above the floor: 77, 2, 2, 1, 1 and 0.",
