@@ -107,11 +107,31 @@ pub struct SummarizeIndex {
     /// uuid -> boundary uuid.
     ///
     /// One map rather than two because the two directions are the same edge and a uuid
-    /// belongs to one record, so no key can mean both. The pairing is what the `pairs`
-    /// provenance relation renders, and it is worth keeping apart from the MODE above: a
-    /// summary whose `direction` csift does not model has no mode and is still the
-    /// boundary's other half, so a reader following the relation reaches it either way.
+    /// belongs to one record, so no key can mean both.
+    ///
+    /// It is a SEPARATE question from the mode, and the separation is what makes the `pairs`
+    /// relation symmetric. A summary whose `summarizeMetadata.direction` csift does not model
+    /// has NO mode to lend its boundary and is still that boundary's other half - so this map
+    /// is filled from `isCompactSummary` alone while [`SummarizeIndex::by_boundary_uuid`]
+    /// keeps its own rule. Filled from the mode instead, such a pair recorded nothing here
+    /// while the boundary went on naming the summary off its own `anchorUuid` key: one
+    /// relation with two answers in one file, the summary printing an honest empty about a
+    /// record that is plainly above it.
     paired_uuid: HashMap<String, String>,
+}
+
+/// Is this row a compaction SUMMARY at all - the question the mode answers first and then
+/// throws away.
+///
+/// It lives here rather than on [`ChainNode`] because this is its one reader, and it is a
+/// separate predicate from the mode because the two genuinely differ on one shape: a summary
+/// whose `direction` csift does not model is a summary with no mode. A spine row is never a
+/// summary (a summary is a `role:user` record, so every prefilter admits it whole), which is
+/// why the `full()` arm answers for both kinds.
+fn is_summary_node(rec: ChainNode<'_>) -> bool {
+    rec.full()
+        .and_then(|r| r.is_compact_summary)
+        .unwrap_or(false)
 }
 
 impl SummarizeIndex {
@@ -138,9 +158,9 @@ impl SummarizeIndex {
     /// body must be two enum-TAG loads on the common record and nothing more. A boundary is
     /// the only shape carrying a `subtype`, and `subtype.is_some()` is a discriminant read,
     /// so it short-circuits the string compare inside [`ChainNode::is_compact_boundary`] for
-    /// every user and assistant record; the summary arm's own first statement compares an
-    /// `Option<bool>` before it reaches the direction string. Never reorder these so a
-    /// string compare runs first.
+    /// every user and assistant record; the summary arm reads ONE `Option<bool>`
+    /// ([`is_summary_node`]) and reaches the direction string only for a record that already
+    /// is a summary. Never reorder these so a string compare runs first.
     pub fn from_nodes<'a>(records: impl IntoIterator<Item = ChainNode<'a>>) -> Self {
         let mut by_boundary_uuid = HashMap::new();
         let mut paired_uuid = HashMap::new();
@@ -151,19 +171,21 @@ impl SummarizeIndex {
                 pending = rec.uuid();
                 continue;
             }
-            let Some(mode) = rec.summary_compaction_mode() else {
+            if !is_summary_node(rec) {
                 continue;
-            };
+            }
             let Some(uuid) = pending.take() else {
                 continue;
             };
-            by_boundary_uuid.insert(uuid.to_string(), mode);
-            // The PAIRING is recorded whether or not the summary carries a uuid of its own,
-            // because a summary with none still closes the boundary for the MODE above -
-            // only the edge back needs the id, and an absent one simply yields no entry.
+            // The PAIRING closes on the SUMMARY, not on its mode: an unmodeled direction is
+            // a mode csift declines to guess and never a reason to leave the two halves of
+            // one event unable to name each other.
             if let Some(summary) = rec.uuid() {
                 paired_uuid.insert(uuid.to_string(), summary.to_string());
                 paired_uuid.insert(summary.to_string(), uuid.to_string());
+            }
+            if let Some(mode) = rec.summary_compaction_mode() {
+                by_boundary_uuid.insert(uuid.to_string(), mode);
             }
         }
         SummarizeIndex {

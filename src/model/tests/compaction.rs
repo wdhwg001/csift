@@ -166,8 +166,9 @@ fn the_pairing_answers_both_ways_even_where_the_mode_is_unknown() {
     );
     assert_eq!(
         ix.paired_with(Some("cb1")),
-        None,
-        "and a summary csift cannot read the gesture of closes no pairing either - the \
-         pairing is recorded where the mode is, so the two can never disagree"
+        Some("sum1"),
+        "and the pairing still closes: a gesture csift cannot read is a MODE it declines to \
+         guess, not a reason for the two halves of one event to stop naming each other"
     );
+    assert_eq!(ix.paired_with(Some("sum1")), Some("cb1"));
 }

@@ -88908,7 +88908,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "348-348",
+          "lines": "356",
           "snippet": "            rec.logical_parent_uuid.as_deref(),"
         }
       ],
@@ -94696,7 +94696,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "375-377",
+          "lines": "383-385",
           "snippet": "    if rec.resume_paired(&env.ctx_for(kept)) != Some(true) {\n        return None;\n    }"
         }
       ],
@@ -94919,7 +94919,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "406-407",
+          "lines": "414-415",
           "snippet": "fn reports_edge(rec: &Record, env: &ClassifyEnv<'_>) -> HitFact {\n    let Some(id) = rec.pulse_tool_use_id() else {"
         },
         {
@@ -96848,12 +96848,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "336-337",
+          "lines": "344-345",
           "snippet": "    let (anchor, basis) = match segment(\"anchorUuid\").filter(|a| Some(*a) != rec.uuid.as_deref()) {\n        Some(a) => (Some(a), Basis::Key),"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "355-355",
+          "lines": "363",
           "snippet": "            .map(|u| edge(crate::model::EdgeKind::Preserves, Basis::Key, Some(u))),"
         }
       ],

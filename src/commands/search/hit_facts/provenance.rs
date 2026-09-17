@@ -291,7 +291,9 @@ pub(crate) fn survival_edges(
 /// the `isCompactSummary` record). An older boundary that carries only the four original
 /// scalars names nothing, and there the pairing is POSITION - the first summary after the
 /// boundary and before the next one. A SUMMARY names no boundary on any key at all, so its
-/// half of the edge is always position.
+/// half of the edge is always position, and its honest empty says the TRUE reason: not that
+/// the record lacks a key (no summary has one) but that no boundary precedes it in this
+/// file - a clone head, whose boundary lives in the session it was copied from.
 ///
 /// `precedes` is the `logicalParentUuid` the boundary carries in place of the null
 /// `parentUuid` every boundary has - the true predecessor the compaction re-linked to. It
@@ -311,10 +313,16 @@ fn compaction_edges(class: Class, rec: &Record, env: &ClassifyEnv<'_>) -> Vec<Hi
         record_text::for_edge_at(kind, basis, uuid, None, line)
     };
     if class == Class::CompactionSummary {
+        let Some(boundary) = env.summarize.paired_with(rec.uuid.as_deref()) else {
+            return vec![HitFact::ForUnknown {
+                kind: crate::model::EdgeKind::Pairs,
+                reason: "no compaction boundary precedes this summary in this file".to_string(),
+            }];
+        };
         return vec![edge(
             crate::model::EdgeKind::Pairs,
             Basis::Position,
-            env.summarize.paired_with(rec.uuid.as_deref()),
+            Some(boundary),
         )];
     }
     if class != Class::CompactionBoundary {

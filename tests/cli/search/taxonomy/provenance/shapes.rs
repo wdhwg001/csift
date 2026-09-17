@@ -470,3 +470,111 @@ fn a_pulse_names_the_call_it_reports_on_from_either_carrier() {
         text.stdout
     );
 }
+
+/// `pairs` is SYMMETRIC even where the summary's gesture is one csift does not model.
+///
+/// The mode and the pairing are different questions and they come apart on exactly this
+/// shape: `summarizeMetadata.direction` reads a word csift has no `SummarizeMode` for, so the
+/// pair has no mode - and the two records are still each other's other half. Reading the
+/// mode's absence as "not a summary" left the boundary naming the summary off its own
+/// `anchorUuid` key while the summary printed an honest empty about a record one line below
+/// it: one relation, two answers, one file.
+#[test]
+fn the_compaction_pair_is_symmetric_even_with_an_unmodeled_direction() {
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"y1","parentUuid":null,"timestamp":"2026-06-08T05:00:00.000Z","message":{"role":"user","content":"zzside chart the lagoon"}}"#,
+            "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"y2","parentUuid":null,"timestamp":"2026-06-08T05:01:00.000Z","compactMetadata":{"trigger":"manual","preTokens":900,"preservedSegment":{"headUuid":"y1","anchorUuid":"y3","tailUuid":"y1"}}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"y3","parentUuid":"y2","isCompactSummary":true,"summarizeMetadata":{"direction":"sideways"},"timestamp":"2026-06-08T05:01:01.000Z","message":{"role":"user","content":"zzside the summary"}}"#,
+            "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "-t",
+        "harness.compaction.*",
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits: Vec<serde_json::Value> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let pairs = |line: u64| -> serde_json::Value {
+        hits.iter()
+            .filter(|h| h["line"].as_u64() == Some(line))
+            .flat_map(|h| h["for"].as_array().cloned().unwrap_or_default())
+            .find(|e| e["kind"] == "pairs")
+            .unwrap_or_else(|| panic!("no pairs edge on L{line}:\n{}", out.stdout))
+    };
+    assert_eq!(
+        pairs(2)["target"]["line"].as_u64(),
+        Some(3),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        pairs(3)["target"]["line"].as_u64(),
+        Some(2),
+        "{}",
+        out.stdout
+    );
+    // The MODE is still absent - an unmodeled gesture is never folded into a known one.
+    let summary = hits
+        .iter()
+        .find(|h| h["line"].as_u64() == Some(3))
+        .unwrap_or_else(|| panic!("no summary hit:\n{}", out.stdout));
+    assert!(summary["mode"].is_null(), "{summary}");
+}
+
+/// A summary with no boundary above it says the TRUE reason it names nothing.
+///
+/// No compaction summary carries a key naming its boundary, so "the record carries no such
+/// key" would be true of every summary ever written and would tell a reader nothing about
+/// the one in front of them. The fact is that this FILE holds no boundary before it - a
+/// clone head, whose boundary lives in the session it was copied from.
+#[test]
+fn an_unpaired_summary_names_the_reason_the_file_gives() {
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"z1","parentUuid":null,"isCompactSummary":true,"isVisibleInTranscriptOnly":true,"timestamp":"2026-06-08T06:00:00.000Z","message":{"role":"user","content":"zzclone the summary this file opens with"}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"z2","parentUuid":"z1","timestamp":"2026-06-08T06:01:00.000Z","message":{"role":"user","content":"zzclone carry on"}}"#,
+            "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "-t",
+        "harness.compaction.*",
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let edge = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .flat_map(|h| h["for"].as_array().cloned().unwrap_or_default())
+        .find(|e| e["kind"] == "pairs")
+        .unwrap_or_else(|| panic!("no pairs edge:\n{}", out.stdout));
+    assert!(edge["target"].is_null(), "{edge}");
+    assert_eq!(
+        edge["reason"], "no compaction boundary precedes this summary in this file",
+        "{edge}"
+    );
+}
