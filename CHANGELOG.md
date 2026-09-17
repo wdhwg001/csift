@@ -359,7 +359,7 @@ surface change bumps the PATCH.
   caller who errored on one has a single address. Two statements that had gone stale are
   corrected against the binary: a text excerpt is one line per record, and sixteen of the
   eighteen bookkeeping line types build their key=value head from their own bytes. It ships
-  at 58,419 tokens, 1,691 over the 56,728 it replaced (tiktoken `cl100k_base` throughout).
+  at 58,482 tokens, 1,754 over the 56,728 it replaced (tiktoken `cl100k_base` throughout).
   The rewrite itself landed at 56,687, so its dedup and rider removal paid for every section
   it added; two correction rounds bought the rest - the retirement table grown to every
   spelling the binary refuses, the crossing default's value, the label-zone tags the file

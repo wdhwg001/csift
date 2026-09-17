@@ -30,33 +30,56 @@ const SOURCES: &[&str] = &[
 
 /// A tag whose HEAD is a runtime value, so no head word can be extracted statically.
 ///
-/// Each entry is the literal as it sits in the source, and each carries the reason it
-/// cannot be swept plus where the manual documents its values. A NEW dynamic form fails
-/// the test until it is added here WITH that reason - which is the point: the allowlist is
-/// the place a reader learns why a tag is not pinned, not a place to make one disappear.
+/// Each entry is the WHOLE literal as it sits in the source and is matched for EQUALITY, not
+/// as a prefix, because one entry must cover exactly the construct its reason names. A prefix
+/// silently widens: `[{}` was one entry reading "`Marker::render` and the `for` edge builder",
+/// and it was ALSO absorbing `render.rs`'s image suffix - a third construct, in a different
+/// file, that is not a label-zone tag at all - so the sweep was holding a tag nobody had
+/// looked at. A NEW dynamic form fails the test until it is added here WITH its own reason
+/// and where the manual documents its values, and a CHANGED format string fails too, which is
+/// correct: the reason was written against a shape, and a shape that moved needs it re-read.
 const DYNAMIC_HEADS: &[(&str, &str)] = &[
     (
-        "[{line_type}",
-        "the bookkeeping head opens with the LINE's own `type` - SKILL 7.4 states the rule \
-         and the 7.2 rows name every one of the eighteen types",
+        "[{line_type}]",
+        "a bookkeeping head with no fields - SKILL 7.4 states the rule and the 7.2 rows name \
+         every one of the eighteen line types",
     ),
     (
-        "[{op}",
+        "[{line_type} {}]",
+        "the same head carrying its key=value run - same rule, same rows",
+    ),
+    (
+        "[{op}]{nd}",
         "`user.queued` opens with the queue OPERATION word - SKILL's `user.queued` 7.2 row \
          names the four observed values including the `queued` fallback",
     ),
     (
-        "[{source}",
+        "[{op} · {reason}]{nd}",
+        "the same word carrying the `remove` reason - that 7.2 row spells `[remove · <reason>]`",
+    ),
+    (
+        "[{source}]",
         "the attachment body source, `[rendered]` or `[payload]` - SKILL 7.2's intro and 7.4",
     ),
     (
-        "[{state}",
+        "[{state}]{nd}",
         "the resume placeholder's pairing, `[paired]` or `[unpaired]` - its own 7.2 row",
     ),
     (
-        "[{}",
-        "`Marker::render` and the `for` edge builder, whose heads are `&'static str`s swept \
-         separately below",
+        "[{}]",
+        "a `Marker` with no detail, and the `for` edge builder's bare form - their heads are \
+         `&'static str`s, swept separately below",
+    ),
+    (
+        "[{} {d}]",
+        "a `Marker` carrying its detail - same heads, same sweep",
+    ),
+    (
+        "[{} {}: {}]",
+        "NOT a label-zone tag: `render.rs`'s image suffix, which ends a `search` hit line \
+         AFTER the excerpt and reads `[1 image: #265]` / `[3 images: ...]`. The COUNT leads, \
+         so no head word exists; SKILL 7.4 names it as the one `search` bracket outside the \
+         zone and 13.3 gives the form",
     ),
 ];
 
@@ -228,9 +251,11 @@ fn skill_names_every_label_zone_head() {
     }
     for (tag, file) in &dynamic {
         assert!(
-            DYNAMIC_HEADS.iter().any(|(pat, _)| tag.starts_with(pat)),
+            DYNAMIC_HEADS.iter().any(|(lit, _)| tag == lit),
             "{file} builds `{tag}`, a tag whose head is a runtime value. It cannot be swept, \
-             so add it to DYNAMIC_HEADS with the reason and where SKILL documents its values"
+             so add THAT EXACT literal to DYNAMIC_HEADS with its own reason and where SKILL \
+             documents its values. An existing entry that merely starts the same way does not \
+             cover it - the match is equality, so one entry means one construct"
         );
     }
 }
