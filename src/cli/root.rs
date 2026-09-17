@@ -119,10 +119,13 @@ use super::*;
         and decides by the BYTES: identical, or one a strict byte PREFIX of the other,\n               \
         collapse onto the LONGEST; copies that DIFFER merge into nothing and both stay in\n               \
         scope, and so does a copy csift could not READ (the stderr note names that one and\n               \
-        the error; a scope holding it then dies reading it, like any unreadable file).\n               \
-        Every merge is named on stderr and counted in the JSON header\n               \
-        (`duplicate_transcripts`, `duplicate_records_dropped`), beside the copies it did\n               \
-        NOT merge (`divergent_transcripts`). `show` still refuses an address that resolves\n               \
+        the error). A command that reads every file in its scope then dies on that copy,\n               \
+        after the note and before its own header; `agents` opens a session file only\n               \
+        through its sidecar, so a copy with no sidecar directory beside it is never read\n               \
+        and that run finishes normally. Every merge is named on stderr and counted in the\n               \
+        JSON header (`duplicate_transcripts`, `duplicate_records_dropped`), beside the\n               \
+        copies it did NOT merge (`divergent_transcripts`) and the ones it could not read\n               \
+        (`unreadable_transcripts`). `show` still refuses an address that resolves\n               \
         to two files: target a `*.jsonl` path to read one copy.\n  \
           Caps         No silent truncation, ever: every cap prints what was dropped and how\n               \
         to get the rest. `list` caps an unscoped run at 50 rows; `show` caps at 200 record\n               \

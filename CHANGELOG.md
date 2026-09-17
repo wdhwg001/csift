@@ -49,8 +49,9 @@ surface change bumps the PATCH.
   The resolver names every merge on stderr,
   `list`/`search`/`stats`/`files`/`recover`/`verbatim`/`image`/`agents` carry
   `duplicate_transcripts` and `duplicate_records_dropped` in their JSON header - plus
-  `divergent_transcripts`, the copies csift refused to merge, because the first two read 0
-  both when nothing was duplicated and when a duplicate merged nothing - and a `copies` line
+  `divergent_transcripts`, the copies csift refused to merge, and `unreadable_transcripts`,
+  the copies it could not read, because the first two read 0 both when nothing was duplicated
+  and when a duplicate merged nothing - and a `copies` line
   in text, and a `list` row carries `also_at` plus `duplicate_relation`. `show` keeps
   refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
   target takes the same merge: a copied project directory carries the whole sidecar, so one

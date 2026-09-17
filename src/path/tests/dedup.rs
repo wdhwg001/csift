@@ -225,6 +225,13 @@ fn no_duplicate_reports_zero_rather_than_omitting_the_keys() {
     let fields = duplicate_header_fields(&[]);
     assert_eq!(fields["duplicate_transcripts"], 0);
     assert_eq!(fields["duplicate_records_dropped"], 0);
+    assert_eq!(fields["divergent_transcripts"], 0);
+    assert_eq!(fields["unreadable_transcripts"], 0);
+    assert_eq!(
+        fields.as_object().map(serde_json::Map::len),
+        Some(4),
+        "the header key set is a contract: {fields}"
+    );
 }
 
 #[test]

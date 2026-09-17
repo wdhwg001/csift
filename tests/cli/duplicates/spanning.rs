@@ -148,7 +148,7 @@ fn identical_home_with_a_write() -> Home {
 }
 
 #[test]
-fn every_spanning_surface_carries_the_two_header_keys() {
+fn every_spanning_surface_carries_the_four_header_keys() {
     let h = identical_home_with_a_write();
     let file = "/p/note.md";
     let sess = at(SESS);
@@ -181,6 +181,19 @@ fn every_spanning_surface_carries_the_two_header_keys() {
         );
         assert_eq!(
             header[0]["duplicate_records_dropped"], 3,
+            "{:?} header: {}",
+            args, header[0]
+        );
+        // The other two are 0 here and still PRESENT: a reader parsing the stream alone tells
+        // "nothing was duplicated" from "a duplicate merged nothing" by these keys, so an
+        // absent one (Null) is not the same answer as a zero.
+        assert_eq!(
+            header[0]["divergent_transcripts"], 0,
+            "{:?} header: {}",
+            args, header[0]
+        );
+        assert_eq!(
+            header[0]["unreadable_transcripts"], 0,
             "{:?} header: {}",
             args, header[0]
         );

@@ -63,10 +63,12 @@ use super::*;
         byte before the shorter copy ends) merges NOTHING, so both copies keep their own row \
         and each names the other; `unknown` (a copy csift could not READ) merges nothing \
         either, because a read failure is a gap in the evidence rather than evidence of \
-        sameness - the stderr note names that copy and the error the filesystem returned. \
+        sameness - the stderr note names that copy and the error the filesystem returned, and \
+        `list`, which reads every file in its scope, then dies on it before printing a row. \
         `sessions_in_scope` counts DISTINCT sessions, with \
         `duplicate_transcripts` and `duplicate_records_dropped` beside it in the header (plus \
-        `divergent_transcripts`, the copies csift did NOT merge - a merge that dropped nothing \
+        `divergent_transcripts`, the copies csift did NOT merge, and `unreadable_transcripts`, \
+        the ones it could not read - a merge that dropped nothing \
         reads 0 in the first two, exactly like an ordinary scope), and \
         the resolver names every merge on stderr as well. To read a dropped copy, target its \
         `*.jsonl` path.\n\n\

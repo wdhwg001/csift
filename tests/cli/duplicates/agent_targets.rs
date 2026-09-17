@@ -348,6 +348,66 @@ fn an_ordinary_listing_names_no_transcript_and_one_run_stays_one_row() {
 }
 
 #[test]
+#[cfg(unix)]
+fn an_unreadable_copy_reaches_the_header_of_the_one_surface_that_survives_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = Home::new();
+    // A duplicated session whose second copy csift cannot read, and which has NO sidecar
+    // directory beside it - `agents` opens a session file only through its sidecar, so this
+    // copy is never read and the run completes.
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &body_two());
+    h.write(&format!("{ENC_SHORT}/{SESS}.jsonl"), &body_two());
+    // An unrelated session with one agent, so the listing has a lane to print.
+    let other = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c99";
+    h.write(&format!("{ENC}/{other}.jsonl"), &body_two());
+    h.write(
+        &format!("{ENC}/{other}/subagents/agent-{AGENT}.jsonl"),
+        &agent_record(1, "child ask"),
+    );
+
+    let locked = h.projects().join(ENC_SHORT).join(format!("{SESS}.jsonl"));
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    // Root - and any filesystem that does not enforce modes - can still read it, and then
+    // there is no unreadable copy to test.
+    if std::fs::File::open(&locked).is_ok() {
+        return;
+    }
+    let agents = h.run(&["agents", "--format", "json"]);
+    let list = h.run(&["list", "--no-subagents"]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    assert!(
+        agents.success,
+        "`agents` reads a session file only through its sidecar:\n{}",
+        agents.stderr
+    );
+    let header = json_rows(&agents.stdout, "header");
+    assert_eq!(
+        header[0]["unreadable_transcripts"], 1,
+        "the one place a reader of the STREAM learns it: {}",
+        header[0]
+    );
+    assert_eq!(header[0]["duplicate_transcripts"], 0, "{}", header[0]);
+    assert_eq!(header[0]["divergent_transcripts"], 0, "{}", header[0]);
+    assert!(
+        agents.stderr.contains("could not read"),
+        "and the note is the one a reader of stderr gets:\n{}",
+        agents.stderr
+    );
+    assert_eq!(
+        json_rows(&agents.stdout, "agent").len(),
+        1,
+        "{}",
+        agents.stdout
+    );
+
+    // The surfaces that read EVERY file in scope die on that copy instead - fail-loud, after
+    // the same note and before any header of their own.
+    assert!(!list.success, "{}", list.stdout);
+    assert!(list.stderr.contains("Permission denied"), "{}", list.stderr);
+}
+
+#[test]
 fn the_sidecars_of_a_divergent_pair_still_merge_their_identical_agents() {
     // The sessions DIFFER, so neither is dropped and BOTH sidecars are walked - and those
     // hold one agent transcript twice, which every count would otherwise double.

@@ -470,12 +470,17 @@ pub fn emit_duplicate_banner(groups: &[DuplicateGroup]) {
 ///   id because their copies disagree byte for byte. A merge that dropped nothing is not
 ///   the same as no duplicate on disk, and without this key a JSON reader saw the two
 ///   zeros above and could not tell the two apart.
+/// - `unreadable_transcripts` - how many copies csift could not READ at all, which is why
+///   their group merged nothing.
 ///
-/// There is deliberately NO key for the UNKNOWN relation. A copy csift cannot read is in
-/// scope like any other (that group merges nothing), and every surface reads what is in its
-/// scope - so the command dies on that copy before any header prints, the crate's fail-loud
-/// posture. What reports it is the resolver's stderr NOTE, which names the copy and the
-/// error at resolution, before the read that kills the command.
+/// The last key has a reader, and which surfaces have one is a measured fact rather than an
+/// obvious one. A copy csift cannot read stays in scope (its group merges nothing), so a
+/// surface that reads EVERY file in its scope - `list`, `search`, `stats`, `files`,
+/// `recover`, `verbatim`, `image` - dies on it, fail-loud, after the resolver's stderr note
+/// and before its own header. `agents` is different: it reads a session file only through
+/// its SIDECAR, so an unreadable copy with no `<uuid>/subagents` directory beside it is
+/// never opened - that run prints its header and exits 0, and this key is the only place
+/// the fact reaches a reader parsing the stream, who never sees the note on stderr.
 #[must_use]
 pub fn duplicate_header_fields(groups: &[DuplicateGroup]) -> serde_json::Value {
     let divergent: usize = groups
@@ -483,9 +488,15 @@ pub fn duplicate_header_fields(groups: &[DuplicateGroup]) -> serde_json::Value {
         .filter(|g| g.relation == DuplicateRelation::Divergent)
         .map(|g| g.members.len().saturating_sub(1))
         .sum();
+    let unreadable: usize = groups
+        .iter()
+        .flat_map(|g| g.members.iter())
+        .filter(|m| m.error.is_some())
+        .count();
     serde_json::json!({
         "duplicate_transcripts": groups.iter().map(|g| g.dropped.len()).sum::<usize>(),
         "duplicate_records_dropped": groups.iter().map(DuplicateGroup::dropped_lines).sum::<usize>(),
         "divergent_transcripts": divergent,
+        "unreadable_transcripts": unreadable,
     })
 }

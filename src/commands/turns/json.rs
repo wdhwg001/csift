@@ -71,6 +71,7 @@ pub(crate) fn render_json(
         "duplicate_transcripts": dup["duplicate_transcripts"],
         "duplicate_records_dropped": dup["duplicate_records_dropped"],
         "divergent_transcripts": dup["divergent_transcripts"],
+        "unreadable_transcripts": dup["unreadable_transcripts"],
         "sessions_rendered": sc.rendered,
         "top_level_sessions": sc.in_scope_top,
         "subagent_sessions": sc.in_scope_sub,
