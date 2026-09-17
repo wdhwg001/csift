@@ -259,3 +259,62 @@ fn inventory_edges(md: &str) -> Vec<&str> {
     }
     out
 }
+
+/// EVERY `[for: <word>` tag the two record-reading manuals RENDER names a relation of the
+/// vocabulary.
+///
+/// The help-parity sweep already asks whether every JSON key a surface emits is named in
+/// the manual that documents it. It reads KEY NAMES, so it is blind to the spelling of a
+/// rendered TAG - and that is exactly where the vocabulary drifted: `hook run` was respelled
+/// `hook_run` in the enum, the label zone, the census key and SKILL, while
+/// `search --help` went on showing `[for: hook run ...]` to the one reader who cannot check
+/// it against the binary. Nothing failed.
+///
+/// This reads the help TEXT the way a person does and holds each tag word to `EdgeKind`.
+/// `<kind>` is skipped: it is the manuals' own placeholder for "any relation word", not a
+/// word.
+#[test]
+fn every_for_tag_the_help_renders_names_a_relation_of_the_vocabulary() {
+    use clap::CommandFactory;
+    let cmd = crate::cli::Cli::command();
+    let words: Vec<&'static str> = EdgeKind::ALL.iter().map(|k| k.as_str()).collect();
+    let mut seen = 0usize;
+    for name in ["search", "show"] {
+        let sub = cmd
+            .get_subcommands()
+            .find(|s| s.get_name() == name)
+            .unwrap_or_else(|| panic!("no `{name}` subcommand"));
+        let text = format!(
+            "{}\n{}",
+            sub.get_after_help()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+            sub.get_after_long_help()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        );
+        for (i, _) in text.match_indices("[for: ") {
+            let rest = &text[i + "[for: ".len()..];
+            // The tag's word runs to the first space or the closing bracket; a help body is
+            // wrapped with `\`-continuations, so a word can be followed by a newline too.
+            let end = rest
+                .find(|c: char| c.is_whitespace() || c == ']')
+                .unwrap_or(rest.len());
+            let word = &rest[..end];
+            if word == "<kind>" {
+                continue;
+            }
+            seen += 1;
+            assert!(
+                words.contains(&word),
+                "`{name} --help` renders [for: {word} ...], which is no relation of the \
+                 vocabulary: {words:?}"
+            );
+        }
+    }
+    assert!(
+        seen >= 3,
+        "the two manuals rendered {seen} concrete `for` tags - the reader this guards is \
+         gone, or the extraction stopped matching"
+    );
+}

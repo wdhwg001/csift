@@ -47,8 +47,8 @@ pub(crate) const SECTION: &str =
      that starts at 1. \
      `interrupted_message_id`, `hook_run_id`, `scheduled_task_id` and `scheduled_fire_id` \
      are the explicit joins, JSON only. The unit's ONE `for` edge comes from the first two: \
-     `[for: interrupted <id> (not in this file)]`, `[for: hook run <first 8> (not in this \
-     file)]`, and `[for: hook run unknown (<reason>)]` where a Stop-hook summary names no \
+     `[for: interrupted <id> (not in this file)]`, `[for: hook_run <first 8> (not in this \
+     file)]`, and `[for: hook_run unknown (<reason>)]` where a Stop-hook summary names no \
      run - neither id is a record uuid, so the middle form is what an ordinary transcript \
      renders. ABSENCE is read at KEY level: a missing key means this record does not say, \
      never no, and a fact object that IS present names every member with null for one the \
