@@ -186,6 +186,22 @@ impl SearchArgs {
         !gated_leaves().into_iter().any(|c| self.scans_gated(c))
     }
 
+    /// Does any reader of THIS scan project the ENGINE's own `for` edges?
+    ///
+    /// `parent` and `result_of` ride JSON alone - `EdgeKind::rendered_in_label` is false
+    /// for exactly those two and for nothing else - so a scan whose output is TEXT and
+    /// which does not census them renders every byte it renders without either edge ever
+    /// being built. Building them anyway costs two string allocations and two map lookups
+    /// on every emitted hit, which on a wide-match row over a 397 MiB transcript measured
+    /// 0.05 s of 4.47 s CPU for facts nothing on that path can show.
+    ///
+    /// It is NOT a format test: the `for-kind` census is a TEXT surface that reads the
+    /// edges, and keying on the format alone would empty two of its keys.
+    #[must_use]
+    pub fn projects_engine_edges(&self) -> bool {
+        matches!(self.format, OutputFormat::Json) || self.count_by == Some(CountAxis::ForKind)
+    }
+
     /// True when the scan keeps EVERY `type:"attachment"` line: the `--attachments` flag
     /// (and the `--count-by attachment` axis, which cannot be answered without it), or an
     /// explicit `-t` reaching a leaf whose only carrier is an attachment payload type.

@@ -169,7 +169,7 @@ impl TurnRootsCell {
 pub(crate) fn engine_edges(
     h: &Hit,
     parent_uuid: Option<&str>,
-    tools: &ToolIndex,
+    tool_lines: &crate::model::ProvIndex,
     lines: &dyn crate::model::LineOfUuid,
 ) -> Vec<HitFact> {
     let mut out: Vec<HitFact> = Vec::new();
@@ -179,7 +179,7 @@ pub(crate) fn engine_edges(
         Some(Class::AgentToolResult | Class::CommInbox | Class::UserAnswer | Class::UserRejection)
     ) {
         if let Some(id) = h.tool_use_id.as_deref() {
-            named_line = tools.prov.tool_use_at(id);
+            named_line = tool_lines.tool_use_at(id);
             out.push(record_text::for_edge_at(
                 crate::model::EdgeKind::ResultOf,
                 Basis::Key,
@@ -219,13 +219,21 @@ pub(crate) fn backfill_provenance(
     turn: &Turn<'_>,
     pos: usize,
     roots: &TurnRoots,
-    tools: &ToolIndex,
-    lines: &dyn crate::model::LineOfUuid,
+    env: &ClassifyEnv<'_>,
 ) {
     let root = roots.link(turn, pos);
     let parent_uuid = turn.records[pos].node().parent_uuid();
     for h in hits.iter_mut() {
+        // The ROOT is on every unit under every format: the label zone prints it.
         h.for_root = root.clone();
-        h.facts.extend(engine_edges(h, parent_uuid, tools, lines));
+        // The two ENGINE edges ride JSON alone, so they are built only where a reader
+        // projects or censuses them. Nothing about the output moves either way - a text
+        // scan renders no tag for `parent` or `result_of` and never could
+        // (`EdgeKind::rendered_in_label` is false for exactly those two) - and what is
+        // saved is two string allocations and two map lookups on every emitted hit.
+        if env.wants_engine_edges {
+            h.facts
+                .extend(engine_edges(h, parent_uuid, env.tool_lines, env.lines));
+        }
     }
 }

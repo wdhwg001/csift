@@ -13669,7 +13669,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "119-123",
+          "lines": "124-128",
           "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,"
         },
         {
@@ -41328,7 +41328,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "364-366",
+          "lines": "369-371",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -55516,12 +55516,12 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "99-106",
+          "lines": "103-110",
           "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "408-409",
+          "lines": "413-414",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55620,12 +55620,12 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "234-242",
+          "lines": "220-228",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "297-307",
+          "lines": "302-312",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
@@ -55635,7 +55635,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "397-401",
+          "lines": "383-387",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -74625,7 +74625,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "239-242",
+          "lines": "225-228",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -80305,7 +80305,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "104-111",
+          "lines": "109-116",
           "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
@@ -86807,7 +86807,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "55-59",
+          "lines": "59-63",
           "snippet": "    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();"
         }
       ],
@@ -86881,7 +86881,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "234-242",
+          "lines": "220-228",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -94671,7 +94671,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "257",
+          "lines": "243",
           "snippet": "    let resume_paired = rec.resume_paired(ctx);"
         }
       ],

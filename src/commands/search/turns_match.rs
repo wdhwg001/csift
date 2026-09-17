@@ -24,6 +24,10 @@ pub(crate) fn reconstruct_and_match(
     head_is_fork: bool,
     schedule_fires: &crate::model::ScheduleFireIndex,
     for_addr: Option<&ForAddr>,
+    // Whether the engine's own `for` edges have a reader on this scan. Passed in rather
+    // than read off `args`, because `show` reaches this through `fetch_records` with a
+    // DEFAULT `SearchArgs` and still projects them in its JSON rows.
+    engine_edges: bool,
 ) -> (Vec<Exchange>, usize, ChainCounts) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -116,6 +120,7 @@ pub(crate) fn reconstruct_and_match(
         schedule_fires,
         lines: &row_lines,
         tool_lines: &tools.prov,
+        wants_engine_edges: engine_edges,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -499,6 +504,11 @@ pub(crate) struct ClassifyEnv<'a> {
     /// CALL resolves to an address instead of reporting a line it could not find. It is
     /// the map the one tool walk already produced; nothing here builds a second one.
     pub(crate) tool_lines: &'a crate::model::ProvIndex,
+    /// Does a reader of this scan PROJECT the engine's own two edges
+    /// ([`crate::cli::SearchArgs::projects_engine_edges`])? They ride JSON alone, so a
+    /// text scan that does not census them can render its every byte without them - and
+    /// building a fact no reader can reach is the cost this answers.
+    pub(crate) wants_engine_edges: bool,
 }
 
 impl ClassifyEnv<'_> {

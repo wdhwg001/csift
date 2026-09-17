@@ -113,14 +113,7 @@ pub(crate) fn collect_turn_hits(
         backfill_address(&mut hits[before..], kept);
         backfill_survival(&mut hits[before..], chain, idx, survivor_lines);
         if hits.len() > before {
-            backfill_provenance(
-                &mut hits[before..],
-                turn,
-                i,
-                roots.get(turn),
-                tools,
-                env.lines,
-            );
+            backfill_provenance(&mut hits[before..], turn, i, roots.get(turn), env);
             hit_idxs.push(i);
         }
     }
@@ -174,14 +167,7 @@ pub(crate) fn collect_turn_siblings(
         );
         backfill_address(&mut sibs[before..], kept);
         if sibs.len() > before {
-            backfill_provenance(
-                &mut sibs[before..],
-                turn,
-                i,
-                roots.get(turn),
-                tools,
-                env.lines,
-            );
+            backfill_provenance(&mut sibs[before..], turn, i, roots.get(turn), env);
         }
     }
     // FIXED policy (see [`sibling_cap`]): message classes always render; chattier

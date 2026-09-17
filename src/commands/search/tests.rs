@@ -56,6 +56,10 @@ fn test_env() -> ClassifyEnv<'static> {
         lines: &NoLines,
         // An EMPTY tool index, for the same reason: no call in these fixtures is looked up.
         tool_lines: NO_TOOLS.get_or_init(crate::model::ProvIndex::default),
+        // The unit tests read the engine's edges directly, so the neutral env projects
+        // them: the gate is a scan-policy answer, and a test that asserts an edge is its
+        // own reader.
+        wants_engine_edges: true,
     }
 }
 
@@ -119,6 +123,8 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         false,
         &crate::model::ScheduleFireIndex::default(),
         None,
+        // The unit fixtures read the engine's edges off the hits they get back.
+        true,
     );
     exchanges
 }

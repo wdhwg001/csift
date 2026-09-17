@@ -206,6 +206,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 &spawn_map,
                 inner_parallel,
                 for_addr.as_ref(),
+                args.projects_engine_edges(),
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -427,6 +428,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                         // included, or the probe would name labels outside the set the
                         // reader asked about.
                         for_addr.as_ref(),
+                        // The probe counts LABELS, never edges: it feeds `label_census`
+                        // alone, so nothing it builds would be read.
+                        false,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;

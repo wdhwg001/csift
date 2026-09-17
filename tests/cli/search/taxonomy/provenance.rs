@@ -287,6 +287,31 @@ fn the_engine_edges_are_on_the_units_that_have_them() {
     }
 }
 
+/// The `for-kind` census is a TEXT surface that READS the engine's edges, and it keeps
+/// them.
+///
+/// The engine's two relations ride JSON alone, so they are built only where a reader
+/// projects or censuses them - and this is the reader that is not JSON. A gate keyed on
+/// the output format alone would empty two of these keys while every rendered byte stayed
+/// identical, which is exactly the silent drop the honest-empties law exists to prevent.
+#[test]
+fn the_for_kind_census_carries_the_engine_edges_in_text_output() {
+    let h = reachability_home();
+    let mut argv: Vec<&str> = vec!["search", "", REACH_TARGET, "--count-by", "for-kind"];
+    argv.extend_from_slice(&EVERY_LEAF);
+    let out = h.run(&argv);
+    assert!(out.success, "census failed: {}", out.stderr);
+    for kind in ENGINE_KINDS {
+        assert!(
+            out.stdout
+                .lines()
+                .any(|l| l.split_whitespace().nth(1) == Some(kind)),
+            "the engine's {kind} edge is missing from the TEXT census:\n{}",
+            out.stdout
+        );
+    }
+}
+
 /// The two user-facing duals point at the CALL they answer, by line.
 ///
 /// An answered AskUserQuestion and a refused tool call are the person's message and a tool

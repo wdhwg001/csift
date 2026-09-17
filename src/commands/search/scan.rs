@@ -45,6 +45,10 @@ pub(crate) fn fetch_records(
         // `show` fetches the records an address NAMES; the reverse provenance query is a
         // scan over a scope and lives on `search` alone.
         None,
+        // `show` projects the engine's edges in its JSON rows and reaches this with a
+        // DEFAULT `SearchArgs`, so the answer is stated here rather than read off a format
+        // that is not show's. An address fetches at most a capped handful of records.
+        true,
     )?;
     Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
 }
@@ -62,6 +66,7 @@ pub(crate) fn search_one_file(
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
     for_addr: Option<&ForAddr>,
+    engine_edges: bool,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -424,6 +429,7 @@ pub(crate) fn search_one_file(
         head_is_fork,
         &schedule_fires,
         for_addr,
+        engine_edges,
     );
 
     // `--raw`: backfill each hit's VERBATIM source line from this file's mmap - one pass
