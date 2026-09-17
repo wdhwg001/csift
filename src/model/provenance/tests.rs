@@ -2,11 +2,20 @@
 
 use super::*;
 
-/// The vocabulary, typed out: every variant, and its word.
+/// The vocabulary, typed out: EVERY variant, in the enum's own order, and its word.
 ///
 /// Hand-kept rather than derived, because a list derived from the enum would assert
 /// nothing about what the vocabulary CLAIMS - which is the whole reason the set is closed.
-const EVERY_KIND: [EdgeKind; 17] = [
+/// It lives here rather than as a production `EdgeKind::ALL` because nothing in the binary
+/// enumerates the vocabulary (the census keys on the words a scan actually saw), and a
+/// const with none but test readers is dead code this crate declines to carry.
+///
+/// What makes it a COMPLETE list rather than a sample is [`ordinal`]: the enum's own
+/// exhaustiveness check turns a variant missing from here into a compile error. Without
+/// that the list was seventeen of nineteen, `parent` and `result_of` were absent, and a
+/// twentieth relation whose word collided with `leaf` passed the whole suite - because the
+/// list it was missing from was the list the uniqueness test walked.
+const EVERY_KIND: [EdgeKind; 19] = [
     EdgeKind::AttachedTo,
     EdgeKind::ArmedBy,
     EdgeKind::Banner,
@@ -18,13 +27,78 @@ const EVERY_KIND: [EdgeKind; 17] = [
     EdgeKind::HookRun,
     EdgeKind::Interrupted,
     EdgeKind::Leaf,
+    EdgeKind::Parent,
     EdgeKind::Redoes,
     EdgeKind::Refused,
     EdgeKind::RepliesTo,
     EdgeKind::Reports,
+    EdgeKind::ResultOf,
     EdgeKind::Versions,
     EdgeKind::Wraps,
 ];
+
+/// Where each variant sits in [`EVERY_KIND`].
+///
+/// The match is EXHAUSTIVE, so a variant added to [`EdgeKind`] and not to the list does not
+/// compile: the only way to make it compile is to give it a position, and the test below
+/// then demands that position actually hold it.
+fn ordinal(k: EdgeKind) -> usize {
+    match k {
+        EdgeKind::AttachedTo => 0,
+        EdgeKind::ArmedBy => 1,
+        EdgeKind::Banner => 2,
+        EdgeKind::Blocked => 3,
+        EdgeKind::ContinuedIn => 4,
+        EdgeKind::Fires => 5,
+        EdgeKind::ForToolUse => 6,
+        EdgeKind::ForkedFrom => 7,
+        EdgeKind::HookRun => 8,
+        EdgeKind::Interrupted => 9,
+        EdgeKind::Leaf => 10,
+        EdgeKind::Parent => 11,
+        EdgeKind::Redoes => 12,
+        EdgeKind::Refused => 13,
+        EdgeKind::RepliesTo => 14,
+        EdgeKind::Reports => 15,
+        EdgeKind::ResultOf => 16,
+        EdgeKind::Versions => 17,
+        EdgeKind::Wraps => 18,
+    }
+}
+
+/// The list IS the enum: nineteen words, each variant once, in the enum's own order.
+///
+/// The count is the vocabulary's own claim - every document that teaches it says nineteen -
+/// so it is asserted rather than derived from the list's length, which would agree with
+/// itself whatever the list held.
+#[test]
+fn the_vocabulary_list_holds_every_variant_in_enum_order() {
+    assert_eq!(
+        EVERY_KIND.len(),
+        19,
+        "the closed vocabulary is nineteen relations"
+    );
+    for (i, k) in EVERY_KIND.into_iter().enumerate() {
+        assert_eq!(ordinal(k), i, "{k:?} is listed out of order, or twice");
+    }
+}
+
+/// Exactly TWO relations ride JSON alone, and they are the engine's own.
+///
+/// A family edge exists because a record carries a key naming a target, which is what the
+/// label zone is for. The engine's two are on nearly every unit and repeat what a rendered
+/// transcript already shows, so they are the documented exception - and an exception worth
+/// stating is worth pinning, because a third one would quietly remove a relation from every
+/// text surface at once.
+#[test]
+fn only_the_engine_relations_ride_json_alone() {
+    let hidden: Vec<&str> = EVERY_KIND
+        .into_iter()
+        .filter(|k| !k.rendered_in_label())
+        .map(EdgeKind::as_str)
+        .collect();
+    assert_eq!(hidden, ["parent", "result_of"]);
+}
 
 /// Every relation word is DISTINCT.
 ///
