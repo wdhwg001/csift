@@ -72,13 +72,13 @@ pub(crate) fn reconstruct_and_match(
         crate::model::SummarizeIndex::default()
     };
 
-    // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
-    // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
-    let tool_names = build_tool_name_index(rows);
-    // The `▹` pairing id sets (GOLD §7): every `tool_use` id + every `tool_result` `tool_use_id`
-    // in this transcript, joined GLOBALLY (not by contiguity) so a use↔result pair resolves across
-    // records / parallel calls. A use with no result-id ⇒ pending; a result with no use-id ⇒ orphan.
-    let (use_ids, result_ids) = tool_pair_ids(rows);
+    // ONE walk over this file's tool blocks, answering the three questions a hit asks of
+    // them: what the tool is called (a bare `tool_result` carries only the id), whether a
+    // result came back (the `▹` pairing join, GOLD §7 - membership and not contiguity, so a
+    // use pairs with its result across records and parallel calls), and which LINE carries
+    // the call (the `result_of` provenance edge, the one join the chain's uuid map cannot
+    // make). Three walks over the same blocks answered the first two; the third rides along.
+    let tools = build_tool_index(rows);
     // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
     // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is HOISTED
     // (GOLD §3): `run_search` built one `DiscoveredSpawns` per DISTINCT discovery-root up front, so
@@ -159,7 +159,7 @@ pub(crate) fn reconstruct_and_match(
             args.resolve_persisted,
             excerpt_max,
             &plan_index,
-            &tool_names,
+            &tools,
             address,
             &env,
         );
@@ -177,7 +177,7 @@ pub(crate) fn reconstruct_and_match(
                 args.resolve_persisted,
                 excerpt_max,
                 &plan_index,
-                &tool_names,
+                &tools,
                 &env,
             )
         } else {
@@ -187,7 +187,7 @@ pub(crate) fn reconstruct_and_match(
         // Resolve the `▹` tool-pairing state of every tool hit/sibling against the file-level id
         // sets (GOLD §7) now that the hits are collected.
         for h in hits.iter_mut().chain(siblings.iter_mut()) {
-            set_pairing(h, &use_ids, &result_ids);
+            set_pairing(h, &tools);
         }
 
         let record_uuids = turn

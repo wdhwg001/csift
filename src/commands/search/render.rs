@@ -20,6 +20,12 @@ fn extension_zone(h: &Hit) -> String {
                 .iter()
                 .filter_map(|f| f.label_zone().map(|z| format!(" {z}"))),
         )
+        // The ROOT closes the zone rather than opening it: the edges say what the record
+        // states about its neighbours, and the root says what the whole unit belongs to,
+        // which is the answer a reader wants LAST once they know what they are looking at.
+        // A unit that opens its own turn renders nothing here - a tag saying "this is the
+        // opener" on every human message would restate the line the reader is on.
+        .chain(h.for_root.label_zone().map(|z| format!(" {z}")))
         .collect()
 }
 

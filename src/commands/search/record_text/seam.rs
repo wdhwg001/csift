@@ -239,6 +239,24 @@ pub(crate) fn for_edge(
     session: Option<&str>,
     ctx: &ClassifyCtx,
 ) -> HitFact {
+    let line = uuid.and_then(|u| ctx.line_of_uuid(u));
+    for_edge_at(kind, basis, uuid, session, line)
+}
+
+/// The same builder with the LINE already resolved - for a caller that holds a
+/// [`crate::model::LineOfUuid`] but no [`ClassifyCtx`] to wrap it in.
+///
+/// One BODY, two entries, deliberately: the engine's own edges (the parent link, a tool
+/// result's call) are built where the hits are backfilled rather than where a record is
+/// classified, and a second body there would be a second set of answers to "what does an
+/// edge look like when its target is not in this file".
+pub(crate) fn for_edge_at(
+    kind: EdgeKind,
+    basis: Basis,
+    uuid: Option<&str>,
+    session: Option<&str>,
+    line: Option<usize>,
+) -> HitFact {
     let session = session.map(str::to_string);
     let Some(uuid) = uuid else {
         // A relation whose target is a whole TRANSCRIPT - `continued-in` names the child
@@ -259,7 +277,6 @@ pub(crate) fn for_edge(
             reason: "the record carries no such key".to_string(),
         };
     };
-    let line = ctx.line_of_uuid(uuid);
     HitFact::For {
         kind,
         basis,

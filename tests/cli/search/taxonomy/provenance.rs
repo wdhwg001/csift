@@ -118,6 +118,14 @@ impl Edge {
     }
 }
 
+/// The two relations the ENGINE builds for every unit rather than the six families for
+/// the records that state them. They are excluded from the family pin below and asserted
+/// on their own terms, because they are on a different footing: a family edge exists
+/// because a record carries a key, so its presence IS the fact; an engine edge is on every
+/// unit that has a parent or answers a call, so what is worth pinning about it is when it
+/// is ABSENT.
+const ENGINE_KINDS: [&str; 2] = ["parent", "result_of"];
+
 /// Every `for` edge the reachability fixture renders, sorted and deduplicated.
 fn edges(h: &Home) -> Vec<Edge> {
     let mut argv: Vec<&str> = vec![
@@ -173,7 +181,11 @@ fn edges(h: &Home) -> Vec<Edge> {
 fn every_for_edge_the_taxonomy_renders() {
     let h = reachability_home();
     let got = edges(&h);
-    let have: Vec<(&str, &str, &str, &str)> = got.iter().map(Edge::tuple).collect();
+    let have: Vec<(&str, &str, &str, &str)> = got
+        .iter()
+        .filter(|e| !ENGINE_KINDS.contains(&e.kind.as_str()))
+        .map(Edge::tuple)
+        .collect();
 
     let missing: Vec<&(&str, &str, &str, &str)> = EVERY_EDGE
         .iter()
@@ -202,4 +214,108 @@ fn only_an_unknown_edge_carries_a_null_basis() {
             "{leaf} / {kind}: basis {basis} with target shape {shape}"
         );
     }
+}
+
+/// The ENGINE's own edges, on the terms that make them worth pinning.
+///
+/// `parent` is on a unit whose record names a `parentUuid` and NOT on a unit whose turn
+/// opener is that same record under a family's more specific word - one relation, one
+/// edge, which is the rule that keeps a reader from learning two words for the link
+/// between an injection and the turn it was written under.
+///
+/// `result_of` is on a tool RESULT and on nothing else, and its basis is `key`, because
+/// the API itself wrote the `tool_use_id` that joins the two.
+#[test]
+fn the_engine_edges_are_on_the_units_that_have_them() {
+    let h = reachability_home();
+    let got = edges(&h);
+    let engine: Vec<&Edge> = got
+        .iter()
+        .filter(|e| ENGINE_KINDS.contains(&e.kind.as_str()))
+        .collect();
+
+    for e in &engine {
+        assert_eq!(
+            e.basis,
+            if e.kind == "result_of" {
+                "key"
+            } else {
+                "position"
+            },
+            "{e:?}: the engine's basis is a statement about how it found the target"
+        );
+    }
+
+    let result_of: Vec<&str> = engine
+        .iter()
+        .filter(|e| e.kind == "result_of")
+        .map(|e| e.leaf.as_str())
+        .collect();
+    assert_eq!(
+        result_of,
+        ["agent.tool.result"],
+        "result_of belongs to a tool result and to nothing else"
+    );
+
+    // ONE RELATION, ONE EDGE: a leaf whose family already names the parent link carries
+    // the family's word and not the generic one. These four are the shapes that do.
+    for leaf in [
+        "harness.hook.feedback",
+        "harness.enforce.retry",
+        "harness.schedule.fire",
+        "harness.system.command",
+    ] {
+        assert!(
+            !engine.iter().any(|e| e.leaf == leaf && e.kind == "parent"),
+            "{leaf} carries both its family's word for the parent link and the engine's"
+        );
+        assert!(
+            got.iter().any(|e| e.leaf == leaf && e.basis == "position"),
+            "{leaf} lost the family edge that made the engine stand down"
+        );
+    }
+}
+
+/// EVERY emitted unit carries a root, and its three answers are the three shapes.
+///
+/// The root is the primitive's own question (which message does this thing correspond to),
+/// so it is the one provenance field with no "only on records that state it" clause. A
+/// consumer that had to tell "this unit opens its turn" from "csift did not look" out of a
+/// missing key could not, which is why the object is always there.
+#[test]
+fn every_unit_carries_a_root_and_names_which_answer_it_is() {
+    let h = reachability_home();
+    let mut argv: Vec<&str> = vec![
+        "search",
+        "",
+        REACH_TARGET,
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ];
+    argv.extend_from_slice(&EVERY_LEAF);
+    let out = h.run(&argv);
+    assert!(out.success, "scan failed: {}", out.stderr);
+
+    let (mut openers, mut chained, mut placed) = (0, 0, 0);
+    for row in json_rows(&out.stdout, "exchange") {
+        for hit in row["hits"].as_array().cloned().unwrap_or_default() {
+            let r = &hit["for_root"];
+            assert!(r.is_object(), "every hit carries a root object: {hit}");
+            match (r["note"].as_str(), r["line"].as_u64(), r["hops"].as_u64()) {
+                (Some("turn opener"), None, None) => openers += 1,
+                (None, Some(_), Some(_)) => chained += 1,
+                (Some("not reached by the parent chain"), Some(_), None) => placed += 1,
+                other => panic!("a fourth root shape: {other:?} in {r}"),
+            }
+        }
+    }
+    assert!(openers > 0, "no unit opened its own turn");
+    assert!(chained > 0, "no unit reached its opener through the chain");
+    assert!(
+        placed > 0,
+        "no unit was placed in a turn the chain could not carry it to - the fixture's \
+         harness lines hang off records the prefilter drops, so some must be"
+    );
 }

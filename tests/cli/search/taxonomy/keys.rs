@@ -166,15 +166,23 @@ fn an_addressed_record_row_carries_every_key_its_line_names() {
     assert_eq!(fired["scheduled_fire_id"], "fire-1");
 }
 
-/// The `for` edge on the wire: one array, one entry, the basis named, and the honest
-/// empty where the leaf owes an edge the record cannot supply.
+/// The `for` edge on the wire: one array, one entry from THIS family, the basis named, and
+/// the honest empty where the leaf owes an edge the record cannot supply.
+///
+/// The array also carries the ENGINE's own `parent` edge, which every unit has and which
+/// this family does not build - so the family's own entry is selected by its relation word
+/// rather than by position, and the count is of the family's edges rather than of the array.
 #[test]
 fn the_for_edge_rides_one_key_with_its_basis_and_its_honest_empty() {
     let h = keys_home();
 
     let named = row(&h, "8");
-    let edges = named["for"].as_array().expect("an array");
-    assert_eq!(edges.len(), 1, "at most one edge per unit: {edges:?}");
+    let all = named["for"].as_array().expect("an array");
+    let edges: Vec<&serde_json::Value> = all
+        .iter()
+        .filter(|e| e["kind"] != "parent" && e["kind"] != "result_of")
+        .collect();
+    assert_eq!(edges.len(), 1, "at most one family edge per unit: {all:?}");
     assert_eq!(edges[0]["kind"], "hook run");
     assert_eq!(edges[0]["basis"], "key");
     assert_eq!(
@@ -185,7 +193,11 @@ fn the_for_edge_rides_one_key_with_its_basis_and_its_honest_empty() {
     assert_eq!(edges[0]["target"]["note"], "not in this file");
 
     let unnamed = row(&h, "9");
-    let edges = unnamed["for"].as_array().expect("an array");
+    let all = unnamed["for"].as_array().expect("an array");
+    let edges: Vec<&serde_json::Value> = all
+        .iter()
+        .filter(|e| e["kind"] != "parent" && e["kind"] != "result_of")
+        .collect();
     assert_eq!(edges[0]["target"], serde_json::Value::Null);
     assert_eq!(
         edges[0]["reason"],

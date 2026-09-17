@@ -273,7 +273,11 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         extractable `#N` / `L<line>i<n>` ids the record carries (an empty array when \
         none), `for` the record's PROVENANCE edges - one array however many relations a \
         unit carries, each `{kind, basis, target, reason}`, present only on a unit that \
-        carries one, `refetch` is the ready-to-run `csift show` \
+        carries one - and `for_root` the message the unit corresponds to: \
+        `{line, uuid, hops, note}` on EVERY hit, naming the record that opened its turn \
+        and the parent hops up to it, with `note: \"turn opener\"` when the unit IS that \
+        record and `note: \"not reached by the parent chain\"` when the turn grouping \
+        places it but the parent links do not carry it there, `refetch` is the ready-to-run `csift show` \
         command addressed at the RIGHT id (run it verbatim), and `refetch_uuid` its \
         uuid-addressed twin: a line number is a durable address only while the transcript \
         is append-only, and Claude Code rewrites a live transcript in place on a stream \

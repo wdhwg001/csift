@@ -41323,7 +41323,7 @@
       "code": [
         {
           "path": "src/commands/search/render.rs",
-          "lines": "124-127",
+          "lines": "130-133",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -46447,7 +46447,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "129-137",
+          "lines": "135-143",
           "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -55620,7 +55620,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "198-206",
+          "lines": "209-217",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -55635,7 +55635,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "358-362",
+          "lines": "372-376",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -62123,6 +62123,11 @@
           "path": "src/commands/recover/scan.rs",
           "lines": "421-423",
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
+        },
+        {
+          "path": "src/commands/search/hit_facts.rs",
+          "lines": "465-471",
+          "snippet": "            return Some(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                tools.prov.tool_use_at(id),\n            ));"
         }
       ],
       "instrument": "python3 walk of every *.jsonl under the projects root: per file record the line index of every tool_use block id and of the FIRST tool_result echoing it as tool_use_id, plus the indices of every turn-opener candidate, then bucket each join by whether an opener index lies strictly between call and result and count results whose id has no call in the same file. Counting rule: one count per (file, tool_use id) pair resolved within the same file, first result wins; the turn-opener predicate is the one stated in the specimen rule.",
@@ -65317,7 +65322,7 @@
       "code": [
         {
           "path": "src/commands/search/render_json.rs",
-          "lines": "20-22",
+          "lines": "36-38",
           "snippet": "/// The ready-to-run fetch command for a hit - `csift show` addressed at the transcript that\n/// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are\n/// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG"
         }
       ],
@@ -74610,7 +74615,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "203-206",
+          "lines": "214-217",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -86866,7 +86871,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "198-206",
+          "lines": "209-217",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -87300,7 +87305,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "85-91",
+          "lines": "91-97",
           "snippet": "    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's\n    // own marker and the engine's own come out in the same shape.\n    let nd = if h.delivery == Some(false) {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    } else {\n        String::new()\n    };"
         }
       ],
@@ -88809,7 +88814,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "64-68",
+          "lines": "68-72",
           "snippet": "        let filter = filter.with_survival(chain.survival(idx).selectable());\n        collect_record_hits(\n            rec,\n            kept.gated_raw.as_deref(),\n            chain.opener_class(idx),"
         }
       ],
@@ -89104,7 +89109,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "316-319",
+          "lines": "319-322",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -91586,7 +91591,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "103-106",
+          "lines": "109-112",
           "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
         }
       ],
@@ -93115,12 +93120,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "237-238",
+          "lines": "240-241",
           "snippet": "/// What an elided member renders as, everywhere and always: nothing.\npub(crate) const ELIDED_PLACEHOLDER: &str = \"<elided>\";"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "270-283",
+          "lines": "273-286",
           "snippet": "fn elide_members(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {\n                        serde_json::json!(ELIDED_PLACEHOLDER)\n                    } else {\n                        elide_members(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
         },
         {
@@ -94656,7 +94661,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "221",
+          "lines": "232",
           "snippet": "    let resume_paired = rec.resume_paired(ctx);"
         }
       ],
@@ -94884,8 +94889,13 @@
         },
         {
           "path": "src/commands/search/record_text/seam.rs",
-          "lines": "262-266",
-          "snippet": "    let line = ctx.line_of_uuid(uuid);\n    HitFact::For {\n        kind,\n        basis,\n        target: ForTarget {"
+          "lines": "242-244",
+          "snippet": "    let line = uuid.and_then(|u| ctx.line_of_uuid(u));\n    for_edge_at(kind, basis, uuid, session, line)\n}"
+        },
+        {
+          "path": "src/commands/search/hit_facts.rs",
+          "lines": "481-487",
+          "snippet": "    Some(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        lines.line_of_uuid(parent),\n    ))"
         }
       ],
       "instrument": "Byte-search the 2.1.258 build for `let ke={parentUuid:me?null:_e,logicalParentUuid:` (one occurrence) and read 300 bytes back to recover the loop that computes `_e` and the two telemetry calls. Corpus side, over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`; for each file collect the set of `uuid` values on its lines, then keep the objects with `type == \"user\"` and truthy `isMeta`, flatten the text the way the model layer does, and bucket each record by the FIRST template of csift's arm order its left-trimmed text opens with - plus the two buckets the arm order decides on the content SHAPE rather than on text, a textless image-only record and a textless document-only one. Per bucket count the records carrying a `parentUuid` and the subset whose parent is in that file's uuid set; a record no bucket claims is the residue and is counted apart. For the frame bucket, additionally count the records whose text matches `<tool-use-id>([^<]*)</tool-use-id>`.",

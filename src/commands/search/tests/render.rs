@@ -58,6 +58,7 @@ fn render_label_decorates_pairing_and_direction() {
         replay_copy_of: None,
         compaction: None,
         truncated: false,
+        for_root: crate::model::RootLink::default(),
         markers: Vec::new(),
         facts: Vec::new(),
     };
@@ -295,6 +296,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         replay_copy_of: None,
         compaction: None,
         truncated: false,
+        for_root: crate::model::RootLink::default(),
         markers: Vec::new(),
         facts: Vec::new(),
     };
@@ -355,6 +357,7 @@ fn a_summarize_summary_names_its_direction_in_the_label_zone() {
         replay_copy_of: None,
         compaction,
         truncated: false,
+        for_root: crate::model::RootLink::default(),
         markers: Vec::new(),
         facts: Vec::new(),
     };

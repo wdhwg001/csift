@@ -23,12 +23,16 @@ pub(crate) fn collect_turn_hits(
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
-    tool_names: &HashMap<String, String>,
+    tools: &ToolIndex,
     address: Option<&AddressSet>,
     env: &ClassifyEnv<'_>,
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
+    // The root walk's ladder, built on the FIRST hit of this turn and not before: most
+    // turns of a scanned file produce none, and a map built for every turn would be a
+    // per-record cost on the whole file to answer a question about the records that matched.
+    let mut positions: Option<HashMap<&str, usize>> = None;
     for (i, row) in turn.records.iter().enumerate() {
         // A SPINE row is not a record: it carries the chain-structural fields so the chain
         // can see the DAG, and nothing to match, classify or render.
@@ -71,7 +75,7 @@ pub(crate) fn collect_turn_hits(
             resolve_persisted,
             excerpt_max,
             plan_index,
-            tool_names,
+            &tools.names,
             &env.ctx_for(kept),
             &mut hits,
         );
@@ -98,6 +102,8 @@ pub(crate) fn collect_turn_hits(
         backfill_address(&mut hits[before..], kept);
         backfill_survival(&mut hits[before..], chain, idx, survivor_lines);
         if hits.len() > before {
+            let positions = positions.get_or_insert_with(|| turn_uuid_positions(turn));
+            backfill_provenance(&mut hits[before..], turn, i, positions, tools, env.lines);
             hit_idxs.push(i);
         }
     }
@@ -119,12 +125,13 @@ pub(crate) fn collect_turn_siblings(
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
-    tool_names: &HashMap<String, String>,
+    tools: &ToolIndex,
     env: &ClassifyEnv<'_>,
 ) -> (Vec<Hit>, usize) {
     let pure = Matcher::pure();
     let all = LabelFilter::all(); // every label is eligible - siblings ignore -t/-T
     let mut sibs = Vec::new();
+    let mut positions: Option<HashMap<&str, usize>> = None;
     for (i, row) in turn.records.iter().enumerate() {
         let Some(kept) = row.kept() else {
             continue;
@@ -142,11 +149,15 @@ pub(crate) fn collect_turn_siblings(
             resolve_persisted,
             excerpt_max,
             plan_index,
-            tool_names,
+            &tools.names,
             &env.ctx_for(kept),
             &mut sibs,
         );
         backfill_address(&mut sibs[before..], kept);
+        if sibs.len() > before {
+            let positions = positions.get_or_insert_with(|| turn_uuid_positions(turn));
+            backfill_provenance(&mut sibs[before..], turn, i, positions, tools, env.lines);
+        }
     }
     // FIXED policy (see [`sibling_cap`]): message classes always render; chattier
     // machinery keeps the FIRST N per leaf. The remainder is COUNTED (never silent) -
@@ -336,6 +347,9 @@ pub(crate) fn collect_record_hits(
                 compaction: compaction.clone(),
                 scheduled_at: scheduled_at.clone(),
                 truncated,
+                // Backfilled by `backfill_provenance` once the record's place in its turn is
+                // known - which is one layer up, where the turn is.
+                for_root: crate::model::RootLink::default(),
                 // The EXTENSION POINTS, filled by the one stamping site above: the
                 // engine's own label-zone markers are computed by `render_label`, and
                 // everything here came from a family.

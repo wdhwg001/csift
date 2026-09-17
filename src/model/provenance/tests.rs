@@ -55,3 +55,60 @@ fn every_word_is_printable_as_it_stands() {
         );
     }
 }
+
+/// FIRST WRITE WINS on a duplicate id, and an id the index never saw answers `None`.
+///
+/// The duplicate case is not hypothetical: a compaction re-anchor appends an earlier
+/// record's block a second time, so the two copies carry the same `tool_use` id. The FIRST
+/// is the call as it was MADE, which is where a result should be sent; a last-write index
+/// would silently re-point every result in the file at the replay copy.
+#[test]
+fn a_tool_use_id_resolves_to_the_first_line_that_carried_it() {
+    let mut ix = ProvIndex::default();
+    ix.insert_tool_use("toolu_01aa", 4);
+    ix.insert_tool_use("toolu_01aa", 9);
+    ix.insert_tool_use("toolu_01bb", 7);
+    assert_eq!(ix.tool_use_at("toolu_01aa"), Some(4));
+    assert_eq!(ix.tool_use_at("toolu_01bb"), Some(7));
+    assert_eq!(ix.tool_use_at("toolu_01zz"), None);
+}
+
+/// The THREE root answers, each with its own shape, and none of them an absent field.
+#[test]
+fn the_root_has_three_answers_and_says_which_it_is() {
+    let opener = RootLink::opener();
+    assert_eq!(opener.line, None);
+    assert_eq!(opener.hops, None);
+    assert_eq!(opener.note, Some(ROOT_IS_OPENER));
+    assert_eq!(
+        opener.label_zone(),
+        None,
+        "a tag on the opener would restate the line the reader is on"
+    );
+
+    let chained = RootLink::under(12, Some("u-1".to_string()), Some(3));
+    assert_eq!(chained.line, Some(12));
+    assert_eq!(chained.hops, Some(3));
+    assert_eq!(chained.note, None, "a reached root has nothing to explain");
+    assert_eq!(chained.label_zone().as_deref(), Some("[root L12 +3]"));
+
+    let placed = RootLink::under(12, Some("u-1".to_string()), None);
+    assert_eq!(placed.line, Some(12));
+    assert_eq!(placed.hops, None);
+    assert_eq!(
+        placed.note,
+        Some(ROOT_UNCHAINED),
+        "the grouping placed it; the chain did not carry it"
+    );
+    assert_eq!(chained.label_zone().as_deref(), Some("[root L12 +3]"));
+    assert_eq!(placed.label_zone().as_deref(), Some("[root L12]"));
+}
+
+/// A root whose opener has NO physical line (a merged elicitation-sidecar record) carries
+/// no line at all rather than `L0`, which is an address that fetches nothing.
+#[test]
+fn a_root_with_no_physical_line_names_none() {
+    let r = RootLink::under(0, Some("u-1".to_string()), Some(1));
+    assert_eq!(r.line, None);
+    assert_eq!(r.label_zone(), None);
+}

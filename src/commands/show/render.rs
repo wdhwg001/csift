@@ -179,6 +179,10 @@ pub(crate) fn render_json(
                 // C-33: the compaction facts of a boundary/summary record; null elsewhere.
                 "mode": crate::commands::search::compaction_mode_json(h),
                 "compact_metadata": crate::commands::search::compact_metadata_json(h),
+                // The provenance ROOT, the same shape a `search` hit carries: which
+                // message this record corresponds to. A refetch must answer what the hit it
+                // was copied from answered.
+                "for_root": crate::commands::search::for_root_json(&h.for_root),
             });
             // The EXTENSION POINT, same law as `search`'s hit rows: every `HitFact`
             // projects its own key(s), so a fact a family adds reaches `show` with no

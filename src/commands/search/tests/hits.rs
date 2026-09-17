@@ -358,7 +358,7 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         false,
         EXCERPT_MAX,
         &PlanIndex::default(),
-        &HashMap::new(),
+        &ToolIndex::default(),
         None,
         &test_env(),
     );
@@ -396,7 +396,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         false,
         EXCERPT_MAX,
         &PlanIndex::default(),
-        &HashMap::new(),
+        &ToolIndex::default(),
         None,
         &test_env()
     )
@@ -414,7 +414,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         false,
         EXCERPT_MAX,
         &PlanIndex::default(),
-        &HashMap::new(),
+        &ToolIndex::default(),
         None,
         &test_env()
     )

@@ -154,6 +154,9 @@ pub(crate) fn addressed_unit(
         // An unlabeled unit carries no leaf, so it is never the fired prompt.
         scheduled_at: None,
         truncated,
+        // Backfilled by `backfill_provenance` once the record's place in its turn is
+        // known - which is one layer up, where the turn is.
+        for_root: crate::model::RootLink::default(),
         markers,
         // The shape csift models no leaf for. An address is the only way here, and
         // naming the shape is the whole point of the unit: a reader learns WHAT the
@@ -363,6 +366,144 @@ pub(crate) fn backfill_survival(
         h.survival = survival;
         h.rewound_branch = rewound;
         h.replay_copy_of = replay;
+    }
+}
+
+/// The `uuid -> position in this turn` map the root walk climbs, built ONCE per turn and
+/// only for a turn that produced a hit.
+///
+/// Lazily, because most turns of a scanned file produce none: a map built for every turn
+/// would be a per-record cost on the whole file to answer a question about the few records
+/// that matched. Spine rows are in it too - an attachment chain runs through lines the
+/// prefilter dropped, and a walk that could not see them would stop at the first one.
+pub(crate) fn turn_uuid_positions<'a>(turn: &Turn<'a>) -> HashMap<&'a str, usize> {
+    turn.records
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| r.uuid().map(|u| (u, i)))
+        .collect()
+}
+
+/// The furthest the root walk climbs before giving up.
+///
+/// A turn is bounded by the next opener, so the walk terminates on its own; this is the
+/// guard against a transcript whose parent links form a cycle, which the chain build also
+/// guards against and for the same reason. It is larger than any real turn depth, so
+/// hitting it means the file is malformed rather than long.
+const ROOT_WALK_MAX: u32 = 4096;
+
+/// WHICH MESSAGE the record at `pos` corresponds to: the record that opened its turn, and
+/// the parent-hop distance up to it.
+///
+/// The opener's ADDRESS comes from the turn grouping, which states it, so it is known
+/// whether or not the parent chain reaches it. The HOP COUNT comes from the walk, and its
+/// absence is reported rather than filled in: a unit csift can place in a turn but cannot
+/// chain to its opener is a different thing from one three replies down, and a fabricated
+/// count would hide the difference.
+pub(crate) fn root_link(
+    turn: &Turn<'_>,
+    pos: usize,
+    positions: &HashMap<&str, usize>,
+) -> crate::model::RootLink {
+    if pos == 0 {
+        return crate::model::RootLink::opener();
+    }
+    let Some(opener) = turn.records.first() else {
+        return crate::model::RootLink::opener();
+    };
+    let mut at = pos;
+    let mut hops = 0u32;
+    let reached = loop {
+        let Some(parent) = turn.records[at].node().parent_uuid() else {
+            break false;
+        };
+        let Some(&next) = positions.get(parent) else {
+            break false;
+        };
+        hops += 1;
+        if next == 0 {
+            break true;
+        }
+        // A parent always precedes its child in file order, so a link that does not move
+        // UP the turn is a cycle - break rather than walk it.
+        if next >= at || hops >= ROOT_WALK_MAX {
+            break false;
+        }
+        at = next;
+    };
+    crate::model::RootLink::under(
+        opener.line_no(),
+        opener.uuid().map(str::to_string),
+        reached.then_some(hops),
+    )
+}
+
+/// The ENGINE's own `for` edge for one hit: what this unit corresponds to, one hop up.
+///
+/// TWO relations, and which one applies is a property of the UNIT rather than of the
+/// record. A tool RESULT names the call it answers with the API's own `tool_use_id`, which
+/// is the only relation in the vocabulary that is not a uuid relation - hence the
+/// [`crate::model::ProvIndex`] beside the chain's uuid map. Everything else hangs off
+/// `parentUuid`, which is where the record SITS rather than a target its producer chose,
+/// so that edge is [`Basis::Position`].
+///
+/// ONE RELATION, ONE EDGE: a family that already named this exact target has a more
+/// specific word for it (`blocked`, `redoes`, `fires`, `attached_to`, `wraps`), and adding
+/// the generic one beside it would make a reader learn two words for one relation - which
+/// is the failure the shared builder exists to prevent, from the other side.
+pub(crate) fn engine_edge(
+    h: &Hit,
+    parent_uuid: Option<&str>,
+    tools: &ToolIndex,
+    lines: &dyn crate::model::LineOfUuid,
+) -> Option<HitFact> {
+    if matches!(
+        h.class,
+        Some(Class::AgentToolResult | Class::CommInbox | Class::UserAnswer | Class::UserRejection)
+    ) {
+        if let Some(id) = h.tool_use_id.as_deref() {
+            return Some(record_text::for_edge_at(
+                crate::model::EdgeKind::ResultOf,
+                Basis::Key,
+                Some(id),
+                None,
+                tools.prov.tool_use_at(id),
+            ));
+        }
+    }
+    let parent = parent_uuid?;
+    if h.facts
+        .iter()
+        .any(|f| matches!(f, HitFact::For { target, .. } if target.uuid.as_deref() == Some(parent)))
+    {
+        return None;
+    }
+    Some(record_text::for_edge_at(
+        crate::model::EdgeKind::Parent,
+        Basis::Position,
+        Some(parent),
+        None,
+        lines.line_of_uuid(parent),
+    ))
+}
+
+/// Stamp the provenance answer onto every hit a record just produced: the turn root, and
+/// the engine's own one-hop edge.
+pub(crate) fn backfill_provenance(
+    hits: &mut [Hit],
+    turn: &Turn<'_>,
+    pos: usize,
+    positions: &HashMap<&str, usize>,
+    tools: &ToolIndex,
+    lines: &dyn crate::model::LineOfUuid,
+) {
+    let root = root_link(turn, pos, positions);
+    let parent_uuid = turn.records[pos].node().parent_uuid();
+    for h in hits.iter_mut() {
+        h.for_root = root.clone();
+        if let Some(edge) = engine_edge(h, parent_uuid, tools, lines) {
+            h.facts.push(edge);
+        }
     }
 }
 

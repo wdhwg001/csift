@@ -239,6 +239,16 @@ pub struct Hit {
     /// effect AND bit" signal that drives the trailing reader-caution note (`render_text`) and
     /// the JSON summary's `excerpts_truncated` flag.
     pub truncated: bool,
+    /// WHICH MESSAGE this unit corresponds to: the record that opened its turn, and how
+    /// far up the parent chain it sits ([`crate::model::RootLink`]).
+    ///
+    /// The one provenance answer every unit carries, because every unit has one - which is
+    /// what separates it from the `for` EDGES, each of which exists only for the records
+    /// whose shape states it. Its three forms are all facts and none is an absent field: a
+    /// unit that opens its own turn corresponds to nothing above it, a unit the chain walks
+    /// to the opener from carries the address and the distance, and a unit csift can place
+    /// in a turn but not chain to still carries the address the grouping states.
+    pub for_root: crate::model::RootLink,
     /// Display-only label-zone notes ([`Marker`]), rendered in PUSH ORDER after the
     /// markers `render_label` computes itself. Empty on nearly every hit.
     pub markers: Vec<Marker>,

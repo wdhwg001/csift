@@ -75,6 +75,14 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
         Family::Shared,
         "for:[{kind,basis,target:{line,uuid,session,note},reason}]",
     ),
+    // The provenance ROOT, and it is on EVERY record row: which message this one
+    // corresponds to. Always an object - a unit that opens its own turn says so in `note`
+    // rather than leaving the key out, because "this is the opener" and "csift did not
+    // look" are different answers.
+    k(
+        Family::Shared,
+        "for_root:{line,uuid,hops,note} (the record that opened this unit's turn)",
+    ),
     // The family's own one, on the line whose relation names an INSTANT rather than a
     // record or a file - the one relation no `for` target can express.
     k(Family::Bookkeeping, "checkpoint_closes_at"),

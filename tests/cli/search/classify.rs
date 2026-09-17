@@ -15,10 +15,11 @@ fn search_tool_response_names_the_tool_it_answers() {
         "agent.tool.result",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // Its tool_use (L3) is in scope, so the label renders the `▹` pair; the `Read` tool name still
-    // trails it (so the `agent.tool.result Read` substring holds).
+    // Its tool_use (L3) is in scope, so the label renders the `▹` pair; the provenance root
+    // (the opener of its turn, three parent hops up) follows, and the `Read` tool name still
+    // trails the whole zone.
     assert!(
-        out.stdout.contains("agent.tool.result Read"),
+        out.stdout.contains("agent.tool.result [root L1 +3] Read"),
         "the response names the tool it answers: {}",
         out.stdout
     );

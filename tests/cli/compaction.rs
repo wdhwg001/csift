@@ -95,7 +95,9 @@ fn a_legacy_boundary_renders_byte_for_byte_as_before() {
         "absent survivor keys print nothing:\n{}",
         out.stdout
     );
-    // And its summary keeps the bare leaf path (no `[summarize ...]` tag).
+    // And its summary keeps the bare leaf path (no `[summarize ...]` tag). The `[root L1]`
+    // that follows it is the provenance root every unit carries - the record that opened
+    // the summary's turn - and is what a reader sees instead of a compaction-mode tag.
     let sum = h.run(&[
         "search",
         "",
@@ -104,7 +106,8 @@ fn a_legacy_boundary_renders_byte_for_byte_as_before() {
         "harness.compaction.summary",
     ]);
     assert!(
-        sum.stdout.contains("harness.compaction.summary  L3"),
+        sum.stdout
+            .contains("harness.compaction.summary [root L1]  L3"),
         "an ordinary compaction summary is untagged:\n{}",
         sum.stdout
     );

@@ -8,53 +8,64 @@
 
 use super::*;
 
-/// Build the `tool_use_id → tool name` index for a file's records: every `tool_use` block's
-/// `{id, name}`. A later `tool_result` (which carries only the `tool_use_id`) looks its tool up
-/// here so a `tool-response` row can say WHICH tool it answers. First write wins (ids are unique).
-pub(crate) fn build_tool_name_index(rows: &[Row<'_>]) -> HashMap<String, String> {
-    let mut map: HashMap<String, String> = HashMap::new();
-    for k in rows.iter().filter_map(|r| r.kept()) {
-        if let Some(blocks) = k.rec.blocks() {
-            for b in blocks {
-                if let Block::ToolUse {
-                    id: Some(id),
-                    name: Some(name),
-                    ..
-                } = b
-                {
-                    map.entry(id.clone()).or_insert_with(|| name.clone());
-                }
-            }
-        }
-    }
-    map
+/// Everything ONE walk over a file's `tool_use` / `tool_result` blocks answers.
+///
+/// Three questions used to be three walks over the same blocks - what is this tool called,
+/// did a result come back, and which line carries the call - and the third is what the
+/// `result_of` provenance edge needs. Walking three times to answer three questions about
+/// one block is the cost a file pays for the separation, and the separation buys nothing:
+/// the questions are asked together, at the same place, about the same blocks.
+#[derive(Debug, Default)]
+pub(crate) struct ToolIndex {
+    /// `tool_use_id -> tool name`. A later `tool_result` carries only the id, so a
+    /// `tool-response` row looks its tool up here to say WHICH tool it answers. First write
+    /// wins (ids are unique).
+    pub(crate) names: HashMap<String, String>,
+    /// Every `tool_use` block's `id` in this transcript - the use side of the use/result
+    /// pairing join (GOLD section 7), which is membership and not contiguity so a use pairs
+    /// with its result across records and parallel calls.
+    pub(crate) uses: HashSet<String>,
+    /// Every `tool_result` block's `tool_use_id` - the result side of the same join.
+    pub(crate) results: HashSet<String>,
+    /// `tool_use_id -> the LINE carrying the call`, the one join the chain's uuid map
+    /// cannot make (a `tool_use_id` is a wire id and appears in no `uuid` field).
+    pub(crate) prov: crate::model::ProvIndex,
 }
 
-/// The `▹` pairing id sets for a file (GOLD §7): every `tool_use` block's `id` and every
-/// `tool_result` block's `tool_use_id`. Joined GLOBALLY (membership, not contiguity) so a use
-/// pairs with its result across records / parallel calls.
-pub(crate) fn tool_pair_ids(rows: &[Row<'_>]) -> (HashSet<String>, HashSet<String>) {
-    let mut uses = HashSet::new();
-    let mut results = HashSet::new();
+/// Walk a file's blocks ONCE and answer all four.
+pub(crate) fn build_tool_index(rows: &[Row<'_>]) -> ToolIndex {
+    let mut ix = ToolIndex::default();
     for k in rows.iter().filter_map(|r| r.kept()) {
-        if let Some(blocks) = k.rec.blocks() {
-            for b in blocks {
-                match b {
-                    Block::ToolUse { id: Some(id), .. } => {
-                        uses.insert(id.clone());
+        let Some(blocks) = k.rec.blocks() else {
+            continue;
+        };
+        for b in blocks {
+            match b {
+                Block::ToolUse {
+                    id: Some(id), name, ..
+                } => {
+                    ix.uses.insert(id.clone());
+                    // A sidecar-merged elicitation marker has no physical line, so it
+                    // records none: an edge pointing at line 0 would be an address that
+                    // fetches nothing.
+                    if k.line_no > 0 {
+                        ix.prov.insert_tool_use(id, k.line_no);
                     }
-                    Block::ToolResult {
-                        tool_use_id: Some(id),
-                        ..
-                    } => {
-                        results.insert(id.clone());
+                    if let Some(name) = name {
+                        ix.names.entry(id.clone()).or_insert_with(|| name.clone());
                     }
-                    _ => {}
                 }
+                Block::ToolResult {
+                    tool_use_id: Some(id),
+                    ..
+                } => {
+                    ix.results.insert(id.clone());
+                }
+                _ => {}
             }
         }
     }
-    (uses, results)
+    ix
 }
 
 /// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7). Pairing is a
@@ -68,7 +79,8 @@ pub(crate) fn tool_pair_ids(rows: &[Row<'_>]) -> (HashSet<String>, HashSet<Strin
 /// elicitation / unreturned); a result-side hit is paired iff its use-id is present (else
 /// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit:
 /// an inbound teammate-message, an idle signal section) stays `None` - outside the axis.
-pub(crate) fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &HashSet<String>) {
+pub(crate) fn set_pairing(h: &mut Hit, ix: &ToolIndex) {
+    let (use_ids, result_ids) = (&ix.uses, &ix.results);
     let Some(id) = h.tool_use_id.as_deref() else {
         return;
     };

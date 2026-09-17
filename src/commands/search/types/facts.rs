@@ -259,7 +259,11 @@ impl HitFact {
         match self {
             // The shape IS the label for an unmodeled unit, so it adds no second tag.
             HitFact::Unmodeled(_) => None,
-            HitFact::For { kind, target, .. } => Some(target.label_zone(kind.as_str())),
+            // A relation the engine reads off the file's own shape rides JSON alone
+            // ([`EdgeKind::rendered_in_label`]); a relation a record STATES renders its tag.
+            HitFact::For { kind, target, .. } => kind
+                .rendered_in_label()
+                .then(|| target.label_zone(kind.as_str())),
             HitFact::ForUnknown { kind, reason } => {
                 Some(format!("[for: {} unknown ({reason})]", kind.as_str()))
             }
