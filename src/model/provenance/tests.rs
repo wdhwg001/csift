@@ -338,3 +338,86 @@ fn every_for_tag_the_help_renders_names_a_relation_of_the_vocabulary() {
         found.len()
     );
 }
+
+/// The `--count-by for-kind` help's KEY SPACE is the vocabulary, word for word and counted.
+///
+/// The help enumerates all twenty-seven relation words and says how many there are, which is
+/// what makes it usable without the source - and it is a hand-typed list, so a twenty-eighth
+/// variant leaves it naming twenty-seven of the twenty-eight keys the census can print, with
+/// nothing failing. The drift test over the SPEC and SKILL inventories does not reach it:
+/// those are tables in markdown and this is a sentence in a doc comment.
+///
+/// The count is pinned as its spelled-out WORD, because that is the form the sentence uses
+/// and therefore the form that goes stale. The table covers the plausible range and fails
+/// loudly outside it rather than silently skipping the check.
+#[test]
+fn the_for_kind_help_names_every_relation_and_counts_them() {
+    use clap::CommandFactory;
+    const NUMBER_WORDS: [(usize, &str); 21] = [
+        (20, "twenty"),
+        (21, "twenty-one"),
+        (22, "twenty-two"),
+        (23, "twenty-three"),
+        (24, "twenty-four"),
+        (25, "twenty-five"),
+        (26, "twenty-six"),
+        (27, "twenty-seven"),
+        (28, "twenty-eight"),
+        (29, "twenty-nine"),
+        (30, "thirty"),
+        (31, "thirty-one"),
+        (32, "thirty-two"),
+        (33, "thirty-three"),
+        (34, "thirty-four"),
+        (35, "thirty-five"),
+        (36, "thirty-six"),
+        (37, "thirty-seven"),
+        (38, "thirty-eight"),
+        (39, "thirty-nine"),
+        (40, "forty"),
+    ];
+    const MARKER: &str = "THE KEY SPACE is the closed vocabulary";
+    const END: &str = "Six of them";
+
+    let mut cmd = crate::cli::Cli::command();
+    let sub = cmd
+        .get_subcommands_mut()
+        .find(|s| s.get_name() == "search")
+        .expect("no `search` subcommand");
+    // The rendered page wraps, so the enumeration is read with its newlines flattened.
+    let page = sub.render_long_help().to_string().replace('\n', " ");
+    let start = page
+        .find(MARKER)
+        .unwrap_or_else(|| panic!("`search --help` no longer says {MARKER:?}"));
+    let rest = &page[start..];
+    let end = rest
+        .find(END)
+        .unwrap_or_else(|| panic!("`search --help` no longer says {END:?} after the key space"));
+    let listing = &rest[..end];
+
+    let n = EdgeKind::ALL.len();
+    let word = NUMBER_WORDS
+        .iter()
+        .find(|(k, _)| *k == n)
+        .map(|(_, w)| *w)
+        .unwrap_or_else(|| panic!("extend NUMBER_WORDS: the vocabulary is {n} relations"));
+    assert!(
+        listing.contains(&format!("{word} words")),
+        "the help counts the key space as something other than `{word} words`:\n{listing}"
+    );
+
+    let mut named: Vec<&str> = listing
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .filter(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c == '_'))
+        .collect();
+    named.sort_unstable();
+    named.dedup();
+    let mut words: Vec<&str> = EdgeKind::ALL.iter().map(|k| k.as_str()).collect();
+    words.sort_unstable();
+    assert_eq!(
+        named, words,
+        "the `--count-by for-kind` help's key space is not the vocabulary"
+    );
+}
