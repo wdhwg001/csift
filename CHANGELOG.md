@@ -55,6 +55,10 @@ surface change bumps the PATCH.
   refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
   target takes the same merge: a copied project directory carries the whole sidecar, so one
   `agent-<hex>.jsonl` is on disk under two directories too.
+- **Every `csift agents` row names its own transcript** (`path`, and a `transcript` line in
+  the text tree for the ids that occur twice). Two copies of one session carry two copies of
+  each agent transcript, and those rows are identical in every other field - the agent id
+  included - so without the path a consumer sees two lanes it cannot tell apart.
 - **`csift agents` counts what it prints.** The session count row's `agents` is now exactly the
   number of `kind:"agent"` rows under it, and the text tree prints that same set in that same
   order: both projections take one walk, whose visited set keys on node identity rather than on

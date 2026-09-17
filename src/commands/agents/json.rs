@@ -153,6 +153,11 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
     use serde_json::json;
     let mut obj = json!({
         "agent_id": n.agent_id,
+        // The node's own transcript. Every other field of two copies of one agent is
+        // identical by construction - a copied project directory carries the whole sidecar,
+        // so a DIVERGENT session pair keeps two lanes that share even their ids - and this
+        // is what tells them apart and what `show <path>` reads to see one alone.
+        "path": n.path.display().to_string(),
         // The TRANSCRIPT-SHAPE discriminator (builtin-task | workflow | teammate) -
         // named `shape` so `kind` stays the envelope discriminator exclusively.
         "shape": n.kind.label(),

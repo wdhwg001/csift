@@ -177,6 +177,15 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     }
     println!("{head}");
 
+    // TWO lanes can share every id they have: a copied project directory carries the whole
+    // sidecar, so a divergent session pair keeps two copies of each agent transcript. The
+    // path is the only thing that separates them, so it prints for exactly the ids that
+    // occur twice - on an ordinary listing it would be one line of noise per agent, and the
+    // JSON row carries it unconditionally because that one is the machine contract.
+    if view.ambiguous_ids.contains(&n.agent_id) {
+        println!("{ind2}transcript {}", n.path.display());
+    }
+
     // A `/fork` child: name the fork point (the parent's last record uuid at fork
     // time - feed it to `csift show @<parent-session> --uuid <it>`) + the carried
     // context length. Facts from the head fork-context-ref record, absent otherwise.

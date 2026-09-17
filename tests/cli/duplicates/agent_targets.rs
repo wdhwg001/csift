@@ -156,6 +156,18 @@ fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
     );
     let summary = json_rows(&out.stdout, "summary");
     assert_eq!(summary[0]["agents"], 2);
+    // Two rows that a consumer cannot tell apart are two rows it cannot act on: every other
+    // field of the pair is identical by construction, so the transcript path is what names
+    // WHICH lane each row is.
+    let paths: Vec<&str> = agents
+        .iter()
+        .map(|a| a["path"].as_str().expect("a path"))
+        .collect();
+    assert_ne!(paths[0], paths[1], "the rows name different transcripts");
+    assert!(
+        paths.iter().any(|p| p.contains(ENC)) && paths.iter().any(|p| p.contains(ENC_SHORT)),
+        "one row per project directory: {paths:?}"
+    );
 
     // The text tree prints exactly what the rows carry - same set, same count.
     let text = h.run(&["agents", &at(SESS)]);
@@ -170,6 +182,14 @@ fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
         "the footer counts the blocks above it:\n{}",
         text.stdout
     );
+    // The text tree names them too, for exactly the ids that occur twice.
+    assert_eq!(
+        text.stdout.matches("transcript ").count(),
+        2,
+        "two blocks sharing an id each name their own transcript:\n{}",
+        text.stdout
+    );
+    assert!(text.stdout.contains(ENC_SHORT), "{}", text.stdout);
 }
 
 #[test]

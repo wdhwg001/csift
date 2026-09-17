@@ -9,6 +9,7 @@ fn node(
 ) -> SubagentNode {
     SubagentNode {
         agent_id: "abc123".to_string(),
+        path: std::path::PathBuf::from("/p/<uuid>/subagents/agent-abc123.jsonl"),
         kind,
         parent_session_id: "sess".to_string(),
         parent_agent_id: None,
@@ -135,6 +136,7 @@ fn node_json_omits_returned_and_files_unless_requested() {
         want_returned: false,
         want_files: false,
         single_node: false,
+        ambiguous_ids: std::collections::BTreeSet::new(),
     };
     let j = node_json(&n, &lean);
     assert!(j.get("returned_message").is_none());
@@ -146,6 +148,7 @@ fn node_json_omits_returned_and_files_unless_requested() {
         want_returned: true,
         want_files: true,
         single_node: false,
+        ambiguous_ids: std::collections::BTreeSet::new(),
     };
     let j2 = node_json(&n, &rich);
     assert!(j2.get("returned_message").is_some());
@@ -166,6 +169,7 @@ fn node_json_renders_returned_message_source() {
         want_returned: true,
         want_files: false,
         single_node: false,
+        ambiguous_ids: std::collections::BTreeSet::new(),
     };
     let j = node_json(&n, &rich);
     assert_eq!(j["returned_message"], "the answer");

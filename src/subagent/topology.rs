@@ -11,6 +11,10 @@ use super::*;
 pub struct SubagentNode {
     /// Bare-hex canonical agent id (== record `agentId`).
     pub agent_id: String,
+    /// Absolute path to this node's own transcript. Two copies of one session under two
+    /// project directories carry two copies of each agent transcript, and those nodes share
+    /// every id they have - the path is the only field that tells the lanes apart.
+    pub path: PathBuf,
     pub kind: SubagentKind,
     pub parent_session_id: String,
     /// The bare-hex id of the PARENT subagent, when this node nests under another (future
@@ -398,6 +402,7 @@ pub(crate) fn node_for(
         });
     Ok(SubagentNode {
         agent_id: subagent.agent_id.clone(),
+        path: subagent.path.clone(),
         kind: subagent.kind,
         parent_session_id: subagent.parent_session_id.clone(),
         parent_agent_id,

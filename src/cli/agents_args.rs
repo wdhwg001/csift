@@ -100,6 +100,10 @@ pub enum AgentKindFilter {
         its children; rebuild nesting from parent_agent_id + depth; there is no \
         children[] array in JSON, the tree renders in TEXT mode); a closing \
         {kind:\"summary\", sessions, runs, agents} terminator. Agent-row fields: {agent_id, \
+        path (the node's OWN transcript - two copies of one session carry two copies of \
+        each agent transcript and those rows share every other id, so the path is what \
+        names which lane a row is; the text tree prints a `transcript` line for exactly \
+        the ids that occur twice), \
         shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \
         workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
         started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \

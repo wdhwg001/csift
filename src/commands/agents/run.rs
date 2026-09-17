@@ -94,10 +94,21 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // The output is ALWAYS the parent->child tree. A single `--agent <hex>` grab renders
     // just that one node (a tree of one): `single_node` suppresses the whole-workflow
     // topology so the grab never dumps every sibling under a WORKFLOW header.
+    // Which ids more than one node in this set carries: the copies of one agent transcript,
+    // which are identical in every field but their path.
+    let mut id_counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for n in &nodes {
+        *id_counts.entry(n.agent_id.as_str()).or_default() += 1;
+    }
     let view = View {
         want_returned,
         want_files,
         single_node: args.agent.is_some(),
+        ambiguous_ids: id_counts
+            .into_iter()
+            .filter(|&(_, c)| c > 1)
+            .map(|(id, _)| id.to_string())
+            .collect(),
     };
 
     match args.format {
@@ -150,6 +161,12 @@ pub(crate) fn augment_unmanifested_runs(
 pub(crate) struct View {
     pub(crate) want_returned: bool,
     pub(crate) want_files: bool,
+    /// The agent ids that occur MORE THAN ONCE in the emitted set - two copies of one
+    /// session under two project directories carry two copies of each agent transcript, and
+    /// those nodes share every id they have. The text tree prints the transcript path for
+    /// exactly these, because that is where two blocks would otherwise read identically;
+    /// the JSON row carries `path` unconditionally, being the machine contract.
+    pub(crate) ambiguous_ids: std::collections::BTreeSet<String>,
     /// A single `--agent <hex>` grab: render JUST the matched node (a tree of one), with no
     /// SESSION/WORKFLOW headers and no nested-topology walk.
     pub(crate) single_node: bool,
