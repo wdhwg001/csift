@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "346-352",
+          "lines": "347-353",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -48317,7 +48317,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "508-510",
+          "lines": "509-511",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -54091,7 +54091,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "346-352",
+          "lines": "347-353",
           "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -87188,7 +87188,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "531-536",
+          "lines": "532-537",
           "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],

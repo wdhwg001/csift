@@ -26,8 +26,14 @@ use super::*;
 ///
 /// TWO forms, and the difference is the ID LAW csift teaches everywhere else: a LINE is
 /// per-FILE, so `L42` means line 42 of each transcript the scope holds and is meant to be
-/// used with a target that names one; a UUID is global, so it finds its record wherever it
-/// is and the closure can start in one transcript and continue in another.
+/// used with a target that names one; a UUID is global, so it finds its record in whichever
+/// scanned transcript carries it.
+///
+/// The CLOSURE is per FILE under either form: [`for_closure`] runs once per transcript over
+/// that transcript's rows, and both frontiers it grows - the uuids and the call ids - hold
+/// only what that file states. So a uuid address finds its record wherever it sits and the
+/// walk then stays inside that one file. Joining a closure ACROSS transcripts is a declared
+/// follow-on, not something this pass half-does.
 #[derive(Debug, Clone)]
 pub(crate) enum ForAddr {
     /// The record at this 1-based jsonl line, in each scanned transcript.

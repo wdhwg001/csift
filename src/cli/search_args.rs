@@ -285,8 +285,9 @@ pub struct SearchArgs {
 
     /// Print everything that is FOR one record, TRANSITIVELY: the reverse provenance
     /// query. `<ADDR>` is `L<line>` (per FILE, so pair it with a target that names one) or
-    /// a record UUID (global - the closure can start in one transcript and continue in
-    /// another). The answer is ordinary hits in file order, the addressed record at the
+    /// a record UUID (which finds its record in whichever scanned transcript carries it).
+    /// The closure itself is computed PER TRANSCRIPT and never crosses one. The answer is
+    /// ordinary hits in file order, the addressed record at the
     /// head, and it grows: a record is in it when it is for the address OR for something
     /// already in it - so a call's result, the notification a background task it launched
     /// sent two turns later, and the attachments written for any of those all come back
