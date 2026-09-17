@@ -105,8 +105,11 @@ surface change bumps the PATCH.
   word) and `result_of` (a tool result's `tool_use_id`).
 - **The relation vocabulary is closed** (`EdgeKind`, nineteen words). Every family wrote
   its word as a bare string at the call site, so the set was whatever six files happened to
-  contain - unenumerable, and impossible to census. Output did not move a byte; the
-  cross-family pin that says so landed first.
+  contain - unenumerable, and impossible to census. No relation was renamed - every word is
+  the one its family already rendered - and the cross-family pin over the whole edge SET
+  landed first. Rendered bytes did move elsewhere in this version: an edge naming a CALL
+  now resolves through the tool index and prints the call's line where it used to print
+  the wire id with `not in this file`.
 - **`--count-by for-kind`**, the census over that vocabulary: which provenance relations a
   scope carries. Multi-key like `label`, distinct per record, counting a relation whether
   or not csift resolved its target.

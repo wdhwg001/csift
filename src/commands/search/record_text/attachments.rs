@@ -383,10 +383,11 @@ fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
         ctx,
     );
     // The tool call this attachment answers for: an INNER key of the payload, never a
-    // top-level one. It is a WIRE id rather than a record uuid, so the lookup finds no line
-    // and the edge keeps the id under `not in this file` - which is the shared edge's own
-    // word for exactly this case, and better than a second index csift would have to build
-    // to pretend otherwise.
+    // top-level one. It is a WIRE id rather than a record uuid, so the chain's uuid map
+    // cannot see it - and the shared builder resolves it through the TOOL index instead,
+    // which is the one map that answers for a `tool_use_id`. The edge renders the call's
+    // LINE when this transcript carries it and keeps the id under `not in this file` when
+    // it does not (a call a compaction dropped, a parent lane's call in a subagent file).
     let for_tool_use = super::for_edge(
         EdgeKind::ForToolUse,
         Basis::Key,

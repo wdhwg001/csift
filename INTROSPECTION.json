@@ -95126,7 +95126,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "390-396",
+          "lines": "391-397",
           "snippet": "    let for_tool_use = super::for_edge(\n        EdgeKind::ForToolUse,\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        None,\n        ctx,\n    );"
         },
         {
