@@ -28,6 +28,11 @@ fn record(n: u32, text: &str) -> String {
     )
 }
 
+/// A THIRD project directory holding the same session id. Two copies is the shape the
+/// corpus shows; three is what a second rename leaves, and it is the only shape that
+/// reaches the plural half of the `copies` row.
+const ENC_THIRD: &str = "-Users-testuser-Projects-archived";
+
 /// The same session id under two project directories, byte-identical.
 fn identical_home() -> Home {
     let h = Home::new();
@@ -104,6 +109,30 @@ fn the_json_header_counts_distinct_sessions_and_says_what_the_merge_cost() {
         .as_str()
         .expect("a path")
         .contains(ENC_SHORT));
+}
+
+#[test]
+fn a_row_that_stands_for_two_dropped_copies_says_so_in_the_plural() {
+    // A second rename leaves a THIRD copy, and it is the only shape that reaches the
+    // plural half of the fate line: one row now stands for two copies, not one.
+    let h = identical_home();
+    h.write(&format!("{ENC_THIRD}/{SESS}.jsonl"), &body_two());
+
+    let out = h.run(&["list", "--no-subagents"]);
+    assert!(out.success, "{}", out.stderr);
+    assert_eq!(out.stdout.matches("SESSION  ").count(), 1, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("copies   2 other copies of this session id, identical, dropped from this scope (this row stands for them)"),
+        "{}",
+        out.stdout
+    );
+
+    let json = h.run(&["list", "--no-subagents", "--format", "json"]);
+    let rows = json_rows(&json.stdout, "session");
+    assert_eq!(rows[0]["also_at_count"], 2);
+    let header = json_rows(&json.stdout, "header");
+    assert_eq!(header[0]["duplicate_transcripts"], 2);
+    assert_eq!(header[0]["sessions_in_scope"], 1);
 }
 
 #[test]
