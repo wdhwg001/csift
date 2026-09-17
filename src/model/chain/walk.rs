@@ -33,7 +33,10 @@ const REPAIR_WINDOW_MS: i64 = 5_000;
 pub(crate) struct Walked {
     /// The last record the walk reached - the FLOOR below which abandonment is claimed.
     pub(crate) floor: usize,
-    /// The newest boundary the walk stopped at or stepped over.
+    /// The boundary the walk STOPPED at - the floor, when the floor is a boundary - and
+    /// `None` when it ended at a head, a dangling parent or a cycle. A boundary the walk
+    /// stepped OVER is counted in `crossed` and never named here: this is the record the
+    /// surviving conversation is cut at, and a crossed one is a cut csift got past.
     pub(crate) boundary: Option<usize>,
     /// Compaction boundaries stepped over.
     pub(crate) crossed: usize,
@@ -94,10 +97,10 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
             };
             break;
         }
-        out.boundary.get_or_insert(i);
         if !budget.allows(out.crossed) {
             out.exhausted = true;
             out.cause = FloorCause::BudgetExhausted;
+            out.boundary = Some(i);
             break;
         }
         let over = b.recs[i]
@@ -106,6 +109,7 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudg
             .filter(|&j| !b.visited[j]);
         let Some(j) = over else {
             out.cause = FloorCause::UnresolvableBoundary;
+            out.boundary = Some(i);
             break;
         };
         out.crossed += 1;

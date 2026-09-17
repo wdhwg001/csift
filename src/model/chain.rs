@@ -218,8 +218,13 @@ pub struct Chain {
     #[allow(dead_code)]
     pub leaf_index: Option<usize>,
     pub leaf_source: LeafSource,
-    /// The newest `compact_boundary` the walk stopped at or stepped over; the disclosure
-    /// `boundary_cut_line` is derived from it.
+    /// The `compact_boundary` the walk STOPPED at, which is the floor whenever the floor is
+    /// a boundary, and `None` when the walk ended at a head, a dangling parent or a cycle.
+    /// The disclosure `boundary_cut_line` is derived from it, and it keeps the meaning it
+    /// had before the crossing budget existed: the record the surviving conversation is cut
+    /// at. A boundary the walk stepped OVER is counted in `boundaries_crossed` and named
+    /// nowhere - naming it here would print "the conversation is cut at L<n>" for a cut
+    /// csift got past, two lines above the floor it actually stopped at.
     pub boundary_cut: Option<usize>,
     /// The walk's terminating index - the floor below which `Abandoned` is claimed.
     pub floor: usize,

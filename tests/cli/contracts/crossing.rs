@@ -90,6 +90,11 @@ fn the_budget_decides_how_far_the_chain_climbs_and_the_summary_states_it() {
     assert_eq!(one["boundaries_above_floor"], 1, "{one}");
     assert_eq!(one["floor_line"], 5, "the older boundary: {one}");
     assert_eq!(one["floor_cause"], "budget-exhausted", "{one}");
+    assert_eq!(
+        one["boundary_cut_line"], one["floor_line"],
+        "the named cut is the boundary the walk STOPPED at, never the one it stepped \
+         over - a crossed cut is a cut csift got past: {one}"
+    );
 
     // Budget 2: both crossed, the walk reaches the head, nothing left above the floor.
     let two = at_budget("2");
@@ -98,6 +103,10 @@ fn the_budget_decides_how_far_the_chain_climbs_and_the_summary_states_it() {
     assert_eq!(two["boundaries_above_floor"], 0, "{two}");
     assert_eq!(two["floor_cause"], "head", "{two}");
     assert_eq!(two["floor_line"], 1, "{two}");
+    assert!(
+        two["boundary_cut_line"].is_null(),
+        "a walk that reached the head is cut at no boundary: {two}"
+    );
 
     // `all` is budget 2 on a file with two boundaries, and says so in its own words.
     let every = at_budget("all");
@@ -537,7 +546,7 @@ fn the_scope_names_one_floor_only_when_it_holds_one_transcript() {
     let one = scope(&h);
     assert_eq!(one["floor_line"], 5, "{one}");
     assert_eq!(one["floor_cause"], "budget-exhausted", "{one}");
-    assert_eq!(one["boundary_cut_line"], 9, "{one}");
+    assert_eq!(one["boundary_cut_line"], one["floor_line"], "{one}");
     assert!(one["leaf_source"].is_string(), "{one}");
 
     for (n, id) in ids.iter().enumerate() {

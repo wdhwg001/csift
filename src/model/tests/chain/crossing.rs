@@ -49,7 +49,10 @@ fn a_budget_of_one_steps_over_the_boundary_and_resolves_the_history_above_it() {
     // operator rewound past. That is the whole difference the budget buys.
     let r = rewound_above_a_boundary();
     let c = Chain::build(&r, None, CrossingBudget::Limited(1));
-    assert_eq!(c.boundary_cut, Some(4), "the crossing still names the cut");
+    assert_eq!(
+        c.boundary_cut, None,
+        "the boundary was CROSSED, so it is counted and not named as the cut"
+    );
     assert_eq!(
         survivals(&c, r.len()),
         vec![
@@ -492,5 +495,64 @@ fn a_floor_with_no_timestamp_still_prints_its_line() {
         bare.lines()[1].starts_with("(the chain floor ("),
         "{:?}",
         bare.lines()
+    );
+}
+
+/// The landmark's own shape: two boundaries the walk steps over, then a third whose logical
+/// parent is gone. `b3` is the newest and is crossed, `b2` likewise, `b1` is the floor.
+fn two_crossed_then_a_dangling_floor() -> Vec<Record> {
+    recs(&[
+        &u("u0", "", "prompt 0", "2026-06-07T05:00:00.000Z"),
+        &a("a0", "u0", "reply 0", "2026-06-07T05:00:05.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"gone-from-disk","timestamp":"2026-06-07T06:01:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
+        r#"{"type":"user","uuid":"s1","parentUuid":"b1","isCompactSummary":true,"timestamp":"2026-06-07T06:01:01.000Z","message":{"role":"user","content":"summary 1"}}"#,
+        &u("u1", "s1", "prompt 1", "2026-06-07T06:01:02.000Z"),
+        &a("a1", "u1", "reply 1", "2026-06-07T06:01:03.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b2","parentUuid":null,"logicalParentUuid":"a1","timestamp":"2026-06-07T06:02:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
+        r#"{"type":"user","uuid":"s2","parentUuid":"b2","isCompactSummary":true,"timestamp":"2026-06-07T06:02:01.000Z","message":{"role":"user","content":"summary 2"}}"#,
+        &u("u2", "s2", "prompt 2", "2026-06-07T06:02:02.000Z"),
+        &a("a2", "u2", "reply 2", "2026-06-07T06:02:03.000Z"),
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b3","parentUuid":null,"logicalParentUuid":"a2","timestamp":"2026-06-07T06:03:00.000Z","compactMetadata":{"trigger":"auto"}}"#,
+        r#"{"type":"user","uuid":"s3","parentUuid":"b3","isCompactSummary":true,"timestamp":"2026-06-07T06:03:01.000Z","message":{"role":"user","content":"summary 3"}}"#,
+        &u("u3", "s3", "prompt 3", "2026-06-07T06:03:02.000Z"),
+        &a("a3", "u3", "reply 3", "2026-06-07T06:03:03.000Z"),
+    ])
+}
+
+#[test]
+fn the_named_cut_is_the_boundary_the_walk_stopped_at_never_one_it_stepped_over() {
+    // `boundary_cut` is what the footer calls "the compaction boundary the surviving
+    // conversation is cut at", and it kept that meaning through the crossing: a boundary the
+    // walk got PAST is not a cut it stopped at. Recorded before the budget test, it named the
+    // NEWEST boundary instead, so a crossing printed "cut at L11" two lines above "the chain
+    // floor is L3" - two different records offered as the same fact.
+    let r = two_crossed_then_a_dangling_floor();
+    let c = Chain::build(&r, None, CrossingBudget::Unbounded);
+    assert_eq!(c.boundaries_crossed, 2, "b3 and b2 are stepped over");
+    assert_eq!(c.floor, 2, "b1 is the floor");
+    assert_eq!(c.floor_cause, FloorCause::UnresolvableBoundary);
+    assert_eq!(
+        c.boundary_cut,
+        Some(c.floor),
+        "the named cut IS the floor, not the newest boundary (index 10)"
+    );
+
+    // At budget 0 nothing is crossed and the newest boundary is both the stop and the cut -
+    // the reading csift gave before the budget existed.
+    let off = Chain::build(&r, None, CrossingBudget::NONE);
+    assert_eq!(off.boundaries_crossed, 0);
+    assert_eq!(off.floor, 10);
+    assert_eq!(off.boundary_cut, Some(10));
+
+    // A walk that ends at the HEAD names no cut at all.
+    let head = Chain::build(
+        &rewound_above_a_boundary(),
+        None,
+        CrossingBudget::Limited(1),
+    );
+    assert_eq!(head.floor_cause, FloorCause::Head);
+    assert_eq!(
+        head.boundary_cut, None,
+        "a crossed boundary is counted, never named as the cut"
     );
 }
