@@ -153,17 +153,24 @@ fn budget_zero_says_nothing_about_crossing_on_any_surface() {
         vec!["files", t.as_str(), "--no-subagents"],
         vec!["image", t.as_str(), "--no-subagents"],
         vec!["show", t.as_str(), "--line", "1..12"],
+        vec![
+            "recover",
+            t.as_str(),
+            "--no-subagents",
+            "--file",
+            "/Users/dev/chart.md",
+        ],
     ];
     for mut argv in argvs {
         let name = argv[0];
         argv.extend_from_slice(&["--cross-compactions", "0"]);
         let out = h.run(&argv);
         assert!(out.success, "{name} stderr: {}", out.stderr);
+        let both = format!("{}{}", out.stdout, out.stderr);
         assert!(
-            !out.stdout.contains("compaction crossing")
-                && !out.stdout.contains("compaction boundaries crossed"),
-            "{name} text:\n{}",
-            out.stdout
+            !both.contains("compaction crossing")
+                && !both.contains("compaction boundaries crossed"),
+            "{name} text:\n{both}"
         );
         let mut jargv: Vec<&str> = argv.clone();
         jargv.extend_from_slice(&["--format", "json"]);
@@ -526,4 +533,49 @@ fn a_raw_turn_window_discloses_on_stderr_and_a_line_address_has_nothing_to_say()
         "a line address crossed nothing to find its lines:\n{}",
         lines.stderr
     );
+}
+
+#[test]
+fn every_recover_mode_discloses_what_the_walk_crossed() {
+    // `recover` is five modes over one scan, and the DEFAULT one - restore - used to be the
+    // silent one. It is also the mode most likely to be piped straight into a file, so a
+    // reader who never sees the other four has to be told there which budget produced the
+    // replay. Its stdout is the restored FILE, so the lines ride stderr with the rest of its
+    // status report; the other four print to stdout with their own reports.
+    let h = crossing_home();
+    let t = at(XSESS);
+    let modes: Vec<(&str, Vec<&str>)> = vec![
+        ("restore", vec![]),
+        ("at", vec!["--at", "@turn:2"]),
+        ("salvage", vec!["--salvage"]),
+        ("patches", vec!["--patches"]),
+        ("coverage", vec!["--coverage"]),
+    ];
+    for (name, extra) in modes {
+        let mut argv = vec![
+            "recover",
+            t.as_str(),
+            "--no-subagents",
+            "--file",
+            "/Users/dev/chart.md",
+        ];
+        argv.extend_from_slice(&extra);
+        argv.extend_from_slice(&["--cross-compactions", "1"]);
+        let out = h.run(&argv);
+        assert!(out.success, "{name} stderr: {}", out.stderr);
+        let both = format!("{}{}", out.stdout, out.stderr);
+        assert!(
+            both.contains("(compaction crossing: 1 boundary(s) stepped over"),
+            "{name}:\n{both}"
+        );
+
+        let mut jargv = argv.clone();
+        jargv.extend_from_slice(&["--format", "json"]);
+        let jout = h.run(&jargv);
+        assert!(jout.success, "{name} json stderr: {}", jout.stderr);
+        let s = summary(&jout.stdout);
+        assert_eq!(s["crossing_budget"], 1, "{name}: {s}");
+        assert_eq!(s["boundaries_crossed"], 1, "{name}: {s}");
+        assert_eq!(s["floor_line"], 5, "{name}: {s}");
+    }
 }

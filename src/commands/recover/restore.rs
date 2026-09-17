@@ -9,6 +9,19 @@ use super::*;
 /// ranges and pointing at the other modes. Across unrelated session groups the freshest,
 /// most-complete candidate wins. Raw content goes to STDOUT (so `recover --file X > X` restores
 /// it); the status note goes to STDERR.
+/// Fold the crossing's six keys into a summary object. `restore` prints its summary from
+/// three paths (the `--out` write, the stdout stream and the hard-error bail) and a machine
+/// reader must not have to work out which one it got.
+fn with_crossing(
+    mut summary: serde_json::Value,
+    crossing: &crate::model::CrossingReport,
+) -> serde_json::Value {
+    for (k, v) in crossing.json_fields() {
+        summary[k] = v;
+    }
+    summary
+}
+
 pub(crate) fn render_restore(
     ctx: &RenderCtx,
     sessions: &[ScanResult],
@@ -28,6 +41,12 @@ pub(crate) fn render_restore(
         counts: EventCounts,
     }
     let file = ctx.file.as_deref().unwrap_or("(none)");
+    // The crossing, folded over every session this run READ rather than over the one it
+    // restored from: the walk that decided which events are on the surviving conversation
+    // ran on all of them, and a restore is the mode most likely to be piped somewhere
+    // without a second look, so it says what it crossed on the same terms as the rest.
+    let crossing =
+        crate::model::CrossingReport::fold(ctx.cross, sessions.iter().map(|s| &s.crossing));
     if json {
         // envelope v2: restore too opens with the header (then one kind:"restore" row
         // + the summary - the single stream shape every command shares). The bail
@@ -58,9 +77,10 @@ pub(crate) fn render_restore(
             println!("{row}");
             println!(
                 "{}",
-                crate::text::envelope_summary(
-                    serde_json::json!({"sessions": 0, "file": file, "mode": "restore"})
-                )
+                crate::text::envelope_summary(with_crossing(
+                    serde_json::json!({"sessions": 0, "file": file, "mode": "restore"}),
+                    &crossing,
+                ))
             );
         }
     };
@@ -174,11 +194,19 @@ pub(crate) fn render_restore(
     // window says so positively; a window with boundaries or opaque commands lists
     // exactly what the replay did not include, plus the search that inspects it.
     let emit_status = |head: String| {
+        // stderr, because stdout here is the restored FILE - the same reason every other
+        // line of this status report rides stderr.
+        let disclose = || {
+            for line in crossing.lines() {
+                eprintln!("  {line}");
+            }
+        };
         if boundaries.is_empty() && disclosure.is_clean() {
             eprintln!(
                 "{head}, complete; no bash mutation of this file and no opaque \
                  mutating-class command detected in the window)"
             );
+            disclose();
             return;
         }
         eprintln!("{head}, complete from the tool stream; NOT verified against disk)");
@@ -209,6 +237,7 @@ pub(crate) fn render_restore(
         if let Some(cmd) = &disclosure.suggested {
             eprintln!("  inspect the window: {cmd}");
         }
+        disclose();
     };
     let restore_row = |extra: serde_json::Value| {
         let mut row = serde_json::json!({
@@ -235,9 +264,10 @@ pub(crate) fn render_restore(
             );
             println!(
                 "{}",
-                crate::text::envelope_summary(
-                    serde_json::json!({"sessions": 1, "file": file, "mode": "restore"})
-                )
+                crate::text::envelope_summary(with_crossing(
+                    serde_json::json!({"sessions": 1, "file": file, "mode": "restore"}),
+                    &crossing,
+                ))
             );
         } else if wrote {
             emit_status(format!(
@@ -250,9 +280,10 @@ pub(crate) fn render_restore(
         println!("{}", restore_row(serde_json::json!({"content": content})));
         println!(
             "{}",
-            crate::text::envelope_summary(
-                serde_json::json!({"sessions": 1, "file": file, "mode": "restore"})
-            )
+            crate::text::envelope_summary(with_crossing(
+                serde_json::json!({"sessions": 1, "file": file, "mode": "restore"}),
+                &crossing,
+            ))
         );
     } else {
         print!("{content}");
