@@ -37,10 +37,14 @@ pub(crate) fn render_json(
 
     let mut runs_total = 0usize;
     for (session, snodes) in &by_session {
+        // A run belongs to the session whose sidecar holds its manifest: two sessions can
+        // name one workflow id, and without that test each of their runs was emitted under
+        // both, so the session count row and the rows under it disagreed.
         let runs: Vec<&WorkflowRun> = workflow_runs
             .iter()
             .filter(|r| {
-                in_scope_wf.contains(r.run_id.as_str())
+                r.session_id == **session
+                    && in_scope_wf.contains(r.run_id.as_str())
                     && snodes
                         .iter()
                         .any(|n| n.workflow_id.as_deref() == Some(r.run_id.as_str()))

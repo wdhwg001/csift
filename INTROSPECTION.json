@@ -64798,7 +64798,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "89",
+          "lines": "97",
           "snippet": "        nodes.retain(|n| window_admits(n, &time_window, args.order_by));"
         }
       ],
@@ -66641,7 +66641,7 @@
         },
         {
           "path": "src/subagent/topology.rs",
-          "lines": "388-397",
+          "lines": "395-404",
           "snippet": "    // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the\n    // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its\n    // parent's transcript, so the spawning tool_use sits in the child's own file and the\n    // graph join names the child as its own parent (measured: every depth-65 node was\n    // such a self-cycle before v0.10.1).\n    let not_self = |p: String| (p != subagent.agent_id).then_some(p);\n    let parent_agent_id = subagent\n        .meta_parent_agent_id\n        .clone()\n        .and_then(not_self)"
         },
         {
@@ -67475,7 +67475,7 @@
       "code": [
         {
           "path": "src/subagent/topology.rs",
-          "lines": "217-220",
+          "lines": "223-226",
           "snippet": "/// Read every top-level `<session>/workflows/wf_*.json` manifest (\u00a75) as a [`WorkflowRun`].\n/// Returns an empty vec when the session has no sidecar / no `workflows/` dir (never an\n/// error for the common no-workflow case). The `workflows/scripts/` subdir and any\n/// non-`wf_*.json` entry are ignored."
         },
         {
@@ -68666,7 +68666,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "274-279",
+          "lines": "290-295",
           "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = \"note: teammate rows are in-process Agent subagents \u2014 address one BY NAME (the `(@name)` shown) \\\nvia SendMessage to steer it, and `message:{\\\"type\\\":\\\"shutdown_request\\\"}` to terminate it.\";\npub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =\n    \"      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \\\nbuilds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \\\nteammate has no separate OS process (it shares the orchestrator PID \u2014 `pkill` won't help).\";"
         }
       ],
@@ -96636,7 +96636,7 @@
         },
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "59-62",
+          "lines": "73-76",
           "snippet": "    let (kept, agent_groups) = path::dedup_copies(nodes.iter().map(|n| n.path.clone()).collect());\n    if !agent_groups.is_empty() {\n        let keep: std::collections::BTreeSet<std::path::PathBuf> = kept.into_iter().collect();\n        nodes.retain(|n| keep.contains(&n.path));"
         },
         {

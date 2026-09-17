@@ -68,9 +68,9 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
             .or_default()
             .push(n);
     }
-    // Group workflow runs by session is implicit (runs carry no session id), so we match
-    // by the workflow_id present on the in-scope nodes: a run is shown when at least one
-    // of its agents is in scope.
+    // A run belongs to the session whose sidecar holds its manifest, and it is SHOWN when at
+    // least one of its agents is in scope - both tests, because two sessions can name one
+    // workflow id and matching on the id alone printed each of their runs under both.
     let in_scope_wf: std::collections::BTreeSet<&str> = nodes
         .iter()
         .filter_map(|n| n.workflow_id.as_deref())
@@ -86,7 +86,7 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
 
         // Workflow runs (as parent nodes) + their agents nested under them.
         for run in workflow_runs {
-            if !in_scope_wf.contains(run.run_id.as_str()) {
+            if run.session_id != **session || !in_scope_wf.contains(run.run_id.as_str()) {
                 continue;
             }
             let agents: Vec<&SubagentNode> = snodes

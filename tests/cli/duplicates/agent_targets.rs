@@ -351,6 +351,36 @@ fn an_ordinary_listing_names_no_transcript_and_one_run_stays_one_row() {
 }
 
 #[test]
+fn two_sessions_that_share_a_run_id_keep_a_row_each() {
+    // The copy fold keys on the PAIR (session, run). A run id is unique inside the session
+    // that minted it and nothing makes it unique across sessions, so an id-keyed fold would
+    // drop the second session's run as though it were the first one's copy - the same row
+    // this file's sibling test wants folded, wanted kept.
+    let other = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c88";
+    let run = "{\"runId\":\"wf_same\",\"workflowName\":\"demo\",\"status\":\"completed\",\
+               \"agentCount\":1}";
+    let h = Home::new();
+    for (sess, agent) in [(SESS, AGENT), (other, "beefcafe01234567")] {
+        h.write(&format!("{ENC}/{sess}.jsonl"), &record(1, "a session"));
+        h.write(&format!("{ENC}/{sess}/workflows/wf_same.json"), run);
+        h.write(
+            &format!("{ENC}/{sess}/subagents/workflows/wf_same/agent-{agent}.jsonl"),
+            &agent_record(1, "child ask"),
+        );
+    }
+    let out = h.run(&["agents", "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+    let runs = json_rows(&out.stdout, "run");
+    assert_eq!(runs.len(), 2, "one run row per session: {}", out.stdout);
+    let owners: Vec<&str> = runs
+        .iter()
+        .map(|r| r["session_id"].as_str().expect("a session id"))
+        .collect();
+    assert!(owners.contains(&SESS), "{owners:?}");
+    assert!(owners.contains(&other), "{owners:?}");
+}
+
+#[test]
 #[cfg(unix)]
 fn an_unreadable_copy_reaches_the_header_of_the_one_surface_that_survives_it() {
     use std::os::unix::fs::PermissionsExt;

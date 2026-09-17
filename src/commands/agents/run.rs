@@ -44,9 +44,23 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // Flatten nodes; keep workflow runs keyed per session for the tree.
     let mut nodes: Vec<SubagentNode> = Vec::new();
     let mut workflow_runs: Vec<WorkflowRun> = Vec::new();
+    // A copied project directory carries the whole sidecar, its workflow MANIFESTS included,
+    // so the same run is discovered once per session COPY. One run is one row, and a run's
+    // identity is the PAIR (session, run): a run id is unique within the session that minted
+    // it and nothing makes it unique across sessions, so keying on the id alone would drop
+    // another session's run as though it were a copy - and would then hide that under the
+    // renderers, which used to attach a run to every session whose agents named that
+    // workflow id. The first occurrence stays, which keeps the tree's run order exactly as
+    // the scan produced it.
+    let mut seen_runs: std::collections::BTreeSet<(String, String)> =
+        std::collections::BTreeSet::new();
     for t in topos {
         nodes.extend(t.nodes);
-        workflow_runs.extend(t.workflow_runs);
+        for r in t.workflow_runs {
+            if seen_runs.insert((r.session_id.clone(), r.run_id.clone())) {
+                workflow_runs.push(r);
+            }
+        }
     }
     let mut duplicates = resolved.duplicates;
     // The sidecar copies `agents` gathers take the SAME merge as every other surface.
@@ -63,12 +77,6 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         path::emit_duplicate_notes(&agent_groups);
         duplicates.extend(agent_groups);
     }
-    // A copied project directory carries the whole sidecar, its workflow MANIFESTS included,
-    // so the same run is discovered once per session copy. One run is one row: the first
-    // occurrence stays, which keeps the tree's run order exactly as the scan produced it.
-    let mut seen_runs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    workflow_runs.retain(|r| seen_runs.insert(r.run_id.clone()));
-
     // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--order-by time
     // window AND the --shape filter (a known id should resolve regardless of when it ran or
     // its shape), and a no-match is a hard error with discovery guidance - never the
@@ -150,19 +158,27 @@ pub(crate) fn augment_unmanifested_runs(
     workflow_runs: &mut Vec<WorkflowRun>,
 ) {
     use std::collections::BTreeSet;
-    let known: BTreeSet<&str> = workflow_runs.iter().map(|r| r.run_id.as_str()).collect();
+    // Keyed by the PAIR, like the fold above: a manifest under session A must not stand in
+    // for session B's run of the same id, or B's agents lose the run header they render
+    // under and vanish from the tree.
+    let known: BTreeSet<(&str, &str)> = workflow_runs
+        .iter()
+        .map(|r| (r.session_id.as_str(), r.run_id.as_str()))
+        .collect();
     // Preserve first-seen (sorted-node) order while de-duplicating.
-    let mut missing: Vec<String> = Vec::new();
-    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut missing: Vec<(String, String)> = Vec::new();
+    let mut seen: BTreeSet<(&str, &str)> = BTreeSet::new();
     for n in nodes {
         if let Some(wf) = n.workflow_id.as_deref() {
-            if !known.contains(wf) && seen.insert(wf) {
-                missing.push(wf.to_string());
+            let key = (n.parent_session_id.as_str(), wf);
+            if !known.contains(&key) && seen.insert(key) {
+                missing.push((n.parent_session_id.clone(), wf.to_string()));
             }
         }
     }
-    for run_id in missing {
+    for (session_id, run_id) in missing {
         workflow_runs.push(WorkflowRun {
+            session_id,
             run_id,
             task_id: None,
             workflow_name: None,

@@ -200,6 +200,12 @@ pub(crate) fn child_tail_text(path: &Path) -> Option<String> {
 /// the `--tree` view. Fields are best-effort (a key absent in an older manifest → `None`).
 #[derive(Debug, Clone)]
 pub struct WorkflowRun {
+    /// The session whose sidecar holds this manifest. A `run_id` is unique WITHIN a session
+    /// and nothing makes it unique across sessions, so the identity of a run is the PAIR:
+    /// this is what folds a copied project directory's duplicate manifests onto one row
+    /// without folding another session's run into it, and what puts a run row under its own
+    /// session rather than under every session whose agents name that workflow id.
+    pub session_id: String,
     /// `runId` (== the `wf_<id>` stem, which matches the `subagents/workflows/wf_<id>/`
     /// dir name - the join key to the workflow agents).
     pub run_id: String,
@@ -255,6 +261,7 @@ pub fn discover_workflow_runs(session_jsonl: &Path) -> Result<Vec<WorkflowRun>> 
         // run_id: prefer the manifest field, fall back to the filename stem.
         let run_id = str_f("runId").unwrap_or_else(|| name.trim_end_matches(".json").to_string());
         out.push(WorkflowRun {
+            session_id: session_id_from_path(session_jsonl),
             run_id,
             task_id: str_f("taskId"),
             workflow_name: str_f("workflowName"),
