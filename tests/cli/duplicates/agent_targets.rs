@@ -118,6 +118,14 @@ fn an_agent_targets_divergent_copies_both_stay_and_show_names_them() {
     assert!(show.stderr.contains("name a path"), "{}", show.stderr);
     assert!(show.stderr.contains(ENC_SHORT), "{}", show.stderr);
     assert!(show.stderr.contains(ENC), "{}", show.stderr);
+    // What was duplicated is an AGENT, and the refusal says so: a reader told these are
+    // copies of one session id goes looking for a uuid that is not in play here.
+    assert!(
+        show.stderr.contains(&format!("subagent {AGENT}")),
+        "the bail names what it refused, in the resolver's own words:\n{}",
+        show.stderr
+    );
+    assert!(!show.stderr.contains("session id"), "{}", show.stderr);
 }
 
 #[test]

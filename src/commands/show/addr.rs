@@ -105,9 +105,19 @@ pub(crate) fn resolve_single_transcript(target: &std::path::Path) -> Result<Path
                  ids from `csift agents`) | a `*.jsonl` path."
                     .to_string()
             } else {
+                // WHAT was duplicated is the group's own word: an agent target reaches this
+                // arm too, and calling its copies a session id sends the reader looking for
+                // a uuid that is not in play. `subject()` is the one spelling of that, so
+                // this message can never drift from the resolver's own note.
+                let subjects: Vec<String> = resolved
+                    .duplicates
+                    .iter()
+                    .map(path::DuplicateGroup::subject)
+                    .collect();
                 format!(
-                    "These are copies of ONE session id under different project \
-                     directories, so no `@<uuid>` separates them - name a path: {}",
+                    "These are copies of ONE {} under different project directories, so no \
+                     `@<id>` separates them - name a path: {}",
+                    subjects.join(" and one "),
                     every.join(" | ")
                 )
             };
