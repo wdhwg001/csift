@@ -146,6 +146,7 @@ mod keys;
 mod matcher;
 mod record_text;
 mod render;
+mod reverse;
 mod rows;
 mod scan;
 mod seam;
