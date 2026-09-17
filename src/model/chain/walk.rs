@@ -11,8 +11,10 @@
 //! carries on. What it reaches above a crossed boundary is resolved by the ordinary rules
 //! - Live where the chain reaches it, Abandoned where it does not.
 //!
-//! The walk ends on a boundary anyway in two cases, and both leave a FLOOR: the budget ran
-//! out, or the boundary's door is shut. A shut door is three facts (see [`shut_door`]) and
+//! The walk ends on a boundary anyway for FOUR causes, and every one leaves a FLOOR: the
+//! budget ran out standing on it, or the boundary's door is shut - and a shut door is three
+//! separate facts rather than one (see [`shut_door`]), which is why the count is four and
+//! why `budget-exhausted` alone does not mean a larger budget would move that floor. And
 //! the commonest on disk is not the one it looks like: of the 275 boundary records over one
 //! projects root, 52 name a `logicalParentUuid` on no line of their own file (claim
 //! MISC-043, the pre-compaction lines deleted from disk), but of the 18 transcripts whose

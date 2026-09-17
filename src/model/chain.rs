@@ -37,14 +37,16 @@
 //! unreadable. What the walk reaches above a crossed boundary takes the ordinary rules:
 //! Live where the chain reaches it, Abandoned where it does not.
 //!
-//! The walk still ends ON a boundary two ways, and both leave a FLOOR: the budget ran out,
-//! or the `logicalParentUuid` reached no record the map still holds (claim MISC-043: 52 of
-//! 255 boundary records, over 14 of the 21 compacted transcripts, name a
-//! `logicalParentUuid` matching no `uuid` on ANY line of their own file; a relink cut
-//! removes more). An off-chain record physically above the floor is `PreCut`, never
-//! `Abandoned` - csift declines to call a record abandoned in a region it could not
-//! resolve - and [`CrossingReport`] states which cause it was, how many boundaries remain
-//! above and the flag value that would reach them. In that blind region the measured
+//! The walk still ends ON a boundary, for FOUR causes, and every one of them leaves a
+//! FLOOR: the budget ran out standing on it, or one of the three facts shut its door (the
+//! `walk::shut_door` classification - the `logicalParentUuid` names no record on any line, or one
+//! the pre-boundary cut removed from the map, or one the walk had already reached; claim
+//! MISC-043 counts the first shape at 52 of 275 boundary records over 14 files). An
+//! off-chain record physically above the floor is `PreCut`, never `Abandoned` - csift
+//! declines to call a record abandoned in a region it could not resolve - and
+//! [`CrossingReport`] states which cause it was, how many boundaries remain above, and a
+//! flag value only where raising the budget would MOVE that floor, which a shut door makes
+//! false even under `budget-exhausted`. In that blind region the measured
 //! same-parent opener rule (an opener with a LATER opener sharing its `parentUuid` was
 //! recalled and re-sent) still applies, so draft detection never depends on the chain
 //! reaching that far.
