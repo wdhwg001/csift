@@ -3,7 +3,6 @@
 use super::*;
 // ── scan_one_file branch coverage (mmap-None, skipped-line counting) ──
 use std::io::Write as _;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 #[test]
 fn mutations_in_records_carrier_join_backfill_and_bash() {
@@ -233,32 +232,23 @@ fn extract_empty_for_session_with_no_mutations() {
     assert!(extract(&records).is_empty());
 }
 
-static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn tmp_jsonl(lines: &[&str]) -> std::path::PathBuf {
-    let p = std::env::temp_dir().join(format!(
-        "csift-files-{}-{}.jsonl",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+/// The guard rides BACK to the caller: dropping it here would delete the tree under the
+/// test that is about to scan the file.
+fn tmp_jsonl(lines: &[&str]) -> (crate::testfs::Scratch, std::path::PathBuf) {
+    let (dir, p) = crate::testfs::Scratch::file("files", "scan.jsonl");
     let mut f = std::fs::File::create(&p).unwrap();
     for l in lines {
         writeln!(f, "{l}").unwrap();
     }
-    p
+    (dir, p)
 }
 
 #[test]
 fn scan_one_file_empty_is_safe() {
     // A zero-byte file → mmap_bytes None → empty result (the early-return arm).
-    let p = std::env::temp_dir().join(format!(
-        "csift-files-empty-{}-{}.jsonl",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    let (_dir, p) = crate::testfs::Scratch::file("files-empty", "empty.jsonl");
     std::fs::File::create(&p).unwrap();
     let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan empty");
-    std::fs::remove_file(&p).ok();
     assert!(fr.mutations.is_empty());
     assert_eq!(fr.skipped_lines, 0);
 }
@@ -267,14 +257,13 @@ fn scan_one_file_empty_is_safe() {
 fn scan_one_file_extracts_mutations_and_counts_skips() {
     // A populated file: a genuine user, a Write tool_use + carrier, plus a
     // malformed line that survives the prefilter (carries "Write") → counted.
-    let p = tmp_jsonl(&[
+    let (_dir, p) = tmp_jsonl(&[
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
         r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/tmp/scan.md","content":"x"}}]}}"#,
         r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/tmp/scan.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#,
         r#"{"name":"Write" this is broken json after the marker}"#,
     ]);
     let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan");
-    std::fs::remove_file(&p).ok();
     assert_eq!(fr.mutations.len(), 1, "one Write mutation");
     assert_eq!(fr.mutations[0].mutation.path, "/tmp/scan.md");
     assert!(fr.mutations[0].mutation.is_create, "carrier create joined");
@@ -285,12 +274,11 @@ fn scan_one_file_extracts_mutations_and_counts_skips() {
 fn scan_one_file_skips_non_candidate_noise_lines() {
     // An attachment line with NONE of the mutation/role markers is dropped pre-JSON
     // (the `!line_is_files_candidate` true arm), leaving zero mutations + zero skips.
-    let p = tmp_jsonl(&[
+    let (_dir, p) = tmp_jsonl(&[
         r#"{"type":"attachment","data":{"x":1}}"#,
         r#"{"type":"file-history-snapshot","snapshot":{}}"#,
     ]);
     let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan");
-    std::fs::remove_file(&p).ok();
     assert!(fr.mutations.is_empty());
     assert_eq!(
         fr.skipped_lines, 0,
@@ -303,11 +291,10 @@ fn subagent_mutation_carries_is_subagent_and_refeedable_parent_in_grouped_views(
     // A subagent transcript path stamps is_subagent=true + the re-feedable PARENT uuid
     // onto every mutation, so the grouped (text + JSON) views can brand the row instead
     // of leaking the bare hex as a `SESSION` / re-feedable `session_id`.
-    let dir = std::env::temp_dir().join(format!(
-        "csift-files-sub-{}-{}/aaaabbbb-cccc-dddd-eeee-ffff00001111/subagents/workflows/wf_q",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    let root = crate::testfs::Scratch::dir("files-sub");
+    // Below a tree this run just claimed: the session shape under it can be built with
+    // create_dir_all, because nothing there can be inherited.
+    let dir = root.join("aaaabbbb-cccc-dddd-eeee-ffff00001111/subagents/workflows/wf_q");
     std::fs::create_dir_all(&dir).unwrap();
     let p = dir.join("agent-c0ffee1234567890.jsonl");
     {
@@ -316,7 +303,6 @@ fn subagent_mutation_carries_is_subagent_and_refeedable_parent_in_grouped_views(
         writeln!(f, r#"{{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"w1","name":"Write","input":{{"file_path":"/tmp/sub.md","content":"x"}}}}]}}}}"#).unwrap();
     }
     let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan subagent");
-    std::fs::remove_file(&p).ok();
     assert_eq!(fr.mutations.len(), 1);
     let m = &fr.mutations[0];
     assert_eq!(

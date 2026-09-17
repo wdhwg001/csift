@@ -479,8 +479,7 @@ fn resolve_persisted_flag_adds_pointer_markers() {
 #[test]
 fn resolve_persisted_text_reads_file_or_notes_failure() {
     // Success: the resolved text is the file content (not the inline pointer).
-    let dir = std::env::temp_dir();
-    let p = dir.join(format!("csift-persist-test-{}.txt", std::process::id()));
+    let (_dir, p) = crate::testfs::Scratch::file("persist-test", "persisted.txt");
     std::fs::write(&p, "THE REAL PERSISTED BODY with a deep token zzqqxx").unwrap();
     let resolved = resolve_persisted_text(&p.to_string_lossy(), "<persisted-output> pointer");
     assert!(resolved.contains("zzqqxx"), "got: {resolved}");
@@ -488,7 +487,6 @@ fn resolve_persisted_text_reads_file_or_notes_failure() {
         !resolved.contains("pointer"),
         "inline pointer should be replaced"
     );
-    std::fs::remove_file(&p).ok();
 
     // Failure: a missing file keeps the inline text + an explicit note (never fatal).
     let missing = resolve_persisted_text("/no/such/csift/file.txt", "inline preview text");
@@ -501,8 +499,7 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     // Build a carrier whose inline tool_result is a <persisted-output> pointer to
     // a temp file; a token that lives ONLY in the file (not inline) must match
     // ONLY when --resolve-persisted is set. This is the discriminating test.
-    let dir = std::env::temp_dir();
-    let p = dir.join(format!("csift-e2e-persist-{}.txt", std::process::id()));
+    let (_dir, p) = crate::testfs::Scratch::file("e2e-persist", "persisted.txt");
     std::fs::write(&p, "deep file body containing the token wibblewobble here").unwrap();
     let line = format!(
         r#"{{"type":"user","uuid":"u0","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"x","content":"<persisted-output>\nOutput too large (1 KB). Full output saved to: {}\n\nPreview (first 2KB):\n(no token here)\n</persisted-output>"}}]}}}}"#,
@@ -546,8 +543,6 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     );
     assert_eq!(with_resolve.len(), 1, "deep token matches after resolution");
     assert_eq!(with_resolve[0].class, Some(Class::AgentToolResult));
-
-    std::fs::remove_file(&p).ok();
 }
 
 #[test]

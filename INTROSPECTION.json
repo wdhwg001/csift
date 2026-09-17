@@ -67495,7 +67495,7 @@
         },
         {
           "path": "src/subagent/tests.rs",
-          "lines": "49",
+          "lines": "34",
           "snippet": "/// A top-level `workflows/wf_abc.json` manifest is also written (NOT under"
         }
       ],
@@ -90353,7 +90353,7 @@
         {
           "path": "src/commands/session/tests.rs",
           "snippet": "fn checkpoint_close_reads_the_sum_and_refuses_other_types() {",
-          "lines": "411"
+          "lines": "392"
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",

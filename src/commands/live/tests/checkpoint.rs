@@ -2,15 +2,9 @@
 
 use super::*;
 
-fn tmp_dir(stem: &str) -> std::path::PathBuf {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let p = std::env::temp_dir().join(format!(
-        "csift-cp-{}-{}-{stem}",
-        std::process::id(),
-        N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&p).unwrap();
-    p
+/// The guard, never a bare path: dropping it here would delete the tree under the test.
+fn tmp_dir(stem: &str) -> crate::testfs::Scratch {
+    crate::testfs::Scratch::dir(&format!("cp-{stem}"))
 }
 
 const CP: &str = r#"{"type":"cost-state","sessionId":"s","totalCostUSD":0.1,"totalDuration":1000,"startTime":1780808940000,"modelUsage":{},"hasUnknownModelCost":false}"#;
@@ -54,8 +48,6 @@ fn last_checkpoint_counts_the_physical_line_and_only_at_the_tail() {
     big.push('\n');
     std::fs::write(&p, &big).unwrap();
     assert_eq!(last_checkpoint(&p).unwrap().map(|c| c.line), Some(40_001));
-
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -229,5 +221,4 @@ fn team_candidates_take_only_the_files_written_at_that_startup() {
         ],
         "the window is inclusive on both sides and nothing outside it competes"
     );
-    std::fs::remove_dir_all(&dir).ok();
 }

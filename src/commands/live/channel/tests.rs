@@ -28,42 +28,23 @@ const MSG_ID: &str = "0123456789abcdef";
 
 /// A scratch channel root, removed on drop.
 struct Fixture {
+    /// The tree the channel root sits in; its Drop removes both.
+    scratch: crate::testfs::Scratch,
     root: PathBuf,
 }
 
 impl Fixture {
     fn new() -> Self {
-        // A process-wide counter beside the pid and the clock: two fixtures built in
-        // the same nanosecond on parallel test threads must not share a root, or one
-        // Drop wipes the other's tree mid-run.
-        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        let root = std::env::temp_dir().join(format!(
-            "csift-channel-test-{}-{nanos}-{seq}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        Fixture {
-            root: channel_dir(&root),
-        }
+        let scratch = crate::testfs::Scratch::dir("channel-test");
+        let root = channel_dir(&scratch);
+        Fixture { scratch, root }
     }
 
     /// The scratch directory the channel root sits inside. A test that needs a whole session
     /// tree beside the channel - a transcript plus its subagent lanes - writes it here, so one
     /// Drop removes both.
     fn scratch(&self) -> &Path {
-        self.root.parent().unwrap_or(&self.root)
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        if let Some(parent) = self.root.parent() {
-            let _ = std::fs::remove_dir_all(parent);
-        }
+        &self.scratch
     }
 }
 

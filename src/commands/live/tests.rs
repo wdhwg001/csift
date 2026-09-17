@@ -37,21 +37,18 @@ fn note_text(a: &Assessment) -> String {
 
 // ── tail_shape against real files ──
 
-struct TempJsonl(std::path::PathBuf);
+struct TempJsonl {
+    path: std::path::PathBuf,
+    /// The tree that removes the transcript on drop (`crate::testfs`: a name a killed
+    /// run's leftovers cannot occupy). Held, never read.
+    _dir: crate::testfs::Scratch,
+}
 
 impl TempJsonl {
     fn new(content: &str) -> Self {
-        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let p = std::env::temp_dir().join(format!("csift-live-{}-{n}.jsonl", std::process::id()));
-        std::fs::write(&p, content).unwrap();
-        TempJsonl(p)
-    }
-}
-
-impl Drop for TempJsonl {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        let (dir, path) = crate::testfs::Scratch::file("live", "tail.jsonl");
+        std::fs::write(&path, content).unwrap();
+        TempJsonl { path, _dir: dir }
     }
 }
 
@@ -59,7 +56,7 @@ impl Drop for TempJsonl {
 
 /// A temp session tree: `<root>/<uuid>.jsonl` + `<root>/<uuid>/subagents/agent-x.jsonl`.
 pub(super) struct TempSession {
-    pub(super) root: std::path::PathBuf,
+    pub(super) root: crate::testfs::Scratch,
     pub(super) main: std::path::PathBuf,
 }
 
@@ -67,9 +64,9 @@ pub(super) const UUID: &str = "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d";
 
 impl TempSession {
     pub(super) fn new(main: &str, sub: Option<&str>) -> Self {
-        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("csift-bg-{}-{n}", std::process::id()));
+        let root = crate::testfs::Scratch::dir("bg");
+        // Below a tree this run just claimed, nothing can be inherited: create_dir_all here
+        // only builds the session shape inside it.
         std::fs::create_dir_all(root.join(UUID).join("subagents")).unwrap();
         let main_p = root.join(format!("{UUID}.jsonl"));
         std::fs::write(&main_p, main).unwrap();
@@ -90,12 +87,6 @@ impl TempSession {
             .join(UUID)
             .join("subagents")
             .join("agent-abcdef0123456789.jsonl")
-    }
-}
-
-impl Drop for TempSession {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
     }
 }
 

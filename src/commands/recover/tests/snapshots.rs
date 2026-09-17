@@ -148,9 +148,7 @@ fn generation_reset_bounds_the_number_signal_but_not_the_content_check() {
 
 #[test]
 fn attach_gate_requires_mtime_agreement_and_version_change() {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let home = std::env::temp_dir().join(format!("csift-snap-{}-{n}", std::process::id()));
+    let home = crate::testfs::Scratch::dir("snap");
     let sess = "aaaa1111-2222-4333-8444-555566667777";
     let store = home.join("file-history").join(sess);
     std::fs::create_dir_all(&store).unwrap();
@@ -206,7 +204,6 @@ fn attach_gate_requires_mtime_agreement_and_version_change() {
     // garbage instant / missing file: refused.
     assert_eq!(verified_store_content(&blob, "not a time"), None);
     assert_eq!(verified_store_content(&store.join("missing@v9"), bt), None);
-    std::fs::remove_dir_all(&home).unwrap();
 }
 
 #[test]
@@ -218,10 +215,7 @@ fn first_marker_divergence_rebases_and_tolerance_is_inclusive() {
     assert_eq!(rep.final_buffer.known_lines(), vec![(1, "new".to_string())]);
 
     // The mtime window is inclusive: exactly 120s off still verifies; 121s refuses.
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("csift-tol-{}-{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testfs::Scratch::dir("tol");
     let blob = dir.join("hash@v1");
     std::fs::write(&blob, "body\n").unwrap();
     let bt = "2026-06-07T05:00:00Z";
@@ -248,7 +242,6 @@ fn first_marker_divergence_rebases_and_tolerance_is_inclusive() {
         .set_modified(t2)
         .unwrap();
     assert_eq!(verified_store_content(&blob, bt), None, "121s is outside");
-    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]

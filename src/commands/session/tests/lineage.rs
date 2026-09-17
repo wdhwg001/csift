@@ -49,7 +49,7 @@ fn summarize_reads_the_child_id_off_a_tail_written_handoff_line() {
     // order the backward tail walk relies on.
     let parent = "11111111-2222-4333-8444-555555555555";
     let child = "99999999-2222-4333-8444-555555555555";
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "handoff-tail",
         &[
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"do the thing"}}"#,
@@ -58,7 +58,6 @@ fn summarize_reads_the_child_id_off_a_tail_written_handoff_line() {
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(
         s.continued_in.as_deref(),
         Some(child),
@@ -70,14 +69,13 @@ fn summarize_reads_the_child_id_off_a_tail_written_handoff_line() {
 fn a_key_inside_a_payload_is_not_a_handoff() {
     // Only a TOP-LEVEL key is the field: a transcript quoting the shape (csift's own dev
     // sessions do) must not be read as having been handed over.
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "handoff-quoted",
         &[
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the line is {\"continuedInSessionId\":\"99999999-2222-4333-8444-555555555555\"}"}}"#,
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(
         s.continued_in, None,
         "a quoted key is prose, not a lineage field"
@@ -91,7 +89,7 @@ fn the_newest_handoff_line_wins() {
     let parent = "11111111-2222-4333-8444-555555555555";
     let first = "aaaaaaaa-2222-4333-8444-555555555555";
     let second = "bbbbbbbb-2222-4333-8444-555555555555";
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "handoff-twice",
         &[
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first prompt"}}"#,
@@ -101,7 +99,6 @@ fn the_newest_handoff_line_wins() {
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(
         s.continued_in.as_deref(),
         Some(second),
@@ -111,13 +108,12 @@ fn the_newest_handoff_line_wins() {
 
 #[test]
 fn a_transcript_with_no_handoff_line_reports_none() {
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "handoff-absent",
         &[
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"hello"}}"#,
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(s.continued_in, None);
 }

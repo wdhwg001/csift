@@ -1,6 +1,5 @@
 use super::*;
 use std::io::Write as _;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 mod lineage;
 
@@ -69,19 +68,15 @@ fn local_iso_matches_system_tz_offset() {
     assert_eq!(out, expected);
 }
 
-static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn tmp_session(name_stem: &str, lines: &[&str]) -> PathBuf {
-    let p = std::env::temp_dir().join(format!(
-        "csift-sess-{}-{}-{name_stem}.jsonl",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+/// The guard rides BACK to the caller: dropping it here would delete the tree under the
+/// test that is about to summarize the transcript.
+fn tmp_session(name_stem: &str, lines: &[&str]) -> (crate::testfs::Scratch, PathBuf) {
+    let (dir, p) = crate::testfs::Scratch::file("sess", &format!("{name_stem}.jsonl"));
     let mut f = std::fs::File::create(&p).unwrap();
     for l in lines {
         writeln!(f, "{l}").unwrap();
     }
-    p
+    (dir, p)
 }
 
 #[test]
@@ -106,7 +101,7 @@ fn summarize_head_first_user_captures_identity() {
     // The head finds a genuine user FIRST → identity captured from it; the tail
     // finds the last user + last agent. Exercises the head identity-capture arm
     // and both tail `is_none()` branches.
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "head",
         &[
             r#"{"type":"user","cwd":"/Users/testuser/Projects/foo","version":"2.1.0","gitBranch":"main","sessionId":"sid-data","message":{"role":"user","content":"first q"}}"#,
@@ -116,7 +111,6 @@ fn summarize_head_first_user_captures_identity() {
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(s.cwd.as_deref(), Some("/Users/testuser/Projects/foo"));
     assert_eq!(s.version.as_deref(), Some("2.1.0"));
     assert_eq!(s.git_branch.as_deref(), Some("main"));
@@ -130,7 +124,7 @@ fn summarize_backfills_identity_from_tail_when_head_user_lacks_it() {
     // The head's FIRST genuine user carries NO identity fields (cwd/version/branch
     // all absent), but the LAST genuine user at the tail DOES - so the tail's
     // `capture_identity_if_empty` backfills them (only the still-None fields).
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "tailfill",
         &[
             // head genuine user - no identity fields at all.
@@ -141,7 +135,6 @@ fn summarize_backfills_identity_from_tail_when_head_user_lacks_it() {
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     // The head found the first user, but identity was backfilled from the tail.
     assert_eq!(
         s.first_user.as_ref().unwrap().excerpt,
@@ -164,12 +157,11 @@ fn summarize_session_id_from_data_when_filename_has_no_stem() {
     // path; the data-fallback arm is also reachable when the stem is empty. Since
     // a real temp file always has a stem, assert the cross-check shape instead:
     // the id equals the stem and the data id is retained internally.
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "dataid",
         &[r#"{"type":"user","sessionId":"sid-data-xyz","message":{"role":"user","content":"hi"}}"#],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     // Filename stem wins (non-empty) - the documented precedence.
     assert!(!s.session_id.is_empty());
 }
@@ -179,7 +171,7 @@ fn summarize_head_skips_non_genuine_records_before_first_user() {
     // The head stream leads with non-genuine records (metadata, an isMeta pseudo-
     // turn, a tool_result carrier) → the head closure's `genuine_user_text()`
     // returns None for each (the FALSE arm) until the real first user is reached.
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "headnoise",
         &[
             r#"{"type":"last-prompt","leafUuid":"x"}"#,
@@ -190,7 +182,6 @@ fn summarize_head_skips_non_genuine_records_before_first_user() {
         ],
     );
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(
         s.first_user.as_ref().unwrap().excerpt,
         "the genuine first question"
@@ -200,13 +191,12 @@ fn summarize_head_skips_non_genuine_records_before_first_user() {
 #[test]
 fn top_level_summary_is_not_subagent_and_is_its_own_parent() {
     // A plain `<uuid>.jsonl` path is top-level: is_subagent=false and parent==session_id.
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "toplevel",
         &[r#"{"type":"user","message":{"role":"user","content":"hi"}}"#],
     );
     let s = summarize_session(&p, false).unwrap();
     let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
-    std::fs::remove_file(&p).ok();
     assert!(!s.is_subagent);
     assert_eq!(s.parent_session_id, stem);
     assert_eq!(s.parent_session_id, s.session_id);
@@ -217,11 +207,10 @@ fn subagent_summary_carries_is_subagent_and_refeedable_parent() {
     // A subagent transcript path `…/<PARENT-UUID>/subagents/workflows/wf_x/agent-<hex>.jsonl`:
     // session_id is the bare hex (NOT re-feedable), is_subagent=true, and
     // parent_session_id is the re-feedable PARENT uuid (the dir before `subagents/`).
-    let dir = std::env::temp_dir().join(format!(
-        "csift-subdir-{}-{}/11111111-2222-3333-4444-555555555555/subagents/workflows/wf_z",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    let root = crate::testfs::Scratch::dir("subdir");
+    // Below a tree this run just claimed: the session shape under it can be built with
+    // create_dir_all, because nothing there can be inherited.
+    let dir = root.join("11111111-2222-3333-4444-555555555555/subagents/workflows/wf_z");
     std::fs::create_dir_all(&dir).unwrap();
     let p = dir.join("agent-deadbeefcafe1234.jsonl");
     {
@@ -233,7 +222,6 @@ fn subagent_summary_carries_is_subagent_and_refeedable_parent() {
         .unwrap();
     }
     let s = summarize_session(&p, false).unwrap();
-    std::fs::remove_file(&p).ok();
     assert_eq!(
         s.session_id, "deadbeefcafe1234",
         "bare hex (agent- stripped)"
@@ -249,23 +237,19 @@ fn subagent_summary_carries_is_subagent_and_refeedable_parent() {
 fn summarize_session_id_is_filename_stem() {
     // The session id is the jsonl basename; even when the data carries a different
     // sessionId, the filename wins (the `session_id.is_empty()` false arm).
-    let p = tmp_session(
+    let (_dir, p) = tmp_session(
         "stemid",
         &[r#"{"type":"user","sessionId":"DATA-ID","message":{"role":"user","content":"hi"}}"#],
     );
     let s = summarize_session(&p, false).unwrap();
     let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
-    std::fs::remove_file(&p).ok();
     assert_eq!(s.session_id, stem);
     assert_ne!(s.session_id, "DATA-ID");
 }
 
 #[test]
 fn clone_probe_arms_and_origin_join_edges() {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("csift-clone-{}-{n}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
+    let root = crate::testfs::Scratch::dir("clone");
     let bx = "0f1e2d3c-4b5a-4697-8807-16f5e4d3c2b1";
 
     // A garbage line CARRYING the timestamp needle parses to nothing and is walked
@@ -351,14 +335,11 @@ fn clone_probe_arms_and_origin_join_edges() {
         "an unrelated boundary near a prose quote is not the origin"
     );
     std::fs::remove_file(&decoy).unwrap();
-
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
 fn clone_origin_decoys_stay_outside_the_join() {
-    let root = std::env::temp_dir().join(format!("csift-clone-decoy-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
+    let root = crate::testfs::Scratch::dir("clone-decoy");
     let bx = "3a4b5c6d-7e8f-4a9b-8c0d-1e2f3a4b5c6d";
     let clone = root.join("c1.jsonl");
     std::fs::write(
@@ -432,12 +413,7 @@ fn checkpoint_close_reads_the_sum_and_refuses_other_types() {
 
 #[test]
 fn cleared_from_origin_takes_the_nearest_checkpoint_in_window() {
-    let dir = std::env::temp_dir().join(format!(
-        "csift-clear-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testfs::Scratch::dir("clear");
     let wrapper = "2026-06-07T05:10:00.000Z";
     let w = crate::timez::epoch_ms(wrapper).unwrap();
     let checkpoint = |close: i64| {
@@ -478,18 +454,11 @@ fn cleared_from_origin_takes_the_nearest_checkpoint_in_window() {
     let after = cleared_from_origin(&cleared, wrapper);
     assert_eq!(after.distance_ms, Some(164));
     assert!(after.after, "the checkpoint closes after the wrapper");
-
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn cleared_from_origin_never_joins_a_file_to_itself() {
-    let dir = std::env::temp_dir().join(format!(
-        "csift-clear-self-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testfs::Scratch::dir("clear-self");
     let wrapper = "2026-06-07T05:10:00.000Z";
     let w = crate::timez::epoch_ms(wrapper).unwrap();
     let checkpoint = |close: i64| {
@@ -528,17 +497,11 @@ fn cleared_from_origin_never_joins_a_file_to_itself() {
         "the self file and the decoy are excluded, not the whole directory"
     );
     assert_eq!(joined.distance_ms, Some(9), "the .txt decoy never wins");
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn cleared_from_origin_keeps_the_first_line_of_an_equal_distance_pair() {
-    let dir = std::env::temp_dir().join(format!(
-        "csift-clear-tie-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testfs::Scratch::dir("clear-tie");
     let wrapper = "2026-06-07T05:10:00.000Z";
     let w = crate::timez::epoch_ms(wrapper).unwrap();
     let checkpoint = |close: i64| {
@@ -570,6 +533,4 @@ fn cleared_from_origin_keeps_the_first_line_of_an_equal_distance_pair() {
     let exact = cleared_from_origin(&cleared, wrapper);
     assert_eq!(exact.distance_ms, Some(0));
     assert!(!exact.after, "a zero distance is not `after`: {exact:?}");
-
-    std::fs::remove_dir_all(&dir).ok();
 }

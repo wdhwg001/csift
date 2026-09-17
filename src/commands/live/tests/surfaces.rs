@@ -143,7 +143,7 @@ fn probe_word(p: &PsProbe) -> &'static str {
 fn tail_shape_reads_pairing_stop_reason_and_holds_torn_tails() {
     // Empty file: nothing seen, nothing claimed.
     let empty = TempJsonl::new("");
-    let s = tail_shape(&empty.0).unwrap();
+    let s = tail_shape(&empty.path).unwrap();
     assert_eq!(s.records_seen, 0);
     assert!(s.unreturned_use.is_none() && s.last_stop_reason.is_none());
 
@@ -156,7 +156,7 @@ fn tail_shape_reads_pairing_stop_reason_and_holds_torn_tails() {
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#,
         "\n",
     ));
-    let s = tail_shape(&settled.0).unwrap();
+    let s = tail_shape(&settled.path).unwrap();
     assert!(s.unreturned_use.is_none(), "{s:?}");
     assert_eq!(s.last_stop_reason.as_deref(), Some("end_turn"));
     assert_eq!(s.last_ts_utc.as_deref(), Some("2026-06-07T05:00:03Z"));
@@ -167,7 +167,7 @@ fn tail_shape_reads_pairing_stop_reason_and_holds_torn_tails() {
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t2","name":"Grep","input":{"pattern":"x"}}]}}"#,
         "\n",
     ));
-    let s = tail_shape(&open.0).unwrap();
+    let s = tail_shape(&open.path).unwrap();
     assert_eq!(
         s.unreturned_use.as_ref().map(|(t, _)| t.as_str()),
         Some("Grep")
@@ -181,7 +181,7 @@ fn tail_shape_reads_pairing_stop_reason_and_holds_torn_tails() {
         "not json at all\n",
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash"#,
     ));
-    let s = tail_shape(&torn.0).unwrap();
+    let s = tail_shape(&torn.path).unwrap();
     assert_eq!(s.records_seen, 1, "torn tail held, garbage skipped: {s:?}");
     assert!(s.unreturned_use.is_none(), "{s:?}");
 }
@@ -200,9 +200,7 @@ fn age_secs_handles_absent_and_garbage() {
 
 #[test]
 fn children_report_tolerates_garbage_journals_and_quiet_children() {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("csift-live-ch-{}-{n}", std::process::id()));
+    let root = crate::testfs::Scratch::dir("live-ch");
     let main = root.join("s1.jsonl");
     let wf = root.join("s1/subagents/workflows/wf_a");
     std::fs::create_dir_all(&wf).unwrap();
@@ -232,14 +230,11 @@ fn children_report_tolerates_garbage_journals_and_quiet_children() {
     assert_eq!(report.children[0].detail, "no timestamped tail");
     // 1 journal agent in flight; the settled child adds nothing.
     assert_eq!(report.live_count, 1);
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
 fn children_report_generating_needs_recency_and_no_end_turn() {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("csift-live-ac-{}-{n}", std::process::id()));
+    let root = crate::testfs::Scratch::dir("live-ac");
     let main = root.join("s1.jsonl");
     std::fs::create_dir_all(root.join("s1/subagents")).unwrap();
     std::fs::write(&main, "").unwrap();
@@ -302,7 +297,6 @@ fn children_report_generating_needs_recency_and_no_end_turn() {
     let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
     assert_eq!(report.children[0].state, "settled", "{report:?}");
     assert_eq!(report.live_count, 0);
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -320,7 +314,7 @@ fn tail_shape_stops_early_once_all_answers_are_in() {
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t9","name":"Bash","input":{}}]}}"#, "\n",
     ));
     let f = TempJsonl::new(&content);
-    let s = tail_shape(&f.0).unwrap();
+    let s = tail_shape(&f.path).unwrap();
     assert_eq!(
         s.unreturned_use.as_ref().map(|(t, _)| t.as_str()),
         Some("Bash")
@@ -358,7 +352,7 @@ fn tail_window_spans_a_real_turn_tail() {
         "the fixture must exceed the window"
     );
     let f = TempJsonl::new(&content);
-    let s = tail_shape(&f.0).unwrap();
+    let s = tail_shape(&f.path).unwrap();
     assert_eq!(s.last_stop_reason.as_deref(), Some("end_turn"), "{s:?}");
 }
 
@@ -382,9 +376,7 @@ fn probe_pid_reports_a_reaped_pid_dead() {
 
 #[test]
 fn children_report_settles_a_lane_whose_completion_pulse_landed() {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!("csift-live-rt-{}-{n}", std::process::id()));
+    let root = crate::testfs::Scratch::dir("live-rt");
     let main = root.join("s1.jsonl");
     std::fs::create_dir_all(root.join("s1/subagents")).unwrap();
     std::fs::write(&main, "").unwrap();
@@ -413,7 +405,6 @@ fn children_report_settles_a_lane_whose_completion_pulse_landed() {
         "{report:?}"
     );
     assert_eq!(report.live_count, 0);
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -427,6 +418,6 @@ fn tail_shape_window_without_a_newline_yields_no_records() {
     giant.push('\n');
     giant.push_str(&"y".repeat(700 * 1024)); // one unterminated line past the window
     let f = TempJsonl::new(&giant);
-    let shape = tail_shape(&f.0).unwrap();
+    let shape = tail_shape(&f.path).unwrap();
     assert_eq!(shape.records_seen, 0, "{shape:?}");
 }

@@ -1,8 +1,6 @@
 use super::*;
+use crate::testfs::Scratch;
 use std::io::Write;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Collect ALL backward lines (as Strings) for a byte slice at a given chunk
 /// size, dropping blanks (matching the parse-path's blank filter).
@@ -16,49 +14,38 @@ fn tmp_jsonl(lines: &[&str]) -> tempfile_path::TempJsonl {
     tempfile_path::TempJsonl::new(lines)
 }
 
-/// Minimal temp-file helper (no external dev-dep): writes lines to a uniquely
-/// named file under the OS temp dir and removes it on drop.
+/// Minimal temp-file helper (no external dev-dep): writes lines to a file inside this
+/// run's own scratch tree, which removes the file with it on drop.
 mod tempfile_path {
-    use super::Write;
+    use super::{Scratch, Write};
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::Ordering;
 
     #[derive(Debug)]
     pub struct TempJsonl {
+        /// The guard whose Drop removes the file; held, never read.
+        _dir: Scratch,
         path: PathBuf,
     }
 
     impl TempJsonl {
         pub fn new(lines: &[&str]) -> Self {
-            let t = Self::make_path();
-            let mut f = std::fs::File::create(&t).expect("create temp");
+            let (dir, path) = Scratch::file("test", "t.jsonl");
+            let mut f = std::fs::File::create(&path).expect("create temp");
             for l in lines {
                 writeln!(f, "{l}").expect("write line");
             }
             f.flush().expect("flush");
-            TempJsonl { path: t }
+            TempJsonl { _dir: dir, path }
         }
 
         pub fn empty() -> Self {
-            let t = Self::make_path();
-            std::fs::File::create(&t).expect("create temp");
-            TempJsonl { path: t }
-        }
-
-        fn make_path() -> PathBuf {
-            let n = super::COUNTER.fetch_add(1, Ordering::Relaxed);
-            let pid = std::process::id();
-            std::env::temp_dir().join(format!("csift-test-{pid}-{n}.jsonl"))
+            let (dir, path) = Scratch::file("test", "t.jsonl");
+            std::fs::File::create(&path).expect("create temp");
+            TempJsonl { _dir: dir, path }
         }
 
         pub fn path(&self) -> &Path {
             &self.path
-        }
-    }
-
-    impl Drop for TempJsonl {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.path);
         }
     }
 }

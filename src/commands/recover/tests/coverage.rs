@@ -9,8 +9,7 @@ fn line_number_counter_is_one_to_one_with_jsonl_lines() {
     // A scan over content + blank + malformed lines: line_no must equal the true file
     // line for every retained record, and a malformed line must not desync the count.
     use std::io::Write as _;
-    let dir = std::env::temp_dir();
-    let p = dir.join(format!("csift-recover-ln-{}.jsonl", std::process::id()));
+    let (_dir, p) = crate::testfs::Scratch::file("recover-ln", "lines.jsonl");
     let mut f = std::fs::File::create(&p).unwrap();
     // line 1: genuine user; line 2: BLANK; line 3: a Read result for /p/a.rs;
     // line 4: malformed (carries "Read" so it survives the prefilter); line 5: another read.
@@ -34,7 +33,6 @@ fn line_number_counter_is_one_to_one_with_jsonl_lines() {
     f.flush().unwrap();
 
     let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan");
-    std::fs::remove_file(&p).ok();
     // Two read events; their line numbers are the TRUE jsonl lines (3 and 5), with the
     // blank + malformed lines counted in between (so 5, not 4).
     assert_eq!(sr.events.len(), 2, "two read events");
@@ -208,10 +206,9 @@ fn window_admits_turn_and_time() {
 #[test]
 fn scan_one_file_empty_is_safe() {
     // A zero-byte file → mmap None → empty ScanResult (the early-return arm).
-    let p = std::env::temp_dir().join(format!("csift-recover-empty-{}.jsonl", std::process::id()));
+    let (_dir, p) = crate::testfs::Scratch::file("recover-empty", "empty.jsonl");
     std::fs::File::create(&p).unwrap();
     let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan empty");
-    std::fs::remove_file(&p).ok();
     assert!(sr.events.is_empty());
     assert_eq!(sr.skipped_lines, 0);
 }

@@ -220,11 +220,7 @@ fn head_records_visits_torn_tail_fragment() {
     content.push_str(r#"{"type":"user","message":{"role":"user","content":"a"}}"#);
     content.push('\n');
     content.push_str(r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"tail-no-newline"}]}}"#);
-    let p = std::env::temp_dir().join(format!(
-        "csift-torn-{}-{}.jsonl",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    let (_dir, p) = Scratch::file("torn", "torn.jsonl");
     std::fs::write(&p, content.as_bytes()).unwrap();
     let mut seen = 0usize;
     let mut last_agent: Option<String> = None;

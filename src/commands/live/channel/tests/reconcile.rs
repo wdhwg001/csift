@@ -17,33 +17,19 @@ const QUOTING_PROSE: &str = r#"{"type":"user","uuid":"u9","timestamp":"2026-06-0
 
 /// A scratch transcript, removed on drop.
 struct Transcript {
-    dir: PathBuf,
+    /// The tree whose Drop removes the transcript with it.
+    _dir: crate::testfs::Scratch,
     path: PathBuf,
 }
 
 impl Transcript {
     fn new(lines: &[&str]) -> Self {
-        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        let dir = std::env::temp_dir().join(format!(
-            "csift-reconcile-test-{}-{nanos}-{seq}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("{SESSION}.jsonl"));
+        let (dir, path) =
+            crate::testfs::Scratch::file("reconcile-test", &format!("{SESSION}.jsonl"));
         let mut body = lines.join("\n");
         body.push('\n');
         std::fs::write(&path, body).unwrap();
-        Transcript { dir, path }
-    }
-}
-
-impl Drop for Transcript {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
+        Transcript { _dir: dir, path }
     }
 }
 

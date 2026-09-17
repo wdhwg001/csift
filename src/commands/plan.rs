@@ -442,7 +442,7 @@ mod tests {
     fn resolve_plan_target_prefers_the_top_level_lane() {
         // Both lanes carry a binding: the top-level session's own plan wins the
         // sigil resolution; the subagent's binding is a fallback only.
-        let dir = std::env::temp_dir().join(format!("csift-plan-lane-{}", std::process::id()));
+        let dir = crate::testfs::Scratch::dir("plan-lane");
         let sub_dir = dir.join("11111111-2222-4333-8444-555555555555/subagents");
         std::fs::create_dir_all(&sub_dir).unwrap();
         let top = dir.join("11111111-2222-4333-8444-555555555555.jsonl");
@@ -458,8 +458,6 @@ mod tests {
         )
         .unwrap();
         let r = resolve_plan_target(&[top.clone(), sub.clone()]).unwrap();
-        std::fs::remove_file(&top).ok();
-        std::fs::remove_file(&sub).ok();
         assert_eq!(r.plan_file, "/plans/top-level-plan.md");
         assert!(!r.is_subagent);
     }
@@ -491,8 +489,7 @@ mod tests {
     /// with no `planFilePath` all resolve to `None` (never a false binding).
     #[test]
     fn resolve_session_plan_binds_only_on_a_real_plan_mode_attachment() {
-        let dir = std::env::temp_dir().join(format!("csift-plan-ut-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testfs::Scratch::dir("plan-ut");
         let write = |name: &str, body: &str| {
             let p = dir.join(name);
             std::fs::write(&p, body).unwrap();
@@ -545,7 +542,5 @@ mod tests {
             "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"isSubAgent\":false,\"planFilePath\":\"/x/q.md\",\"planExists\":false},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",
         );
         assert_eq!(resolve_session_plan(&no_slug).unwrap().unwrap().slug, None);
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

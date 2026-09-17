@@ -68,6 +68,16 @@ impl Scratch {
         });
         Scratch { root }
     }
+
+    /// A fresh tree plus the path of one file inside it. A bare `temp_dir()/csift-x-<pid>.txt`
+    /// is the same adoption hazard one level down, so a file fixture lives in a tree of its
+    /// own. The file is not created here: a test that wants one writes it, and the ones that
+    /// need a path with NO file behind it get exactly that.
+    pub(crate) fn file(tag: &str, name: &str) -> (Scratch, PathBuf) {
+        let dir = Scratch::dir(tag);
+        let path = dir.join(name);
+        (dir, path)
+    }
 }
 
 impl std::ops::Deref for Scratch {

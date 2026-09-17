@@ -2,25 +2,16 @@ use super::*;
 use std::io::Write;
 
 /// A scratch projects-root mimicking the real on-disk layout, removed on drop.
+#[derive(Debug)]
 struct Fixture {
-    root: PathBuf,
+    root: crate::testfs::Scratch,
 }
 
 impl Fixture {
     fn new() -> Self {
-        // A process-wide atomic sequence guarantees a unique root per instance even
-        // when two `Fixture::new()` calls on parallel test threads land on the same
-        // PID + nanosecond - otherwise their `Drop` `remove_dir_all` could wipe a
-        // sibling test's tree mid-run (a ~8% flake on the default parallel runner).
-        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let n = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("csift-sub-{}-{n}-{seq}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
-        Fixture { root }
+        Fixture {
+            root: crate::testfs::Scratch::dir("sub"),
+        }
     }
 
     fn write(&self, rel: &str, contents: &str) -> PathBuf {
@@ -29,12 +20,6 @@ impl Fixture {
         let mut f = std::fs::File::create(&p).unwrap();
         f.write_all(contents.as_bytes()).unwrap();
         p
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
     }
 }
 

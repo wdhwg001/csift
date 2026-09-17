@@ -1,6 +1,6 @@
 use super::*;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::testfs::Scratch;
 
 mod agent_copies;
 mod dedup;
@@ -12,21 +12,18 @@ mod settings_scopes;
 mod settings_tolerance;
 mod trap;
 
-static TREE_COUNTER: AtomicU64 = AtomicU64::new(0);
-
 /// A throwaway directory tree (no external dev-dep), removed on drop. Every fixture path
 /// is generated, so nothing about this machine reaches a test literal.
 #[derive(Debug)]
 struct Tree {
-    root: PathBuf,
+    root: Scratch,
 }
 
 impl Tree {
     fn new() -> Tree {
-        let n = TREE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("csift-settings-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&root).expect("create temp tree");
-        Tree { root }
+        Tree {
+            root: Scratch::dir("settings"),
+        }
     }
 
     fn write(&self, rel: &str, body: &str) -> PathBuf {
@@ -46,11 +43,5 @@ impl Tree {
 
     fn path(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
-    }
-}
-
-impl Drop for Tree {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
     }
 }

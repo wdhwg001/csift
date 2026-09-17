@@ -49,12 +49,9 @@ fn empty_file_is_safe() {
 
 #[test]
 fn mmap_open_error_surfaces_context() {
-    // A path that does not exist → the `File::open` error context arm of mmap_file.
-    let missing = std::env::temp_dir().join(format!(
-        "csift-missing-{}-{}.jsonl",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
+    // A path that does not exist → the `File::open` error context arm of mmap_file. The
+    // tree is this run's own, so nothing can have left a file at that name.
+    let (_dir, missing) = Scratch::file("missing", "missing.jsonl");
     let err = mmap_bytes(&missing).unwrap_err();
     assert!(
         err.to_string().contains("cannot open")
