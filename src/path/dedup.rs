@@ -250,7 +250,7 @@ fn first_record_cwd(path: &Path) -> Option<String> {
         .read_to_end(&mut buf)
         .ok()?;
     let head = String::from_utf8_lossy(&buf);
-    // The last fragment may be cut by the window; a partial `"cwd":"…` there simply does
+    // The last fragment may be cut by the window; a partial `"cwd":"...` there simply does
     // not parse, which is the honest answer for a record the probe could not see whole.
     head.split('\n')
         .find_map(|l| extract_json_string_field(l, "cwd"))

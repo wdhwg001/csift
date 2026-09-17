@@ -130,6 +130,25 @@ fn the_first_cwd_probe_reads_past_a_record_that_carries_none() {
 }
 
 #[test]
+fn the_head_window_steps_over_a_huge_leading_line_to_reach_the_first_cwd() {
+    let tree = Tree::new();
+    // The window exists to clear a big leading record (an image line runs to megabytes).
+    // Two copies of EQUAL size, so only the cwd tie-break can decide: `-Users-dev-aaa`
+    // sorts before `-Users-dev-proj`, so a probe that cannot reach the cwd hands the win
+    // to the directory that does NOT encode it.
+    let big = format!(
+        "{{\"type\":\"attachment\",\"pad\":\"{}\"}}\n",
+        "x".repeat(4096)
+    );
+    let body = big + &line("/Users/dev/proj", 1);
+    let other = transcript(&tree, "-Users-dev-aaa", ID, &body);
+    let home = transcript(&tree, "-Users-dev-proj", ID, &body);
+
+    let (kept, _) = dedup_top_level(vec![other, home.clone()]);
+    assert_eq!(kept, vec![home]);
+}
+
+#[test]
 fn a_torn_final_line_still_counts_as_a_record() {
     let tree = Tree::new();
     // No trailing newline on the shorter copy: a crash-truncated tail is still a line the
