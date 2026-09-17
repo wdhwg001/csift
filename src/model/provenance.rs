@@ -223,10 +223,22 @@ impl RootLink {
 
     /// The answer for a unit under an opener: its address, and the hop count when the
     /// parent chain reached it.
+    ///
+    /// The line is a REAL line, and the caller is what makes that true: the only record
+    /// csift holds with no physical line is a merged elicitation-sidecar record, and none
+    /// of the shapes the sidecar carries opens a turn, so no turn's opener is one
+    /// (`no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line`). A guard that
+    /// collapsed a zero to `None` used to sit here for a caller that does not exist, and
+    /// what it would have produced is worse than the case it guarded: an object with a
+    /// uuid, a hop count and no line and no note - a FIFTH wire shape beside the four
+    /// documented answers, rendering nothing at all in the label zone. The
+    /// `debug_assert` says the invariant out loud instead of quietly papering over its
+    /// breach.
     #[must_use]
     pub fn under(line: usize, uuid: Option<String>, hops: Option<u32>) -> RootLink {
+        debug_assert!(line > 0, "a turn opener always carries a physical line");
         RootLink {
-            line: (line > 0).then_some(line),
+            line: Some(line),
             uuid,
             hops,
             note: hops.is_none().then_some(ROOT_UNCHAINED),

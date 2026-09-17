@@ -207,11 +207,26 @@ fn the_root_has_four_answers_and_says_which_it_is() {
     assert_eq!(notes.len(), before, "two answers share a note: {notes:?}");
 }
 
-/// A root whose opener has NO physical line (a merged elicitation-sidecar record) carries
-/// no line at all rather than `L0`, which is an address that fetches nothing.
+/// A root ALWAYS has a line, and this is why: the only record csift holds with no physical
+/// line is a merged elicitation-sidecar record, and neither shape the sidecar carries opens
+/// a turn - an unresolved AskUserQuestion or ExitPlanMode rides an `assistant` record, and
+/// an MCP elicitation rides a `system` one. So no turn's opener can be one, and the guard
+/// that used to collapse a zero line stood for a caller that does not exist.
+///
+/// Pinned on the SHAPES rather than on the guard, because the guard was never the fact: if
+/// one of these ever did open a turn, a `None` line would hide it behind a fifth wire shape
+/// no manual names, and this test would name it instead.
 #[test]
-fn a_root_with_no_physical_line_names_none() {
-    let r = RootLink::under(0, Some("u-1".to_string()), Some(1));
-    assert_eq!(r.line, None);
-    assert_eq!(r.label_zone(), None);
+fn no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line() {
+    for line in [
+        r#"{"type":"assistant","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"toolu_01x","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01x","name":"AskUserQuestion","input":{"questions":[]}}]}}"#,
+        r#"{"type":"system","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp","csiftKey":"some-server","content":"MCP elicitation pending"}"#,
+    ] {
+        let r: crate::model::Record = serde_json::from_str(line).expect("fixture parses");
+        assert!(r.is_elicitation_marker(), "the fixture is a marker: {line}");
+        assert!(!r.opens_turn(), "a sidecar record opens no turn: {line}");
+    }
+    let r = RootLink::under(12, Some("u-1".to_string()), Some(1));
+    assert_eq!(r.line, Some(12), "the address a reader can fetch");
+    assert_eq!(r.label_zone().as_deref(), Some("[root L12 +1]"));
 }
