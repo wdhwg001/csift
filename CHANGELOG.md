@@ -328,6 +328,18 @@ surface change bumps the PATCH.
   on a closed enum a consumer branches on. The global `--cross-compactions` doc now names all
   eight, sorted by what a reader can do about each: only `budget-exhausted` is one a larger
   budget can move, and only when that boundary's door is open. Help text is surface.
+- **The root `--help`'s newline pitfall said the opposite of what the binary does.** It read
+  "Text-mode excerpts keep a record's LITERAL newlines (a multiline Bash command renders
+  as-is)", and the excerpt builder collapses every whitespace run to a single space, so a
+  text excerpt is ONE LINE per record. The pitfall it warned about was real and its mechanism
+  was inverted: a `head -N` cuts whole records off the end and takes the footer with them, it
+  does not cut into a record. The help now states the collapse, names the JSON `body` and
+  `--raw` as the two ways back to the newlines, and keeps the pipe advice on its true
+  footing. The same measurement corrects a second sentence, in `SKILL.md` alone: `body` keeps
+  the newlines of a render csift did not already flatten, and an opener it RECONSTRUCTS
+  (`user.message`, `user.answer`, `user.rejection`) is flattened a layer earlier, in the
+  model, so its `body` is flat too and `--raw` is the only way to its bytes. Help text is
+  surface.
 - **`SKILL.md` is rewritten as the always-current mastery manual.** It had become a ledger:
   37 lines carried a csift version rider, so a reader had to work out which sentences
   described the binary in front of them. It carries none now, and the Surface line against

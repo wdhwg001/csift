@@ -165,10 +165,15 @@ use super::*;
         NATIVE transcript already shows closed (e.g. a REJECTED plan: Claude Code fires\n    \
         no PostToolUse for a rejection, so the hook never got to write its resolved\n    \
         marker) is auto-dropped: the native record outranks the sidecar.\n  \
-          - Text-mode excerpts keep a record's LITERAL newlines (a multiline Bash command\n    \
-        renders as-is), so piping text output through `head -N` can cut mid-record and\n    \
-        hide the overflow pointers. The line-safe machine form is `--format json` (one\n    \
-        object per line); the honest caps are `--max-count` and the built-in drop reports.\n\n\
+          - A text-mode excerpt is ONE LINE per record: whitespace runs collapse to single\n    \
+        spaces, so a multiline Bash command renders flat and `--no-truncate` alone will\n    \
+        not give a table or a paragraph break back. The JSON `body` keeps the newlines\n    \
+        of a render csift did not already flatten - an opener it RECONSTRUCTS (a user\n    \
+        message, an answered AskUserQuestion, a rejection) is flattened a layer earlier,\n    \
+        so its `body` is flat too and `--raw` is the only way to its bytes. To bound the\n    \
+        OUTPUT reach for `--max-count` rather than a pipe into `head`/`tail`: a capped\n    \
+        run keeps every note and names what it dropped, while a pipe amputates one end\n    \
+        of the ledger.\n\n\
         THE CHANNEL (send / msg / ack / deliver)\n  \
           A message channel between Claude Code lanes, and into one from any process\n  \
         outside Claude Code. It exists because the official channel is structurally\n  \
