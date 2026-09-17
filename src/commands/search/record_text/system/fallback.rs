@@ -62,15 +62,17 @@ pub(crate) fn notes(rec: &Record) -> (Vec<HitFact>, Vec<Marker>) {
                 fell_back_from: from.clone(),
             }),
             // The banner is the `model_refusal_fallback` record that DESCENDS from this
-            // one, and descent is the one direction a uuid map cannot answer: this record
-            // names no key pointing down, and the reverse index that would find the child
-            // is the provenance work, not a family's. So the edge is emitted with its
-            // reason rather than omitted - a reader learns that the banner exists, that
-            // it names this record, and which way to look.
+            // one, and descent is the one direction no uuid map answers: this record names
+            // no key pointing down, and one record can have several banners, so the answer
+            // is a SET rather than the single target an edge carries. The index csift
+            // holds does not close it either - it maps a `tool_use_id` to a line, which is
+            // a different join. So the edge is emitted with its reason rather than omitted
+            // - a reader learns that the banner exists, that it names this record, and
+            // which way to look.
             HitFact::ForUnknown {
                 kind: EdgeKind::Banner,
                 reason: "the banner names this record, not the reverse; a one-to-many \
-                         descent needs the provenance index"
+                         descent, which no uuid map answers"
                     .to_string(),
             },
         ],
@@ -126,7 +128,7 @@ mod tests {
                 ("fell_back_from", "\"model-a\"".to_string()),
                 (
                     "for",
-                    r#"[{"basis":null,"kind":"banner","reason":"the banner names this record, not the reverse; a one-to-many descent needs the provenance index","target":null}]"#
+                    r#"[{"basis":null,"kind":"banner","reason":"the banner names this record, not the reverse; a one-to-many descent, which no uuid map answers","target":null}]"#
                         .to_string()
                 ),
             ]

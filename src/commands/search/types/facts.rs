@@ -218,9 +218,10 @@ pub enum HitFact {
         target: ForTarget,
     },
     /// The HONEST EMPTY of the same edge: the record names no target, or the target is a
-    /// DESCENT (one record to many) that only a provenance index can answer. Rendered,
-    /// never omitted - a silently absent edge reads as "there is no such relation", which
-    /// is a different claim from "this record does not say".
+    /// DESCENT (one record to many), which is the direction no uuid map answers and a
+    /// shape this edge could not carry anyway - it names ONE neighbour. Rendered, never
+    /// omitted - a silently absent edge reads as "there is no such relation", which is a
+    /// different claim from "this record does not say".
     ForUnknown {
         /// The relation the edge would have carried.
         kind: EdgeKind,

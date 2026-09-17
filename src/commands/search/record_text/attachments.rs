@@ -371,8 +371,10 @@ fn payload_str<'a>(rec: &'a Record, key: &str) -> Option<&'a str> {
 fn record_facts(rec: &Record, ctx: &ClassifyCtx) -> Vec<HitFact> {
     // Where this attachment hangs. An attachment's parent is most often ANOTHER attachment
     // - they chain - and the chain ends on the record the whole run of them was attached
-    // to. ONE hop: the walk to the first conversation record is a provenance index's work,
-    // not a per-unit fact's.
+    // to. ONE hop, by the design of the edge: every `for` edge names one neighbour and the
+    // distance rides `for_root` instead, so following the run up to the first conversation
+    // record is a MULTI-HOP walk this builder does not make, and the edge says what this
+    // line states rather than where the run ends.
     let attached_to = super::for_edge(
         EdgeKind::AttachedTo,
         Basis::Key,

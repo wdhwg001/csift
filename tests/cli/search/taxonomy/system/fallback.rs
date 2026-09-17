@@ -24,7 +24,7 @@ fn a_fallback_served_turn_is_addressable_and_names_both_models() {
     assert!(
         show.stdout.contains(
             "[for: banner unknown (the banner names this record, not the reverse; a \
-             one-to-many descent needs the provenance index)]"
+             one-to-many descent, which no uuid map answers)]"
         ),
         "{}",
         show.stdout
