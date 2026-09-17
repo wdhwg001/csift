@@ -15,98 +15,117 @@
 //! The wire form is [`EdgeKind::as_str`], which is what the label zone prints and what
 //! `--count-by for-kind` keys on.
 
-/// The RELATION a `for` edge names: what this record is FOR.
+/// Declare the relation vocabulary ONCE: the enum, its wire words, and the list of every
+/// variant, all out of the same input.
 ///
-/// Every variant is a word one family already renders, plus the two the engine itself
-/// answers for every unit ([`EdgeKind::Parent`] and [`EdgeKind::ResultOf`]). The set is
-/// small on purpose - a vocabulary a reader has to look up is a vocabulary they will not
-/// use - and it is closed so that the census axis has keys it can declare.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum EdgeKind {
-    /// The record this one was written UNDER: an attachment's parent, an isMeta
-    /// injection's, the record a `queued_command` rode in on.
-    AttachedTo,
-    /// The call that armed a schedule. Joined by a scheduler id rather than a record
-    /// uuid, so it is always the honest empty with that as its reason.
-    ArmedBy,
-    /// The `model_refusal_fallback` record a fallback-served assistant turn's banner
-    /// belongs to - a DESCENT, which a uuid map cannot answer.
-    Banner,
-    /// The assistant turn a Stop hook's feedback blocked.
-    Blocked,
-    /// The child TRANSCRIPT a background handover moved to. The one relation whose target
-    /// is a whole session and no record in it.
-    ContinuedIn,
-    /// The `scheduled_task_fire` record a fired prompt was submitted under.
-    Fires,
-    /// The tool call an attachment answers for, by the payload's own `toolUseID`.
-    ForToolUse,
-    /// The record a `/fork` cut at, in the transcript it was cut from.
-    ForkedFrom,
-    /// The hook RUN a `stop_hook_summary` belongs to, by the run id it shares with that
-    /// run's injected-context attachments.
-    HookRun,
-    /// The assistant message an interrupt cut short.
-    Interrupted,
-    /// The record a `last-prompt` line's `leafUuid` names - the chain leaf at that write.
-    Leaf,
-    /// The record this one hangs off in Claude Code's own conversation DAG - `parentUuid`,
-    /// resolved to a line. The ENGINE's own edge: every record that names a parent carries
-    /// it, unless a family already named that same target with a word of its own.
-    Parent,
-    /// The assistant turn a harness redo nudge sent back.
-    Redoes,
-    /// The user message a model refusal was for.
-    Refused,
-    /// The message an inbound relay answers. No relay carries such a key, so this is
-    /// always the honest empty - which is the point: the relation exists and the record
-    /// does not state it.
-    RepliesTo,
-    /// The call a notification pulse reports on, by the `<tool-use-id>` it names.
-    Reports,
-    /// The `tool_use` block a `tool_result` answers, by the API's own `tool_use_id`. The
-    /// ENGINE's other edge, and the one relation in the set that is not a uuid relation at
-    /// all - which is why the index below exists.
-    ResultOf,
-    /// The prompt record a file-history line's `messageId` names.
-    Versions,
-    /// The slash-command record a delivered `local_command` is the output of.
-    Wraps,
+/// A list a variant can be MISSING from is a sample, and a test that walks a sample states
+/// nothing about the vocabulary. An exhaustive `match` from variant to list position does
+/// not close that: it forces an author to TOUCH the test file, not to put the variant into
+/// the list - measured, a twentieth variant given an arm, a colliding word and no row in
+/// the list passed clippy and the whole suite. Generating both from one declaration is what
+/// makes "every variant" mean it: there is no second place to declare one.
+///
+/// `ALL` is `cfg(test)` because nothing in the binary enumerates the vocabulary - the
+/// census keys on the words a scan actually saw - and a const with none but test readers is
+/// the dead code this crate declines to carry.
+macro_rules! edge_kinds {
+    (
+        $(#[$enum_doc:meta])*
+        pub enum $name:ident {
+            $( $(#[$variant_doc:meta])* $variant:ident => $word:literal, )+
+        }
+    ) => {
+        $(#[$enum_doc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub enum $name {
+            $( $(#[$variant_doc])* $variant, )+
+        }
+
+        impl $name {
+            /// The wire word: the label zone's `[for: <word> ...]` and the
+            /// `--count-by for-kind` key. One spelling, so the text surface and JSON can
+            /// never name a relation differently.
+            #[must_use]
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $( $name::$variant => $word, )+
+                }
+            }
+
+            /// EVERY variant, in declaration order - the vocabulary itself, not a list of
+            /// it. A variant cannot be absent: it and this array come from one declaration.
+            #[cfg(test)]
+            pub(crate) const ALL: &'static [$name] = &[ $( $name::$variant, )+ ];
+        }
+    };
+}
+
+edge_kinds! {
+    /// The RELATION a `for` edge names: what this record is FOR.
+    ///
+    /// Every variant is a word one family already renders, plus the two the engine itself
+    /// answers for every unit ([`EdgeKind::Parent`] and [`EdgeKind::ResultOf`]). The set is
+    /// small on purpose - a vocabulary a reader has to look up is a vocabulary they will not
+    /// use - and it is closed so that the census axis has keys it can declare.
+    pub enum EdgeKind {
+        /// The record this one was written UNDER: an attachment's parent, an isMeta
+        /// injection's, the record a `queued_command` rode in on.
+        AttachedTo => "attached_to",
+        /// The call that armed a schedule. Joined by a scheduler id rather than a record
+        /// uuid, so it is always the honest empty with that as its reason.
+        ArmedBy => "armed_by",
+        /// The `model_refusal_fallback` record a fallback-served assistant turn's banner
+        /// belongs to - a DESCENT, which a uuid map cannot answer.
+        Banner => "banner",
+        /// The assistant turn a Stop hook's feedback blocked.
+        Blocked => "blocked",
+        /// The child TRANSCRIPT a background handover moved to. The one relation whose target
+        /// is a whole session and no record in it.
+        ContinuedIn => "continued_in",
+        /// The `scheduled_task_fire` record a fired prompt was submitted under.
+        Fires => "fires",
+        /// The tool call an attachment answers for, by the payload's own `toolUseID`.
+        ForToolUse => "for_tool_use",
+        /// The record a `/fork` cut at, in the transcript it was cut from.
+        ForkedFrom => "forked_from",
+        /// The hook RUN a `stop_hook_summary` belongs to, by the run id it shares with that
+        /// run's injected-context attachments.
+        ///
+        /// Its word is the one in the set that is not a single token, deliberately: it is
+        /// what the keys family already renders, and the id it names is a HOOK RUN id
+        /// rather than the API tool_use id its field name suggests - so the two words are
+        /// the distinction, and collapsing them would lose it.
+        HookRun => "hook run",
+        /// The assistant message an interrupt cut short.
+        Interrupted => "interrupted",
+        /// The record a `last-prompt` line's `leafUuid` names - the chain leaf at that write.
+        Leaf => "leaf",
+        /// The record this one hangs off in Claude Code's own conversation DAG - `parentUuid`,
+        /// resolved to a line. The ENGINE's own edge: every record that names a parent carries
+        /// it, unless a family already named that same target with a word of its own.
+        Parent => "parent",
+        /// The assistant turn a harness redo nudge sent back.
+        Redoes => "redoes",
+        /// The user message a model refusal was for.
+        Refused => "refused",
+        /// The message an inbound relay answers. No relay carries such a key, so this is
+        /// always the honest empty - which is the point: the relation exists and the record
+        /// does not state it.
+        RepliesTo => "replies_to",
+        /// The call a notification pulse reports on, by the `<tool-use-id>` it names.
+        Reports => "reports",
+        /// The `tool_use` block a `tool_result` answers, by the API's own `tool_use_id`. The
+        /// ENGINE's other edge, and the one relation in the set that is not a uuid relation at
+        /// all - which is why the index below exists.
+        ResultOf => "result_of",
+        /// The prompt record a file-history line's `messageId` names.
+        Versions => "versions",
+        /// The slash-command record a delivered `local_command` is the output of.
+        Wraps => "wraps",
+    }
 }
 
 impl EdgeKind {
-    /// The wire word: the label zone's `[for: <word> ...]` and the `--count-by for-kind`
-    /// key. One spelling, so the text surface and JSON can never name a relation
-    /// differently.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            EdgeKind::AttachedTo => "attached_to",
-            EdgeKind::ArmedBy => "armed_by",
-            EdgeKind::Banner => "banner",
-            EdgeKind::Blocked => "blocked",
-            EdgeKind::ContinuedIn => "continued_in",
-            EdgeKind::Fires => "fires",
-            EdgeKind::ForToolUse => "for_tool_use",
-            EdgeKind::ForkedFrom => "forked_from",
-            // The one word in the set that is not a single token. It is what the keys
-            // family already renders, and the id it names is a HOOK RUN id rather than
-            // the API tool_use id its field name suggests - so the two words are the
-            // distinction, and collapsing them would lose it.
-            EdgeKind::HookRun => "hook run",
-            EdgeKind::Interrupted => "interrupted",
-            EdgeKind::Leaf => "leaf",
-            EdgeKind::Parent => "parent",
-            EdgeKind::Redoes => "redoes",
-            EdgeKind::Refused => "refused",
-            EdgeKind::RepliesTo => "replies_to",
-            EdgeKind::Reports => "reports",
-            EdgeKind::ResultOf => "result_of",
-            EdgeKind::Versions => "versions",
-            EdgeKind::Wraps => "wraps",
-        }
-    }
-
     /// Does this relation render a tag in the LABEL ZONE, or ride JSON alone?
     ///
     /// The label zone carries what a record SAYS about itself, and a family edge is exactly

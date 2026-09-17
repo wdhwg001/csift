@@ -2,85 +2,27 @@
 
 use super::*;
 
-/// The vocabulary, typed out: EVERY variant, in the enum's own order, and its word.
+/// The vocabulary IS [`EdgeKind::ALL`], generated beside the enum by the `edge_kinds!`
+/// declaration, so a variant cannot exist outside it. The tests below walk that.
 ///
-/// Hand-kept rather than derived, because a list derived from the enum would assert
-/// nothing about what the vocabulary CLAIMS - which is the whole reason the set is closed.
-/// It lives here rather than as a production `EdgeKind::ALL` because nothing in the binary
-/// enumerates the vocabulary (the census keys on the words a scan actually saw), and a
-/// const with none but test readers is dead code this crate declines to carry.
+/// It was a hand-kept array here, and twice that was not enough. First it held seventeen
+/// of the nineteen - `parent` and `result_of` absent - so the uniqueness and JSON-alone
+/// tests were statements about a sample. Then an exhaustive variant-to-position `match`
+/// was added to close it, and it did not: it forces an author to TOUCH this file, not to
+/// put the variant into the list, and a twentieth variant given an arm, a colliding word
+/// and no row in the array passed clippy and the whole suite.
+/// The vocabulary is NINETEEN relations, and that is the claim every document makes.
 ///
-/// What makes it a COMPLETE list rather than a sample is [`ordinal`]: the enum's own
-/// exhaustiveness check turns a variant missing from here into a compile error. Without
-/// that the list was seventeen of nineteen, `parent` and `result_of` were absent, and a
-/// twentieth relation whose word collided with `leaf` passed the whole suite - because the
-/// list it was missing from was the list the uniqueness test walked.
-const EVERY_KIND: [EdgeKind; 19] = [
-    EdgeKind::AttachedTo,
-    EdgeKind::ArmedBy,
-    EdgeKind::Banner,
-    EdgeKind::Blocked,
-    EdgeKind::ContinuedIn,
-    EdgeKind::Fires,
-    EdgeKind::ForToolUse,
-    EdgeKind::ForkedFrom,
-    EdgeKind::HookRun,
-    EdgeKind::Interrupted,
-    EdgeKind::Leaf,
-    EdgeKind::Parent,
-    EdgeKind::Redoes,
-    EdgeKind::Refused,
-    EdgeKind::RepliesTo,
-    EdgeKind::Reports,
-    EdgeKind::ResultOf,
-    EdgeKind::Versions,
-    EdgeKind::Wraps,
-];
-
-/// Where each variant sits in [`EVERY_KIND`].
-///
-/// The match is EXHAUSTIVE, so a variant added to [`EdgeKind`] and not to the list does not
-/// compile: the only way to make it compile is to give it a position, and the test below
-/// then demands that position actually hold it.
-fn ordinal(k: EdgeKind) -> usize {
-    match k {
-        EdgeKind::AttachedTo => 0,
-        EdgeKind::ArmedBy => 1,
-        EdgeKind::Banner => 2,
-        EdgeKind::Blocked => 3,
-        EdgeKind::ContinuedIn => 4,
-        EdgeKind::Fires => 5,
-        EdgeKind::ForToolUse => 6,
-        EdgeKind::ForkedFrom => 7,
-        EdgeKind::HookRun => 8,
-        EdgeKind::Interrupted => 9,
-        EdgeKind::Leaf => 10,
-        EdgeKind::Parent => 11,
-        EdgeKind::Redoes => 12,
-        EdgeKind::Refused => 13,
-        EdgeKind::RepliesTo => 14,
-        EdgeKind::Reports => 15,
-        EdgeKind::ResultOf => 16,
-        EdgeKind::Versions => 17,
-        EdgeKind::Wraps => 18,
-    }
-}
-
-/// The list IS the enum: nineteen words, each variant once, in the enum's own order.
-///
-/// The count is the vocabulary's own claim - every document that teaches it says nineteen -
-/// so it is asserted rather than derived from the list's length, which would agree with
-/// itself whatever the list held.
+/// Asserted against the number rather than derived from the list, which would agree with
+/// itself whatever the list held - and since the list is generated from the enum, this is
+/// the enum's own variant count.
 #[test]
-fn the_vocabulary_list_holds_every_variant_in_enum_order() {
+fn the_vocabulary_is_nineteen_relations() {
     assert_eq!(
-        EVERY_KIND.len(),
+        EdgeKind::ALL.len(),
         19,
         "the closed vocabulary is nineteen relations"
     );
-    for (i, k) in EVERY_KIND.into_iter().enumerate() {
-        assert_eq!(ordinal(k), i, "{k:?} is listed out of order, or twice");
-    }
 }
 
 /// Exactly TWO relations ride JSON alone, and they are the engine's own.
@@ -92,10 +34,10 @@ fn the_vocabulary_list_holds_every_variant_in_enum_order() {
 /// text surface at once.
 #[test]
 fn only_the_engine_relations_ride_json_alone() {
-    let hidden: Vec<&str> = EVERY_KIND
-        .into_iter()
+    let hidden: Vec<&str> = EdgeKind::ALL
+        .iter()
         .filter(|k| !k.rendered_in_label())
-        .map(EdgeKind::as_str)
+        .map(|k| k.as_str())
         .collect();
     assert_eq!(hidden, ["parent", "result_of"]);
 }
@@ -108,7 +50,7 @@ fn only_the_engine_relations_ride_json_alone() {
 /// end to end.
 #[test]
 fn every_edge_kind_has_its_own_word() {
-    let mut words: Vec<&str> = EVERY_KIND.iter().map(|k| k.as_str()).collect();
+    let mut words: Vec<&str> = EdgeKind::ALL.iter().map(|k| k.as_str()).collect();
     let before = words.len();
     words.sort_unstable();
     words.dedup();
@@ -119,7 +61,7 @@ fn every_edge_kind_has_its_own_word() {
 /// back - the words are printed in a label zone and read back as census keys.
 #[test]
 fn every_word_is_printable_as_it_stands() {
-    for k in EVERY_KIND {
+    for k in EdgeKind::ALL {
         let w = k.as_str();
         assert!(!w.is_empty(), "{k:?} has no word");
         assert!(
