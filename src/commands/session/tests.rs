@@ -383,7 +383,6 @@ fn clone_origin_decoys_stay_outside_the_join() {
         "a boundary that only references the uuid is not the carrier"
     );
     std::fs::remove_file(&refr).unwrap();
-    std::fs::remove_file(&clone).ok();
 }
 
 // -- C-44: the /clear checkpoint join --

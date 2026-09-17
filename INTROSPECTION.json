@@ -90353,7 +90353,7 @@
         {
           "path": "src/commands/session/tests.rs",
           "snippet": "fn checkpoint_close_reads_the_sum_and_refuses_other_types() {",
-          "lines": "392"
+          "lines": "391"
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
