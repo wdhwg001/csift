@@ -12,7 +12,7 @@
 //! with an EMPTY pattern and the full selector set, the same way the leaf census does and
 //! for the same reason - four leaves render no body and a pattern scan cannot reach them.
 //!
-//! A PAIRED ROOT, split four ways by WHAT IS BEING ASSERTED rather than by size. This file
+//! A PAIRED ROOT, split five ways by WHAT IS BEING ASSERTED rather than by size. This file
 //! holds the RENDERED edge set - every `for` tag the shared 73-leaf fixture prints, as one
 //! equality - plus the fixture target and the reader every child runs through. Rendered,
 //! not family-built: five of the engine's own relations render a tag and are in the set,
@@ -22,7 +22,8 @@
 //! `provenance/census.rs` holds the `--count-by for-kind` surface over that vocabulary.
 //! `provenance/shapes.rs` holds the cases that need a transcript built around ONE
 //! structural question, which the shared fixture cannot carry without becoming a second
-//! fixture inside the first.
+//! fixture inside the first, and `provenance/compaction.rs` the four that are all about
+//! ONE subject - the join between a compaction boundary and its summary.
 //!
 //! WHY THE SHAPE AND NOT THE VALUE: a line number moves the day the fixture gains a line
 //! above the edge, and a test that pinned it would fail on an unrelated edit while saying
@@ -36,7 +37,14 @@ use crate::harness::*;
 /// The full-census target: the top-level transcript AND its subagent lane.
 const REACH_TARGET: &str = "@3a1b2c3d-4e5f-4061-8273-849506a7b8c9";
 
+/// The home the SHAPE cases write their own transcripts into - one per case, each built
+/// around the one structural question it asks. It lives on the root because two children
+/// write into it and a second copy of a fixture path is a second place for it to drift.
+const LEAD_ENC: &str = "-Users-dev-lead-project";
+const LEAD_SESS: &str = "6f7e8d9c-0b1a-4c2d-8e3f-4a5b6c7d8e9f";
+
 mod census;
+mod compaction;
 mod engine;
 mod shapes;
 
@@ -79,7 +87,7 @@ const EVERY_EDGE: [(&str, &str, &str, &str); 48] = [
     ("harness.command.caveat", "attached_to", "position", "line"),
     // The fixture's boundary carries only the four original `compactMetadata` scalars, so
     // its pairing falls to POSITION and it names no predecessor - the two older shapes.
-    // The key-carrying forms need a boundary built around them (`provenance/shapes.rs`).
+    // The key-carrying forms need a boundary built around them (`provenance/compaction.rs`).
     ("harness.compaction.boundary", "pairs", "position", "line"),
     ("harness.compaction.boundary", "precedes", "null", "unknown"),
     ("harness.compaction.summary", "pairs", "position", "line"),
