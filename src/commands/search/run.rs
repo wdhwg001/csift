@@ -201,12 +201,10 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         })
         .collect::<Result<Vec<_>>>()?;
 
-    // SCOPE span of the resolved set (every transcript, incl. hit-free subagents).
-    let scope_sub = session_files
-        .iter()
-        .filter(|p| crate::subagent::is_subagent_path(p))
-        .count();
-    let scope_top = session_files.len() - scope_sub;
+    // SCOPE span of the resolved set (every transcript, incl. hit-free subagents), counted
+    // in DISTINCT session ids - the one rule, so a divergent duplicate pair reports the one
+    // session the disk holds twice rather than two.
+    let (scope_top, scope_sub) = crate::subagent::scope_span_files(&session_files);
 
     // ── Combined STABLE chronological timeline (SPEC §6.2) ──
     // Flatten every file's exchanges into ONE timeline, then stable-sort by the

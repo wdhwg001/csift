@@ -106,8 +106,10 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
         }
     }
 
-    let sub = rows.iter().filter(|r| r.is_subagent).count();
-    let top = rows.len() - sub;
+    // DISTINCT session ids, through the shared rule: a divergent duplicate pair is one
+    // session on disk twice, and `sessions_in_scope` is a session census.
+    let (top, sub) =
+        crate::subagent::scope_span(rows.iter().map(|r| (r.session_id.clone(), r.is_subagent)));
     match args.format {
         OutputFormat::Text => render_text(&rows, top, sub, dropped, &resolved.duplicates),
         OutputFormat::Json => render_json(&rows, top, sub, dropped, &resolved.duplicates)?,

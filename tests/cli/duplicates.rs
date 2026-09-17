@@ -188,6 +188,14 @@ fn copies_that_disagree_both_stay_in_scope_and_say_so() {
     let header = json_rows(&out.stdout, "header");
     assert_eq!(header[0]["duplicate_transcripts"], 0);
     assert_eq!(header[0]["duplicate_records_dropped"], 0);
+    // The SCOPE is a session census, so it reads ONE where the disk holds one session
+    // twice - the rows are per copy, the count is per id.
+    assert_eq!(
+        header[0]["sessions_in_scope"], 1,
+        "a divergent pair is one session in scope, not two: {}",
+        header[0]
+    );
+    assert_eq!(header[0]["top_level_sessions"], 1);
     assert!(out.stderr.contains("DIFFER"), "{}", out.stderr);
 
     // The text row has to say the OPPOSITE fate from a merged one: nothing was dropped,

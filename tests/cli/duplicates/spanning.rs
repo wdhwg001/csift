@@ -3,6 +3,42 @@
 
 use super::*;
 
+#[test]
+fn every_spanning_surface_counts_a_divergent_pair_as_one_session() {
+    // Nothing merges when the bytes disagree, so both copies stay in scope - and the SCOPE
+    // header is a session census, so every surface has to answer 1 where the disk holds one
+    // session twice. Counting transcripts answered 2 on each of them.
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &record(1, "another branch"),
+    );
+    let sess = at(SESS);
+    let cases: Vec<Vec<&str>> = vec![
+        vec!["list", "--no-subagents", "--format", "json"],
+        vec!["search", "branch", &sess, "--format", "json"],
+        vec!["stats", &sess, "--format", "json"],
+        vec!["files", &sess, "--format", "json"],
+        vec!["verbatim", &sess, "--format", "json"],
+    ];
+    for args in cases {
+        let out = h.run(&args);
+        assert!(out.success, "{:?}: {}", args, out.stderr);
+        let header = json_rows(&out.stdout, "header");
+        assert_eq!(
+            header[0]["sessions_in_scope"], 1,
+            "{:?} header: {}",
+            args, header[0]
+        );
+        assert_eq!(
+            header[0]["top_level_sessions"], 1,
+            "{:?} header: {}",
+            args, header[0]
+        );
+    }
+}
+
 /// A fixture with one Edit in each copy, so `recover` and `files` have something to replay.
 fn identical_home_with_a_write() -> Home {
     let h = Home::new();

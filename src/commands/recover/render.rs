@@ -115,8 +115,11 @@ pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
 /// incl. empty/no-history subagents) - `(top_level, subagent)`. Drives the shared SCOPE
 /// banner / JSON header so a bare `csift recover <uuid>` fan-out is announced like list/turns.
 pub(crate) fn scope_span(sessions: &[ScanResult]) -> (usize, usize) {
-    let sub = sessions.iter().filter(|s| s.is_subagent).count();
-    (sessions.len() - sub, sub)
+    crate::subagent::scope_span(
+        sessions
+            .iter()
+            .map(|s| (s.session_id.clone(), s.is_subagent)),
+    )
 }
 
 /// Chronological order of two optional ISO-8601 timestamps. Timestamped events sort before

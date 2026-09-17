@@ -16649,7 +16649,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "269-275",
+          "lines": "271-277",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -39048,12 +39048,12 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "185-190",
+          "lines": "182-187",
           "snippet": "pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant\n    // coverage rides the tool-name needles below, so admitting every assistant\n    // text record here would repeal this prefilter). Finders built ONCE (per-line\n    // hot path - the stateless form rebuilt its searcher every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 6]> ="
         },
         {
           "path": "src/commands/files/run.rs",
-          "lines": "193-198",
+          "lines": "190-195",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),\n                // Settings-family external writes read the snapshot version sequence.\n                memmem::Finder::new(b\"file-history-snapshot\"),"
         }
       ],
@@ -40129,7 +40129,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "319-320",
+          "lines": "321-322",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41438,7 +41438,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "308-310",
+          "lines": "310-312",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -51658,7 +51658,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "277-282",
+          "lines": "279-284",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51840,12 +51840,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "326",
+          "lines": "328",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "277-282",
+          "lines": "279-284",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -52153,17 +52153,17 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "269-275",
+          "lines": "271-277",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "277-282",
+          "lines": "279-284",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "326",
+          "lines": "328",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52238,12 +52238,12 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "269-275",
+          "lines": "271-277",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "326",
+          "lines": "328",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52794,7 +52794,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "259-262",
+          "lines": "261-264",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -54286,7 +54286,7 @@
         },
         {
           "path": "src/commands/stats.rs",
-          "lines": "268-275",
+          "lines": "270-277",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54375,7 +54375,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "267-268",
+          "lines": "269-270",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54450,7 +54450,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "276",
+          "lines": "278",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55960,7 +55960,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "271-275",
+          "lines": "273-277",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -63858,7 +63858,7 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "193-196",
+          "lines": "190-193",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -64698,7 +64698,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "259-266",
+          "lines": "261-268",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -65816,7 +65816,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "277-282",
+          "lines": "279-284",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65904,7 +65904,7 @@
       "code": [
         {
           "path": "src/commands/stats.rs",
-          "lines": "326",
+          "lines": "328",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -91823,7 +91823,7 @@
         {
           "path": "src/commands/session/run.rs",
           "snippet": "fn line_has_continued_in_key(line: &[u8]) -> bool {",
-          "lines": "192"
+          "lines": "198"
         },
         {
           "path": "src/commands/session/summarize.rs",

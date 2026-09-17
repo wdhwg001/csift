@@ -56,3 +56,33 @@ pub fn is_subagent_path(path: &Path) -> bool {
     path.components()
         .any(|c| c.as_os_str().to_str() == Some("subagents"))
 }
+
+/// The SCOPE span every spanning surface announces: how many DISTINCT top-level sessions and
+/// how many DISTINCT subagents the resolved set covers.
+///
+/// Distinct IDS, never transcripts. One session id can be on disk under two project
+/// directories, and a pair whose contents DIVERGE merges into nothing and keeps both files
+/// in scope (§2.5) - counting files there reported two sessions where the disk holds one
+/// session twice. The header key is named `sessions_in_scope` and is read as a session
+/// census, so the rule lives in ONE place rather than once per surface.
+pub fn scope_span(rows: impl IntoIterator<Item = (String, bool)>) -> (usize, usize) {
+    let mut top: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut sub: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (id, is_sub) in rows {
+        if is_sub {
+            sub.insert(id);
+        } else {
+            top.insert(id);
+        }
+    }
+    (top.len(), sub.len())
+}
+
+/// [`scope_span`] for a caller holding the resolved transcript PATHS, which is most of them.
+pub fn scope_span_files(files: &[std::path::PathBuf]) -> (usize, usize) {
+    scope_span(
+        files
+            .iter()
+            .map(|p| (session_id_from_path(p), is_subagent_path(p))),
+    )
+}

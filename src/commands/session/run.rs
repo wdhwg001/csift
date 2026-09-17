@@ -64,8 +64,14 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     // like every other spanning command, where `--max-count`-class ROW caps never shrink
     // the scope numbers. Without this, an unscoped all-projects `list` reported the capped
     // 50 as the scope - off from the real corpus by orders of magnitude (R7 §2.4).
-    let scope_sub = summaries.iter().filter(|s| s.is_subagent).count();
-    let scope_top = summaries.len() - scope_sub;
+    // They count DISTINCT session ids, through the shared rule: a divergent duplicate pair
+    // is ONE session the disk holds twice, and it gets a ROW per copy, so counting rows
+    // would report a session count no session census agrees with.
+    let (scope_top, scope_sub) = crate::subagent::scope_span(
+        summaries
+            .iter()
+            .map(|s| (s.session_id.clone(), s.is_subagent)),
+    );
 
     let all_projects = args.paths.is_empty() && args.sessions_from.is_none();
     // `--max-count 0` = uncapped (the crate-wide convention) - it beats the default cap.

@@ -30,11 +30,8 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
 
     // SCOPE span of the resolved set (every transcript, incl. mutation-free subagents) so the
     // fan-out is announced from the true file set, not just the mutation-bearing subset.
-    let scope_sub = session_files
-        .iter()
-        .filter(|p| crate::subagent::is_subagent_path(p))
-        .count();
-    let scope_top = session_files.len() - scope_sub;
+    // DISTINCT session ids, through the shared rule (a divergent duplicate pair is one).
+    let (scope_top, scope_sub) = crate::subagent::scope_span_files(&session_files);
 
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<FileResult> = session_files

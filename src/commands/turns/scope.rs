@@ -54,26 +54,30 @@ pub(crate) struct ScopeCounts {
 }
 
 pub(crate) fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> ScopeCounts {
-    let mut in_scope = 0usize;
-    let mut in_scope_top = 0usize;
-    let mut rendered = 0usize;
-    for (sr, plan) in sessions.iter().zip(plans.iter()) {
-        in_scope += 1;
-        // Discriminate via the AUTHORITATIVE path-derived `is_subagent` field (set from
-        // subagent::is_subagent_path at scan time) - NOT a re-derived id-shape heuristic. This
-        // is the same signal turns' own JSON, and every other surface, already brands on.
-        if !sr.is_subagent {
-            in_scope_top += 1;
-        }
-        if !plan.selected.is_empty() {
-            rendered += 1;
-        }
-    }
+    // Discriminate via the AUTHORITATIVE path-derived `is_subagent` field (set from
+    // subagent::is_subagent_path at scan time) - NOT a re-derived id-shape heuristic. This
+    // is the same signal turns' own JSON, and every other surface, already brands on. The
+    // counts are DISTINCT session ids through the shared rule, so a duplicate pair whose
+    // copies diverge (both stay in scope, §2.5) reads as the ONE session it is - and
+    // `rendered` counts the same way, or a two-copy session could render more sessions
+    // than the scope says it holds.
+    let (in_scope_top, in_scope_sub) = crate::subagent::scope_span(
+        sessions
+            .iter()
+            .map(|sr| (sr.session_id.clone(), sr.is_subagent)),
+    );
+    let (rendered_top, rendered_sub) = crate::subagent::scope_span(
+        sessions
+            .iter()
+            .zip(plans.iter())
+            .filter(|(_, plan)| !plan.selected.is_empty())
+            .map(|(sr, _)| (sr.session_id.clone(), sr.is_subagent)),
+    );
     ScopeCounts {
-        in_scope,
+        in_scope: in_scope_top + in_scope_sub,
         in_scope_top,
-        in_scope_sub: in_scope - in_scope_top,
-        rendered,
+        in_scope_sub,
+        rendered: rendered_top + rendered_sub,
     }
 }
 
