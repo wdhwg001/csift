@@ -2964,6 +2964,32 @@ moves from 4.50 s to 4.44 s of a 4.34 s base, and the selective row `B08` return
 base exactly (2.29 s both). Output is byte-identical either way - 70,800,770 bytes on the
 landmark wide-match row with and without the gate.
 
+**The NINE relations that followed: measured on the OUTPUT, the timing PENDING.** The second
+half of the primitive (section 4.12's `supersedes`, `continues`, `replays`, `branches`,
+`pairs`, `precedes`, `preserves`, `repairs`, and `reports` widened to both pulse carriers)
+was built on a host whose 1-minute load average sat between 51 and 56, so no control band
+was measured and NO timing ratio is claimed for it; the A/B belongs to an idle host and is
+pending there, with the `K01`-`K03` rows that now cover `--count-by for-kind` and `--for` in
+the set. What COULD be measured without an idle host was run instead: every acid row of the
+tiny and compacted classes under a release build of the pre-relation tip and one of this
+one, stdouts compared byte for byte. 128 rows, 106 byte-identical, 22 differing, 0 exit-code
+differences, and 2 line-count differences - both of them `K01`, the `for-kind` census, where
+a relation the scope carries IS a row. Every differing byte is accounted to a named relation:
+a `[for: pairs|precedes|preserves|repairs|reports L<n>]` tag in a label zone, a
+`"kind":"..."` entry in a `for[]` array, a census key, the `hook_run` respelling, or the
+`--help` text. Two rows print FEWER bytes, which is the one-relation-one-edge stand-down
+turning an existing `parent` edge into a `pairs` one (`"kind":"parent"` 681 to 679 on the
+compacted whole-scope dump, 9 to 7 on `E01`).
+
+**The gate does not cover all nine, and that is the shape of the cost.** Four of them -
+the SURVIVAL relations - render no tag and ride the same `projects_engine_edges` gate the
+two one-hop edges take, so a default text scan builds none of them. The other five RENDER,
+because no family owns their leaf and nothing else on the unit gives their target as an
+address, so `record_edges` builds them whatever the reader asked for. What that costs is one
+`match` on the unit's own leaf per emitted hit, falling through for every leaf but the eight
+that carry one; what it buys is that the tag is in the text a person reads. The byte
+accounting above is the honest statement of the rest until the timing runs.
+
 **What is left, and why it stays.** The residue is the bytes: a per-hit tag the reader sees,
 and two per-hit JSON keys a consumer follows. `for_root` is answered for EVERY unit by
 design (section 4.12) - that is the primitive, not an implementation detail - so the floor
