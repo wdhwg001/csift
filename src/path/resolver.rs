@@ -161,19 +161,15 @@ pub fn resolve_session_files_reported(
     // twice is one file here rather than a fabricated pair of copies.
     files.sort();
     files.dedup();
-    let (mut files, groups) = dedup_copies(files);
-    // A group the top-level pass already reported reaches this one AGAIN whenever it merged
-    // NOTHING - a divergent or unreadable pair keeps every member in scope, so the second
-    // pass sees the same two copies and decides them the same way. One group is one note and
-    // one row in the header count, so only what THIS pass newly decided is reported.
-    let seen: std::collections::BTreeSet<String> =
+    // A basename the top-level pass already decided is skipped here: a group that merged
+    // NOTHING keeps every member in the set, so this pass would otherwise compare the same
+    // two transcripts byte for byte a second time and announce the group twice. One group is
+    // one comparison, one note and one row in the header count.
+    let decided: std::collections::BTreeSet<String> =
         duplicates.iter().map(|g| g.session_id.clone()).collect();
-    let fresh: Vec<DuplicateGroup> = groups
-        .into_iter()
-        .filter(|g| !seen.contains(&g.session_id))
-        .collect();
-    emit_duplicate_notes(&fresh);
-    duplicates.extend(fresh);
+    let (mut files, groups) = dedup_copies_skipping(files, &decided);
+    emit_duplicate_notes(&groups);
+    duplicates.extend(groups);
     files.sort();
     Ok(Resolved { files, duplicates })
 }

@@ -139,6 +139,18 @@ impl DuplicateGroup {
 /// The kept set preserves nothing about input order (the caller sorts), and a group that
 /// merges nothing contributes every one of its members.
 pub fn dedup_copies(files: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<DuplicateGroup>) {
+    dedup_copies_skipping(files, &std::collections::BTreeSet::new())
+}
+
+/// [`dedup_copies`] over a set an earlier pass already DECIDED: a basename in `decided`
+/// passes through untouched - not compared, not reported. The resolver's union pass takes
+/// it, because a group that merged NOTHING still has every member in the set, so a second
+/// pass would byte-compare the same two transcripts again (tens of megabytes each on a real
+/// pair) and announce the group a second time.
+pub fn dedup_copies_skipping(
+    files: Vec<PathBuf>,
+    decided: &std::collections::BTreeSet<String>,
+) -> (Vec<PathBuf>, Vec<DuplicateGroup>) {
     let mut by_stem: std::collections::BTreeMap<String, Vec<PathBuf>> =
         std::collections::BTreeMap::new();
     for f in files {
@@ -152,7 +164,7 @@ pub fn dedup_copies(files: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<DuplicateGroup>) 
     let mut kept: Vec<PathBuf> = Vec::new();
     let mut groups: Vec<DuplicateGroup> = Vec::new();
     for (stem, paths) in by_stem {
-        if paths.len() < 2 {
+        if paths.len() < 2 || decided.contains(&stem) {
             kept.extend(paths);
             continue;
         }

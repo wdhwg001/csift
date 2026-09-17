@@ -42640,12 +42640,12 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "418-423",
+          "lines": "414-419",
           "snippet": "/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved\n/// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only\n/// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the\n/// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does\n/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix\n/// keep decision."
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "440-446",
+          "lines": "436-442",
           "snippet": "    if let Some(want) = &pd.target_cwd {\n        if let Some(stored) = read_first_cwd(&p) {\n            if !cwd_equivalent(&stored, want) {\n                return;\n            }\n        }\n    }"
         }
       ],
@@ -42971,7 +42971,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "520-529",
+          "lines": "516-525",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
@@ -75059,7 +75059,7 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "274-278",
+          "lines": "270-274",
           "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` \u2192 an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
@@ -96606,17 +96606,17 @@
       "code": [
         {
           "path": "src/path/dedup.rs",
-          "lines": "210-214",
+          "lines": "222-226",
           "snippet": "    let relation = if members.iter().any(|m| m.error.is_some()) {\n        DuplicateRelation::Unknown\n    } else {\n        classify_bytes(&bytes)\n    };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "238-244",
+          "lines": "250-256",
           "snippet": "        let verdict = if other[..n] != winner[..n] {\n            DuplicateRelation::Divergent\n        } else if other.len() == winner.len() {\n            DuplicateRelation::Identical\n        } else {\n            DuplicateRelation::Prefix\n        };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "277-281",
+          "lines": "289-293",
           "snippet": "    let by_size = |a: &(u64, bool, PathBuf), b: &(u64, bool, PathBuf)| {\n        b.0.cmp(&a.0) // longest first\n            .then(b.1.cmp(&a.1)) // then the copy whose dir name encodes the recorded cwd\n            .then(a.2.cmp(&b.2)) // then deterministically by path\n    };"
         },
         {
@@ -96626,8 +96626,8 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "162-164",
-          "snippet": "    files.sort();\n    files.dedup();\n    let (mut files, groups) = dedup_copies(files);"
+          "lines": "170-172",
+          "snippet": "    let (mut files, groups) = dedup_copies_skipping(files, &decided);\n    emit_duplicate_notes(&groups);\n    duplicates.extend(groups);"
         },
         {
           "path": "src/commands/show/addr.rs",
