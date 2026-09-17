@@ -291,7 +291,17 @@ pub struct SearchArgs {
     /// head, and it grows: a record is in it when it is for the address OR for something
     /// already in it - so a call's result, the notification a background task it launched
     /// sent two turns later, and the attachments written for any of those all come back
-    /// from one query. The address may name a GATED line (a hook attachment, a bookkeeping
+    /// from one query. THREE structural relations admit a row and no others: its
+    /// `parentUuid` names a member (which carries `parent` and every family word built on
+    /// the parent link - `attached_to`, `blocked`, `redoes`, `fires`, `wraps`), it carries
+    /// a `tool_result` answering a member's call (`result_of`), or it names a member's
+    /// call by id in its own text or payload (`reports`, `for_tool_use`). The rest of the
+    /// vocabulary is not reverse-walked today, so `--for` on a record that only
+    /// `versions`, `refused`, `interrupted`, `leaf`, `forked_from`, `continued_in`,
+    /// `replies_to`, `armed_by`, `banner` or `hook run` points AT comes back empty - a
+    /// definitive absence about the three arms, not a claim that nothing points there.
+    /// The forward direction answers those: the `for[]` on the hit, or
+    /// `--count-by for-kind`. The address may name a GATED line (a hook attachment, a bookkeeping
     /// line): the closure starts there either way, and the addressed record itself is
     /// emitted only under its own gate - `--for L12` gives you what L12 drew, `--for L12
     /// --attachments` gives you L12 as well. Composes with `-t`/`-T`/time/scope; the
