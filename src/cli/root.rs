@@ -226,7 +226,13 @@ pub struct Cli {
     ///
     /// `0` restores the loader's reading and makes csift say nothing about crossing at
     /// all; `all` follows every boundary a transcript carries. The footer names what was
-    /// crossed, what was not and the value that would reach the rest.
+    /// crossed, what was not, and what you can do about the rest - it offers a flag value
+    /// only where the BUDGET is what stopped the walk, since a boundary naming a record no
+    /// line of the file carries is a floor at every budget.
+    ///
+    /// The DEFAULT is chosen by measurement against the performance contract and that
+    /// measurement is still pending, so the shipped value is the candidate and may change
+    /// in a later release. Pass the number explicitly wherever you need it stable.
     #[arg(
         long = "cross-compactions",
         value_name = "N|all",
