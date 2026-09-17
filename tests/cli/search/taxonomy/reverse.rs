@@ -338,10 +338,20 @@ fn a_gated_address_opens_a_closure_and_emits_only_under_its_gate() {
 
 /// The same fix through the UUID form: naming the gated record by its own uuid is the same
 /// address, so it answers with the same set.
+///
+/// ANCHORED to the concrete set, not to the other query: with the fix reverted both sides
+/// are empty and an equality between them holds, which is the shape of a test that checks
+/// nothing.
 #[test]
 fn a_gated_address_by_uuid_answers_the_same_set() {
     let h = home();
-    assert_eq!(lines_for(&h, "a3"), lines_for(&h, "L12"));
+    let by_uuid = lines_for(&h, "a3");
+    assert_eq!(
+        by_uuid,
+        vec![13],
+        "the record parented to the gated address"
+    );
+    assert_eq!(by_uuid, lines_for(&h, "L12"), "and the line form agrees");
 }
 
 /// An EMPTY address is a usage error: `--for ""` asks for the closure of nothing, and an
