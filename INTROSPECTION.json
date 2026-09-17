@@ -96630,6 +96630,16 @@
           "snippet": "    let (mut files, groups) = dedup_copies_skipping(files, &decided);\n    emit_duplicate_notes(&groups);\n    duplicates.extend(groups);"
         },
         {
+          "path": "src/path/agent_subtree.rs",
+          "lines": "41-44",
+          "snippet": "    if let (Some(owner), Some(name)) = (&owner, owner.as_ref().and_then(|o| o.file_name())) {\n        let mut probed: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();\n        for pd in dirs {\n            let sibling = pd.dir.join(name);"
+        },
+        {
+          "path": "src/commands/agents/run.rs",
+          "lines": "59-62",
+          "snippet": "    let (kept, agent_groups) = path::dedup_copies(nodes.iter().map(|n| n.path.clone()).collect());\n    if !agent_groups.is_empty() {\n        let keep: std::collections::BTreeSet<std::path::PathBuf> = kept.into_iter().collect();\n        nodes.retain(|n| keep.contains(&n.path));"
+        },
+        {
           "path": "src/commands/show/addr.rs",
           "lines": "92-93",
           "snippet": "    match (resolved.files.as_slice(), dropped.as_slice()) {\n        ([one], []) => Ok(one.clone()),"
