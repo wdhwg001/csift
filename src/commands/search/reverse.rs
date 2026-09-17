@@ -99,25 +99,33 @@ impl ForAddr {
 /// The ADDRESSED record is in the set. A reader asking what a message drew wants to see
 /// the message at the head of the answer, and leaving it out would make the first hit look
 /// like the seed when it is already a consequence.
+///
+/// The SEED is looked for on BOTH streams. An address names a LINE (or a uuid), and what
+/// the section 7d prefilter made of that line is not part of the question: a hook
+/// attachment, a bookkeeping line and a system record are all addressable and all reach
+/// this walk as SPINE rows under a flagless scan. Seeding only from a searchable record
+/// made `--for` on one of those a definitive absence for the WHOLE closure, the ordinary
+/// records parented to the address included. The gated record itself still emits only
+/// under its own gate, because a spine row carries no message and nothing can render it -
+/// so `--for L12` answers with what hangs off L12, and `--for L12 --attachments` answers
+/// with L12 and what hangs off it.
 pub(crate) fn for_closure(rows: &[Row<'_>], addr: &ForAddr) -> BTreeSet<usize> {
     let mut lines: BTreeSet<usize> = BTreeSet::new();
     let mut uuids: HashSet<&str> = HashSet::new();
     let mut calls: HashSet<&str> = HashSet::new();
     for row in rows {
+        let seed = is_seed(*row, addr);
         let Some(kept) = row.kept() else {
             // A SPINE row carries no message, so it can never be emitted - but it is a
             // chain node, and a run of attachments hangs off one. Carrying its uuid into
-            // the frontier is what lets the walk cross it instead of stopping there.
-            if is_member_spine(*row, &uuids) {
+            // the frontier is what lets the walk cross it instead of stopping there, and
+            // it is also how a gated ADDRESS opens a closure of its own.
+            if seed || is_member_spine(*row, &uuids) {
                 if let Some(u) = row.uuid() {
                     uuids.insert(u);
                 }
             }
             continue;
-        };
-        let seed = match addr {
-            ForAddr::Line(n) => kept.line_no == *n,
-            ForAddr::Uuid(u) => kept.rec.uuid.as_deref() == Some(u.as_str()),
         };
         if !seed && !joins(kept, &uuids, &calls) {
             continue;
@@ -133,6 +141,20 @@ pub(crate) fn for_closure(rows: &[Row<'_>], addr: &ForAddr) -> BTreeSet<usize> {
         }
     }
     lines
+}
+
+/// Is this row the ADDRESSED one? Read off the ROW and not off a record, so a line the
+/// prefilter dropped answers it exactly as a searchable one does - the two streams are one
+/// file-order list and an address knows nothing about which of them a line landed on.
+///
+/// A merged elicitation-sidecar record carries line 0 and can never be a line seed, because
+/// `ForAddr::parse` refuses 0: it has no physical line, so `L0` would be an address to
+/// nothing.
+fn is_seed(row: Row<'_>, addr: &ForAddr) -> bool {
+    match addr {
+        ForAddr::Line(n) => row.line_no() == *n,
+        ForAddr::Uuid(u) => row.uuid() == Some(u.as_str()),
+    }
 }
 
 /// Does this SPINE row hang off a member? A spine row has a parent link and nothing else,

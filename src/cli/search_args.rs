@@ -291,9 +291,12 @@ pub struct SearchArgs {
     /// head, and it grows: a record is in it when it is for the address OR for something
     /// already in it - so a call's result, the notification a background task it launched
     /// sent two turns later, and the attachments written for any of those all come back
-    /// from one query. Composes with `-t`/`-T`/time/scope; the PATTERN still applies, so
-    /// use an empty pattern for the whole set. JSON: the summary gains `for_of`
-    /// (`address`, `records`, `transcripts`).
+    /// from one query. The address may name a GATED line (a hook attachment, a bookkeeping
+    /// line): the closure starts there either way, and the addressed record itself is
+    /// emitted only under its own gate - `--for L12` gives you what L12 drew, `--for L12
+    /// --attachments` gives you L12 as well. Composes with `-t`/`-T`/time/scope; the
+    /// PATTERN still applies, so use an empty pattern for the whole set. JSON: the summary
+    /// gains `for_of` (`address`, `records`, `transcripts`).
     #[arg(long = "for", value_name = "ADDR")]
     pub for_addr: Option<String>,
 

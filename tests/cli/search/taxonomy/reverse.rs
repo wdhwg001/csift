@@ -51,6 +51,13 @@ const TRANSCRIPT: &str = concat!(
     // the closure sees it as a record rather than as a spine row.
     r#"{"type":"attachment","uuid":"a2","parentUuid":"r6","timestamp":"2026-06-08T01:04:01.000Z","attachment":{"type":"hook_additional_context","hookName":"zzrev-notes","hookEvent":"PostToolUse","toolUseID":"toolu_01rev","content":["zzrev the hook saw the build finish"]}}"#,
     "\n",
+    // L12 is a GATED line addressed in its own right: a hook run's own record, which a
+    // default scan's prefilter drops. L13 is an ordinary assistant message parented to it
+    // and gated by nothing. `--for L12` has to answer with L13.
+    r#"{"type":"attachment","uuid":"a3","parentUuid":"r6","timestamp":"2026-06-08T01:05:00.000Z","attachment":{"type":"hook_success","hookName":"zzrev-gate","hookEvent":"PostToolUse","command":"zzrev-check","exitCode":0,"durationMs":9,"stdout":"zzrev the gate ran"}}"#,
+    "\n",
+    r#"{"type":"assistant","uuid":"rB","parentUuid":"a3","timestamp":"2026-06-08T01:05:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzrev the reply that hangs off the hook run"}]}}"#,
+    "\n",
 );
 
 fn home() -> Home {
@@ -284,6 +291,57 @@ fn an_attachment_naming_a_members_call_joins_when_attachments_are_admitted() {
         lines.contains(&11),
         "the attachment that names the call: {lines:?}"
     );
+}
+
+/// A GATED ADDRESS opens its own closure. L12 is a hook run's own record, which a default
+/// scan's prefilter drops, so the walk meets it as a spine row - and an address is an
+/// address whichever stream its line landed on. The answer is L13, the ordinary assistant
+/// message parented to it, which is gated by nothing and was returned by nothing before:
+/// seeding only from a searchable record made `--for L12` a definitive absence for the
+/// whole closure.
+///
+/// The address itself is absent from the flagless answer, and that is the gate doing its
+/// job rather than the walk losing it: a spine row carries no message and renders nothing.
+/// Admit attachment lines and it comes back at the head of the same set.
+#[test]
+fn a_gated_address_opens_a_closure_and_emits_only_under_its_gate() {
+    let h = home();
+    assert_eq!(
+        lines_for(&h, "L12"),
+        vec![13],
+        "the record parented to the gated address, which is gated by nothing"
+    );
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{SESS}"),
+        "--for",
+        "L12",
+        "--attachments",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let mut lines: Vec<u64> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .filter_map(|hit| hit["line"].as_u64())
+        .collect();
+    lines.sort_unstable();
+    lines.dedup();
+    assert_eq!(
+        lines,
+        vec![12, 13],
+        "under the gate the addressed record itself is emitted too"
+    );
+}
+
+/// The same fix through the UUID form: naming the gated record by its own uuid is the same
+/// address, so it answers with the same set.
+#[test]
+fn a_gated_address_by_uuid_answers_the_same_set() {
+    let h = home();
+    assert_eq!(lines_for(&h, "a3"), lines_for(&h, "L12"));
 }
 
 /// An EMPTY address is a usage error: `--for ""` asks for the closure of nothing, and an
