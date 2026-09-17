@@ -156,7 +156,10 @@ pub fn dedup_copies(files: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<DuplicateGroup>) 
 fn classify_group(stem: &str, paths: Vec<PathBuf>) -> DuplicateGroup {
     let ordered = order_members(paths);
     // mmap, never a read-into-memory copy: a duplicated transcript runs to tens of
-    // megabytes and both copies are compared byte for byte.
+    // megabytes and both copies are compared byte for byte. This is a ONE-SHOT map, taken
+    // and dropped inside this function, which is what keeps it on the right side of the
+    // section 4 live-file law: the readers that rule bans are the POLLING and long-lived
+    // ones, which can still be holding a map when another process truncates the file.
     //
     // A read FAILURE is kept as the error it returned rather than folded into an empty
     // map: an unreadable copy read as `&[]` is an empty one, which compares as a prefix
@@ -396,7 +399,7 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
                  still being written"
             };
             format!(
-                "session {id} is on disk under {n} project directories ({how}); reading {} \
+                "session {id} is on disk under {n} project directories ({how}); keeping {} \
                  ({} {}) and dropping {} {} ({} {}) at {}. Target that path directly to read \
                  the dropped copy instead.",
                 g.kept.display(),

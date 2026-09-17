@@ -96606,17 +96606,17 @@
       "code": [
         {
           "path": "src/path/dedup.rs",
-          "lines": "188-192",
+          "lines": "191-195",
           "snippet": "    let relation = if members.iter().any(|m| m.error.is_some()) {\n        DuplicateRelation::Unknown\n    } else {\n        classify_bytes(&bytes)\n    };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "216-222",
+          "lines": "219-225",
           "snippet": "        let verdict = if other[..n] != winner[..n] {\n            DuplicateRelation::Divergent\n        } else if other.len() == winner.len() {\n            DuplicateRelation::Identical\n        } else {\n            DuplicateRelation::Prefix\n        };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "255-259",
+          "lines": "258-262",
           "snippet": "    let by_size = |a: &(u64, bool, PathBuf), b: &(u64, bool, PathBuf)| {\n        b.0.cmp(&a.0) // longest first\n            .then(b.1.cmp(&a.1)) // then the copy whose dir name encodes the recorded cwd\n            .then(a.2.cmp(&b.2)) // then deterministically by path\n    };"
         },
         {
