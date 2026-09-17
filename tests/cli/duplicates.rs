@@ -50,6 +50,12 @@ fn list_gives_a_duplicated_session_one_row_that_names_its_other_copy() {
     );
     assert!(out.stdout.contains("identical"), "{}", out.stdout);
     assert!(
+        out.stdout
+            .contains("dropped from this scope (this row stands for it)"),
+        "a merged row says the copy left the scope and that this row stands for it:\n{}",
+        out.stdout
+    );
+    assert!(
         out.stdout.contains(ENC_SHORT),
         "the row names where the dropped copy is:\n{}",
         out.stdout
@@ -157,6 +163,23 @@ fn copies_that_disagree_both_stay_in_scope_and_say_so() {
     assert_eq!(header[0]["duplicate_transcripts"], 0);
     assert_eq!(header[0]["duplicate_records_dropped"], 0);
     assert!(out.stderr.contains("DIFFER"), "{}", out.stderr);
+
+    // The text row has to say the OPPOSITE fate from a merged one: nothing was dropped,
+    // so each copy's row stands for itself.
+    let text = h.run(&["list", "--no-subagents"]);
+    assert_eq!(
+        text.stdout.matches("SESSION  ").count(),
+        2,
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains(
+            "divergent, kept (contents differ, so nothing merged - each copy has its own row)"
+        ),
+        "{}",
+        text.stdout
+    );
 
     // A divergent group drops nothing, so `show`'s refusal cannot key on what was dropped:
     // a reader facing two copies needs the paths whether or not either was merged away.
