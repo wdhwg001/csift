@@ -384,14 +384,6 @@ pub(crate) fn turn_uuid_positions<'a>(turn: &Turn<'a>) -> HashMap<&'a str, usize
         .collect()
 }
 
-/// The furthest the root walk climbs before giving up.
-///
-/// A turn is bounded by the next opener, so the walk terminates on its own; this is the
-/// guard against a transcript whose parent links form a cycle, which the chain build also
-/// guards against and for the same reason. It is larger than any real turn depth, so
-/// hitting it means the file is malformed rather than long.
-const ROOT_WALK_MAX: u32 = 4096;
-
 /// WHICH MESSAGE the record at `pos` corresponds to: the record that opened its turn, and
 /// the parent-hop distance up to it.
 ///
@@ -424,9 +416,12 @@ pub(crate) fn root_link(
         if next == 0 {
             break true;
         }
-        // A parent always precedes its child in file order, so a link that does not move
-        // UP the turn is a cycle - break rather than walk it.
-        if next >= at || hops >= ROOT_WALK_MAX {
+        // A parent always precedes its child in file order (claim REC-075 measured four
+        // corpus joins where it does not, all of them a tool result 1-2 lines above its
+        // call), so a link that does not move UP the turn is a cycle or that inversion -
+        // break rather than walk it. It is also what BOUNDS the walk: `at` strictly
+        // decreases, so the loop runs at most `pos` times and needs no second guard.
+        if next >= at {
             break false;
         }
         at = next;

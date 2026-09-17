@@ -62126,7 +62126,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "465-471",
+          "lines": "460-466",
           "snippet": "            return Some(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                tools.prov.tool_use_at(id),\n            ));"
         }
       ],
@@ -94894,7 +94894,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "481-487",
+          "lines": "476-482",
           "snippet": "    Some(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        lines.line_of_uuid(parent),\n    ))"
         }
       ],
