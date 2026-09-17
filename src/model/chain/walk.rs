@@ -2,7 +2,8 @@
 //! plain ancestry.
 //!
 //! `parentUuid` FIRST - that is the only link Claude Code's own loader reads, so a
-//! `compact_boundary` (whose `parentUuid` is null on 260 of 260 corpus specimens) ends
+//! `compact_boundary` (whose `parentUuid` is null on 275 of 275 boundary records over one
+//! projects root) ends
 //! the loader's reconstruction and every record above it is gone from the resumed
 //! conversation. csift climbs the same link and then asks one more question the loader
 //! never asks: the boundary names the record it re-linked from, in `logicalParentUuid`,
@@ -11,11 +12,15 @@
 //! - Live where the chain reaches it, Abandoned where it does not.
 //!
 //! The walk ends on a boundary anyway in two cases, and both leave a FLOOR: the budget ran
-//! out, or the `logicalParentUuid` names no record the map still holds (claim MISC-043: 52
-//! of 255 boundary records, the pre-compaction lines having been deleted from disk; a
-//! relink cut removes more). Everything physically above the floor is unresolved - never
-//! abandoned, only `PreCut` - and [`CrossingReport`] states which of the two it was, how
-//! many boundaries are still above, and the flag value that would reach them.
+//! out, or the boundary's door is shut. A shut door is three facts (see [`shut_door`]) and
+//! the commonest on disk is not the one it looks like: of the 275 boundary records over one
+//! projects root, 52 name a `logicalParentUuid` on no line of their own file (claim
+//! MISC-043, the pre-compaction lines deleted from disk), but of the 18 transcripts whose
+//! FLOOR is a boundary, nine stop for that reason and nine stop on a link pointing back at a
+//! record the walk had already reached. Everything physically above the floor is
+//! unresolved (never abandoned, only `PreCut`) and [`CrossingReport`] states which case it was, how
+//! many boundaries are still above, and the flag value that would reach them, when one
+//! would.
 //!
 //! Repairs and rescues, each mirroring one loader hop: a parent uuid that names no
 //! record (or one already visited) falls back to the nearest UNVISITED record with the

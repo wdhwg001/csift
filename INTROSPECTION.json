@@ -19878,7 +19878,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2459",
+          "lines": "2458",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -74520,7 +74520,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "135-146",
+          "lines": "136-147",
           "snippet": "/// What an ABANDONED turn-opener was. The discriminator is whether anything under it\n/// ever answered: a recalled prompt has no assistant descendant, a rewound turn does.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Kind {\n    /// A prompt that was recalled into the input box (or otherwise left behind) and never\n    /// drew a reply. `superseded_by` is the surviving opener that replaced it, when the\n    /// two share a `parentUuid`.\n    Draft { superseded_by: Option<usize> },\n    /// A prompt that WAS answered, and the conversation was later rewound past it.\n    /// `resend` is the surviving opener the conversation continued from instead.\n    Rewound { resend: Option<usize> },\n}"
         },
         {
@@ -74732,7 +74732,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "161-165",
+          "lines": "162-166",
           "snippet": "    pub fn class(self) -> Class {\n        match self {\n            Kind::Draft { .. } => Class::UserUnsent,\n            Kind::Rewound { .. } => Class::UserRewound,\n        }"
         }
       ],
@@ -86896,7 +86896,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "373-375",
+          "lines": "374-376",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {
@@ -88279,16 +88279,16 @@
       "id": "MISC-036",
       "area": "misc",
       "behavior": "The reconstruction walk reads `parentUuid` and nothing else (2.1.258 @166143634). A record with no parentUuid ends it, which is why a `compact_boundary` - whose own parentUuid is null - is an absolute cut: `logicalParentUuid` sits on that record but no reader on the load path consults it. Two repairs ride the walk: a cycle is detected by a visited set and stops it with a partial transcript (the message literal at @166143713), and a parent that names no record, or one already visited, falls back to the nearest UNVISITED record with the SAME `isSidechain` whose timestamp is at most 5000 ms earlier and closest (@166145374).",
-      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader everywhere the loader has an answer. It departs at ONE record, deliberately and under a budget: where the parent link runs out on a `compact_boundary`, csift reads the `logicalParentUuid` the loader ignores and carries on, up to `--cross-compactions` boundaries. Above a boundary it STEPPED OVER the ordinary rules apply, so a record there is Live where the chain reaches it and Abandoned where it does not; above the FLOOR - the record the walk ended on, because the budget ran out or the logical parent named nothing the map still holds - every off-chain record is `pre-cut` and none is called abandoned. `--cross-compactions 0` is the loader's own reading and csift then says nothing about crossing at all. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record is skipped by a bare role selector.",
+      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader everywhere the loader has an answer. It departs at ONE record, deliberately and under a budget: where the parent link runs out on a `compact_boundary`, csift reads the `logicalParentUuid` the loader ignores and carries on, up to `--cross-compactions` boundaries. Above a boundary it STEPPED OVER the ordinary rules apply, so a record there is Live where the chain reaches it and Abandoned where it does not; above the FLOOR - the record the walk ended on, because the budget ran out or the boundary door was shut - every off-chain record is `pre-cut` and none is called abandoned. Crossing therefore moves records in BOTH directions and a release note that carries one movement without the other is half the story: a record above a crossed boundary that the chain reaches becomes `live`, and one it does not reach becomes `abandoned`. `--cross-compactions 0` is the loader's own reading and csift then says nothing about crossing at all. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record is skipped by a bare role selector.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "55",
+          "lines": "60",
           "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>, budget: CrossingBudget) -> Walked {"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "164-175",
+          "lines": "169-180",
           "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
@@ -88356,6 +88356,16 @@
           "observed": "The loader reads `parentUuid` only and ends on a boundary's null parent. Budget 0 reproduced the pre-flag build on 24 of 24 streams (6 transcripts x 4 streams), byte for byte. At budget 3 the walk stepped over 2 boundaries on the landmark and 0 on the other five; 490 of the landmark's 31,000 emitted top-level hits moved `pre-cut` to `live` (83 live / 30,612 pre-cut / 305 abandoned at budget 0, against 573 / 30,122 / 305 at budget 3), and its `show --branch-points` child verdicts moved from 1 live / 443 pre-cut to 8 live / 436 pre-cut. Budget `all` gave output identical to budget 3 on all six.",
           "rule": "One read per hop. One byte comparison per (transcript, stream). One survival observation per emitted search hit whose `is_subagent` is false; one verdict observation per branch-point child row.",
           "note": "The claim said csift's `logicalParentUuid` arm was a guard that never runs. It is now the crossing, taken on purpose and bounded; the text states the budget, the two floor causes and the budget-0 equivalence."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Re-read the walk at 2.1.258 @166143634 and the 5 s repair at @166145374, then ran the budgeted walk at 0, 3 and all over the corpus set below, capturing `search '' <file> --no-subagents --format json`, `search '' <file> --no-subagents --count-by label`, `stats <file> --no-subagents --format json` and `show <file> --branch-points --format json` for each, byte-comparing every budget-0 stream against a build that predates the flag and every budget-3 stream against its budget-`all` twin key by key. Counting rules: a survival census counts EMITTED HITS of the search stream, one per hit object; a whole-file total is the `stats` session row or the search summary's `abandoned_records`; a branch census counts CHILD entries keyed on the child's `survival` field. the corpus set is a RULE rather than a list: every uuid-named top-level transcript of one projects root that carries at least one `compact_boundary` and whose size is 9 to 21 MiB inclusive (1 MiB = 1,048,576 bytes), which is seven transcripts, plus the section 7 performance landmark whatever its size - eight in all. Stating the band in decimal MB excluded two of the seven at 20.05 and 20.71 MiB, and one of those two is a transcript the crossing MOVES.",
+          "observed": "The loader reads `parentUuid` only and ends on a boundary's null parent. Budget 0 reproduced the pre-flag build on 32 of 32 streams (8 transcripts x 4 streams), byte for byte. At budget 3 the walk stepped over a boundary on THREE of the eight and none on the other five: 2 on the landmark, 1 on each of two band transcripts. Both movements are real and they run in opposite directions. Records move `pre-cut` to `live`: the landmark 83 live / 30,612 pre-cut / 305 abandoned at budget 0 against 573 / 30,122 / 305 at budget 3 (+490 live), one band transcript 1,415 / 1,151 / 5 against 2,565 / 0 / 6, the other 499 / 989 / 25 against 1,451 / 0 / 62. And records move INTO abandoned at whole-file level, which the emitted-hit census does not show: the search summary's `abandoned_records` reads 349 against 607 on the landmark (+258), 688 against 1,919 and 483 against 1,618 on the two band transcripts. `show --branch-points` child survivals moved from 1 live / 443 pre-cut to 8 live / 436 pre-cut on the landmark and from 1 live / 3 pre-cut to 4 live / 0 pre-cut on each of the two. Every `stats` whole-file chain total (`turns`, `abandoned_turns`, `rewound_turns`, `replay_copies`) is unchanged at every budget on all eight. Budget `all` differs from budget 3 on 24 of the 32 streams and every one of those differences is the echoed `crossing_budget` value alone - `3` against `all` - with every other key equal; the 8 streams that ARE byte-identical are the `--count-by label` censuses, which do not echo it.",
+          "rule": "One observation per transcript path, each command pinned to that one file; hits are counted per emitted hit object, whole-file totals off the stats session row or the search summary, branch children per child entry.",
+          "note": "Two statements the earlier check carried do not survive the re-measurement. `pre-cut` to `live` was reported as the only movement; the opposite movement is there too, at whole-file level, and the landmark's `abandoned_records` rises by 258. And budget 3 against budget `all` was reported as byte-identical; it is identical in every key except the one that echoes the budget, which is a different and weaker statement. The corpus set is also stated as a rule now: the decimal reading of the size band had excluded two transcripts, one of which the crossing moves."
         }
       ]
     },
@@ -88431,12 +88441,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "199-212",
+          "lines": "204-217",
           "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message_id())\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "248-259",
+          "lines": "253-264",
           "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
         }
       ],
@@ -88626,7 +88636,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "102-114",
+          "lines": "103-115",
           "snippet": "/// One record's place in the surviving conversation.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub enum Survival {\n    /// On the chain the loader walks (or rescued onto it).\n    #[default]\n    Live,\n    /// Above a cut the loader stops at, or in a region csift could not resolve. Kept and\n    /// selectable exactly as before - only flagged.\n    PreCut,\n    /// Off the chain, in a region the chain resolved. `root` is the index of the\n    /// abandoned branch's topmost record (the branch head a reader should look at).\n    Abandoned { root: usize },\n}\n"
         }
       ],
@@ -88918,7 +88928,7 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "150-159",
+          "lines": "155-164",
           "snippet": "fn shut_door(b: &Builder<'_>, i: usize) -> FloorCause {\n    let Some(slot) = b.recs[i].logical_parent_uuid().and_then(|u| b.map_slot(u)) else {\n        return FloorCause::UnresolvableBoundary;\n    };\n    if b.cut_removed(slot) {\n        FloorCause::RelinkRemoved\n    } else {\n        FloorCause::BoundaryLoop\n    }\n}"
         },
         {
@@ -96406,7 +96416,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3237"
+          "lines": "3236"
         }
       ],
       "instrument": "Corpus: over each root count the top-level carriers of `supersedesUuids`, `turnCompanion`, `effort`, `perTurnEffort`, `promptSource`, `permissionMode`, `promptId` and every key beginning `queue`, with `type` breakdowns, value shapes and value sets; count the `message`-level carriers of `stop_details`, `diagnostics`, `context_management` and `container` with their own key sets; for `supersedesUuids` build each file's `uuid` set and count how many of its entries are in it; report the lowest carrying `version` for `turnCompanion` and `perTurnEffort`. Two projects roots. Root 1 is a LIVE root that is appended to while it is read, so its counts are one instant's reading and reproduce at or above what is quoted; at the pass quoted here it held 9,806 `*.jsonl` files and 1,797,567 lines. Root 2 is a FROZEN snapshot that reproduces exactly: 10,618 files and 2,333,486 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
@@ -97007,7 +97017,7 @@
       "id": "MISC-046",
       "area": "misc",
       "behavior": "How many `compact_boundary` records one transcript carries is long-tailed rather than uniform, and each one is separately crossable or not. Censused over the 82 uuid-named top-level transcripts of one projects root, one observation per boundary record: 23 files carry at least one, 275 records in all, every one with a null `parentUuid` and every one naming a `logicalParentUuid`. The per-file counts are 1 seven times, 2 three times, then 4, 5, 6 twice, 7 twice, 12, 15, 27, 28, 32, 33 and 80 - so 10 of the 23 carry at most two while one carries 80, which is a session that ran long enough to compact eighty times. Crossability is the second axis: 223 of the 275 name a record still on a line of their own file and 52 do not (MISC-043), and per file 9 of the 23 resolve every boundary while 4 resolve none.",
-      "depends": "The global `--cross-compactions` flag decides how many of those boundaries csift's survival walk steps over, and its DEFAULT is chosen against this shape: a small count resolves the ordinary compacted transcript (10 of 23 carry at most two boundaries) while the eighty-compaction session is not traced by default, and what was left uncrossed is named in the footer with the flag value that would reach it. `0` restores Claude Code's own reading byte for byte and makes csift say nothing about crossing. Measured over the five 9-21 MB compacted transcripts and the 415 MB landmark, the default and `all` produce identical output on all six, because on every one of them the walk stops for a reason the budget does not control - a dangling logical parent, or a head record with the remaining boundaries off the walk's path.",
+      "depends": "The global `--cross-compactions` flag decides how many of those boundaries csift's survival walk steps over, and its DEFAULT is chosen against this shape: a small count resolves the ordinary compacted transcript (10 of 23 carry at most two boundaries) while the eighty-compaction session is not traced by default, and what was left uncrossed is named in the footer with the flag value that would reach it. `0` restores Claude Code's own reading byte for byte and makes csift say nothing about crossing. Measured over the eight-transcript differential set - the seven top-level transcripts of one projects root that carry a boundary and sit between 9 and 21 MiB, plus the performance landmark - the default and `all` reach the same floor on every one, because on each the walk stops for a reason the budget does not control: a boundary whose door is shut, or a head record with the remaining boundaries off the walk's path. Their streams are not byte-identical - 24 of the 32 pairs differ by the echoed `crossing_budget` value, `3` against `all`, and by nothing else - which is the honest form of that statement.",
       "code": [
         {
           "path": "src/model/chain/budget.rs",
@@ -97016,7 +97026,7 @@
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "110-120",
+          "lines": "115-125",
           "snippet": "        let over = b.recs[i]\n            .logical_parent_uuid()\n            .and_then(|u| b.resolve(u))\n            .filter(|&j| !b.visited[j]);\n        if !budget.allows(out.crossed) {\n            out.exhausted = true;\n            out.cause = FloorCause::BudgetExhausted;\n            out.boundary = Some(i);\n            out.floor_crossable = over.is_some();\n            break;\n        }"
         }
       ],
@@ -97047,6 +97057,16 @@
           "observed": "23 of 82 transcripts carry a boundary; 275 records; per-file counts 1x7, 2x3, 4, 5, 6x2, 7x2, 12, 15, 27, 28, 32, 33, 80; 223 of 275 resolvable, 52 not; 9 of 23 files fully resolvable, 4 not at all. Budget 3 and budget all produced byte-identical streams on all six measured transcripts, and budget 0 reproduced the pre-flag build on all six. Crossings at budget 3: 2 on the landmark, 0 on the other five; boundaries left above the floor: 77, 2, 2, 1, 1 and 0.",
           "rule": "One observation per boundary record for the census; one stream comparison per (transcript, budget pair).",
           "note": "The census half is closed. The cost half of the default is the open leg: the flag ships with its default documented as chosen pending that measurement."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-17",
+          "verdict": "refined",
+          "instrument": "Ran the per-file boundary census over the 82 top-level transcripts of the projects root, then ran `csift search '' <file> --no-subagents --format json --cross-compactions <b>` for b in 0, 3 and all over the differential's corpus set, byte-comparing each budget-3 stream against its budget-`all` twin and, where they differ, comparing the two streams KEY BY KEY to name what the difference is; and byte-comparing every budget-0 stream against a build that predates the flag. the corpus set is a RULE rather than a list: every uuid-named top-level transcript of one projects root that carries at least one `compact_boundary` and whose size is 9 to 21 MiB inclusive (1 MiB = 1,048,576 bytes), which is seven transcripts, plus the section 7 performance landmark whatever its size - eight in all. Stating the band in decimal MB excluded two of the seven at 20.05 and 20.71 MiB, and one of those two is a transcript the crossing MOVES.",
+          "observed": "23 of 82 transcripts carry a boundary; 275 records; per-file counts 1x7, 2x3, 4, 5, 6x2, 7x2, 12, 15, 27, 28, 32, 33, 80; 223 of 275 resolvable, 52 not; 9 of 23 files fully resolvable, 4 not at all. Over the eight-transcript differential set, budget 0 reproduced the pre-flag build on 32 of 32 streams. Budget 3 and budget `all` are NOT byte-identical: 24 of the 32 stream pairs differ, and every difference is the echoed `crossing_budget` value alone (`3` against `all`), every other key equal - which is the fact that matters, since it means no walk reached a boundary that a budget of 3 stopped it at. Crossings at budget 3: 2 on the landmark, 1 on each of two band transcripts, 0 on the other five; boundaries left above the floor: 77, 2, 2, 1, 1, 0, 0 and 0.",
+          "rule": "One observation per boundary record for the census; one per transcript path for the budget comparison, each command pinned to that one file.",
+          "note": "The earlier check said budget 3 and budget `all` produced byte-identical streams. They do not: 24 of 32 pairs differ by the echoed `crossing_budget`. The claim's own sentence is corrected to the fact the comparison actually supports - that no transcript in the set has a boundary a budget of 3 would have stopped at."
         }
       ]
     }

@@ -26,7 +26,8 @@
 //! descendant of the leaf is Live.
 //!
 //! FAIL-OPEN, always - and the reason is where the walk STOPS. Claude Code's walk ends at
-//! a `compact_boundary`: its `parentUuid` is null (260 of 260 corpus specimens) and the
+//! a `compact_boundary`: its `parentUuid` is null (275 of 275 boundary records over the 23
+//! compacted files among the 82 top-level transcripts of one projects root) and the
 //! loader never reads `logicalParentUuid`, the field naming the record the compaction
 //! re-linked from. csift follows that field under a CROSSING BUDGET ([`CrossingBudget`],
 //! the global `--cross-compactions` flag), because the conversation genuinely continues

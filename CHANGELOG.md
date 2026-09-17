@@ -334,10 +334,20 @@ surface change bumps the PATCH.
   `show`, `stats`, `files`, `recover`, `verbatim`, `image`. Above a boundary it CROSSED the
   ordinary rules apply, so a turn the operator rewound past above a cut is finally named for
   what it is rather than filed as unresolved history; above the FLOOR everything off-chain
-  stays `pre-cut`. This is a surface change on a compacted transcript: a record's `survival`
-  can move from `pre-cut` to `live` or to `abandoned`, and a turn that becomes abandoned
-  leaves the numbering. `--cross-compactions 0` restores the previous reading exactly, and
-  under it csift says nothing about crossing at all, neither a footer line nor a JSON key.
+  stays `pre-cut`. The DEFAULT is `--cross-compactions 3`, and it is PROVISIONAL: the value
+  is chosen by a measurement against the performance contract that needs an idle host, so it
+  is the candidate rather than a measured answer and can change in a later release - pass the
+  number explicitly wherever you need it stable. This is a surface change on a compacted
+  transcript, and it moves records in BOTH directions: one whose survival was `pre-cut`
+  becomes `live` where the chain reaches it and `abandoned` where it does not, and a turn
+  that becomes abandoned leaves the numbering. Measured over eight transcripts (the seven
+  top-level ones of one projects root carrying a boundary between 9 and 21 MiB, plus the
+  397 MiB landmark), three of them move at the default: 490 emitted hits go `pre-cut` to
+  `live` on the landmark and 1,150 and 952 on the other two, while their whole-file
+  `abandoned_records` rise by 258, 1,231 and 1,135. `--cross-compactions 0` restores the
+  previous reading exactly - 32 of 32 streams byte-identical to a build that predates the
+  flag - and under it csift says nothing about crossing at all, neither a footer line nor a
+  JSON key.
   The footer is never silent otherwise: it names how many boundaries were stepped over, how
   many were not, where the chain floor sits, WHY it sits there - a budget that ran out, or a
   boundary whose door is shut, named by which of three facts shut it: the record is on no
