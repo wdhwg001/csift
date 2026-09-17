@@ -518,3 +518,57 @@ fn an_agent_targets_divergent_copies_both_stay_and_show_names_them() {
     assert!(show.stderr.contains(ENC_SHORT), "{}", show.stderr);
     assert!(show.stderr.contains(ENC), "{}", show.stderr);
 }
+
+#[test]
+fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
+    // Two copies of one session whose contents DIFFER merge into nothing, so both sidecars
+    // are in scope and each carries its own copy of the agent transcript: two lanes that
+    // share an agent id by construction. That is the shape where the count row and the rows
+    // it counts used to disagree - the walk deduped by id, the count did not.
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &record(1, "another branch"),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &agent_record(1, "child of one"),
+    );
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        &agent_record(1, "child of the other"),
+    );
+
+    let out = h.run(&["agents", &at(SESS), "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+    let session = json_rows(&out.stdout, "session");
+    let agents = json_rows(&out.stdout, "agent");
+    assert_eq!(
+        session[0]["agents"], 2,
+        "the count row states what follows it: {}",
+        out.stdout
+    );
+    assert_eq!(
+        agents.len(),
+        2,
+        "every lane in scope gets a row, id-sharing copies included: {}",
+        out.stdout
+    );
+    let summary = json_rows(&out.stdout, "summary");
+    assert_eq!(summary[0]["agents"], 2);
+
+    // The text tree prints exactly what the rows carry - same set, same count.
+    let text = h.run(&["agents", &at(SESS)]);
+    assert_eq!(
+        text.stdout.matches(&format!("  {AGENT}  ")).count(),
+        2,
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains("2 subagent(s)"),
+        "the footer counts the blocks above it:\n{}",
+        text.stdout
+    );
+}

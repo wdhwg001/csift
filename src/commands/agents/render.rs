@@ -89,15 +89,19 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
             if !in_scope_wf.contains(run.run_id.as_str()) {
                 continue;
             }
-            let agents: Vec<&&SubagentNode> = snodes
+            let agents: Vec<&SubagentNode> = snodes
                 .iter()
                 .filter(|n| n.workflow_id.as_deref() == Some(run.run_id.as_str()))
+                .copied()
                 .collect();
             if agents.is_empty() {
                 continue;
             }
             print_workflow_run(run);
-            for n in agents {
+            // The same walk again, so a run's members are the rows its JSON block emits,
+            // in that order. They render FLAT under the run: the run is their parent here,
+            // and the agent-to-agent nesting rides `depth` / `parent_agent_id` on the row.
+            for (n, _) in preorder_depth(&agents) {
                 print_node_block(n, view, 2);
             }
         }
@@ -116,32 +120,13 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
 
 /// Print built-in agents as a tree by `parent_agent_id`. A root (parent absent, or its parent
 /// not an in-scope built-in) prints at indent 1 - identical to the pre-nesting flat layout -
-/// and each child one indent deeper. Pre-order DFS via an explicit stack (no recursion depth
-/// risk); siblings in stable `agent_id` order.
+/// and each child one indent deeper.
+///
+/// The walk is [`preorder_depth`], the one the JSON rows take, so the tree can never print a
+/// different set, a different order or a different COUNT from the rows a consumer parses.
 pub(crate) fn print_builtin_agents_nested(builtin: &[&SubagentNode], view: &View) {
-    use std::collections::{BTreeMap, HashSet};
-    let ids: HashSet<&str> = builtin.iter().map(|n| n.agent_id.as_str()).collect();
-    let mut kids: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
-    let mut roots: Vec<&SubagentNode> = Vec::new();
-    for &n in builtin {
-        match n.parent_agent_id.as_deref() {
-            Some(p) if ids.contains(p) => kids.entry(p).or_default().push(n),
-            _ => roots.push(n),
-        }
-    }
-    roots.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
-    // Stack holds (node, indent); push children reversed so they pop in agent_id order.
-    let mut stack: Vec<(&SubagentNode, usize)> =
-        roots.into_iter().rev().map(|n| (n, 1usize)).collect();
-    while let Some((n, indent)) = stack.pop() {
-        print_node_block(n, view, indent);
-        if let Some(cs) = kids.get(n.agent_id.as_str()) {
-            let mut cs = cs.clone();
-            cs.sort_by(|a, b| b.agent_id.cmp(&a.agent_id)); // reverse → pop in order
-            for c in cs {
-                stack.push((c, indent + 1));
-            }
-        }
+    for (n, depth) in preorder_depth(builtin) {
+        print_node_block(n, view, 1 + depth);
     }
 }
 

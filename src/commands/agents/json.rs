@@ -64,7 +64,7 @@ pub(crate) fn render_json(
                 .filter(|n| n.workflow_id.as_deref() == Some(run.run_id.as_str()))
                 .copied()
                 .collect();
-            for n in preorder(&members) {
+            for (n, _) in preorder_depth(&members) {
                 println!("{}", serde_json::to_string(&agent_row(n, view))?);
             }
         }
@@ -73,7 +73,7 @@ pub(crate) fn render_json(
             .filter(|n| n.workflow_id.is_none())
             .copied()
             .collect();
-        for n in preorder(&builtin) {
+        for (n, _) in preorder_depth(&builtin) {
             println!("{}", serde_json::to_string(&agent_row(n, view))?);
         }
     }
@@ -86,11 +86,22 @@ pub(crate) fn render_json(
     Ok(())
 }
 
-/// Tree PRE-ORDER over a node set: roots (parent absent or out-of-set) sorted by id,
-/// children sorted by id, depth-first. A node unreachable from any root (a forged
-/// parent cycle) is APPENDED at the end rather than dropped - flat rows must never
-/// lose a node (the old nested shape silently omitted such nodes).
-pub(crate) fn preorder<'a>(nodes: &[&'a SubagentNode]) -> Vec<&'a SubagentNode> {
+/// The ONE walk both projections take: tree PRE-ORDER over a node set - roots (parent
+/// absent or out-of-set) sorted by id, children sorted by id, depth-first - carrying the
+/// DEPTH the text tree indents by and the JSON rows ignore. EVERY node comes back EXACTLY
+/// ONCE, so the count a session row prints is the number of rows that follow it and the
+/// text tree prints the same set in the same order. A node unreachable from any root (a
+/// forged parent cycle) is APPENDED at the end rather than dropped - a projection must
+/// never lose a node (the old nested shape silently omitted such nodes).
+///
+/// The visited set keys on node IDENTITY, not on `agent_id`. Two copies of one session
+/// under two project directories whose contents DIVERGE stay in scope by the merge rule
+/// (§2.5), and they carry two copies of each agent transcript, which share an id by
+/// construction: keying on the id emitted one of the pair while the session row counted
+/// both, which is exactly the disagreement between the count and the rows. Identity still
+/// guards the cycle a `parent_agent_id` chain can name, because a node is reached twice
+/// only through an edge and never through itself.
+pub(crate) fn preorder_depth<'a>(nodes: &[&'a SubagentNode]) -> Vec<(&'a SubagentNode, usize)> {
     use std::collections::{BTreeMap, HashSet};
     let ids: HashSet<&str> = nodes.iter().map(|n| n.agent_id.as_str()).collect();
     let mut kids: BTreeMap<&str, Vec<&'a SubagentNode>> = BTreeMap::new();
@@ -102,25 +113,26 @@ pub(crate) fn preorder<'a>(nodes: &[&'a SubagentNode]) -> Vec<&'a SubagentNode> 
         }
     }
     roots.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
-    let mut out: Vec<&'a SubagentNode> = Vec::new();
-    let mut seen: HashSet<&str> = HashSet::new();
-    let mut stack: Vec<&'a SubagentNode> = roots.into_iter().rev().collect();
-    while let Some(n) = stack.pop() {
-        if !seen.insert(n.agent_id.as_str()) {
+    let mut out: Vec<(&'a SubagentNode, usize)> = Vec::new();
+    let mut seen: HashSet<*const SubagentNode> = HashSet::new();
+    let mut stack: Vec<(&'a SubagentNode, usize)> =
+        roots.into_iter().rev().map(|n| (n, 0usize)).collect();
+    while let Some((n, depth)) = stack.pop() {
+        if !seen.insert(std::ptr::from_ref(n)) {
             continue;
         }
-        out.push(n);
+        out.push((n, depth));
         if let Some(cs) = kids.get(n.agent_id.as_str()) {
             let mut cs = cs.clone();
             cs.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
             for c in cs.into_iter().rev() {
-                stack.push(c);
+                stack.push((c, depth + 1));
             }
         }
     }
     for &n in nodes {
-        if !seen.contains(n.agent_id.as_str()) {
-            out.push(n);
+        if !seen.contains(&std::ptr::from_ref(n)) {
+            out.push((n, 0));
         }
     }
     out

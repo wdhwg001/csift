@@ -53,6 +53,11 @@ surface change bumps the PATCH.
   refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
   target takes the same merge: a copied project directory carries the whole sidecar, so one
   `agent-<hex>.jsonl` is on disk under two directories too.
+- **`csift agents` counts what it prints.** The session count row's `agents` is now exactly the
+  number of `kind:"agent"` rows under it, and the text tree prints that same set in that same
+  order: both projections take one walk, whose visited set keys on node identity rather than on
+  the agent id. Two copies of one session whose contents differ keep both sidecars in scope and
+  their agent transcripts share an id, which the old walk deduped while the count row did not.
 - **`csift list` emits one row per session, not one per copy**, and `sessions_in_scope` counts
   distinct sessions. BREAKING on a scope holding a duplicated session: the row count and every
   spanning count change, and the header numbers with them.

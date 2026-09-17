@@ -86,7 +86,11 @@ pub enum AgentKindFilter {
         JSON SCHEMA (per --format json)\n  \
           FLAT kind-tagged rows (envelope v2, v0.5): a leading {kind:\"header\", …} line; \
         per session one light {kind:\"session\", session_id, runs, agents} row (counts \
-        only); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
+        only - `agents` is EXACTLY the number of {kind:\"agent\"} rows that follow it, and \
+        the text tree prints that same set in that same order, so the two projections can \
+        never disagree; two copies of one session whose contents DIFFER keep both sidecars \
+        in scope, so an agent with a copy under each gets a ROW PER COPY and they share an \
+        id - the `copies` line above says why); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
         workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
         default_model, started_utc, started_local} row followed by its member agent rows \
         (a RUN row's `status` is the workflow journal's own last status VERBATIM: an OPEN \
