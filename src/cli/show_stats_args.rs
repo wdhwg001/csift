@@ -19,7 +19,8 @@ const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
         line numbers address one file. That includes the COPIES case: when one session id \
         sits under two project directories the spanning commands merge them, but `show` \
         counts the UNMERGED set and refuses, naming every copy's path - no `@<uuid>` \
-        separates them, so name the `*.jsonl` you mean.\n\n\
+        and no `@<agent-id>` separates them (a copied project directory carries the \
+        whole sidecar, so a subagent has two copies too), so name the `*.jsonl` you mean.\n\n\
         ADDRESSING + EXIT\n  \
           `--line` / `--turn` tokens take the shared range grammar: `N` · `A..B` · `N..` (to \
         the end) · `..N` · `-k` from the end (`--line -20..` = the last 20 lines, `--turn -3..` = \

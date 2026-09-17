@@ -106,13 +106,20 @@ impl DuplicateGroup {
     }
 }
 
-/// Collapse the resolved TOP-LEVEL files that share a session id, returning the kept set
-/// plus one report per duplicated id. Files whose basename occurs once pass through
-/// untouched, so an ordinary scope pays one map build and no file read.
+/// Collapse the resolved files that share a BASENAME, returning the kept set plus one
+/// report per duplicated id. Files whose basename occurs once pass through untouched, so
+/// an ordinary scope pays one map build and no file read.
 ///
-/// The kept set preserves nothing about input order (the caller sorts), and a divergent
-/// group contributes every one of its members.
-pub fn dedup_top_level(files: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<DuplicateGroup>) {
+/// The basename is the id for BOTH transcript kinds - `<uuid>.jsonl` for a session and
+/// `agent-<hex>.jsonl` for a subagent - and a copied project directory carries the whole
+/// sidecar with it, so an agent target meets the same shape from the other side (PATH-014:
+/// every duplicated agent basename on the measured root belongs to one of the duplicated
+/// sessions' two sidecars, and no agent basename is shared between two different sessions).
+/// One rule serves both; the caller decides which set it hands over.
+///
+/// The kept set preserves nothing about input order (the caller sorts), and a group that
+/// merges nothing contributes every one of its members.
+pub fn dedup_copies(files: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<DuplicateGroup>) {
     let mut by_stem: std::collections::BTreeMap<String, Vec<PathBuf>> =
         std::collections::BTreeMap::new();
     for f in files {

@@ -7,11 +7,18 @@ use super::*;
 /// agent (its hex is globally unique), builds that session's topology, and emits transcripts
 /// per `scope`: `TopLevelOnly` = the agent alone; `WithSubagents` = the agent + descendants.
 /// Errors when no such agent exists in scope.
+///
+/// EVERY owning directory is collected, not the first one found, and the result goes through
+/// the same [`dedup_copies`] merge the session path takes: a copied project directory carries
+/// the whole sidecar with it, so one agent hex can be owned by two copies of one session.
+/// Returning the first hit picked a copy by `read_dir` order - possibly the very copy the
+/// session path would have dropped - and disclosed nothing.
 pub(crate) fn resolve_agent_subtree(
     dirs: &[ProjectDir],
     hex: &str,
     scope: SubagentScope,
-) -> Result<Vec<PathBuf>> {
+) -> Result<Resolved> {
+    let mut found: Vec<PathBuf> = Vec::new();
     for pd in dirs {
         for top in top_level_jsonls(&pd.dir) {
             let subs = crate::subagent::subagent_transcript_files(&top)?;
@@ -23,25 +30,28 @@ pub(crate) fn resolve_agent_subtree(
             if !by_id.contains_key(hex) {
                 continue; // not this session's agent
             }
-            // Found the owning session. The descendants come from the agent→agent topology
+            // An owning session. The descendants come from the agent→agent topology
             // (`parent_agent_id`); on flat real data an agent has none, so the result is just
             // the agent itself - correct, and it nests automatically once CC nests subagents.
             let nodes = crate::subagent::build_topology(&top, false)?;
             let descendants = subtree_agent_ids(&nodes, hex);
-            let mut out: Vec<PathBuf> = Vec::new();
             // The agent's OWN transcript is always included (both scopes keep the target itself).
             if let Some(p) = by_id.get(hex) {
-                out.push(p.clone());
+                found.push(p.clone());
             }
             if !matches!(scope, SubagentScope::TopLevelOnly) {
                 for d in &descendants {
                     if let Some(p) = by_id.get(d) {
-                        out.push(p.clone());
+                        found.push(p.clone());
                     }
                 }
             }
-            return Ok(out);
         }
+    }
+    if !found.is_empty() {
+        let (files, duplicates) = dedup_copies(found);
+        emit_duplicate_notes(&duplicates);
+        return Ok(Resolved { files, duplicates });
     }
     // Exact id matched nothing. A collision-lengthened `search` header token is a PREFIX of a
     // bare-hex agent id (12 hex chars routes here as an exact-id shape), so before giving up,

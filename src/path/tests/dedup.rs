@@ -18,7 +18,7 @@ fn line(cwd: &str, n: usize) -> String {
 fn a_session_id_under_one_directory_is_not_a_duplicate() {
     let tree = Tree::new();
     let a = transcript(&tree, "-Users-dev-proj", ID, &line("/Users/dev/proj", 1));
-    let (kept, groups) = dedup_top_level(vec![a.clone()]);
+    let (kept, groups) = dedup_copies(vec![a.clone()]);
     assert_eq!(kept, vec![a]);
     assert!(groups.is_empty());
 }
@@ -32,7 +32,7 @@ fn byte_identical_copies_merge_onto_the_directory_the_recorded_cwd_encodes() {
     let short = transcript(&tree, "-Users-dev-p", ID, &body);
     let long = transcript(&tree, "-Users-dev-proj", ID, &body);
 
-    let (kept, groups) = dedup_top_level(vec![short.clone(), long.clone()]);
+    let (kept, groups) = dedup_copies(vec![short.clone(), long.clone()]);
     assert_eq!(kept, vec![long.clone()]);
     assert_eq!(groups.len(), 1);
     let g = &groups[0];
@@ -55,7 +55,7 @@ fn a_strict_byte_prefix_merges_onto_the_longer_copy() {
     let cut = transcript(&tree, "-Users-dev-proj", ID, &shorter);
     let whole = transcript(&tree, "-Users-dev-p", ID, &longer);
 
-    let (kept, groups) = dedup_top_level(vec![cut.clone(), whole.clone()]);
+    let (kept, groups) = dedup_copies(vec![cut.clone(), whole.clone()]);
     assert_eq!(kept, vec![whole.clone()]);
     let g = &groups[0];
     assert_eq!(g.relation, DuplicateRelation::Prefix);
@@ -72,7 +72,7 @@ fn copies_that_disagree_are_never_merged() {
     let a = transcript(&tree, "-Users-dev-one", ID, &line("/Users/dev/one", 1));
     let b = transcript(&tree, "-Users-dev-two", ID, &line("/Users/dev/two", 9));
 
-    let (mut kept, groups) = dedup_top_level(vec![a.clone(), b.clone()]);
+    let (mut kept, groups) = dedup_copies(vec![a.clone(), b.clone()]);
     kept.sort();
     let mut both = vec![a, b];
     both.sort();
@@ -93,7 +93,7 @@ fn one_diverging_copy_makes_the_whole_group_unmergeable() {
     let b = transcript(&tree, "-Users-dev-b", ID, &body);
     let c = transcript(&tree, "-Users-dev-c", ID, &line("/Users/dev/proj", 7));
 
-    let (kept, groups) = dedup_top_level(vec![a, b, c]);
+    let (kept, groups) = dedup_copies(vec![a, b, c]);
     assert_eq!(kept.len(), 3);
     assert_eq!(groups[0].relation, DuplicateRelation::Divergent);
     assert!(groups[0].dropped.is_empty());
@@ -118,7 +118,7 @@ fn an_unreadable_copy_merges_nothing_and_the_note_names_it_with_the_error() {
         return;
     }
 
-    let (mut kept, groups) = dedup_top_level(vec![open.clone(), locked.clone()]);
+    let (mut kept, groups) = dedup_copies(vec![open.clone(), locked.clone()]);
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
     kept.sort();
     let mut both = vec![open, locked.clone()];
@@ -148,9 +148,9 @@ fn an_equal_size_tie_no_cwd_can_break_falls_to_the_smallest_path() {
     let a = transcript(&tree, "-Users-dev-aaa", ID, &body);
     let b = transcript(&tree, "-Users-dev-bbb", ID, &body);
 
-    let (kept, _) = dedup_top_level(vec![b.clone(), a.clone()]);
+    let (kept, _) = dedup_copies(vec![b.clone(), a.clone()]);
     assert_eq!(kept, vec![a.clone()]);
-    let (kept_again, _) = dedup_top_level(vec![a.clone(), b]);
+    let (kept_again, _) = dedup_copies(vec![a.clone(), b]);
     assert_eq!(kept_again, vec![a]);
 }
 
@@ -165,7 +165,7 @@ fn the_first_cwd_probe_reads_past_a_record_that_carries_none() {
     let short = transcript(&tree, "-Users-dev-p", ID, &body);
     let long = transcript(&tree, "-Users-dev-proj", ID, &body);
 
-    let (kept, _) = dedup_top_level(vec![short, long.clone()]);
+    let (kept, _) = dedup_copies(vec![short, long.clone()]);
     assert_eq!(kept, vec![long]);
 }
 
@@ -184,7 +184,7 @@ fn the_head_window_steps_over_a_huge_leading_line_to_reach_the_first_cwd() {
     let other = transcript(&tree, "-Users-dev-aaa", ID, &body);
     let home = transcript(&tree, "-Users-dev-proj", ID, &body);
 
-    let (kept, _) = dedup_top_level(vec![other, home.clone()]);
+    let (kept, _) = dedup_copies(vec![other, home.clone()]);
     assert_eq!(kept, vec![home]);
 }
 
@@ -198,7 +198,7 @@ fn a_torn_final_line_still_counts_as_a_record() {
     let cut = transcript(&tree, "-Users-dev-a", ID, &shorter);
     let whole = transcript(&tree, "-Users-dev-b", ID, &longer);
 
-    let (_, groups) = dedup_top_level(vec![cut, whole]);
+    let (_, groups) = dedup_copies(vec![cut, whole]);
     assert_eq!(groups[0].relation, DuplicateRelation::Prefix);
     assert_eq!(groups[0].dropped_lines(), 2);
 }
@@ -213,7 +213,7 @@ fn the_header_fields_sum_every_group() {
     let c = transcript(&tree, "-Users-dev-a", id2, &body);
     let d = transcript(&tree, "-Users-dev-b", id2, &body);
 
-    let (_, groups) = dedup_top_level(vec![a, b, c, d]);
+    let (_, groups) = dedup_copies(vec![a, b, c, d]);
     assert_eq!(groups.len(), 2);
     let fields = duplicate_header_fields(&groups);
     assert_eq!(fields["duplicate_transcripts"], 2);
@@ -235,7 +235,7 @@ fn the_note_names_the_kept_copy_the_dropped_one_and_how_they_relate() {
     let cut = transcript(&tree, "-Users-dev-a", ID, &shorter);
     let whole = transcript(&tree, "-Users-dev-b", ID, &longer);
 
-    let (_, groups) = dedup_top_level(vec![cut.clone(), whole.clone()]);
+    let (_, groups) = dedup_copies(vec![cut.clone(), whole.clone()]);
     let note = duplicate_note(&groups[0]);
     assert!(note.contains(&ID[..8]), "{note}");
     assert!(note.contains("PREFIX"), "{note}");
@@ -254,7 +254,7 @@ fn a_divergent_note_gives_both_record_counts_and_refuses_to_merge() {
         &(line("/Users/dev/two", 9) + &line("/Users/dev/two", 8)),
     );
 
-    let (_, groups) = dedup_top_level(vec![a, b]);
+    let (_, groups) = dedup_copies(vec![a, b]);
     let note = duplicate_note(&groups[0]);
     assert!(note.contains("DIFFER"), "{note}");
     assert!(note.contains("2 lines"), "{note}");

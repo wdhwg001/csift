@@ -403,3 +403,118 @@ fn the_terminal_modes_keep_a_pure_stdout() {
     assert_eq!(ids.stdout.trim(), SESS);
     assert!(ids.stderr.contains("project directories"), "{}", ids.stderr);
 }
+
+/// The agent id both copies of the session's sidecar carry: a copied project directory
+/// brings the whole sidecar with it, so ONE agent hex is on disk under two directories.
+const AGENT: &str = "abcdef0123456789";
+
+fn agent_record(n: u32, text: &str) -> String {
+    format!(
+        "{{\"type\":\"user\",\"uuid\":\"a{n}\",\"timestamp\":\"2026-06-07T0{n}:00:05.000Z\",\
+         \"message\":{{\"role\":\"user\",\"content\":\"{text}\"}}}}\n"
+    )
+}
+
+/// One session under two project directories, each carrying its own copy of the agent
+/// transcript the tests below target directly by `@<agent-id>`.
+fn agent_home(under_enc: &str, under_short: &str) -> Home {
+    let h = Home::new();
+    let body = body_two();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &body);
+    h.write(&format!("{ENC_SHORT}/{SESS}.jsonl"), &body);
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        under_enc,
+    );
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+        under_short,
+    );
+    h
+}
+
+#[test]
+fn an_agent_target_merges_its_own_copies_and_names_the_merge() {
+    let child = agent_record(1, "child ask");
+    let h = agent_home(&child, &child);
+    let agent = at(AGENT);
+
+    let out = h.run(&["list", &agent, "--format", "json"]);
+    assert!(out.success, "{}", out.stderr);
+    let rows = json_rows(&out.stdout, "session");
+    assert_eq!(
+        rows.len(),
+        1,
+        "one row per agent, not one per copy: {rows:?}"
+    );
+    assert_eq!(rows[0]["duplicate_relation"], "identical");
+    assert_eq!(rows[0]["also_at_count"], 1);
+    // Equal sizes and no cwd to read, so the winner is the smallest path - which is the
+    // answer on every run and every machine, not whatever `read_dir` happened to yield.
+    let kept = rows[0]["path"].as_str().expect("a path");
+    assert!(kept.contains(ENC), "{kept}");
+    assert!(!kept.contains(ENC_SHORT), "{kept}");
+    assert!(
+        out.stderr.contains("project directories"),
+        "an agent target discloses its merge like any other:\n{}",
+        out.stderr
+    );
+
+    let count = h.run(&["search", "child", &agent, "-c"]);
+    assert_eq!(count.stdout.trim(), "1", "{}", count.stderr);
+}
+
+#[test]
+fn an_agent_targets_prefix_copy_merges_onto_the_longer_one() {
+    let shorter = agent_record(1, "child ask");
+    let longer = format!("{shorter}{}", agent_record(2, "child again"));
+    // The LONGER copy sits under the renamed directory, which sorts last: only the size
+    // rule can send the win there, and picking the shorter one would drop a record.
+    let h = agent_home(&shorter, &longer);
+    let agent = at(AGENT);
+
+    let out = h.run(&["list", &agent, "--format", "json"]);
+    let rows = json_rows(&out.stdout, "session");
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["duplicate_relation"], "prefix");
+    assert!(
+        rows[0]["path"]
+            .as_str()
+            .expect("a path")
+            .contains(ENC_SHORT),
+        "the longer copy wins: {}",
+        rows[0]["path"]
+    );
+    let header = json_rows(&out.stdout, "header");
+    assert_eq!(header[0]["duplicate_transcripts"], 1);
+    assert_eq!(header[0]["duplicate_records_dropped"], 1);
+
+    let count = h.run(&["search", "child", &agent, "-c"]);
+    assert_eq!(count.stdout.trim(), "2", "the kept copy is the longer one");
+}
+
+#[test]
+fn an_agent_targets_divergent_copies_both_stay_and_show_names_them() {
+    let h = agent_home(
+        &agent_record(1, "one branch"),
+        &agent_record(1, "another branch"),
+    );
+    let agent = at(AGENT);
+
+    let out = h.run(&["list", &agent, "--format", "json"]);
+    let rows = json_rows(&out.stdout, "session");
+    assert_eq!(rows.len(), 2, "nothing merges when the bytes disagree");
+    for r in &rows {
+        assert_eq!(r["duplicate_relation"], "divergent");
+        assert_eq!(r["also_at_count"], 1);
+    }
+    assert!(out.stderr.contains("DIFFER"), "{}", out.stderr);
+
+    // The one refusal that stays: an address naming two files on disk must not pick one,
+    // and `@<agent-id>` cannot separate the copies either - only a path can.
+    let show = h.run(&["show", &agent, "--line", "1"]);
+    assert!(!show.success, "{}", show.stdout);
+    assert!(show.stderr.contains("name a path"), "{}", show.stderr);
+    assert!(show.stderr.contains(ENC_SHORT), "{}", show.stderr);
+    assert!(show.stderr.contains(ENC), "{}", show.stderr);
+}

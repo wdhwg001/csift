@@ -101,12 +101,17 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
 }
 
 /// Copy the resolver's duplicate report onto the rows it is about. A merged group has ONE
-/// row in scope (its winner), which names the dropped copies; a divergent group has a row
-/// per copy, and each names its siblings.
+/// row in scope (its winner), which names the dropped copies; a group that merges nothing
+/// has a row per copy, and each names its siblings.
+///
+/// The join is on the PATH each row was built from, never on the id: a group's id is the
+/// shared BASENAME, which is the bare uuid for a session and `agent-<hex>` for a subagent,
+/// while a subagent ROW carries the stripped hex - so an id join silently skipped every
+/// agent group. A path is what the row and the group already agree on.
 fn attach_duplicates(summaries: &mut [SessionSummary], groups: &[path::DuplicateGroup]) {
     for g in groups {
         for s in summaries.iter_mut() {
-            if s.is_subagent || s.session_id != g.session_id {
+            if !g.members.iter().any(|m| m.path == s.path) {
                 continue;
             }
             s.duplicate_relation = Some(g.relation);

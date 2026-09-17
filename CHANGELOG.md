@@ -50,7 +50,9 @@ surface change bumps the PATCH.
   `list`/`search`/`stats`/`files`/`recover`/`verbatim`/`image`/`agents` carry
   `duplicate_transcripts` and `duplicate_records_dropped` in their JSON header and a `copies`
   line in text, and a `list` row carries `also_at` plus `duplicate_relation`. `show` keeps
-  refusing an address that resolves to two files and now names the paths.
+  refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
+  target takes the same merge: a copied project directory carries the whole sidecar, so one
+  `agent-<hex>.jsonl` is on disk under two directories too.
 - **`csift list` emits one row per session, not one per copy**, and `sessions_in_scope` counts
   distinct sessions. BREAKING on a scope holding a duplicated session: the row count and every
   spanning count change, and the header numbers with them.

@@ -2,6 +2,7 @@ use super::*;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod agent_copies;
 mod dedup;
 mod encode;
 mod ids;

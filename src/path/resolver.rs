@@ -111,7 +111,7 @@ pub fn resolve_session_files_reported(
         // Collapse the copies of one session id BEFORE the subagents are gathered: a copied
         // project directory carries the session's whole sidecar with it, so gathering from
         // both would double every subagent transcript too.
-        let (mut top_level, groups) = dedup_top_level(top_level);
+        let (mut top_level, groups) = dedup_copies(top_level);
         emit_duplicate_notes(&groups);
         duplicates = groups;
 
@@ -142,7 +142,12 @@ pub fn resolve_session_files_reported(
     // ── AGENT path: each `@<agent-hex>` resolves to the subagent + (unless `--no-subagents`)
     // its TOPOLOGICAL descendants. Errors when no such agent exists in scope.
     for hex in &agent_hexes {
-        files.extend(resolve_agent_subtree(&dirs, hex, scope)?);
+        // The agent path runs the SAME merge (a copied project directory carries the whole
+        // sidecar, so an agent hex can be owned by two copies of one session), and its
+        // report joins the session path's rather than replacing it.
+        let resolved = resolve_agent_subtree(&dirs, hex, scope)?;
+        files.extend(resolved.files);
+        duplicates.extend(resolved.duplicates);
     }
 
     files.sort();
