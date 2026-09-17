@@ -7,8 +7,10 @@
 
 use crate::harness::*;
 
-/// The SHORT project-directory name a rename leaves behind - it matches no record's cwd.
-const ENC_SHORT: &str = "-Users-testuser-Projects-f";
+/// The project-directory name a rename leaves behind - it matches no record's cwd. It is
+/// deliberately NOT a substring of `ENC`: an assertion that a path "contains" one of the two
+/// would be true of both, and two tests below turn on exactly which copy a path names.
+const ENC_SHORT: &str = "-Users-testuser-Projects-renamed";
 
 /// Two records, both recording the cwd the LONG directory name encodes.
 fn body_two() -> String {
@@ -99,6 +101,27 @@ fn the_json_header_counts_distinct_sessions_and_says_what_the_merge_cost() {
         .as_str()
         .expect("a path")
         .contains(ENC_SHORT));
+}
+
+#[test]
+fn a_sibling_session_in_the_same_scope_is_left_alone() {
+    // The report is attached to the rows it is ABOUT: a second, unduplicated session listed
+    // beside the duplicated one must come back with an empty `also_at` and a null relation.
+    let h = identical_home();
+    let other = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c99";
+    h.write(
+        &format!("{ENC}/{other}.jsonl"),
+        &record(1, "a separate ask"),
+    );
+
+    let out = h.run(&["list", "--no-subagents", "--format", "json"]);
+    let rows = json_rows(&out.stdout, "session");
+    assert_eq!(rows.len(), 2, "{}", out.stdout);
+    for r in &rows {
+        let dup = r["session_id"] == SESS;
+        assert_eq!(r["also_at_count"], usize::from(dup), "{r}");
+        assert_eq!(r["duplicate_relation"].is_null(), !dup, "{r}");
+    }
 }
 
 #[test]
