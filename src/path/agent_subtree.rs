@@ -19,32 +19,36 @@ pub(crate) fn resolve_agent_subtree(
     scope: SubagentScope,
 ) -> Result<Resolved> {
     let mut found: Vec<PathBuf> = Vec::new();
-    for pd in dirs {
+    let mut owner: Option<PathBuf> = None;
+    'scan: for pd in dirs {
         for top in top_level_jsonls(&pd.dir) {
-            let subs = crate::subagent::subagent_transcript_files(&top)?;
-            // agent_id (bare hex) → its transcript path, for this session.
-            let by_id: std::collections::HashMap<String, PathBuf> = subs
-                .iter()
-                .map(|p| (crate::subagent::session_id_from_path(p), p.clone()))
-                .collect();
-            if !by_id.contains_key(hex) {
-                continue; // not this session's agent
+            if let Some(files) = agent_files_under(&top, hex, scope)? {
+                found.extend(files);
+                owner = Some(top);
+                break 'scan;
             }
-            // An owning session. The descendants come from the agent→agent topology
-            // (`parent_agent_id`); on flat real data an agent has none, so the result is just
-            // the agent itself - correct, and it nests automatically once CC nests subagents.
-            let nodes = crate::subagent::build_topology(&top, false)?;
-            let descendants = subtree_agent_ids(&nodes, hex);
-            // The agent's OWN transcript is always included (both scopes keep the target itself).
-            if let Some(p) = by_id.get(hex) {
-                found.push(p.clone());
+        }
+    }
+    // The owning session is known, and an agent hex is globally unique, so the ONLY other
+    // file that can hold this agent is a COPY OF THAT SESSION - the same basename under
+    // another project directory. That is one `is_file` probe per directory, never a second
+    // walk of every sidecar in the corpus, and the difference is measurable: on a live root
+    // of 30 project directories, interleaved seven times against the walk-everything shape
+    // in one binary, the medians were 0.31 s probing against 0.54 s walking (debug build,
+    // warm cache). Probing is also indistinguishable from the pre-merge early return, which
+    // did the same scan and then stopped.
+    if let (Some(owner), Some(name)) = (&owner, owner.as_ref().and_then(|o| o.file_name())) {
+        let mut probed: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
+        for pd in dirs {
+            let sibling = pd.dir.join(name);
+            // A directory can be named twice in one invocation, and probing the same file
+            // twice would hand `dedup_copies` a path duplicated against itself - which is
+            // not two copies of a session, it is one file counted twice.
+            if sibling == *owner || !probed.insert(sibling.clone()) || !sibling.is_file() {
+                continue;
             }
-            if !matches!(scope, SubagentScope::TopLevelOnly) {
-                for d in &descendants {
-                    if let Some(p) = by_id.get(d) {
-                        found.push(p.clone());
-                    }
-                }
+            if let Some(files) = agent_files_under(&sibling, hex, scope)? {
+                found.extend(files);
             }
         }
     }
@@ -88,6 +92,34 @@ pub(crate) fn resolve_agent_subtree(
         "no subagent `{hex}` found under the resolved target(s). List ids with \
          `csift agents <session>`, then pass one as `@<agent-hex>`."
     )
+}
+
+/// The transcripts ONE top-level session contributes for an `@<agent-hex>` target: the
+/// agent's own transcript plus, unless `--no-subagents`, its topological descendants.
+/// `None` when this session does not own the agent, which is the common answer.
+fn agent_files_under(top: &Path, hex: &str, scope: SubagentScope) -> Result<Option<Vec<PathBuf>>> {
+    let subs = crate::subagent::subagent_transcript_files(top)?;
+    // agent_id (bare hex) → its transcript path, for this session.
+    let by_id: std::collections::HashMap<String, PathBuf> = subs
+        .iter()
+        .map(|p| (crate::subagent::session_id_from_path(p), p.clone()))
+        .collect();
+    let Some(own) = by_id.get(hex) else {
+        return Ok(None);
+    };
+    // The descendants come from the agent→agent topology (`parent_agent_id`); on flat real
+    // data an agent has none, so the result is just the agent itself - correct, and it
+    // nests automatically once CC nests subagents.
+    let mut out = vec![own.clone()];
+    if !matches!(scope, SubagentScope::TopLevelOnly) {
+        let nodes = crate::subagent::build_topology(top, false)?;
+        for d in subtree_agent_ids(&nodes, hex) {
+            if let Some(p) = by_id.get(&d) {
+                out.push(p.clone());
+            }
+        }
+    }
+    Ok(Some(out))
 }
 
 /// The bare-hex agent ids in `nodes` that DESCEND from `root` (children, grandchildren, …) via
