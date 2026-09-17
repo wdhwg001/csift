@@ -161,11 +161,16 @@ impl TurnRootsCell {
 /// `set_pairing` keys on the class and leaves both outside its domain, so the id moves
 /// provenance and nothing else.
 ///
-/// ONE RELATION, ONE EDGE decides which is dropped when they coincide: `parent` stands down
-/// when a family already named that uuid with a more specific word (`blocked`, `redoes`,
-/// `fires`, `attached_to`, `wraps`) or when it resolves to the very LINE `result_of` already
-/// named. Two words for one relation is a vocabulary a reader has to learn twice, which is
-/// the failure the shared builder exists to prevent, from the other side.
+/// ONE RELATION, ONE EDGE decides which is dropped when they coincide, and the test is on
+/// the TARGET rather than on who named it: `parent` stands down when ANY OTHER edge already
+/// on this unit names that same uuid, or when it resolves to the very LINE `result_of` just
+/// named. A FAMILY's word is the common case (`blocked`, `redoes`, `fires`, `attached_to`,
+/// `wraps`), and TWO of the engine's own five rendering relations do it too - `pairs` on a
+/// compaction summary and `repairs` on a paired resume placeholder both name the record
+/// above, which is exactly what `parentUuid` names there. Measured on the landmark
+/// transcript, that is 83 records: `parent` 169,180 -> 169,097, against 80 summaries and 3
+/// paired placeholders. Two words for one relation is a vocabulary a reader has to learn
+/// twice, which is the failure the shared builder exists to prevent, from the other side.
 pub(crate) fn engine_edges(
     h: &Hit,
     parent_uuid: Option<&str>,

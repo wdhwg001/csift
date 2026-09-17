@@ -62126,7 +62126,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "183-189",
+          "lines": "188-194",
           "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
@@ -86891,7 +86891,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "259-261",
+          "lines": "264-266",
           "snippet": "        Some(crate::model::Kind::Draft { superseded_by }) => {\n            superseded_by.and_then(|s| edge(crate::model::EdgeKind::Supersedes, Basis::Position, s))\n        }"
         }
       ],
@@ -88133,7 +88133,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "255-256",
+          "lines": "260-261",
           "snippet": "            .replay_of(idx)\n            .and_then(|s| edge(crate::model::EdgeKind::Replays, Basis::Key, s)),"
         }
       ],
@@ -88753,7 +88753,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "262-264",
+          "lines": "267-269",
           "snippet": "        Some(crate::model::Kind::Rewound { resend }) => {\n            resend.and_then(|s| edge(crate::model::EdgeKind::Continues, Basis::Position, s))\n        }"
         }
       ],
@@ -88908,7 +88908,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "356",
+          "lines": "361",
           "snippet": "            rec.logical_parent_uuid.as_deref(),"
         }
       ],
@@ -94696,7 +94696,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "383-385",
+          "lines": "388-390",
           "snippet": "    if rec.resume_paired(&env.ctx_for(kept)) != Some(true) {\n        return None;\n    }"
         }
       ],
@@ -94919,7 +94919,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "414-415",
+          "lines": "419-420",
           "snippet": "fn reports_edge(rec: &Record, env: &ClassifyEnv<'_>) -> HitFact {\n    let Some(id) = rec.pulse_tool_use_id() else {"
         },
         {
@@ -94929,7 +94929,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "205-211",
+          "lines": "210-216",
           "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],
@@ -96848,12 +96848,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "344-345",
+          "lines": "349-350",
           "snippet": "    let (anchor, basis) = match segment(\"anchorUuid\").filter(|a| Some(*a) != rec.uuid.as_deref()) {\n        Some(a) => (Some(a), Basis::Key),"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "363",
+          "lines": "368",
           "snippet": "            .map(|u| edge(crate::model::EdgeKind::Preserves, Basis::Key, Some(u))),"
         }
       ],
