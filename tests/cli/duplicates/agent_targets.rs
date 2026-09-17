@@ -48,8 +48,10 @@ fn an_agent_target_merges_its_own_copies_and_names_the_merge() {
     );
     assert_eq!(rows[0]["duplicate_relation"], "identical");
     assert_eq!(rows[0]["also_at_count"], 1);
-    // Equal sizes and no cwd to read, so the winner is the smallest path - which is the
-    // answer on every run and every machine, not whatever `read_dir` happened to yield.
+    // Equal sizes, and the cwd tie-break cannot fire on a sidecar path (it compares the
+    // file's parent directory name, which here is `subagents`), so the winner is the
+    // smallest path - the answer on every run and every machine, not whatever `read_dir`
+    // happened to yield.
     let kept = rows[0]["path"].as_str().expect("a path");
     assert!(kept.contains(ENC), "{kept}");
     assert!(!kept.contains(ENC_SHORT), "{kept}");
@@ -197,8 +199,9 @@ fn a_session_and_its_agent_in_one_invocation_resolve_one_copy_of_that_agent() {
     // TWO paths reach the same `agent-<hex>.jsonl`: the session target gathers it from the
     // sidecar of the session it kept, the agent target finds it under both directories.
     // They used to merge separately and pick DIFFERENT winners - the session path inherits
-    // the session's winner, the agent path decides on its own bytes and, at equal sizes
-    // with no `cwd` on an agent record, takes the smallest path - so both copies survived
+    // the session's winner, the agent path decides on its own bytes and, at equal sizes,
+    // takes the smallest path (the cwd tie-break reads a parent directory name and a
+    // sidecar's is `subagents`, so it never fires here) - so both copies survived
     // the path-level dedup and every row claimed the other had been dropped.
     let child = agent_record(1, "child ask");
     let h = agent_home(&child, &child);

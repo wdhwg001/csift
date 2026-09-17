@@ -276,7 +276,10 @@ fn classify_bytes(bytes: &[&[u8]]) -> DuplicateRelation {
 /// Equal sizes are broken by the copy whose DIRECTORY basename equals the encoding of the
 /// first record that carries a `cwd` (the value the directory key was derived from at
 /// write time), then by the lexicographically smallest path, so the answer is the same on
-/// every run and every machine.
+/// every run and every machine. That first tie-break is a TOP-LEVEL transcript's rule and
+/// nothing else: it compares the file's PARENT directory name, which for a sidecar
+/// transcript is `subagents` or a `wf_<id>` rather than an encoded cwd, so an agent group
+/// falls to the path comparison whatever its records carry.
 fn order_members(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     paths.sort();
     let mut keyed: Vec<(u64, bool, PathBuf)> = paths

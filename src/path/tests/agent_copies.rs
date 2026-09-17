@@ -151,3 +151,28 @@ fn an_agent_under_one_directory_reports_no_duplicate() {
     assert_eq!(r.files.len(), 1);
     assert!(r.duplicates.is_empty(), "the ordinary case reports nothing");
 }
+
+#[test]
+fn the_cwd_tie_break_never_fires_on_a_sidecar_path() {
+    // The equal-size tie-break asks whether a copy's PARENT directory name encodes the cwd
+    // its first record carries. A sidecar transcript's parent is `subagents` (or a
+    // `wf_<id>`), never an encoded cwd, so the probe is structurally false for every agent
+    // group and the tie falls to the smallest path. Here both copies name DIR_B's cwd: a
+    // probe that walked up to the project directory would hand DIR_B the win.
+    let tree = Tree::new();
+    let body = "{\"type\":\"user\",\"uuid\":\"a1\",\"cwd\":\"/Users/dev/bbb\",\
+         \"message\":{\"role\":\"user\",\"content\":\"child ask\"}}\n";
+    let dirs = two_copies(&tree, body, body);
+    assert_eq!(encode_cwd(Path::new("/Users/dev/bbb")), DIR_B);
+
+    let r = resolve(&dirs);
+    assert_eq!(r.files.len(), 1, "{:?}", r.files);
+    assert_eq!(
+        r.files[0],
+        tree.path(DIR_A)
+            .join(UUID)
+            .join("subagents")
+            .join(format!("agent-{HEX}.jsonl")),
+        "the smallest path wins the tie, not the directory the records name"
+    );
+}

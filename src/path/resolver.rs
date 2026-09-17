@@ -154,8 +154,11 @@ pub fn resolve_session_files_reported(
     // and one of its agents at once (`list @<uuid> @<agent-hex>`). Two paths reached the
     // same `agent-<hex>.jsonl` under two project directories, each merged its own half, and
     // they chose different winners - the session path inherits the SESSION winner while the
-    // agent path decides on its own bytes and, at equal sizes with no `cwd` on an agent
-    // record, falls to the smallest path. Both survivors then passed the path-level dedup
+    // agent path decides on its own bytes and, at equal sizes, falls straight to the
+    // smallest path: the cwd tie-break compares a file's PARENT directory name, which for a
+    // sidecar transcript is `subagents` or a `wf_<id>` and can never equal an encoded cwd,
+    // so it is structurally false for every agent group, whatever the records carry. Both
+    // survivors then passed the path-level dedup
     // (different paths), so the scope carried the transcript twice while every row claimed
     // the other copy had been dropped. The path-level dedup runs FIRST, so one file named
     // twice is one file here rather than a fabricated pair of copies.
