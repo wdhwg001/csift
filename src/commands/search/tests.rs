@@ -151,6 +151,7 @@ mod pairing;
 mod record_text;
 mod render;
 mod reverse;
+mod roots;
 mod rows;
 mod scan;
 mod seam;
