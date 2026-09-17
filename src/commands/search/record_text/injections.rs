@@ -184,8 +184,9 @@ pub(crate) fn facts(
         // deliberate absence rather than a missing arm: the pulse's `reports` edge is the
         // ENGINE's (`search::hit_facts::provenance::reports_edge`), because the ORDINARY
         // carrier is not isMeta and never reaches this family's gate at all - a relation
-        // read here answered for 94 of the 4,007 pulse-carrying records on one projects
-        // root. One reader, both carriers.
+        // read here answered for 95 of the 4,017 pulse-carrying records on one projects
+        // root (the counting rule, which names the file set AND the content reading, is at
+        // `Record::pulse_tool_use_id`). One reader, both carriers, one reading.
         //
         // Every OTHER leaf this family's classify file can assign - the two schedule
         // ticks and the resume repair prompt - carries no edge, because no key on those

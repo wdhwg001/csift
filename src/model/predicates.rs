@@ -261,18 +261,25 @@ impl Record {
     /// reader moves those four from a false reason to the builder's `not in this file`, which
     /// is what the record actually supports.
     ///
-    /// MEASURED, with the file set stated so the numbers reproduce: one row per RECORD whose
-    /// textual `message.content` carries `<task-notification>`, over EVERY `*.jsonl` under
-    /// one projects root - the top-level transcripts AND the `<uuid>/subagents/**` sidecar
-    /// ones, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a
-    /// `csift-channel/` directory. 4,007 such records, of which 94 are the frame: a relation
-    /// read in the family that owns the frame reached 2% of the pulses on disk. Reading the
-    /// top-level transcripts ALONE misses the sidecars and does not reproduce those numbers.
+    /// MEASURED, and the counting rule is BOTH halves - the file set and the reading:
+    /// one row per RECORD whose `message.content`, read the way the CLASSIFIER reads it
+    /// (the bare string, or the newline-join of the content array's `text` blocks), carries
+    /// `<task-notification>`; over EVERY `*.jsonl` under one projects root - the top-level
+    /// transcripts AND the `<uuid>/subagents/**` sidecar ones, excluding `journal.jsonl`,
+    /// `elicitations.jsonl` and anything under a `csift-channel/` directory. Both halves
+    /// move the answer: the top-level transcripts ALONE miss the sidecars, and the
+    /// string-only reading gives 3,805 rows against 4,017 and moves the FRAME count 95 to
+    /// 56, a 41% difference on the one population the family used to own.
+    ///
+    /// On that rule: 4,017 records, of which 95 are the frame - a relation read in the
+    /// family that owns the frame reached 2% of the pulses on disk. Since this reader takes
+    /// the same reading, its DOMAIN is that whole population rather than a subset of it.
     ///
     /// The value is a `tool_use` id, not a record uuid, so it resolves through the tool
-    /// index rather than the chain's uuid map. On the same rows: 2,463 pulses carry the tag
-    /// and 2,453 of those name a `tool_use` block of the same file, which is 61% of all
-    /// pulses answered with an address.
+    /// index rather than the chain's uuid map. On the same rows: 2,470 pulses carry the tag
+    /// and 2,459 of those name a `tool_use` block of the same file, which is 61% of all
+    /// pulses answered with an address. The projects root is a LIVE corpus, so a re-run
+    /// reads a few more rows than these; the rule is what reproduces, not the last digit.
     #[must_use]
     pub fn pulse_tool_use_id(&self) -> Option<String> {
         let s = self.raw_message_text()?;

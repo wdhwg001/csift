@@ -224,12 +224,13 @@ fn an_edge_naming_a_call_resolves_to_the_line_that_carries_it() {
 ///
 /// The pulse arrives two ways and only the rarer one is an isMeta notification FRAME, so a
 /// relation read in the family that owns the frame answered for a fraction of the pulses on
-/// disk: 94 of 4,007 pulse-carrying records over one projects root (the counting rule and
-/// the file set are at `Record::pulse_tool_use_id`). The engine reads the tag
+/// disk: 95 of 4,017 pulse-carrying records over one projects root (the counting rule - the
+/// file set AND the content reading - is at `Record::pulse_tool_use_id`). The engine reads
+/// the tag
 /// off the record's own text instead, so both carriers give the same answer and both resolve
 /// through the tool index - a `tool_use` id is a wire id and is in no `uuid` field.
 ///
-/// A pulse that names no tag says so. About a third of them do not (1,235 of 4,007 carry a
+/// A pulse that names no tag says so. About a third of them do not (1,236 of 4,017 carry a
 /// `<task-id>` and no `<tool-use-id>`), and joining THOSE means reading `toolUseResult` for
 /// every tool result in the file, which the section 7 laws keep off a scan.
 #[test]

@@ -290,14 +290,25 @@ surface change bumps the PATCH.
 
 - **A notification pulse names the call it reports on, whichever carrier it rides.**
   `reports` was read in the isMeta injection family, whose gate is the authorship flag, so
-  it answered only for the pulse wrapped in a notification FRAME: 94 of the 4,007
+  it answered only for the pulse wrapped in a notification FRAME: 95 of the 4,017
   pulse-carrying records over one projects root. It is read at the engine now, off the
-  record's own text, so the 3,913 ordinary carriers answer too - and it resolves through the
+  record's own text, so the 3,922 ordinary carriers answer too - and it resolves through the
   tool index rather than printing a bare handle, because a `tool_use` id is a wire id and is
-  in no `uuid` field (2,463 pulses carry the tag; 2,453 of those name a call of the same
+  in no `uuid` field (2,470 pulses carry the tag; 2,459 of those name a call of the same
   file, so 61% of pulses get an address). A pulse that names no tag says so rather than
-  dropping the edge; joining those through their `<task-id>` would reach 1,227 more, about
-  92%, and is a declared follow-on. COUNTING RULE: one row per RECORD whose textual `message.content` carries `<task-notification>`, over every `*.jsonl` under one projects root - the top-level transcripts AND the `<uuid>/subagents/**` sidecar ones, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory.
+  dropping the edge; joining those through their `<task-id>` would reach 1,228 more, about
+  92%, and is a declared follow-on. The reader takes the same text the CLASSIFIER takes, so
+  a pulse whose content is a block array answers exactly as a string one does.
+
+  COUNTING RULE, both halves - the FILE SET and the READING:
+  one row per RECORD whose `message.content`, read as the bare string or as the
+  newline-join of the content array's `text` blocks, carries `<task-notification>`; over
+  every `*.jsonl` under one projects root - the top-level transcripts AND the
+  `<uuid>/subagents/**` sidecar ones, excluding `journal.jsonl`, `elicitations.jsonl` and
+  anything under a `csift-channel/` directory. Both halves move the answer: the top-level
+  transcripts alone miss the sidecars, and a string-only reading gives 3,805 rows instead
+  of 4,017 and moves the FRAME count from 95 to 56. The corpus is live, so a re-run reads
+  a few more rows; the rule is what reproduces.
 
 - **The relation INVENTORY, in SPEC 4.12 and SKILL.** One table over every relation csift
   can answer about a record: the twenty-seven `for[]` words, the relations that ride a FIELD

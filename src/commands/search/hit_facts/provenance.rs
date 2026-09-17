@@ -403,20 +403,23 @@ fn resume_edge(rec: &Record, kept: &Kept, env: &ClassifyEnv<'_>) -> Option<HitFa
 /// The pulse reaches a transcript two ways - as an ordinary `type:"user"` record and, far
 /// less often, wrapped in an isMeta notification FRAME - and only the second is an isMeta
 /// injection. Reading the relation in the family that owns the frame therefore answered for
-/// 94 of the 4,007 pulse-carrying records, and said nothing about the other 3,913. It is
+/// 95 of the 4,017 pulse-carrying records, and said nothing about the other 3,922. It is
 /// read here instead, off the record's own text through the one reader
-/// ([`Record::pulse_tool_use_id`]), so both carriers get the same answer. (Counting rule and
-/// file set: [`Record::pulse_tool_use_id`].)
+/// ([`Record::pulse_tool_use_id`]), so both carriers get the same answer - and off the text
+/// the CLASSIFIER read, so a pulse whose content is a block array answers exactly as a
+/// string one does. (The counting rule behind every number here names BOTH its file set and
+/// its content reading, at [`Record::pulse_tool_use_id`]; the reader's domain is that whole
+/// population.)
 ///
 /// [`Basis::Key`]: the producer wrote the tag to say which call this pulse is about. The
 /// value is a `tool_use` id rather than a record uuid, so it resolves through the tool index
-/// (2,453 of the 2,463 tagged pulses name a call of the same file, so 61% of all pulses get
+/// (2,459 of the 2,470 tagged pulses name a call of the same file, so 61% of all pulses get
 /// an address).
 ///
-/// A pulse with NO tag - 1,235 carry a `<task-id>` and no `<tool-use-id>`, 309 carry
+/// A pulse with NO tag - 1,236 carry a `<task-id>` and no `<tool-use-id>`, 311 carry
 /// neither - answers the honest empty with that as the reason, never a silent absence.
-/// Joining THOSE through their `<task-id>` would reach 1,227 more (`toolUseResult.taskId`
-/// 1,206, `agentId` 20, `backgroundTaskId` 1), taking the relation to about 92%; it means
+/// Joining THOSE through their `<task-id>` would reach 1,228 more (`toolUseResult.taskId`
+/// 1,206, `agentId` 21, `backgroundTaskId` 1), taking the relation to about 92%; it means
 /// reading `toolUseResult` for every tool result in the file, which section 7 keeps off a
 /// scan, so it is a stated follow-on with its share and its yield measured rather than a
 /// gap.
