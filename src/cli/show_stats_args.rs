@@ -94,7 +94,8 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         to find its lines).\n\n  \
           Under `--branch-points` the rows are {kind:\"branch-point\", uuid, line, \
         parent_line, parent_type, live_child_line, children:[…], widest_gap_seconds} and \
-        the summary is {branch_points, conversation_records, skipped_lines}. `line` and \
+        the summary is {branch_points, conversation_records, skipped_lines} plus the same \
+        crossing set, on the same terms. `line` and \
         `parent_line` are the SAME value - on this row the record IS the fork parent - and \
         both are null when the parent uuid names no line in the file. `live_child_line` is \
         the line of the child on the chain, and it is null unless EXACTLY one child is \
