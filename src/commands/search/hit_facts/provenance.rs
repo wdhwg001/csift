@@ -318,10 +318,19 @@ fn compaction_edges(class: Class, rec: &Record, env: &ClassifyEnv<'_>) -> Vec<Hi
         record_text::for_edge_at(kind, basis, uuid, None, line)
     };
     if class == Class::CompactionSummary {
+        // The reason states WHAT WAS SEARCHED, which is the pairing, and not a fact about
+        // the file that nothing here tested. `paired_with` answers `None` three ways and
+        // only one of them is "no boundary above": the summary can carry no `uuid` of its
+        // own (the map needs one to key the edge back), or an earlier summary can already
+        // have taken the pending boundary. Naming the third as the reason would report a
+        // negative csift never looked for - the move claim CLS-060's `fallbackModel` arm
+        // refuses for the same reason. The corpus has no specimen of any of the three (292
+        // summaries, 292 boundaries, 292 paired), so this reason prints only for the shape
+        // an e2e builds, which is exactly when a reader has to trust the wording.
         let Some(boundary) = env.summarize.paired_with(rec.uuid.as_deref()) else {
             return vec![HitFact::ForUnknown {
                 kind: crate::model::EdgeKind::Pairs,
-                reason: "no compaction boundary precedes this summary in this file".to_string(),
+                reason: "no boundary in this file is paired with this summary".to_string(),
             }];
         };
         return vec![edge(

@@ -180,6 +180,14 @@ impl SummarizeIndex {
             // The PAIRING closes on the SUMMARY, not on its mode: an unmodeled direction is
             // a mode csift declines to guess and never a reason to leave the two halves of
             // one event unable to name each other.
+            //
+            // A summary with NO uuid of its own consumes the boundary and records no
+            // pairing, because the map is keyed both ways and there is no key to record.
+            // The MODE below still closes on it - that map is keyed on the boundary alone -
+            // so such a boundary keeps its mode and loses only the edge, which is the
+            // honest split: csift knows what kind of event it was and cannot give either
+            // record the other's address. No corpus specimen exists (292 summaries, 292
+            // with a uuid), so this arm is a guard rather than a path.
             if let Some(summary) = rec.uuid() {
                 paired_uuid.insert(uuid.to_string(), summary.to_string());
                 paired_uuid.insert(summary.to_string(), uuid.to_string());

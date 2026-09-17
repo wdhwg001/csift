@@ -241,12 +241,15 @@ fn the_compaction_pair_is_symmetric_even_with_an_unmodeled_direction() {
     assert!(summary["mode"].is_null(), "{summary}");
 }
 
-/// A summary with no boundary above it says the TRUE reason it names nothing.
+/// A summary with no boundary above it says what csift SEARCHED and did not find.
 ///
 /// No compaction summary carries a key naming its boundary, so "the record carries no such
 /// key" would be true of every summary ever written and would tell a reader nothing about
-/// the one in front of them. The fact is that this FILE holds no boundary before it - a
-/// clone head, whose boundary lives in the session it was copied from.
+/// the one in front of them. What csift did was ask the file's PAIRING, so that is what the
+/// reason names. It deliberately does not say "no boundary precedes this summary", which is
+/// the fixture's own shape here - a clone head, whose boundary lives in the session it was
+/// copied from - but only one of the three ways the pairing comes back empty, and the other
+/// two would be reported with a fact csift never tested.
 #[test]
 fn an_unpaired_summary_names_the_reason_the_file_gives() {
     let h = Home::new();
@@ -278,8 +281,12 @@ fn an_unpaired_summary_names_the_reason_the_file_gives() {
         .find(|e| e["kind"] == "pairs")
         .unwrap_or_else(|| panic!("no pairs edge:\n{}", out.stdout));
     assert!(edge["target"].is_null(), "{edge}");
+    // The reason names the PAIRING csift searched, not a fact about the file it did not
+    // test: `paired_with` answers None three ways (no boundary above, a summary with no
+    // uuid of its own, an earlier summary that already took the pending boundary) and this
+    // fixture is only the first of them.
     assert_eq!(
-        edge["reason"], "no compaction boundary precedes this summary in this file",
+        edge["reason"], "no boundary in this file is paired with this summary",
         "{edge}"
     );
 }
