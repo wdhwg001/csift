@@ -56,13 +56,10 @@ hand-written pass returns a plausible number that is wrong in a direction you ca
 | greps for a tool's output | large outputs are externalised to `tool-results/<id>.txt`, leaving a pointer the regex matches instead of the content | `search --resolve-persisted` |
 
 `search "" TARGET --count-by label` prints the carrier distribution before you write a line
-of parsing. The engineer in that eval incident put it best afterwards: *"it would also
-have told me the carrier distribution before I wrote a single line of parsing. I never
-asked."*
+of parsing.
 
 Hand-rolling a genuinely special case is fine, and csift never writes a transcript so it
-will not stop you. What this section exists to prevent is hand-rolling as the DEFAULT, where every trap
-above fails quietly and the number you report is wrong in a direction you cannot see.
+will not stop you. What this section exists to prevent is hand-rolling as the DEFAULT.
 
 ## 4. Route by QUESTION — one question ⇒ one command
 
@@ -180,7 +177,7 @@ A selector is a leaf path, a CATEGORY (`agent.message`, `harness.turn`), a ROLE 
 
 1. **Leaf visibility** — the `LLM sees` column of §7.2. 28 of the 73 leaves are invisible, and they group by WHY: the two scan-layer user leaves (a recalled draft, a rewound turn) are ordinary user records the surviving conversation no longer threads through; `user.queued` and the whole `harness.bookkeeping` category are non-transcript lines with no `message{}` at all; the two textless thinking leaves carry a signature the model echoes back and no text it could read; the message-less `type:"system"` records (the compaction boundary, the scheduler's fire record, the three `harness.turn` telemetry leaves, four of the five `harness.system` event kinds) are written for the REPL's own banners; and `harness.hook.outcome` is a hook RUN's receipt, which the harness converts to nothing. `harness.system.command` is visible because its subtype is the ONE the request assembler re-mints as a user message, and `agent.message.structured` is visible because the MODEL produced that text.
 2. **Per-RECORD delivery.** Claude Code assembles its request with one drop predicate, and where that predicate disagrees with the leaf default csift mirrors it per record: a `system`/`local_command` record IS sent, an `isVirtual` record and the `<synthetic>` API-error placeholder are NOT, an attachment whose payload type the converter drops is NOT, and a `hook_success` IS exactly when it carries a rendered body. An undelivered record renders `[not delivered]` and every JSON hit carries `delivered`.
-3. **Survival** (§9): an `abandoned` record is off the conversation however it was delivered, so a bare role or category skips it while a glob or an exact leaf reaches it marked. A `pre-cut` record is never skipped by this axis, because csift declines to narrow on a verdict it could not resolve.
+3. **Survival** (§9.1, which states what each verdict does to a selector): an `abandoned` record is off the conversation however it was delivered, so this axis narrows on it. A `pre-cut` record is never skipped by this axis, because csift declines to narrow on a verdict it could not resolve.
 
 **THE ONE STATED EXCEPTION to the whole visible-face law** is `agent.message.structured` against axis 2. It rides a `structured_output` attachment, a converter-dropped payload, so axis 2 would take it out of `-t agent` and `-t agent.message` and leave that two-leaf category showing only its plain half with nothing to say the other exists. Axis 2 asks what the model RECEIVED; this is the leaf the model WROTE, and the API gives a turn free text or a schema-bound answer and never both, so a bare `agent.message` gives you whichever one the turn used. Only FACE MEMBERSHIP moves: the record was still not delivered, so its `delivered` field and its `[not delivered]` marker do not.
 
@@ -511,14 +508,13 @@ The flag is GLOBAL and on every chain-walking command (`search`/`show`/`stats`/`
 |---|---|---|
 | `budget-exhausted` | a compaction boundary the budget would not cross | **yes, when that boundary's door is open** — and the footer names the value. When it is shut, the footer names the door's own reason instead |
 | `unresolvable-boundary` | a boundary whose `logicalParentUuid` names no record on any line of this file — the pre-compaction records were deleted from disk, or it names nothing at all (52 of 275 corpus boundaries are that shape) | no |
-| `relink-removed` | a boundary whose `logicalParentUuid` names a record this file DOES carry, on a line you can open, which the pre-boundary relink cut took out of the uuid map before any leaf was picked. On disk and off the map is a different fact from gone | no |
+| `relink-removed` | a boundary whose `logicalParentUuid` names a record this file DOES carry, on a line you can open, which the pre-boundary relink cut took out of the uuid map before any leaf was picked. On disk and off the map is a different fact from gone, and the cause is real but UNSEEN so far: 0 of the 18 boundary floors over one projects root | no |
 | `boundary-loop` | a boundary whose `logicalParentUuid` names a record the walk had ALREADY reached, so its door leads back into the conversation rather than above the cut — the usual shape for a boundary carrying a preserved set (9 of the 18 boundary floors over one projects root, at `--cross-compactions all`) | no |
 | `head` | the conversation's own head: a record with no parent that is not a boundary | no — the walk ended BELOW the boundaries and never reached them |
 | `dangling-parent` | a `parentUuid` naming no record in this file, with no repair inside the 5 s window | no — same reason |
 | `cycle` | the parent links loop back on themselves | no — same reason |
 | `no-leaf` | no leaf resolved at all, so nothing is on the chain | no — there is no walk to extend |
 
-Over 82 top-level transcripts at `--cross-compactions all`, the three shut-door causes split 9 / 0 / 9 across the 18 files that end on a boundary.
 
 **THE SIX JSON KEYS**, present on the trailing summary of every chain-walking command whenever the budget is non-zero and ABSENT at 0: `crossing_budget` (a number or `"all"`) · `boundaries_crossed` · `budget_exhausted` · `boundaries_above_floor` · `floor_line` · `floor_cause` (one of the eight above). They ride the `--count-by` census summary, each `stats` session row and the `show --branch-points` summary on the same terms. **The floor's LINE and CAUSE are single-transcript facts** and drop the moment a second transcript folds into a total, exactly as `boundary_cut_line` does — one scope has as many floors as it has files, and naming one of them would name the wrong one. The COUNTS add.
 
@@ -600,9 +596,14 @@ Records outside an axis's domain (no tool name, no pairing, no model, no edge) a
 
 **Regex patterns WITH metacharacters are prefiltered too**: a necessity-only literal extraction (every branch of an alternation must demand one safe needle) lets `search "TodoWrite.*legacy|legacy.*TodoWrite"` scan at near-literal speed. No flag, no semantic change, matches byte-identical.
 
-**OUTPUT GEOMETRY (text).** Exchanges emit oldest-first, stable chronological across every transcript in scope, undated exchanges last. Each exchange header opens with a STABLE id-prefix token `<tok>·t<N>`: `<tok>` is the first 8 chars of the owning transcript id, directly usable as an `@` target and identical across invocations (a within-output collision lengthens the colliding group to 12 chars, then the full id; a teammate id renders whole). A subagent exchange carries `(parent <first-8-of-owning-uuid>)` on EVERY header. The head carries scope, match totals and direction; the tail repeats the totals and adds integrity notes and refetch guidance; each over-long fragment marks its own truncation inline. To limit output prefer `--max-count` over piping into `head`/`tail`: a capped run keeps every note, a pipe amputates one end of the ledger.
+**OUTPUT GEOMETRY (text).** Four facts:
 
-**SURVIVAL** (§9): abandoned records are searchable under a glob or an exact leaf and skipped by a bare face; a matching draft emits as its own `<tok>·draft` unit labeled `user.unsent`; a `--turn` window suppresses abandoned units, because they belong to no numbered turn. **PROVENANCE** (§8): every hit carries `for_root`, and `for[]` wherever the record states a relation.
+- **Order**: oldest-first, chronological across the whole scope, undated last.
+- **Header token** `<tok>·t<N>`: `<tok>` is the transcript id's first 8 chars and is itself an `@` target, stable across runs (a within-output collision lengthens to 12, then the full id; a teammate id renders whole). A subagent header adds `(parent <first-8>)`.
+- **Head and tail**: head = scope, totals, direction. Tail = totals again, integrity notes, refetch guidance. Each over-long fragment marks its own truncation inline.
+- **To limit output** use `--max-count`, never a pipe: a cap keeps every note, `head`/`tail` amputates one end of the ledger.
+
+**SURVIVAL** (§9.1, which states the selector and window rules): what is `search`'s own is that a matching draft emits as its own `<tok>·draft` unit labeled `user.unsent`. **PROVENANCE** (§8): every hit carries `for_root`, and `for[]` wherever the record states a relation.
 
 ```bash
 csift search "panic" @<uuid> -t agent --since 6h
@@ -935,7 +936,17 @@ csift wait @<uuid> --until tool:Read:handover --timeout 600      # ...until it r
 
 ## 16. The channel: `send` · `msg` · `ack` · `deliver`
 
-**WHY IT EXISTS: for some receivers the official channel is not weaker, it is ABSENT.** A running **workflow lane** cannot be reached by `SendMessage` at all. An **unnamed subagent** has no arm to address its own parent subagent (the official `to` grammar resolves `main`, a name, a `[ref]` or an `a…` id, so addressing `main` reaches the top-level conversation and not the agent that spawned you). Nothing reaches an **idle top-level session** that published no socket. A sender **outside Claude Code** — a human, a CI job, a Claude in another harness — holds no tool to call at all. And a build below the version floors, or with the gates off, has nothing. csift's channel is a set of files csift owns under the receiving session's sidecar dir, carried into the lane by a `csift deliver` hook the RECEIVER'S OPERATOR installed.
+**WHY IT EXISTS: for some receivers the official channel is not weaker, it is ABSENT.**
+
+| receiver | why the official path does not reach it |
+|---|---|
+| a running **workflow lane** | `SendMessage` cannot address one |
+| an **unnamed subagent** reaching its PARENT subagent | the `to` grammar resolves `main`, a name, a `[ref]` or an `a…` id — so `main` reaches the top-level conversation, not your spawner |
+| an **idle top-level session** | published no socket |
+| a sender **outside Claude Code** (a human, CI, another harness) | holds no tool to call |
+| a build below the version floors, or gates off | nothing at all |
+
+csift's channel is files csift owns under the receiver's sidecar dir, carried in by a `csift deliver` hook the RECEIVER'S OPERATOR installed.
 
 ```
 csift send @<lane> ("MESSAGE" | -f FILE | stdin) [--mode steer|queue] [--ttl 12h] [--from @<lane>|LABEL]
@@ -976,7 +987,14 @@ csift whoami --to @<lane>                                   # would it reach? (n
 
 **GATE VERDICTS** (teams, harbor) follow one grammar, because a gate csift cannot SEE enabled is UNKNOWN with its evidence and never assumed off: `enabled via settings env (<scope>)` · `no settings-level enable; shell env and CLI flags are not observable -> unknown; use evidence: teams directories N, teammate lanes N` · for harbor, `registry messagingSocketPath present -> on and bound` / `absent -> unknown`.
 
-**A COMPLETED AGENT LANE IS REFUSED, ON PURPOSE.** Reaching a completed teammate or unnamed subagent is not a delivery: the official path RESPAWNS the lane. So it is `REFUSED` unless you pass `--resume`, which DELEGATES that resume and tells you what it does — the lane is respawned with its prior messages, a concurrent resume of the same lane throws instead of queueing, on Claude Code below 2.1.260 the completion notification goes to the MAIN conversation rather than to you, and with background tasks disabled it runs INLINE with no notification at all. A completed WORKFLOW lane and a stopped-by-user lane are refused outright: neither has a re-entry point.
+**A COMPLETED AGENT LANE IS REFUSED, ON PURPOSE.** Reaching a completed teammate or unnamed subagent is not a delivery: the official path RESPAWNS the lane. So it is `REFUSED` unless you pass `--resume`, which DELEGATES that resume and prints all four of its consequences:
+
+- the lane RESPAWNS with its prior messages;
+- a concurrent resume of it THROWS rather than queueing;
+- below Claude Code 2.1.260 the completion notice goes to the MAIN conversation, not to you;
+- with background tasks disabled it runs INLINE, no notification at all.
+
+A completed WORKFLOW lane and a stopped-by-user lane are refused outright: neither has a re-entry point.
 
 **OFFICIAL SENDS ARE DELEGATED, NEVER PERFORMED.** Where an official transport exists (the teammate mailbox, the in-process queue, the cross-session socket, a resume) csift PRINTS the exact call for YOU to make — it is a binary and those are model tools — and still queues on its own channel, so a delegation you forget is not a lost message (`--official-only` queues nothing). The `to` value is the routing or `a…` form and NEVER a session uuid: the official grammar has no bare-uuid arm and csift will not invent one (§5.1).
 
@@ -1114,7 +1132,7 @@ csift search "" @U -t agent.tool.use --raw | jq 'select(.message.content[]?.inpu
 csift search P @U --format json | jq -r 'select(.kind=="exchange") | .hits[] | select(.label=="agent.tool.result") | .refetch' | sh
 ```
 
-One more pipeline shape, because it is the composition loop the whole tool is built around: `search -l` emits owning session ids one per line, and every multi-target command takes `--sessions-from -` (which then spans, §5).
+One more pipeline shape, because it is the composition loop the whole tool is built around (§11.1 for what `-l` emits, §5 for how the receiving command scopes it):
 
 ```bash
 csift search "X" -l | csift files --sessions-from - --by file
@@ -1193,7 +1211,7 @@ This table is keyed by the BELIEF rather than by the topic, because that is how 
 | a refusal's `retractedMessageUuids` is a list of records to fetch | they are WIRE uuids of the normalized messages the fallback retracted and resolve to NO transcript line (0 of 75 and 0 of 79 entries across two measured roots), so csift does not expose them at all. Its sibling `refusedUserMessageUuid` is the one that RESOLVES — a `type:"user"` record every time it does — and it rides the hit as the `for: refused` edge with that LINE |
 | a slash command always leaves a wrapper record, so finding none means it was not run | THREE families leave NOTHING on disk. (1) A local-jsx command whose every normal exit returns `display:"skip"`: `/btw`, `/tasks` and its alias `/bashes`, and `/release-notes`. (2) ANY panel closed with Escape, whatever that command's own display option is. (3) A `local` command whose result is of type `skip`: `/rewind` (= `/checkpoint`, `/undo`), `/stop`, one `/exit` path. The silent family is small (3 skip-only of the 83 local-jsx commands at Claude Code 2.1.258) but holds commands a reader reaches for. `/btw` is the sharpest case: its answer is a separate one-turn query run with `skipTranscript`, so the question and the answer live in memory and reach the parent transcript never |
 | a record on disk is a record the model saw | not for the harness's own notices. `/release-notes` APPENDS a `system`/`informational` record and THEN returns skip: it is on disk, it was rendered to the human, and the request assembler drops it. Read the JSON `delivered` on a hit, or the `[not delivered]` marker in text, rather than inferring from presence (§7.1, axis 2) |
-| a `Continue from where you left off.` prompt and the `No response requested.` reply after it are the human and the model | neither is. They are the resume LOADER's repair pair, written at load time when a transcript ends on a dangling user record: `harness.resume.prompt` (isMeta, machine-authored) and `harness.resume.placeholder` (an assistant record with the `<synthetic>` model, fabricated with no model call). **The model received BOTH** — they are not filtered out of the request — so they shape the resumed turn while belonging to neither side of the conversation. `-t user` and `-t agent` hide them; `-t harness` and `-t harness.resume` show them; `status` and `wait` walk past them for the last prompt and reply. The prompt leaf needs isMeta, so a message YOU start with that sentence is still yours: `user.message`, opening its turn |
+| a `Continue from where you left off.` prompt and the `No response requested.` reply after it are the human and the model | neither is. They are the resume LOADER's repair pair, written at load time when a transcript ends on a dangling user record: `harness.resume.prompt` and `harness.resume.placeholder` (§7.3 for both shapes), fabricated with no model call. **The model received BOTH** — they are not filtered out of the request — so they shape the resumed turn while belonging to neither side of the conversation. `-t user` and `-t agent` hide them; `-t harness` and `-t harness.resume` show them; `status` and `wait` walk past them for the last prompt and reply. The prompt leaf needs isMeta, so a message YOU start with that sentence is still yours: `user.message`, opening its turn |
 | `ScheduleWakeup` calls live under `harness.schedule.*` | a tool CALL classifies by ROLE — arming a wakeup is `agent.tool.use` like any other tool, and the `harness.schedule.*` leaves are the FIRED side only (§7.2). Every marker arm of that family is matched at the START of the record's content, so a record that merely QUOTES a tick keeps its own leaf |
 | csift only reads Claude Code's exact compact serialization | candidate detection is serialization-TOLERANT: a reserialized `"role": "user"` line (json.dumps defaults, a jq round-trip) is a full citizen, with the same previews, counts and matches. The framing law still stands: ONE record per LINE, so pretty-printed multi-line JSON breaks jsonl framing and counts as malformed |
 | a hook that needs a session fact needs its own state file | the transcript already records it. Before persisting anything — the last prompt time, ids, activity markers — ask whether the jsonl already has it, and query csift from the hook: a query writes nothing, runs sub-second, and is safe inside a hook. A shadow store duplicates ground truth and then drifts from it |
