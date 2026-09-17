@@ -151,6 +151,32 @@ pub enum FloorCause {
 }
 
 impl FloorCause {
+    /// Every variant, so the closed set is WALKABLE.
+    ///
+    /// `floor_cause` is a closed enum a consumer branches on, and its eight slugs are
+    /// copied into the root `--help` (rendered on all 18 pages) and into `SKILL.md`
+    /// section 9.2. Three copies and nothing held them together, which is the same shape
+    /// as the retired-selector drift. This is the one a test can iterate, and
+    /// `cli::tests::manuals` reads the rendered help against it in both directions.
+    ///
+    /// `cfg(test)` because the DOCS are its only reader: production reaches a cause
+    /// through the value it computed, never by walking the set, and an unconditional
+    /// const would be dead code the lint is right to refuse. Its COMPLETENESS is not left
+    /// to this list either - `covers_every_variant` below matches exhaustively, so adding
+    /// a ninth variant without adding it here fails to compile rather than silently
+    /// shrinking what the manuals are held to.
+    #[cfg(test)]
+    pub const ALL: [FloorCause; 8] = [
+        FloorCause::Head,
+        FloorCause::NoLeaf,
+        FloorCause::BudgetExhausted,
+        FloorCause::UnresolvableBoundary,
+        FloorCause::RelinkRemoved,
+        FloorCause::BoundaryLoop,
+        FloorCause::DanglingParent,
+        FloorCause::Cycle,
+    ];
+
     /// The stable wire spelling (JSON `floor_cause`).
     #[must_use]
     pub fn as_str(self) -> &'static str {

@@ -465,3 +465,45 @@ fn a_floor_with_no_timestamp_still_prints_its_line() {
         bare.lines()
     );
 }
+
+/// [`FloorCause::ALL`] covers every variant, enforced by the COMPILER rather than by one
+/// list agreeing with another.
+///
+/// `ALL` exists so the manuals can be held to the closed set (`cli::tests::manuals` reads
+/// the rendered `--cross-compactions` block against it, both ways). A hand-kept array is
+/// only worth that if it cannot fall behind the enum, and a length assertion cannot tell:
+/// bump the enum and the array together-but-wrong and a count still agrees with itself.
+///
+/// So the guarantee is an EXHAUSTIVE match with no wildcard arm. Adding a ninth variant
+/// stops this file compiling, which names the omission at the enum rather than letting
+/// the docs quietly stop covering it. Each arm answers with that variant's own slug, so
+/// the same match pins the wire spelling too - and the dedup catches the other way a
+/// hand-kept array goes wrong, a variant listed twice while another is missing, which
+/// leaves the length right.
+#[test]
+fn floor_cause_all_covers_every_variant() {
+    fn slug(c: FloorCause) -> &'static str {
+        match c {
+            FloorCause::Head => "head",
+            FloorCause::NoLeaf => "no-leaf",
+            FloorCause::BudgetExhausted => "budget-exhausted",
+            FloorCause::UnresolvableBoundary => "unresolvable-boundary",
+            FloorCause::RelinkRemoved => "relink-removed",
+            FloorCause::BoundaryLoop => "boundary-loop",
+            FloorCause::DanglingParent => "dangling-parent",
+            FloorCause::Cycle => "cycle",
+        }
+    }
+    for c in FloorCause::ALL {
+        assert_eq!(
+            slug(c),
+            c.as_str(),
+            "{c:?} renders a slug this pin does not expect"
+        );
+    }
+    let mut seen: Vec<&str> = FloorCause::ALL.iter().map(|c| c.as_str()).collect();
+    let before = seen.len();
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen.len(), before, "ALL lists a variant twice: {seen:?}");
+}

@@ -127,3 +127,97 @@ fn skill_section_10_names_every_retired_selector_and_its_successors() {
         );
     }
 }
+
+/// The root help names EVERY `floor_cause` slug, and no token shaped like one that is not.
+///
+/// The eight slugs are a closed enum a consumer branches on, and they live in three
+/// places: [`FloorCause`], the global `--cross-compactions` doc (rendered on all eighteen
+/// help pages) and `SKILL.md` section 9.2. Nothing held the three together: the help
+/// carried the KEY on seven pages and the value domain on none, which is how a reader
+/// ends up guessing at a field the wire hands them.
+///
+/// BOTH DIRECTIONS, because they are two different failures. A slug the help OMITS is a
+/// value a reader meets on the wire and cannot look up. A dashed token the help sets in
+/// backticks that is NO slug is a value a reader will look for and never see - the shape
+/// a rename leaves behind, since an old spelling reads exactly like a real one.
+///
+/// The extraction reads BACKTICKED tokens rather than sweeping for substrings: the page
+/// is prose about boundaries and budgets, so `head` and `cycle` occur as ordinary English
+/// all over it and a substring reading would call this green on a page naming none of
+/// them as VALUES.
+///
+/// The reverse half is scoped to the `--cross-compactions` BLOCK rather than to the whole
+/// page, and reads tokens of the SLUG GRAMMAR (lowercase words joined by dashes, which is
+/// what every [`FloorCause::as_str`] is). Both narrowings are forced by the page rather
+/// than chosen: a grammar-free sweep would demand that every flag and every `@`-target be
+/// a floor cause, and a page-wide one would demand it of every other enum's values.
+///
+/// Inside that block TWO closed enums are documented, because the flag moves records
+/// between them: a record above the floor stays `pre-cut`, which is a [`Survival`]. So
+/// the reverse check admits both wire sets and nothing else - both are read from their
+/// own `as_str`, never listed here, so the day `survival` gains a slug this test learns
+/// it rather than failing on it.
+#[test]
+fn the_root_help_names_every_floor_cause() {
+    use crate::model::FloorCause;
+    use clap::CommandFactory;
+
+    let help = crate::cli::Cli::command().render_long_help().to_string();
+    let start = help
+        .find("--cross-compactions <N|all>")
+        .expect("the root help declares the crossing flag");
+    // clap closes a flag's block with its own `[default: …]` line, so that is the block's
+    // end and nothing from the next flag can leak in.
+    let end = help[start..]
+        .find("[default:")
+        .map_or(help.len(), |i| start + i);
+    let block = &help[start..end];
+    let ticked: Vec<&str> = block
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    assert!(
+        ticked.len() > 8,
+        "the crossing block parsed to {} backticked tokens - the block extraction broke",
+        ticked.len()
+    );
+
+    for cause in FloorCause::ALL {
+        let slug = cause.as_str();
+        assert!(
+            ticked.contains(&slug),
+            "`csift --help`'s --cross-compactions block names no floor_cause `{slug}` - a \
+             value the wire hands a reader and the manual does not explain"
+        );
+    }
+
+    let mut known: Vec<&str> = FloorCause::ALL.iter().map(|c| c.as_str()).collect();
+    known.extend(
+        [
+            crate::model::Survival::Live,
+            crate::model::Survival::PreCut,
+            crate::model::Survival::Abandoned { root: 0 },
+        ]
+        .iter()
+        .map(|s| s.as_str()),
+    );
+    let slug_shaped = |t: &str| {
+        t.contains('-')
+            && t.split('-')
+                .all(|w| !w.is_empty() && w.bytes().all(|b| b.is_ascii_lowercase()))
+    };
+    for token in &ticked {
+        if !slug_shaped(token) {
+            continue;
+        }
+        assert!(
+            known.contains(token),
+            "`csift --help`'s --cross-compactions block sets `{token}` in backticks, which \
+             is no floor_cause and no survival value - a renamed slug reads exactly like a \
+             real one"
+        );
+    }
+}
