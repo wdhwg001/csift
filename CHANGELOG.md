@@ -352,7 +352,7 @@ surface change bumps the PATCH.
   corrected against the binary: a text excerpt is one line per record, and sixteen of the
   eighteen bookkeeping line types build their key=value head from their own bytes. The file
   landed smaller than it started (56,687 tokens against 56,728, tiktoken `cl100k_base`
-  throughout) and ships at 57,582 after the correction round that followed - the retirement
+  throughout) and ships at 57,576 after the correction round that followed - the retirement
   table grown to every spelling the binary refuses, the crossing default's value, the fifteen
   label-zone tags the file named nowhere, and the three empty-result stderr lines it had
   never quoted. The two 73-row transparency tables and the relation inventory keep their
