@@ -120,18 +120,46 @@ fn label_zone_sources() -> Vec<PathBuf> {
     files
 }
 
-/// The file with its inline `#[cfg(test)] mod tests { … }` region and its comment lines
-/// removed: a bracket in a doc comment is prose about the output, not output.
+/// The file with its inline `#[cfg(test)] mod … { … }` region and its comment lines removed:
+/// a bracket in a doc comment is prose about the output, not output.
+///
+/// It cuts at an inline test MODULE or nowhere, and that precision is the whole function. An
+/// earlier form cut at the first `#[cfg(test)]` of any kind, which silently truncated every
+/// file carrying that attribute on an ITEM - a const inside a macro, one enum variant - and
+/// took the sweep's eyes off every literal below it. A `#[cfg(test)]` on an item is CODE and
+/// its literals are words csift prints; a trailing `#[cfg(test)] mod tests;` declaration has
+/// no body here to strip at all.
 fn code_only(src: &str) -> String {
     let body: String = src
         .lines()
         .filter(|l| !l.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n");
-    match body.find("#[cfg(test)]") {
+    match inline_test_module(&body) {
         Some(i) => body[..i].to_string(),
         None => body,
     }
+}
+
+/// The offset of an inline `#[cfg(test)] mod <name> { … }`, or `None` for every other use of
+/// the attribute. The discriminator is the BRACE: a module reached by `{` carries its tests
+/// here, a `mod <name>;` reached by `;` carries them in another file.
+fn inline_test_module(body: &str) -> Option<usize> {
+    const ATTR: &str = "#[cfg(test)]";
+    let mut from = 0;
+    while let Some(rel) = body[from..].find(ATTR) {
+        let at = from + rel;
+        let rest = body[at + ATTR.len()..].trim_start();
+        if let Some(tail) = rest.strip_prefix("mod ") {
+            let opens = tail.find('{');
+            let declares = tail.find(';');
+            if matches!((opens, declares), (Some(o), d) if d.is_none_or(|d| o < d)) {
+                return Some(at);
+            }
+        }
+        from = at + ATTR.len();
+    }
+    None
 }
 
 /// Every string literal in `src`, as its raw inner text (escapes left as written).
@@ -211,6 +239,12 @@ fn marker_head(src: &str, lit: &str) -> Option<String> {
 /// for and the part a rename moves, so matching `[<head>` in `SKILL.md` survives every
 /// placeholder while still failing on a renamed or deleted tag.
 ///
+/// A green run means the sweep REACHED every head and found each one documented, and those
+/// are two claims rather than one. The floor below checks that the walk is not empty; the
+/// POSITIVE CONTROL checks that it did not SHRINK, by naming heads the sources are known to
+/// build. Without it a narrowed extraction reads as a clean bill of health, which is exactly
+/// what happened while `code_only` truncated at the first `#[cfg(test)]` of any kind.
+///
 /// What this test CANNOT catch, stated so nobody reads a green run as more than it is: a
 /// FALLBACK ARM sharing its head with the arm beside it. `[checkpoint closes <instant>]` and
 /// `[checkpoint closes unknown (…)]` are one head, and so are `[root L12 +3]` and the hopless
@@ -241,6 +275,42 @@ fn skill_names_every_label_zone_head() {
         sources.len(),
         heads.len()
     );
+
+    // THE POSITIVE CONTROL, and a floor alone is not one. A walk that silently SHRANK - an
+    // earlier `code_only` truncated every file at its first `#[cfg(test)]`, item or module -
+    // still cleared the floor on the files it did read, so the test went green while it had
+    // stopped looking at the whole system family and at everything below a cfg(test) item.
+    // Naming heads the sweep MUST reach turns that into a failure: each of these is built by
+    // a different file, so losing one file loses one name.
+    const MUST_REACH: &[&str] = &[
+        "root",
+        "checkpoint",
+        "for:",
+        "refusal",
+        "api-error",
+        "notice",
+        "scheduled",
+        "abandoned",
+        "replay",
+        "rewound",
+        "summarize",
+    ];
+    for want in MUST_REACH {
+        assert!(
+            heads.iter().any(|(h, _)| h == want),
+            "the sweep did not reach `[{want}`, which the sources do build - the EXTRACTION \
+             shrank, so every assertion below is running on a short list. Found {} head(s) \
+             over {} file(s): {:?}",
+            heads.len(),
+            sources.len(),
+            {
+                let mut seen: Vec<&str> = heads.iter().map(|(h, _)| h.as_str()).collect();
+                seen.sort_unstable();
+                seen.dedup();
+                seen
+            }
+        );
+    }
 
     for (head, file) in &heads {
         assert!(
