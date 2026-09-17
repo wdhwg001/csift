@@ -42951,7 +42951,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "555-564",
+          "lines": "449-458",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
