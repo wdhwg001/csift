@@ -74520,7 +74520,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "136-147",
+          "lines": "137-148",
           "snippet": "/// What an ABANDONED turn-opener was. The discriminator is whether anything under it\n/// ever answered: a recalled prompt has no assistant descendant, a rewound turn does.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Kind {\n    /// A prompt that was recalled into the input box (or otherwise left behind) and never\n    /// drew a reply. `superseded_by` is the surviving opener that replaced it, when the\n    /// two share a `parentUuid`.\n    Draft { superseded_by: Option<usize> },\n    /// A prompt that WAS answered, and the conversation was later rewound past it.\n    /// `resend` is the surviving opener the conversation continued from instead.\n    Rewound { resend: Option<usize> },\n}"
         },
         {
@@ -74732,7 +74732,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "162-166",
+          "lines": "163-167",
           "snippet": "    pub fn class(self) -> Class {\n        match self {\n            Kind::Draft { .. } => Class::UserUnsent,\n            Kind::Rewound { .. } => Class::UserRewound,\n        }"
         }
       ],
@@ -86896,7 +86896,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "374-376",
+          "lines": "375-377",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {
@@ -88636,7 +88636,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "103-115",
+          "lines": "104-116",
           "snippet": "/// One record's place in the surviving conversation.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub enum Survival {\n    /// On the chain the loader walks (or rescued onto it).\n    #[default]\n    Live,\n    /// Above a cut the loader stops at, or in a region csift could not resolve. Kept and\n    /// selectable exactly as before - only flagged.\n    PreCut,\n    /// Off the chain, in a region the chain resolved. `root` is the index of the\n    /// abandoned branch's topmost record (the branch head a reader should look at).\n    Abandoned { root: usize },\n}\n"
         }
       ],
@@ -97017,11 +97017,11 @@
       "id": "MISC-046",
       "area": "misc",
       "behavior": "How many `compact_boundary` records one transcript carries is long-tailed rather than uniform, and each one is separately crossable or not. Censused over the 82 uuid-named top-level transcripts of one projects root, one observation per boundary record: 23 files carry at least one, 275 records in all, every one with a null `parentUuid` and every one naming a `logicalParentUuid`. The per-file counts are 1 seven times, 2 three times, then 4, 5, 6 twice, 7 twice, 12, 15, 27, 28, 32, 33 and 80 - so 10 of the 23 carry at most two while one carries 80, which is a session that ran long enough to compact eighty times. Crossability is the second axis: 223 of the 275 name a record still on a line of their own file and 52 do not (MISC-043), and per file 9 of the 23 resolve every boundary while 4 resolve none.",
-      "depends": "The global `--cross-compactions` flag decides how many of those boundaries csift's survival walk steps over, and its DEFAULT is chosen against this shape: a small count resolves the ordinary compacted transcript (10 of 23 carry at most two boundaries) while the eighty-compaction session is not traced by default, and what was left uncrossed is named in the footer with the flag value that would reach it. `0` restores Claude Code's own reading byte for byte and makes csift say nothing about crossing. Measured over the eight-transcript differential set - the seven top-level transcripts of one projects root that carry a boundary and sit between 9 and 21 MiB, plus the performance landmark - the default and `all` reach the same floor on every one, because on each the walk stops for a reason the budget does not control: a boundary whose door is shut, or a head record with the remaining boundaries off the walk's path. Their streams are not byte-identical - 24 of the 32 pairs differ by the echoed `crossing_budget` value, `3` against `all`, and by nothing else - which is the honest form of that statement.",
+      "depends": "The global `--cross-compactions` flag decides how many of those boundaries csift's survival walk steps over, and its DEFAULT is chosen against this shape: a small count resolves the ordinary compacted transcript (10 of 23 carry at most two boundaries) while the eighty-compaction session is not traced by default, and what was left uncrossed is named in the footer with the flag value that would reach it. `0` makes csift say nothing about crossing and reproduces the pre-flag reading - measured, 32 of 32 streams, with one known exception: a boundary whose own `parentUuid` is non-null and names no record was crossed by the guard the pre-flag walk kept for that shape, and budget 0 does not cross it. The corpus holds zero specimens of the shape. Measured over the eight-transcript differential set - the seven top-level transcripts of one projects root that carry a boundary and sit between 9 and 21 MiB, plus the performance landmark - the default and `all` reach the same floor on every one, because on each the walk stops for a reason the budget does not control: a boundary whose door is shut, or a head record with the remaining boundaries off the walk's path. Their streams are not byte-identical - 24 of the 32 pairs differ by the echoed `crossing_budget` value, `3` against `all`, and by nothing else - which is the honest form of that statement.",
       "code": [
         {
           "path": "src/model/chain/budget.rs",
-          "lines": "32",
+          "lines": "40",
           "snippet": "pub const CROSS_COMPACTIONS_DEFAULT: CrossingBudget = CrossingBudget::Limited(3);"
         },
         {

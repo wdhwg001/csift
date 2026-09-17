@@ -328,7 +328,9 @@ surface change bumps the PATCH.
   `compact_boundary` and the whole history above the cut leaves the conversation; csift
   stopped there too and flagged that region `pre-cut`. But the boundary names the record the
   compaction re-anchored onto, in `logicalParentUuid`, and the conversation genuinely
-  continues across a compaction - a subagent dispatched before one returns after it. The
+  continues across a compaction - the records above a cut are the same conversation, and
+  until the walk gets up there a turn the operator rewound past cannot be told apart from
+  history csift merely failed to resolve. The
   walk now follows that link, up to N boundaries, set by the new GLOBAL flag
   `--cross-compactions <N|all>` and honoured by every chain-walking command: `search`,
   `show`, `stats`, `files`, `recover`, `verbatim`, `image`. Above a boundary it CROSSED the
@@ -347,7 +349,10 @@ surface change bumps the PATCH.
   `abandoned_records` rise by 258, 1,231 and 1,135. `--cross-compactions 0` restores the
   previous reading exactly - 32 of 32 streams byte-identical to a build that predates the
   flag - and under it csift says nothing about crossing at all, neither a footer line nor a
-  JSON key.
+  JSON key. That equality is a measurement with one known exception rather than a law: a
+  boundary whose own `parentUuid` is non-null and names no record was crossed by the guard
+  the pre-flag walk kept for exactly that shape, and budget 0 does not cross it. No
+  transcript of the measured corpus carries one.
   The footer is never silent otherwise: it names how many boundaries were stepped over, how
   many were not, where the chain floor sits, WHY it sits there - a budget that ran out, or a
   boundary whose door is shut, named by which of three facts shut it: the record is on no

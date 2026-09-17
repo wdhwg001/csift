@@ -4,8 +4,10 @@
 //! Claude Code's own loader stops dead at a `compact_boundary` - it reads `parentUuid`
 //! only, and every boundary carries a null one. csift walks the same links, so it stopped
 //! there too and flagged the whole region above as `PreCut`. But the conversation does
-//! naturally continue across a compaction (a subagent dispatched before one returns after
-//! it), and the boundary itself names the record it re-linked from, in
+//! naturally continue across a compaction - the records above a cut are the same
+//! conversation, and until the walk gets up there csift cannot tell a turn the operator
+//! rewound past from history it simply could not resolve - and the boundary itself names the
+//! record it re-linked from, in
 //! `logicalParentUuid`. Following that link resolves the region above by the ordinary
 //! rules instead of declaring it unresolved.
 //!
@@ -19,8 +21,14 @@
 //! it would not.
 //!
 //! Budget 0 is Claude Code's own rule, and under it csift discloses NOTHING about crossing,
-//! because it crossed nothing: a `--cross-compactions 0` run is byte-for-byte the reading
-//! csift gave before the budget existed.
+//! because it crossed nothing. It also reproduces the reading csift gave before the budget
+//! existed, and that is a MEASUREMENT with one known exception rather than a law: 32 of 32
+//! streams over the differential's eight transcripts are byte-identical to a build that
+//! predates the flag, and the exception is a boundary whose OWN `parentUuid` is non-null and
+//! resolves to no record. The pre-flag walk reached the `logicalParentUuid` arm there as a
+//! guard and crossed; at budget 0 this walk refuses, so that one shape can read differently.
+//! The corpus holds zero specimens of it - which is a fact about the corpus, not about the
+//! rule.
 
 /// The default crossing budget, and the value the global `--cross-compactions` flag
 /// carries when it is not given.

@@ -31,7 +31,8 @@
 //! loader never reads `logicalParentUuid`, the field naming the record the compaction
 //! re-linked from. csift follows that field under a CROSSING BUDGET ([`CrossingBudget`],
 //! the global `--cross-compactions` flag), because the conversation genuinely continues
-//! across a compaction - a subagent dispatched before one returns after it - and a reader
+//! across a compaction - the records above a cut are the same conversation, and a turn the
+//! operator rewound past up there cannot be named until the walk reaches it - and a reader
 //! asking what a session did wants the turns above the cut resolved rather than declared
 //! unreadable. What the walk reaches above a crossed boundary takes the ordinary rules:
 //! Live where the chain reaches it, Abandoned where it does not.

@@ -220,7 +220,9 @@ pub struct Cli {
     /// Claude Code's own loader never crosses: it reads `parentUuid` only, which is null
     /// on a boundary, so on resume the model sees the summary and not the turns above it.
     /// csift crosses because a transcript is an archive and the turns above the cut were
-    /// real - a subagent dispatched before a compaction returns after it. Above a CROSSED
+    /// real: the records above a cut are the same conversation, and a turn the operator
+    /// rewound past up there is one csift could not name until the walk got to it. Above a
+    /// CROSSED
     /// boundary records resolve by the ordinary rules (live / abandoned); above the FLOOR
     /// where the walk stopped they stay `pre-cut`, exactly as before.
     ///
