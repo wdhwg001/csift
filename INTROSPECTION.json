@@ -46442,7 +46442,7 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "69-74",
+          "lines": "76-81",
           "snippet": "pub(crate) fn queue_facts(rec: &Record) -> (Option<String>, Option<String>) {\n    if !rec.is_type(\"queue-operation\") {\n        return (None, None);\n    }\n    (rec.operation.clone(), rec.reason.clone())\n}"
         },
         {
@@ -62125,8 +62125,8 @@
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
-          "path": "src/commands/search/hit_facts.rs",
-          "lines": "502-508",
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "141-147",
           "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
@@ -89109,7 +89109,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "319-322",
+          "lines": "326-329",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -93120,12 +93120,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "240-241",
+          "lines": "247-248",
           "snippet": "/// What an elided member renders as, everywhere and always: nothing.\npub(crate) const ELIDED_PLACEHOLDER: &str = \"<elided>\";"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "273-286",
+          "lines": "280-293",
           "snippet": "fn elide_members(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {\n                        serde_json::json!(ELIDED_PLACEHOLDER)\n                    } else {\n                        elide_members(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
         },
         {
@@ -94893,8 +94893,8 @@
           "snippet": "    let line = uuid.and_then(|u| ctx.line_of_uuid(u).or_else(|| ctx.line_of_tool_use(u)));\n    for_edge_at(kind, basis, uuid, session, line)\n}"
         },
         {
-          "path": "src/commands/search/hit_facts.rs",
-          "lines": "524-530",
+          "path": "src/commands/search/hit_facts/provenance.rs",
+          "lines": "163-169",
           "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],

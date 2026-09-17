@@ -387,9 +387,13 @@ commands/search/   # types + types/ (a paired root: Hit/Exchange/SearchOutcome, 
                    #   root: turn reconstruction, and pairing - the file-level tool join),
                    #   hits + hits/ (a paired root: the record emission engine, and
                    #   blocks - the per-BLOCK loop and the sink both halves emit through)
-                   #   + hit_facts (the per-record facts stamped onto a built hit: the ONE
-                   #   STAMPING SITE `family_facts`, the unmodeled unit and its shape, the
-                   #   compaction pair's fields, the survival answer, the address),
+                   #   + hit_facts + hit_facts/ (a PAIRED ROOT: what is stamped from the
+                   #   RECORD alone - the ONE STAMPING SITE `family_facts`, the unmodeled
+                   #   unit and its shape, the compaction pair's fields, the survival
+                   #   answer, the address - beside provenance, what needs the record's
+                   #   PLACE: the per-turn root table and the cell a turn's two passes
+                   #   share, the engine's own two edges, and the backfill that stamps
+                   #   both onto a built hit),
                    #   record_text + record_text/ (a paired root: the shared resolution and
                    #   the matchable-text law, seam - the RENDER seam `family_render` with
                    #   its dispatch table and the one `for_edge` builder, promoted - the
