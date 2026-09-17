@@ -13,6 +13,7 @@ mod harness;
 mod injections;
 mod keys;
 mod openers;
+mod provenance;
 mod reachability;
 mod schedule_fire;
 mod selectors;
