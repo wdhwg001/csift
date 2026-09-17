@@ -262,11 +262,12 @@ impl CrossingReport {
                 // BOUNDARIES LEFT ABOVE THE FLOOR are a fact in their own right, and the
                 // last of the four to be admitted here. With only the three above, this
                 // went quiet on exactly the report a FOLD produces: the fold drops the
-                // cause, so a scope of two transcripts that each stop at a shut door with
-                // nothing crossed said NOTHING in text while its JSON carried
-                // `boundaries_above_floor: 3` - each transcript alone printing both lines
-                // and the pair printing neither. The keys and the lines answer one question
-                // and must not answer it differently.
+                // cause, so a scope of transcripts that each stop at a shut door with
+                // nothing crossed said NOTHING in text while its JSON still counted the
+                // boundaries above their floors - each transcript alone printing both lines
+                // and the scope printing neither (pinned on a two-transcript scope, which
+                // reads `0 stepped over / 2 above`). The keys and the lines answer one
+                // question and must not answer it differently.
                 || self.boundaries_above_floor > 0)
     }
 
