@@ -372,3 +372,35 @@ fn automation_label_failed_status_and_no_summary() {
         Some("[task ? completed] just a note")
     );
 }
+
+/// The CALL a pulse reports on, read off EITHER carrier by one reader.
+///
+/// The pulse reaches a transcript two ways and only one of them is an isMeta injection, so
+/// the reader is on the record rather than in the family that owns the frame. It reads the
+/// same tag on both, and it refuses a record that carries no pulse at all - the tag name is
+/// generic enough that a record merely quoting one must not answer here.
+#[test]
+fn a_pulse_names_the_call_it_reports_on_whichever_carrier_it_rides() {
+    let body = "[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification><task-id>b1234567</task-id><tool-use-id>toolu_77</tool-use-id><summary>done</summary></task-notification>";
+    let escaped = serde_json::to_string(body).expect("json string");
+    let ordinary = parse(&format!(
+        r#"{{"type":"user","uuid":"n1","message":{{"role":"user","content":{escaped}}}}}"#
+    ));
+    let frame = parse(&format!(
+        r#"{{"type":"user","isMeta":true,"uuid":"n2","message":{{"role":"user","content":{escaped}}}}}"#
+    ));
+    assert_eq!(ordinary.pulse_tool_use_id().as_deref(), Some("toolu_77"));
+    assert_eq!(frame.pulse_tool_use_id().as_deref(), Some("toolu_77"));
+
+    // A pulse with no such tag names nothing rather than an empty id.
+    let bare = parse(
+        r#"{"type":"user","uuid":"n3","message":{"role":"user","content":"<task-notification><summary>done</summary></task-notification>"}}"#,
+    );
+    assert_eq!(bare.pulse_tool_use_id(), None);
+    // And a record carrying the TAG but no pulse is not one: the gate is the notification,
+    // not the tag, so a message quoting a tool-use id answers nothing.
+    let quoting = parse(
+        r#"{"type":"user","uuid":"n4","message":{"role":"user","content":"which call was <tool-use-id>toolu_77</tool-use-id> again?"}}"#,
+    );
+    assert_eq!(quoting.pulse_tool_use_id(), None);
+}

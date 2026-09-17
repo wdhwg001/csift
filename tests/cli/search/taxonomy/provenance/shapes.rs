@@ -385,3 +385,88 @@ fn a_boundary_anchored_at_itself_pairs_with_the_summary_instead() {
         .collect();
     assert_eq!(preserves, [Some(1), Some(1)], "{boundary}");
 }
+
+/// A notification pulse names the CALL it reports on, from EITHER carrier.
+///
+/// The pulse arrives two ways and only the rarer one is an isMeta notification FRAME, so a
+/// relation read in the family that owns the frame answered for a fraction of the pulses on
+/// disk: 93 of 3,997 pulse-carrying records over one projects root. The engine reads the tag
+/// off the record's own text instead, so both carriers give the same answer and both resolve
+/// through the tool index - a `tool_use` id is a wire id and is in no `uuid` field.
+///
+/// A pulse that names no tag says so. About a third of them do not (1,235 of 3,997 carry a
+/// `<task-id>` and no `<tool-use-id>`), and joining THOSE means reading `toolUseResult` for
+/// every tool result in the file, which the section 7 laws keep off a scan.
+#[test]
+fn a_pulse_names_the_call_it_reports_on_from_either_carrier() {
+    let pulse = "<task-notification><task-id>b1234567</task-id><tool-use-id>toolu_01n</tool-use-id><summary>background-command task b1234567 completed</summary></task-notification>";
+    let bare = "<task-notification><task-id>b7654321</task-id><summary>monitor task b7654321 tick</summary></task-notification>";
+    let h = Home::new();
+    h.write(
+        &format!("{LEAD_ENC}/{LEAD_SESS}.jsonl"),
+        &format!(
+            concat!(
+                r#"{{"type":"user","uuid":"n0","parentUuid":null,"timestamp":"2026-06-08T04:00:00.000Z","message":{{"role":"user","content":"zzpulse start the build"}}}}"#,
+                "\n",
+                r#"{{"type":"assistant","uuid":"n1","parentUuid":"n0","timestamp":"2026-06-08T04:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"toolu_01n","name":"Bash","input":{{"command":"make"}}}}]}}}}"#,
+                "\n",
+                r#"{{"type":"user","uuid":"n2","parentUuid":"n1","timestamp":"2026-06-08T04:05:00.000Z","message":{{"role":"user","content":"{pulse}"}}}}"#,
+                "\n",
+                r#"{{"type":"user","uuid":"n3","isMeta":true,"parentUuid":"n2","timestamp":"2026-06-08T04:06:00.000Z","message":{{"role":"user","content":"{pulse}"}}}}"#,
+                "\n",
+                r#"{{"type":"user","uuid":"n4","parentUuid":"n3","timestamp":"2026-06-08T04:07:00.000Z","message":{{"role":"user","content":"{bare}"}}}}"#,
+                "\n",
+            ),
+            pulse = pulse,
+            bare = bare,
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "",
+        &format!("@{LEAD_SESS}"),
+        "--format",
+        "json",
+        "--max-count",
+        "0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits: Vec<serde_json::Value> = json_rows(&out.stdout, "exchange")
+        .iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let reports = |line: u64| -> serde_json::Value {
+        hits.iter()
+            .filter(|h| h["line"].as_u64() == Some(line))
+            .flat_map(|h| h["for"].as_array().cloned().unwrap_or_default())
+            .find(|e| e["kind"] == "reports")
+            .unwrap_or_else(|| panic!("no reports edge on L{line}:\n{}", out.stdout))
+    };
+    // The ORDINARY carrier - the common one, which no family ever reached.
+    let ordinary = reports(3);
+    assert_eq!(ordinary["basis"], "key");
+    assert_eq!(ordinary["target"]["line"].as_u64(), Some(2));
+    // The FRAME, on the same tag and the same index.
+    let frame = reports(4);
+    assert_eq!(frame["basis"], "key");
+    assert_eq!(frame["target"]["line"].as_u64(), Some(2));
+    // A pulse with no tag states the relation and says it named nothing.
+    let none = reports(5);
+    assert!(none["target"].is_null(), "{none}");
+    assert_eq!(none["reason"], "the pulse names no tool-use-id");
+
+    let text = h.run(&["search", "", &format!("@{LEAD_SESS}"), "--max-count", "0"]);
+    assert!(text.success, "{}", text.stderr);
+    assert_eq!(
+        text.stdout.matches("[for: reports L2]").count(),
+        2,
+        "both carriers render the address:\n{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout
+            .contains("[for: reports unknown (the pulse names no tool-use-id)]"),
+        "the honest empty is rendered, never dropped:\n{}",
+        text.stdout
+    );
+}

@@ -11,7 +11,6 @@
 //! producer leaves none.
 
 use super::*;
-use crate::model::extract_xml_tag;
 
 /// What an isMeta INJECTION says - the family's half of the render seam.
 ///
@@ -165,13 +164,11 @@ pub(crate) fn facts(
         // it, so the prompt's parent IS the event it fired from (claim CLS-031) - which
         // is also the only mark the producer leaves on the prompt itself.
         Class::ScheduleFire => facts.push(parent_edge(EdgeKind::Fires, rec, ctx)),
-        // The notification FRAME is a second carrier of a `<task-notification>` pulse,
-        // and the pulse names the tool_use it reports on.
-        Class::NotificationWorkflow
-        | Class::NotificationMonitor
-        | Class::NotificationSubagent
-        | Class::NotificationBackgroundCommand
-        | Class::NotificationTask => facts.push(reports_edge(rec, ctx)),
+        // The notification FRAME is a second carrier of a `<task-notification>` pulse, and
+        // the `reports` edge it used to build is the ENGINE's now: the ORDINARY carrier is
+        // not isMeta and never reached this family at all, so a relation read here answered
+        // for 93 of the 3,997 pulse-carrying records on one projects root. One reader, both
+        // carriers (`search::hit_facts::reports_edge`).
         // The image record. When its content is BLOCKS and no text it renders nothing at
         // all, so the counts are what an address has to show instead of the head of a
         // base64 payload.
@@ -241,20 +238,6 @@ fn inbox_facts(rec: &Record, facts: &mut Vec<HitFact>) {
 /// running tail of the transcript (claim CLS-049), so what it names is the record above.
 fn parent_edge(kind: EdgeKind, rec: &Record, ctx: &ClassifyCtx) -> HitFact {
     super::for_edge(kind, Basis::Position, rec.parent_uuid.as_deref(), None, ctx)
-}
-
-/// The FRAME carrier's edge: the `<tool-use-id>` its wrapped pulse names.
-///
-/// [`Basis::Key`] - the producer wrote that tag to say which call this pulse is about.
-/// The value is a tool_use id rather than a record uuid, so the shared builder's lookup
-/// finds no line and the edge renders the id with its note. That is the honest shape: the
-/// id IS the join a reader needs, and it is the same answer the builder gives any target
-/// this transcript does not carry.
-fn reports_edge(rec: &Record, ctx: &ClassifyCtx) -> HitFact {
-    let id = rec
-        .raw_message_text()
-        .and_then(|s| extract_xml_tag(&s, "tool-use-id"));
-    super::for_edge(EdgeKind::Reports, Basis::Key, id.as_deref(), None, ctx)
 }
 
 /// The image and document block counts of a TEXTLESS block record, or `None` when the

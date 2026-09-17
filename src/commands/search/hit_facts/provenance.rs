@@ -385,6 +385,41 @@ fn resume_edge(rec: &Record, kept: &Kept, env: &ClassifyEnv<'_>) -> Option<HitFa
     ))
 }
 
+/// The CALL a `<task-notification>` pulse reports on, for EITHER carrier.
+///
+/// The pulse reaches a transcript two ways - as an ordinary `type:"user"` record and, far
+/// less often, wrapped in an isMeta notification FRAME - and only the second is an isMeta
+/// injection. Reading the relation in the family that owns the frame therefore answered for
+/// 93 of the 3,997 pulse-carrying records on one projects root, and said nothing about the
+/// other 3,904. It is read here instead, off the record's own text through the one reader
+/// ([`Record::pulse_tool_use_id`]), so both carriers get the same answer.
+///
+/// [`Basis::Key`]: the producer wrote the tag to say which call this pulse is about. The
+/// value is a `tool_use` id rather than a record uuid, so it resolves through the tool index
+/// (2,449 of the 2,457 tagged pulses name a call of the same file).
+///
+/// A pulse with NO tag - about a third of them, a monitor cadence tick or a session start's
+/// orphan reconciliation - answers the honest empty with that as the reason, never a silent
+/// absence. Joining THOSE through their `<task-id>` means reading `toolUseResult` for every
+/// tool result in the file, which section 7 keeps off a scan; it is a stated follow-on with
+/// its share measured rather than a gap.
+fn reports_edge(rec: &Record, env: &ClassifyEnv<'_>) -> HitFact {
+    let Some(id) = rec.pulse_tool_use_id() else {
+        return HitFact::ForUnknown {
+            kind: crate::model::EdgeKind::Reports,
+            reason: "the pulse names no tool-use-id".to_string(),
+        };
+    };
+    let line = env.tool_lines.tool_use_at(&id);
+    record_text::for_edge_at(
+        crate::model::EdgeKind::Reports,
+        Basis::Key,
+        Some(&id),
+        None,
+        line,
+    )
+}
+
 /// The relations the ENGINE states about a record because no family owns its leaf.
 ///
 /// They RENDER, unlike the engine's one-hop pair and the survival four: each names a target
@@ -396,6 +431,11 @@ fn record_edges(class: Class, kept: &Kept, env: &ClassifyEnv<'_>) -> Vec<HitFact
     match class {
         Class::CompactionBoundary | Class::CompactionSummary => compaction_edges(class, rec, env),
         Class::ResumePlaceholder => resume_edge(rec, kept, env).into_iter().collect(),
+        Class::NotificationWorkflow
+        | Class::NotificationMonitor
+        | Class::NotificationSubagent
+        | Class::NotificationBackgroundCommand
+        | Class::NotificationTask => vec![reports_edge(rec, env)],
         _ => Vec::new(),
     }
 }

@@ -242,6 +242,32 @@ impl Record {
         Some(automation_label_for_section(s))
     }
 
+    /// The CALL a `<task-notification>` pulse reports on: the `<tool-use-id>` its producer
+    /// wrote into the notification body. `None` when this record carries no pulse, or when
+    /// the pulse names no such tag.
+    ///
+    /// ONE reader for BOTH carriers, which is the whole reason it sits on the record rather
+    /// than in a family. The pulse arrives two ways - as an ordinary `type:"user"` record
+    /// and, less often, wrapped in an isMeta notification FRAME - and only the second is an
+    /// isMeta injection. Measured over one projects root, one row per record whose textual
+    /// content carries the notification tag: 3,997 such records, of which 93 are the frame.
+    /// A relation read in the family that owns the frame therefore reached 2% of the pulses
+    /// on disk.
+    ///
+    /// The value is a `tool_use` id, not a record uuid, so it resolves through the tool
+    /// index rather than the chain's uuid map. Measured on the same rows: 2,457 pulses carry
+    /// the tag and 2,449 of those name a `tool_use` block of the same file.
+    #[must_use]
+    pub fn pulse_tool_use_id(&self) -> Option<String> {
+        let Content::Text(s) = self.message.as_ref()?.content.as_ref()? else {
+            return None;
+        };
+        if !s.contains(TASK_NOTIFICATION_PREFIX) {
+            return None;
+        }
+        extract_xml_tag(s, "tool-use-id")
+    }
+
     /// Plain-text rendering of a GENUINE user message for the `list`/`search`
     /// excerpt: the raw string, or the concatenation of all `text` blocks. Returns
     /// `None` for non-user / non-genuine records. Whitespace-normalized to a single

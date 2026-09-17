@@ -216,32 +216,6 @@ fn the_relayed_human_message_is_marked_on_both_surfaces() {
     assert!(out.1.is_empty() && out.0.is_empty());
 }
 
-/// The frame carrier reports on the tool_use its pulse names. That id is not a record
-/// uuid, so the shared builder finds no line and the edge renders the id with its note.
-#[test]
-fn the_frame_carrier_reports_the_pulse_tool_use_id() {
-    let text = "[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification><task-id>b1234567</task-id><tool-use-id>toolu_77</tool-use-id><summary>done</summary></task-notification>";
-    let out = run(
-        &meta("m1", "parent-1", text),
-        Some(Class::NotificationBackgroundCommand),
-    );
-    assert_eq!(zone(&out), "[for: reports toolu_77 (not in this file)]");
-    let edge = &wire(&out)["for"][0];
-    assert_eq!(edge["basis"], "key");
-    assert_eq!(edge["target"]["uuid"], "toolu_77");
-    assert!(edge["target"]["line"].is_null());
-    // A pulse with no tool-use-id says so rather than dropping the edge.
-    let bare = "[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification><summary>done</summary></task-notification>";
-    let out = run(
-        &meta("m2", "parent-1", bare),
-        Some(Class::NotificationBackgroundCommand),
-    );
-    assert_eq!(
-        zone(&out),
-        "[for: reports unknown (the record carries no such key)]"
-    );
-}
-
 /// A textless image record renders its block COUNTS, which is what an address has to show
 /// for a record whose only content is a picture.
 #[test]

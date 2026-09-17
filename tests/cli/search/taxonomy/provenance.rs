@@ -45,7 +45,7 @@ mod shapes;
 /// names an id no line here carries (a wire id, or a record another file holds), kept
 /// because the id is real; `session` = the target is a whole transcript and no record in
 /// it; `unknown` = the record names nothing, and the edge says so rather than vanishing.
-const EVERY_EDGE: [(&str, &str, &str, &str); 43] = [
+const EVERY_EDGE: [(&str, &str, &str, &str); 48] = [
     ("agent.communication.channel", "attached_to", "key", "line"),
     (
         "agent.communication.channel",
@@ -116,6 +116,29 @@ const EVERY_EDGE: [(&str, &str, &str, &str); 43] = [
     ("harness.hook.feedback", "blocked", "position", "line"),
     ("harness.hook.outcome", "attached_to", "key", "line"),
     ("harness.hook.outcome", "for_tool_use", "null", "unknown"),
+    // The fixture's pulses name no `<tool-use-id>`, which is the shape about a third of the
+    // corpus's pulses take - the honest empty with its reason. A pulse that DOES name one
+    // needs a launching call beside it, which `provenance/shapes.rs` builds.
+    (
+        "harness.notification.background-command",
+        "reports",
+        "null",
+        "unknown",
+    ),
+    ("harness.notification.monitor", "reports", "null", "unknown"),
+    (
+        "harness.notification.subagent",
+        "reports",
+        "null",
+        "unknown",
+    ),
+    ("harness.notification.task", "reports", "null", "unknown"),
+    (
+        "harness.notification.workflow",
+        "reports",
+        "null",
+        "unknown",
+    ),
     ("harness.resume.placeholder", "repairs", "position", "line"),
     ("harness.schedule.event", "armed_by", "null", "unknown"),
     ("harness.schedule.fire", "fires", "position", "line"),
