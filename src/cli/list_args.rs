@@ -65,7 +65,10 @@ use super::*;
         either, because a read failure is a gap in the evidence rather than evidence of \
         sameness - the stderr note names that copy and the error the filesystem returned. \
         `sessions_in_scope` counts DISTINCT sessions, with \
-        `duplicate_transcripts` and `duplicate_records_dropped` beside it in the header, and \
+        `duplicate_transcripts` and `duplicate_records_dropped` beside it in the header (plus \
+        `divergent_transcripts` and `unreadable_transcripts`, the copies csift did NOT merge - \
+        a merge that dropped nothing reads 0 in the first two, exactly like an ordinary scope), \
+        and \
         the resolver names every merge on stderr as well. To read a dropped copy, target its \
         `*.jsonl` path.\n\n\
         CLEAR LINEAGE (an inference, and the row says so)\n  \

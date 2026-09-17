@@ -36698,7 +36698,7 @@
       "code": [
         {
           "path": "src/cli/root.rs",
-          "lines": "190-192",
+          "lines": "192-194",
           "snippet": "          Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\\n  \\\n        Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\\n  \\\n        it; csift can only read what survives.\\n\\n\\"
         },
         {

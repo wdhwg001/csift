@@ -4,6 +4,41 @@
 use super::*;
 
 #[test]
+fn every_spanning_surface_says_a_divergent_pair_stayed_in_scope() {
+    // A merge that dropped NOTHING is not the same fact as no duplicate on disk, and the
+    // two keys above answer 0 for both. `divergent_transcripts` is what separates them for
+    // a reader who only parses JSON - the stderr note is not in the stream.
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
+    h.write(
+        &format!("{ENC_SHORT}/{SESS}.jsonl"),
+        &record(1, "another branch"),
+    );
+    let sess = at(SESS);
+    let cases: Vec<Vec<&str>> = vec![
+        vec!["list", "--no-subagents", "--format", "json"],
+        vec!["search", "branch", &sess, "--format", "json"],
+        vec!["stats", &sess, "--format", "json"],
+        vec!["files", &sess, "--format", "json"],
+        vec!["verbatim", &sess, "--format", "json"],
+        vec!["image", &sess, "--format", "json"],
+        vec!["agents", &sess, "--format", "json"],
+    ];
+    for args in cases {
+        let out = h.run(&args);
+        assert!(out.success, "{:?}: {}", args, out.stderr);
+        let header = json_rows(&out.stdout, "header");
+        assert_eq!(
+            header[0]["divergent_transcripts"], 1,
+            "{:?} header: {}",
+            args, header[0]
+        );
+        assert_eq!(header[0]["duplicate_transcripts"], 0, "{:?}", args);
+        assert_eq!(header[0]["unreadable_transcripts"], 0, "{:?}", args);
+    }
+}
+
+#[test]
 fn every_spanning_surface_counts_a_divergent_pair_as_one_session() {
     // Nothing merges when the bytes disagree, so both copies stay in scope - and the SCOPE
     // header is a session census, so every surface has to answer 1 where the disk holds one

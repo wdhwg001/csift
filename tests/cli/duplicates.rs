@@ -135,6 +135,8 @@ fn an_ordinary_session_carries_the_keys_with_nothing_in_them() {
     let header = json_rows(&out.stdout, "header");
     assert_eq!(header[0]["duplicate_transcripts"], 0);
     assert_eq!(header[0]["duplicate_records_dropped"], 0);
+    assert_eq!(header[0]["divergent_transcripts"], 0);
+    assert_eq!(header[0]["unreadable_transcripts"], 0);
     let rows = json_rows(&out.stdout, "session");
     assert!(rows[0]["duplicate_relation"].is_null());
     assert_eq!(rows[0]["also_at_count"], 0);

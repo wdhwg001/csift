@@ -425,13 +425,35 @@ pub fn emit_duplicate_banner(groups: &[DuplicateGroup]) {
     }
 }
 
-/// The shared JSON disclosure every spanning surface carries in its envelope header:
-/// how many transcripts the merge removed from the scope, and how many physical jsonl
-/// lines went with them. Both 0 when no session id was duplicated.
+/// The shared JSON disclosure every spanning surface carries in its envelope header. FOUR
+/// keys, all 0 when no session id was duplicated, and each answering one question a count
+/// in the rows below can no longer answer on its own:
+///
+/// - `duplicate_transcripts` - how many transcripts the merge REMOVED from the scope.
+/// - `duplicate_records_dropped` - their physical jsonl lines, the domain `show --line`
+///   addresses.
+/// - `divergent_transcripts` - how many transcripts stayed in scope BEYOND one per session
+///   id because their copies disagree byte for byte. A merge that dropped nothing is not
+///   the same as no duplicate on disk, and without this key a JSON reader saw the two
+///   zeros above and could not tell the two apart.
+/// - `unreadable_transcripts` - how many copies csift could not READ at all, which is why
+///   their group merged nothing. A read failure is counted, never hidden.
 #[must_use]
 pub fn duplicate_header_fields(groups: &[DuplicateGroup]) -> serde_json::Value {
+    let divergent: usize = groups
+        .iter()
+        .filter(|g| g.relation == DuplicateRelation::Divergent)
+        .map(|g| g.members.len().saturating_sub(1))
+        .sum();
+    let unreadable: usize = groups
+        .iter()
+        .flat_map(|g| g.members.iter())
+        .filter(|m| m.error.is_some())
+        .count();
     serde_json::json!({
         "duplicate_transcripts": groups.iter().map(|g| g.dropped.len()).sum::<usize>(),
         "duplicate_records_dropped": groups.iter().map(DuplicateGroup::dropped_lines).sum::<usize>(),
+        "divergent_transcripts": divergent,
+        "unreadable_transcripts": unreadable,
     })
 }
