@@ -183,7 +183,7 @@ fn the_for_edge_rides_one_key_with_its_basis_and_its_honest_empty() {
         .filter(|e| e["kind"] != "parent" && e["kind"] != "result_of")
         .collect();
     assert_eq!(edges.len(), 1, "at most one family edge per unit: {all:?}");
-    assert_eq!(edges[0]["kind"], "hook run");
+    assert_eq!(edges[0]["kind"], "hook_run");
     assert_eq!(edges[0]["basis"], "key");
     assert_eq!(
         edges[0]["target"]["uuid"],

@@ -108,7 +108,7 @@ const EVERY_EDGE: [(&str, &str, &str, &str); 39] = [
     ("harness.schedule.fire", "fires", "position", "line"),
     ("harness.system.command", "wraps", "position", "line"),
     ("harness.system.refusal", "refused", "key", "line"),
-    ("harness.turn.stop-hooks", "hook run", "key", "uuid"),
+    ("harness.turn.stop-hooks", "hook_run", "key", "uuid"),
 ];
 
 /// One rendered edge, flattened to what a reader can check.
@@ -308,6 +308,46 @@ fn the_for_kind_census_carries_the_engine_edges_in_text_output() {
                 .any(|l| l.split_whitespace().nth(1) == Some(kind)),
             "the engine's {kind} edge is missing from the TEXT census:\n{}",
             out.stdout
+        );
+    }
+}
+
+/// EVERY `for-kind` census key is ONE whitespace-free token, `hook_run` included.
+///
+/// The census renders `<count>  <key>` per line, which is what every other axis renders and
+/// what every reader of that surface splits on whitespace - `the_for_kind_census_carries_
+/// the_engine_edges_in_text_output` above is one such reader, and it takes field 1. A key
+/// carrying a space parses as two fields there, so the reader silently reads the first word
+/// of the relation and reports the rest as missing. `hook run` was the one such key in the
+/// vocabulary; the rule is pinned over the WHOLE key space rather than over that one word,
+/// because the next two-word relation would reopen it.
+#[test]
+fn every_for_kind_census_key_is_one_token() {
+    let h = reachability_home();
+    let mut argv: Vec<&str> = vec!["search", "", REACH_TARGET, "--count-by", "for-kind"];
+    argv.extend_from_slice(&EVERY_LEAF);
+    let out = h.run(&argv);
+    assert!(out.success, "census failed: {}", out.stderr);
+    let keys: Vec<&str> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| {
+            let mut f = l.split_whitespace();
+            f.next()?.parse::<u64>().ok()?;
+            f.next()
+        })
+        .collect();
+    assert!(
+        keys.contains(&"hook_run"),
+        "the respelled key is not in the census: {keys:?}\n{}",
+        out.stdout
+    );
+    for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert_eq!(
+            line.split_whitespace().count(),
+            2,
+            "a census row that does not split into count + one key: {line:?}"
         );
     }
 }

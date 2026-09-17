@@ -563,6 +563,15 @@ surface change bumps the PATCH.
   their own key block, and the `search` hit schema gained `tool_use_id` and `source`, which
   a hit carries and the schema had never listed.
 
+- **The provenance relation `hook run` is respelled `hook_run`.** `--count-by for-kind`
+  prints `<count>  <key>` per line like every other census axis, so a key with a space in
+  it cannot be read back by the whitespace split every reader of that surface writes, and
+  this was the only key in the closed vocabulary that carried one. The word says what it
+  said - the id a `stop_hook_summary` names is a hook RUN id, not the API tool_use id its
+  field name suggests - and the three surfaces move together: the census key, the
+  `[for: hook_run ...]` label-zone tag, and the JSON `for[].kind`. Neither spelling has
+  shipped in a released binary.
+
 ### Fixed
 
 - **The two textless thinking leaves rendered a body they do not have.** An

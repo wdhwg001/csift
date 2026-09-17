@@ -199,7 +199,7 @@ fn a_stop_hook_summary_with_no_run_id_renders_the_edges_honest_empty() {
     );
     assert_eq!(
         zones,
-        vec!["[for: hook run unknown (no toolUseID on this stop_hook_summary record)]".to_string()]
+        vec!["[for: hook_run unknown (no toolUseID on this stop_hook_summary record)]".to_string()]
     );
     let edge = json
         .iter()
@@ -214,7 +214,7 @@ fn a_stop_hook_summary_with_no_run_id_renders_the_edges_honest_empty() {
     );
     assert_eq!(
         with_id,
-        vec!["[for: hook run 66666666 (not in this file)]".to_string()]
+        vec!["[for: hook_run 66666666 (not in this file)]".to_string()]
     );
     assert!(
         json.iter()

@@ -89,13 +89,15 @@ edge_kinds! {
         /// The record a `/fork` cut at, in the transcript it was cut from.
         ForkedFrom => "forked_from",
         /// The hook RUN a `stop_hook_summary` belongs to, by the run id it shares with that
-        /// run's injected-context attachments.
+        /// run's injected-context attachments. The id it names is a HOOK RUN id rather than
+        /// the API tool_use id its field name suggests, which is what the word says.
         ///
-        /// Its word is the one in the set that is not a single token, deliberately: it is
-        /// what the keys family already renders, and the id it names is a HOOK RUN id
-        /// rather than the API tool_use id its field name suggests - so the two words are
-        /// the distinction, and collapsing them would lose it.
-        HookRun => "hook run",
+        /// SPELLED WITH AN UNDERSCORE like every other word in the set, because a relation
+        /// word is a census KEY: `--count-by for-kind` prints `<count>  <key>` per line, so
+        /// a key carrying a space cannot be read back by the whitespace split every reader
+        /// of that surface writes, and the one two-word key in the vocabulary is the one
+        /// that breaks them.
+        HookRun => "hook_run",
         /// The assistant message an interrupt cut short.
         Interrupted => "interrupted",
         /// The record a `last-prompt` line's `leafUuid` names - the chain leaf at that write.

@@ -298,7 +298,7 @@ pub struct SearchArgs {
     /// call by id in its own text or payload (`reports`, `for_tool_use`). The rest of the
     /// vocabulary is not reverse-walked today, so `--for` on a record that only
     /// `versions`, `refused`, `interrupted`, `leaf`, `forked_from`, `continued_in`,
-    /// `replies_to`, `armed_by`, `banner` or `hook run` points AT comes back empty - a
+    /// `replies_to`, `armed_by`, `banner` or `hook_run` points AT comes back empty - a
     /// definitive absence about the three arms, not a claim that nothing points there.
     /// The forward direction answers those: the `for[]` on the hit, or
     /// `--count-by for-kind`. The address may name a GATED line (a hook attachment, a bookkeeping
