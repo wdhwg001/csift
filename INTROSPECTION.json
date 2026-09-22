@@ -24024,7 +24024,7 @@
           "instrument": "Corpus: for every echo carrying `truncatedByTokenCap`, count `startLine != 1`; one observation per echo. Measured now over all of ~/.claude/projects: 0 of 174. Binary: the `let ht={type:\"text\",file:{filePath:n,content:De,numLines:Ne,startLine:Ue!==void 0?Math.max(1,f):f` construction, reachable via `python3 -c` seeking that literal in a `strings -a` dump.",
           "probe": {
             "kind": "corpus",
-            "command": "For each transcript under the projects root: for every echo carrying `truncatedByTokenCap`, count the ones whose `startLine` is not 1, and report that count against the number of echoes carrying the key.",
+            "command": "For each transcript under the projects root: for every echo whose `toolUseResult.file` carries `truncatedByTokenCap` - the object the writer quoted in this state builds - count the ones whose `startLine` in that same object is not 1, and report that count against the number of echoes carrying the key.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one observation per echo."
           },
