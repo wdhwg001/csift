@@ -271,6 +271,37 @@ fn turns_targeted_top_level_skipped_at_tiny_budget_is_reported_not_silent() {
 }
 
 #[test]
+fn turns_prints_its_scope_banner_for_a_lone_session_the_budget_skipped() {
+    // The banner prints when MORE THAN ONE session is in scope OR when the budget skipped
+    // one, and the second disjunct is the only reason on a scope of exactly one. Without
+    // it a targeted session that rendered NOTHING would print its skip note under no
+    // heading at all - no scope line, no budget, nothing saying what the budget was that
+    // it did not fit. The case above cannot reach this: it spans subagents, so the first
+    // disjunct is already true.
+    let h = populated_home();
+    let out = h.run(&[
+        "verbatim",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--budget",
+        "120",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .starts_with("scope  1 session in scope (1 top-level + 0 subagent) · 0 rendered"),
+        "a lone skipped session still gets the banner, and it counts the session as in \
+         scope and zero as rendered:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("budget 120 chars is PER session"),
+        "the banner carries the budget the skip note is measured against:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
 fn turns_clean_session_reports_no_skipped_lines() {
     // A session with NO malformed lines → the skipped-lines footer is OMITTED (the
     // `skipped_lines > 0` false arm).
