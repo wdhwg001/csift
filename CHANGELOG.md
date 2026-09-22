@@ -871,11 +871,16 @@ surface change bumps the PATCH.
   derived by the walk and carried on the README rather than typed anywhere. Rule 8 stops
   matching rows with a regex and REGENERATES the README block, comparing it byte for byte. A
   folded check is not simply dropped: every fact token with no survivor in the state is carried
-  into `residue`, and each carried entry names what superseded it. The prose rewrite masks every
-  quoted run, literal, offset, version and whitespace run before it fires and restores each byte
-  for byte, so it can neither cut a comma out of a jq argument list, nor normalise the double
-  space out of an asctime literal, nor flatten the indent a python heredoc's block structure
-  lives in; and a date that is the object of an epoch stays.
+  into `residue`, and each carried entry names what superseded it. A carried entry the SOURCE
+  had already cut short is repaired where the same state spells the whole word, trimmed back to
+  the last complete item where it does not, and completed from the claim's own schema-1 text
+  where that text says what came next; a cut landing on a word BOUNDARY, where every token is
+  spelled correctly and the sentence stops anyway, is found by its LENGTH - the four truncation
+  constants the source itself writes at. The prose rewrite masks every quoted run, literal,
+  offset, version and whitespace run before it fires and restores each byte for byte, so it can
+  neither cut a comma out of a jq argument list, nor normalise the double space out of an
+  asctime literal, nor flatten the indent a python heredoc's block structure lives in; and a
+  date that is the object of an epoch stays.
 
 ## [0.12.3] - 2026-09-13
 
