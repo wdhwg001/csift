@@ -122,6 +122,5 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
                 &crossing,
             ),
         }
-        Ok(())
     }
 }

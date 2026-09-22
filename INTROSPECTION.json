@@ -35605,12 +35605,12 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "187-192",
+          "lines": "186-191",
           "snippet": "pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant\n    // coverage rides the tool-name needles below, so admitting every assistant\n    // text record here would repeal this prefilter). Finders built ONCE (per-line\n    // hot path - the stateless form rebuilt its searcher every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 6]> ="
         },
         {
           "path": "src/commands/files/run.rs",
-          "lines": "195-200",
+          "lines": "194-199",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),\n                // Settings-family external writes read the snapshot version sequence.\n                memmem::Finder::new(b\"file-history-snapshot\"),"
         }
       ],
@@ -58363,7 +58363,7 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "195-198",
+          "lines": "194-197",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],

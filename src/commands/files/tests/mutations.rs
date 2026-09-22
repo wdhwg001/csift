@@ -320,6 +320,6 @@ fn subagent_mutation_carries_is_subagent_and_refeedable_parent_in_grouped_views(
     // Both grouped renders run without panic on a subagent-tagged outcome (covers the
     // branded SUBAGENT header arm + the json_grouped discriminator arm).
     let muts = vec![m.clone()];
-    render_text(&outcome(FilesDetail::ByFile, muts.clone()));
+    render_text(&outcome(FilesDetail::ByFile, muts.clone())).expect("text render");
     render_json(&outcome(FilesDetail::ByFile, muts)).expect("grouped json");
 }

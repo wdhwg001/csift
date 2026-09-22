@@ -101,9 +101,8 @@ pub fn run_files(args: &FilesArgs, cross: CrossingBudget) -> Result<()> {
 
     match args.format {
         OutputFormat::Text => render_text(&outcome),
-        OutputFormat::Json => render_json(&outcome)?,
+        OutputFormat::Json => render_json(&outcome),
     }
-    Ok(())
 }
 
 /// Scan one session file: mmap → prefilter → parse → delimit turns → extract + join.

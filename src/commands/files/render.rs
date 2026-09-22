@@ -1,44 +1,59 @@
 //! Text + JSON projections (summary / dir / file / timeline).
+//!
+//! Both go through ONE [`crate::text::Out`]: a `--by timeline` over a heavily-edited
+//! session is one row per mutation and the landmark transcript prints 6,590 of them. See
+//! the `text::out` module docs for what holding the lock obliges - the banners stay
+//! `println!` because they are already flushed before the writer exists.
+
+use std::io::Write as _;
 
 use super::*;
 
-pub(crate) fn render_text(outcome: &Outcome) {
+pub(crate) fn render_text(outcome: &Outcome) -> Result<()> {
     // SCOPE banner FIRST (before the empty check) so a fan-out that touched no files still
     // announces it spanned N subagents - the same up-front disclosure `list`/`turns` give.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     crate::path::emit_duplicate_banner(&outcome.duplicates);
+    let mut out = crate::text::Out::stdout();
     if outcome.mutations.is_empty() && outcome.boundaries.is_empty() {
-        println!("no file mutations found");
-        print_footer(outcome);
-        return;
+        writeln!(out, "no file mutations found")?;
+        write_footer(&mut out, outcome)?;
+        out.flush()?;
+        return Ok(());
     }
 
     if !outcome.mutations.is_empty() {
         match outcome.detail {
-            FilesDetail::Summary => render_summary(outcome),
-            FilesDetail::ByDir => render_by_dir(outcome),
-            FilesDetail::ByFile => render_by_file(outcome),
-            FilesDetail::Timeline => render_timeline(outcome),
+            FilesDetail::Summary => render_summary(&mut out, outcome)?,
+            FilesDetail::ByDir => render_by_dir(&mut out, outcome)?,
+            FilesDetail::ByFile => render_by_file(&mut out, outcome)?,
+            FilesDetail::Timeline => render_timeline(&mut out, outcome)?,
         }
     }
-    render_boundaries_section(outcome);
-    print_footer(outcome);
+    render_boundaries_section(&mut out, outcome)?;
+    write_footer(&mut out, outcome)?;
+    out.flush()?;
+    Ok(())
 }
 
 /// The Edit-before-Read boundary section - orthogonal to the mutation rollup, shown in every
 /// detail mode (and on its own when a session ONLY hit boundaries, no mutations). Each row
 /// carries the file, the jsonl line, turn, time, and kind so it joins back to the transcript
 /// and feeds `recover --file <path> --coverage` for the precise per-boundary breakdown.
-pub(crate) fn render_boundaries_section(outcome: &Outcome) {
+pub(crate) fn render_boundaries_section<W: std::io::Write>(
+    w: &mut W,
+    outcome: &Outcome,
+) -> Result<()> {
     if outcome.boundaries.is_empty() {
-        return;
+        return Ok(());
     }
-    println!();
-    println!(
+    writeln!(w)?;
+    writeln!(
+        w,
         "── Edit-before-Read boundaries ({}) — file changed OUTSIDE the tool stream (formatter / \
          git / external edit); recover with care ──",
         outcome.boundaries.len()
-    );
+    )?;
     for b in &outcome.boundaries {
         let sub = if b.is_subagent {
             format!(
@@ -48,7 +63,8 @@ pub(crate) fn render_boundaries_section(outcome: &Outcome) {
         } else {
             String::new()
         };
-        println!(
+        writeln!(
+            w,
             "  ⚠ {}  ·  L{}  ·  turn {}  ·  {}  ·  {}{}{sub}",
             b.path,
             b.line_no,
@@ -56,8 +72,9 @@ pub(crate) fn render_boundaries_section(outcome: &Outcome) {
             format_timestamp(b.timestamp_utc.as_deref()),
             b.kind,
             survival_marker(b.survival)
-        );
+        )?;
     }
+    Ok(())
 }
 
 /// The label-zone survival marker a row carries: ` [abandoned]` when the surviving
@@ -78,7 +95,11 @@ pub(crate) fn survival_marker(survival: &str) -> String {
 /// header + `turns`' `(subagent transcript)` annotation) so a consumer never reads a bare
 /// subagent hex as a re-feedable `@<uuid>` target. All mutations in one group share the
 /// same id-domain (same transcript), so the first row's flags brand the whole header.
-pub(crate) fn per_session<F: Fn(&str, &[&TaggedMutation])>(outcome: &Outcome, body: F) {
+pub(crate) fn per_session<W, F>(w: &mut W, outcome: &Outcome, body: F) -> Result<()>
+where
+    W: std::io::Write,
+    F: Fn(&mut W, &str, &[&TaggedMutation]) -> Result<()>,
+{
     let mut by_session: BTreeMap<&str, Vec<&TaggedMutation>> = BTreeMap::new();
     for m in &outcome.mutations {
         by_session.entry(m.session_id.as_str()).or_default().push(m);
@@ -86,69 +107,88 @@ pub(crate) fn per_session<F: Fn(&str, &[&TaggedMutation])>(outcome: &Outcome, bo
     let mut first = true;
     for (sid, ms) in by_session {
         if !first {
-            println!();
+            writeln!(w)?;
         }
         first = false;
         match ms.first() {
             Some(m) if m.is_subagent => {
-                println!("SUBAGENT {sid}  ·  parent SESSION {}", m.parent_session_id);
+                writeln!(
+                    w,
+                    "SUBAGENT {sid}  ·  parent SESSION {}",
+                    m.parent_session_id
+                )?;
             }
-            _ => println!("SESSION {sid}"),
+            _ => writeln!(w, "SESSION {sid}")?,
         }
-        body(sid, &ms);
+        body(w, sid, &ms)?;
     }
+    Ok(())
 }
 
-pub(crate) fn render_summary(outcome: &Outcome) {
-    per_session(outcome, |_sid, ms| {
+pub(crate) fn render_summary<W: std::io::Write>(w: &mut W, outcome: &Outcome) -> Result<()> {
+    per_session(w, outcome, |w, _sid, ms| {
         let owned: Vec<TaggedMutation> = ms.iter().map(|m| (*m).clone()).collect();
         let buckets = group_by(&owned, |m| bucket_key(&m.path));
         for (bucket, counts) in &buckets {
-            println!("  {bucket}: {}", counts.ops_label());
+            writeln!(w, "  {bucket}: {}", counts.ops_label())?;
         }
-    });
+        Ok(())
+    })
 }
 
-pub(crate) fn render_by_dir(outcome: &Outcome) {
-    per_session(outcome, |_sid, ms| {
+pub(crate) fn render_by_dir<W: std::io::Write>(w: &mut W, outcome: &Outcome) -> Result<()> {
+    per_session(w, outcome, |w, _sid, ms| {
         let owned: Vec<TaggedMutation> = ms.iter().map(|m| (*m).clone()).collect();
         let dirs = group_by(&owned, |m| {
             parent_dir(&m.path).unwrap_or_else(|| "./".to_string())
         });
         for (dir, counts) in &dirs {
-            println!("  {dir}");
-            println!(
+            writeln!(w, "  {dir}")?;
+            writeln!(
+                w,
                 "    {}  ·  {} file(s)",
                 counts.ops_label(),
                 counts.files.len()
-            );
-            println!(
+            )?;
+            writeln!(
+                w,
                 "    first  {}",
                 format_timestamp(counts.first_ts.as_deref())
-            );
-            println!("    last   {}", format_timestamp(counts.last_ts.as_deref()));
+            )?;
+            writeln!(
+                w,
+                "    last   {}",
+                format_timestamp(counts.last_ts.as_deref())
+            )?;
         }
-    });
+        Ok(())
+    })
 }
 
-pub(crate) fn render_by_file(outcome: &Outcome) {
-    per_session(outcome, |_sid, ms| {
+pub(crate) fn render_by_file<W: std::io::Write>(w: &mut W, outcome: &Outcome) -> Result<()> {
+    per_session(w, outcome, |w, _sid, ms| {
         let owned: Vec<TaggedMutation> = ms.iter().map(|m| (*m).clone()).collect();
         let files = group_by(&owned, |m| m.path.clone());
         for (file, counts) in &files {
-            println!("  {file}");
-            println!("    {}", counts.ops_label());
-            println!(
+            writeln!(w, "  {file}")?;
+            writeln!(w, "    {}", counts.ops_label())?;
+            writeln!(
+                w,
                 "    first  {}",
                 format_timestamp(counts.first_ts.as_deref())
-            );
-            println!("    last   {}", format_timestamp(counts.last_ts.as_deref()));
+            )?;
+            writeln!(
+                w,
+                "    last   {}",
+                format_timestamp(counts.last_ts.as_deref())
+            )?;
         }
-    });
+        Ok(())
+    })
 }
 
-pub(crate) fn render_timeline(outcome: &Outcome) {
-    per_session(outcome, |_sid, ms| {
+pub(crate) fn render_timeline<W: std::io::Write>(w: &mut W, outcome: &Outcome) -> Result<()> {
+    per_session(w, outcome, |w, _sid, ms| {
         // Sort chronologically by timestamp (None last), then by original file order.
         let mut owned: Vec<&TaggedMutation> = ms.to_vec();
         owned.sort_by(|a, b| {
@@ -172,7 +212,8 @@ pub(crate) fn render_timeline(outcome: &Outcome) {
             } else {
                 ""
             };
-            println!(
+            writeln!(
+                w,
                 "  L{}  {}  turn {}  {}{}  {}{}{detail}{}",
                 m.line_no,
                 format_timestamp(m.mutation.timestamp_utc.as_deref()),
@@ -182,9 +223,10 @@ pub(crate) fn render_timeline(outcome: &Outcome) {
                 m.mutation.path,
                 errored,
                 survival_marker(m.survival)
-            );
+            )?;
         }
-    });
+        Ok(())
+    })
 }
 
 /// Sort key that places timestamp-less mutations LAST (after all timestamped ones) and
@@ -196,7 +238,7 @@ pub(crate) fn timestamp_sort_key(ts: Option<&str>) -> (bool, String) {
     }
 }
 
-pub(crate) fn print_footer(outcome: &Outcome) {
+pub(crate) fn write_footer<W: std::io::Write>(w: &mut W, outcome: &Outcome) -> Result<()> {
     let level = match outcome.detail {
         FilesDetail::Summary => "summary",
         FilesDetail::ByDir => "by-dir",
@@ -204,20 +246,29 @@ pub(crate) fn print_footer(outcome: &Outcome) {
         FilesDetail::Timeline => "timeline",
     };
     let filter = filter_context(outcome);
-    println!();
-    println!(
+    writeln!(w)?;
+    writeln!(
+        w,
         "{} distinct file(s)  ·  {} mutation(s)  ·  {} Edit-before-Read boundary(ies)  ·  detail={level}  ·  {filter}",
         outcome.distinct_files(),
         outcome.mutations.len(),
         outcome.boundaries.len()
-    );
-    println!("(Bash mutations are heuristic — parsed from the command string.)");
+    )?;
+    writeln!(
+        w,
+        "(Bash mutations are heuristic — parsed from the command string.)"
+    )?;
     for line in outcome.crossing.lines() {
-        println!("{line}");
+        writeln!(w, "{line}")?;
     }
     if outcome.skipped_lines > 0 {
-        println!("({})", crate::text::malformed_note(outcome.skipped_lines));
+        writeln!(
+            w,
+            "({})",
+            crate::text::malformed_note(outcome.skipped_lines)
+        )?;
     }
+    Ok(())
 }
 
 /// A short description of the active turn/time filter for the footer.
@@ -233,8 +284,10 @@ pub(crate) fn filter_context(outcome: &Outcome) -> String {
 
 pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
     use serde_json::json;
+    let mut out = crate::text::Out::stdout();
     // envelope v2: header (always) → kind-tagged rows → summary (always).
-    println!(
+    writeln!(
+        out,
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
             "files",
@@ -242,15 +295,16 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             outcome.scope_sub,
             crate::path::duplicate_header_fields(&outcome.duplicates)
         ))?
-    );
+    )?;
     match outcome.detail {
-        FilesDetail::Summary => json_grouped(outcome, |m| bucket_key(&m.path), "bucket")?,
+        FilesDetail::Summary => json_grouped(&mut out, outcome, |m| bucket_key(&m.path), "bucket")?,
         FilesDetail::ByDir => json_grouped(
+            &mut out,
             outcome,
             |m| parent_dir(&m.path).unwrap_or_else(|| "./".to_string()),
             "dir",
         )?,
-        FilesDetail::ByFile => json_grouped(outcome, |m| m.path.clone(), "file")?,
+        FilesDetail::ByFile => json_grouped(&mut out, outcome, |m| m.path.clone(), "file")?,
         FilesDetail::Timeline => {
             for m in &outcome.mutations {
                 let obj = json!({
@@ -289,7 +343,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
                     "path_verbatim": m.mutation.path_verbatim,
                     "command_errored": m.mutation.command_errored,
                 });
-                println!("{}", serde_json::to_string(&obj)?);
+                writeln!(out, "{}", serde_json::to_string(&obj)?)?;
             }
         }
     }
@@ -315,7 +369,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             "ts_utc": b.timestamp_utc,
             "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
         });
-        println!("{}", serde_json::to_string(&obj)?);
+        writeln!(out, "{}", serde_json::to_string(&obj)?)?;
     }
     // envelope v2 summary. `detail_level` values equal the `--by` flag values verbatim.
     // `sessions` = distinct OWNING sessions among the emitted mutations/boundaries -
@@ -350,12 +404,14 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
         summary_fields[k] = v;
     }
     let summary = crate::text::envelope_summary(summary_fields);
-    println!("{}", serde_json::to_string(&summary)?);
+    writeln!(out, "{}", serde_json::to_string(&summary)?)?;
+    out.flush()?;
     Ok(())
 }
 
 /// Emit one JSON object per group (bucket / dir / file), keyed per session.
-pub(crate) fn json_grouped<F: Fn(&FileMutation) -> String>(
+pub(crate) fn json_grouped<W: std::io::Write, F: Fn(&FileMutation) -> String>(
+    w: &mut W,
     outcome: &Outcome,
     key: F,
     row_kind: &str,
@@ -402,7 +458,7 @@ pub(crate) fn json_grouped<F: Fn(&FileMutation) -> String>(
                 "last_utc": counts.last_ts,
                 "last_local": counts.last_ts.as_deref().and_then(local_iso),
             });
-            println!("{}", serde_json::to_string(&obj)?);
+            writeln!(w, "{}", serde_json::to_string(&obj)?)?;
         }
     }
     Ok(())

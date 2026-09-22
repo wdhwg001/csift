@@ -1,4 +1,11 @@
 //! Text tree rendering: nested runs, node blocks, pending lanes.
+//!
+//! The tree goes through ONE [`crate::text::Out`]: a session with thousands of subagents
+//! prints tens of thousands of rows (18,308 on the section 7 landmark transcript). See the
+//! `text::out` module docs for what holding the lock obliges - the duplicate banner stays
+//! `println!` because it is already flushed before the writer exists.
+
+use std::io::Write as _;
 
 use super::*;
 
@@ -8,20 +15,22 @@ pub(crate) fn render_text(
     args: &AgentsArgs,
     view: &View,
     duplicates: &[crate::path::DuplicateGroup],
-) {
+) -> Result<()> {
     crate::path::emit_duplicate_banner(duplicates);
+    let mut w = crate::text::Out::stdout();
     if nodes.is_empty() {
-        println!("no subagents found");
-        return;
+        writeln!(w, "no subagents found")?;
+        w.flush()?;
+        return Ok(());
     }
 
     if view.single_node {
         // A single `--agent <hex>` grab: just the matched node, no SESSION/WORKFLOW header.
         for n in nodes {
-            print_node_block(n, view, 1);
+            print_node_block(&mut w, n, view, 1)?;
         }
     } else {
-        render_tree_text(nodes, workflow_runs, view);
+        render_tree_text(&mut w, nodes, workflow_runs, view)?;
     }
 
     // Footer with the filter context (so an empty-looking result is explained).
@@ -38,26 +47,34 @@ pub(crate) fn render_text(
             .collect::<Vec<_>>()
             .join(",")
     };
-    println!();
-    println!(
+    writeln!(w)?;
+    writeln!(
+        w,
         "{} subagent(s)  ·  kind={kinds}  ·  window-axis={}",
         nodes.len(),
         axis_label(args.order_by)
-    );
+    )?;
 
     // When a teammate is in scope, point at the CORRECT control tool (SendMessage by name),
     // since the natural-but-wrong reach (TaskStop / pkill) silently fails on a teammate id.
     if any_teammate(nodes) {
-        println!();
-        println!("{TEAMMATE_CONTROL_HINT_L1}");
-        println!("{TEAMMATE_CONTROL_HINT_L2}");
-        println!("{TEAMMATE_CONTROL_HINT_L3}");
+        writeln!(w)?;
+        writeln!(w, "{TEAMMATE_CONTROL_HINT_L1}")?;
+        writeln!(w, "{TEAMMATE_CONTROL_HINT_L2}")?;
+        writeln!(w, "{TEAMMATE_CONTROL_HINT_L3}")?;
     }
+    w.flush()?;
+    Ok(())
 }
 
 /// Tree text: each session → its workflow RUN nodes (with their agents nested) → then the
 /// remaining built-in agents. Joins workflow agents to a run by `workflow_id == run_id`.
-pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &View) {
+pub(crate) fn render_tree_text<W: std::io::Write>(
+    w: &mut W,
+    nodes: &[SubagentNode],
+    workflow_runs: &[WorkflowRun],
+    view: &View,
+) -> Result<()> {
     use std::collections::BTreeMap;
 
     // Group nodes by parent session.
@@ -79,10 +96,10 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
     let mut first = true;
     for (session, snodes) in &by_session {
         if !first {
-            println!();
+            writeln!(w)?;
         }
         first = false;
-        println!("SESSION  {session}");
+        writeln!(w, "SESSION  {session}")?;
 
         // Workflow runs (as parent nodes) + their agents nested under them.
         for run in workflow_runs {
@@ -97,12 +114,12 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
             if agents.is_empty() {
                 continue;
             }
-            print_workflow_run(run);
+            print_workflow_run(w, run)?;
             // The same walk again, so a run's members are the rows its JSON block emits,
             // in that order. They render FLAT under the run: the run is their parent here,
             // and the agent-to-agent nesting rides `depth` / `parent_agent_id` on the row.
             for (n, _) in preorder_depth(&agents) {
-                print_node_block(n, view, 2);
+                print_node_block(w, n, view, 2)?;
             }
         }
 
@@ -114,8 +131,9 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
             .filter(|n| n.workflow_id.is_none())
             .copied()
             .collect();
-        print_builtin_agents_nested(&builtin, view);
+        print_builtin_agents_nested(w, &builtin, view)?;
     }
+    Ok(())
 }
 
 /// Print built-in agents as a tree by `parent_agent_id`. A root (parent absent, or its parent
@@ -124,14 +142,19 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
 ///
 /// The walk is [`preorder_depth`], the one the JSON rows take, so the tree can never print a
 /// different set, a different order or a different COUNT from the rows a consumer parses.
-pub(crate) fn print_builtin_agents_nested(builtin: &[&SubagentNode], view: &View) {
+pub(crate) fn print_builtin_agents_nested<W: std::io::Write>(
+    w: &mut W,
+    builtin: &[&SubagentNode],
+    view: &View,
+) -> Result<()> {
     for (n, depth) in preorder_depth(builtin) {
-        print_node_block(n, view, 1 + depth);
+        print_node_block(w, n, view, 1 + depth)?;
     }
+    Ok(())
 }
 
 /// Print a workflow RUN header line (the tree parent of its agents).
-pub(crate) fn print_workflow_run(run: &WorkflowRun) {
+pub(crate) fn print_workflow_run<W: std::io::Write>(w: &mut W, run: &WorkflowRun) -> Result<()> {
     let mut head = format!("  WORKFLOW  {}", run.run_id);
     if let Some(name) = &run.workflow_name {
         head.push_str(&format!("  [{name}]"));
@@ -139,23 +162,29 @@ pub(crate) fn print_workflow_run(run: &WorkflowRun) {
     if let Some(s) = &run.status {
         head.push_str(&format!("  {s}"));
     }
-    println!("{head}");
+    writeln!(w, "{head}")?;
     if let Some(n) = run.agent_count {
-        println!("      agents     {n}");
+        writeln!(w, "      agents     {n}")?;
     }
     if let Some(ms) = run.duration_ms {
-        println!("      duration   {}", fmt_ms(ms));
+        writeln!(w, "      duration   {}", fmt_ms(ms))?;
     }
     if let Some(t) = run.total_tokens {
-        println!("      tokens     {t}");
+        writeln!(w, "      tokens     {t}")?;
     }
     if let Some(m) = &run.default_model {
-        println!("      model      {m}");
+        writeln!(w, "      model      {m}")?;
     }
+    Ok(())
 }
 
 /// Print one node's text block, indented `depth` levels (2 spaces per level).
-pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
+pub(crate) fn print_node_block<W: std::io::Write>(
+    w: &mut W,
+    n: &SubagentNode,
+    view: &View,
+    depth: usize,
+) -> Result<()> {
     let ind = "  ".repeat(depth);
     let ind2 = "  ".repeat(depth + 1);
 
@@ -175,7 +204,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
             head.push_str(&format!("  routing: {rid}"));
         }
     }
-    println!("{head}");
+    writeln!(w, "{head}")?;
 
     // TWO lanes can share every id they have: a copied project directory carries the whole
     // sidecar, so a divergent session pair keeps two copies of each agent transcript. The
@@ -183,7 +212,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     // occur twice - on an ordinary listing it would be one line of noise per agent, and the
     // JSON row carries it unconditionally because that one is the machine contract.
     if view.ambiguous_ids.contains(&n.agent_id) {
-        println!("{ind2}transcript {}", n.path.display());
+        writeln!(w, "{ind2}transcript {}", n.path.display())?;
     }
 
     // A `/fork` child: name the fork point (the parent's last record uuid at fork
@@ -194,7 +223,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
             .fork_context_length
             .map(|c| format!(" (context {c})"))
             .unwrap_or_default();
-        println!("{ind2}forked-at  {fp}{ctx}");
+        writeln!(w, "{ind2}forked-at  {fp}{ctx}")?;
     }
 
     // A FROZEN lane: the status above says `running`, but it is blocked at an unreturned tool_use.
@@ -203,64 +232,68 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     if let Some(class) = n.pending_classification {
         let tool = n.pending_tool_name.as_deref().unwrap_or("?");
         let id = n.pending_tool_use_id.as_deref().unwrap_or("?");
-        println!(
+        writeln!(
+            w,
             "{ind2}PENDING    {} · {tool} ({id}) · frozen since {}",
             class.label(),
             format_timestamp(n.pending_since_utc.as_deref())
-        );
+        )?;
         if class == PendingClassification::EscalationBlocked {
-            println!(
-                "{ind2}           ↑ a dangerous-rm Bash CC HOISTS for human approval even under \
+            writeln!(w, "{ind2}           ↑ a dangerous-rm Bash CC HOISTS for human approval even under \
                  bypass — almost certainly waiting for a Yes (approve/deny in the main UI), NOT dead."
-            );
+            )?;
         }
         // The prediction's own evidence: the harness's reason tail (or csift's note
         // where the deciding arm reads the filesystem) and which checker of which
         // Claude Code generation would have decided it.
         if let Some(reason) = &n.pending_reason {
-            println!("{ind2}           reason: {reason}");
+            writeln!(w, "{ind2}           reason: {reason}")?;
         }
         if let Some(checker) = &n.pending_checker {
-            println!("{ind2}           {checker}");
+            writeln!(w, "{ind2}           {checker}")?;
         }
     }
 
     // A teammate's team + handle (the team-lead addresses it by `@<name>`); shown only when set.
     if let Some(tn) = &n.team_name {
         match &n.name {
-            Some(nm) => println!("{ind2}team       {tn}  (@{nm})"),
-            None => println!("{ind2}team       {tn}"),
+            Some(nm) => writeln!(w, "{ind2}team       {tn}  (@{nm})")?,
+            None => writeln!(w, "{ind2}team       {tn}")?,
         }
     }
     if let Some(d) = &n.description {
-        println!("{ind2}desc       {d}");
+        writeln!(w, "{ind2}desc       {d}")?;
     }
-    println!(
+    writeln!(
+        w,
         "{ind2}triggered  {}",
         format_timestamp(n.trigger_utc.as_deref())
-    );
-    println!(
+    )?;
+    writeln!(
+        w,
         "{ind2}started    {}",
         format_timestamp(n.started_utc.as_deref())
-    );
+    )?;
     // Truthful terminal line: only a COMPLETED lane prints "completed" (+ duration) -
     // `completed_utc` is status-gated at the node, so presence == completion. A frozen
     // lane's tail instant is already on the PENDING line as "frozen since"; any other
     // non-completed lane (running-not-frozen / unknown) prints the tail ts as
     // "last-seen" so the instant is never lost and never mislabeled.
     if n.completed_utc.is_some() {
-        println!(
+        writeln!(
+            w,
             "{ind2}completed  {}",
             format_timestamp(n.completed_utc.as_deref())
-        );
+        )?;
         if let Some(dur) = duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()) {
-            println!("{ind2}duration   {dur}");
+            writeln!(w, "{ind2}duration   {dur}")?;
         }
     } else if n.pending_classification.is_none() {
-        println!(
+        writeln!(
+            w,
             "{ind2}last-seen  {}",
             format_timestamp(n.last_activity_utc.as_deref())
-        );
+        )?;
     }
     if view.want_returned {
         if let (Some(msg), Some(src)) = (&n.returned_message, n.returned_message_source) {
@@ -270,34 +303,35 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
             // source tag; don't rely on the reader remembering the schema note.
             // `completed_utc` is status-gated, so absence == the lane is not completed.
             if n.completed_utc.is_none() {
-                println!(
-                    "{ind2}returned   ({} · history — predates the still-open lane, NOT the outcome) {}",
+                writeln!(w, "{ind2}returned   ({} · history — predates the still-open lane, NOT the outcome) {}",
                     src.label(),
                     one_line(msg)
-                );
+                )?;
             } else {
-                println!("{ind2}returned   ({}) {}", src.label(), one_line(msg));
+                writeln!(w, "{ind2}returned   ({}) {}", src.label(), one_line(msg))?;
             }
         } else {
-            println!("{ind2}returned   (unresolved)");
+            writeln!(w, "{ind2}returned   (unresolved)")?;
         }
     }
     if view.want_files {
         if n.files_changed.is_empty() {
-            println!("{ind2}files      (none)");
+            writeln!(w, "{ind2}files      (none)")?;
         } else {
-            println!("{ind2}files      {} changed", n.files_changed.len());
+            writeln!(w, "{ind2}files      {} changed", n.files_changed.len())?;
             for (path, op, is_create) in &n.files_changed {
                 let tag = if *is_create { "create" } else { op.as_str() };
-                println!("{ind2}  {tag:<12} {path}");
+                writeln!(w, "{ind2}  {tag:<12} {path}")?;
             }
         }
     }
     if n.skipped_lines > 0 {
         // R12: same window census as `list` - lifecycle reads the transcript head/tail only.
-        println!(
+        writeln!(
+            w,
             "{ind2}note     {} (among the head/tail lines read — full census: csift stats)",
             crate::text::malformed_note(n.skipped_lines)
-        );
+        )?;
     }
+    Ok(())
 }

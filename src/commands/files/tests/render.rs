@@ -12,14 +12,14 @@ fn render_text_all_detail_levels_run() {
         FilesDetail::ByFile,
         FilesDetail::Timeline,
     ] {
-        render_text(&outcome(d, muts.clone()));
+        render_text(&outcome(d, muts.clone())).expect("text render");
     }
 }
 
 #[test]
 fn render_text_empty_prints_none() {
     // The empty-mutations branch of render_text (→ "no file mutations found").
-    render_text(&outcome(FilesDetail::Summary, Vec::new()));
+    render_text(&outcome(FilesDetail::Summary, Vec::new())).expect("text render");
 }
 
 #[test]
@@ -56,7 +56,8 @@ fn footer_reports_skipped_lines() {
     // The skipped-lines footer branch (> 0) fires.
     let mut o = outcome(FilesDetail::Summary, extract(&fixture()));
     o.skipped_lines = 3;
-    print_footer(&o); // exercises the `skipped_lines > 0` true arm
+    // Written to a sink: the arm under test is the footer's, not the terminal's.
+    write_footer(&mut Vec::new(), &o).expect("footer"); // the `skipped_lines > 0` true arm
 }
 
 #[test]
@@ -67,14 +68,18 @@ fn render_multi_session_separator() {
     let mut a = extract_mutations("aaaa-sess", &fx, &ln, &view_of(&fx));
     let b = extract_mutations("bbbb-sess", &fx, &ln, &view_of(&fx));
     a.extend(b);
-    render_text(&outcome(FilesDetail::Summary, a));
+    render_text(&outcome(FilesDetail::Summary, a)).expect("text render");
 }
 
 #[test]
 fn timeline_renders_heuristic_and_non_heuristic() {
     // The timeline heuristic-label ternary both arms: a Write (no label) and a
     // Bash mutation (heuristic label) in the same session.
-    render_timeline(&outcome(FilesDetail::Timeline, extract(&fixture())));
+    render_timeline(
+        &mut Vec::new(),
+        &outcome(FilesDetail::Timeline, extract(&fixture())),
+    )
+    .expect("timeline");
 }
 
 #[test]

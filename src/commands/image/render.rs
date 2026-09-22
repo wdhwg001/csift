@@ -1,4 +1,11 @@
 //! Text + JSON projections.
+//!
+//! Both go through ONE [`crate::text::Out`]: a listing is one row per image and a
+//! transcript can carry thousands. See the `text::out` module docs for what holding the
+//! lock obliges - the duplicate banner stays `println!` because it is already flushed
+//! before the writer exists.
+
+use std::io::Write as _;
 
 use super::*;
 
@@ -9,14 +16,16 @@ pub(crate) fn render_text(
     skipped_lines: usize,
     duplicates: &[crate::path::DuplicateGroup],
     crossing: &crate::model::CrossingReport,
-) {
+) -> Result<()> {
     crate::path::emit_duplicate_banner(duplicates);
+    let mut out = crate::text::Out::stdout();
     if selected.is_empty() {
-        println!("no images found");
+        writeln!(out, "no images found")?;
         if skipped_lines > 0 {
-            println!("({})", crate::text::malformed_note(skipped_lines));
+            writeln!(out, "({})", crate::text::malformed_note(skipped_lines))?;
         }
-        return;
+        out.flush()?;
+        return Ok(());
     }
     // The document basename rides the FIRST row of each RECORD GROUP, not every row: five
     // pages of one PDF would repeat one name five times.
@@ -68,7 +77,8 @@ pub(crate) fn render_text(
             "live" => String::new(),
             other => format!("  [{other}]"),
         };
-        println!(
+        writeln!(
+            out,
             "{}  {}  {}{}{}{}",
             label,
             size,
@@ -76,7 +86,7 @@ pub(crate) fn render_text(
             doc,
             survival,
             tag
-        );
+        )?;
     }
     let mut tail = format!(
         "{} image(s) · {} transcript(s)",
@@ -89,12 +99,14 @@ pub(crate) fn render_text(
             crate::text::malformed_note(skipped_lines)
         ));
     }
-    println!("{tail}");
+    writeln!(out, "{tail}")?;
     // Each row's survival marker is read off the chain, so how far that chain climbed is
     // part of what the marker means.
     for line in crossing.lines() {
-        println!("{line}");
+        writeln!(out, "{line}")?;
     }
+    out.flush()?;
+    Ok(())
 }
 
 /// JSON listing: one object per image, then a trailing summary object.
@@ -104,13 +116,16 @@ pub(crate) fn render_json(
     skipped_lines: usize,
     duplicates: &[crate::path::DuplicateGroup],
     crossing: &crate::model::CrossingReport,
-) {
-    println!(
+) -> Result<()> {
+    let mut out = crate::text::Out::stdout();
+    writeln!(
+        out,
         "{}",
         crate::text::envelope_header("image", crate::path::duplicate_header_fields(duplicates))
-    );
+    )?;
     for img in selected {
-        println!(
+        writeln!(
+            out,
             "{}",
             json!({
                 "kind": "image",
@@ -134,11 +149,13 @@ pub(crate) fn render_json(
                 "ts_utc": img.ts_utc,
                 "ts_local": img.ts_utc.as_deref().and_then(local_iso),
             })
-        );
+        )?;
     }
     let mut summary_fields = json!({ "images": selected.len(), "transcripts": transcripts, "skipped_lines": skipped_lines });
     for (k, v) in crossing.json_fields() {
         summary_fields[k] = v;
     }
-    println!("{}", crate::text::envelope_summary(summary_fields));
+    writeln!(out, "{}", crate::text::envelope_summary(summary_fields))?;
+    out.flush()?;
+    Ok(())
 }

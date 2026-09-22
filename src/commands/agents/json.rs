@@ -1,5 +1,7 @@
 //! Flat JSON rows: session / run / agent in pre-order.
 
+use std::io::Write as _;
+
 use super::*;
 
 pub(crate) fn render_json(
@@ -9,6 +11,7 @@ pub(crate) fn render_json(
     duplicates: &[crate::path::DuplicateGroup],
 ) -> Result<()> {
     use std::collections::{BTreeMap, BTreeSet};
+    let mut out = crate::text::Out::stdout();
 
     // envelope v2, FLAT rows (v0.5): header → per session a light `kind:"session"` row
     // (counts only) → each workflow run as its own `kind:"run"` row followed by its
@@ -16,13 +19,14 @@ pub(crate) fn render_json(
     // summary. The tree nests in TEXT mode only; JSON consumers reconstruct it from
     // `parent_agent_id`/`depth` - so `jq 'select(.kind=="agent")'` addresses every node,
     // the uniform envelope idiom the old one-giant-session-row shape defeated.
-    println!(
+    writeln!(
+        out,
         "{}",
         serde_json::to_string(&crate::text::envelope_header(
             "agents",
             crate::path::duplicate_header_fields(duplicates)
         ))?
-    );
+    )?;
     let mut by_session: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
     for n in nodes {
         by_session
@@ -57,19 +61,20 @@ pub(crate) fn render_json(
             "runs": runs.len(),
             "agents": snodes.len(),
         });
-        println!("{}", serde_json::to_string(&obj)?);
+        writeln!(out, "{}", serde_json::to_string(&obj)?)?;
         for run in &runs {
-            println!(
+            writeln!(
+                out,
                 "{}",
                 serde_json::to_string(&workflow_run_json(run, session))?
-            );
+            )?;
             let members: Vec<&SubagentNode> = snodes
                 .iter()
                 .filter(|n| n.workflow_id.as_deref() == Some(run.run_id.as_str()))
                 .copied()
                 .collect();
             for (n, _) in preorder_depth(&members) {
-                println!("{}", serde_json::to_string(&agent_row(n, view))?);
+                writeln!(out, "{}", serde_json::to_string(&agent_row(n, view))?)?;
             }
         }
         let builtin: Vec<&SubagentNode> = snodes
@@ -78,7 +83,7 @@ pub(crate) fn render_json(
             .copied()
             .collect();
         for (n, _) in preorder_depth(&builtin) {
-            println!("{}", serde_json::to_string(&agent_row(n, view))?);
+            writeln!(out, "{}", serde_json::to_string(&agent_row(n, view))?)?;
         }
     }
     let summary = crate::text::envelope_summary(serde_json::json!({
@@ -86,7 +91,8 @@ pub(crate) fn render_json(
         "runs": runs_total,
         "agents": nodes.len(),
     }));
-    println!("{}", serde_json::to_string(&summary)?);
+    writeln!(out, "{}", serde_json::to_string(&summary)?)?;
+    out.flush()?;
     Ok(())
 }
 

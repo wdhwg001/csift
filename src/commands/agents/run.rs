@@ -141,7 +141,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 
     match args.format {
         OutputFormat::Text => {
-            render_text(&nodes, &workflow_runs, args, &view, &duplicates);
+            render_text(&nodes, &workflow_runs, args, &view, &duplicates)?;
         }
         OutputFormat::Json => render_json(&nodes, &workflow_runs, &view, &duplicates)?,
     }
