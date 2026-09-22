@@ -449,17 +449,41 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
     }
 }
 
+/// The shared TEXT disclosure as one string, one `copies …` line plus a blank line per
+/// duplicated session id - empty when nothing was duplicated. ONE builder behind the two
+/// sinks below, exactly as the scope banner's is.
+fn duplicate_banner_text(groups: &[DuplicateGroup]) -> String {
+    groups
+        .iter()
+        .map(|g| format!("copies {}\n\n", duplicate_note(g)))
+        .collect()
+}
+
 /// The shared TEXT disclosure, one line per duplicated session id, printed beside the scope
 /// banner rather than as a trailing footer: the merge is a fact about the resolved SCOPE,
 /// like the span line it sits under, and the banner is the one place every spanning surface
 /// already discloses that - always reached, even on an empty result. Silent when nothing
 /// was duplicated, and never called from the `-c` / `-l` terminal modes, whose stdout is a
 /// bare number or a pure id stream (the resolver's stderr note carries those).
+///
+/// This is the `println!` sink, for the surfaces that print every row that way (`stats`,
+/// `recover`); a surface holding a `crate::text::Out` calls [`write_duplicate_banner`], for
+/// the reason `crate::text::emit_scope_banner` states.
 pub fn emit_duplicate_banner(groups: &[DuplicateGroup]) {
-    for g in groups {
-        println!("copies {}", duplicate_note(g));
-        println!();
+    let banner = duplicate_banner_text(groups);
+    if !banner.is_empty() {
+        print!("{banner}");
     }
+}
+
+/// [`emit_duplicate_banner`] onto a writer: the same bytes in the same place, for the
+/// surfaces that own a `crate::text::Out` and so report a write that cannot land instead of
+/// aborting inside it.
+pub fn write_duplicate_banner<W: std::io::Write>(
+    w: &mut W,
+    groups: &[DuplicateGroup],
+) -> std::io::Result<()> {
+    w.write_all(duplicate_banner_text(groups).as_bytes())
 }
 
 /// The shared JSON disclosure every spanning surface carries in its envelope header. FOUR

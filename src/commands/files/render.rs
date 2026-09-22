@@ -2,8 +2,8 @@
 //!
 //! Both go through ONE [`crate::text::Out`]: a `--by timeline` over a heavily-edited
 //! session is one row per mutation and the landmark transcript prints 6,590 of them. See
-//! the `text::out` module docs for what holding the lock obliges - the banners stay
-//! `println!` because they are already flushed before the writer exists.
+//! the `text::out` module docs for what holding the lock obliges - the scope and duplicate
+//! banners go through the same writer, because they are this surface's first stdout bytes.
 // The `text::out` obligation, mechanically: a stray print on this thread jumps the
 // buffer's queue and one inside the parallel render closure hangs the process, so a
 // print outside an `Out` is an error here unless it says why (see `text::out`).
@@ -16,9 +16,10 @@ use super::*;
 pub(crate) fn render_text(outcome: &Outcome) -> Result<()> {
     // SCOPE banner FIRST (before the empty check) so a fan-out that touched no files still
     // announces it spanned N subagents - the same up-front disclosure `list`/`turns` give.
-    crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
-    crate::path::emit_duplicate_banner(&outcome.duplicates);
+    // Through the SAME writer as the rows: see the module doc.
     let mut out = crate::text::Out::stdout();
+    crate::text::write_scope_banner(&mut out, outcome.scope_top, outcome.scope_sub)?;
+    crate::path::write_duplicate_banner(&mut out, &outcome.duplicates)?;
     if outcome.mutations.is_empty() && outcome.boundaries.is_empty() {
         writeln!(out, "no file mutations found")?;
         write_footer(&mut out, outcome)?;

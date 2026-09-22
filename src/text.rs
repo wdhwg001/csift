@@ -62,7 +62,7 @@ pub fn malformed_note(n: usize) -> String {
 /// The canonical SCOPE-span text fragment, e.g. `4 sessions in scope (1 top-level + 3
 /// subagent)`. EVERY subagent-spanning subcommand (`list`/`files`/`search`/`recover`/`turns`)
 /// reports a bare-uuid fan-out with this SAME wording so an agent reads one format. `turns`
-/// prefixes `scope  ` and appends its budget clause; the others use [`emit_scope_banner`].
+/// prefixes `scope  ` and appends its budget clause; the others use [`scope_banner_text`].
 #[must_use]
 pub fn scope_span_fragment(top: usize, sub: usize) -> String {
     let total = top + sub;
@@ -72,18 +72,44 @@ pub fn scope_span_fragment(top: usize, sub: usize) -> String {
     )
 }
 
-/// Emit the `scope  N sessions in scope (X top-level + Y subagent)` banner + a trailing blank
-/// line to stdout - but ONLY when the resolved set actually spans ≥1 subagent (`sub > 0`).
-/// This is the ONE emit site for the four non-turns spanning subcommands
-/// (`list`/`files`/`search`/`recover`): a bare `csift <cmd> <uuid>` that silently balloons
-/// from 1 transcript to N must announce the fan-out up front, identically across surfaces,
-/// and stay silent (no banner) under `--no-subagents` or a genuinely single-transcript scope.
-/// `turns` keeps its own richer banner (it folds in the per-session budget math) but reuses
-/// [`scope_span_fragment`] for the wording.
+/// The `scope  N sessions in scope (X top-level + Y subagent)` banner AND its trailing
+/// blank line as one string - `None` when the resolved set spans no subagent (`sub == 0`),
+/// which is when the banner stays silent. ONE builder, so the two sinks below can differ in
+/// WHERE the bytes go and in nothing else.
+fn scope_banner_text(top: usize, sub: usize) -> Option<String> {
+    (sub > 0).then(|| format!("scope  {}\n\n", scope_span_fragment(top, sub)))
+}
+
+/// Emit the scope banner to the process stdout with `println!`, for the surfaces that print
+/// EVERY row that way (`list`, `stats`, `recover`). This is the ONE emit site for the four
+/// non-turns spanning subcommands (`list`/`files`/`search`/`recover`): a bare
+/// `csift <cmd> <uuid>` that silently balloons from 1 transcript to N must announce the
+/// fan-out up front, identically across surfaces, and stay silent (no banner) under
+/// `--no-subagents` or a genuinely single-transcript scope. `turns` keeps its own richer
+/// banner (it folds in the per-session budget math) but reuses [`scope_span_fragment`] for
+/// the wording.
+///
+/// A surface that holds an [`Out`] calls [`write_scope_banner`] instead. The difference is
+/// not stylistic: a write that cannot land ABORTS inside `println!` and is REPORTED through
+/// the buffer, so a banner printed here by a buffered surface would give that one surface
+/// two exit codes for one closed pipe, decided by how wide its scope happened to be.
 pub fn emit_scope_banner(top: usize, sub: usize) {
-    if sub > 0 {
-        println!("scope  {}", scope_span_fragment(top, sub));
-        println!();
+    if let Some(banner) = scope_banner_text(top, sub) {
+        print!("{banner}");
+    }
+}
+
+/// [`emit_scope_banner`] onto a writer: the same bytes in the same place, for the surfaces
+/// that own an [`Out`]. The banner is the first thing in THEIR byte stream, so it is their
+/// writer that makes the write and their `Err` arm that reports one that cannot land.
+pub fn write_scope_banner<W: std::io::Write>(
+    w: &mut W,
+    top: usize,
+    sub: usize,
+) -> std::io::Result<()> {
+    match scope_banner_text(top, sub) {
+        Some(banner) => w.write_all(banner.as_bytes()),
+        None => Ok(()),
     }
 }
 
@@ -309,6 +335,45 @@ pub(crate) fn fmt_ms(ms: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The banner is TWO lines - the `scope  ` row and a blank one separating it from the
+    /// rows below - and it is silent when the scope spans no subagent. Pinned on the
+    /// builder rather than through a surface: both sinks read this one string, so a wording
+    /// or a newline that moved here moves on every spanning surface at once.
+    #[test]
+    fn the_scope_banner_is_the_row_plus_a_blank_line_or_nothing_at_all() {
+        assert_eq!(
+            scope_banner_text(1, 0),
+            None,
+            "nothing spanned, nothing said"
+        );
+        assert_eq!(
+            scope_banner_text(1, 3).as_deref(),
+            Some("scope  4 sessions in scope (1 top-level + 3 subagent)\n\n")
+        );
+        // One subagent is the narrowest scope that still prints: the gate is `sub > 0`,
+        // not a count of what the fan-out found interesting.
+        assert_eq!(
+            scope_banner_text(1, 1).as_deref(),
+            Some("scope  2 sessions in scope (1 top-level + 1 subagent)\n\n")
+        );
+    }
+
+    /// The writer sink puts exactly those bytes on the writer, and nothing at all when the
+    /// builder says nothing - so a buffered surface's first stdout bytes are the same bytes
+    /// a `println!` surface prints.
+    #[test]
+    fn the_writer_sink_emits_the_builder_bytes_verbatim() {
+        let mut sink: Vec<u8> = Vec::new();
+        write_scope_banner(&mut sink, 2, 5).expect("a Vec sink cannot fail");
+        assert_eq!(
+            String::from_utf8(sink).expect("ascii"),
+            scope_banner_text(2, 5).expect("a spanned scope has a banner")
+        );
+        let mut silent: Vec<u8> = Vec::new();
+        write_scope_banner(&mut silent, 2, 0).expect("a Vec sink cannot fail");
+        assert!(silent.is_empty(), "an unspanned scope writes no bytes");
+    }
 
     #[test]
     fn truncate_short_is_unchanged() {

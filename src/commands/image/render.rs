@@ -2,8 +2,8 @@
 //!
 //! Both go through ONE [`crate::text::Out`]: a listing is one row per image and a
 //! transcript can carry thousands. See the `text::out` module docs for what holding the
-//! lock obliges - the duplicate banner stays `println!` because it is already flushed
-//! before the writer exists.
+//! lock obliges - the duplicate banner goes through the same writer, because it is this
+//! surface's first stdout bytes.
 // The `text::out` obligation, mechanically: a stray print on this thread jumps the
 // buffer's queue and one inside the parallel render closure hangs the process, so a
 // print outside an `Out` is an error here unless it says why (see `text::out`).
@@ -21,8 +21,8 @@ pub(crate) fn render_text(
     duplicates: &[crate::path::DuplicateGroup],
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
-    crate::path::emit_duplicate_banner(duplicates);
     let mut out = crate::text::Out::stdout();
+    crate::path::write_duplicate_banner(&mut out, duplicates)?;
     if selected.is_empty() {
         writeln!(out, "no images found")?;
         if skipped_lines > 0 {

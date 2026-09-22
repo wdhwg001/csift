@@ -1,8 +1,8 @@
 //! Text rendering: document body, slices, boundary banners, turn text.
 //!
-//! Every stdout byte below the scope banner goes through ONE [`crate::text::Out`]: the
-//! banner is printed before it exists (a `LineWriter` has already flushed it), and from
-//! that point a stray `println!` would jump the buffer's queue - see the `text::out`
+//! EVERY stdout byte goes through ONE [`crate::text::Out`], the duplicate banner and this
+//! command's own budget-carrying scope banner included, and from the writer's first line a
+//! stray `println!` would jump the buffer's queue - see the `text::out`
 //! module docs. A session's turn lines are built into one string by the emit closures
 //! (which return nothing and so cannot carry a write error) and written through the buffer
 //! once per session, in the same order and with the same bytes a per-line print produced.
@@ -133,25 +133,26 @@ pub(crate) fn render_text(
     // read as `0 top-level`. Printed whenever more than one session is in scope OR some
     // in-scope session was skipped by the budget; a lone session that rendered cleanly stays
     // silent (the common single-thread recovery case, zero added noise).
-    crate::path::emit_duplicate_banner(&ctx.duplicates);
+    // Both banners go through the SAME writer as every row below them: they are this
+    // surface's FIRST stdout bytes, so a write that cannot land has to reach the same `Err`
+    // arm the rows' writes reach rather than aborting ahead of the buffer.
+    let mut out = crate::text::Out::stdout();
+    crate::path::write_duplicate_banner(&mut out, &ctx.duplicates)?;
     let sc = scope_summary(sessions, plans);
     let any_skipped = sc.rendered < sc.in_scope;
-    // The BANNER prints before the writer below exists, so a `LineWriter` has already
-    // flushed it and it cannot land ahead of anything - the same reason every other
-    // surface's scope banner stays a print.
-    #[allow(clippy::print_stdout)]
     if sc.in_scope > 1 || any_skipped {
         // Reuse the shared `N session(s) in scope (X top-level + Y subagent)` wording (the same
         // fragment list/files/search/recover emit), then append turns' own budget clause.
-        println!(
+        writeln!(
+            out,
             "scope  {} · {} rendered within budget · budget {} chars is PER session → up to {} \
              chars total",
             crate::text::scope_span_fragment(sc.in_scope_top, sc.in_scope_sub),
             sc.rendered,
             ctx.budget_chars,
             ctx.budget_chars.saturating_mul(sc.rendered.max(1))
-        );
-        println!();
+        )?;
+        writeln!(out)?;
     }
 
     // A TARGETED top-level session that has restorable content but does NOT fit the budget
@@ -162,7 +163,6 @@ pub(crate) fn render_text(
     // terminal "no turns selected (empty session set …)" fallback - that case is already
     // honest and not a budget problem. `skipped_any` tracks only the budget-too-small notes,
     // separate from `any`, so the fallback still keys on whether a real block rendered.
-    let mut out = crate::text::Out::stdout();
     let mut skipped_any = false;
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         if plan.selected.is_empty() && !sr.is_subagent {

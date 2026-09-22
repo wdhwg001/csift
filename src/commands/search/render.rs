@@ -3,10 +3,10 @@
 //!
 //! A PAIRED ROOT, split when the 600-line cap bound: `exchange` holds the writers BELOW an
 //! exchange header (one record line and its image annotations), `notes` the two closing
-//! disclosures. Every stdout byte below the scope banners goes through ONE
-//! [`crate::text::Out`]: the banners are printed before it exists (a `LineWriter` has
-//! already flushed them), and from that point a stray `println!` would jump the buffer's
-//! queue - see the `text::out` module docs.
+//! disclosures. EVERY stdout byte this surface writes goes through ONE
+//! [`crate::text::Out`], the scope and duplicate banners included, so one query has one
+//! answer for a write that cannot land; a stray `println!` anywhere below the writer would
+//! jump the buffer's queue - see the `text::out` module docs.
 // The `text::out` obligation, mechanically: a stray print on this thread jumps the
 // buffer's queue and one inside the parallel render closure hangs the process, so a
 // print outside an `Out` is an error here unless it says why (see `text::out`).
@@ -276,10 +276,13 @@ pub(crate) fn header_tokens(exchanges: &[Exchange]) -> HashMap<&str, String> {
 
 pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) -> Result<()> {
     // SCOPE banner FIRST (before the empty check) so a bare `csift search '' <uuid>` fan-out
-    // announces it spanned N subagents up front - same disclosure as list/files/turns.
-    crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
-    crate::path::emit_duplicate_banner(&outcome.duplicates);
+    // announces it spanned N subagents up front - same disclosure as list/files/turns. It
+    // goes through the SAME writer as the rows below it: a banner printed outside the buffer
+    // would be this surface's first stdout byte, and a write that cannot land would abort
+    // there instead of being reported.
     let mut out = crate::text::Out::stdout();
+    crate::text::write_scope_banner(&mut out, outcome.scope_top, outcome.scope_sub)?;
+    crate::path::write_duplicate_banner(&mut out, &outcome.duplicates)?;
     if outcome.exchanges.is_empty() {
         writeln!(out, "no matching exchanges")?;
         if outcome.skipped_lines > 0 {

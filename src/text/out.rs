@@ -30,8 +30,11 @@
 //! builds or writes through an `Out` denies `clippy::print_stdout` and
 //! `clippy::print_stderr`, and each legitimate site carries an `#[allow]` saying why it
 //! prints outside a buffer. Output printed BEFORE the `Out` exists is already flushed
-//! (that is what a `LineWriter` does at each newline), which is why the scope banners can
-//! stay `println!`.
+//! (that is what a `LineWriter` does at each newline), so it cannot land out of order -
+//! but it is still a `println!`, which ABORTS on a write that cannot land where the buffer
+//! REPORTS one, so a surface that builds an `Out` builds it FIRST and writes even its scope
+//! and duplicate banners through it. Otherwise one query answers a closed pipe two ways,
+//! chosen by whether its scope was wide enough to print a banner.
 //!
 //! The FLUSH obligation is WIDER THAN THE LINT, and that is the half to read twice. A
 //! surface [`Out::flush`]es before ANY CALL that can write to stderr, not only before an
