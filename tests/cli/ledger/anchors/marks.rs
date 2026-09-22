@@ -34,27 +34,47 @@ pub(crate) fn mark_shape(excerpt: &str, status: &str) -> Option<String> {
     None
 }
 
-/// A marked excerpt that is a DESCRIPTION of bytes rather than a quote of them. Every
+/// An excerpt that is a DESCRIPTION of bytes rather than a quote of them. Every
 /// whitespace-separated token is a plain word - letters, with a hyphen or an apostrophe
 /// inside and a full stop or comma allowed at the edge - and there are five or more of
-/// them. Such a string occurs in no build by construction, so a mark on it passes while
-/// asserting nothing; the remedy is the dot-run's, re-cut the excerpt to the run it
-/// describes. A single token can never be prose here, whatever it spells, because a
-/// dot-joined identifier list is one token and a quoted literal usually is too.
+/// them. Such a string occurs in no build by construction, so it can never be byte-exact
+/// and an offset beside one decides nothing; the remedy is the dot-run's, re-cut the
+/// excerpt to the run it describes. A single token can never be prose here, whatever it
+/// spells, because a dot-joined identifier list is one token and a quoted literal usually
+/// is too.
+///
+/// A NUMERAL IS A WORD. `the offsets 5 of 7 records carry it` is prose and a test that
+/// demanded letters in every token read it as a quote, which left the hole this predicate
+/// exists to close one number wide. But a list of bare numbers is a CENSUS RESULT rather
+/// than English - the shape the anchor-rot procedure moves into a verdict under its own
+/// name - so prose owes at least one alphabetic token as well.
 pub(crate) fn reads_as_prose(excerpt: &str) -> bool {
     let mut words = 0usize;
+    let mut lettered = false;
     for token in excerpt.split_whitespace() {
+        // A bare ELLIPSIS is punctuation rather than a token, and reading it as one made
+        // every sentence that elides something unreachable by this test - which is exactly
+        // the shape census prose was shipping in.
+        if token.chars().all(|c| c == '.' || c == '\u{2026}') {
+            continue;
+        }
         let core = token.trim_matches(|c| c == '.' || c == ',');
-        if core.is_empty()
-            || !core
-                .chars()
-                .all(|c| c.is_ascii_alphabetic() || "-'".contains(c))
+        if core.is_empty() {
+            return false;
+        }
+        if core
+            .chars()
+            .all(|c| c.is_ascii_alphabetic() || "-'".contains(c))
+        {
+            lettered = true;
+        } else if !(core.chars().all(|c| c.is_ascii_digit() || c == ',')
+            && core.chars().any(|c| c.is_ascii_digit()))
         {
             return false;
         }
         words += 1;
     }
-    words >= 5
+    words >= 5 && lettered
 }
 
 /// A MARK IS A CLAIM, NOT A PASS. `absent` asserts the excerpt is in the build at no

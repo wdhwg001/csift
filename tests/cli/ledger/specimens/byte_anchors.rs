@@ -111,10 +111,14 @@ fn ledger_gate_rule_12_counts_closed_state_anchors_without_reading_them() {
     closed["producer_chain"] = json!([{"role": "writer", "offset": 99, "excerpt": "gone"}]);
     c["states"][0]["from"] = json!("2.1.201");
     // The OPEN state keeps one located hop, so the split is read off two states that each
-    // carry one rather than off an open state with none. Its excerpt is ELIDED, because this
-    // specimen is about the open/closed split and not about what the bytes say.
-    c["states"][0]["producer_chain"] =
-        json!([{"role": "writer", "offset": 1, "excerpt": "the writer ... its tail"}]);
+    // carry one rather than off an open state with none. It is MARKED, because this specimen
+    // is about the open/closed split and not about what the bytes say - and a mark is the one
+    // verdict that decides itself without asking where the offset points.
+    c["states"][0]["producer_chain"] = json!([{
+        "role": "writer", "offset": 1,
+        "excerpt": "zzq-no-build-carries-these-bytes-zzq",
+        "anchor_status": "absent"
+    }]);
     c["states"] = json!([closed, c["states"][0].clone()]);
     let mut f = Vec::new();
     let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
@@ -127,21 +131,95 @@ fn ledger_gate_rule_12_counts_closed_state_anchors_without_reading_them() {
 /// printed non-printable bytes as `.`, so the excerpt is a picture of the bytes rather than
 /// the bytes - and because it contains `...`, the elided arm counted it skipped and 76
 /// anchors checked nothing at all.
+///
+/// The refusal comes AFTER the byte comparison, which is the whole of the rest of this
+/// specimen: an excerpt that IS the bytes at its offset is byte-exact whatever it looks
+/// like, and testing the shape first made a quote a build really carries unanchorable.
 #[test]
-fn ledger_gate_rule_12_refuses_a_dot_run_the_way_it_refuses_an_empty_excerpt() {
+fn ledger_gate_rule_12_refuses_a_dot_run_only_where_the_bytes_do_not_match() {
     let build = b"alpha......bravo";
     assert_eq!(
         anchors::classify(build, 5, "......", None),
+        anchors::Anchor::Exact,
+        "the build really carries those bytes at that offset, so the anchor holds"
+    );
+    assert_eq!(
+        anchors::classify(build, 4, "......", None),
         anchors::Anchor::DotRun,
-        "a dot run is refused even where the build really carries those bytes"
+        "and where it does not, the lossy render is refused by name"
     );
     assert_eq!(
         anchors::classify(build, 0, "alpha...bravo", None),
         anchors::Anchor::Elided,
-        "three dots is still an ellipsis a writer typed"
+        "three dots is still an ellipsis a writer typed, and its head is at the offset"
     );
     assert!(anchors::dot_run("sessionKind....trackingPath"));
     assert!(!anchors::dot_run("a...b"));
+}
+
+/// AN ELLIPSIS EXCUSES THE TAIL, NEVER THE HEAD. The elided bucket used to be compared
+/// against nothing, so replacing an already-elided excerpt with fabricated text moved no
+/// figure and the gate exited 0. The run before the first ellipsis is a quote of bytes like
+/// any other, so it is held to the offset exactly as `prefix-only` holds a head.
+#[test]
+fn ledger_gate_rule_12_holds_an_elided_excerpt_to_its_own_head() {
+    let build = b"alpha bravo charlie delta";
+    assert_eq!(
+        anchors::classify(build, 0, "alpha ... delta", None),
+        anchors::Anchor::Elided,
+        "the head is at the offset, so only the tail was elided"
+    );
+    assert_eq!(
+        anchors::classify(build, 0, "alpxa ... delta", None),
+        anchors::Anchor::ElidedHead { at: 3 },
+        "a fabricated head is named with the byte where the build stops agreeing"
+    );
+    assert_eq!(
+        anchors::classify(build, 0, "... delta", None),
+        anchors::Anchor::ElidedNoHead,
+        "an excerpt that opens with its own ellipsis quotes nothing at its offset"
+    );
+    assert_eq!(
+        anchors::elision_head("alpha ... delta"),
+        "alpha",
+        "the space in front of the elision belongs to the elision, not to the quote"
+    );
+}
+
+/// PROSE CAN NEVER ANCHOR, and the refusal reaches an EXCERPT rather than only a mark: it
+/// used to be asked by `verify_mark` alone, so census prose wearing an ellipsis was counted
+/// skipped and anchored nothing. A numeral is a word in that test, because prose carrying
+/// one number is still prose.
+#[test]
+fn ledger_gate_rule_12_refuses_an_unmarked_excerpt_that_reads_as_prose() {
+    let build = b"a string-table copy of the property name";
+    assert_eq!(
+        anchors::classify(build, 0, "a string-table copy of the property name", None),
+        anchors::Anchor::Exact,
+        "a build string really can be an English sentence, and this one is the bytes"
+    );
+    assert_eq!(
+        anchors::classify(build, 1, "a string-table copy of the property name", None),
+        anchors::Anchor::Prose,
+        "where it is not the bytes, a description of them is refused by name"
+    );
+    assert_eq!(
+        anchors::classify(
+            build,
+            1,
+            "the pending count is 16 of 22 ... elsewhere",
+            None
+        ),
+        anchors::Anchor::Prose,
+        "an ellipsis does not make a sentence a quote"
+    );
+    assert!(anchors::reads_as_prose(
+        "the offsets 5 of 7 records carry it"
+    ));
+    assert!(
+        !anchors::reads_as_prose("160067268 160771073 180729337 182144236 165529356"),
+        "a list of bare numbers is a census result, which has its own remedy"
+    );
 }
 
 /// A hop can name its own BUILD, and a build NOBODY HOLDS is not a pass. Comparing a

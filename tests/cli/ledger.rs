@@ -62,9 +62,16 @@
 //!     UNREAD rather than unreadable, so it is named rather than counted. A MARK IS A
 //!     CLAIM, NOT A PASS, so every mark is verified against the build too, and two of its
 //!     arms need no build at all: an EMPTY excerpt matches at every offset and PROSE at
-//!     none, so a mark on either is true by construction and decides nothing. Neither can
-//!     an excerpt carrying a run of four or more DOTS anchor - that is a lossy render of
-//!     non-printable bytes, and it slipped past as "elided" while checking nothing. A
+//!     none, so a mark on either is true by construction and decides nothing. PROSE is
+//!     refused on an UNMARKED excerpt as well, after the comparison has missed: a
+//!     description of the bytes equals no build's bytes, and asking it of marks alone left
+//!     census prose anchoring nothing. Neither can an excerpt carrying a run of four or
+//!     more DOTS anchor - that is a lossy render of non-printable bytes - though both of
+//!     those are asked AFTER the byte comparison, because a quote really can carry four
+//!     dots and a build string really can be an English sentence. An ELLIPSIS excuses the
+//!     TAIL of an excerpt and never its head: the run before the first one is held to the
+//!     offset exactly as `prefix-only` holds a head, without which the whole elided bucket
+//!     was compared against nothing and fabricated text passed. A
 //!     CLOSED state's anchors were exact at the build its range ended on: they are counted
 //!     and never compared against a later build. A host with NO build prints one line and
 //!     passes, which is the one place counting and moving on is honest.

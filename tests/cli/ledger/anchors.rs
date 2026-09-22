@@ -3,11 +3,20 @@
 //! Every `producer_chain` hop and every `enumeration` entry may carry a byte `offset` into
 //! the build. An offset is a locator and the excerpt is the evidence, so the check is one
 //! comparison: the bytes at the offset ARE the excerpt, or the anchor no longer points at
-//! its producer. Three anchors are counted and skipped instead of compared - an ELIDED
-//! excerpt (it carries an ellipsis, so it never had a byte-exact form), and one the ledger
-//! itself marks `anchor_status: "absent"` or `"prefix-only"`, the two outcomes recorded
-//! when an excerpt cannot be located at all. Those marks are the standing worklist: they
-//! are what a later pass re-locates first.
+//! its producer. Three anchors are counted instead of being compared WHOLE - an ELIDED
+//! excerpt, which is held to its own head instead (below), and one the ledger itself marks
+//! `anchor_status: "absent"` or `"prefix-only"`, the two outcomes recorded when an excerpt
+//! cannot be located at all. Those marks are the standing worklist: they are what a later
+//! pass re-locates first.
+//!
+//! AN ELLIPSIS EXCUSES THE TAIL, NEVER THE HEAD. Carrying `...` says nothing about whether
+//! an excerpt is a quote: minified JavaScript's spread operator wears the same three dots,
+//! and 1,319 `...`-bearing excerpts are byte-exact at their own offsets, which is why the
+//! comparison runs FIRST and an ellipsis is never a category that pre-empts it. What is
+//! left after it misses really has elided something - and the run BEFORE the first ellipsis
+//! is a quote of bytes like any other, so it is held to the offset exactly as `prefix-only`
+//! holds a head. Without that the whole bucket was an unverified escape hatch: replacing an
+//! already-elided excerpt with wholly fabricated text moved no figure and the gate exited 0.
 //!
 //! A MARK IS A CLAIM, NOT A PASS. Skipping a marked hop without testing what it asserts
 //! would make the mark a way to quiet the rule by typing a word, so every mark is
@@ -18,10 +27,12 @@
 //! the property name in the non-code region` is not a quote of bytes at all - it is a
 //! DESCRIPTION of them - so it occurs at no offset in any build, and the mark it carries
 //! passes while deciding nothing. That is the dot-run defect in another spelling, so it is
-//! refused the same way: a marked excerpt whose every whitespace-separated token is a plain
-//! word, five or more of them, is prose and can never anchor. The test is on the MARK,
+//! refused the same way: an excerpt whose every whitespace-separated token is a plain word,
+//! five or more of them, is prose and can never anchor. The refusal reaches an EXCERPT and
+//! not only a mark: it used to be asked by `verify_mark` alone, so census prose wearing an
+//! ellipsis was counted skipped and anchored nothing. It is asked AFTER the comparison,
 //! because a build string really can be an English sentence - an error message, a prompt -
-//! and an unmarked one still has to equal the bytes at its offset.
+//! and an excerpt that IS the bytes is byte-exact whatever it reads like.
 //!
 //! AN EMPTY EXCERPT IS NEVER EVIDENCE. `bytes[off..off]` equals an empty excerpt at every
 //! offset in every build, so an offset beside one passed the comparison while anchoring
@@ -95,6 +106,15 @@ pub(crate) enum Anchor {
     /// An excerpt carrying a run of four or more dots: a lossy render of bytes that are
     /// not printable, which no build can ever equal.
     DotRun,
+    /// An excerpt that reads as PROSE: a description of the bytes rather than a quote of
+    /// them, so it can equal no build's bytes and its offset decides nothing.
+    Prose,
+    /// An elided excerpt whose run BEFORE the first ellipsis is empty, so nothing of it is
+    /// a quote at this offset.
+    ElidedNoHead,
+    /// An elided excerpt whose head does not match at the offset. `at` is the head byte
+    /// where the build stops agreeing.
+    ElidedHead { at: usize },
     /// The offset sits at or past the END of the compared build. That is an error about the
     /// LOCATOR rather than about the excerpt, so it is refused before the eliding and the
     /// marks - both of which would otherwise let an offset no file can hold pass as skipped.
@@ -111,13 +131,7 @@ pub(crate) fn classify(build: &[u8], offset: usize, excerpt: &str, status: Optio
     if excerpt.is_empty() {
         return Anchor::Empty;
     }
-    // Checked SECOND, before the byte comparison and before the ellipsis arm: a run of four
-    // or more dots is a lossy render rather than a quote, and the ellipsis arm would
-    // otherwise count it skipped for carrying the `...` its own damage produced.
-    if dot_run(excerpt) {
-        return Anchor::DotRun;
-    }
-    // Checked THIRD, and before the eliding and the marks: an offset at or past the end of
+    // Checked SECOND, and before the eliding and the marks: an offset at or past the end of
     // the build addresses no byte of it, which is a defect in the LOCATOR. Three enumeration
     // offsets addressed a predecessor build and were compared against the verified one,
     // where the ellipsis arm counted them skipped rather than naming the mismatch.
@@ -131,12 +145,42 @@ pub(crate) fn classify(build: &[u8], offset: usize, excerpt: &str, status: Optio
         }
     }
     let want = excerpt.as_bytes();
-    // Checked AFTER the byte comparison, deliberately: minified JavaScript is dense with
-    // `...`, so an excerpt carrying one is very often byte-exact anyway, and counting it
-    // exact is the stronger reading. An ellipsis is an excuse, not a category that
-    // pre-empts the check.
+    // THE COMPARISON COMES FIRST, and the three refusals below are what is left once it
+    // has missed. A dot run and a prose sentence are both excerpts that CANNOT equal any
+    // build's bytes - but a quote really can carry four dots, and a build string really can
+    // be an English sentence (an error message, a prompt), so refusing either before the
+    // comparison would fail an anchor that was sound. An excerpt that IS the bytes is
+    // byte-exact whatever it reads like.
+    if dot_run(excerpt) {
+        return Anchor::DotRun;
+    }
+    if reads_as_prose(excerpt) {
+        return Anchor::Prose;
+    }
+    // AN ELLIPSIS IS AN EXCUSE FOR THE TAIL, NEVER FOR THE HEAD. Minified JavaScript is
+    // dense with `...`, so an excerpt carrying one is usually byte-exact anyway and the
+    // comparison above has already said so. What is left is an excerpt that elides
+    // something - and the run BEFORE the first ellipsis is a quote of bytes like any
+    // other, so it is held to the offset exactly as `prefix-only` holds a head. Without
+    // that, an elided excerpt was counted skipped and compared against nothing: replacing
+    // one with wholly fabricated text moved no figure and the gate exited 0.
     if excerpt.contains("...") || excerpt.contains('\u{2026}') {
-        return Anchor::Elided;
+        let head = elision_head(excerpt);
+        if head.is_empty() {
+            return Anchor::ElidedNoHead;
+        }
+        for want in readings(head) {
+            if avail.len() >= want.len() && avail[..want.len()] == want[..] {
+                return Anchor::Elided;
+            }
+        }
+        return Anchor::ElidedHead {
+            at: avail
+                .iter()
+                .zip(head.as_bytes())
+                .take_while(|(a, b)| a == b)
+                .count(),
+        };
     }
     match status {
         Some("absent") => Anchor::Absent,
@@ -151,6 +195,19 @@ pub(crate) fn classify(build: &[u8], offset: usize, excerpt: &str, status: Optio
 /// printable-ASCII filter leaves where a run of non-printable bytes was.
 pub(crate) fn dot_run(excerpt: &str) -> bool {
     excerpt.as_bytes().windows(4).any(|w| w == b"....")
+}
+
+/// The run BEFORE the first ellipsis, in either spelling.
+///
+/// The whitespace a writer puts in front of ` ... ` belongs to the ELISION rather than to
+/// the quote - nobody writes a space to mean a byte there - so it is trimmed, and only the
+/// trailing kind, because a leading space in an excerpt is a byte of the build.
+pub(crate) fn elision_head(excerpt: &str) -> &str {
+    let cut = [excerpt.find("..."), excerpt.find('\u{2026}')]
+        .into_iter()
+        .flatten()
+        .min();
+    cut.map_or(excerpt, |i| &excerpt[..i]).trim_end()
 }
 
 /// The byte readings of one excerpt, strongest first: its UTF-8 bytes, and - when every
@@ -399,6 +456,30 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
                 "{}: {}[{}] offset {} carries a run of four or more dots, which is a lossy \
                  render of bytes that are not printable rather than a quote of them - re-cut \
                  the excerpt to the clean run around its literal",
+                site.id, site.field, site.index, site.offset
+            )),
+            Anchor::Prose => failures.push(format!(
+                "{}: {}[{}] offset {} carries an excerpt that reads as prose (`{}`) - that is \
+                 a DESCRIPTION of the bytes rather than a quote of them, so it equals no \
+                 build's bytes and the offset decides nothing; re-cut the excerpt to the run \
+                 it describes and move the description into the entry's own prose",
+                site.id,
+                site.field,
+                site.index,
+                site.offset,
+                site.excerpt.chars().take(80).collect::<String>()
+            )),
+            Anchor::ElidedNoHead => failures.push(format!(
+                "{}: {}[{}] offset {} carries an excerpt that OPENS with its own ellipsis, so \
+                 nothing of it is a quote of the bytes at that offset - re-cut it to the run \
+                 the offset carries, or drop the offset",
+                site.id, site.field, site.index, site.offset
+            )),
+            Anchor::ElidedHead { at } => failures.push(format!(
+                "{}: {}[{}] offset {} no longer carries the run BEFORE its first ellipsis at \
+                 Claude Code {at_build} (first difference at head byte {at}) - an ellipsis \
+                 excuses the tail of an excerpt and never its head, so re-anchor the offset \
+                 or re-cut the excerpt to what the build holds",
                 site.id, site.field, site.index, site.offset
             )),
             Anchor::Drifted { at } => failures.push(format!(
