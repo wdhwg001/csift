@@ -18556,8 +18556,8 @@
               "role": "writer",
               "name": "function Th(e) builds the {type:\"system\",subtype:\"hook_response\",...} object and hands it to _u",
               "offset": 161999622,
-              "excerpt": "function Th(e){let n=e.stdout||e.stderr||e.output;if(n)t(`Hook ${e.hookName} (${e.hookEvent}) ${e.outcome}:.${n}`);if(!xSe(e.hookEvent))return;_u({type:\"system\",subtype:\"hook_response\",hook_id:e.hookId,hook_name:e.hookName,hook_event:e.hookEvent,output:e.output,stdout:e.stdout,stderr:e.stderr,...e.exitCode!==void 0&&{exit_code:e.exitCode},outcome:e.outcome})}function V8n(e){$5t().setAllHookEventsEnabled(e)}function PSe(e,n){if(!e||typeof e!==\"object\"||Array.isArray(",
-              "note": "The template that becomes the bytes if anything persisted them: hook_id, hook_name, hook_event, output, stdout, stderr, a conditional exit_code and outcome - the claimed field set exactly, and the gate is inside this same function."
+              "excerpt": "function Th(e){let n=e.stdout||e.stderr||e.output;if(n)t(`Hook ${e.hookName} (${e.hookEvent}) ${e.outcome}:",
+              "note": "The template that becomes the bytes if anything persisted them: hook_id, hook_name, hook_event, output, stdout, stderr, a conditional exit_code and outcome - the claimed field set exactly, and the gate is inside this same function. The capture that ran before printed the template's newline as a full stop, so the excerpt diverged from the build one byte past the colon; the run quoted here is the part that is bytes."
             },
             {
               "role": "writer",
@@ -19891,8 +19891,8 @@
               "role": "writer",
               "name": "$3 writes the file and Npe renders the <persisted-output> pointer with the true size and a preview",
               "offset": 160363597,
-              "excerpt": "async function $3(n,e,r,i){let a=Array.isArray(n);if(a){if(n.some((h)=>h.type!==\"text\"))return{error:\"Cannot persist tool results containing non-text content\"}}await iW(r,i);let o=L8e(r,e,a),l=a?S(n,n\n---\nfunction Npe(n){let e=`${Ore}\n`;return e+=`Output too large (${Ut(n.originalSize)}). Full output saved to: ${n.filepath}\n\n`,e+=`Preview (first ${Ut(pNe)}):\n`,e+=n.preview,e+=n.hasMore?`\n...\n`:`\n`,e+=Z_n,e}async function Fpe(n,e,r,",
-              "note": "$3 writes hook-<id>-<n>-<source> under the session's tool-results directory and returns {filepath, originalSize, preview, hasMore}; Npe turns that into `Output too large (<size>). Full output saved to: <path>` plus a `Preview (first 2KB):` block."
+              "excerpt": "async function $3(n,e,r,i){let a=Array.isArray(n);if(a){if(n.some((h)=>h.type!==\"text\"))return{error:\"Cannot persist tool results ",
+              "note": "$3 writes hook-<id>-<n>-<source> under the session's tool-results directory and returns {filepath, originalSize, preview, hasMore}; Npe turns that into `Output too large (<size>). Full output saved to: <path>` plus a `Preview (first 2KB):` block. The excerpt had TWO sites in it, this writer and the formatter that turns its return into the pointer sentence, joined by a separator the build never wrote; the second is described in this note rather than quoted as though it sat here."
             }
           ],
           "enumeration": [
@@ -21819,8 +21819,8 @@
             {
               "site": "XQt call sites - whole-binary count",
               "offset": 162378303,
-              "excerpt": "XQt( occurs 5 times: 162371547 (vTe), 162373034 (bX), 162378303 (definition), 182144236 and 182157340 (an unrelated settings-source homonym function XQt(){let t=[],e=be(\"projectSettings\") ...)",
-              "verdict": "There is no third writer of a version number, so the two routes above are the complete producer set for the observed sequence."
+              "excerpt": "XQt(e,n){let r=O3r(e,n),o=uH(r),d;try{d=await I8(e)}catch(_){if(V(_))return{backupFileName:null,version:n,backupTime:new Date,",
+              "verdict": "There is no third writer of a version number, so the two routes above are the complete producer set for the observed sequence. The offsets the definition's own name occurs at are 162371547 (vTe), 162373034 (bX), 162378303 (the definition quoted here), and 182144236 and 182157340, which are an unrelated settings-source homonym."
             },
             {
               "site": "A3r evictor - what leaves the retained window",
@@ -22498,8 +22498,8 @@
             {
               "site": "the two sites that STRIP _simulatedSedEdit before the tool_use is persisted",
               "offset": 164441203,
-              "excerpt": "if(e.name===Qe&&z&&typeof z===\"object\"&&\"_simulatedSedEdit\"in z){let{_simulatedSedEdit:ht,...Lt}=z;z=Lt}  (also at 164149718 on the permission path)",
-              "verdict": "The key never reaches disk, so this path is INVISIBLE in a transcript: the record shows a plain shell command. Corpus check: 0 persisted tool_use inputs carry the key across 8,196 files."
+              "excerpt": "_simulatedSedEdit\"in Ie){let{_simulatedSedEdit:xn,...An}=Ie;Ie=An}let Pe=Ie,De=e.backfillObservableInput&&typeof ",
+              "verdict": "The key never reaches disk, so this path is INVISIBLE in a transcript: the record shows a plain shell command. Corpus check: 0 persisted tool_use inputs carry the key across 8,196 files. The same construct also stands on the permission path at 164149718. The earlier capture carried another build's minified identifiers for the three bindings, which is why it matched nothing here."
             },
             {
               "site": "XQt call sites - the complete set of store creators",
@@ -22560,8 +22560,8 @@
               "role": "trigger",
               "name": "resume or fork: smt is called with the loaded session's file-history snapshots",
               "offset": 180760875,
-              "excerpt": "if(O===\"fork\")PTn(I,Gu(T),Ie);else Z1e(I,Gu(T),Ie);if(I.fileHistorySnapshots)smt(I,Gu(T),Ie);  ||  [163214632] if(C=we!==null&&(...),!C)smt(_,!r.forkSession&&I?Gu(I):void 0,r.storageV5);",
-              "note": "The two callers are the REPL resume/fork step and the session-resume loader. Nothing else calls smt."
+              "excerpt": "if(I.fileHistorySnapshots)smt(I,Gu(T),Ie);ue((Mo)=>({...Mo,standaloneAgentContext:nHe(I.agentName,I.agentColor),sendMessagePins:{},",
+              "note": "The two callers are the REPL resume/fork step and the session-resume loader. Nothing else calls smt. The two callers are the resume/fork step and the session-resume loader at 163214632; the excerpt had both in one string with a separator the build never wrote, so what is quoted here is the snapshot call this offset carries."
             },
             {
               "role": "gate",
@@ -22590,8 +22590,8 @@
             {
               "site": "link (C3r) call sites in the binary",
               "offset": 162383318,
-              "excerpt": "C3r( occurs exactly ONCE, at 162383318, inside $3r; the binding comes from import{...,link as C3r,...}from\"fs/promises\" at the file-history module head.",
-              "verdict": "The resume/restore path is the ONLY producer of a hard link in the store, which is why every measured nlink>1 group spans two session directories and none sits inside one."
+              "excerpt": "await C3r(d,f)}catch(v){let C=E(v);if(C===\"EEXIST\")return;if(C===\"ENOENT\")throw t(`FileHistory: Failed to copy backup ${e} on restore ",
+              "verdict": "The resume/restore path is the ONLY producer of a hard link in the store, which is why every measured nlink>1 group spans two session directories and none sits inside one. The linked-in name occurs exactly once, at the offset quoted here, inside the restore helper; the binding comes from the file-history module's own import of `link` at its head."
             },
             {
               "site": "smt call sites",
@@ -22805,8 +22805,8 @@
             {
               "site": "constant table (byte string, not code)",
               "offset": 74823788,
-              "excerpt": "...truncatedByTokenCap... appearing among adjacent pooled identifiers such as extractReadFilesFromMessages: skipping malformed and collectRewoundFileTrackingPaths",
-              "verdict": "Not a site; the constant pool."
+              "excerpt": "truncatedByTokenCap",
+              "verdict": "Not a site; the constant pool. Not a site; the constant pool. The pooled identifier is quoted here on its own: the bytes around it are not printable, so the neighbours the entry names cannot be shown as one run."
             },
             {
               "site": "replay reader in the transcript rebuild",
@@ -22983,8 +22983,8 @@
             {
               "site": "the remaining lfe byte hits",
               "offset": 180729337,
-              "excerpt": "160067268 and 160771073 are the chunk export and import lists; 180729337 is an unrelated UI homonym function lfe(T){return{...FJe(T),panelFileView:null,...}}; the other 22 hits are wordlists, mime tables and x86 mnemonic strings.",
-              "verdict": "Closes the negative: FOUR constructions exist in 2.1.258, all path-bearing, and there is no pathless construction anywhere."
+              "excerpt": "lfe(T){return{...FJe(T),panelFileView:null,frameNavPath:null,frameExpanded:!1,idleTeammatesExpanded:!1,footerLinks:T.footerLinks.some((I)",
+              "verdict": "Closes the negative: FOUR constructions exist in 2.1.258, all path-bearing, and there is no pathless construction anywhere. Of the 25 hits, 160067268 and 160771073 are the chunk export and import lists; 180729337, quoted here, is an unrelated UI homonym; the other 22 are wordlists, mime tables and x86 mnemonics."
             },
             {
               "site": "boundary build 2.1.204 - the predecessor carrier, read whole",
@@ -43140,8 +43140,8 @@
             {
               "site": "call-site census of gje, with the homonym trap it hides",
               "offset": 180033602,
-              "excerpt": "16 occurrences: the pending-count gje (180033602) is called at 180034155 (F1n), 180043965 (the render hook nk) and 181824924 (getPendingBackgroundWork); a DIFFERENT gje at 165529356, function gje(e){return e.replace(S6t,...)}, owns 165529634 / 165636227 / 165638550; the rest are name tables",
-              "verdict": "only F1n reaches a record; nk is a render hook and getPendingBackgroundWork is used at 181822284 purely as an away-summary skip guard (if(Ce>0||Re>0){skipped}), so neither can write a count - and a naive grep of the name would have counted four unrelated hits"
+              "excerpt": "gje({tasks:l,queuedCommands:p=[]}){let g=new Set,T=new Set,y=(M)=>{if(GE(M)&&M.isBackgrounded)g.add(M.id);else if(M.type===\"local_workflow\")",
+              "verdict": "only F1n reaches a record; nk is a render hook and getPendingBackgroundWork is used at 181822284 purely as an away-summary skip guard (if(Ce>0||Re>0){skipped}), so neither can write a count - and a naive grep of the name would have counted four unrelated hits Sixteen occurrences: the pending-count function quoted here at 180033602 is called at 180034155, at 180043965 by the render hook and at 181824924; a DIFFERENT function of the same folded name sits at 165529356."
             },
             {
               "site": "the transcript envelope literal (the only other source of keys on the record)",
@@ -64574,8 +64574,8 @@
               "role": "writer",
               "name": "the reconstruction expression and the state write",
               "offset": 163598805,
-              "excerpt": "fe=I.content.replace(/<system-reminder>[\\s\\S]*?</system-reminder>/g,\"\").split(`\n`).map(adr).join(`\n`).trim();if(C.timestamp){let me=new Date(C.timestamp).getTime(),_e=WQ(F.filePath);o.set(F.filePath,{content:fe,timestamp:me,offset:_e?1:F.offset??1,limit:_e?void 0:F.limit,...W&&{",
-              "note": "content.replace(/<system-reminder>[\\s\\S]*?</system-reminder>/g,\"\").split(newline).map(adr).join(newline).trim(), stored as o.set(F.filePath,{content:fe,timestamp,offset,limit,...isPartialView}) - strip, per-line map, rejoin, trim, exactly the four steps the claim states."
+              "excerpt": "fe=I.content.replace(/<system-reminder>[\\s\\S]*?<\\/system-reminder>/g,\"\").split(`",
+              "note": "content.replace(/<system-reminder>[\\s\\S]*?</system-reminder>/g,\"\").split(newline).map(adr).join(newline).trim(), stored as o.set(F.filePath,{content:fe,timestamp,offset,limit,...isPartialView}) - strip, per-line map, rejoin, trim, exactly the four steps the claim states. The capture dropped the backslash of the escaped closing slash inside the regex literal, so the excerpt diverged 48 bytes in; the run quoted here is the build's own bytes."
             },
             {
               "role": "writer",
