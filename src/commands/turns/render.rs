@@ -1,4 +1,13 @@
 //! Text rendering: document body, slices, boundary banners, turn text.
+//!
+//! Every stdout byte below the scope banner goes through ONE [`crate::text::Out`]: the
+//! banner is printed before it exists (a `LineWriter` has already flushed it), and from
+//! that point a stray `println!` would jump the buffer's queue - see the `text::out`
+//! module docs. A session's turn lines are built into one string by the emit closures
+//! (which return nothing and so cannot carry a write error) and written through the buffer
+//! once per session, in the same order and with the same bytes a per-line print produced.
+
+use std::io::Write as _;
 
 use super::*;
 
@@ -103,7 +112,9 @@ pub(crate) fn render_text(
             None => n - 1,
         };
         if let Some(chunk) = chunks.into_iter().nth(idx) {
-            print!("{chunk}");
+            let mut out = crate::text::Out::stdout();
+            write!(out, "{chunk}")?;
+            out.flush()?;
         }
         return Ok(());
     }
@@ -143,21 +154,23 @@ pub(crate) fn render_text(
     // terminal "no turns selected (empty session set …)" fallback - that case is already
     // honest and not a budget problem. `skipped_any` tracks only the budget-too-small notes,
     // separate from `any`, so the fallback still keys on whether a real block rendered.
+    let mut out = crate::text::Out::stdout();
     let mut skipped_any = false;
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         if plan.selected.is_empty() && !sr.is_subagent {
             if let Some(min) = min_render_chars(sr, ctx.budget_chars, &ctx.cfg) {
-                println!(
+                writeln!(
+                    out,
                     "SESSION {}  skipped — its first round-trip needs ≥ {} chars; \
                      raise --budget (now {})",
                     sr.session_id, min, ctx.budget_chars
-                );
+                )?;
                 skipped_any = true;
             }
         }
     }
     if skipped_any {
-        println!();
+        writeln!(out)?;
     }
 
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
@@ -166,7 +179,7 @@ pub(crate) fn render_text(
         }
         any = true;
         if !first {
-            println!();
+            writeln!(out)?;
         }
         first = false;
 
@@ -178,12 +191,13 @@ pub(crate) fn render_text(
         // overload r6 removed elsewhere), and surface the re-feedable parent uuid inline so a
         // turns-text reader has a re-feed path. A top-level uuid block stays `SESSION <uuid>`.
         if sr.is_subagent {
-            println!(
+            writeln!(
+                out,
                 "SUBAGENT {}  ·  parent SESSION {}  (subagent transcript)",
                 sr.session_id, sr.parent_session_id
-            );
+            )?;
         } else {
-            println!("SESSION {}", sr.session_id);
+            writeln!(out, "SESSION {}", sr.session_id)?;
         }
         // `spanned K of N`: K = boundaries the budget-selected window crossed (a QUERY
         // property - a small budget can read 0 on a compaction-heavy session), N = the
@@ -191,13 +205,14 @@ pub(crate) fn render_text(
         // R10 misread where `spanned 0` on a 4-boundary session looked like a bug until the
         // reader varied the budget (same disambiguation pattern as the automation
         // `in scope (not all selected)` note below).
-        println!(
+        writeln!(
+            out,
             "  budget {} chars · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
             ctx.budget_chars,
             ctx.rt_fraction,
             plan.spanned_boundaries,
             sr.summaries.len()
-        );
+        )?;
         // Header automation note carries a PER-CLASS breakdown, not just the lumped scalar,
         // so a reader sees the composition (`2 background-command, 1 agent`) without scanning
         // every `[kind …]` label line in the body.
@@ -211,7 +226,8 @@ pub(crate) fn render_text(
         } else {
             String::new()
         };
-        println!(
+        writeln!(
+            out,
             "  selected {} user{} + {} assistant units across {} turns · {} / {} chars used",
             n_user,
             automation_note,
@@ -219,7 +235,7 @@ pub(crate) fn render_text(
             plan.selected.len(),
             plan.rendered_chars,
             ctx.budget_chars
-        );
+        )?;
         // Whole-session automation composition, INDEPENDENT of budget selection - so a
         // monitor-heavy session isn't silently read as "no automation" when the recency
         // window selected none of its deep pulses. Shown only when MORE automation exists in
@@ -227,34 +243,40 @@ pub(crate) fn render_text(
         let in_scope_by = automation_in_scope_by_kind(std::slice::from_ref(plan));
         let in_scope_total: usize = in_scope_by.iter().sum();
         if in_scope_total > n_automation {
-            println!(
+            writeln!(
+                out,
                 "  in scope (not all selected): {} automation trigger{} — {}",
                 in_scope_total,
                 if in_scope_total == 1 { "" } else { "s" },
                 automation_breakdown_text(&in_scope_by)
-            );
+            )?;
         }
         if let (Some(sline), true) = (plan.newest_summary_line, plan.dedup_demoted > 0) {
-            println!(
+            writeln!(
+                out,
                 "  dedup: {} units also present in summary L{} (demoted, flagged)",
                 plan.dedup_demoted, sline
-            );
+            )?;
         }
         // Announce that ≥1 selected unit is a hook-backfilled elicitation-sidecar record (§3.10)
         // - the consumer is reading merged records, not raw native jsonl.
         if plan_has_sidecar(plan) {
-            println!("  with elicitation sidecar");
+            writeln!(out, "  with elicitation sidecar")?;
         }
         if let Some(note) = abandoned_note(sr) {
-            println!("{note}");
+            writeln!(out, "{note}")?;
         }
         for line in sr.crossing.lines() {
-            println!("  {line}");
+            writeln!(out, "  {line}")?;
         }
-        println!("  {}", "─".repeat(60));
+        writeln!(out, "  {}", "─".repeat(60))?;
 
         // Walk the ascending selected set, inserting boundary banners as
-        // `compactions_before` decreases toward EOF.
+        // `compactions_before` decreases toward EOF. The emit closures fill ONE string per
+        // session (they return nothing, so a write error inside them would have nowhere to
+        // go) and it is written through the buffer below - the same bytes in the same
+        // order a per-line print produced, and the same text `out_blob` carries for `--out`.
+        let mut body = String::new();
         let mut prev_comp: Option<usize> = None;
         for sel in &plan.selected {
             let Some(turn) = find_turn(plan, sel.turn_index) else {
@@ -265,34 +287,38 @@ pub(crate) fn render_text(
                 turn.compactions_before,
                 &sr.summaries,
                 &mut |s| {
-                    println!("{s}");
-                    out_blob.push_str(&s);
-                    out_blob.push('\n');
+                    body.push_str(&s);
+                    body.push('\n');
                 },
             );
             render_turn_text(turn, sel.sides, &ctx.cfg, None, &mut |s| {
-                println!("{s}");
-                out_blob.push_str(&s);
-                out_blob.push('\n');
+                body.push_str(&s);
+                body.push('\n');
             });
         }
+        out.write_all(body.as_bytes())?;
+        out_blob.push_str(&body);
     }
 
     // The terminal fallback fires only when NOTHING rendered AND no per-session skip note
     // already explained why (a skip note is the more specific, actionable message).
     if !any && !skipped_any {
-        println!("no turns selected (empty session set or budget too small)");
+        writeln!(
+            out,
+            "no turns selected (empty session set or budget too small)"
+        )?;
     }
     if ctx.skipped_lines > 0 {
-        println!();
-        println!("({})", crate::text::malformed_note(ctx.skipped_lines));
+        writeln!(out)?;
+        writeln!(out, "({})", crate::text::malformed_note(ctx.skipped_lines))?;
     }
     if let Some(p) = out_path {
         if crate::commands::recover::write_out_guarded(p, &out_blob)? {
-            println!();
-            println!("(wrote full reconstruction to {})", p.display());
+            writeln!(out)?;
+            writeln!(out, "(wrote full reconstruction to {})", p.display())?;
         }
     }
+    out.flush()?;
     Ok(())
 }
 

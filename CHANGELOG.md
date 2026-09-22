@@ -795,8 +795,8 @@ surface change bumps the PATCH.
   `search` in all three of its stream shapes, `show` rendered, `files`, `agents`, `image` -
   the failed write now takes the one error arm every other failure takes: exit 1 and
   `csift: error: Broken pipe (os error 32)`. `show --raw` already did. The surfaces still
-  writing with `println!`, `list` and `stats` and `verbatim`, keep the abort. What a reader
-  that stays receives does not move; only the failure path does.
+  writing with `println!`, `list` and `stats`, keep the abort. What a reader that stays
+  receives does not move; only the failure path does.
 
 ### Performance
 
@@ -806,7 +806,8 @@ surface change bumps the PATCH.
   a wide-match text search paid 0.45 s of that phase's 0.59 s inside `println!`, which is one
   `write(2)` and one backward newline scan per row - 493k of them. Two changes. Every
   row-dumping surface (`search` text, JSON and `--raw`, both of `show`'s, `files`, `agents`,
-  `image`) now writes through one buffered stdout, one syscall per megabyte. And `search`
+  `image`, and both of `verbatim`'s - its documented `--subagents` span is 125,269 text rows
+  on that session) now writes through one buffered stdout, one syscall per megabyte. And `search`
   renders its per-exchange rows in bounded parallel chunks, writing the chunk buffers in
   index order, so the byte stream is the one a serial loop produced. Medians of 7 interleaved
   reps on that session, at a host load of 7 to 27 that the wall numbers carry and the CPU

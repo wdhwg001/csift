@@ -1,4 +1,10 @@
 //! JSON emission: units, placeholders, boundaries, the envelope.
+//!
+//! One stream, one [`crate::text::Out`]: a `--subagents` reconstruction of a heavily
+//! spanned session is tens of thousands of rows, and nothing is printed before the
+//! envelope's own header line, so the writer is built first and every row goes through it.
+
+use std::io::Write as _;
 
 use super::*;
 
@@ -9,6 +15,7 @@ pub(crate) fn render_json(
     out_path: Option<&Path>,
 ) -> Result<()> {
     use serde_json::json;
+    let mut out = crate::text::Out::stdout();
     let mut out_blob = String::new();
 
     // A machine-readable HEADER object so a JSON consumer can recover the human/automation
@@ -93,11 +100,15 @@ pub(crate) fn render_json(
     });
     {
         let s = serde_json::to_string(&header)?;
-        println!("{s}");
+        writeln!(out, "{s}")?;
         out_blob.push_str(&s);
         out_blob.push('\n');
     }
 
+    // The boundary emitter returns nothing, so a write error inside it would have nowhere
+    // to go: it fills this buffer instead and the rows are written after it returns.
+    // Re-used across turns rather than re-allocated per crossing.
+    let mut bnd = String::new();
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         if plan.selected.is_empty() {
             continue;
@@ -108,6 +119,7 @@ pub(crate) fn render_json(
                 continue;
             };
             // Interleave boundary records the same way the text banners do.
+            bnd.clear();
             maybe_boundary_json(
                 &mut prev_comp,
                 turn.compactions_before,
@@ -122,14 +134,15 @@ pub(crate) fn render_json(
                         "mode": mode.map(SummarizeMode::slug),
                     });
                     let s = serde_json::to_string(&obj).expect("serialize boundary");
-                    println!("{s}");
-                    out_blob.push_str(&s);
-                    out_blob.push('\n');
+                    bnd.push_str(&s);
+                    bnd.push('\n');
                 },
             );
+            out.write_all(bnd.as_bytes())?;
+            out_blob.push_str(&bnd);
 
             if let Some(u) = shown_user(turn, sel.sides) {
-                emit_unit_json(sr, turn, u, None, &mut out_blob)?;
+                emit_unit_json(&mut out, sr, turn, u, None, &mut out_blob)?;
             }
             // The assistant lane: one object per KEPT agent message, plus a
             // `collapsed_agents` placeholder object per contiguous dropped span (carrying
@@ -138,12 +151,14 @@ pub(crate) fn render_json(
             // carries `superseded_by_line`.
             for entry in shown_agent_lane(turn, sel.sides, &ctx.cfg) {
                 match entry {
-                    AgentRender::Kept(a) => emit_unit_json(sr, turn, &a.unit, None, &mut out_blob)?,
+                    AgentRender::Kept(a) => {
+                        emit_unit_json(&mut out, sr, turn, &a.unit, None, &mut out_blob)?
+                    }
                     AgentRender::Placeholder(s) => {
-                        emit_placeholder_json(sr, turn, &s, &mut out_blob)?
+                        emit_placeholder_json(&mut out, sr, turn, &s, &mut out_blob)?
                     }
                     AgentRender::Superseded { msg, by_line } => {
-                        emit_unit_json(sr, turn, &msg.unit, Some(by_line), &mut out_blob)?
+                        emit_unit_json(&mut out, sr, turn, &msg.unit, Some(by_line), &mut out_blob)?
                     }
                 }
             }
@@ -170,7 +185,8 @@ pub(crate) fn render_json(
         term_fields[k] = v;
     }
     let term = crate::text::envelope_summary(term_fields);
-    println!("{}", serde_json::to_string(&term)?);
+    writeln!(out, "{}", serde_json::to_string(&term)?)?;
+    out.flush()?;
     if let Some(p) = out_path {
         crate::commands::recover::write_out_guarded(p, &out_blob)?;
     }
@@ -182,7 +198,8 @@ pub(crate) fn render_json(
 /// describes what the TEXT render would show. `superseded_by` names the LATER message whose
 /// body carries this one's whole text, when the text render replaced this unit with the
 /// same-prefix re-send marker - the JSON row still carries the prose in full.
-pub(crate) fn emit_unit_json(
+pub(crate) fn emit_unit_json<W: std::io::Write>(
+    w: &mut W,
     sr: &ScanResult,
     turn: &TurnSlice,
     unit: &TurnUnit,
@@ -256,7 +273,7 @@ pub(crate) fn emit_unit_json(
         }
     }
     let s = serde_json::to_string(&obj)?;
-    println!("{s}");
+    writeln!(w, "{s}")?;
     out_blob.push_str(&s);
     out_blob.push('\n');
     Ok(())
@@ -265,7 +282,8 @@ pub(crate) fn emit_unit_json(
 /// Emit a collapsed-agent-span placeholder as a JSON record (the machine twin of the
 /// text `△ L… [X agent messages, Y tool calls, Z failed]` line). Carries the exact X/Y/Z
 /// counts + the fetchable first/last jsonl line so a consumer can `Read` the raw range.
-pub(crate) fn emit_placeholder_json(
+pub(crate) fn emit_placeholder_json<W: std::io::Write>(
+    w: &mut W,
     sr: &ScanResult,
     turn: &TurnSlice,
     span: &PlaceholderSpan,
@@ -300,7 +318,7 @@ pub(crate) fn emit_placeholder_json(
         },
     });
     let s = serde_json::to_string(&obj)?;
-    println!("{s}");
+    writeln!(w, "{s}")?;
     out_blob.push_str(&s);
     out_blob.push('\n');
     Ok(())
