@@ -1710,7 +1710,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For every background launch, parse `toolUseResult` on the paired result and test for a `backgroundTaskId` key, bucketing by whether the file path contains a `subagents` component. Counting rule: one presence/absence observation per launch keyed (file, tool_use id).",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one presence/absence observation per launch keyed (file, tool_use id)."
           },
           "producer_trace": "complete",
@@ -1795,7 +1795,7 @@
           "probe": {
             "kind": "corpus",
             "command": "rg -n '<that id>' <the main transcript>",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one carrier observation per matching line, bucketed into `queue-operation` / `attachment` / `user`; a launch with no `user` row but a `queue-operation` row is a mid-turn delivery."
           },
           "producer_trace": "complete",
@@ -2183,7 +2183,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On a monitor-rich transcript, extract every `<task-notification>` block in `type:\"user\"` records whose `<summary>` first word is `Monitor` and bucket by presence of `<status>` against `<event>`. Counting rule: one observation per notification BLOCK (a record may hold several), counting only delivered `type:\"user\"` records so the queue and attachment echoes are not triple-counted; the unit test `a_monitor_is_open_through_event_pulses_until_it_ends_or_times_out` in src/commands/live/tests/background_scan.rs pins the state machine.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one observation per notification BLOCK (a record may hold several), counting only delivered `type:\"user\"` records so the queue and attachment echoes are not triple-counted; the unit test `a_monitor_is_open_through_event_pulses_until_it_ends_or_times_out` in src/commands/live/tests/background_scan.rs pins the state machine."
           },
           "producer_trace": "complete",
@@ -2370,7 +2370,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Counting rule: distinct ids on both sides, deduped on the id string because one session copied into two project directories duplicates ids.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "distinct ids on both sides, deduped on the id string because one session copied into two project directories duplicates ids."
           },
           "producer_trace": "complete",
@@ -2881,7 +2881,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Locate an orphan notice line and walk forward: the next record is an `attachment` at delta about 0 whose `parentUuid` equals the notice `uuid`, and the first assistant record follows tens of seconds later. Counting rule: one walk per specimen; timestamp deltas in seconds between the notice and the first following `type:\"assistant\"` record.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one walk per specimen; timestamp deltas in seconds between the notice and the first following `type:\"assistant\"` record."
           },
           "producer_trace": "complete",
@@ -10639,7 +10639,7 @@
             "kind": "csift",
             "command": "csift search 'stopped by the user' --count-by label, asserting the user.message key is absent and that the harness.notification.subagent count equals the on-disk notice count",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
-            "rule": "Do NOT assert that every matched record lands under harness.notification.subagent: the phrase also occurs in ordinary prose, and corpus-wide the query returns 242 records across 9 labels of which only 10 are notices (agent.tool.result 122, agent.tool.use 60, agent.thinking 29, agent.communication.inbox 10, harness.notification.subagent 10, agent.message 8, agent.communication.sent 4, harness.compaction.summary 2, harness.context.* 1)."
+            "rule": "One observation is one matched record, keyed by the label it lands under. Do NOT assert that every matched record lands under harness.notification.subagent: the phrase also occurs in ordinary prose, and corpus-wide the query returns 242 records across 9 labels of which only 10 are notices (agent.tool.result 122, agent.tool.use 60, agent.thinking 29, agent.communication.inbox 10, harness.notification.subagent 10, agent.message 8, agent.communication.sent 4, harness.compaction.summary 2, harness.context.* 1)."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -11932,7 +11932,7 @@
             "kind": "csift",
             "command": "csift search '<a phrase your hook injects>' @<session> -t harness.hook.context",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "matched records."
+            "rule": "One observation is one matched record."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -12227,7 +12227,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On one real transcript, count role/message lines that contain the bare word `attachment` and, of those, how many also contain the unescaped `\"attachment\"`. Counting rule: one per matching LINE, restricted to records whose message.role is user or assistant.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one per matching LINE, restricted to records whose message.role is user or assistant."
           },
           "producer_trace": "complete",
@@ -12984,7 +12984,7 @@
             "kind": "csift",
             "command": "csift search 'turn duration' . -t harness.turn.duration -c",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
-            "rule": "exchanges for csift, records for the probe."
+            "rule": "One observation is one exchange on the csift side and one record on the probe side. exchanges for csift, records for the probe."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -13795,7 +13795,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For each `compact_boundary`, join `compactMetadata.preservedMessages.uuids` against the uuids of the lines preceding that boundary in the same file, bucketed by `type`/`subtype`.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "per line, per boundary window; denominator = uuid-bearing lines in that boundary's own pre-window. Expect rate parity across types."
           },
           "producer_trace": "complete",
@@ -14155,7 +14155,7 @@
             "kind": "csift",
             "command": "csift search '' @<session> -t harness.compaction.summary --no-truncate",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "summary bullets versus genuine-user turns before the boundary."
+            "rule": "One observation is one summary bullet on one side and one genuine-user turn before the boundary on the other."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -14351,7 +14351,7 @@
             "kind": "csift",
             "command": "csift verbatim @<session> --budget 40000 --format json | jq -rc 'select(.kind==\"compaction_boundary\")|.line' | wc -l, cross-checked against the header row's boundaries_spanned and boundaries_total. Counting rule: boundaries the budget window crossed over the session's total",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "boundaries the budget window crossed over the session's total. NOTE the boundary row's line key is `line`, not `line_no` (the row carries exactly kind/line/summary_chars), so the ledger's `.line_no` projection yields null on every row."
+            "rule": "One observation is one compaction boundary: those the budget window crossed, over the session's total. boundaries the budget window crossed over the session's total. NOTE the boundary row's line key is `line`, not `line_no` (the row carries exactly kind/line/summary_chars), so the ledger's `.line_no` projection yields null on every row."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -15045,7 +15045,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Group a transcript's records by `message.id` and flag ids whose members disagree on any usage field. Alongside it, the duplicate census that fixes the shape's frequency: per file, group records by their own uuid, keep uuids appearing on more than one line, count each duplicated LINE under its version stamp, and compare every second-or-later copy against the first on timestamp, parentUuid and the four top-level usage counters; then read every all-zero copy for message.id equality, usage.iterations[0] and the surviving usage keys. For the single-copy footprint, a second pass over the same files: count every assistant record whose four top-level counters are all 0, split by whether usage.iterations is populated, by whether the record's uuid appears more than once and by model, and mark each file whose FIRST timestamped record is a system record with subtype compact_boundary. For the producer side, enumerate the override tuple by its byte literal `output_tokens:0` and read every occurrence, separating a spread of an existing message.usage from a freshly built all-zero usage object. Counting rule: per id per file for the usage disagreement, per duplicated line for the version tally, per second-or-later copy for the comparison, per record for the zeroed-usage census, per byte occurrence for the literal enumeration. Scope: every .jsonl directly under a project directory.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "per id per file for the usage disagreement, per duplicated line for the version tally, per second-or-later copy for the comparison, per record for the zeroed-usage census, per byte occurrence for the literal enumeration. Scope: every .jsonl directly under a project directory."
           },
           "producer_trace": "complete",
@@ -18228,7 +18228,7 @@
           "probe": {
             "kind": "corpus",
             "command": "grep -oF hook_event_name",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One specimen per jsonl line under a per-session elicitations.jsonl that parses as JSON; 'strict schema' = the line carries both csiftPhase and csiftKind; key prefix tested with str.startswith('toolu_')."
           },
           "producer_trace": "complete",
@@ -19307,7 +19307,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Use the brace-depth arm scan above, or cross-check against the on-disk `attachment.hookEvent` census, which surfaces PreToolUse immediately as the largest bucket.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "One record per jsonl line whose top-level attachment object has type == \"hook_additional_context\", bucketed by that object's hookEvent value."
           },
           "producer_trace": "complete",
@@ -19494,7 +19494,7 @@
           "probe": {
             "kind": "live",
             "command": "Live check: register the elicitation recipe with a matcher containing a colon and confirm the sidecar is never created.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "exact literal presence of the regex and of the split expression (one match each)."
           },
           "producer_trace": "complete",
@@ -20062,7 +20062,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Iterate every `trackedFileBackups` entry of every snapshot line in a set of large transcripts and count presence of `realParentDir`, null `backupFileName`, and absolute-vs-relative path spelling.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the set of large transcripts the instrument names",
             "rule": "one entry per (snapshot line, tracked path) pair, not per line."
           },
           "producer_trace": "complete",
@@ -20159,7 +20159,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Count `trackedFileBackups` entries corpus-wide and, among them, how many carry a non-null `backupFileName`.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "one probe per tracked-path entry, presence reported as a percentage of entries."
           },
           "producer_trace": "complete",
@@ -20586,7 +20586,7 @@
           "probe": {
             "kind": "corpus",
             "command": "jq -r 'select(.attachment.type==\"edited_text_file\") | .attachment.snippet' <file> | head -3 | cat -A",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one probe per attachment payload."
           },
           "producer_trace": "complete",
@@ -21015,7 +21015,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Counting rule: one tool_result per attempt, one witness sequence per session.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "a live trial on the host the instrument names",
             "rule": "one tool_result per attempt, one witness sequence per session."
           },
           "producer_trace": "complete",
@@ -21871,7 +21871,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For each snapshot line after the first, record `isSnapshotUpdate` and whether any tracked path's version differs from the previous snapshot, then cross-tabulate. Counting rule: one row per snapshot line after the first.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one row per snapshot line after the first."
           },
           "producer_trace": "complete",
@@ -21953,7 +21953,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Find a session with two Edits of the same tracked path between adjacent snapshot lines and confirm the version advanced by exactly one.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one interval per adjacent snapshot pair, one increment per tracked path."
           },
           "producer_trace": "complete",
@@ -22031,7 +22031,7 @@
           "probe": {
             "kind": "corpus",
             "command": "In a session where a slash command rewrote settings, compare the command record's timestamp with the following snapshot entry's `backupTime`; expect the backup to trail by seconds. Counting rule: one lag measurement per version change with a nearby command record.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one lag measurement per version change with a nearby command record."
           },
           "producer_trace": "complete",
@@ -22107,7 +22107,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For one session, build the set of `trackedFileBackups` keys and the set of Edit/Write `filePath` values; expect the tracked set to be a subset of the structured-write set.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one path per distinct string in each set."
           },
           "producer_trace": "complete",
@@ -22186,7 +22186,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Collect the union of `trackedFileBackups` keys corpus-wide and count how many match the settings-family shape; separately count sessions with at least one such key. Counting rule: one path per distinct key string, one session per transcript file.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "one path per distinct key string, one session per transcript file."
           },
           "producer_trace": "complete",
@@ -22420,7 +22420,7 @@
           "probe": {
             "kind": "corpus",
             "command": "List a session's store directory and compare its entries with the session's structured Edit/Write targets and with its bash-written paths: bash-only paths are absent, and the lowest surviving version is frequently above v1.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one session's file-history store directory under the claude home",
             "rule": "one row per store file, one path per distinct tool target."
           },
           "producer_trace": "complete",
@@ -22894,7 +22894,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: for every line containing `Truncated: PARTIAL view`, split on the em-dash-space and test whether the remainder starts with `showing`; count separately for `attachment.banner` and for `tool_result` content. Measured now: attachment banners 170 path-bearing / 0 pathless; tool_result copies 4 path-bearing / 528 pathless.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One observation per carrier occurrence."
           },
           "producer_trace": "complete",
@@ -23109,7 +23109,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: count records whose `attachment.banner` contains `very long lines and cannot be paginated by line`, one observation per record.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One observation per record whose `attachment.banner` contains the literal."
           },
           "producer_trace": "complete",
@@ -23531,7 +23531,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: count `edited_text_file` snippets containing `lines truncated] ...`, one observation per attachment - measured now: 651 of 1254 non-empty snippets (52%).",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One observation per `edited_text_file` attachment whose snippet contains the truncation tail."
           },
           "producer_trace": "complete",
@@ -24204,7 +24204,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus evidence that the character branch fires: count records whose `attachment.type` is `read_truncation_notice` and whose text carries the banner `this file has very long lines and cannot be paginated by line` - measured: 31, all at CC 2.1.211, plus 3 older `tool_result` string carriers (2.1.159, 2.1.177, 2.1.231).",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "the two branches, the six-retry loops and the `je` flag are one expression."
           },
           "producer_trace": "complete",
@@ -24377,7 +24377,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Seek the literal `let W=C.toolUseResult?.file?.truncatedByTokenCap===!0||v.has(I.tool_use_id)||I.content.startsWith(` in a `strings -a` dump of the 2.1.258 binary; the surrounding function rebuilds `readFileState` from persisted messages and sets `isPartialView` from that disjunction.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One observation per distinct tool_use id per carrier: the field = a record whose toolUseResult.file contains truncatedByTokenCap; the notice = an attachment record whose attachment.type is read_truncation_notice (its toolUseID); the banner = a tool_result block whose content string starts with `<system-reminder>[Truncated: PARTIAL view ` followed by U+2014."
           },
           "producer_trace": "complete",
@@ -24459,7 +24459,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: bucket by the record's `version` field, counting one observation per record carrying `truncatedByTokenCap` and one per record whose `attachment.type` is `read_truncation_notice`; separately count the user records carrying the partial-view banner literal and split them by whether a `toolUseResult` object is present at all. Dating: byte-count the two names in the boundary builds and read the writer in the first build that carries it - the result-object spread for the key, the dispatch push for the attachment - after checking each build against its release manifest.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One observation per record carrying `truncatedByTokenCap` and one per record whose `attachment.type` is `read_truncation_notice`, both bucketed by the record's `version`; the banner half counts one per user record carrying the partial-view literal, split by whether a `toolUseResult` object is present at all."
           },
           "producer_trace": "complete",
@@ -25071,7 +25071,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Count Write results of type `update` whose stored `content` is the empty string, and the same for type `create`, bucketing every carrier by the record's `version`.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "0 of the 102 update carriers at versions after 2.1.211 are empty, including the one at 2.1.258."
           },
           "producer_trace": "complete",
@@ -26478,7 +26478,7 @@
             "kind": "csift",
             "command": "csift image <target> against a python3 walk that counts every image block reachable from a record's message.content (direct or nested in a tool_result content array) and groups them by csift's fingerprint rule, the base64 length plus its first 32 and last 32 characters",
             "scope": "the transcripts `<target>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "distinct content fingerprints versus image blocks; an extra copy is every copy of a repeated group but its newest."
+            "rule": "One observation is one distinct content fingerprint on one side and one image block on the other. distinct content fingerprints versus image blocks; an extra copy is every copy of a repeated group but its newest."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -27625,7 +27625,7 @@
           "probe": {
             "kind": "corpus",
             "command": "python3 -c \"import json,glob,pathlib,collections;print(collections.Counter(json.load(open(p)).get('status') for p in glob.glob(str(pathlib.Path.home()/'.claude/sessions/*.json'))))\"",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the harness session registry under the claude home",
             "rule": "one status observation per registry file per sampling instant; the file is point-in-time, so a value seen zero times is not evidence it cannot occur."
           },
           "producer_trace": "complete",
@@ -28540,7 +28540,7 @@
           "probe": {
             "kind": "corpus",
             "command": "`cat ~/.claude/jobs/*/state.json` on a machine that has only run interactive sessions: either no directory at all, or a row whose `inFlight` counts are zero with an empty `kinds` array. Counting rule: one file per background-job directory; the `kinds` array is populated only for a background session, so absence on an interactive-only machine is the expected observation, not a refutation.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the harness job-state directory under the claude home",
             "rule": "one file per background-job directory; the `kinds` array is populated only for a background session, so absence on an interactive-only machine is the expected observation, not a refutation."
           },
           "producer_trace": "complete",
@@ -28996,7 +28996,7 @@
           "instrument": "In a busybox container run `ps -p 1 -o lstart=` (non-zero exit or empty output) beside `test -d /proc/1` (succeeds), then `csift status` for a live session there must not report stale-dead and must name the reuse guard as skipped. Counting rule: one probe outcome per platform family (busybox, glibc Linux, macOS); only a real run on a busybox host exercises the fallback. The unit tests `probe_pid_own_process_guard_states` and `probe_pid_reports_a_reaped_pid_dead` in src/commands/live/tests/surfaces.rs pin the alive and dead arms.",
           "probe": {
             "kind": "live",
-            "command": "csift status",
+            "command": "In a busybox container: 1. run `ps -p 1 -o lstart=` and record the exit status and the output (expect a non-zero exit or empty output); 2. run `test -d /proc/1` (expect success); 3. run `csift status` for a live session on that host and read whether it reports stale-dead and whether it names the reuse guard as skipped. Repeat 1 and 2 on macOS or glibc Linux, where the command returns a local-zone date.",
             "scope": "one running Claude Code session and the files it writes while it runs",
             "rule": "one probe outcome per platform family (busybox, glibc Linux, macOS); only a real run on a busybox host exercises the fallback."
           },
@@ -30123,7 +30123,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Over the abandoned-lane set, count lanes whose newest assistant record carries a `stop_reason` other than `end_turn`. Counting rule: one observation per lane, taken from that lane's newest assistant record only.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one observation per lane, taken from that lane's newest assistant record only."
           },
           "producer_trace": "complete",
@@ -31671,7 +31671,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: census the input key sets of `Write` / `Edit` / `MultiEdit` / `NotebookEdit` `tool_use` blocks, one observation per block, key set = the sorted top-level keys of `block.input`. csift's side is pinned by the unit test at src/commands/live/tests/conditions.rs:142, which fixtures a `NotebookEdit` tool_use carrying `notebook_path` + `new_source` and asserts the path source is consulted and that a path miss short-circuits before the line regex.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
             "rule": "Corpus: census the input key sets of `Write` / `Edit` / `MultiEdit` / `NotebookEdit` `tool_use` blocks, one observation per block, key set = the sorted top-level keys of `block.input`."
           },
           "producer_trace": "complete",
@@ -32642,7 +32642,7 @@
             "kind": "csift",
             "command": "csift show @<session> --branch-points --format json",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "records with 2+ conversation children, where a conversation child is a user/assistant record that is not a tool_result carrier, not isMeta and not a compaction summary."
+            "rule": "One observation is one record with two or more conversation children, where a conversation child is a user or assistant record that is not a tool_result carrier, not isMeta and not a compaction summary."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -33959,7 +33959,7 @@
             "kind": "csift",
             "command": "csift search 'hello world' @<a session containing that phrase across a newline>",
             "scope": "the transcripts `@<a session containing that phrase across a newline>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "matched records with and without the whitespace in the pattern."
+            "rule": "One observation is one matched record, counted with and without the whitespace in the pattern."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -34202,7 +34202,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift whoami @trap:<a fresh 3-word-plus-4-digit marker>",
-            "scope": "the transcripts `<a fresh 3-word-plus-4-digit marker>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
+            "scope": "one live top-level session's transcript tree under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "One observation per csift invocation: two invocations, two outcomes."
           },
           "producer_trace": "complete",
@@ -34361,7 +34361,7 @@
             "kind": "csift",
             "command": "csift wait",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "For csift's baseline, append a matching record to a transcript BEFORE launching `csift wait` on it - the wait must not fire and must exit 124; the e2e tests p5_wait_fires_only_on_post_start_events and p11_history_in_every_lane_never_fires in tests/cli/live/wait.rs pin that in every lane."
+            "rule": "One observation is one build for the ladder sweep, one poll sample per transcript for the append-only half, and one wait run for the csift baseline. For csift's baseline, append a matching record to a transcript BEFORE launching `csift wait` on it - the wait must not fire and must exit 124; the e2e tests p5_wait_fires_only_on_post_start_events and p11_history_in_every_lane_never_fires in tests/cli/live/wait.rs pin that in every lane."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -34690,7 +34690,7 @@
           "instrument": "Read the probe, both guard forms and the delayed-SIGKILL consumer at the cited offsets, then enumerate every ps-shelling call in that module and every in-process liveness probe beside them, and separately every other caller of the `-o lstart=` form in the executable, giving each a verdict on whether it feeds the reuse guard. For the environment half, run `ps -p $$ -o lstart=` on a minimal (busybox) userland - empty output, non-zero status - against macOS or glibc Linux, which return a local-zone date; counting rule, one probe per platform. The unit tests `probe_pid_own_process_guard_states` and `probe_pid_reports_a_reaped_pid_dead` in src/commands/live/tests/surfaces.rs pin csift's alive and dead arms.",
           "probe": {
             "kind": "repo",
-            "command": "The unit tests `probe_pid_own_process_guard_states` and `probe_pid_reports_a_reaped_pid_dead` in src/commands/live/tests/surfaces.rs pin csift's alive and dead arms.",
+            "command": "cargo test probe_pid_own_process_guard_states probe_pid_reports_a_reaped_pid_dead",
             "scope": "the csift worktree at the state's range",
             "rule": "One observation per unit test read, and one verdict per enumerated call site. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
           },
@@ -35726,7 +35726,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus half: count jsonl lines per spelling with a fixed-string search (`rg -c -F`, one count per matching line summed over the transcripts of a project directory), then count the user records whose message.content holds a tool_result block whose content STARTS with `<tool_use_error>`, bucketed by message head and by the shape of the record's toolUseResult, counting rule one observation per record.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "csift's own tree at the state's range",
             "rule": "One needle per `memmem::Finder::new` call inside the `LazyLock` array for the code half; one count per matching line per spelling and one observation per user record whose tool_result content starts with the error tag for the corpus half."
           },
           "producer_trace": "complete",
@@ -37660,7 +37660,7 @@
             "kind": "csift",
             "command": "csift search '' @<session> -t agent.thinking.narration --format json | jq -r .line",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "narration blocks whose assistant message carries no thinking block of any other kind, over all narration blocks; measured 5.67% (176/3,103)."
+            "rule": "One observation is one narration block, and the share is taken over all narration blocks. narration blocks whose assistant message carries no thinking block of any other kind, over all narration blocks; measured 5.67% (176/3,103)."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -38366,7 +38366,7 @@
             "kind": "corpus",
             "command": "ls ~/.claude/projects | awk '{ print length($0), $0 }' | sort -rn | head",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "characters of the directory basename, not bytes of the cwd."
+            "rule": "One observation is one CHARACTER of the directory basename, never one byte of the cwd."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -38874,7 +38874,7 @@
             "kind": "csift",
             "command": "csift list <ENCODED-dir> --format json | jq -r 'select(.kind==\"session\") | .cwd' | sort -u",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
-            "rule": "distinct `cwd` strings across the directory's top-level session rows."
+            "rule": "One observation is one distinct `cwd` string across the directory's top-level session rows."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -39165,7 +39165,7 @@
           "instrument": "List the project directories holding no top-level jsonl (`for d in ~/.claude/projects/*/; do [ -z \"$(ls \"$d\"*.jsonl 2>/dev/null)\" ] && echo \"$d\"; done`), then run `csift list`: it must complete without error and print no bare-hex session id. Counting rule: one directory per line printed.",
           "probe": {
             "kind": "csift",
-            "command": "csift list",
+            "command": "for d in ~/.claude/projects/*/; do [ -z \"$(ls \"$d\"*.jsonl 2>/dev/null)\" ] && echo \"$d\"; done      # then: csift list",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
             "rule": "one directory per line printed."
           },
@@ -40070,7 +40070,7 @@
           "probe": {
             "kind": "corpus",
             "command": "`prancing`, `foraging`): the namer draws with randomBytes, not a seeded PRNG, and takes no session-id argument. Counting rule: presence of the three word arrays and absence of any session-id argument in the namer.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.227), read whole",
             "rule": "One observation per word array in the build, plus one for the namer's argument list: presence of the three arrays and absence of any session-id argument."
           },
           "producer_trace": "complete",
@@ -40205,7 +40205,7 @@
             "kind": "csift",
             "command": "csift search '\"slug\"' @<session> --raw | head -1",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "first slug-carrying line by file order."
+            "rule": "One observation is one line: the first slug-carrying line by file order."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -41763,7 +41763,7 @@
           "probe": {
             "kind": "corpus",
             "command": "The cited literal ['policySettings','flagSettings',...['localSettings','projectSettings']...] exists, but it is a first-wins precedence walk for a DIFFERENT settings key (an auto-memory directory lookup: 'for(let r of n){let o=be(r)?.autoMemoryDirectory;if(o!=null)return{dir:o,source:r}}'), and its middle pair is behind a runtime conditional.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "Five distinct policySettings-led arrays exist, two of them in orders that contradict each other, so no single bracketed literal settles precedence."
           },
           "producer_trace": "complete",
@@ -41862,8 +41862,8 @@
           "probe": {
             "kind": "corpus",
             "command": "sort -u over the extracted spellings yields 13 distinct hits at CC 2.1.258, not the 4 listed",
-            "scope": "not stated: the instrument names no population",
-            "rule": "sort -u over the extracted spellings yields 13 distinct hits at CC 2.1.258, not the 4 listed."
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
+            "rule": "One observation is one distinct spelling under `sort -u`. sort -u over the extracted spellings yields 13 distinct hits at CC 2.1.258, not the 4 listed."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -42096,7 +42096,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Extract every `queue-operation` line and cross-tabulate `operation` against the presence of `content` and of `reason`; counting rule = one row per physical queue line, grouped by operation value.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one row per physical queue line, grouped by operation value."
           },
           "producer_trace": "complete",
@@ -42870,7 +42870,7 @@
           "probe": {
             "kind": "corpus",
             "command": "rg -n '<its id>' <the main transcript>",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one carrier observation per matching line, bucketed into `queue-operation` / `attachment` / `user`."
           },
           "producer_trace": "complete",
@@ -43268,7 +43268,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Replay a transcript maintaining the set of `run_in_background` launches with no `<task-notification>` naming them yet; at each `subtype:\"turn_duration\"` line record that set size and the line key set. Counting rule = one observation per turn_duration record; `open at that instant` = launched earlier in the file with no completion carrier seen.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one observation per turn_duration record; `open at that instant` = launched earlier in the file with no completion carrier seen."
           },
           "producer_trace": "complete",
@@ -43499,7 +43499,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Segment a transcript into turn-end gaps (the records between the last assistant record and the next turn opener) and bucket each gap by the previous assistant `stop_reason` and by whether the gap contains a `turn_duration`. Counting rule = one gap per turn end; interrupt-shaped = a user record arriving while the previous assistant `stop_reason` is `tool_use`.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "one gap per turn end; interrupt-shaped = a user record arriving while the previous assistant `stop_reason` is `tool_use`."
           },
           "producer_trace": "complete",
@@ -44455,7 +44455,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Parse every `stop_hook_summary` line and cross-tabulate `preventedContinuation` against a non-empty `stopReason`; counting rule = one observation per matching line.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one observation per matching line."
           },
           "producer_trace": "complete",
@@ -46237,7 +46237,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "\"@internal Per-turn wall-clock duration plus budget and pending-background-work counts. REPL renders the 'Done in Ns' / 'Waiting for N agents' line. From internal SystemMessage 'turn_duration'.\")),dke=m(()=>c({type:x(\"system\"),subtype:x(\"api_error\"),error:c({m",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one observation per extracted string."
           },
           "producer_trace": "complete",
@@ -46748,7 +46748,7 @@
           "probe": {
             "kind": "corpus",
             "command": "(2) The same Python sweep over assistant records carrying `message.usage`, additionally iterating the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` when each is a dict, and counting the non-dict (null) occurrences separately.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One count per assistant record per usage key, with the three nested objects iterated when each is a dict and their non-dict occurrences counted separately."
           },
           "producer_trace": "complete",
@@ -47060,7 +47060,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Python over the mixed-version sample and over the version-current subset: for each assistant record with a dict `usage.cache_creation`, compare `(ephemeral_5m_input_tokens or 0) + (ephemeral_1h_input_tokens or 0)` against `(cache_creation_input_tokens or 0)`, and bucket the disagreements by which of the three is zero; plus `strings -n 6` over the 2.1.258 binary for the fallback expression and the pick-one expression.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "Python over the mixed-version sample and over the version-current subset: for each assistant record with a dict `usage.cache_creation`, compare `(ephemeral_5m_input_tokens or 0) + (ephemeral_1h_input_tokens or 0)` against `(cache_creation_input_tokens or 0)`, and bucket the disagreements by which of the three is zero."
           },
           "producer_trace": "complete",
@@ -47748,7 +47748,7 @@
             "kind": "csift",
             "command": "csift stats --format json | tail -1",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
-            "rule": "`csift stats --format json | tail -1` over the whole corpus is the sound form: stats fully validates every line for the census, so a type it does not list has zero records."
+            "rule": "One observation is one record type in the `stats` line-type census. `csift stats --format json | tail -1` over the whole corpus is the sound form: stats fully validates every line for the census, so a type it does not list has zero records."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -48450,7 +48450,7 @@
           "probe": {
             "kind": "corpus",
             "command": "rg -c '\\\"type\\\":\\\"assistant\\\".*\\\"content\\\":\\\"'",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "`rg -c '\\\"type\\\":\\\"assistant\\\".*\\\"content\\\":\\\"'` is not sound as written - the `.*` lets any later `\\\"content\\\":\\\"` on the same line satisfy it, including one nested inside a tool_use input - so a nonzero result would not prove a string body."
           },
           "producer_trace": "complete",
@@ -48897,7 +48897,7 @@
             "kind": "csift",
             "command": "csift search '' @<id> --raw",
             "scope": "the transcripts `@<id>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "bytes of the `toolUseResult` value versus bytes of the whole line, over candidate (role-bearing) lines only."
+            "rule": "One observation is one BYTE: bytes of the `toolUseResult` value against bytes of the whole line, over candidate (role-bearing) lines only."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -49546,7 +49546,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Filter transcript lines to those with a `message.usage` object and tabulate top-level `type`; counting rule = per line.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "per line."
           },
           "producer_trace": "complete",
@@ -49617,7 +49617,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Group records by `message.id` and compute max(timestamp) - min(timestamp) per group; counting rule = per id. Expect a nonzero spread on most multi-record ids and zero model/type disagreement within an id.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "per id."
           },
           "producer_trace": "complete",
@@ -50194,7 +50194,7 @@
             "kind": "corpus",
             "command": "rg -l '\"fork-context-ref\"' ~/.claude/projects/*/*.jsonl",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "files whose FIRST line has that type."
+            "rule": "One observation is one file whose FIRST line has that type."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -50529,7 +50529,7 @@
             "kind": "csift",
             "command": "csift search \"\" <target> --count-by label",
             "scope": "the transcripts `<target>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "records, not blocks."
+            "rule": "One observation is one record, never one block. records, not blocks."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -51012,7 +51012,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Group a large transcript's records by `message.id` and flag ids whose members disagree on any usage field; counting rule = per id, per file. Measured: 2 of 3 sampled sessions had 0 mismatches, one large session had 3 mismatching ids, each a duplicate-uuid replay whose second copy was all-zero.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "per id, per file. Measured: 2 of 3 sampled sessions had 0 mismatches, one large session had 3 mismatching ids, each a duplicate-uuid replay whose second copy was all-zero."
           },
           "producer_trace": "complete",
@@ -51191,7 +51191,7 @@
             "kind": "csift",
             "command": "csift search 'hello world' @<session> -c",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "matched records with and without the whitespace in the pattern."
+            "rule": "One observation is one matched record, counted with and without the whitespace in the pattern."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -51269,7 +51269,7 @@
             "kind": "csift",
             "command": "csift search 'cd /tmp\\\\n' <target> -t agent.tool.use",
             "scope": "the transcripts `<target>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "matched records."
+            "rule": "One observation is one matched record."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -51432,7 +51432,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Read the csift unit tests beside `src/commands/search/` that pin `synth_marker_finders` under `--resolve-persisted`; expect the two conservative needles present only when the flag is set.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "csift's own tree at the state's range",
             "rule": "one needle per pushed literal."
           },
           "producer_trace": "complete",
@@ -52040,7 +52040,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: for records carrying both a `toolUseResult.file` and a string `tool_result` block, test the render's first line against `^\\s*\\d+\\t`; one observation per record. Measured now: 8343 gutter-rendered, 265 other (all `<system-reminder>` warnings).",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One observation per record carrying both a `toolUseResult.file` and a string `tool_result` block."
           },
           "producer_trace": "complete",
@@ -53141,7 +53141,7 @@
           "probe": {
             "kind": "corpus",
             "command": "grep -F 'oldString:i().describe'",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.156), read whole",
             "rule": "one grep hit is the single minified schema constructor; the Edit-result constructor in the same binary (`grep -F 'oldString:i().describe'`) has no `type` member."
           },
           "producer_trace": "complete",
@@ -53252,8 +53252,8 @@
           "probe": {
             "kind": "corpus",
             "command": "Replace the live 120-newest-file window (which reported 1801 creates / 247 updates and drifts every run) with the whole-corpus sweep, which a stranger can rerun deterministically against a fixed corpus: 2598 creates, all in the ('create', originalFile null, structuredPatch []) bucket; 291 updates, none in it.",
-            "scope": "not stated: the instrument names no population",
-            "rule": "Replace the live 120-newest-file window (which reported 1801 creates / 247 updates and drifts every run) with the whole-corpus sweep, which a stranger can rerun deterministically against a fixed corpus: 2598 creates, all in the ('create', originalFile null, structuredPatch []) bucket."
+            "scope": "the corpus of transcripts the instrument names",
+            "rule": "One observation is one Write echo over the whole corpus, bucketed by its result type and its originalFile and structuredPatch shape. Replace the live 120-newest-file window (which reported 1801 creates / 247 updates and drifts every run) with the whole-corpus sweep, which a stranger can rerun deterministically against a fixed corpus: 2598 creates, all in the ('create', originalFile null, structuredPatch []) bucket."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -53377,7 +53377,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Use the whole-corpus cross-tab (226 / 46 / 19 of 291) rather than the live 120-newest-file window that reported 190 str vs 57 null of 247 and drifts every run.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One observation per Write echo, cross-tabulated over the whole corpus rather than over a newest-file window, which drifts every run."
           },
           "producer_trace": "complete",
@@ -53999,7 +53999,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Tally three states, not two (null / empty string / non-empty string), and add the length-bucket sweep that exposes the 10000-character cap.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One tally per Edit echo (toolUseResult dict with an oldString key) keyed by which of the three states originalFile is in; the cap is one measurement per string-valued originalFile over every toolUseResult dict, reported as max(len) and count(len>10000)."
           },
           "producer_trace": "complete",
@@ -54889,7 +54889,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "return{data:{filePath:F,oldString:me,newString:j,originalFile:fe,structuredPatch:ke,userModified:_??!1,replaceAll:B,...we&&{staleRecovered:!0},...Ie&&{memdirStamped:!0},...De&&{gitDiff:De}}}}async function IYr(e){le",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One tally per raw jsonl line containing the substring; one tally per parsed record whose toolUseResult is a dict with a 'gitDiff' key. A zero is a negative control, not a specimen of the write."
           },
           "producer_trace": "complete",
@@ -57605,7 +57605,7 @@
           "probe": {
             "kind": "corpus",
             "command": "grep -F 'The content to write to the file'",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one `strings` line holds the whole minified constructor; the Write input constructor is found with `grep -F 'The content to write to the file'`."
           },
           "producer_trace": "complete",
@@ -59283,7 +59283,7 @@
           "probe": {
             "kind": "corpus",
             "command": "python3 over a deterministic sample (files 200 KB to 40 MB, newest 14 by mtime): per file, Counter every top-level uuid string, then sum c-1 for every value with c>1. Counting rule: repeats counted per file, so cross-file duplication is NOT included in the number.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "repeats counted per file, so cross-file duplication is NOT included in the number."
           },
           "producer_trace": "complete",
@@ -59375,7 +59375,7 @@
             "kind": "csift",
             "command": "csift show @<id> --uuid <uuid> --format json",
             "scope": "the transcripts `@<id>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "rows with kind==\"record\" in the rendered jsonl stream; non-blank stdout lines for `--raw`."
+            "rule": "One observation is one row with `kind == \"record\"` in the rendered jsonl stream, and one non-blank stdout line under `--raw`."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -59736,7 +59736,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Python over a size-filtered random sample: per line take `raw[:4000]`, count the line if any byte >= 0x80, and separately count it if `re.search(rb'\\\\u00[89a-fA-F][0-9a-fA-F]|\\\\u0[1-9a-fA-F][0-9a-fA-F]{2}|\\\\u[1-9a-fA-F][0-9a-fA-F]{3}', head)` matches; for each escape hit check whether the raw bytes contain `\\\\\\\\u` (a literal backslash-u in content) and exclude it.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the size-filtered random sample of transcript lines the instrument's own sweep defines",
             "rule": "one observation per line, prefix-bounded at 4,000 bytes."
           },
           "producer_trace": "complete",
@@ -59806,7 +59806,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Python over a size-filtered random sample: for every line with `type == \"assistant\"` whose `message.usage` is a dict, increment a `Counter` over its keys; report each key's count against the record total. Counting rule: one observation per assistant RECORD (not per API message), so the per-block duplication is included by design.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the size-filtered random sample of transcript lines the instrument's own sweep defines",
             "rule": "one observation per assistant RECORD (not per API message), so the per-block duplication is included by design."
           },
           "producer_trace": "complete",
@@ -59957,8 +59957,8 @@
           "instrument": "Same Python sweep, additionally iterating the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` when each is a dict. Counting rule: one observation per (record, nested key) pair.",
           "probe": {
             "kind": "corpus",
-            "command": "Same Python sweep, additionally iterating the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` when each is a dict. Counting rule: one observation per (record, nested key) pair.",
-            "scope": "not stated: the instrument names no population",
+            "command": "Python over a size-filtered random sample: for every line with `type == \"assistant\"` whose `message.usage` is a dict, iterate the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` wherever each is itself a dict, and increment a `Counter` over the (record, nested key) pairs.",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one observation per (record, nested key) pair."
           },
           "producer_trace": "complete",
@@ -60127,7 +60127,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Python over a size-filtered random sample: for each assistant record with a dict `usage.cache_creation`, compare `(ephemeral_5m_input_tokens or 0) + (ephemeral_1h_input_tokens or 0)` against `(cache_creation_input_tokens or 0)`; report equal and unequal counts. Counting rule: one observation per record; missing sub-keys treated as 0.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the size-filtered random sample of transcript lines the instrument's own sweep defines",
             "rule": "one observation per record; missing sub-keys treated as 0."
           },
           "producer_trace": "complete",
@@ -63964,7 +63964,7 @@
           "probe": {
             "kind": "corpus",
             "command": "The phrase 'all at version >= 2.1.191 bar 4 strays' is inverted.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "One count per tool_result block carrying a create or update marker in a lane with a subagents component and no workflows component; bucket by dict-valued toolUseResult; timestamps read verbatim from the record."
           },
           "producer_trace": "complete",
@@ -64256,7 +64256,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Re-measured: 2594 records, 2594 string-typed, 2594 with an errored tool_result block, and the converse 2594 of 2594 - the claim's 2592 was the same measurement a few hours earlier on a live corpus.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "a live trial on the host the instrument names",
             "rule": "One count per RECORD; a record qualifies when 'toolUseResult' is present and not null, and separately when any message.content block has type tool_result with is_error true."
           },
           "producer_trace": "complete",
@@ -64341,7 +64341,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Add the is_error cross-tab, otherwise the two totals (2584 arrays vs 2594 errors) invite the coincidence reading that this measurement refutes.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "One count per tool_result BLOCK in a workflow-lane transcript; content type is the JSON type of block['content']; the originating tool name comes from the tool_use with the same id earlier in the same file."
           },
           "producer_trace": "complete",
@@ -64432,8 +64432,8 @@
           "instrument": "The bare phrase search is no longer a clean counting rule: 12 tool_result blocks corpus-wide hold the phrase because the message has since been quoted in prose and in binary dumps. Anchor on the '<tool_use_error>' prefix plus is_error true, which still gives exactly 4 - all workflow lanes, all at record version 2.1.231.",
           "probe": {
             "kind": "corpus",
-            "command": "The bare phrase search is no longer a clean counting rule: 12 tool_result blocks corpus-wide hold the phrase because the message has since been quoted in prose and in binary dumps. Anchor on the '<tool_use_error>' prefix plus is_error true, which still gives exactly 4 - all workflow lanes, all at record version 2.1.231.",
-            "scope": "not stated: the instrument names no population",
+            "command": "Census the `tool_result` blocks whose text STARTS with `<tool_use_error>` followed by the message and whose `is_error` is true, and separately census the blocks that merely contain the phrase; report both counts and the record `version` of each anchored hit.",
+            "scope": "the corpus of transcripts the instrument names",
             "rule": "One count per tool_result BLOCK. A block counts as a REJECTION only when its text starts with <tool_use_error> followed by the message and its is_error is true; a block that merely contains the phrase does not."
           },
           "producer_trace": "complete",
@@ -65784,7 +65784,7 @@
             "kind": "csift",
             "command": "csift search '<text typed after a slash command>' @<id>",
             "scope": "the transcripts `@<id>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "records carrying the invocation leaf, split by whether `labels` also contains `user.message`."
+            "rule": "One observation is one record carrying the invocation leaf, split by whether `labels` also contains `user.message`."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -68571,7 +68571,7 @@
           "probe": {
             "kind": "corpus",
             "command": "grep -abo USERPROFILE and grep -abo 'process.env.HOME' and read every hit in the application region, recording for each whether it lies on the path from the first record write to the resolver",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.228), read whole",
             "rule": "one home resolution per process."
           },
           "producer_trace": "upstream",
@@ -71440,7 +71440,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "allocateName(s){let e=c(s),n=r(),a=n.agentNameRegistry,g=new Set(Object.values(n.teamContext?.teammates??{}).map((o)=>o.name));for(let o=1;;o++){let m=o===1?e:`${e}-${o}`;if(_0(m)||g.has(m))continue;let d=a.get(m);if(d===void 0||f(n.tasks,d)===void 0)return m}}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "occurrences of the fixed byte string over the whole file for the enumerations; verbatim byte reads otherwise."
           },
           "producer_trace": "complete",
@@ -71604,7 +71604,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "var Bs=[\"userSettings\",\"projectSettings\",\"localSettings\",\"flagSettings\",\"policySettings\"];",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -71683,7 +71683,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "let u=he(e,\"managed-settings.d\");",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -71762,7 +71762,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "var mu=wr(function(e,n,o,s){_r(e,n,o,s)}),k0=mu;",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -71841,7 +71841,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "function te(n){return[...new Set(n)]}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -71921,7 +71921,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "RCt=m(()=>c({description:i().optional().describe(\"Brief, user-facing explanation of what these hooks provide\"),hooks:Pb(()=>Yj()).optional().describe(\"The hooks provided by the plugin, in the same format as the one used for settings\"),modules:R(i()).max(Wl,{message:\"hooks.json `modules` names one hooks module per plugin; a second entry is refused\"}).optional().describe(\"The hooks module: one path, relative to this hooks.json, ",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -72000,7 +72000,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "function $ar(e){if(e===\"\")return[];let n=e.split(\",\").map((s)=>s.trim()),o=[];for(let s of n)switch(s){case\"user\":o.push(\"userSettings\");break;case\"project\":o.push(\"projectSettings\");break;case\"local\":o.push(\"localSettings\");break;default:throw Error(`Invalid setting source: ${s}. Valid options are: user, project, local`)}return o}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -72158,7 +72158,7 @@
           "probe": {
             "kind": "corpus",
             "command": "tail -c +OFFSET+1 | head -c N",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte."
           },
           "producer_trace": "complete",
@@ -72324,7 +72324,7 @@
           "probe": {
             "kind": "corpus",
             "command": "tail -c +OFFSET+1 | head -c N",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte."
           },
           "producer_trace": "complete",
@@ -72464,7 +72464,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "...{messagingSocketPath:Nb.CLAUDE_CODE_MESSAGING_SOCKET}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -72536,7 +72536,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "let wo=hR.watch(Dr,{persistent:!0,ignoreInitial:!0,depth:0,awaitWriteFinish:{stabilityThreshold:n,pollInterval:r},ignored:(Di,na)=>{",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -72615,7 +72615,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "get(e,n){let r=new Map,o=this.sessions.get(e);if(!o)return r;for(let d of n?[n]:Hh){let f=o.hooks[d];if(f)r.set(d,Bur(f))}return r}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -72694,7 +72694,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "function jJo(e,n){let r=new Set((be(\"policySettings\")?.hooks?.[n]??[]).map((o)=>g4.stableKey(o)));return e.filter((o)=>!r.has(g4.stableKey(o)))}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
           "producer_trace": "complete",
@@ -73009,7 +73009,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Live: a Stop hook exiting 2 with text on stderr, then the same hook returning {\"continue\":false}, reading which record each produces in the receiving transcript.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One record read per live arm: the hook exiting 2 with text on stderr, and the same hook returning `{\"continue\":false}`."
           },
           "producer_trace": "complete",
@@ -73095,7 +73095,7 @@
           "probe": {
             "kind": "corpus",
             "command": "tail -c +OFFSET-230 | head -c 500 and confirm that every call passes one hook's single field. Then read 163198954 and 163199508 and confirm no threshold call lies between the accumulator push and the attachment build, and 162928977 for the PreToolUse inserter passing the array through. Counting rule: occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings."
           },
           "producer_trace": "complete",
@@ -73751,7 +73751,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "agent_transcript_path",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "OCCURRENCES of the literal are counted over the whole file, but the enumeration lists SITES - adjacent occurrences inside one conditional rewrite are one site, which is what collapses 12 occurrences to 8 sites. Then read the Stop-family emitter, its agent-id ternary and the child path builder at their offsets and confirm each byte for byte."
           },
           "producer_trace": "complete",
@@ -73872,7 +73872,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "j={...Sa(U,ne()),hook_event_name:\"SessionStart\",source:n,agent_type:d,model:f,session_title:o??fu(U.id),...I}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -73946,7 +73946,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "W={background_tasks:cnr(f.taskRegistry.all()),session_crons:unr()}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74017,7 +74017,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "_={...Sa(r.session,ne(),n),hook_event_name:\"UserPromptSubmit\",prompt:e,...!1,session_title:fu(r.session.id)};",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74098,7 +74098,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "async function*wWt(e,n,r,o,d=dd,f){let _={...Sa(f.session,ne(),r),hook_event_name:\"TeammateIdle\",teammate_name:e,team_name:n};",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74166,7 +74166,7 @@
           "probe": {
             "kind": "corpus",
             "command": "A live trial arms an asyncRewake hook that exits 2 while the session is idle and reads whether a task-notification record lands and in which transcript.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74251,7 +74251,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "await jt(Yr,30000,\"remote_control operation still pending at teardown\").catch(()=>{}),await fmn(),",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74324,8 +74324,8 @@
           "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Corpus side: census the records naming a subagent event and check the path component they sit under, one per matching line and one per matching file.",
           "probe": {
             "kind": "corpus",
-            "command": "Corpus side: census the records naming a subagent event and check the path component they sit under, one per matching line and one per matching file.",
-            "scope": "not stated: the instrument names no population",
+            "command": "Build side: `tail -c +<OFFSET+1> <build> | head -c <N>` at the named offset and compare the bytes with the excerpt; count occurrences of the fixed byte string over the whole file. Corpus side: census the records naming a subagent event and record the path component each sits under.",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74460,7 +74460,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "if(_)return{answer:{},exitClass:\"2\",localWarning:`[${r}]: the hook script appears to be missing (${FU(e.stderr,\"no such file\")})`,blocked:!1}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74531,7 +74531,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "let d=o?.managedHooksExcluded?jJo(MB(r),r):[...MB(r)],f=typeof n===\"string\"?[n]:n;",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74609,7 +74609,7 @@
           "probe": {
             "kind": "corpus",
             "command": "A live trial pauses a session, fires one of the six events and reads whether the hook ran.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "Occurrences of the fixed byte string over the whole build file, and one reading per fired event in the live trial."
           },
           "producer_trace": "complete",
@@ -74673,7 +74673,7 @@
           "probe": {
             "kind": "corpus",
             "command": "A live trial runs a workflow with a hook that logs SubagentStart, SubagentStop and tool-event payloads, compared against a listing of the workflow subtree on disk.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74897,7 +74897,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "\"CLAUDECODE\",\"CLAUDE_CODE_SESSION_ID\",\"CLAUDE_CODE_BRIDGE_SESSION_ID\"",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the harness session registry under the claude home",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74968,7 +74968,7 @@
           "probe": {
             "kind": "corpus",
             "command": "A live trial branches a session in place and reads the `source` value the SessionStart payload carries.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -75039,7 +75039,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus side: census the records naming the start event, one per matching line.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
             "rule": "LINES carrying the literal per cached build, and one observation per corpus line naming the start event."
           },
           "producer_trace": "partial",
@@ -75408,7 +75408,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus side: count the records carrying the attachment type, one per matching line.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
             "rule": "LINES carrying the literal per cached build, and one observation per corpus line carrying the attachment type."
           },
           "producer_trace": "complete",
@@ -75754,7 +75754,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "if(j.additionalContexts&&j.additionalContexts.length>0)yield{message:Sn({type:\"hook_additional_context\",content:j.additionalContexts,hookName:`PostToolUse:${n.name}`,toolUseID:r,hookEvent:\"PostToolUse\"})};if(j.class",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -75902,7 +75902,7 @@
             "kind": "corpus",
             "command": "Collect the hook-context attachment lines from every subagent transcript and partition them by the attachment's event field; compare with the same partition over the top-level transcripts, and with the hook-success attachments in the subagent transcripts. The counting rule is lines, summed over files.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "lines, summed over files."
+            "rule": "One observation is one LINE, summed over files."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -76200,7 +76200,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On disk, partition every JSON object carried on its own line inside a relay body and count those carrying a `result` field.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one per JSON object on its own line inside a relay body."
           },
           "producer_trace": "complete",
@@ -76279,7 +76279,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On disk, count every record whose attachment type is `queued_command` and inspect whether any carries an envelope header. Counting rule: one per record whose attachment type is `queued_command`.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one per record whose attachment type is `queued_command`."
           },
           "producer_trace": "complete",
@@ -76431,7 +76431,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Partition every JSON object carried on its own line inside a relay body by the Claude Code version stamped on its carrying record, and count those carrying a `result` field. Counting rule: one per JSON object on its own line inside a relay body; records counted once each.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one per JSON object on its own line inside a relay body; records counted once each."
           },
           "producer_trace": "complete",
@@ -76590,7 +76590,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Enumerate `teams/*/inboxes/*.json` under the config home, parse each array, and bucket every object by its `read` value; independently count literal occurrences of the key in the same files.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the team mailbox directories under the claude home",
             "rule": "one per parsed object, and one per literal occurrence, reported side by side."
           },
           "producer_trace": "complete",
@@ -76748,7 +76748,7 @@
             "kind": "corpus",
             "command": "Count literal occurrences of the relay preambles over the projects root, count the records whose string content opens with one after stripping leading whitespace, and separately count the carriers that are session-state cache lines. Counting rule: a real relay is a record whose string content BEGINS with a preamble after stripping leading whitespace.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "a real relay is a record whose string content BEGINS with a preamble after stripping leading whitespace."
+            "rule": "One observation is one record; a real relay is a record whose string content BEGINS with a preamble after stripping leading whitespace."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -76826,7 +76826,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Count lines whose parsed object carries the `type:\"result\"` shape with an `agentId` and a content-hash `key`, partitioned by whether the file sits under a `subagents/` path component, and check each for a timestamp, uuid and version field.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "not stated: the instrument names a shape and a counting rule but no root, file set, build or host to take them over",
             "rule": "one per matching line, whole corpus."
           },
           "producer_trace": "complete",
@@ -77695,7 +77695,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "Bb(",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "The enumeration counts the CALL FORM, not the name: occurrences of the byte string `Bb(` whose preceding byte lies outside [A-Za-z0-9_$], which returns 22 over the whole binary and covers the definition, every call of it, and every same-named function declared locally in another chunk."
           },
           "producer_trace": "complete",
@@ -78237,7 +78237,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus side: parse every row file under the registry directory and count the rows carrying each field, one per file.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One observation per row file under the registry directory, counted per field the row carries."
           },
           "producer_trace": "complete",
@@ -78660,7 +78660,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "let _={...Sa(r.session,ne(),o,r),hook_event_name:\"PostToolBatch\",tool_calls:e};",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -78811,7 +78811,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "return{userDisplayMessage:v.leng",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "occurrences of the fixed byte string over the whole file, each read and given a verdict."
           },
           "producer_trace": "complete",
@@ -78885,7 +78885,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "An=(await WC(fn,f.storageV5)).filter((Cn)=>Cn.status===\"in_progress\"&&Cn.owner===nt);",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -78959,7 +78959,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "agentType:\"subagent\",subagentName:Pe.agentType,workflowRunId:f,workflowName:ce,",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "A count is occurrences of the fixed byte string over the whole executable."
           },
           "producer_trace": "complete",
@@ -79171,7 +79171,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On disk a real relay is a record whose string content begins with a preamble after leading whitespace is stripped; counting rule: one per record, reported against occurrences of the same literals over the whole corpus.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.145), read whole",
             "rule": "one per record, reported against occurrences of the same literals over the whole corpus."
           },
           "producer_trace": "complete",
@@ -79242,7 +79242,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "v={mode:\"prompt\",agentId:Ze(),value:k,uuid:w,priority:m,origin:_,skipSlashCommands:!0,isMeta:!0,skipAttachments:!0};",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -79316,7 +79316,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "...e&&{notify_when_idle:aA(M().optional()).describe(",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.236), read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -80285,7 +80285,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: JSON-walk every line matching the same literal and tally `level`, `isMeta` and the presence of a `message` key; counting rule one observation per record.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one observation per byte match. Corpus: JSON-walk every line matching the same literal and tally `level`, `isMeta` and the presence of a `message` key; counting rule one observation per record."
           },
           "producer_trace": "complete",
@@ -81054,7 +81054,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Run csift over a transcript whose newest boundary carries `preservedMessages` and read the `survival` of a preserved record and of a pre-boundary record outside the preserved set.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "One read per hop; one survival value per record inspected."
           },
           "producer_trace": "complete",
@@ -81121,7 +81121,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Build a transcript whose assistant turn spans two records with one `message.id` and a `tool_result` carrier under the second, and confirm csift marks every one of them live.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "one transcript, the one the instrument names",
             "rule": "One survival verdict per record of the built transcript."
           },
           "producer_trace": "complete",
@@ -81250,7 +81250,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.203), read whole",
             "rule": "One verdict per historical native build, present iff the literal's bytes occur at least once."
           },
           "producer_trace": "complete",
@@ -81775,7 +81775,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Read the three hops at their offsets in the 2.1.258 executable and count `readFile` in the surrounding window; then, on the one corpus boundary carrying `compactMetadata.messagesSummarized`, compare that number against the uuid-bearing records preceding the boundary in the same file and against `preservedMessages.allUuids` entries that resolve to no line. Counting rule: one record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`."
           },
           "producer_trace": "complete",
@@ -82790,7 +82790,7 @@
           "probe": {
             "kind": "corpus",
             "command": "head `async function*wtn({session:o,setMessages:m`, and the regeneration tail `let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,`",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "cleared one live session and read both transcripts plus the cost-state line the saver wrote."
           },
           "producer_trace": "complete",
@@ -82974,7 +82974,7 @@
             "kind": "corpus",
             "command": "For every top-level transcript under the projects root, read lines until the first `type:\"user\"` record whose `isMeta` is not true and test whether its message content opens with `<command-name>` or `<command-message>` naming `clear`; report how many transcripts qualify and, for each, the wrapper's line number and the types of the lines above it. Confirm live by clearing a session and reading the first ten lines of the new transcript.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "For every top-level transcript under the projects root, read lines until the first `type:\"user\"` record whose `isMeta` is not true and test whether its message content opens with `<command-name>` or `<command-message>` naming `clear`."
+            "rule": "One observation is one top-level transcript under the projects root. For every top-level transcript under the projects root, read lines until the first `type:\"user\"` record whose `isMeta` is not true and test whether its message content opens with `<command-name>` or `<command-message>` naming `clear`."
           },
           "producer_trace": "none",
           "specimen": "observed",
@@ -83775,7 +83775,7 @@
             "kind": "bytes",
             "literal": "__CMDSUB__",
             "scope": "the one Claude Code build file the state's range names",
-            "rule": "the iteration cap as an integer and the token as a literal string."
+            "rule": "One observation is one constant read at its own offset. the iteration cap as an integer and the token as a literal string."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -84285,7 +84285,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "XQo=[/(^|[;&|\\n(`][ \\t]*)(?:rm|git\\s+(?:reset|clean|checkout|restore|stash))\\b[^;&|\\n]*(?:",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "one verdict per occurrence, with the closure being that every occurrence is read."
           },
           "producer_trace": "complete",
@@ -85208,7 +85208,7 @@
             "kind": "corpus",
             "command": "Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript). On every parsed line whose top-level `type` is `attachment`, collect the distinct values of `attachment.type`, and count separately the records whose TOP-LEVEL `rendered` key is present and non-null, bucketed by that payload type.",
             "scope": "the `<uuid>/subagents/**/agent-*.jsonl` of one projects root",
-            "rule": "Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript)."
+            "rule": "One observation is one non-blank line, one JSON parse each; a line that does not parse counts as unparsed and contributes to nothing. Census every `*.jsonl` at any depth under a projects root, subagent transcripts included, excluding a file named `journal.jsonl` or `elicitations.jsonl` (neither is a transcript)."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -86481,8 +86481,8 @@
           "probe": {
             "kind": "bytes",
             "literal": "var od=65536",
-            "scope": "not stated: the instrument names no population",
-            "rule": "For the planner, find `planReAppendSessionMetadata(e,n,r,o){`, read forward to the first `return{sessionFile:` and list every `type:\"<value>\"` literal in that body plus every `N5(<binding>,\"<cause>\")` call."
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "rule": "One observation is one byte-find for each named literal, and one `type:\"<value>\"` literal or `N5(<binding>,\"<cause>\")` call inside the planner body. For the planner, find `planReAppendSessionMetadata(e,n,r,o){`, read forward to the first `return{sessionFile:` and list every `type:\"<value>\"` literal in that body plus every `N5(<binding>,\"<cause>\")` call."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -86543,7 +86543,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One verdict per occurrence of the quoted literal, and one observation per `queue-operation` line under the QT-045 walk."
           },
           "producer_trace": "complete",
@@ -86625,7 +86625,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Byte-regex the executable for `\\.?(consume|remove|removeByFilter|clearCommandQueue)\\(`, and for each hit walk forward from the open paren, quote-aware, to the MATCHING close paren, accepting only a `reason:` inside that argument list and taking both arms of a ternary. On disk, bucket every `queue-operation` line by (operation, reason present).",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "A window-based form of the same probe reports a false positive (an unrelated `{ok:!1,reason:\"aborted\"}` a hundred bytes past a different object's `remove(`), so the paren walk is the counting rule. On disk, bucket every `queue-operation` line by (operation, reason present)."
           },
           "producer_trace": "complete",
@@ -86752,7 +86752,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Byte-find the factory by its object literal `{type:\"history-suppression\"`, then enumerate every occurrence of the appending writer's minified name (which differs per build) followed by `(` and read each: one definition, three direct calls, one forwarding call. Read the wrapper at that forwarding call and enumerate ITS callers. On disk, census the `cause` values and the lines carrying `vetoedAgainstAccountUuid` under the QT-045 walk.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
             "rule": "One verdict per occurrence of the appending writer's minified name, and one observation per `history-suppression` line under the QT-045 walk."
           },
           "producer_trace": "complete",
@@ -86849,7 +86849,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One verdict per applying site, recording whether it changes message CONTENT, a context flag or a header."
           },
           "producer_trace": "partial",
@@ -86906,7 +86906,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "bookkeepingOnly",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "Byte-find the bare word `bookkeeping` over the whole executable and read every occurrence, classing each as the `bookkeepingOnly` compound (the word immediately followed by `Only`) or unrelated."
           },
           "producer_trace": "complete",
@@ -87042,7 +87042,7 @@
           "probe": {
             "kind": "corpus",
             "command": "For the two person-facing effects, byte-find `filtered from /resume: continued in ${o.continuedInSessionId}` (the developer log, followed immediately by the `superseded` assignment) and `Your most recent conversation is running in the background (session ` (the startup sentence).",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter."
           },
           "producer_trace": "complete",
@@ -88322,7 +88322,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "if(de.subtype===\"api_error\"){return null}",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "an arm is one occurrence of a receiver-qualified comparison; distinct names are the set of the string literals those arms compare against."
           },
           "producer_trace": "complete",
@@ -88526,7 +88526,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
-            "scope": "not stated: the instrument names no population",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
             "rule": "One verdict per occurrence of the minified name, and one offset recorded per occurrence of `===\"fallback\"` against the renderer's system-handling span."
           },
           "producer_trace": "complete",
