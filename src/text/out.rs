@@ -50,8 +50,11 @@
 //! `println!`: the scope sink is named by `commands/session/render.rs`, and both sinks by
 //! `commands/stats/render.rs` and by `commands/recover/render.rs`. A surface that holds an
 //! `Out` takes the writer form instead, and what keeps this one shut is a tree sweep in
-//! `tests/cli/contracts/write_errors.rs`, which refuses a module that carries the deny and
-//! names either sink, asking PER SINK so that half a migration fails too.
+//! `tests/cli/contracts/write_errors.rs`: it refuses a module that carries the deny and
+//! names EITHER sink, so ONE such call is enough to fail it. Asking PER SINK is a separate
+//! assertion in the same test - the positive control over those three print-form callers,
+//! which names each sink each of them must still be seen calling, so half a migration of
+//! one of THOSE fails too.
 //!
 //! `commands/image/run.rs` carries the deny and calls `extract`, which is defined in
 //! `commands/image/convert.rs`, a file that carries none and holds six prints. What keeps
