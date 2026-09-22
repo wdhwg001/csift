@@ -833,7 +833,11 @@ surface change bumps the PATCH.
   one-copy figure of 512.2 MiB - so the peak is not a floor on the bound, and a reader
   sizing a run works from twice 128 rows. The smallest inputs stay inside the same-binary
   control band, at a median ratio of 1.009 against the control's 0.9997. Output bytes do not
-  move: every row of a 158-binding acid set, over three size classes, is byte-identical.
+  move: of the acid set's 169 (row, size class) pairs over three size classes, 167 are
+  byte-identical on all four streams - stdout, stderr, the exit code, and an interleaved
+  `2>&1` capture, which is the only one that can see the ORDER between the first two. The
+  two excluded are the `whoami --format json` rows, which print live lane instants that a
+  repeat of the SAME binary moves as well.
   What a render change can never reach is stated rather than claimed away: a heavy regex row
   is 1.189 s against a 1.140 s floor with the render removed entirely, because its output is
   2.5 MB and its clock is the regex over that 1.18 GB.
