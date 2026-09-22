@@ -41,9 +41,8 @@ fn into_closed_pipe(h: &Home, args: &[&str]) -> (Option<i32>, String) {
     (code, err)
 }
 
-/// One session, NO subagent sidecar: the scope banner is a `println!` that runs BEFORE the
-/// buffer exists and is suppressed when nothing was spanned, so every stdout byte these
-/// commands emit is a byte the buffer owns.
+/// One session, NO subagent sidecar and no second copy: neither banner fires, so every
+/// stdout byte these commands emit is a row.
 fn buffered_only_home() -> (Home, String) {
     let h = Home::new();
     let sess = "11111111-2222-4333-8444-555555555555";
@@ -109,6 +108,109 @@ fn a_closed_stdout_is_reported_as_an_error_on_every_buffered_stream() {
         assert!(
             !err.contains("panicked"),
             "{what}: a write error is an error, not a panic - `println!` aborts here: {err}"
+        );
+    }
+}
+
+/// One session whose scope carries a SUBAGENT (the `scope` banner) and whose transcript
+/// also sits under a second project directory (the `copies` banner). Both banners precede
+/// every row their surface prints, and both were `println!` sites outside the buffer - so
+/// the same query answered a closed pipe one way with a banner and another way without,
+/// which is the split this fixture exists to keep shut.
+fn banner_home() -> (Home, String) {
+    let h = Home::new();
+    let sess = "11111111-2222-4333-8444-555555555555";
+    let one = "-Users-testuser-Projects-one";
+    let img = img_block("image/png", PNG_1X1);
+    let body = format!(
+        "{}\n{}\n{}\n{}\n",
+        serde_json::json!({
+            "type":"user","uuid":"u0","sessionId":sess,"cwd":"/Users/testuser/Projects/one",
+            "timestamp":"2026-06-07T05:00:00.000Z",
+            "message":{"role":"user","content":[{"type":"text","text":"carry needle here"}, img]}
+        }),
+        serde_json::json!({
+            "type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z",
+            "message":{"role":"assistant","content":[{"type":"text","text":"reply needle"}]}
+        }),
+        serde_json::json!({
+            "type":"assistant","uuid":"a1","parentUuid":"a0","timestamp":"2026-06-07T05:00:06.000Z",
+            "message":{"role":"assistant","content":[{"type":"tool_use","id":"call0","name":"Write",
+                "input":{"file_path":"/Users/testuser/Projects/one/greet.py","content":"print('hi')\n"}}]}
+        }),
+        serde_json::json!({
+            "type":"user","uuid":"c0","parentUuid":"a1","timestamp":"2026-06-07T05:00:07.000Z",
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call0","content":"wrote it"}]}
+        }),
+    );
+    h.write(&format!("{one}/{sess}.jsonl"), &body);
+    // The SECOND copy, byte-identical: what a renamed project's copied directory leaves.
+    // Its directory name matches no record's cwd, so the merge keeps the copy above and
+    // every spanning surface prints a `copies` line for it.
+    h.write(
+        &format!("-Users-testuser-Projects-renamed/{sess}.jsonl"),
+        &body,
+    );
+    h.write(
+        &format!("{one}/{sess}/subagents/agent-aaa111.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aaa111","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"sub: carry needle"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"sub done"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{one}/{sess}/subagents/agent-aaa111.meta.json"),
+        r#"{"agentType":"explore","description":"carry","toolUseId":"toolu_x"}"#,
+    );
+    (h, at(sess))
+}
+
+#[test]
+fn a_banner_is_part_of_the_stream_it_heads_not_an_exception_to_it() {
+    let (h, t) = banner_home();
+    // Every buffered surface that can print a banner, with one present. The banner is the
+    // FIRST stdout byte of each, so if it is written outside the buffer the whole row
+    // stream answers a closed pipe with a process abort instead of csift's error - and
+    // does so only on the scopes wide enough to print one, which is a carve-out no reader
+    // can predict from the command they typed.
+    let modes: [(&str, Vec<&str>); 6] = [
+        ("search text", vec!["search", "needle", t.as_str()]),
+        ("files", vec!["files", t.as_str()]),
+        (
+            "files --by timeline",
+            vec!["files", t.as_str(), "--by", "timeline"],
+        ),
+        ("agents", vec!["agents", t.as_str()]),
+        ("image", vec!["image", t.as_str()]),
+        (
+            "verbatim --subagents",
+            vec!["verbatim", t.as_str(), "--subagents"],
+        ),
+    ];
+    for (what, args) in modes {
+        let ok = h.run(&args);
+        assert!(ok.success, "{what}: control run failed: {}", ok.stderr);
+        assert!(
+            ok.stdout.starts_with("scope  ") || ok.stdout.starts_with("copies "),
+            "{what}: this fixture exists so a BANNER is the first stdout byte; it is not, \
+             so the run below would prove nothing:\n{}",
+            ok.stdout
+        );
+
+        let (code, err) = into_closed_pipe(&h, &args);
+        assert_eq!(
+            code,
+            Some(1),
+            "{what}: a banner is part of the stream it heads - a write that cannot land is \
+             reported like any other, not aborted inside `println!`. stderr: {err}"
+        );
+        assert!(
+            err.contains("csift: error: Broken pipe"),
+            "{what}: the failure reaches main's one Err arm: {err}"
+        );
+        assert!(
+            !err.contains("panicked"),
+            "{what}: the banner is written through the buffer, so nothing aborts: {err}"
         );
     }
 }
