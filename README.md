@@ -277,13 +277,13 @@ Every range carries one receipt, and a receipt has to have measured something ou
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
-| end-to-end | 585 | 79.2% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| &nbsp;&nbsp;of which chain traced | 585 | 79.2% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
+| end-to-end | 584 | 79.0% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| &nbsp;&nbsp;of which chain traced | 584 | 79.0% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
 | specimen-only | 47 | 6.4% | observed on disk or live; the writer not traced (or traced only in part) (21 of them with a partly traced writer) |
 | producer-only | 79 | 10.7% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 13 | 1.8% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
-| upstream | 15 | 2.0% | the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed |
+| upstream | 16 | 2.2% | the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed |
 | total | 739 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
