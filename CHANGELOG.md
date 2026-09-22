@@ -791,6 +791,28 @@ surface change bumps the PATCH.
 
 ### Performance
 
+- **The render was the other serial half of a search.** Everything the scan does in
+  parallel was spent before the first output byte: on a 1.4 GB session a whole-scope
+  `--format json` dump cost 1.94 s of CPU on ONE thread while nine rayon workers waited, and
+  a wide-match text search paid 0.45 s of that phase's 0.59 s inside `println!`, which is one
+  `write(2)` and one backward newline scan per row - 493k of them. Two changes. Every
+  row-dumping surface (`search` text, JSON and `--raw`, both of `show`'s, `files`, `agents`,
+  `image`) now writes through one buffered stdout, one syscall per megabyte. And `search`
+  renders its per-exchange rows in bounded parallel chunks, writing the chunk buffers in
+  index order, so the byte stream is the one a serial loop produced. Medians of 7 interleaved
+  reps on that session, at a host load of 7 to 27 that the wall numbers carry and the CPU
+  numbers do not: the JSON dump 2.958 s -> 1.532 s, `search 'x'` 1.247 -> 1.040,
+  `search 'the'` 1.140 -> 0.931 (at its own `-c` floor now), a `--for` closure 1.080 ->
+  0.901, `show --branch-points` 0.397 -> 0.355, the `agents` tree 0.664 -> 0.619,
+  `files --by timeline` 0.890 -> 0.858. CPU for the two wide text rows falls about 10%
+  (their sys halves 1.10 -> 0.70 and 1.07 -> 0.68); the JSON dump's rises 3.9%, which is what
+  the fan-out costs to spread over ten cores. Peak resident memory is unchanged - the
+  look-ahead is fixed at 128 rows - and the smallest inputs stay inside the same-binary
+  control band, at a median ratio of 1.009 against the control's 0.9997. Output bytes do not
+  move: every row of a 158-binding acid set, over three size classes, is byte-identical.
+  What a render change can never reach is stated rather than claimed away: a heavy regex row
+  is 1.189 s against a 1.140 s floor with the render removed entirely, because its output is
+  2.5 MB and its clock is the regex over 1.4 GB.
 - **A record's width is a number now, and it is written down.** The amendment gave `Record`
   a second conversion key and a memo holding both parsed conversions, and the memo held its
   payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
