@@ -68,8 +68,13 @@
 //! not the whole of what a wave holds: while it renders, each worker also holds ONE row's
 //! intermediate structures, which for the JSON projector is the `serde_json::Value` tree it
 //! builds before serializing it into its chunk's buffer - a term bounded by the pool rather
-//! than by the look-ahead. On megabyte-sized rows the measured peak-RSS delta ran to a
-//! median of 1.4x the one-copy figure and 1.6x at worst (SPEC 7k).
+//! than by the look-ahead. On ONE measured fixture (SPEC 7k names it: 200 records whose
+//! rendered rows are 4.2 MB each, so 128 of them is 512.2 MiB) the peak-RSS delta read
+//! 715.8 MiB median and 836.9 MiB at worst - both under the bound, and neither a ratio to
+//! carry anywhere else. SPEC 7k's second shape, 160 rows of 4.55 MiB, moved between 0 and
+//! +127 MiB: what a peak SHOWS depends on the fixture's own parse footprint and on the
+//! pages the process already holds, which is why a reader sizing a run works from the
+//! bound above rather than from an observed delta.
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write;
