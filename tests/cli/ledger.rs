@@ -94,6 +94,13 @@
 //!     pass that normalises whitespace can leave every word intact and every program dead,
 //!     and no other rule here would see it. An interpreter this host does not hold is
 //!     counted and skipped, exactly as rule 12 skips a build it does not hold.
+//! 20. An OPEN state's receipt names an ARTEFACT OUTSIDE csift's own tree - a Claude Code
+//!     build or a byte offset in one, a corpus or projects root, the harness's own
+//!     directories, a session target, a live trial. The artefact is the test and never the
+//!     command: a check naming only `src/`, a self-written fixture or this repository's own
+//!     documents decided nothing about Claude Code, and a badge resting on one rests on
+//!     nothing. The classifier lives in `ledger/artefact.rs`, in the gate rather than only
+//!     in the pass that writes the file.
 //!
 //! The attribution set carries `upstream`: the producer lies OUTSIDE the shipped binary
 //! by construction (the model or API side, the operating system, a native runtime
@@ -101,6 +108,7 @@
 //! `producer_trace: upstream` + `specimen: observed` derives it.
 
 mod anchors;
+mod artefact;
 mod legs;
 mod programs;
 mod prose;
@@ -217,6 +225,7 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
             states::state_text(&at, state, &mut failures);
             states::closed_receipt(&at, state, &mut failures);
             rules::attribution(&at, state, &mut failures);
+            artefact::open_receipt(&at, state, &mut failures);
             legs::text_instructions(&at, state, &mut failures);
             legs::retired_spellings(&at, state, &mut failures);
             prose::check_state(&at, state, &mut failures);
