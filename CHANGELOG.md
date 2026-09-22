@@ -844,15 +844,22 @@ surface change bumps the PATCH.
   with the backtick exemption bounded; rule 10 reaches `residue` and a receipt's `note`,
   which is where every unconsumed text instruction was hiding; rules 15 to 20 are the
   state's own text and probe, a closed state's receipt, a retired selector handed to csift
-  as an argument, the file's own shape, every heredoc handed back to its own language
-  to parse, and the receipt's artefact itself; rule 21 is the `bytes` probe's own literal,
-  read in the builds its state names, because four of them counted zero in every one and a
+  as an argument - the bare `tool` among them, with the valid `--count-by tool` census axis
+  spared by position rather than by word - the file's own shape, every heredoc handed back
+  to its own language to parse, and the receipt's artefact itself; rule 21 is the `bytes`
+  probe's own literal, read in the builds its state names and in a CLOSED state's too
+  wherever this host holds them, because four of them counted zero in every one and a
   probe that counts nothing cannot be run. Rule 12 learns that a hop can name the BUILD it
   was read in - and that a build nobody holds is not a pass, so such a hop is named rather
   than counted wherever the verified build itself is here - refuses a run of four or more
-  dots the way it refuses an empty excerpt, refuses a MARK on an excerpt that reads as
-  prose, since English occurs in no build and satisfies `absent` by construction, and
-  compares bytes rather than a UTF-8 round trip. Rule 8 stops matching rows with a regex
+  dots the way it refuses an empty excerpt, holds an ELIDED excerpt to the run before its
+  first ellipsis at its own offset - that bucket used to be compared against nothing, so
+  replacing an already-elided excerpt with fabricated text moved no figure - refuses an
+  excerpt that reads as prose whether or not the hop wears a MARK, since English occurs in
+  no build and satisfies `absent` by construction, decides a marked hop by its mark BEFORE
+  the eliding so it lands in one of the five counts and never in two, and compares bytes
+  rather than a UTF-8 round trip. How many `...`-bearing excerpts are byte-exact anyway is
+  derived by the walk and carried on the README rather than typed anywhere. Rule 8 stops matching rows with a regex
   and REGENERATES the README block, comparing it byte for byte. A folded check is not
   simply dropped: every fact token with no survivor in the state is carried into `residue`,
   and each carried entry names what superseded it. The prose rewrite masks every quoted
