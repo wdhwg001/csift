@@ -26,8 +26,8 @@
 //! descendant of the leaf is Live.
 //!
 //! FAIL-OPEN, always - and the reason is where the walk STOPS. Claude Code's walk ends at
-//! a `compact_boundary`: its `parentUuid` is null (275 of 275 boundary records over the 23
-//! compacted files among the 82 top-level transcripts of one projects root) and the
+//! a `compact_boundary`: its `parentUuid` is null (278 of 278 boundary records over the 23
+//! compacted files among the 82 top-level transcripts of one live projects root) and the
 //! loader never reads `logicalParentUuid`, the field naming the record the compaction
 //! re-linked from. csift follows that field under a CROSSING BUDGET ([`CrossingBudget`],
 //! the global `--cross-compactions` flag), because the conversation genuinely continues
@@ -41,7 +41,7 @@
 //! FLOOR: the budget ran out standing on it, or one of the three facts shut its door (the
 //! `walk::shut_door` classification - the `logicalParentUuid` names no record on any line, or one
 //! the pre-boundary cut removed from the map, or one the walk had already reached; claim
-//! MISC-043 counts the first shape at 52 of 275 boundary records over 14 files). An
+//! MISC-043 counts the first shape at 52 of 278 boundary records over 14 files). An
 //! off-chain record physically above the floor is `PreCut`, never `Abandoned` - csift
 //! declines to call a record abandoned in a region it could not resolve - and
 //! [`CrossingReport`] states which cause it was, how many boundaries remain above, and a

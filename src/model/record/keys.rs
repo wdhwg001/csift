@@ -23,7 +23,7 @@
 //! measured rather than argued about, and it is why this is a serde shape at all. A
 //! depth-1 key walk at the one place a `Record` is built from bytes, behind an
 //! Aho-Corasick gate over the key names, cost 48 to 79 percent of user CPU on three
-//! section 7 acid rows over a 415 MiB transcript, because it is a second whole-line pass
+//! section 7 acid rows over a 396.7 MiB transcript, because it is a second whole-line pass
 //! on top of the one serde already makes. A lazier read at EMISSION time cannot reach the
 //! bytes at all: the engine keeps a record's source line only for a line whose `Record`
 //! cannot answer for it, which is the opposite of the population these keys ride.

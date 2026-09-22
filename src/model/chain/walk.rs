@@ -2,8 +2,8 @@
 //! plain ancestry.
 //!
 //! `parentUuid` FIRST - that is the only link Claude Code's own loader reads, so a
-//! `compact_boundary` (whose `parentUuid` is null on 275 of 275 boundary records over one
-//! projects root) ends
+//! `compact_boundary` (whose `parentUuid` is null on 278 of 278 boundary records over one
+//! live projects root at the time of its census) ends
 //! the loader's reconstruction and every record above it is gone from the resumed
 //! conversation. csift climbs the same link and then asks one more question the loader
 //! never asks: the boundary names the record it re-linked from, in `logicalParentUuid`,

@@ -507,7 +507,7 @@ The flag is GLOBAL and on every chain-walking command (`search`/`show`/`stats`/`
 | `floor_cause` | what stopped the walk | does a bigger budget move it |
 |---|---|---|
 | `budget-exhausted` | a compaction boundary the budget would not cross | **yes, when that boundary's door is open** — and the footer names the value. When it is shut, the footer names the door's own reason instead |
-| `unresolvable-boundary` | a boundary whose `logicalParentUuid` names no record on any line of this file — the pre-compaction records were deleted from disk, or it names nothing at all (52 of 275 corpus boundaries are that shape) | no |
+| `unresolvable-boundary` | a boundary whose `logicalParentUuid` names no record on any line of this file — the pre-compaction records were deleted from disk, or it names nothing at all (52 of 278 corpus boundaries are that shape) | no |
 | `relink-removed` | a boundary whose `logicalParentUuid` names a record this file DOES carry, on a line you can open, which the pre-boundary relink cut took out of the uuid map before any leaf was picked. On disk and off the map is a different fact from gone, and the cause is real but UNSEEN so far: 0 of the 18 boundary floors over one projects root | no |
 | `boundary-loop` | a boundary whose `logicalParentUuid` names a record the walk had ALREADY reached, so its door leads back into the conversation rather than above the cut — the usual shape for a boundary carrying a preserved set (9 of the 18 boundary floors over one projects root, at `--cross-compactions all`) | no |
 | `head` | the conversation's own head: a record with no parent that is not a boundary | no — the walk ended BELOW the boundaries and never reached them |
