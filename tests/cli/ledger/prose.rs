@@ -20,12 +20,16 @@
 //! a rejected tool use - so banning the token would destroy meaning rather than process
 //! narrative; those words are barred in their audit SENSE, which no regex decides.
 //!
-//! The first-person family is MECHANICAL but narrow, and the narrowness is measured: these
+//! The first-person family is MECHANICAL but narrow, and the narrowness is measured. These
 //! strings quote minified JavaScript where `we`, `We` and `wE` are ordinary identifier
-//! names (`let we=fe.sourceToolAssistantUUID`, `function wE(e,n,r,o,d)`), so a case-folded
-//! `\bwe\b` reads 156 hits of which 150 are the build's own bytes. The arms are therefore
-//! case-SENSITIVE and anchored on whitespace both sides: a pronoun is a standalone English
-//! word, while an identifier sits against `=`, `(`, `.` or `;`.
+//! names (`let we=fe.sourceToolAssistantUUID`, `function wE(e,n,r,o,d)`, `origin:we`), so a
+//! case-folded `\bwe\b` over every string value of the shipped ledger reads 746 hits and
+//! exactly 2 of them have whitespace on both sides - both inside a `code[].snippet`, which
+//! quotes csift's own source and which this rule does not scan. Counting rule: one hit per
+//! non-overlapping match, over every string value of `INTROSPECTION.json`, whitespace read
+//! as the Unicode property. So the arms are case-SENSITIVE and anchored on whitespace both
+//! sides: a pronoun is a standalone English word, while an identifier sits against `=`,
+//! `(`, `.`, `:` or `;`.
 //!
 //! A BACKTICKED span is exempt, for the reason an `excerpt` is: it quotes the build or a
 //! command verbatim, and Claude Code really does intern a beta named
@@ -244,9 +248,17 @@ fn prose_fields(state: &Value) -> Vec<(String, String)> {
 pub(crate) fn check_state(at: &str, state: &Value, failures: &mut Vec<String>) {
     for (path, text) in prose_fields(state) {
         for (rule, token) in hits(&text) {
+            // The article follows the LABEL, because `a audit-process word` is the one
+            // reading a person gets of this rule and a gate that misspells its own finding
+            // reads as one nobody maintains.
+            let article = if rule.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
             failures.push(format!(
-                "{at}.{path}: `{token}` is a {rule} - the ledger is a fact record keyed by \
-                 Claude Code version only"
+                "{at}.{path}: `{token}` is {article} {rule} - the ledger is a fact record \
+                 keyed by Claude Code version only"
             ));
         }
     }

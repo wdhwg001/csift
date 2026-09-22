@@ -193,7 +193,7 @@ pub(crate) fn render_block(
          such in the ledger, with the residue line that says how to find its producer again; \
          those are the first thing the next pass re-locates. A hop read in an artifact the \
          badge does not name carries that build and is compared against THAT one, which is why \
-         it is disclosed as a count rather than a verdict - whether a given machine holds those \
+         it is disclosed as a count and never as a verdict: whether a given machine holds those \
          artifacts is a property of the machine. A closed state's anchors were exact at the \
          build its own range ended on, so the gate counts them and does not re-read them \
          against a later one.\n",

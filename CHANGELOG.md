@@ -838,21 +838,23 @@ surface change bumps the PATCH.
   a live trial. The artefact is the test and never the command, so `grep` over `src` is the
   same text pass as reading the file while `grep -ab` over a shipped build is a
   measurement, and a text pass can never back the badge. The gate is rewritten to read all
-  of it and grows from fourteen rules to eighteen, each failing by name on a hand-built
+  of it and grows from fourteen rules to twenty, each failing by name on a hand-built
   specimen: rule 13 is the state shape, including that the open state is LAST; rule 14 is
   the prose law over every field a pass wrote, now word-bounded, first-person-aware and
   with the backtick exemption bounded; rule 10 reaches `residue` and a receipt's `note`,
-  which is where every unconsumed text instruction was hiding; rules 15 to 18 are the
+  which is where every unconsumed text instruction was hiding; rules 15 to 20 are the
   state's own text and probe, a closed state's receipt, a retired selector handed to csift
-  as an argument, and the file's own shape. Rule 12 learns that a hop can name the BUILD it
+  as an argument, the file's own shape, every heredoc handed back to its own language
+  to parse, and the receipt's artefact itself. Rule 12 learns that a hop can name the BUILD it
   was read in, refuses a run of four or more dots the way it refuses an empty excerpt, and
   compares bytes rather than a UTF-8 round trip. Rule 8 stops matching rows with a regex
   and REGENERATES the README block, comparing it byte for byte. A folded check is not
   simply dropped: every fact token with no survivor in the state is carried into `residue`,
   and each carried entry names what superseded it. The prose rewrite masks every quoted
-  run, literal, offset and version before it fires and restores each byte for byte, so it
-  can neither cut a comma out of a jq argument list nor normalise the double space out of
-  an asctime literal, and a date that is the object of an epoch stays.
+  run, literal, offset, version and whitespace run before it fires and restores each byte
+  for byte, so it can neither cut a comma out of a jq argument list, nor normalise the
+  double space out of an asctime literal, nor flatten the indent a python heredoc's block
+  structure lives in; and a date that is the object of an epoch stays.
 
 ## [0.12.3] - 2026-09-13
 
