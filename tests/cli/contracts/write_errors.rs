@@ -65,10 +65,12 @@ fn buffered_only_home() -> (Home, String) {
 #[test]
 fn a_closed_stdout_is_reported_as_an_error_on_every_buffered_stream() {
     let (h, t) = buffered_only_home();
-    // The three stream SHAPES the buffer carries: rendered text, the JSON envelope, and a
-    // raw byte dump. Each is checked twice - once with an ordinary stdout, so a failure
-    // below can only be the closed pipe, and once with the pipe closed.
-    let modes: [(&str, Vec<&str>); 3] = [
+    // The stream SHAPES the buffer carries: rendered text, the JSON envelope, a raw byte
+    // dump, and `verbatim`'s two, which are the surface that joined the buffered set last
+    // and so the one a later change is most likely to take back out. Each is checked twice
+    // - once with an ordinary stdout, so a failure below can only be the closed pipe, and
+    // once with the pipe closed.
+    let modes: [(&str, Vec<&str>); 5] = [
         ("search text", vec!["search", "needle", t.as_str()]),
         (
             "search json",
@@ -77,6 +79,11 @@ fn a_closed_stdout_is_reported_as_an_error_on_every_buffered_stream() {
         (
             "show --raw",
             vec!["show", t.as_str(), "--line", "1..16", "--raw"],
+        ),
+        ("verbatim text", vec!["verbatim", t.as_str()]),
+        (
+            "verbatim json",
+            vec!["verbatim", t.as_str(), "--format", "json"],
         ),
     ];
     for (what, args) in modes {
