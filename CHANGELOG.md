@@ -830,18 +830,29 @@ surface change bumps the PATCH.
   it is open) holding the claim text for that range, the two attribution legs, the
   provenance and ONE `verified` receipt; `located` and `first_seen_claude_code` retire into
   the first state's `from`, and the per-check dates and csift versions retire outright. Each
-  state also gains a `probe`, the machine-readable twin of `instrument` naming the half a
-  stranger re-runs first as one of bytes, corpus, csift or live. The gate is rewritten to
-  read it, grows two rules and mends one: rule 13 is the state shape, rule 14 is the prose
-  law itself over every field a pass wrote, and rule 12 now counts a closed state's anchors
-  without re-reading them against a later build and refuses an offset beside an empty
-  excerpt, which had been passing as byte-exact while anchoring nothing. Every rule fails by
-  name on a hand-built specimen. The receipt is a MEASUREMENT - a check that only re-reads
-  csift's own source is a text pass and can never back the badge - and a folded check is not
-  simply dropped: every fact token with no survivor in the state is carried into `residue`.
-  The prose rewrite masks every quoted run, literal and byte offset before it fires, so it
-  can never cut a comma out of a jq argument list or a semicolon out of a verbatim build
-  quote. The README's tally block counts the open states.
+  state also gains a `from_basis` - one word saying whether its floor was measured,
+  bounded or defaulted - and a `probe`, the machine-readable twin of `instrument` naming
+  the half a stranger re-runs first as one of bytes, corpus, csift, live or repo. A
+  RECEIPT is the last check at the badge's build whose instrument names an artefact
+  OUTSIDE csift's own tree: a build, a byte offset in one, a corpus, a registry directory,
+  a live trial. The artefact is the test and never the command, so `grep` over `src` is the
+  same text pass as reading the file while `grep -ab` over a shipped build is a
+  measurement, and a text pass can never back the badge. The gate is rewritten to read all
+  of it and grows from fourteen rules to eighteen, each failing by name on a hand-built
+  specimen: rule 13 is the state shape, including that the open state is LAST; rule 14 is
+  the prose law over every field a pass wrote, now word-bounded, first-person-aware and
+  with the backtick exemption bounded; rule 10 reaches `residue` and a receipt's `note`,
+  which is where every unconsumed text instruction was hiding; rules 15 to 18 are the
+  state's own text and probe, a closed state's receipt, a retired selector handed to csift
+  as an argument, and the file's own shape. Rule 12 learns that a hop can name the BUILD it
+  was read in, refuses a run of four or more dots the way it refuses an empty excerpt, and
+  compares bytes rather than a UTF-8 round trip. Rule 8 stops matching rows with a regex
+  and REGENERATES the README block, comparing it byte for byte. A folded check is not
+  simply dropped: every fact token with no survivor in the state is carried into `residue`,
+  and each carried entry names what superseded it. The prose rewrite masks every quoted
+  run, literal, offset and version before it fires and restores each byte for byte, so it
+  can neither cut a comma out of a jq argument list nor normalise the double space out of
+  an asctime literal, and a date that is the object of an epoch stays.
 
 ## [0.12.3] - 2026-09-13
 
