@@ -76,7 +76,7 @@ impl Home {
     /// The csift command every runner starts from: this `$HOME` (on both the unix and the
     /// Windows home var) and a cleared session env, so `whoami` is deterministic unless a
     /// test sets it back.
-    fn cmd(&self, args: &[&str]) -> Command {
+    pub(crate) fn cmd(&self, args: &[&str]) -> Command {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_csift"));
         cmd.args(args)
             .env("HOME", &self.root)

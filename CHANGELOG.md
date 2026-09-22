@@ -788,6 +788,15 @@ surface change bumps the PATCH.
   `model/automation.rs` and in the block loop's module doc: it renders an empty body, and
   what it is rides the label zone as a marker, which is what keeps the fabricated word out
   of matchable text.
+- **A stdout write that cannot land is reported now, instead of aborting the process.**
+  Piping a command into a reader that goes away - `| head`, a closed pipe - made `println!`
+  abort: exit 101 and a std backtrace naming `library/std/src/io/stdio.rs` where csift's own
+  message belongs. On every surface whose rows go through the shared buffered stdout -
+  `search` in all three of its stream shapes, `show` rendered, `files`, `agents`, `image` -
+  the failed write now takes the one error arm every other failure takes: exit 1 and
+  `csift: error: Broken pipe (os error 32)`. `show --raw` already did. The surfaces still
+  writing with `println!`, `list` and `stats` and `verbatim`, keep the abort. What a reader
+  that stays receives does not move; only the failure path does.
 
 ### Performance
 
