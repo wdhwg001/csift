@@ -1,0 +1,179 @@
+//! Rule 12: the byte anchors, over a synthetic build.
+//!
+//! See the parent module for why each rule owes a specimen.
+
+use super::*;
+
+#[test]
+fn ledger_gate_rule_12_anchor_classifier_decides_every_verdict() {
+    let build: &[u8] = b"alpha bravo charlie ...rest delta echo";
+    // Exact: the bytes at the offset are the excerpt.
+    assert_eq!(
+        anchors::classify(build, 6, "bravo", None),
+        anchors::Anchor::Exact
+    );
+    // Byte-exactness outranks eliding: a `...` that really is in the build is exact.
+    assert_eq!(
+        anchors::classify(build, 20, "...rest", None),
+        anchors::Anchor::Exact
+    );
+    // Elided: an ellipsis in the excerpt, in either spelling.
+    assert_eq!(
+        anchors::classify(build, 6, "bra...vo", None),
+        anchors::Anchor::Elided
+    );
+    assert_eq!(
+        anchors::classify(build, 6, "bra\u{2026}vo", None),
+        anchors::Anchor::Elided
+    );
+    // Drifted: the head agrees for four bytes, then the build says something else.
+    assert_eq!(
+        anchors::classify(build, 6, "bravado", None),
+        anchors::Anchor::Drifted { at: 4 }
+    );
+    // Drifted with the excerpt running off the end of the build.
+    assert_eq!(
+        anchors::classify(build, 34, "echoes", None),
+        anchors::Anchor::Drifted { at: 4 }
+    );
+    // The two marks are counted and skipped.
+    assert_eq!(
+        anchors::classify(build, 6, "zulu", Some("absent")),
+        anchors::Anchor::Absent
+    );
+    assert_eq!(
+        anchors::classify(build, 6, "bravado", Some("prefix-only")),
+        anchors::Anchor::PrefixOnly
+    );
+    // A mark never hides a hop that is byte-exact again.
+    assert_eq!(
+        anchors::classify(build, 6, "bravo", Some("absent")),
+        anchors::Anchor::Exact
+    );
+    // An EMPTY excerpt matches at every offset, so it is refused before the byte test -
+    // including at offset 0, the placeholder for "no byte location".
+    assert_eq!(
+        anchors::classify(build, 6, "", None),
+        anchors::Anchor::Empty
+    );
+    assert_eq!(
+        anchors::classify(build, 0, "", Some("absent")),
+        anchors::Anchor::Empty
+    );
+}
+
+/// A mark is a CLAIM about the build, so the rule tests what it asserts. Without this, an
+/// anchor that rotted could be quieted by typing `absent` beside it.
+
+#[test]
+fn ledger_gate_rule_12_a_mark_is_a_claim_not_a_pass() {
+    let build: &[u8] = b"alpha bravo charlie ...rest delta echo";
+    // The honest marks: the excerpt is nowhere in the build.
+    assert_eq!(anchors::verify_mark(build, 6, "zulu", "absent"), None);
+    assert_eq!(
+        anchors::verify_mark(build, 6, "bravado", "prefix-only"),
+        None
+    );
+    // Marking a hop whose excerpt IS in the build is refused, whatever the offset says.
+    assert_eq!(
+        anchors::verify_mark(build, 999, "bravo", "absent"),
+        Some(
+            "marked `absent` but the excerpt occurs in the build at offset 6 - \
+             re-anchor the offset instead of marking the hop"
+                .to_string()
+        )
+    );
+    assert!(anchors::verify_mark(build, 999, "bravo", "prefix-only").is_some());
+    // `prefix-only` also asserts a head match where the offset points.
+    assert_eq!(
+        anchors::verify_mark(build, 12, "bravado", "prefix-only"),
+        Some(
+            "marked `prefix-only` but no leading byte of the excerpt matches at offset 12 - \
+             that mark asserts a head match, so the hop is `absent`"
+                .to_string()
+        )
+    );
+    // `absent` makes no claim about the offset, so a head mismatch there is fine.
+    assert_eq!(anchors::verify_mark(build, 12, "zulu", "absent"), None);
+    // An empty excerpt asserts nothing and can never be marked.
+    assert!(anchors::verify_mark(build, 6, "", "absent").is_some());
+}
+
+/// Rule 12's open/closed split: a closed state's anchors are counted and never compared,
+/// so a superseded fact is not asked to still sit at its old bytes.
+
+#[test]
+fn ledger_gate_rule_12_counts_closed_state_anchors_without_reading_them() {
+    let mut c = good_claim();
+    let mut closed = c["states"][0].clone();
+    closed["from"] = json!("2.1.100");
+    closed["to"] = json!("2.1.200");
+    closed["producer_chain"] = json!([{"role": "writer", "offset": 99, "excerpt": "gone"}]);
+    c["states"][0]["from"] = json!("2.1.201");
+    c["states"] = json!([closed, c["states"][0].clone()]);
+    let mut f = Vec::new();
+    let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
+    assert_eq!(a.closed, 1, "the closed state's anchor is counted");
+    assert_eq!(a.total, 0, "and is not among the anchors that are read");
+    assert!(f.is_empty(), "{f:?}");
+}
+
+/// A DOT RUN is a lossy render, not an ellipsis. Four or more dots means the capture
+/// printed non-printable bytes as `.`, so the excerpt is a picture of the bytes rather than
+/// the bytes - and because it contains `...`, the elided arm counted it skipped and 76
+/// anchors checked nothing at all.
+#[test]
+fn ledger_gate_rule_12_refuses_a_dot_run_the_way_it_refuses_an_empty_excerpt() {
+    let build = b"alpha......bravo";
+    assert_eq!(
+        anchors::classify(build, 5, "......", None),
+        anchors::Anchor::DotRun,
+        "a dot run is refused even where the build really carries those bytes"
+    );
+    assert_eq!(
+        anchors::classify(build, 0, "alpha...bravo", None),
+        anchors::Anchor::Elided,
+        "three dots is still an ellipsis a writer typed"
+    );
+    assert!(anchors::dot_run("sessionKind....trackingPath"));
+    assert!(!anchors::dot_run("a...b"));
+}
+
+/// A hop can name its own BUILD. Some facts are only readable in an artifact the badge does
+/// not name, and comparing those against the verified build produced 33 marks asserting an
+/// excerpt was nowhere - about a build it was never read in.
+#[test]
+fn ledger_gate_rule_12_reads_a_hop_against_the_build_it_names() {
+    let mut c = good_claim();
+    c["states"][0]["producer_chain"] = json!([{
+        "role": "writer",
+        "offset": 0,
+        "excerpt": "not in the verified build",
+        "build": "2.1.208-no-such-artifact-on-any-host",
+        "note": "read in an older build"
+    }]);
+    let mut f = Vec::new();
+    let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
+    assert_eq!(a.other_build, 1, "the hop is counted as another build's");
+    assert_eq!(a.absent, 0, "and not as a mark");
+    if a.measured.is_some() {
+        assert!(
+            f.is_empty(),
+            "a build that is not here decides nothing: {f:?}"
+        );
+    }
+}
+
+/// The comparison is on BYTES. A few excerpts were captured from regions that are not valid
+/// UTF-8 and stored one code point per byte; encoding such a string back to UTF-8 widens
+/// every byte above 0x7f, so the comparison could never match while the anchor was sound.
+#[test]
+fn ledger_gate_rule_12_reads_a_latin_1_capture_as_bytes() {
+    let build = &[b'a', 0xe9, b'b'];
+    let excerpt = "a\u{e9}b"; // three CHARACTERS, four UTF-8 bytes
+    assert_eq!(excerpt.len(), 4);
+    assert_eq!(
+        anchors::classify(build, 0, excerpt, None),
+        anchors::Anchor::Exact
+    );
+}

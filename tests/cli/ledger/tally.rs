@@ -2,9 +2,23 @@
 //!
 //! The page claims two measured things - "verified against Claude Code X" and a table of
 //! how completely each behavior is attributed - and both are numbers a reader is entitled
-//! to re-derive. Rule 8's block is REGENERATED from the ledger, never typed, and every
-//! figure in it is a count over the ledger's OPEN states: a closed state records what was
-//! true of an older build, and the page speaks about the build the badge names.
+//! to re-derive. Every figure in the block is a count over the ledger's OPEN states: a
+//! closed state records what was true of an older build, and the page speaks about the
+//! build the badge names.
+//!
+//! RULE 8 REGENERATES THE WHOLE BLOCK AND COMPARES IT BYTE FOR BYTE. It used to read the
+//! rows with a regex (`^\| ([a-z-]+) \| (\d+) \|`), and a regex checks what it names: the
+//! `&nbsp;&nbsp;of which chain traced` row has no `[a-z-]+` key so it was never read, the
+//! `share` column was never read at all, and the `(24 of them with a partly traced writer)`
+//! parenthetical was a hand-typed number in a sentence. Three numbers on a page that
+//! promises re-derivable ones. A generator has no such holes: whatever it does not
+//! generate is not in the block, and whatever is in the block it generated.
+//!
+//! THE MEASURED HALF IS THE ONE EXCEPTION. The byte-exact / elided / other-build counts
+//! need the build, and a host without it cannot generate them - so on such a host those
+//! four numbers are taken from the page and everything around them is still compared. The
+//! ledger-derived counts (total, absent, prefix-only, closed, other-build) are checked
+//! everywhere.
 
 use super::{anchors, open_state};
 use regex::Regex;
@@ -32,53 +46,6 @@ pub(crate) fn badges(verified: &str, readme: &str, failures: &mut Vec<String>) {
     }
 }
 
-/// Rule 8, second half: the README states the measured anchor tally, so the page's claim
-/// about byte offsets is a number a reader can re-derive. The ledger-derived counts are
-/// checked everywhere; the byte-exact / elided split needs the build, so it is checked
-/// only on a host that holds it.
-fn anchor_line(a: &anchors::Anchors, verified: &str, block: &str, failures: &mut Vec<String>) {
-    let re = Regex::new(
-        r"anchors byte-exact at Claude Code (\d+\.\d+\.\d+): ([\d,]+) of ([\d,]+) \(elided ([\d,]+), absent ([\d,]+), prefix-only ([\d,]+)\), closed-state anchors ([\d,]+), not checked",
-    )
-    .unwrap();
-    let Some(cap) = re.captures(block) else {
-        failures.push(
-            "README ledger tally carries no `anchors byte-exact at Claude Code ... closed-state anchors N, not checked` line"
-                .to_string(),
-        );
-        return;
-    };
-    if &cap[1] != verified {
-        failures.push(format!(
-            "README anchor line names Claude Code {} but the ledger is verified at {verified}",
-            &cap[1]
-        ));
-    }
-    let num = |i: usize| {
-        cap[i]
-            .replace(',', "")
-            .parse::<usize>()
-            .unwrap_or(usize::MAX)
-    };
-    let mut expected = vec![
-        ("total anchors", num(3), a.total),
-        ("absent", num(5), a.absent),
-        ("prefix-only", num(6), a.prefix_only),
-        ("closed-state anchors", num(7), a.closed),
-    ];
-    if let Some((exact, elided)) = a.measured {
-        expected.push(("byte-exact", num(2), exact));
-        expected.push(("elided", num(4), elided));
-    }
-    for (label, said, is) in expected {
-        if said != is {
-            failures.push(format!(
-                "README anchor line says {label} {said} but the ledger has {is}"
-            ));
-        }
-    }
-}
-
 /// One attribution row's count: claims whose OPEN state carries that value.
 pub(crate) fn attribution_count(claims: &[Value], key: &str) -> usize {
     claims
@@ -87,9 +54,155 @@ pub(crate) fn attribution_count(claims: &[Value], key: &str) -> usize {
         .count()
 }
 
-/// Rule 8: the README's ledger tally (the table between the `ledger-tally` markers)
-/// carries one row per attribution value plus a total, and every count equals the
-/// ledger's - the table is regenerated from the ledger, never typed.
+/// End-to-end claims whose open state actually pins its hops at byte offsets. The row
+/// exists because "traced" and "traced AT AN OFFSET" are different promises, and the
+/// anchors line below the table speaks only about the second.
+fn chain_traced(claims: &[Value]) -> usize {
+    claims
+        .iter()
+        .filter(|c| {
+            open_state(c).is_some_and(|s| {
+                s["attribution"].as_str() == Some("end-to-end")
+                    && s["producer_chain"]
+                        .as_array()
+                        .is_some_and(|h| h.iter().any(|x| x["offset"].is_number()))
+            })
+        })
+        .count()
+}
+
+/// Specimen-only claims whose producer leg is `partial` rather than `none` - the
+/// parenthetical in that row's meaning.
+fn partly_traced(claims: &[Value]) -> usize {
+    claims
+        .iter()
+        .filter(|c| {
+            open_state(c).is_some_and(|s| {
+                s["attribution"].as_str() == Some("specimen-only")
+                    && s["producer_trace"].as_str() == Some("partial")
+            })
+        })
+        .count()
+}
+
+fn comma(n: usize) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn share(n: usize, total: usize) -> String {
+    if total == 0 {
+        return "0.0%".to_string();
+    }
+    format!("{:.1}%", (n as f64) * 100.0 / (total as f64))
+}
+
+/// The measured four, read off the page. Used ONLY on a host without the build, so the
+/// generated block can still be compared everywhere else.
+fn measured_from_readme(block: &str) -> Option<(usize, usize)> {
+    let re = Regex::new(
+        r"anchors byte-exact at Claude Code \d+\.\d+\.\d+: ([\d,]+) of [\d,]+ \(elided ([\d,]+),",
+    )
+    .unwrap();
+    let cap = re.captures(block)?;
+    let num = |i: usize| cap[i].replace(',', "").parse::<usize>().ok();
+    Some((num(1)?, num(2)?))
+}
+
+/// The block, generated. This IS the README's ledger tally: the page carries what this
+/// returns, byte for byte, between the markers.
+pub(crate) fn render_block(
+    claims: &[Value],
+    a: &anchors::Anchors,
+    verified: &str,
+    measured: (usize, usize),
+) -> String {
+    let total = claims.len();
+    let (exact, elided) = measured;
+    let rows: [(&str, usize, &str); 6] = [
+        ("end-to-end", attribution_count(claims, "end-to-end"),
+         "the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live"),
+        ("specimen-only", attribution_count(claims, "specimen-only"),
+         "observed on disk or live; the writer not traced (or traced only in part)"),
+        ("producer-only", attribution_count(claims, "producer-only"),
+         "the writer traced in full; no specimen exists in the corpus or could be produced here"),
+        ("partial-producer", attribution_count(claims, "partial-producer"),
+         "a template or field located without its gate and trigger; no specimen"),
+        ("by-elimination", attribution_count(claims, "by-elimination"),
+         "neither leg; attributed by exclusion or from csift's own design"),
+        ("upstream", attribution_count(claims, "upstream"),
+         "the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed"),
+    ];
+    let mut out = String::from("<!-- ledger-tally:begin -->\n");
+    out.push_str("| attribution | claims | share | meaning |\n");
+    out.push_str("|---|---:|---:|---|\n");
+    for (key, n, meaning) in rows {
+        out.push_str(&format!(
+            "| {key} | {} | {} | {meaning}",
+            comma(n),
+            share(n, total)
+        ));
+        if key == "specimen-only" {
+            out.push_str(&format!(
+                " ({} of them with a partly traced writer)",
+                comma(partly_traced(claims))
+            ));
+        }
+        out.push_str(" |\n");
+        if key == "end-to-end" {
+            let t = chain_traced(claims);
+            out.push_str(&format!(
+                "| &nbsp;&nbsp;of which chain traced | {} | {} | the three hops quoted at byte \
+                 offsets in `producer_chain`; the anchors line below is the measured state of \
+                 those offsets |\n",
+                comma(t),
+                share(t, total)
+            ));
+        }
+    }
+    out.push_str(&format!(
+        "| total | {} | 100.0% | one claim per Claude Code behavior csift depends on, verified \
+         at Claude Code {verified} |\n\n",
+        comma(total)
+    ));
+    out.push_str(
+        "A traced claim pins each hop at a byte offset in that build, and the gate re-reads \
+         every one of them:\n\n",
+    );
+    out.push_str(&format!(
+        "`anchors byte-exact at Claude Code {verified}: {} of {} (elided {}, absent {}, \
+         prefix-only {}, read in another build {}), closed-state anchors {}, not checked`\n\n",
+        comma(exact),
+        comma(a.total),
+        comma(elided),
+        comma(a.absent),
+        comma(a.prefix_only),
+        comma(a.other_build),
+        comma(a.closed),
+    ));
+    out.push_str(
+        "The five counts partition the total. An elided excerpt was quoted with an \
+         ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as \
+         such in the ledger, with the residue line that says how to find its producer again; \
+         those are the first thing the next pass re-locates. A hop read in an artifact the \
+         badge does not name carries that build and is compared against THAT one, which is why \
+         it is disclosed as a count rather than a verdict - whether a given machine holds those \
+         artifacts is a property of the machine. A closed state's anchors were exact at the \
+         build its own range ended on, so the gate counts them and does not re-read them \
+         against a later one.\n",
+    );
+    out.push_str("<!-- ledger-tally:end -->");
+    out
+}
+
+/// Rule 8: the README's ledger tally block equals the block this module generates.
 pub(crate) fn ledger_tally(
     claims: &[Value],
     anchors: &anchors::Anchors,
@@ -101,31 +214,35 @@ pub(crate) fn ledger_tally(
         failures.push("README has no ledger-tally table".to_string());
         return;
     };
-    let block = &readme[start..];
-    let block = &block[..block
-        .find("<!-- ledger-tally:end -->")
-        .unwrap_or(block.len())];
-    let row_re = Regex::new(r"(?m)^\| ([a-z-]+) \| (\d+) \|").unwrap();
-    let mut rows: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for cap in row_re.captures_iter(block) {
-        rows.insert(cap[1].to_string(), cap[2].parse().unwrap_or(usize::MAX));
+    let Some(len) = readme[start..].find("<!-- ledger-tally:end -->") else {
+        failures.push("README ledger-tally block has no end marker".to_string());
+        return;
+    };
+    let block = &readme[start..start + len + "<!-- ledger-tally:end -->".len()];
+    let measured = match anchors.measured {
+        Some(m) => m,
+        None => match measured_from_readme(block) {
+            Some(m) => m,
+            None => {
+                failures.push(
+                    "README ledger tally carries no readable `anchors byte-exact at Claude Code \
+                     ...` line, and this host has no build to generate one from"
+                        .to_string(),
+                );
+                return;
+            }
+        },
+    };
+    let want = render_block(claims, anchors, verified, measured);
+    if block != want {
+        let at = block
+            .bytes()
+            .zip(want.bytes())
+            .position(|(a, b)| a != b)
+            .unwrap_or_else(|| block.len().min(want.len()));
+        failures.push(format!(
+            "README ledger tally block differs from the ledger's at byte {at} - the block is \
+             REGENERATED, never typed. Expected:\n{want}"
+        ));
     }
-    for key in super::rules::ATTRIBUTIONS {
-        let expected = attribution_count(claims, key);
-        match rows.get(key) {
-            Some(n) if *n == expected => {}
-            Some(n) => failures.push(format!(
-                "README tally row `{key}` says {n} but the ledger has {expected}"
-            )),
-            None => failures.push(format!("README tally has no `{key}` row")),
-        }
-    }
-    match rows.get("total") {
-        Some(n) if *n == claims.len() => {}
-        _ => failures.push(format!(
-            "README tally total does not equal the ledger's {} claims",
-            claims.len()
-        )),
-    }
-    anchor_line(anchors, verified, block, failures);
 }

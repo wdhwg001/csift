@@ -11,23 +11,32 @@
 //!     scope, never from the day it ran;
 //!   * a CSIFT VERSION - which csift build read a fact is the commit's business;
 //!   * an AUDIT-PROCESS WORD - `verifier`, `tracer`, `today`, `kicked` and their kin
-//!     describe who looked, which is never part of what Claude Code does.
+//!     describe who looked, which is never part of what Claude Code does;
+//!   * FIRST PERSON - a sentence with a person as its subject is about the reading rather
+//!     than about the build.
 //!
 //! WHAT IS NOT BARRED, and why the list is shorter than the law reads. `session`, `lane`
 //! and `rejected` are csift's own domain vocabulary - a top-level session, a frozen lane,
 //! a rejected tool use - so banning the token would destroy meaning rather than process
-//! narrative; those words are barred in their audit SENSE, which no regex decides, and
-//! the sweep that converted the ledger rewrote them by phrase. First person is barred the
-//! same way and for a second reason: these strings quote minified JavaScript, where `I`,
-//! `we` and `my` are ordinary identifiers.
+//! narrative; those words are barred in their audit SENSE, which no regex decides.
+//!
+//! The first-person family is MECHANICAL but narrow, and the narrowness is measured: these
+//! strings quote minified JavaScript where `we`, `We` and `wE` are ordinary identifier
+//! names (`let we=fe.sourceToolAssistantUUID`, `function wE(e,n,r,o,d)`), so a case-folded
+//! `\bwe\b` reads 156 hits of which 150 are the build's own bytes. The arms are therefore
+//! case-SENSITIVE and anchored on whitespace both sides: a pronoun is a standalone English
+//! word, while an identifier sits against `=`, `(`, `.` or `;`.
 //!
 //! A BACKTICKED span is exempt, for the reason an `excerpt` is: it quotes the build or a
 //! command verbatim, and Claude Code really does intern a beta named
-//! `server-side-fallback-2026-06-01`. The exemption applies ONLY when the backticks
-//! BALANCE - an odd count means one span is unclosed, and pairing left to right from there
-//! exempts prose instead of a literal, which is how a date and a first-person clause once
-//! hid behind an exemption they had no claim to. `probe.literal` is exempt for the same
-//! reason a quotation is. Everything a pass WROTE is scanned.
+//! `server-side-fallback-2026-06-01`. TWO conditions bound that exemption. The backticks
+//! must BALANCE - an odd count means one span is unclosed, and pairing left to right from
+//! there exempts prose instead of a literal, which is how a date and a first-person clause
+//! once hid behind an exemption they had no claim to. And the span must be SHORT: a run of
+//! more than `BACKTICK_MAX` characters between two backticks is not a literal anyone
+//! quotes, it is prose that happens to sit between them, and one such run of 2.2 KB shipped
+//! a bare `today`. `probe.literal` is exempt for the same reason a quotation is. Everything
+//! a pass WROTE is scanned.
 
 use regex::Regex;
 use serde_json::Value;
@@ -36,6 +45,24 @@ use std::sync::OnceLock;
 fn date_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\b\d{4}-\d{2}-\d{2}\b").unwrap())
+}
+
+/// A date that IS the fact rather than the stamp of a reading. `100-nanosecond ticks since
+/// 1601-01-01` names the FILETIME epoch and `0001-01-01` is the .NET zero instant a Windows
+/// probe prints; deleting either removes the very thing the sentence states. Two shapes,
+/// both decidable on the text: a year before 2000 is no stamp of any reading in this file,
+/// and a date governed by `epoch`, `ticks`, `FILETIME` or `asctime` within a short window is
+/// the thing being described.
+fn date_is_a_fact(s: &str, start: usize, end: usize) -> bool {
+    if !s[start..end].starts_with("20") {
+        return true;
+    }
+    let lo = start.saturating_sub(60);
+    let hi = (end + 60).min(s.len());
+    let window = format!("{}{}", &s[lo..start], &s[end..hi]).to_ascii_lowercase();
+    ["epoch", "ticks", "filetime", "asctime"]
+        .iter()
+        .any(|w| window.contains(w))
 }
 
 /// Long month names only. `May` is a month and an everyday verb, and a three-letter
@@ -61,30 +88,61 @@ fn csift_version_re() -> &'static Regex {
 /// The PLURALS and the agent noun are in the alphabet, because a word list that stops at
 /// the singular is a list with a hole in it: `adjudications` shipped 67 times in ONE bulk
 /// receipt sentence and `auditor` four times, while `adjudication` and `audit` were both
-/// already barred.
+/// already barred. So are the two phrases a graded re-read leaves behind - `planted fake`
+/// and `adversarial` - which name how a sentence was checked and never what a build does.
 fn audit_word_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?i)\b(re-audits|re-audit|verifiers|verifier|auditors|auditor|tracers|tracer|scribes|scribe|adjudications|adjudication|adjudicated|kicked|today|yesterday|audits|audited|audit)\b",
+            r"(?i)\b(re-audits|re-audited|re-audit|verifiers|verifier|verify lane|auditors|auditor|tracers|tracer|scribes|scribe|adjudications|adjudication|adjudicated|adjudicate|kicked|today|yesterday|planted fakes|planted fake|planted|adversarial|devil's advocate|blind review|audits|audited|audit)\b",
         )
         .unwrap()
     })
 }
 
+/// A backticked span is single-line and at most this long. See the module doc: a longer run
+/// is prose between two backticks, not a literal, and it is scanned as prose.
+const BACKTICK_MAX: usize = 400;
+
 fn backticked_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"`[^`\n]*`").unwrap())
+    RE.get_or_init(|| Regex::new(&format!(r"`[^`\n]{{0,{BACKTICK_MAX}}}`")).unwrap())
 }
 
-/// csift's own surface spells the flag `--audit`, the module `plan/audit.rs` and the mode
-/// `plan --audit`, so an `audit` touching `.`, `/` or `-` is the tool's word, not the
-/// process's. The regex crate has no look-behind, so the neighbours are read here.
-fn path_adjacent(s: &str, start: usize, end: usize) -> bool {
-    let before = s[..start].chars().next_back();
-    let after = s[end..].chars().next();
-    let touching = |c: Option<char>| matches!(c, Some('.') | Some('/') | Some('-'));
-    touching(before) || touching(after)
+/// FIRST PERSON, case-sensitive and whitespace-anchored. See the module doc for why: `we`
+/// is a real identifier name in the shipped bundle, so the test is whether the token stands
+/// alone as an English word rather than whether the letters occur.
+fn first_person_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"(?:^|\s)(I (?:am|was|have|had|will|would|could|can|do|did|re-[a-z]+|[a-z]+ed)|I'(?:m|ve|ll|d)|[Mm]y [a-z]+|[Ww]e|[Oo]ur [a-z]+|us)(?:[\s,.;:]|$)",
+        )
+        .unwrap()
+    })
+}
+
+/// csift's own surface spells the flag `--audit`, the module `src/commands/plan/audit.rs`
+/// and the mode `plan --audit`, and what makes those spellings csift's is their SHAPE: a
+/// flag, a path, a source file. The older guard spared any match ADJACENT to `.`, `/` or
+/// `-`, which spared `kicked-back`, `re-verifier`, `outside the audit.` and `re-run today.`:
+/// four process words shipping because a hyphen or a full stop sat beside them. So the
+/// whole non-space run around the match is read, and only these three shapes are exempt.
+fn csift_spelling(s: &str, start: usize, end: usize) -> bool {
+    let a = s[..start]
+        .rfind(char::is_whitespace)
+        .map_or(0, |i| i + s[i..].chars().next().map_or(1, char::len_utf8));
+    let b = s[end..]
+        .find(char::is_whitespace)
+        .map_or(s.len(), |i| end + i);
+    let run = s[a..b].trim_matches(|c: char| "`'\",;:()[].".contains(c));
+    run.starts_with("--") && run[2..].chars().all(|c| c.is_alphanumeric() || c == '-')
+        || run.contains('/')
+            && run
+                .chars()
+                .all(|c| c.is_alphanumeric() || "./:@-_".contains(c))
+        || run.ends_with(".rs")
+        || run.split(':').next().is_some_and(|h| h.ends_with(".rs"))
 }
 
 /// Every prose-law violation in one string, as (rule name, the matched text).
@@ -100,7 +158,9 @@ pub(crate) fn hits(s: &str) -> Vec<(&'static str, String)> {
     let s = scanned.as_str();
     let mut out = Vec::new();
     for m in date_re().find_iter(s) {
-        out.push(("calendar date", m.as_str().to_string()));
+        if !date_is_a_fact(s, m.start(), m.end()) {
+            out.push(("calendar date", m.as_str().to_string()));
+        }
     }
     for m in month_re().find_iter(s) {
         out.push(("month name", m.as_str().to_string()));
@@ -112,8 +172,13 @@ pub(crate) fn hits(s: &str) -> Vec<(&'static str, String)> {
     }
     for c in audit_word_re().captures_iter(s) {
         let Some(m) = c.get(1) else { continue };
-        if !path_adjacent(s, m.start(), m.end()) {
+        if !csift_spelling(s, m.start(), m.end()) {
             out.push(("audit-process word", m.as_str().to_string()));
+        }
+    }
+    for c in first_person_re().captures_iter(s) {
+        if let Some(m) = c.get(1) {
+            out.push(("first-person phrase", m.as_str().to_string()));
         }
     }
     out

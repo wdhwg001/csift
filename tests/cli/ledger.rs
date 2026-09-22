@@ -41,36 +41,53 @@
 //! 9. No OPEN state's verdict is `drifted`: a drift closes that state's range and opens
 //!    the next one, so a ledger whose current word on a claim is "drifted" is not
 //!    releasable.
-//! 10. No open leg is an unconsumed text instruction: a leg starting with `TEXT` is a
-//!     claim-text correction a traced hop demanded, and a leg recording a rejected
-//!     rewrite is the old, refuted text still shipping; both are consumed by rewriting
-//!     the text, never released around.
+//! 10. No FIELD carries an unconsumed text instruction: a `TEXT ...` line is a claim-text
+//!     correction a traced hop demanded, and a line recording a rejected rewrite is the
+//!     old, refuted text still shipping; both are consumed by rewriting the text, never
+//!     released around. The scan covers `open_legs`, `residue` AND `verified.note` - the
+//!     legs alone were the one place the instructions were not.
 //! 11. Every state below end-to-end carries both leg fields (`producer_trace`,
 //!     `specimen`), so rule 7's derivation always runs: an attribution with no legs
 //!     recorded is an opinion, not a derivation.
-//! 12. Every byte anchor of an OPEN state still points at its own excerpt in the verified
-//!     build: each `producer_chain` hop and `enumeration` entry carrying an `offset` must
-//!     be byte-exact there, unless it is elided or marked (see `ledger/anchors.rs`). A
-//!     MARK IS A CLAIM, NOT A PASS, so every mark is verified against the build too. An
-//!     EMPTY excerpt can never anchor anything, so an offset beside one is a failure
-//!     rather than a vacuous match. A CLOSED state's anchors were exact at the build its
-//!     range ended on: they are counted and never compared against a later build. A host
-//!     without the build prints one line and passes.
-//! 13. A claim carries one or two states, exactly one of them open; every state names a
-//!     `from`, a closed state names its `to`, and the states are ordered by `from`. The
-//!     OPEN state's range opens at or below the verified build, unless
-//!     `from_after_verified` says why it does not - a behavior first observed on a NEWER
-//!     build has a receipt at the badge's build and a range above it, and that shape is
-//!     stated rather than assumed.
+//! 12. Every byte anchor of an OPEN state still points at its own excerpt in the build it
+//!     was read in: each `producer_chain` hop and `enumeration` entry carrying an `offset`
+//!     must be byte-exact there, unless it is elided or marked (see `ledger/anchors.rs`).
+//!     The build is the verified one unless the hop names its OWN in `build`, which is how
+//!     a Windows artifact and an older version stop being compared against a build they
+//!     were never read in. A MARK IS A CLAIM, NOT A PASS, so every mark is verified against
+//!     the build too. An EMPTY excerpt can never anchor anything, and neither can one
+//!     carrying a run of four or more DOTS - that is a lossy render of non-printable bytes,
+//!     and it slipped past as "elided" while checking nothing. A CLOSED state's anchors
+//!     were exact at the build its range ended on: they are counted and never compared
+//!     against a later build. A host without a build prints one line and passes.
+//! 13. A claim carries one or two states, exactly one of them open AND LAST; every state
+//!     names a `from` and a `from_basis` from the closed set, a closed state names its
+//!     `to`, and the states are ordered by `from`. The OPEN state's range opens at or below
+//!     the verified build, unless `from_after_verified` says why it does not - a behavior
+//!     first observed on a NEWER build has a receipt at the badge's build and a range above
+//!     it, and that shape is stated rather than assumed.
 //! 14. The prose law, as a gate over every text field of every state: no calendar date or
 //!     long month name, no csift version number, no audit-process word (plurals and the
 //!     agent noun included - a word list that stops at the singular is a list with a hole
-//!     in it). The ledger is a fact record keyed by Claude Code version only; the commit
-//!     and the release carry the when and the which-csift. A quoted `excerpt` is exempt -
-//!     it reproduces the build's own bytes, where `kicked:!1`, `"today"` and a model's
-//!     November release date are the build's words - and so is a BACKTICKED span, but
-//!     only where the backticks BALANCE: an unclosed one makes left-to-right pairing
-//!     exempt prose instead of a literal.
+//!     in it), no first person. The ledger is a fact record keyed by Claude Code version
+//!     only; the commit and the release carry the when and the which-csift. A quoted
+//!     `excerpt` is exempt - it reproduces the build's own bytes, where `kicked:!1`,
+//!     `"today"` and a model's November release date are the build's words - and so is a
+//!     BACKTICKED span, but only where the backticks BALANCE and the span is SHORT: an
+//!     unclosed one makes left-to-right pairing exempt prose instead of a literal, and a
+//!     2.2 KB run between two backticks is prose rather than a literal anyone quotes.
+//! 15. Every state names its behavior, its depends and its instrument, and its `probe`
+//!     twin carries a kind from the closed set plus the field that kind is answered by -
+//!     a probe with a kind and nothing else is a placeholder wearing a schema.
+//! 16. A CLOSED state's receipt is shape-checked too: a build no later than its own `to`,
+//!     a verdict from the closed set, a non-empty instrument and observed. It is never
+//!     re-made against a later build, but a range nothing ever stood behind is not a range.
+//! 17. No field hands a RETIRED selector spelling to csift as an argument. The shipped
+//!     binary hard-errors on `harness.meta.*` and the pre-0.5 flat paths, so a probe naming
+//!     one cannot run at all; a residue line saying what a leaf USED to be called is
+//!     history, which is what a superseded reading is for.
+//! 18. The file's own shape: `schema` is 2, the claim list is non-empty, and every claim
+//!     carries a unique non-empty `id` and a non-empty `area`.
 //!
 //! The attribution set carries `upstream`: the producer lies OUTSIDE the shipped binary
 //! by construction (the model or API side, the operating system, a native runtime
@@ -78,11 +95,14 @@
 //! `producer_trace: upstream` + `specimen: observed` derives it.
 
 mod anchors;
+mod legs;
 mod prose;
 mod rules;
 mod specimens;
+mod states;
 mod tally;
 
+use serde_json::Value;
 use std::collections::HashMap;
 
 pub(crate) fn repo() -> std::path::PathBuf {
@@ -122,44 +142,75 @@ pub(crate) fn open_state(claim: &serde_json::Value) -> Option<&serde_json::Value
     states(claim).iter().find(|s| s["to"].is_null())
 }
 
-#[test]
-fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
-    let raw = std::fs::read_to_string(repo().join("INTROSPECTION.json"))
-        .expect("INTROSPECTION.json must exist at the repo root");
-    let doc: serde_json::Value = serde_json::from_str(&raw).expect("INTROSPECTION.json parses");
-    assert_eq!(doc["schema"], 2, "ledger schema version");
-    let verified = doc["verified_claude_code"]
-        .as_str()
-        .expect("verified_claude_code is a string");
-    assert!(
-        version_triple(verified),
-        "verified_claude_code `{verified}` is a version triple"
-    );
-
-    let claims = doc["claims"].as_array().expect("claims is an array");
-    assert!(!claims.is_empty(), "the ledger is never empty");
+/// Rule 18: the file's own shape, as a rule with a name rather than a bare assertion in
+/// the driver. `schema` is 2, the claim list is non-empty, and every claim carries a unique
+/// non-empty `id` and a non-empty `area`. These were three `assert!`s and an inline `if`,
+/// which is exactly how a check ends up with no specimen behind it.
+pub(crate) fn file_shape<'a>(doc: &'a Value, failures: &mut Vec<String>) -> Vec<&'a Value> {
+    if doc["schema"] != 2 {
+        failures.push(format!(
+            "ledger `schema` is {}, not 2 - this gate reads schema 2",
+            doc["schema"]
+        ));
+    }
+    match doc["verified_claude_code"].as_str() {
+        Some(v) if version_triple(v) => {}
+        other => failures.push(format!(
+            "`verified_claude_code` is {other:?}, not a Claude Code version"
+        )),
+    }
+    let Some(claims) = doc["claims"].as_array() else {
+        failures.push("`claims` is not an array".to_string());
+        return Vec::new();
+    };
+    if claims.is_empty() {
+        failures.push("the ledger is empty".to_string());
+    }
     let mut ids: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    let mut evidence: HashMap<String, String> = HashMap::new();
-    let mut file_cache: HashMap<String, Option<rules::FileText>> = HashMap::new();
-    let mut failures: Vec<String> = Vec::new();
-
+    let mut out = Vec::new();
     for c in claims {
         let id = c["id"].as_str().unwrap_or("");
-        if id.is_empty() || !ids.insert(id) {
-            failures.push(format!("claim id missing or duplicated: `{id}`"));
+        if id.is_empty() {
+            failures.push("a claim carries no `id`".to_string());
+            continue;
+        }
+        if !ids.insert(id) {
+            failures.push(format!("claim id `{id}` occurs more than once"));
             continue;
         }
         if c["area"].as_str().is_none_or(|s| s.trim().is_empty()) {
             failures.push(format!("{id}: `area` is empty"));
         }
-        rules::state_shape(id, c, verified, &mut failures);
+        out.push(c);
+    }
+    out
+}
+
+#[test]
+fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
+    let raw = std::fs::read_to_string(repo().join("INTROSPECTION.json"))
+        .expect("INTROSPECTION.json must exist at the repo root");
+    let doc: serde_json::Value = serde_json::from_str(&raw).expect("INTROSPECTION.json parses");
+    let mut failures: Vec<String> = Vec::new();
+    let kept = file_shape(&doc, &mut failures);
+    let verified = doc["verified_claude_code"].as_str().unwrap_or("");
+
+    let claims = doc["claims"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let mut evidence: HashMap<String, String> = HashMap::new();
+    let mut file_cache: HashMap<String, Option<rules::FileText>> = HashMap::new();
+
+    for c in kept {
+        let id = c["id"].as_str().unwrap_or("");
+        states::state_shape(id, c, verified, &mut failures);
         rules::code_sites(id, c, &mut file_cache, &mut failures);
         rules::receipts(id, c, verified, &mut evidence, &mut failures);
         for (i, state) in states(c).iter().enumerate() {
             let at = format!("{id} states[{i}]");
-            rules::state_text(&at, state, &mut failures);
+            states::state_text(&at, state, &mut failures);
+            states::closed_receipt(&at, state, &mut failures);
             rules::attribution(&at, state, &mut failures);
-            rules::leg_hygiene(&at, state, &mut failures);
+            legs::text_instructions(&at, state, &mut failures);
+            legs::retired_spellings(&at, state, &mut failures);
             prose::check_state(&at, state, &mut failures);
         }
     }
