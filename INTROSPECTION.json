@@ -49484,7 +49484,7 @@
             "kind": "csift",
             "command": "csift search '' -t harness.bookkeeping.file-history --count-by label --format json",
             "scope": "the projects root the command targets",
-            "rule": "One marker per delta line matching the target; one files row per (snapshot line, settings-family path) version increase."
+            "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One count per raw jsonl line whose top-level type is file-history-delta; key-set counts are over the parsed object, and the backup sub-object is tabulated separately."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -49494,8 +49494,8 @@
             "The claim's field list is incomplete on the nested object: backup carries a fourth key, realParentDir, on 1,122 of 2,056 records. A reader treating {backupFileName, version, backupTime} as exhaustive would be wrong more than half the time.",
             "The corpus count has moved: 2,056 against the claim's 1,971 (measured two days earlier). The counting rule matters as much as the number - summing every stats row instead of the kind==session rows doubles it exactly.",
             "backup.version is 1 on every delta on this machine, which follows from the producer: vTe backs a NEW path up at version 1 and version movement happens only at snapshot time, so a delta by construction reports the first version of a path.",
-            "An earlier reading, superseded in its conclusion but not in its numbers: Corpus-wide over 7,579 sessions: file-history-delta = 1,971 lines, file-history-snapshot = 4,055. In one project dir, 144 delta lines, all with the identical key set {backup, messageId, snapshotMessageId, timestamp, trackingPath, type}; backup.version was 1 on all 144 and backup.backupFileName was non-null on 79 of 144. `-t harness.meta.snapshot` reaches 577 records in that dir and renders e.g. `[file-history delta at 2026-08-12T01:14:54.653Z: src/path.rs@v1 backup=<hash>@v1]`. The binary writes `insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)`. src/model/classify_promoted.rs:13-25 holds the quoted match, with the `\"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),` arm at line 22. (1) The count is 1,971, not 1,934 - and the counting rule has to travel with it, because summing every stats row instead of only the session rows yields exactly 3,942. (2) `@vN` is csift's own render of `backup.version`, not a Claude Code field name; the CC fields are `trackingPath` and `backup.{backupFileName, version, backupTime}`. Counting rule: One count per raw jsonl line. Corpus totals sum `line_types` over rows with kind == 'session' ONLY - the stats stream also emits one kind == 'summary' row that re-totals the whole scope, and summing every row double-counts every line type exactly 2x.",
-            "An earlier reading, superseded in its conclusion but not in its numbers: complete producer trace: trigger vTe dispatching the track action @162371660; gate reducer lV case \"track\" early return @162368400; writer L7n building the delta entry @166123154. writer excerpt: function L7n(e,n,r,o,d){await Fi().insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)}async function yxr(e,n){await Fi().insertAttributionSnapshot(e,n)}asyn enumeration: 3 site(s) read: L7n call sites (whole binary) @166123154: grep 'L7n(' returns exactly two byte hits: the definition at 166123154 and one c; insertFileHistoryDelta call sites (whole binary) @166106053: grep 'insertFileHistoryDelta(' returns exactly two: the store method at 16610625; the delta gate @162368400: The Ad lookup early-return is the only suppression: no other branch in the reduc specimen: 2,056 records. Counting rule: three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One count per raw jsonl line whose top-level type is file-history-delta; key-set counts are over the parsed object, and the backup sub-object is tabulated separately."
+            "An earlier reading, superseded in its conclusion but not in its numbers: Corpus-wide over 7,579 sessions: file-history-delta = 1,971 lines, file-history-snapshot = 4,055. In one project dir, 144 delta lines, all with the identical key set {backup, messageId, snapshotMessageId, timestamp, trackingPath, type}; backup.version was 1 on all 144 and backup.backupFileName was non-null on 79 of 144. `-t harness.meta.snapshot` reaches 577 records in that dir and renders e.g. The binary writes `insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)`. src/model/classify_promoted.rs:13-25 holds the quoted match, with the `\"file-history-snapshot\" | \"file-history-delta\" => Some(Class::MetaSnapshot),` arm at line 22. (1) The count is 1,971, not 1,934 - and the counting rule has to travel with it, because summing every stats row instead of only the session rows yields exactly 3,942. (2) `@vN` is csift's own render of `backup.version`, not a Claude Code field name; the CC fields are `trackingPath` and `backup.{backupFileName, version, backupTime}`. Counting rule: One count per raw jsonl line. Corpus totals sum `line_types` over rows with kind == 'session' ONLY - the stats stream also emits one kind == 'summary' row that re-totals the whole scope, and summing every row double-counts every line type exactly 2x.",
+            "An earlier reading, superseded in its conclusion but not in its numbers: `files` external-write extraction reads `rec.snapshot` and never `rec.tracking_path`, so its rows are unchanged. Counting rule: One marker per delta line matching the target; one files row per (snapshot line, settings-family path) version increase."
           ],
           "producer_chain": [
             {
@@ -49542,11 +49542,11 @@
           ],
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "refined",
-            "instrument": "Read the delta arm in recover's per-record extraction against a synthetic fixture and confirmed `files` still builds its sequences from `snapshot.trackedFileBackups` only.",
-            "observed": "recover emits a HistorySnapshotMarker per matching delta line; `files` external-write extraction reads `rec.snapshot` and never `rec.tracking_path`, so its rows are unchanged.",
-            "rule": "One marker per delta line matching the target; one files row per (snapshot line, settings-family path) version increase.",
-            "note": "The sentence saying the delta form does not affect recover's backup instrument no longer holds; the files half of it still does."
+            "verdict": "holds",
+            "instrument": "the producer leg traced to closure in the 2.1.258 binary (trigger vTe dispatching the track action @162371660; gate reducer lV case \"track\" early return @162368400; writer L7n building the delta entry @166123154), each excerpt re-read within 400 bytes of its offset; specimen leg: Corpus-wide ripgrep of the literal `\"type\":\"file-history-delta\"` (whose count matches the csift stats line-type census exactly, 2,056 = 2,056) piped to a python probe tabulating top-level key sets, top-level timestamp presence, and the backup object's key set and values (run).",
+            "observed": "complete producer trace: trigger vTe dispatching the track action @162371660; gate reducer lV case \"track\" early return @162368400; writer L7n building the delta entry @166123154. writer excerpt: function L7n(e,n,r,o,d){await Fi().insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)}async function yxr(e,n){await Fi().insertAttributionSnapshot(e,n)}asyn enumeration: 3 site(s) read: L7n call sites (whole binary) @166123154: grep 'L7n(' returns exactly two byte hits: the definition at 166123154 and one c; insertFileHistoryDelta call sites (whole binary) @166106053: grep 'insertFileHistoryDelta(' returns exactly two: the store method at 16610625; the delta gate @162368400: The Ad lookup early-return is the only suppression: no other branch in the reduc specimen: 2,056 records. One top-level key set on all of them: {backup, messageId, snapshotMessageId, timestamp, trackingPath, type}; a top-level timestamp on 2,056 of 2,056. The backup object has TWO shapes: {backupFileName, backupTime, realParentDir, version} on 1,122 and {backupFileName, backupTime, versio",
+            "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One count per raw jsonl line whose top-level type is file-history-delta; key-set counts are over the parsed object, and the backup sub-object is tabulated separately.",
+            "note": "The delta literal with its own timestamp was read in the store wrapper, and the whole-binary call-site count shows exactly one path can produce it - matched by 2,056 on-disk lines carrying that literal's exact key set."
           }
         }
       ]
@@ -50198,10 +50198,10 @@
           "depends": "csift assigns the draft the single leaf `user.unsent` at the scan layer (a per-record classify cannot see the later sibling), keeps it outside turn numbering, and uses the `preservedMessages` exclusion as the LLM-visibility instrument for a bare `-t user`; a recalled-then-abandoned message has no sibling and is structurally undetectable. Since that change a superseded record never fans out into per-section classes: the single `user.unsent` view is emitted whatever the draft's text shape, so a hit's `label` is always a member of its own `labels[]` and a notification selector never sees a draft.",
           "instrument": "compactMetadata.preservedMessages is a JSON OBJECT {anchorUuid, uuids:[...], allUuids?:[...]}, not an array. Treating it as a list of uuids yields 0 preserved uuids and makes the instrument vacuously pass; the object shape is confirmed in the 2.1.258 binary, which builds 'preservedMessages:{anchorUuid:r.anchor_uuid,uuids:[...r.uuids],...r.all_uuids!==void 0&&{allUuids'.",
           "probe": {
-            "kind": "bytes",
-            "literal": "preservedMessages:",
-            "scope": "the Claude Code build named by the state's range",
-            "rule": "RE-LOCATION, not measurement: a count of this literal over the whole build file finds the producer hop again after a rename or a move. It dates the literal, never the behaviour, which the state's instrument measures."
+            "kind": "corpus",
+            "command": "python probe over every top-level transcript under the corpus root: collect compactMetadata.preservedMessages uuids and allUuids per file",
+            "scope": "every *.jsonl under one projects root, top-level and <uuid>/subagents/**, excluding journal.jsonl, elicitations.jsonl and anything under a csift-channel directory",
+            "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); per file: drafts = all but the last member of each multi-member parentUuid group; intersection taken against that same file's preserved uuid set"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -50210,7 +50210,7 @@
           "residue": [
             "An earlier reading, superseded in its conclusion but not in its numbers: 64 transcripts, 229 compact_boundary records, 3785 preserved uuids collected. 560 parentUuid groups with more than one user opener; 856 superseded drafts; 0 of the 856 appear in any preservedMessages uuid set, while 11 of the 560 resend siblings do. csift's own count over the same scope: matched 848 user.unsent records across 26 sessions. One draft per resend sibling (all but the last member of a parentUuid group); intersection counted per uuid, per file. csift's 848 and the python 856 differ because csift's draft set is derived from opens_turn (which also admits answer/rejection/peer openers and excludes slash-command wrappers) while the python approximation keys on plain user records; both agree on 0 overlap with preservedMessages.",
             "An earlier reading this claim's text was corrected against: fix: search/hits.rs computes no sections for a superseded record; e2e a_sectioned_draft_keeps_the_single_unsent_label Counting rule: a hit's label must be a member of its own labels[]",
-            "An earlier reading, superseded in its conclusion but not in its numbers: complete producer trace: trigger turn abort handler calling restoreMessageSync(Zo,Ot?\"refusal_fallback_edit\":\"auto_restore_cancel\") @181627165; gate rewindConversationTo(T,I): Pe=Ce.slice(0,Re) ... q.replace(Pe) @180776684; writer function $it(e,n,r,o=r){let d=r.map(_=>_.uuid),f=dMe([...r],o).map(_=>_.uuid);...preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}} @164831131. writer excerpt: function $it(e,n,r,o=r){let d=r.map((_)=>_.uuid),f=dMe([...r],o).map((_)=>_.uuid);if(d.length===0)return e;return{...e,compactMetadata:{...e.compactMetadata,...f.length>0&&{preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}},preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}}}}function ojt(e,n){if(!n)retu specimen: 67 top-level transcripts, 232 compact_boundary records, 3,490 distinct preserved uuids. 563 parentUuid groups with more than one user opener; 859 superseded drafts, 0 of which appear in any preservedMessages uuid set, while 11 of the 563 resend siblings do - so the exclusion discriminates rather tha three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); per file: drafts = all but the last member of each multi-member parentUuid group; intersection taken against that same file's preserved uuid set One mechanism explains both halves: the rewind drops the abandoned record from the live array while leaving it on disk, so the resend inherits its parentUuid and the draft can never enter the keptMessages that preservedMessages is built from."
+            "An earlier reading, superseded in its conclusion but not in its numbers: The override now carries an `Option<Class>` instead of a boolean, because an abandoned opener takes one of TWO leaves; the delivery override beside it is untouched. Counting rule: One read per cited site; the leaf set is counted by enum variant."
           ],
           "producer_chain": [
             {
@@ -50243,11 +50243,11 @@
           },
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "refined",
-            "instrument": "Read the scan-layer label override in src/search/hits.rs and the per-record delivery note on `Class::llm_visible`.",
-            "observed": "The override now carries an `Option<Class>` instead of a boolean, because an abandoned opener takes one of TWO leaves; the delivery override beside it is untouched.",
-            "rule": "One read per cited site; the leaf set is counted by enum variant.",
-            "note": "A leaf joined the invisible set; the instrument that decides membership is unchanged."
+            "verdict": "holds",
+            "instrument": "attribution push: the producer leg traced in the 2.1.258 binary (trigger turn abort handler calling restoreMessageSync(Zo,Ot?\"refusal_fallback_edit\":\"auto_restore_cancel\") @181627165; gate rewindConversationTo(T,I): Pe=Ce.slice(0,Re) ... q.replace(Pe) @180776684; writer function $it(e,n,r,o=r){let d=r.map(_=>_.uuid),f=dMe([...r],o).map(_=>_.uuid);...preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}} @164831131), each excerpt re-read within 400 bytes of its offset; specimen leg: python probe over every top-level transcript under the corpus root: collect compactMetadata.preservedMessages uuids and allUuids per file (handling both the object and a bare-array shape), group non-meta non-summary non-tool_result user records by parentUuid, call all but the last member of each multi-member group a superseded draft, and intersect both sets with that file's preserved uuids",
+            "observed": "complete producer trace: trigger turn abort handler calling restoreMessageSync(Zo,Ot?\"refusal_fallback_edit\":\"auto_restore_cancel\") @181627165; gate rewindConversationTo(T,I): Pe=Ce.slice(0,Re) ... q.replace(Pe) @180776684; writer function $it(e,n,r,o=r){let d=r.map(_=>_.uuid),f=dMe([...r],o).map(_=>_.uuid);...preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}} @164831131. writer excerpt: function $it(e,n,r,o=r){let d=r.map((_)=>_.uuid),f=dMe([...r],o).map((_)=>_.uuid);if(d.length===0)return e;return{...e,compactMetadata:{...e.compactMetadata,...f.length>0&&{preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}},preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}}}}function ojt(e,n){if(!n)retu specimen: 67 top-level transcripts, 232 compact_boundary records, 3,490 distinct preserved uuids. 563 parentUuid groups with more than one user opener; 859 superseded drafts, 0 of which appear in any preservedMessages uuid set, while 11 of the 563 resend siblings do - so the exclusion discriminates rather tha",
+            "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); per file: drafts = all but the last member of each multi-member parentUuid group; intersection taken against that same file's preserved uuid set",
+            "note": "One mechanism explains both halves: the rewind drops the abandoned record from the live array while leaving it on disk, so the resend inherits its parentUuid and the draft can never enter the keptMessages that preservedMessages is built from."
           }
         }
       ]
@@ -67555,7 +67555,7 @@
             "kind": "csift",
             "command": "csift search '' @<id> -t user.queued --format json",
             "scope": "the projects root the command targets",
-            "rule": "One comparison per enqueued human text; the unsent population read from csift itself."
+            "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -67716,10 +67716,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "Re-read the queue half of the claim against the chain: check that a queued text that never became a user record still has no opener to abandon, and that the unsent leaf covers only records the chain dropped.",
-            "observed": "The queue-only class is untouched by the axis - it has no `type:\"user\"` record at all, so no chain question arises; the unsent leaf still covers only superseded openers.",
-            "rule": "One comparison per enqueued human text; the unsent population read from csift itself.",
-            "note": "The claim now names the chain as the detector instead of the standalone grouping module."
+            "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger AY - the REPL submit dispatcher hands ev @181580347; gate xn - queue admission and the !unlogged l @162035115; writer kun - the default sink binding and the q @162031847; writer FGr - the default sink @162029731",
+            "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
+            "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration.",
+            "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
           }
         }
       ]
@@ -72261,7 +72261,7 @@
             "kind": "corpus",
             "command": "for byte",
             "scope": "what the command names",
-            "rule": "The three outcomes are read as the three branches of the located consumer; no count is asserted."
+            "rule": "Branches are read from the named build at their offsets; the template is a declared constant."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -72308,11 +72308,11 @@
           ],
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "Offsets 164635300, 165812430 and 161464086 located in the Claude Code 2.1.258 executable as the consumer, the exit-code mapper and the feedback formatter of the Stop-family hook response.",
-            "observed": "Exit 2 in the Stop family continues the turn and renders the hook's stderr as an isMeta `<Event> hook feedback:` record; {\"continue\":false} stops the turn and emits a hook_stopped_continuation attachment; a response carrying both continue:false and decision:\"block\" stops rather than blocks.",
-            "rule": "The three outcomes are read as the three branches of the located consumer; no count is asserted.",
-            "note": "csift models the exit2 vehicle and never the stopping one, so only the first branch is a csift code path; the other two are the reason the modelled set is exactly two. The sites are cited by offset and no live capture exists, which is what holds the attribution at partial-producer."
+            "verdict": "refined",
+            "instrument": "Read the Stop-family consumer's preventContinuation branch, the mapper that sets the two outcomes on one response, the turn-stopping attachment and the Stop feedback wrapper with its template in the Claude Code 2.1.258 executable at their offsets.",
+            "observed": "The mapper sets preventContinuation from continue:false and blockingError from decision block on the same response object, so both may be present. The consumer reads preventContinuation first, which is what makes continue:false outrank the block. A continued turn renders its blocking error through a wrapper that prefixes the event name to a fixed feedback template; a stopped turn yields the hook_stopped_continuation attachment instead.",
+            "rule": "Branches are read from the named build at their offsets; the template is a declared constant.",
+            "note": "The text cited 164635300 as the consumer. Those bytes are the TeammateIdle consumer, not the Stop family the claim is about; the Stop-family consumer is at 164633541. Corrected, and the ordering that decides between the two outcomes is now read rather than asserted."
           }
         }
       ]
@@ -75190,15 +75190,12 @@
             "kind": "live",
             "command": "Run a teammate turn with a hook that logs every payload with a capture stamp, then compare each SubagentStop payload against the agent's own transcript records;",
             "scope": "a running Claude Code session",
-            "rule": "verbatim byte reads at the named offsets; a count is occurrences of the fixed byte string over the whole binary"
+            "rule": "One per logged fire and one per transcript record; the event census counts lines of the log."
           },
           "producer_trace": "complete",
           "specimen": "observed",
           "attribution": "end-to-end",
           "open_legs": [],
-          "residue": [
-            "An earlier reading, superseded in its conclusion but not in its numbers: Three SubagentStop fires, all matching their transcript record's text, each record stamped 0.213, 0.184 and 0.119 seconds before the capture; Counting rule: One per logged fire and one per transcript record; the event census counts lines of the log."
-          ],
           "producer_chain": [
             {
               "role": "trigger",
@@ -75267,10 +75264,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "holds",
-            "instrument": "Byte reads in the Claude Code 2.1.258 executable of both halves of the observed ordering: the record persistence path from the message-chain insert through the write policy to the drain that resolves its awaiting writers, and the end-of-turn function that emits the stop events beside the task and idle payloads.",
-            "observed": "Nine hops read. The drain appends the batched entries to the file and only then resolves the writers awaiting them, so a turn's final record is on disk before an await returns. One generator emits both stop events, keyed on whether an agent id was passed, and the last-assistant field is read from the in-memory message array rather than from the file. The end-of-turn function calls the stop emitter ahead of the task loop and the idle loop, and the task event fires once per in-progress task owned by the teammate, which is why a teammate holding none produces no fire.",
-            "rule": "verbatim byte reads at the named offsets; a count is occurrences of the fixed byte string over the whole binary",
-            "note": "The leg is closed, and the source order matches the observed ordering: the stop emitter is called before the task and idle loops, and the persistence drain resolves after the bytes land, which is the mechanism behind the measured stamp gap."
+            "instrument": "A payload log of 158 rows from a teammate turn, joined to the agent's own transcript records by text and stamp.",
+            "observed": "Three SubagentStop fires, all matching their transcript record's text, each record stamped 0.213, 0.184 and 0.119 seconds before the capture; SubagentStop first in all three turns; Stop before TeammateIdle in one turn and after it in two; zero TaskCompleted fires in the whole log.",
+            "rule": "One per logged fire and one per transcript record; the event census counts lines of the log.",
+            "note": "The margins are the record's own claimed stamp against the logger's wall clock on one machine, so a flush lag of that order would be invisible to this instrument."
           }
         }
       ]
@@ -75380,14 +75377,14 @@
             "kind": "corpus",
             "command": "for byte, including the 4000-character truncation constant",
             "scope": "what the command names",
-            "rule": "One per JSON object on its own line inside a relay body; records counted once each."
+            "rule": "verbatim byte reads at the named offsets; a count is occurrences of the fixed byte string over the whole binary"
           },
           "producer_trace": "complete",
           "specimen": "observed",
           "attribution": "end-to-end",
           "open_legs": [],
           "residue": [
-            "An earlier reading, superseded in its conclusion but not in its numbers: Three of the four offsets the claim previously named were off: the truncation was named 500 bytes early inside the notification schema, the mailbox write named a result-truncation helper, and the registration was named 22 bytes into the preceding log template. verbatim byte reads at the named offsets; a count is occurrences of the fixed byte string over the whole binary The behavior holds and the three mis-stated offsets are corrected to the constructs actually read."
+            "An earlier reading, superseded in its conclusion but not in its numbers: All four shapes are present at their named offsets with the truncation at 4000 characters; 5 payloads of 336 carry the `result` field, spread over 220 relay records. Counting rule: One per JSON object on its own line inside a relay body; records counted once each."
           ],
           "producer_chain": [
             {
@@ -75428,11 +75425,11 @@
           ],
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "The notification builder, the truncation constant, the mailbox write and the hook registration re-read at their offsets, paired with a partition of the JSON objects carried inside relay bodies.",
-            "observed": "All four shapes are present at their named offsets with the truncation at 4000 characters; 5 payloads of 336 carry the `result` field, spread over 220 relay records.",
-            "rule": "One per JSON object on its own line inside a relay body; records counted once each.",
-            "note": "Landed with the ack surface: a harness notification is not a channel record, so only the lane's own ledger line closes a message."
+            "verdict": "refined",
+            "instrument": "Byte reads of the five sites of this path in the Claude Code 2.1.258 executable: the Stop hook registration at 180652849, the team-leader skip at 180652652, the notification builder at 160178102, the truncation constant and helper at 160171039 and the mailbox write at 180653028.",
+            "observed": "All five hold. The registration reads I.addFunctionHook(O,\"Stop\",\"\",...), whose callback builds the notification and writes it to the leader's mailbox. The builder returns an object typed idle_notification whose result field is the truncated text and which carries no envelope id. The constant is lP=4000 and the helper cuts the result to it. Three of the four offsets the claim previously named were off: the truncation was named 500 bytes early inside the notification schema, the mailbox write named a result-truncation helper, and the registration was named 22 bytes into the preceding log template.",
+            "rule": "verbatim byte reads at the named offsets; a count is occurrences of the fixed byte string over the whole binary",
+            "note": "The behavior holds and the three mis-stated offsets are corrected to the constructs actually read. The gate hop is new: a team leader registers no idle-notification hook at all, so the notification exists only on the teammate-to-leader direction."
           }
         }
       ]
@@ -78648,7 +78645,7 @@
             "kind": "csift",
             "command": "csift search '' -t user.unsent --no-subagents --max-count 0 --format json",
             "scope": "the projects root the command targets",
-            "rule": "One read per label; no counting."
+            "rule": "One observation per pair (886) and one per control record (2,595, over 2,567 exchange rows); a shape counts once per window however often it occurs in it. Pair rates are over 886, control rates over 2,595. A pair is the draft row and the record its own superseding_line names, in the file whose record at the row's line carries the row's uuid. A control window ends, exclusive, at the next assistant line or the next line csift emits under user.message, user.answer, user.rejection or agent.communication.inbox; the second pass drops the assistant half of that rule. `assistant` is outside the shape comparison because the first window definition zeroes it on the control side."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -78912,11 +78909,11 @@
           ],
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "refined",
-            "instrument": "Re-read the retroactivity argument against the chain: check whether any field on a draft record could decide the label without a later record, now that the decider is the DAG rather than a sibling scan.",
-            "observed": "Still retroactive, and now for two labels: a draft is decided by a LATER sibling and a rewound opener by a DESCENDANT, so both need records that do not exist when the opener is written.",
-            "rule": "One read per label; no counting.",
-            "note": "The decider moved from a sibling scan to the chain and the retroactivity argument holds for both opener leaves."
+            "verdict": "holds",
+            "instrument": "The four steps run end to end after the CMP-019 guard corrected the population: the user.unsent enumeration joined to each survivor by the row's own superseding_line, transcripts read by the path csift list prints, every pair compared key by key and its between-window classified, all 2,595 user.message records of the same sessions classified against the four-case opener set csift emits, and each shape re-counted with the control window cut only at the next opener.",
+            "observed": "886 drafts over 28 sessions; 886 pairs resolved, 0 unresolved (2 session ids resolved to two transcript files each and the uuid check picked the right one). Key sets identical on 852 of 886, 13 distinct key sets on the draft side and 15 by pair union, one-sided keys imagePasteIds 29, origin 5, queueSkipAttachments 1; value differences promptId 886, uuid 886, timestamp 886, message 862, promptSource 28, imagePasteIds 27, origin 15, version 1. 1 of 886 windows holds no line at all; 69 of 886 (7.8%) hold an assistant record. Control: 2,595 records over 2,567 rows, of which 74 (2.9%) have a window ending at another opener with no assistant. Shape rates (drafts/control): file-history-snapshot 99.3/91.2, last-prompt 64.4/53.7, permission-mode 64.3/53.7, mode 64.3/53.4, ai-title 64.3/53.8, hook_additional_context 56.4/51.3, user 47.1/23.9, agent-name 42.0/37.8, total_tokens_reminder 27.8/29.7, ultrathink_effort 22.6/16.2, and 40-odd further shapes below 11% on the draft side. Eight shapes read zero on the control side, and the second pass shows every one of those zeros is the assistant cut: stop_hook_summary 0 -> 85.2%, turn_duration 0 -> 65.8%, queued_command 0 -> 15.0%, batching_reminder_sent 0 -> 7.9%, bash_output_audience_note 0 -> 4.7%, model_refusal_fallback 0 -> 1.5%, informational 0 -> 0.3%, model_refusal_no_fallback 0 -> one occurrence. No shape follows every draft, so there is no discriminator.",
+            "rule": "One observation per pair (886) and one per control record (2,595, over 2,567 exchange rows); a shape counts once per window however often it occurs in it. Pair rates are over 886, control rates over 2,595. A pair is the draft row and the record its own superseding_line names, in the file whose record at the row's line carries the row's uuid. A control window ends, exclusive, at the next assistant line or the next line csift emits under user.message, user.answer, user.rejection or agent.communication.inbox; the second pass drops the assistant half of that rule. `assistant` is outside the shape comparison because the first window definition zeroes it on the control side.",
+            "note": "Re-run over the population the same-uuid guard corrected. The conclusion is unchanged and now has no artifact left in it: neither the draft record nor any successor shape separates a draft from a submitted prompt, and the eight shapes that looked draft-only were end-of-turn material the control window cut away."
           }
         }
       ]
