@@ -11,10 +11,18 @@
 //! `| head` read used to produce. And `BufWriter::drop` SWALLOWS one - exit 0 with the
 //! stream short and nothing said, which is the silent failure the output contract forbids
 //! and which is what an `Out::flush` that returned `Ok(())` would leave behind.
+//!
+//! The print lint that holds all of this is at the PRINT SITE, and that leaves one
+//! residual a call cannot be read off the calling module: `text::emit_scope_banner` and
+//! `path::emit_duplicate_banner` print with `println!` from files that carry no deny,
+//! because both legitimately print. So a call into either from inside a buffered module
+//! compiles clean, passes clippy, and puts a `println!` in the middle of a buffered stream.
+//! The last test here is the sweep that closes it.
 
 use crate::harness::*;
 
 use std::io::Read as _;
+use std::path::Path;
 
 /// Run csift with stdout wired to a pipe whose READ END IS ALREADY CLOSED, returning the
 /// exit code and stderr. Every write the child makes fails with a broken-pipe error from
@@ -213,4 +221,118 @@ fn a_banner_is_part_of_the_stream_it_heads_not_an_exception_to_it() {
             "{what}: the banner is written through the buffer, so nothing aborts: {err}"
         );
     }
+}
+
+/// The inner attribute every module that builds or writes through an `Out` carries.
+const PRINT_DENY: &str = "#![deny(clippy::print_stdout";
+
+/// The two banner sinks that print with `println!`. Their writer twins (`write_scope_banner`
+/// / `write_duplicate_banner`) are what a buffered surface calls, and neither name contains
+/// either of these, so a plain substring separates them.
+const PRINT_SINKS: [&str; 2] = ["emit_scope_banner", "emit_duplicate_banner"];
+
+/// POSITIVE CONTROL for the CALLER half. These three modules print every row with
+/// `println!` and reach a print-form sink today; if the sweep stops finding them it has
+/// narrowed, and a narrowed sweep reads as a clean bill of health while checking nothing.
+/// A module that moves out of this list either gained an `Out` (then it calls the writer
+/// form and belongs in the list below) or stopped printing a banner (then say so here).
+const PRINT_FORM_CALLERS: [&str; 3] = [
+    "src/commands/recover/render.rs",
+    "src/commands/session/render.rs",
+    "src/commands/stats/render.rs",
+];
+
+/// POSITIVE CONTROL for the GUARDED half, which can narrow the same way: these five are
+/// the buffered render entry points, and each must be seen carrying the deny.
+const GUARDED_CONTROLS: [&str; 5] = [
+    "src/commands/agents/render.rs",
+    "src/commands/files/render.rs",
+    "src/commands/image/render.rs",
+    "src/commands/search/render.rs",
+    "src/commands/turns/render.rs",
+];
+
+/// Every `.rs` under `src/`, as (repo-relative path, source with LINE COMMENTS removed).
+/// Comments go because a doc line NAMING a sink is prose and not a call - `text/out.rs`
+/// names both while calling neither. The crate uses no block comments, so a line-wise
+/// strip is the whole of it. Read from the manifest directory, never the process cwd.
+fn crate_sources() -> Vec<(String, String)> {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut out = Vec::new();
+    let mut stack = vec![src.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("read a directory under src/") {
+            let path = entry.expect("a directory entry under src/").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let text = std::fs::read_to_string(&path).expect("read a source file");
+                let code = text
+                    .lines()
+                    .filter(|l| !l.trim_start().starts_with("//"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let rel = path
+                    .strip_prefix(src.parent().expect("src has a parent"))
+                    .expect("under the crate root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.push((rel, code));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn no_module_that_denies_the_print_lints_calls_a_println_form_banner_sink() {
+    let sources = crate_sources();
+    assert!(
+        sources.len() > 100,
+        "the walk found only {} source files - it is not reaching src/, so everything \
+         below is vacuously true",
+        sources.len()
+    );
+
+    let guarded: Vec<&str> = sources
+        .iter()
+        .filter(|(_, code)| code.contains(PRINT_DENY))
+        .map(|(path, _)| path.as_str())
+        .collect();
+    for want in GUARDED_CONTROLS {
+        assert!(
+            guarded.contains(&want),
+            "{want} builds an `Out` and must be seen carrying `{PRINT_DENY}`; the guarded \
+             set found was {guarded:?}"
+        );
+    }
+
+    let callers: Vec<&str> = sources
+        .iter()
+        .filter(|(_, code)| PRINT_SINKS.iter().any(|sink| code.contains(sink)))
+        .map(|(path, _)| path.as_str())
+        .collect();
+    for want in PRINT_FORM_CALLERS {
+        assert!(
+            callers.contains(&want),
+            "{want} calls a print-form banner sink and must be seen doing it; the callers \
+             found were {callers:?}"
+        );
+    }
+
+    let offenders: Vec<&str> = callers
+        .iter()
+        .copied()
+        .filter(|path| guarded.contains(path))
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "{offenders:?} deny the print lints, so they write through an `Out` - and they name \
+         one of {PRINT_SINKS:?}, which print with `println!` from a file that carries no \
+         deny. Clippy cannot see that: the print is in `text.rs` / `path/dedup.rs`, which \
+         legitimately print. Such a call lands ahead of everything the buffer holds and \
+         aborts the process on a closed pipe. Call `write_scope_banner` / \
+         `write_duplicate_banner` on the surface's own writer instead."
+    );
 }
