@@ -11,8 +11,12 @@
 //!
 //! AN ELLIPSIS EXCUSES THE TAIL, NEVER THE HEAD. Carrying `...` says nothing about whether
 //! an excerpt is a quote: minified JavaScript's spread operator wears the same three dots,
-//! and 1,319 `...`-bearing excerpts are byte-exact at their own offsets, which is why the
-//! comparison runs FIRST and an ellipsis is never a category that pre-empts it. What is
+//! and most `...`-bearing excerpts are byte-exact at their own offsets anyway, which is why
+//! the comparison runs FIRST and an ellipsis is never a category that pre-empts it. HOW
+//! MANY is a measured property of the shipped file and of the build, so it is DERIVED here
+//! (the walk classifies every one of them already) and the README carries the count that
+//! derivation returns. It does not sit in this comment, where it went stale by 154 the
+//! first time anchors were relocated and was then read back out of four documents. What is
 //! left after it misses really has elided something - and the run BEFORE the first ellipsis
 //! is a quote of bytes like any other, so it is held to the offset exactly as `prefix-only`
 //! holds a head. Without that the whole bucket was an unverified escape hatch: replacing an
@@ -246,10 +250,15 @@ pub(crate) struct Anchors {
     /// whether this host holds thirteen other artifacts is a property of the host and not
     /// of the ledger - and the README states numbers a reader re-derives.
     pub(crate) other_build: usize,
-    /// `(byte-exact, elided)` over the anchors read against the VERIFIED build, or `None`
-    /// when that build is not on this host. The five counts partition the total exactly:
-    /// `exact + elided + absent + prefix_only + other_build == total`.
-    pub(crate) measured: Option<(usize, usize)>,
+    /// `(byte-exact, elided, byte-exact WHILE carrying an ellipsis)` over the anchors read
+    /// against a build, or `None` when no build is on this host. The first two partition
+    /// the total with the ledger-only counts: `exact + elided + absent + prefix_only +
+    /// other_build == total`. The third is a SUBSET of the first, not a sixth bucket: it is
+    /// how many of the byte-exact anchors carry an ellipsis anyway, which is the measured
+    /// fact behind the page's sentence that an ellipsis says nothing about whether an
+    /// excerpt is a quote. It is derived here rather than typed there, for the same reason
+    /// every other figure in the block is.
+    pub(crate) measured: Option<(usize, usize, usize)>,
 }
 
 pub(crate) struct Site<'a> {
@@ -401,7 +410,7 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
             measured: None,
         };
     };
-    let (mut exact, mut elided) = (0usize, 0usize);
+    let (mut exact, mut elided, mut elided_exact) = (0usize, 0usize, 0usize);
     let (mut named_exact, mut uncached) = (0usize, 0usize);
     let mut cache = BuildCache::default();
     for site in &sites {
@@ -449,6 +458,15 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
         // the excerpt from real bytes, and a hop carrying its own `build` is re-cut from
         // THAT one. So the verdict is decided without the build and the sentence still says
         // which artifact to open.
+        // BYTE-EXACT WHILE CARRYING AN ELLIPSIS, counted wherever it was read. A hop's own
+        // build is still a build, and whether this host holds thirteen artifacts is not a
+        // property of the ledger, so the subset is taken over every anchor the walk
+        // decided rather than over the verified build's share of them.
+        if verdict == Anchor::Exact
+            && (site.excerpt.contains("...") || site.excerpt.contains('\u{2026}'))
+        {
+            elided_exact += 1;
+        }
         match verdict {
             // A hop naming its own build is disclosed as a COUNT, not as a verdict: the
             // page must state the same number on a host that holds thirteen artifacts and
@@ -525,6 +543,6 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
         prefix_only,
         closed,
         other_build,
-        measured: Some((exact, elided)),
+        measured: Some((exact, elided, elided_exact)),
     }
 }

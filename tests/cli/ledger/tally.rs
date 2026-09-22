@@ -14,11 +14,19 @@
 //! promises re-derivable ones. A generator has no such holes: whatever it does not
 //! generate is not in the block, and whatever is in the block it generated.
 //!
-//! THE MEASURED HALF IS THE ONE EXCEPTION. The byte-exact / elided / other-build counts
-//! need the build, and a host without it cannot generate them - so on such a host those
-//! four numbers are taken from the page and everything around them is still compared. The
-//! ledger-derived counts (total, absent, prefix-only, closed, other-build) are checked
-//! everywhere.
+//! THE MEASURED HALF IS THE ONE EXCEPTION. The byte-exact count, the elided count and the
+//! subset of byte-exact anchors that carry an ellipsis anyway all need the build, and a
+//! host without it cannot generate them - so on such a host those numbers are read BACK off
+//! the page and everything around them is still compared. The ledger-derived counts (total,
+//! absent, prefix-only, closed, other-build) are checked everywhere.
+//!
+//! THE ELLIPSIS SUBSET IS DERIVED, NOT TYPED, and that is the whole point of it. The page
+//! says an ellipsis is no evidence that an excerpt was never a quote, and it says so with a
+//! number; that number is a property of the shipped file and of the build, it moved by 154
+//! the first time anchors were relocated, and it was still being stated in four documents
+//! in the present tense at its old value. The anchor walk already classifies every
+//! `...`-bearing excerpt, so the count is a subset of what it decided rather than a second
+//! measurement, and rule 8 holds the README to it exactly as it holds the table.
 
 use super::{anchors, open_state};
 use regex::Regex;
@@ -106,14 +114,21 @@ fn share(n: usize, total: usize) -> String {
 
 /// The measured four, read off the page. Used ONLY on a host without the build, so the
 /// generated block can still be compared everywhere else.
-fn measured_from_readme(block: &str) -> Option<(usize, usize)> {
+fn measured_from_readme(block: &str) -> Option<(usize, usize, usize)> {
     let re = Regex::new(
         r"anchors byte-exact at Claude Code \d+\.\d+\.\d+: ([\d,]+) of [\d,]+ \(elided ([\d,]+),",
     )
     .unwrap();
     let cap = re.captures(block)?;
-    let num = |i: usize| cap[i].replace(',', "").parse::<usize>().ok();
-    Some((num(1)?, num(2)?))
+    let num = |s: &str| s.replace(',', "").parse::<usize>().ok();
+    // The ellipsis subset is a third measured figure and is read back the same way, so a
+    // host with no build still compares the whole block instead of only most of it.
+    let subset = Regex::new(r"([\d,]+) such excerpts ARE byte-exact").unwrap();
+    Some((
+        num(&cap[1])?,
+        num(&cap[2])?,
+        num(&subset.captures(block)?[1])?,
+    ))
 }
 
 /// The block, generated. This IS the README's ledger tally: the page carries what this
@@ -122,10 +137,10 @@ pub(crate) fn render_block(
     claims: &[Value],
     a: &anchors::Anchors,
     verified: &str,
-    measured: (usize, usize),
+    measured: (usize, usize, usize),
 ) -> String {
     let total = claims.len();
-    let (exact, elided) = measured;
+    let (exact, elided, elided_exact) = measured;
     let rows: [(&str, usize, &str); 6] = [
         ("end-to-end", attribution_count(claims, "end-to-end"),
          "the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live"),
@@ -187,12 +202,12 @@ pub(crate) fn render_block(
         comma(a.other_build),
         comma(a.closed),
     ));
-    out.push_str(
+    out.push_str(&format!(
         "The five counts partition the total, and the gate asserts that they do. BYTE-EXACT \
          is read over two encodings: a few excerpts were captured from regions that are not \
          valid UTF-8 and stored one code point per byte, and 14 of these anchors match only \
          under that second reading. An ELIDED excerpt carries an ellipsis somewhere, which is \
-         not the same as having no byte-exact form: 1,319 such excerpts ARE byte-exact at \
+         not the same as having no byte-exact form: {} such excerpts ARE byte-exact at \
          their own offsets and are counted with the rest, because minified JavaScript's \
          spread operator wears the same three dots. What is left in the elided count really \
          did elide something, and the gate holds each of those to the run BEFORE its first \
@@ -204,7 +219,8 @@ pub(crate) fn render_block(
          artifacts is a property of the machine. A closed state's anchors were exact at the \
          build its own range ended on, so the gate counts them and does not re-read them \
          against a later one.\n",
-    );
+        comma(elided_exact),
+    ));
     out.push_str("<!-- ledger-tally:end -->");
     out
 }
@@ -246,7 +262,7 @@ pub(crate) fn ledger_tally(
     // failed on that ledger for another reason, so nothing shipped - but a sum the page
     // states is a sum the gate checks, and a host with no build can still check four of the
     // five against the fifth's absence.
-    let (exact, elided) = measured;
+    let (exact, elided, _) = measured;
     let parts = exact + elided + anchors.absent + anchors.prefix_only + anchors.other_build;
     if anchors.measured.is_some() && parts != anchors.total {
         failures.push(format!(

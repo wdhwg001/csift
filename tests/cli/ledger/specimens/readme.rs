@@ -13,7 +13,7 @@ fn specimen_anchors() -> anchors::Anchors {
         prefix_only: 0,
         closed: 2,
         other_build: 1,
-        measured: Some((1, 1)),
+        measured: Some((1, 1, 0)),
     }
 }
 
@@ -25,8 +25,8 @@ fn specimen_anchors() -> anchors::Anchors {
 fn ledger_gate_rule_8_names_anchor_counts_that_do_not_partition_the_total() {
     let claims = vec![good_claim()];
     let mut a = specimen_anchors();
-    a.measured = Some((3, 1)); // one more byte-exact than the total can hold
-    let good = tally::render_block(&claims, &a, "2.1.258", (2, 1));
+    a.measured = Some((3, 1, 0)); // one more byte-exact than the total can hold
+    let good = tally::render_block(&claims, &a, "2.1.258", (2, 1, 0));
     let mut f = Vec::new();
     tally::ledger_tally(&claims, &a, "2.1.258", &good, &mut f);
     assert!(
@@ -44,7 +44,7 @@ fn ledger_gate_rule_8_names_anchor_counts_that_do_not_partition_the_total() {
 fn ledger_gate_rule_8_names_a_tally_block_that_disagrees_with_the_ledger() {
     let claims = vec![good_claim()];
     let a = specimen_anchors();
-    let good = tally::render_block(&claims, &a, "2.1.258", (1, 1));
+    let good = tally::render_block(&claims, &a, "2.1.258", (1, 1, 0));
     let mut f = Vec::new();
     tally::ledger_tally(&claims, &a, "2.1.258", &good, &mut f);
     assert!(
@@ -78,6 +78,23 @@ fn ledger_gate_rule_8_names_a_tally_block_that_disagrees_with_the_ledger() {
     let mut f = Vec::new();
     tally::ledger_tally(&claims, &a, "2.1.258", &bad, &mut f);
     assert_eq!(f.len(), 1, "the parenthetical is read: {f:?}");
+
+    // The ELLIPSIS SUBSET, one off. It is the one figure in the block that had been a
+    // literal in the gate's own source rather than a count it took, and it was stale by
+    // 154 in four documents at once; a number the page states is a number the page is held
+    // to, so moving it by one is a difference like any other. On a host with no build the
+    // count is read BACK off the page, which is why the mutation has to move the ledger's
+    // reading of it too - otherwise the page would simply be agreeing with itself.
+    let mut off_by_one = specimen_anchors();
+    off_by_one.measured = Some((1, 1, 1));
+    let mut f = Vec::new();
+    tally::ledger_tally(&claims, &off_by_one, "2.1.258", &good, &mut f);
+    assert_eq!(f.len(), 1, "the ellipsis subset is read: {f:?}");
+    assert!(
+        f[0].contains("1 such excerpts ARE byte-exact"),
+        "the failure hands back the block that should be there: {}",
+        f[0]
+    );
 
     // And the anchors line.
     let bad = good.replace("closed-state anchors 2", "closed-state anchors 7");

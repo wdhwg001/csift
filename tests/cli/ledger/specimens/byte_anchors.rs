@@ -472,7 +472,7 @@ fn ledger_gate_rule_12_judges_a_marked_hop_by_its_mark_before_eliding() {
     ]);
     let mut f = Vec::new();
     let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
-    if let Some((exact, elided)) = a.measured {
+    if let Some((exact, elided, _)) = a.measured {
         assert!(f.is_empty(), "the mark holds, so nothing is named: {f:?}");
         assert_eq!(a.absent, 1, "the hop is counted under its mark");
         assert_eq!(elided, 0, "and not a second time as elided");
