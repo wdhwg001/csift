@@ -18,12 +18,48 @@ pub(crate) const ATTRIBUTIONS: [&str; 6] = [
     "upstream",
 ];
 
+/// Rule 1 BEFORE rule 2: a badge version no receipt was made at is ONE fact, not 739.
+///
+/// Bumping `verified_claude_code` ahead of the audit is the ordinary way to reach this gate,
+/// and rule 2 then fires once per claim - 739 lines saying the same thing, with the line
+/// that explains them (the badge moved) somewhere in the middle. So the driver asks this
+/// first: when NO open state carries a receipt at the verified build, it reports the version
+/// once, naming the build the receipts DO stand at, and rule 2's version arm stands down for
+/// every claim. Every other arm of rule 2 still runs, because a verdict or an instrument is
+/// wrong independently of which build the badge names.
+pub(crate) fn badge_stands(claims: &[&Value], verified: &str) -> Option<String> {
+    if claims.is_empty() {
+        return None;
+    }
+    let mut at: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for c in claims {
+        let Some(state) = open_state(c) else { continue };
+        let v = state["verified"]["claude_code"]
+            .as_str()
+            .unwrap_or("<none>")
+            .to_string();
+        *at.entry(v).or_default() += 1;
+    }
+    if at.is_empty() || at.contains_key(verified) {
+        return None;
+    }
+    let stand: Vec<String> = at.iter().map(|(v, n)| format!("{v} on {n}")).collect();
+    Some(format!(
+        "`verified_claude_code` is {verified}, and NO open state carries a receipt at it - \
+         the receipts stand at {}. Rule 2 would name every claim; the badge moved ahead of \
+         the audit, which is one fact. Run the audit at {verified} and rewrite each open \
+         state's receipt, or put the badge back.",
+        stand.join(", ")
+    ))
+}
+
 /// Rules 2, 3 and 9: the OPEN state's receipt is made at the verified build, carries a
 /// closed-set verdict that is not `drifted`, and its evidence is unique across the ledger.
 pub(crate) fn receipts(
     id: &str,
     claim: &Value,
     verified: &str,
+    report_version: bool,
     evidence: &mut HashMap<String, String>,
     failures: &mut Vec<String>,
 ) {
@@ -31,11 +67,13 @@ pub(crate) fn receipts(
         return; // rule 13 already named it
     };
     let receipt = &state["verified"];
-    match receipt["claude_code"].as_str() {
-        Some(v) if v == verified => {}
-        other => failures.push(format!(
-            "{id}: the open state's receipt is at {other:?}, not at Claude Code {verified}"
-        )),
+    if report_version {
+        match receipt["claude_code"].as_str() {
+            Some(v) if v == verified => {}
+            other => failures.push(format!(
+                "{id}: the open state's receipt is at {other:?}, not at Claude Code {verified}"
+            )),
+        }
     }
     let verdict = receipt["verdict"].as_str().unwrap_or("");
     if !VERDICTS.contains(&verdict) {

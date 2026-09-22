@@ -38,9 +38,8 @@ fn ledger_gate_rule_14_names_every_barred_prose_family() {
         "{hits:?}"
     );
 
-    // csift's OWN surface spells the flag, the mode and the module with a `-`, a space
-    // and a `/`; only the bare process word is barred.
-    assert!(prose::hits("`csift plan --audit` reads src/commands/plan/audit.rs").is_empty());
+    // csift's OWN spellings of `audit` are spared by SHAPE; that negative control sits
+    // beside the four positives it contrasts with, in the widening test below.
     // A Claude Code version is never a csift version.
     assert!(prose::hits("present from Claude Code 2.1.208").is_empty());
     // Domain vocabulary a token ban would have destroyed.
@@ -122,6 +121,8 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
         "my poll detected the written file",
         "so we counted the carriers",
         "the equality is telling us the stored form",
+        "our reading of the preserved set",
+        "Our second pass over the same corpus",
     ] {
         let hits = prose::hits(text);
         assert!(
@@ -200,6 +201,30 @@ fn ledger_gate_rule_17_names_a_retired_selector_in_an_argument() {
     let mut f = Vec::new();
     legs::retired_spellings("TEST-001 states[0]", &c["states"][0], &mut f);
     assert!(only(&f).contains("names the retired selector `harness.meta.hook`"));
+
+    // Every ARGUMENT position the rule reads, one specimen each: an arm with none is an
+    // arm nobody has seen fire.
+    for argv in [
+        "csift search '' -T harness.meta.hook",
+        "csift search '' --label harness.meta.hook",
+        "csift search '' --label-not harness.meta.hook",
+        "csift search '' --count-by harness.meta.hook",
+        "jq 'select(.label == \"harness.meta.hook\")'",
+    ] {
+        let mut c = good_claim();
+        c["states"][0]["probe"] = json!({
+            "kind": "csift",
+            "command": argv,
+            "scope": "one projects root",
+            "rule": "one per record"
+        });
+        let mut f = Vec::new();
+        legs::retired_spellings("TEST-001 states[0]", &c["states"][0], &mut f);
+        assert!(
+            f.iter().any(|m| m.contains("names the retired selector")),
+            "{argv}: {f:?}"
+        );
+    }
 
     // History, not an instruction.
     let mut c = good_claim();

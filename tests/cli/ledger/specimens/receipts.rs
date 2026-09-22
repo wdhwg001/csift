@@ -9,14 +9,28 @@ fn ledger_gate_rule_2_names_a_receipt_at_the_wrong_build() {
     let mut c = good_claim();
     c["states"][0]["verified"]["claude_code"] = json!("2.1.200");
     let mut f = Vec::new();
-    rules::receipts("TEST-001", &c, "2.1.258", &mut Default::default(), &mut f);
+    rules::receipts(
+        "TEST-001",
+        &c,
+        "2.1.258",
+        true,
+        &mut Default::default(),
+        &mut f,
+    );
     assert!(only(&f)
         .contains("the open state's receipt is at Some(\"2.1.200\"), not at Claude Code 2.1.258"));
 
     let mut c = good_claim();
     c["states"][0]["verified"]["verdict"] = json!("probably");
     let mut f = Vec::new();
-    rules::receipts("TEST-001", &c, "2.1.258", &mut Default::default(), &mut f);
+    rules::receipts(
+        "TEST-001",
+        &c,
+        "2.1.258",
+        true,
+        &mut Default::default(),
+        &mut f,
+    );
     assert!(only(&f).contains("verdict `probably` is not in"));
 }
 
@@ -27,8 +41,8 @@ fn ledger_gate_rule_3_names_duplicated_evidence() {
     b["id"] = json!("TEST-002");
     let mut seen = Default::default();
     let mut f = Vec::new();
-    rules::receipts("TEST-001", &a, "2.1.258", &mut seen, &mut f);
-    rules::receipts("TEST-002", &b, "2.1.258", &mut seen, &mut f);
+    rules::receipts("TEST-001", &a, "2.1.258", true, &mut seen, &mut f);
+    rules::receipts("TEST-002", &b, "2.1.258", true, &mut seen, &mut f);
     assert!(only(&f).contains("evidence (instrument, observed) identical to TEST-001's"));
 
     // `unverifiable-here` is exempt from uniqueness but must still name its reason.
@@ -36,7 +50,14 @@ fn ledger_gate_rule_3_names_duplicated_evidence() {
     c["states"][0]["verified"]["verdict"] = json!("unverifiable-here");
     c["states"][0]["verified"]["observed"] = json!("  ");
     let mut f = Vec::new();
-    rules::receipts("TEST-001", &c, "2.1.258", &mut Default::default(), &mut f);
+    rules::receipts(
+        "TEST-001",
+        &c,
+        "2.1.258",
+        true,
+        &mut Default::default(),
+        &mut f,
+    );
     assert!(only(&f).contains("empty `observed`"));
 }
 
@@ -45,7 +66,14 @@ fn ledger_gate_rule_9_names_an_open_state_that_drifted() {
     let mut c = good_claim();
     c["states"][0]["verified"]["verdict"] = json!("drifted");
     let mut f = Vec::new();
-    rules::receipts("TEST-001", &c, "2.1.258", &mut Default::default(), &mut f);
+    rules::receipts(
+        "TEST-001",
+        &c,
+        "2.1.258",
+        true,
+        &mut Default::default(),
+        &mut f,
+    );
     assert!(only(&f).contains("the open state's verdict is `drifted`"));
 }
 
@@ -59,7 +87,7 @@ fn ledger_gate_rule_6_names_a_claim_with_no_code_site() {
 }
 
 #[test]
-fn ledger_gate_rule_4_names_a_moved_or_padded_code_site() {
+fn ledger_gate_rule_4_names_a_missing_file_a_moved_snippet_and_a_wrong_range() {
     let mut c = good_claim();
     c["code"][0]["snippet"] = json!("fn this_function_does_not_exist_anywhere()");
     let mut f = Vec::new();
@@ -154,4 +182,47 @@ fn ledger_gate_rule_11_names_a_state_with_no_legs() {
     rules::attribution("TEST-001 states[0]", &c["states"][0], &mut f);
     assert!(only(&f)
         .contains("attribution `specimen-only` with no `producer_trace`/`specimen` legs recorded"));
+}
+
+/// Rule 1 stands in FRONT of rule 2. Bumping `verified_claude_code` ahead of the audit is
+/// the ordinary way to reach this gate, and rule 2 then fires once per claim - hundreds of
+/// lines saying the same thing, with the one that explains them somewhere in the middle. So
+/// the badge is asked first, it reports the version ONCE and names the build the receipts do
+/// stand at, and rule 2's version arm stands down. Every other arm of rule 2 keeps running:
+/// a verdict or an instrument is wrong whatever the badge says.
+#[test]
+fn ledger_gate_rule_1_reports_a_moved_badge_once_instead_of_per_claim() {
+    let a = good_claim();
+    let mut b = good_claim();
+    b["id"] = json!("TEST-002");
+    let claims = [&a, &b];
+
+    // The badge stands where the receipts do: nothing to report, and rule 2 runs whole.
+    assert_eq!(rules::badge_stands(&claims, "2.1.258"), None);
+
+    // The badge moved ahead of the audit: ONE line, naming the build the receipts stand at.
+    let moved = rules::badge_stands(&claims, "2.1.300").expect("the moved badge is reported");
+    assert!(
+        moved.contains("`verified_claude_code` is 2.1.300"),
+        "{moved}"
+    );
+    assert!(
+        moved.contains("the receipts stand at 2.1.258 on 2"),
+        "{moved}"
+    );
+
+    // With it reported, rule 2's version arm says nothing - and its other arms still do.
+    let mut c = good_claim();
+    c["states"][0]["verified"]["claude_code"] = json!("2.1.258");
+    c["states"][0]["verified"]["verdict"] = json!("probably");
+    let mut f = Vec::new();
+    rules::receipts(
+        "TEST-001",
+        &c,
+        "2.1.300",
+        false,
+        &mut Default::default(),
+        &mut f,
+    );
+    assert!(only(&f).contains("verdict `probably` is not in"));
 }

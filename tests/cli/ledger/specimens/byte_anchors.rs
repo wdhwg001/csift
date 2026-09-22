@@ -265,3 +265,50 @@ fn ledger_gate_rule_12_reads_a_latin_1_capture_as_bytes() {
         anchors::Anchor::Exact
     );
 }
+
+/// Rule 12's MARK SWEEP takes two roads and both of them owe a specimen. The "occurs at no
+/// offset" half of every mark runs as ONE Aho-Corasick pass over the build instead of one
+/// search per mark; only when that pass matches something does the exact per-mark path run.
+/// A short-circuit nobody has seen take both roads is one that quietly stops checking, so
+/// this drives each: a mark the build refutes must still be named, and a set of marks the
+/// build carries none of must take the cheap road and still catch a `prefix-only` whose
+/// head does not match where its offset points.
+#[test]
+fn ledger_gate_rule_12_sweeps_every_mark_and_names_the_false_one() {
+    // The pass MATCHES: one mark says `absent` about bytes every build of this line carries.
+    let mut c = good_claim();
+    c["states"][0]["producer_chain"] = json!([
+        {"role": "writer", "offset": 1, "excerpt": "CLAUDE_CODE_USE_POWERSHELL_TOOL",
+         "anchor_status": "absent", "note": "a mark the build refutes"},
+        {"role": "gate", "offset": 2, "excerpt": "zzq-no-build-carries-these-bytes-zzq",
+         "anchor_status": "absent", "note": "a mark that holds"}
+    ]);
+    let mut f = Vec::new();
+    let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
+    if a.measured.is_some() {
+        assert_eq!(f.len(), 1, "only the refuted mark is named: {f:?}");
+        assert!(
+            f[0].contains("marked `absent` but the excerpt occurs"),
+            "{f:?}"
+        );
+        assert!(f[0].contains("producer_chain[0]"), "{f:?}");
+    }
+
+    // The pass finds NOTHING: the cheap road, which still owes the `prefix-only` head test.
+    let mut c = good_claim();
+    c["states"][0]["producer_chain"] = json!([
+        {"role": "writer", "offset": 3, "excerpt": "zzq-no-build-carries-these-bytes-zzq",
+         "anchor_status": "prefix-only", "note": "a head that cannot match at offset 3"},
+        {"role": "gate", "offset": 4, "excerpt": "zzq-nor-these-either-zzq",
+         "anchor_status": "absent", "note": "a mark that holds"}
+    ]);
+    let mut f = Vec::new();
+    let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
+    if a.measured.is_some() {
+        assert_eq!(f.len(), 1, "only the false head is named: {f:?}");
+        assert!(
+            f[0].contains("marked `prefix-only` but no leading byte"),
+            "{f:?}"
+        );
+    }
+}

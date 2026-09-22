@@ -12,7 +12,11 @@
 //!
 //! Rules:
 //! 1. `verified_claude_code` is a version triple, and the README badge carries the SAME
-//!    version (the badge is admitted only through the ledger).
+//!    version (the badge is admitted only through the ledger). It is also asked BEFORE
+//!    rule 2: bumping the badge ahead of the audit is the ordinary way to reach this gate,
+//!    and rule 2 would then name every claim, so when NO open state carries a receipt at
+//!    the verified build the gate says so ONCE, names the build the receipts DO stand at,
+//!    and rule 2's version arm stands down while its other arms keep running.
 //! 2. Every claim's OPEN state carries a `verified` receipt made AT `verified_claude_code`
 //!    with a verdict from the closed set. A CLOSED state's receipt was taken at the build
 //!    its range ended on and is not re-made.
@@ -215,11 +219,26 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
     let mut file_cache: HashMap<String, Option<rules::FileText>> = HashMap::new();
     let mut embedded = programs::Programs::default();
 
+    // Rule 1 stands in FRONT of rule 2: a badge bumped ahead of the audit is one fact, and
+    // rule 2 would spell it out once per claim.
+    let badge_moved = rules::badge_stands(&kept, verified);
+    let report_version = badge_moved.is_none();
+    if let Some(note) = badge_moved {
+        failures.push(note);
+    }
+
     for c in kept {
         let id = c["id"].as_str().unwrap_or("");
         states::state_shape(id, c, verified, &mut failures);
         rules::code_sites(id, c, &mut file_cache, &mut failures);
-        rules::receipts(id, c, verified, &mut evidence, &mut failures);
+        rules::receipts(
+            id,
+            c,
+            verified,
+            report_version,
+            &mut evidence,
+            &mut failures,
+        );
         for (i, state) in states(c).iter().enumerate() {
             let at = format!("{id} states[{i}]");
             states::state_text(&at, state, &mut failures);
