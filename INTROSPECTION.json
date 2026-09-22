@@ -3950,13 +3950,13 @@
             },
             {
               "site": "_flushDeferredSwarmDuration (the deferred swarm flush)",
-              "offset": 181610437,
+              "offset": 181610385,
               "excerpt": "this._requireHost().transcript.replace((oe)=>[...oe,B_t(O,q,Y(oe,KI))])",
               "verdict": "Called with three arguments, so parameter o is undefined and the key is dropped - this site never writes the field at all."
             },
             {
               "site": "async-agent keepalive park (writes into the child agent transcript)",
-              "offset": 163877450,
+              "offset": 163877324,
               "excerpt": "_.updateTranscript(e,(Do)=>({...Do,messages:[...Do.messages.filter((pr)=>!(pr.type===\"system\"&&pr.subtype===\"turn_duration\")),B_t(Date.now()-je,void 0,void 0,dr||void 0)]}))",
               "verdict": "dr||void 0 maps a zero keepalive-agent count to undefined - this site cannot emit a literal 0 either."
             },
@@ -4602,7 +4602,7 @@
             },
             {
               "site": "far call into the job-state writer - the bridge sequence counter",
-              "offset": 176332351,
+              "offset": 176332181,
               "excerpt": "nc function pe(e,r){let o=e.getState().value;if(!o)return;await b(M(r,z),le(o,q))}async function ce(e,r,o){let n=await tr(e,o);if(!n||n.bridgeSessionSeq===r)return;await As(e,{...n,bridgeSessionSeq:r,updatedAt:new Date().toISOString()},o)}\nexport{nqe,YWn,f_r,YRr,JRr,xz,Rsn,QRr,ZR",
               "verdict": "Writes bridgeSessionSeq only; no inFlight."
             },
@@ -4970,13 +4970,13 @@
             },
             {
               "site": "system-event enqueue call site 1/35 - kill path of the local shell task",
-              "offset": 163690604,
+              "offset": 163690484,
               "excerpt": "d},{...d,status:\"killed\",notified:!0,shellCommand:null,endTime:Date.now()}}),r&&!o){if(!r.isAdopted)f1e(e,`\n[killed]\n`);hs(e,\"stopped\",{toolUseId:r.toolUseId,summary:r.description,outputFile:pl(e)})}if(r&&r.kind!==\"monitor\"&&hA())ir().rememberBashTaskSnapshot(e,DNe({taskId:e,outcome:\"killed\",exitCod",
               "verdict": "kill path of the local shell task: forces status killed, then notifies stopped - a terminal transition, never a timer."
             },
             {
               "site": "system-event enqueue call site 2/35 - the registry-update dispatcher",
-              "offset": 163716095,
+              "offset": 163715975,
               "excerpt": "_,tasks:{..._.tasks,[e]:C}}}),o!==null&&!f)_u({type:\"system\",subtype:\"task_updated\",task_id:e,patch:o});if(d!==null&&!f)hs(e,d.status,d.opts)}function Qvo(e,n){let r={};if(n.status!==e.status)r.status=n.status;if(n.description!==e.description)r.description=n.description;if(n.endTime!==e.endTime)r.en",
               "verdict": "the registry-update dispatcher: notifies only when a status transition was actually recorded - a terminal transition, never a timer."
             },
@@ -4994,13 +4994,13 @@
             },
             {
               "site": "system-event enqueue call site 5/35 - the auto-mode scan task kill handler",
-              "offset": 164096933,
+              "offset": 164096813,
               "excerpt": "return o.abortController?.abort(),r=!0,{...o,status:\"killed\",endTime:Date.now(),notified:!0,abortController:void 0}}),r)hs(e,\"stopped\",{skipTranscript:!0,ambient:!0})}};import{mkdir as gMo,readFile as o0n,stat as s0n,unlink as hMo,utimes as yMo,writeFile as i0n}from\"fs/promises\";import{join as _Mo}f",
               "verdict": "the auto-mode scan task kill handler - a terminal transition, never a timer."
             },
             {
               "site": "system-event enqueue call site 6/35 - a task kill handler that also restores a prior mtime",
-              "offset": 164099948,
+              "offset": 164099828,
               "excerpt": ",r=d.priorMtime,o=d.storageV5,{...d,status:\"killed\",endTime:Date.now(),notified:!0,abortController:void 0}}),r!==void 0)hs(e,\"stopped\",{skipTranscript:!0,ambient:!0}),await p$e(r,o)}};var C6t={name:\"InProcessTeammateTask\",type:\"in_process_teammate\",async kill(e,n,r,o,d){let{memberRemoval:f,osTeardow",
               "verdict": "a task kill handler that also restores a prior mtime - a terminal transition, never a timer."
             },
@@ -5012,7 +5012,7 @@
             },
             {
               "site": "system-event enqueue call site 8/35 - the remote-agent kill handler",
-              "offset": 164102127,
+              "offset": 164102007,
               "excerpt": "traplan??!1,I=U.isRemoteReview??!1,F=U.pollStartedAt,B=!0,{...U,status:\"killed\",notified:!0,endTime:Date.now()}}),B){if(hs(e,\"stopped\",{toolUseId:f,summary:_}),v)IR(v).catch((U)=>t(`RemoteAgentTask archive failed: ${String(U)}`));if(I)p(\"task_remote_agent\",\"task_remote_agent_review_failed\",{remote_t",
               "verdict": "the remote-agent kill handler - a terminal transition, never a timer."
             },
@@ -5024,7 +5024,7 @@
             },
             {
               "site": "system-event enqueue call site 10/35 - the same sweep's own-task arm, once, behind the notified flag",
-              "offset": 164109123,
+              "offset": 164109003,
               "excerpt": "}I6t(fe,_e,_,r)}if(nm(I)){let fe=!1;if(r.update(C,(me)=>{if(me.notified)return me;return fe=!0,{...me,notified:!0}}),fe)hs(C,\"stopped\",{toolUseId:I.toolUseId,summary:I.description})}if(nm(I)&&I.agentId!==void 0&&f!==I.agentId)Mxn({taskId:C,toolUseId:I.toolUseId,description:I.description,ownerAgentId",
               "verdict": "the same sweep's own-task arm, once, behind the notified flag - a terminal transition, never a timer."
             },
@@ -5036,13 +5036,13 @@
             },
             {
               "site": "system-event enqueue call site 12/35 - the dream task completed path",
-              "offset": 164610835,
+              "offset": 164610715,
               "excerpt": "e,n){n.update(e,(r)=>({...r,status:\"completed\",endTime:Date.now(),notified:!0,abortController:void 0})),y(\"task_dream\"),hs(e,\"completed\",{skipTranscript:!0,ambient:!0})}function fUn(e,n){n.update(e,(r)=>({...r,status:\"failed\",endTime:Date.now(),notified:!0,abortController:void 0})),p(\"task_dream\",\"t",
               "verdict": "the dream task completed path - a terminal transition, never a timer."
             },
             {
               "site": "system-event enqueue call site 13/35 - the dream task failed path",
-              "offset": 164611034,
+              "offset": 164610914,
               "excerpt": "r)=>({...r,status:\"failed\",endTime:Date.now(),notified:!0,abortController:void 0})),p(\"task_dream\",\"task_dream_failed\"),hs(e,\"failed\",{skipTranscript:!0,ambient:!0})}var k1o=600000,w1o=new RegExp(`^\\\\s*(?:${ipn})\\\\b`,\"i\"),mUn={minHours:24,minSessions:5};function E1o(){let e=P(\"tengu_onyx_plover\",nul",
               "verdict": "the dream task failed path - a terminal transition, never a timer."
             },
@@ -5054,13 +5054,13 @@
             },
             {
               "site": "system-event enqueue call site 15/35 - an async agent aborted mid-run, once, behind the notified flag",
-              "offset": 164964982,
+              "offset": 164964862,
               "excerpt": "(_),agentContext:F}})){if(v.aborted){let _e=!1;if(o.update(_,(ke)=>(_e=ke.notified===!0,_e?ke:{...ke,notified:!0})),!_e)hs(_,\"stopped\",{summary:r});return}if(me.type===\"progress\"&&me.data.type===\"repl_tool_call\"&&me.data.phase===\"start\"){if(j.push({toolName:me.data.toolName,input:me.data.toolInput})",
               "verdict": "an async agent aborted mid-run, once, behind the notified flag - a terminal transition, never a timer."
             },
             {
               "site": "system-event enqueue call site 16/35 - the shell terminal notify that accompanies the transcript pulse",
-              "offset": 164968777,
+              "offset": 164968657,
               "excerpt": "ode:\"task-notification\",skipAttachments:!0,priority:\"next\",agentId:v??Ze(),taskId:e,...U&&{taskDelivery:U}}),v!==void 0)hs(e,r===\"killed\"?\"stopped\":r,{toolUseId:f,summary:j,outputFile:W})}function wzo(e,n,r){let o=n??Ze(),d=ig(),f=d.getCommandQueue().filter((_)=>_.mode===\"task-notification\"&&_.taskI",
               "verdict": "the shell terminal notify that accompanies the transcript pulse - a terminal transition, never a timer."
             },
@@ -5072,7 +5072,7 @@
             },
             {
               "site": "system-event enqueue call site 18/35 - the shell tool's own backgrounded-result arm",
-              "offset": 165034219,
+              "offset": 165034099,
               "excerpt": "et Rn=await Promise.race([yn,bn]);if(Rn!==null){if(Ht=Rn,Rn.backgroundTaskId!==void 0){if(E6t(Rn.backgroundTaskId,Rn,f))hs(Rn.backgroundTaskId,gKe(Rn),{toolUseId:F,summary:Ie||we});let Tr={...Rn,backgroundTaskId:void 0},{taskOutput:Rr}=xt;if(Rr.stdoutToFile&&!Rr.outputFileRedundant)Tr.outputFilePath",
               "verdict": "the shell tool's own backgrounded-result arm: fires when the result arrives, with the status derived from the exit code - a terminal transition, never a timer."
             },
@@ -5096,19 +5096,19 @@
             },
             {
               "site": "system-event enqueue call site 22/35 - the in-process runner completed path",
-              "offset": 176264954,
+              "offset": 176264834,
               "excerpt": "{...v,messages:v.messages.length?[v.messages.at(-1)]:[],inProgressToolUseIDs:new Set}));if(Td(n),i.evictTerminal(n),!oe)hs(n,\"completed\",{toolUseId:x,summary:e.agentId});if(Kbe(e.agentId),Re)g(\"swarm_in_process_run\",\"compact_blocked_by_hook\");else y(\"swarm_in_process_run\");return{success:!0,messages",
               "verdict": "the in-process runner completed path - a terminal transition, never a timer."
             },
             {
               "site": "system-event enqueue call site 23/35 - the in-process runner failed path",
-              "offset": 176265716,
+              "offset": 176265596,
               "excerpt": "({...x,messages:x.messages.length?[x.messages.at(-1)]:[],inProgressToolUseIDs:new Set}));if(Td(n),i.evictTerminal(n),!W)hs(n,\"failed\",{toolUseId:oe,summary:e.agentId});if(!l){let x;try{x=fe?void 0:bjn(U)}catch(v){t(`[inProcessRunner] ${e.agentName} failed to extract partial result: ${v}`)}if(x!==voi",
               "verdict": "the in-process runner failed path - a terminal transition, never a timer."
             },
             {
               "site": "system-event enqueue call site 24/35 - the second copy of the shell backgrounded-result arm, in another module",
-              "offset": 176596806,
+              "offset": 176596686,
               "excerpt": "out((de)=>de(null),Z,Se).unref()),le]);if(X!==null){if(ee=X,X.backgroundTaskId!==void 0){if(E6t(X.backgroundTaskId,X,r))hs(X.backgroundTaskId,gKe(X),{toolUseId:p,summary:E||S});let Se={...X,backgroundTaskId:void 0},{taskOutput:de}=J;if(de.stdoutToFile&&!de.outputFileRedundant)Se.outputFilePath=de.pa",
               "verdict": "the second copy of the shell backgrounded-result arm, in another module - a terminal transition, never a timer."
             },
@@ -5144,7 +5144,7 @@
             },
             {
               "site": "system-event enqueue call site 30/35 - resume reconciliation, a single orphaned workflow",
-              "offset": 178961081,
+              "offset": 178960961,
               "excerpt": "tus:\"stopped\",summary:Bt(I)}),agentId:Ze(),mode:\"task-notification\",skipAttachments:!0,priority:\"next\",shouldQuery:!1}),hs(c.taskId,\"stopped\",{toolUseId:c.toolUseId,summary:I})}}function st(e,n,o,r,i,d){let c=r.slice(0,Fe).map(i),f=[...c,`${tt}${n}`,...d.map((x)=>`${nt}${Bt(x)}`)].map((x)=>`<${Use}>",
               "verdict": "resume reconciliation, a single orphaned workflow - a terminal transition, never a timer."
             },
@@ -5174,7 +5174,7 @@
             },
             {
               "site": "system-event enqueue call site 35/35 - a registry helper that flips a task to a terminal status and then notifies",
-              "offset": 187191982,
+              "offset": 187191862,
               "excerpt": "{if(M.status!==\"running\")return M;return w=!0,{...M,status:m,endTime:Date.now(),notified:!0,abortController:void 0}}),w)hs(t,m,{skipTranscript:!0,ambient:!0})}j();function J(t){return{environment:t.environment,...t.allow.length>0&&{allow:t.allow},...t.soft_deny.length>0&&{soft_deny:t.soft_deny},...t",
               "verdict": "a registry helper that flips a task to a terminal status and then notifies - a terminal transition, never a timer."
             },
@@ -5204,7 +5204,7 @@
             },
             {
               "site": "pulse call site 2/30 - an agent resumed from its transcript view",
-              "offset": 162291052,
+              "offset": 162290937,
               "excerpt": "(C.text)),..._.map((C)=>tCe(C.text)),C7t(v)].join(`\n`)}]}function j4n({agentId:e,description:n,to:r}){return{value:ka({taskId:e,summary:Bt(`${Htt}${n}\" was resumed by the user`),body:`\n<note>The user resumed this agent from its transcript view; it is running again. Do not treat its work as cancelled",
               "verdict": "Passes a task id and NO status. The summary reads that the agent was resumed by the user and the body states it is running again and that its result arrives in a later notification for this task id. Its one caller fires on the resume of a stopped agent, so this is a running-again pulse that names a task and is not a completion."
             },
@@ -5276,7 +5276,7 @@
             },
             {
               "site": "pulse call site 14/30 - a local shell that exited",
-              "offset": 164968593,
+              "offset": 164968473,
               "excerpt": "_shell\");else if(r===\"failed\")p(\"task_local_shell\",\"task_local_shell_failed\");let j=Odt(_,n,r,o,C),W=pl(e);if(Ra({value:ka({taskId:e,toolUseId:f,outputFile:W,status:r,summary:Bt(j)}),mode:\"task-notification\",skipAttachments:!0,priority:\"next\",agentId:v??Ze(),taskId:e,...U&&{taskDelivery:U}}),v!==voi",
               "verdict": "Passes both a task id and a status. Fires from a terminal transition; the status is taken from that transition, never from an elapsed deadline."
             },
@@ -5300,7 +5300,7 @@
             },
             {
               "site": "pulse call site 18/30 - comment replies handed between two sessions of one conversation",
-              "offset": 168804606,
+              "offset": 168804491,
               "excerpt": "adyReplying:!0,...V!==void 0&&{claim:V}})).yielded.has(r),_n=!_t&&(V?.lost.has(r)??!1),Ke=c7(()=>Ne(),o);Ra({value:ka({taskType:B0,summary:Bt(_t?`Another session of this conversation handed its replies on ${Ke} to this one`:_n?`This session handed its replies on ${Ke} to another session of this conv",
               "verdict": "Passes a task type only - no task id, no status."
             },
@@ -13148,19 +13148,19 @@
             },
             {
               "site": "occurrence of the literal `file-history`",
-              "offset": 157721943,
+              "offset": 157721853,
               "excerpt": "relPath);case\"userConfigDir\":return r(t,n.dir,...n.relPath);case\"fileHistory\":return r(t,\"file-history\",n.sessionId,n.backupFileName);case\"job\":return r(t,\"jobs\",n.jobId,...n.relPath);case\"daemon\":return r(t,\"daemon\",...n.relPath);case\"jobsRoot\":return\"file\"in n?r(t,\"jobs\",Q):r(t,\"jobs\",`$",
               "verdict": "storage path resolver: builds the on-disk file-history BACKUP directory, not a record site."
             },
             {
               "site": "occurrence of the literal `file-history`",
-              "offset": 157727018,
+              "offset": 157726928,
               "excerpt": "..n.relPath??[]),scope:n}];case\"fileHistory\":return n.sessionId===void 0?[{directory:r(t,\"file-history\"),scope:n}]:[{directory:r(t,\"file-history\",n.sessionId),scope:n}];case\"job\":return n.jobId===void 0?[{directory:r(t,\"jobs\"),scope:n}]:[{directory:r(t,\"jobs\",n.jobId,...n.relPath??[]),scop",
               "verdict": "storage path resolver (scope enumeration), not a record site."
             },
             {
               "site": "occurrence of the literal `file-history`",
-              "offset": 157727060,
+              "offset": 157726970,
               "excerpt": "y\":return n.sessionId===void 0?[{directory:r(t,\"file-history\"),scope:n}]:[{directory:r(t,\"file-history\",n.sessionId),scope:n}];case\"job\":return n.jobId===void 0?[{directory:r(t,\"jobs\"),scope:n}]:[{directory:r(t,\"jobs\",n.jobId,...n.relPath??[]),scope:n}];case\"daemon\":return[{directory:r(t,\"",
               "verdict": "storage path resolver (scope enumeration), not a record site."
             },
@@ -14966,13 +14966,13 @@
             },
             {
               "site": "Gjt call site 1 of 2: the insertMessageChain record literal",
-              "offset": 166105542,
+              "offset": 166105500,
               "excerpt": "r\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};if(ke.type===\"user\"&&ke.toolUseResult!=null)ke.toolUseResult=",
               "verdict": "stamps every transcript message record - the only production stamping site"
             },
             {
               "site": "Gjt call site 2 of 2: a fork_briefing attachment build",
-              "offset": 180372689,
+              "offset": 180372620,
               "excerpt": "Uuid:Ho.uuid,isSidechain:!1,...Sn({type:\"fork_briefing\",text:To}),...Gjt(Mo)}:void 0,Yo=ho,xn=Pe?.providedSessionId,Xo;if(Pe?.keepParent&&ho!==null){xn??=Nqe(),Xo=xn.slice(0,8);try{Yo=await lfr(ho,Xo,Pe.storageV5,_o)}catch(nn){ret",
               "verdict": "stamps one attachment record - consistent with the claim's 'rides attachment records'; not a bookkeeping type"
             },
@@ -18280,205 +18280,205 @@
           "enumeration": [
             {
               "site": "payload constructor for hook_event_name PreToolUse",
-              "offset": 162932604,
+              "offset": 162932544,
               "excerpt": ": ${e}`,{level:\"verbose\"});let B={...Sa(o.session,ne(),d,o),hook_event_name:\"PreToolUse\",tool_name:e,tool_input:r,tool_use_id:n};function U(j,W){return Qy({session:o.session,hookInput:j===void 0?B:{...B,tool_input:j},too",
               "verdict": "tool-shaped: carries tool_name + tool_input + tool_use_id on top of the Sa base"
             },
             {
               "site": "payload constructor for hook_event_name PostToolUse",
-              "offset": 162933244,
+              "offset": 162933184,
               "excerpt": "ze(e,n,r,o,d,f,_,v=dd,C,I){let F={...Sa(d.session,ne(),f,d),hook_event_name:\"PostToolUse\",tool_name:e,tool_input:r,tool_response:o,tool_use_id:n,duration_ms:C};yield*Qy({session:d.session,hookInput:F,toolUseID:n,matchQue",
               "verdict": "tool-shaped: carries tool_name + tool_input + tool_use_id on top of the Sa base"
             },
             {
               "site": "payload constructor for hook_event_name PostToolUseFailure",
-              "offset": 162933706,
+              "offset": 162933646,
               "excerpt": "ure\",d.session.id)))return;let F={...Sa(d.session,ne(),_,d),hook_event_name:\"PostToolUseFailure\",tool_name:e,tool_input:r,tool_use_id:n,error:o,is_interrupt:f,duration_ms:I};yield*Qy({session:d.session,hookInput:F,toolUs",
               "verdict": "tool-shaped: carries tool_name + tool_input + tool_use_id on top of the Sa base"
             },
             {
               "site": "payload constructor for hook_event_name PostToolBatch",
-              "offset": 162934082,
+              "offset": 162934022,
               "excerpt": "tch\",r.session.id)))return;let _={...Sa(r.session,ne(),o,r),hook_event_name:\"PostToolBatch\",tool_calls:e};yield*Qy({session:r.session,hookInput:_,toolUseID:n,signal:d,timeoutMs:f,toolUseContext:r})}async function*JUt(e,n",
               "verdict": "tool-shaped but carries tool_calls instead of tool_name/tool_input/tool_use_id"
             },
             {
               "site": "payload constructor for hook_event_name PermissionDenied",
-              "offset": 162934387,
+              "offset": 162934327,
               "excerpt": "ied\",d.session.id)))return;let C={...Sa(d.session,ne(),f,d),hook_event_name:\"PermissionDenied\",tool_name:e,tool_input:r,tool_use_id:n,reason:o};yield*Qy({session:d.session,hookInput:C,toolUseID:n,matchQuery:e,signal:_,ti",
               "verdict": "tool-shaped: carries tool_name + tool_input + tool_use_id on top of the Sa base"
             },
             {
               "site": "payload constructor for hook_event_name PermissionRequest",
-              "offset": 162934705,
+              "offset": 162934645,
               "excerpt": "ks called for tool: ${e}`);let C={...Sa(o.session,ne(),d,o),hook_event_name:\"PermissionRequest\",tool_name:e,tool_input:r,permission_suggestions:f};yield*Qy({session:o.session,hookInput:C,toolUseID:n,matchQuery:e,signal:_",
               "verdict": "tool-shaped but carries NO tool_use_id (tool_name + tool_input + permission_suggestions)"
             },
             {
               "site": "payload constructor for hook_event_name UserPromptSubmit (prompt path)",
-              "offset": 164126554,
+              "offset": 164126494,
               "excerpt": "xw(\"UserPromptSubmit\",n,e.id))return;let _={...Sa(e,ne(),o),hook_event_name:\"UserPromptSubmit\",prompt:r,...!1,session_title:fu(e.id)};yield*Qy({session:e,hookInput:_,toolUseID:A0n(),timeoutMs:a8e,sessionHooks:n,storageV5",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name UserPromptSubmit (tool-context path)",
-              "offset": 164126907,
+              "offset": 164126847,
               "excerpt": "ssionHooksRegistry,f))return;let _={...Sa(r.session,ne(),n),hook_event_name:\"UserPromptSubmit\",prompt:e,...!1,session_title:fu(r.session.id)};yield*Qy({session:r.session,hookInput:_,toolUseID:A0n(),signal:r.abortControll",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name PreModelSwitch",
-              "offset": 164544930,
+              "offset": 164544870,
               "excerpt": ";if(Voe(n.toModel))await MJ(n.toModel);let d={...Sa(e,ne()),hook_event_name:\"PreModelSwitch\",from_model:n.fromModel,to_model:n.toModel,requested_model:n.requestedModel,source:n.source,...Got(n.toModel)},f=kme(n.toModel),",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name PostModelSwitch",
-              "offset": 164546780,
+              "offset": 164546720,
               "excerpt": ";if(Voe(n.toModel))await MJ(n.toModel);let v={...Sa(e,ne()),hook_event_name:\"PostModelSwitch\",from_model:n.fromModel,to_model:n.toModel,requested_model:n.requestedModel,source:n.source,...Got(n.toModel)},C=[],I=[];try{fo",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name PreCompact",
-              "offset": 165795362,
+              "offset": 165795302,
               "excerpt": " OV(e,n,r,o,d=dd){let f=da(r.agentContext),_={...Sa(e,ne()),hook_event_name:\"PreCompact\",trigger:n.trigger,custom_instructions:n.customInstructions},v=await ZE({session:e,hookInput:_,matchQuery:n.trigger,signal:o,timeout",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name PostCompact",
-              "offset": 165796470,
+              "offset": 165796410,
               "excerpt": "o,d=dd){if(da(r.agentContext))return{};let f={...Sa(e,ne()),hook_event_name:\"PostCompact\",trigger:n.trigger,compact_summary:n.compactSummary},_=await ZE({session:e,hookInput:f,matchQuery:n.trigger,signal:o,timeoutMs:d,st",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name ConfigChange",
-              "offset": 165797218,
+              "offset": 165797158,
               "excerpt": "Ms:o=dd,storageV5:d,credentials:f}={}){let _={...Sa(e,ne()),hook_event_name:\"ConfigChange\",source:n,file_path:r},v=await ZE({session:e,hookInput:_,timeoutMs:o,matchQuery:n,storageV5:d,credentials:f});if(n===\"policy_setti",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name DirectoryAdded",
-              "offset": 165797524,
+              "offset": 165797464,
               "excerpt": "Ms:o=dd,storageV5:d,credentials:f}={}){let _={...Sa(e,ne()),hook_event_name:\"DirectoryAdded\",directory:n,source:r},v=await ZE({session:e,hookInput:_,matchQuery:r,timeoutMs:o,storageV5:d,credentials:f}),C=v.map((I)=>I.sys",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name Elicitation",
-              "offset": 165797914,
+              "offset": 165797854,
               "excerpt": ":_=dd,mode:v,url:C,elicitationId:I}){let F={...Sa(e,ne(),d),hook_event_name:\"Elicitation\",mcp_server_name:n,message:r,mode:v,url:C,elicitation_id:I,requested_schema:o},B=await ZE({session:e,hookInput:F,matchQuery:n,signa",
               "verdict": "MCP elicitation: carries mcp_server_name + elicitation_id and NO tool_use_id - the claim's 'instead'"
             },
             {
               "site": "payload constructor for hook_event_name ElicitationResult",
-              "offset": 165798400,
+              "offset": 165798340,
               "excerpt": "eoutMs:_=dd,mode:v,elicitationId:C}){let I={...Sa(e,ne(),d),hook_event_name:\"ElicitationResult\",mcp_server_name:n,elicitation_id:C,mode:v,action:r,content:o},F=await ZE({session:e,hookInput:I,matchQuery:n,signal:f,timeou",
               "verdict": "MCP elicitation: carries mcp_server_name + elicitation_id and NO tool_use_id - the claim's 'instead'"
             },
             {
               "site": "payload constructor for hook_event_name CwdChanged",
-              "offset": 165799081,
+              "offset": 165799021,
               "excerpt": "emMessages:v}}function _Wt(e,n,r,o={}){let d={...Sa(e,ne()),hook_event_name:\"CwdChanged\",old_cwd:n,new_cwd:r};return lnr(e,d,o)}function yWt(e,n,r,o={}){let d={...Sa(e,ne()),hook_event_name:\"FileChanged\",file_path:n,even",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name FileChanged",
-              "offset": 165799195,
+              "offset": 165799135,
               "excerpt": "rn lnr(e,d,o)}function yWt(e,n,r,o={}){let d={...Sa(e,ne()),hook_event_name:\"FileChanged\",file_path:n,event:r};return lnr(e,d,o)}async function R5e(e,n,r,o,d){let{globs:f,triggerFilePath:_,parentFilePath:v,timeoutMs:C=dd",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name InstructionsLoaded",
-              "offset": 165799406,
+              "offset": 165799346,
               "excerpt": "utMs:C=dd,storageV5:I,credentials:F}=d??{},B={...Sa(e,ne()),hook_event_name:\"InstructionsLoaded\",file_path:n,memory_type:r,load_reason:o,globs:f,trigger_file_path:_,parent_file_path:v};await ZE({session:e,hookInput:B,tim",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name MessageDisplay",
-              "offset": 165799674,
+              "offset": 165799614,
               "excerpt": ")}async function*k5e(e,n,r,o,d=dd,f,_){let v={...Sa(e,ne()),hook_event_name:\"MessageDisplay\",turn_id:n.turnId,message_id:n.messageId,index:n.index,final:n.final,delta:n.delta};yield*Qy({session:e,hookInput:v,toolUseID:`$",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name Notification",
-              "offset": 165800110,
+              "offset": 165800050,
               "excerpt": "et{message:f,title:_,notificationType:v}=n,C={...Sa(e,ne()),hook_event_name:\"Notification\",message:f,title:_,notification_type:v};await ZE({session:e,hookInput:C,timeoutMs:r,matchQuery:v,storageV5:o,credentials:d})}impor",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name SessionStart",
-              "offset": 165800443,
+              "offset": 165800383,
               "excerpt": "=r!==void 0?{id:Gu(r),project:e.project}:e,j={...Sa(U,ne()),hook_event_name:\"SessionStart\",source:n,agent_type:d,model:f,session_title:o??fu(U.id),...I};eq(\"hook_exec\",Bje);try{yield*Qy({session:e,hookInput:j,toolUseID:$",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name Setup",
-              "offset": 165800778,
+              "offset": 165800718,
               "excerpt": "}}async function*bWt(e,n,r,o=dd,d,f,_){let v={...Sa(e,ne()),hook_event_name:\"Setup\",trigger:n};eq(\"hook_exec\",Bje);try{yield*Qy({session:e,hookInput:v,toolUseID:$wt(),matchQuery:n,signal:r,timeoutMs:o,forceSyncExecution:",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name SubagentStart",
-              "offset": 165801065,
+              "offset": 165801005,
               "excerpt": "nction*TWt(e,n,r,o,d=dd,f,_,v){let C={...Sa(e.session,ne()),hook_event_name:\"SubagentStart\",agent_id:n,agent_type:r};yield*Qy({session:e.session,hookInput:C,toolUseID:$wt(),matchQuery:r,signal:o,timeoutMs:d,sessionHooks:",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name SessionEnd",
-              "offset": 165801447,
+              "offset": 165801387,
               "excerpt": ",signal:f,storageV5:_,credentials:v}=r||{},C={...Sa(e,ne()),hook_event_name:\"SessionEnd\",reason:n},I=await ZE({session:e,sessionHooks:o,getAppState:d,hookInput:C,matchQuery:n,signal:f,timeoutMs:Vgn,storageV5:_,credential",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name StopFailure",
-              "offset": 165802715,
+              "offset": 165802655,
               "excerpt": "id 0,d=e.error??\"unknown\",f={...Sa(n.session,ne(),void 0,n),hook_event_name:\"StopFailure\",error:d,error_details:e.errorDetails,last_assistant_message:o};await ZE({session:n.session,sessionHooks:n.sessionHooksRegistry,get",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name SubagentStop",
-              "offset": 165803468,
+              "offset": 165803408,
               "excerpt": ")),session_crons:unr()},z=Sa(f.session,ne(),e,f),fe=d?{...z,hook_event_name:\"SubagentStop\",stop_hook_active:o,agent_id:d,agent_transcript_path:Ud(d),agent_type:v??\"\",last_assistant_message:j,...W}:{...z,hook_event_name:\"",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name Stop",
-              "offset": 165803611,
+              "offset": 165803551,
               "excerpt": "Ud(d),agent_type:v??\"\",last_assistant_message:j,...W}:{...z,hook_event_name:\"Stop\",stop_hook_active:o,last_assistant_message:j,...W},me;yield*Qy({session:f.session,hookInput:fe,extendedHookInput:me,toolUseID:uJo(),signal",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name TeammateIdle",
-              "offset": 165804055,
+              "offset": 165803995,
               "excerpt": "function*wWt(e,n,r,o,d=dd,f){let _={...Sa(f.session,ne(),r),hook_event_name:\"TeammateIdle\",teammate_name:e,team_name:n};yield*Qy({session:f.session,hookInput:_,toolUseID:Uwt(),signal:o,timeoutMs:d,toolUseContext:f})}asyn",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name TaskCreated",
-              "offset": 165804283,
+              "offset": 165804223,
               "excerpt": "on*EWt(e,n,r,o,d,f,_,v=dd,C){let I={...Sa(C.session,ne(),f),hook_event_name:\"TaskCreated\",task_id:e,task_subject:n,task_description:r,teammate_name:o,team_name:d};yield*Qy({session:C.session,hookInput:I,toolUseID:Uwt(),s",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name TaskCompleted",
-              "offset": 165804554,
+              "offset": 165804494,
               "excerpt": "on*x5e(e,n,r,o,d,f,_,v=dd,C){let I={...Sa(C.session,ne(),f),hook_event_name:\"TaskCompleted\",task_id:e,task_subject:n,task_description:r,teammate_name:o,team_name:d};yield*Qy({session:C.session,hookInput:I,toolUseID:Uwt()",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name UserPromptExpansion",
-              "offset": 165804950,
+              "offset": 165804890,
               "excerpt": "ssionHooksRegistry,v))return;let C={...Sa(_.session,ne(),f),hook_event_name:\"UserPromptExpansion\",expansion_type:e,command_name:n,command_args:r,command_source:o,prompt:d};yield*Qy({session:_.session,hookInput:C,toolUseI",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name WorktreeCreate",
-              "offset": 165805309,
+              "offset": 165805249,
               "excerpt": "5e(e,n,{storageV5:r,credentials:o}={}){let d={...Sa(e,ne()),hook_event_name:\"WorktreeCreate\",name:n},f=await ZE({session:e,hookInput:d,timeoutMs:dd,storageV5:r,credentials:o}),_=f.filter((v)=>v.succeeded).map((v)=>mJo(v.",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             },
             {
               "site": "payload constructor for hook_event_name WorktreeRemove",
-              "offset": 165806343,
+              "offset": 165806283,
               "excerpt": "(\"WorktreeRemove\").length===0)return!1;let d={...Sa(e,ne()),hook_event_name:\"WorktreeRemove\",worktree_path:n},f=await ZE({session:e,hookInput:d,timeoutMs:dd,storageV5:r,credentials:o}),_=!1;for(let v of f)if(v.succeeded)",
               "verdict": "non-tool event: Sa base plus its own event-specific keys only; no tool_use_id, no mcp_server_name"
             }
@@ -18644,7 +18644,7 @@
             },
             {
               "site": "PART A / collision caution. a DIFFERENT minified kEn (files-api retry helper) at 163366374, 163366781, 163369486",
-              "offset": 163366374,
+              "offset": 163366314,
               "excerpt": "ic-beta\":XSo}}var R7=3,JSo=500,_En=524288000;async function kEn(e,n){let r=\"\";for(let o=1;o<=R7;o++){let d=await n(o);if(d.done)return d.value;if(r=d.error||`${e} failed`,mF(`${e} attempt ${o}/${R7} failed: ${r}`),o<R7){let f=JSo*Math.pow(2,o-1);mF(`Retrying ${e} in ${f}ms...`),await re(f)}}throw Er",
               "verdict": "unrelated async retry helper; three of the six kEn( hits are this function and must not be counted as drains"
             },
@@ -18662,13 +18662,13 @@
             },
             {
               "site": "PART A / vocabulary closure. grep _u({type:\"system\",subtype:\" over 158M-167M = 15 sites, 14 distinct subtypes (task_notification, notification, session_state_changed, task_summary, hook_started, hook_progress, hook_response, code_change_published, vcs_state_changed, task_updated, task_started, task_progress, feedback_draft_queued, post_turn_summary)",
-              "offset": 158424263,
+              "offset": 158424237,
               "excerpt": "s(e,n,r){if(!HN(e))return;_u({type:\"system\",subtype:\"task_notification\",task_id:e,tool_use_id:r?.toolUseId,status:n,output_file:r?.outputFile??\"\",summary:r?.summary??\"\",usage:r?.usage,...r?.resourceLinks&&{resource_links:[...r.resourceLinks]},...r?.skipTranscript!==void 0&&{skip_transcript:r.skipTra",
               "verdict": "the queue's whole message vocabulary; it is DISJOINT from the 11 system subtypes that occur on disk, so no message this queue carries has ever been persisted - the (b) half closed by set difference, not by absence of hook_response alone"
             },
             {
               "site": "PART B / not a record. worker-link chain reporter: hookFailed:(p)=>e({type:\"hook_failed\",...p})",
-              "offset": 156635059,
+              "offset": 156634909,
               "excerpt": "=k.createWorkerLinks(t),{post:e,ports:u,pendingNext:c}=n,d=new Map;Txe.setChainReporter({log:(p,o)=>e({type:\"log\",text:p,level:o}),hookFailed:(p)=>e({type:\"hook_failed\",...p})});let a=Axe.createEnvironmentRuntime((p)=>k.hostOp(n,p),w(F));k.hearUnhandledRejections(n,a),t.onmessage=(p)=>{let o=p.data;",
               "verdict": "NOT a record: an inter-worker post over createWorkerLinks, alongside {type:\"log\"} - never enters the conversation message array"
             },
@@ -18693,7 +18693,7 @@
             },
             {
               "site": "PART B / not a record. the per-hook start notice: yield{message:{type:\"progress\",data:{type:\"hook_progress\",...}}}",
-              "offset": 165854047,
+              "offset": 165853897,
               "excerpt": "e_mode:String(Or()),...rt&&{hook_definitions:ht}});let xt=B?void 0:qRt(_e,Lt,Ge.length,ht);for(let{hook:bn}of Ge)yield{message:{type:\"progress\",data:{type:\"hook_progress\",hookEvent:_e,hookName:ke,command:jk(bn),...bn.type===\"prompt\"&&{promptText:Dy(bn.prompt)},...\"statusMessage\"in bn&&bn.statusMessa",
               "verdict": "NOT a record: a streaming progress message; top-level type:\"progress\" records number 0 in the corpus census"
             },
@@ -18711,13 +18711,13 @@
             },
             {
               "site": "PART B / attachment mint. RRe builder, UserPromptSubmit",
-              "offset": 162720426,
+              "offset": 162720276,
               "excerpt": ")=>ePe,submitSource:()=>tPe,tokensByList:()=>WRe,wasPassAborted:()=>nPe});import{randomUUID as SJr}from\"crypto\";var RRe=(e,n=\"UserPromptSubmit\")=>Sn({type:\"hook_additional_context\",content:[...e],hookName:n,toolUseID:`hook-${SJr()}`,hookEvent:\"UserPromptSubmit\"});var d9=!0;var f9=(e)=>({messages:[Mt",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_additional_context has 88780 specimens in the corpus census"
             },
             {
               "site": "PART B / attachment mint. bon contextAttachment builder, hookName tool.call",
-              "offset": 162740329,
+              "offset": 162740179,
               "excerpt": "e,substituting:()=>won,toolResultBlockOf:()=>JH,toolResultOf:()=>Eon,toolUseResultOf:()=>Ton,withoutToolResult:()=>von});var bon=(e,n)=>({message:Sn({type:\"hook_additional_context\",content:[...e],hookName:\"tool.call\",toolUseID:`${n}-context`,hookEvent:\"PostToolUse\"})});var Son=(e,n)=>({type:\"tool_re",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_additional_context has 88780 specimens in the corpus census"
             },
@@ -18753,7 +18753,7 @@
             },
             {
               "site": "PART B / attachment mint. Setup collector",
-              "offset": 163200626,
+              "offset": 163200476,
               "excerpt": "0)_.push(...v.additionalContexts)}}catch(v){if(!(v instanceof aa))throw v;t(\"Setup hooks cancelled (control stream closed)\")}if(_.length>0){let v=Sn({type:\"hook_additional_context\",content:_,hookName:\"Setup\",toolUseID:\"Setup\",hookEvent:\"Setup\"});f.push(v)}return f}function Lgo(e,n,r){let o=Tpn(e),d=",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_additional_context has 88780 specimens in the corpus census"
             },
@@ -18771,13 +18771,13 @@
             },
             {
               "site": "PART B / attachment mint. Stop / SubagentStop collector",
-              "offset": 164633284,
+              "offset": 164633134,
               "excerpt": ";else cn.push(nt.blockingError.blockingError)}if(nt.additionalContexts&&nt.additionalContexts.length>0){let ln=f.agentId?\"SubagentStop\":\"Stop\",pn=Sn({type:\"hook_additional_context\",content:nt.additionalContexts,hookName:ln,toolUseID:Lt,hookEvent:ln});we.push(pn),yield pn,gn=!0,Tn.push(...nt.addition",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_additional_context has 88780 specimens in the corpus census"
             },
             {
               "site": "PART B / attachment mint. PostModelSwitch collector",
-              "offset": 164703447,
+              "offset": 164703297,
               "excerpt": "main\"&&!Ht.agentId&&!dr)try{for(let xr of await j$n(Ht.session)){for(let _i of xr.messages)yield _i,pr=[...pr,_i];if(xr.contexts.length>0){let _i=Sn({type:\"hook_additional_context\",content:xr.contexts,hookName:\"PostModelSwitch\",toolUseID:\"PostModelSwitch\",hookEvent:\"PostModelSwitch\"},fe);yield _i,pr",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_additional_context has 88780 specimens in the corpus census"
             },
@@ -18873,7 +18873,7 @@
             },
             {
               "site": "PART B / attachment mint. the hookSpecificOutput join: blockingError ? hook_blocking_error : hook_success",
-              "offset": 165818145,
+              "offset": 165817995,
               "excerpt": "ed by hook\",command:n}}break;case\"MessageDisplay\":F.displayContent=e.hookSpecificOutput.displayContent;break}}return{...F,message:F.blockingError?Sn({type:\"hook_blocking_error\",hookName:r,toolUseID:o,hookEvent:d,blockingError:F.blockingError}):Sn({type:\"hook_success\",hookName:r,toolUseID:o,hookEvent",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_blocking_error has 30 specimens in the corpus census"
             },
@@ -18897,7 +18897,7 @@
             },
             {
               "site": "PART B / attachment mint. Stop hook prevented continuation",
-              "offset": 164633541,
+              "offset": 164633391,
               "excerpt": "h(pn),yield pn,gn=!0,Tn.push(...nt.additionalContexts)}if(nt.preventContinuation)Ie=!0,Ot=nt.stopReason||\"Stop hook prevented continuation\",yield Sn({type:\"hook_stopped_continuation\",message:Ot,hookName:\"Stop\",toolUseID:Lt,hookEvent:\"Stop\"});if(f.abortController.signal.aborted){if(s(\"tengu_pre_stop_",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_stopped_continuation has 3 specimens in the corpus census"
             },
@@ -18921,19 +18921,19 @@
             },
             {
               "site": "PART B / attachment mint. PostToolUse wrapper, catch arm",
-              "offset": 162922307,
+              "offset": 162922157,
               "excerpt": ":z,queryChainId:ve(e.queryTracking?.chainId),queryDepth:e.queryTracking?.depth,...v&&{mcpServerType:u(v)},..._&&{requestId:ve(_)}}),yield{message:Sn({type:\"hook_error_during_execution\",content:lF(W),hookName:`PostToolUse:${n.name}`,toolUseID:r,hookEvent:\"PostToolUse\"})}}}catch(U){if(Ct(U)){if(e.abor",
               "verdict": "REACHES THE TRANSCRIPT when this arm fires (Sn -> type:\"attachment\" record), but 0 specimens of hook_error_during_execution in the corpus census - a rare arm, not a second lane"
             },
             {
               "site": "PART B / attachment mint. PostToolUseFailure wrapper, catch arm",
-              "offset": 162924107,
+              "offset": 162923957,
               "excerpt": ":z,queryChainId:ve(e.queryTracking?.chainId),queryDepth:e.queryTracking?.depth,...C&&{mcpServerType:u(C)},...v&&{requestId:ve(v)}}),yield{message:Sn({type:\"hook_error_during_execution\",content:lF(W),hookName:`PostToolUseFailure:${n.name}`,toolUseID:r,hookEvent:\"PostToolUseFailure\"})}}}catch(U){if(Ct",
               "verdict": "REACHES THE TRANSCRIPT when this arm fires (Sn -> type:\"attachment\" record), but 0 specimens of hook_error_during_execution in the corpus census - a rare arm, not a second lane"
             },
             {
               "site": "PART B / attachment mint. PreToolUse wrapper, catch arm",
-              "offset": 162929853,
+              "offset": 162929703,
               "excerpt": "ryTracking?.chainId),queryDepth:e.queryTracking?.depth,..._&&{mcpServerType:u(_)},...f&&{requestId:ve(f)}}),yield{type:\"message\",message:{message:Sn({type:\"hook_error_during_execution\",content:lF(z),hookName:`PreToolUse:${n.name}`,toolUseID:o,hookEvent:\"PreToolUse\"})}},F){yield{type:\"hookPermissionR",
               "verdict": "REACHES THE TRANSCRIPT when this arm fires (Sn -> type:\"attachment\" record), but 0 specimens of hook_error_during_execution in the corpus census - a rare arm, not a second lane"
             },
@@ -18963,7 +18963,7 @@
             },
             {
               "site": "PART B / attachment mint. PreToolUse defer decision",
-              "offset": 164443409,
+              "offset": 164443259,
               "excerpt": "deferred\",{toolName:Wn(e.name),queryChainId:ve(o.queryTracking?.chainId),queryDepth:o.queryTracking?.depth});let Bn=Sue();return we.push({message:Sn({type:\"hook_deferred_tool\",toolUseID:n,toolName:e.name,toolInput:Ie,hookName:xn.hookName,hookEvent:\"PreToolUse\",permissionMode:pe(o).mode,...Bn&&{trace",
               "verdict": "REACHES THE TRANSCRIPT when this arm fires (Sn -> type:\"attachment\" record), but 0 specimens of hook_deferred_tool in the corpus census - a rare arm, not a second lane"
             },
@@ -18975,7 +18975,7 @@
             },
             {
               "site": "PART B / attachment mint. e4() helper, exitCode 1",
-              "offset": 165772049,
+              "offset": 165771899,
               "excerpt": ")return!0;return _Tn(e,n,\"read\")!==null}import{randomUUID as zQo}from\"crypto\";function e4(e,n){return{hook:e,outcome:\"non_blocking_error\",message:Sn({type:\"hook_non_blocking_error\",...n,exitCode:1})}}var ige=m(()=>c({ok:M().describe(\"Whether the condition was met\"),reason:i().describe(\"Reason, if th",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_non_blocking_error has 93 specimens in the corpus census"
             },
@@ -19065,19 +19065,19 @@
             },
             {
               "site": "PART B / attachment mint. the hookSpecificOutput join, success branch (stdout/stderr/exitCode/command/durationMs)",
-              "offset": 165818243,
+              "offset": 165818093,
               "excerpt": "tent;break}}return{...F,message:F.blockingError?Sn({type:\"hook_blocking_error\",hookName:r,toolUseID:o,hookEvent:d,blockingError:F.blockingError}):Sn({type:\"hook_success\",hookName:r,toolUseID:o,hookEvent:d,content:\"\",stdout:_,stderr:v,exitCode:C,command:n,durationMs:I})}}async function TJo(e,n){if(L(",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_success has 360807 specimens in the corpus census"
             },
             {
               "site": "PART B / attachment mint. mcp hook completed",
-              "offset": 165861797,
+              "offset": 165861647,
               "excerpt": "t:_e,expectedHookEvent:_e,stdout:Lo.body,stderr:\"\",exitCode:0});spe(Sc.metrics,Dn,_e),yield{...js,outcome:\"success\",hook:bn};return}yield{message:Sn({type:\"hook_success\",hookName:ke,toolUseID:o,hookEvent:_e,content:`${ae.bold(ke)} completed`,stdout:Lo.body,stderr:\"\",command:Dr,durationMs:Date.now()-",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_success has 360807 specimens in the corpus census"
             },
             {
               "site": "PART B / attachment mint. script/command hook success with parsed json output - paired with Th(outcome:\"success\")",
-              "offset": 165865448,
+              "offset": 165865298,
               "excerpt": "ookName:ke,hookEvent:_e,output:br.output,stdout:br.stdout,stderr:br.stderr,exitCode:br.status,outcome:\"success\"}),yield{...Lo,message:Lo.message||Sn({type:\"hook_success\",hookName:ke,toolUseID:o,hookEvent:_e,content:xi,stdout:br.stdout,stderr:br.stderr,exitCode:br.status,command:Dr,durationMs:Ts}),ou",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_success has 360807 specimens in the corpus census; this arm calls Th(...) in the SAME statement, so the dropped hook_response and the persisted attachment come from one site"
             },
@@ -19095,7 +19095,7 @@
             },
             {
               "site": "PART B / attachment mint. hook systemMessage (async / heldForServedCall)",
-              "offset": 165871523,
+              "offset": 165871373,
               "excerpt": "n.hook,\"systemMessageChars\",Rn.systemMessage.length);let nr=await ipe(Rn.systemMessage,`${o}-${Bn}`,\"systemMessage\",{storageV5:we});yield{message:Sn({type:\"hook_system_message\",content:nr,hookName:ke,toolUseID:o,hookEvent:_e,...Rn.heldForServedCall&&{heldForServedCall:!0}})}}if(Rn.terminalSequence)R",
               "verdict": "REACHES THE TRANSCRIPT: Sn mints a type:\"attachment\" record; hook_system_message has 5 specimens in the corpus census"
             }
@@ -19934,7 +19934,7 @@
             },
             {
               "site": "the /add-dir DirectoryAdded systemMessage fan-in",
-              "offset": 187316530,
+              "offset": 187316410,
               "excerpt": "ctoryAdded hook failed: ${g.output}`,{level:\"error\"});let p=Y(a,(g)=>!g.succeeded),S=[...await Promise.all(P.map((g,W)=>ipe(g,`add-dir-${f}-${W}`,\"systemMessage\",{storageV5:s.storageV5}).then((T)=>`DirectoryAdded hook: ${T}`))),...p>0?[`${p} DirectoryAdded ${H(p,\"hook\")} failed; ",
               "verdict": "systemMessage - passes the threshold handler"
             },
@@ -20879,7 +20879,7 @@
             {
               "role": "trigger",
               "name": "tool executor S3: let ke=await e.validateInput?.(_e.data,{...o,toolUseId:n})",
-              "offset": 164440073,
+              "offset": 164440070,
               "excerpt": "let ke=await e.validateInput?.(_e.data,{...o,toolUseId:n});if(AG(o.abortController.signal))return kBe({phase:\"validate_input\",tool:e,toolUseID:n,toolUseContext:o,assistantMessage:f,mcpServerType:C,mcpServerBaseUrl:I,mcpNameLoggable:F,requestId:v,now:B});",
               "note": "The runner's single validation call for every tool. Every field of the validator's return object that anything in the executor sees flows from this one binding, ke. Re-read at the offset an earlier reading checked: EXACT."
             },
@@ -20901,7 +20901,7 @@
           "enumeration": [
             {
               "site": "tool executor S3 (the runner) - e.validateInput?.()",
-              "offset": 164440085,
+              "offset": 164440070,
               "excerpt": "let ke=await e.validateInput?.(_e.data,{...o,toolUseId:n});",
               "verdict": "CONSUMER. Reads ke.result, ke.message, ke.errorCode only. The whole runner body was scanned 164430000-164475000 for the token 'behavior': 14 occurrences, all on Ot (=await BPe(...).decision, the permission decision at 164444806) or the literal construction {behavior:\"deny\",message:Cn,...} at 164442381. Zero reads of ke.behavior."
             },
@@ -20925,13 +20925,13 @@
             },
             {
               "site": "artifact core-verb wrapper, bypass path - r.validateInput.call() [MISSED by the predecessor: dot-call shape]",
-              "offset": 175389914,
+              "offset": 175389839,
               "excerpt": "...r.validateInput!==void 0&&{async validateInput(f,...v){if(!n())return r.validateInput.call(e,f,...v);let T=Dee(f),C=od(Yi(T));if(C!==null)return{result:!1,message:C,errorCode:8};",
               "verdict": "PASS-THROUGH on the not-enabled branch: the delegate's object is returned unchanged, no field read. Never .behavior."
             },
             {
               "site": "artifact core-verb wrapper, main path - await r.validateInput.call() [MISSED by the predecessor: dot-call shape]",
-              "offset": 175390034,
+              "offset": 175390020,
               "excerpt": "let O=await r.validateInput.call(e,T,...v);return O.result?O:{...O,message:ad(O.message)}}},async call(f,...v){",
               "verdict": "CONSUMER. Reads O.result and O.message; on failure re-spreads {...O} with only message replaced, so a behavior field is preserved and forwarded, never read. Note the sibling checkPermissions in the same object literal constructs its OWN {behavior:\"ask\",...} decision at 175389844-260 - that behavior is a permission-decision field being written, not a validator field being read."
             },
@@ -20943,7 +20943,7 @@
             },
             {
               "site": "addon wrapper - eT.validateInput()",
-              "offset": 175643058,
+              "offset": 175643043,
               "excerpt": "let r=await eT.validateInput(a(t),o);return r.result?r:{...r,message:c(e.addon,r.message)}},async call(t,...o){",
               "verdict": "CONSUMER. Reads r.result and r.message; on failure re-spreads {...r} with message rewritten, preserving any behavior field unread."
             },
@@ -20955,7 +20955,7 @@
             },
             {
               "site": "higher-order registration gBn: {validateInput:B(t)} [MISSED by the predecessor: reachable only through the destructured alias]",
-              "offset": 175074711,
+              "offset": 175074573,
               "excerpt": "function gBn(e){let{validationErrorSteer:r,validateInput:t,call:n}=e,a={validationErrorSteer:(i,l)=>M(i,l,r?.(i,l)??null),...t!==void 0&&{validateInput:B(t)},call:V(n)};return Object.defineProperties(Object.defineProperties({},Object.getOwnPropertyDescriptors(e)),Object.getOwnPropertyDescriptors(a))",
               "verdict": "REGISTRATION, not itself a read: the tool's own validator is destructured to t and re-registered wrapped in B. This is the tenth consumer path and it is invisible to a grep of the literal validateInput inside B's body, because inside B the validator is the parameter e."
             },
@@ -20967,7 +20967,7 @@
             },
             {
               "site": "presence check in the artifact core-verb wrapper (non-consuming)",
-              "offset": 175389844,
+              "offset": 175389829,
               "excerpt": "return J},...r.validateInput!==void 0&&{async validateInput(f,...v){",
               "verdict": "NOT a consumer: a void-0 test that decides whether the wrapper defines a validateInput at all. Listed so the occurrence census below adds up exactly."
             },
@@ -21812,7 +21812,7 @@
             },
             {
               "site": "bX -> XQt(C,U) with U = MAX(retained)+1 (the only other version source)",
-              "offset": 162373034,
+              "offset": 162372383,
               "excerpt": "let U=B+1;if(!KCe(U))throw Error(\"FileHistory: no usable next version\"); ... ave(f,v,await XQt(C,U))",
               "verdict": "The soft reset route: when the retained window loses the snapshots holding the high versions, the max falls and the next version is lower. The remaining 70 decreases are snapshot lines at versions 7 and 102-438."
             },
@@ -22054,7 +22054,7 @@
             {
               "role": "gate",
               "name": "bX reuse branch: an unchanged tracked file is NOT re-copied, so its backupTime does not move",
-              "offset": 162372600,
+              "offset": 162372708,
               "excerpt": "let W=F!==void 0?F:I&&KCe(I.version)?I.version:void 0;if(I&&typeof I.backupFileName===\"string\"&&JQ.test(I.backupFileName)&&W!==void 0&&!await K4n(C,I.backupFileName,j)){ave(f,v,I.realParentDir!==void 0&&W===I.version?I:{...I,version:W,realParentDir:...});return}ave(f,v,await XQt(C,U))",
               "note": "K4n compares the live file against the stored blob; when nothing changed the OLD entry (and its old backupTime) is carried forward untouched. A new backupTime therefore appears only when the snapshot pass actually re-copies, which is why the snapshot-form lag is measured in minutes to hours, not seconds."
             },
@@ -22491,7 +22491,7 @@
             },
             {
               "site": "where _simulatedSedEdit is attached - the sed permission preview",
-              "offset": 176215552,
+              "offset": 176215490,
               "excerpt": "ist\",v=to(i,\"write\",!1),A=r||b||d||I?{...e.input}:{...e.input,_simulatedSedEdit:{filePath:i,newContent:k,baseHash:kn(c)}};return{...n,input:A,title:\"Edit file\",subtitle:Se(i,!1),question:{kind:\"file-action\",verbPhrase:\"make this e",
               "verdict": "A sed -i shaped command that previews cleanly is converted into a structured edit at approval time. This is the mechanism behind the 4-of-980 bash-only residue the standing check measured."
             },
@@ -22823,7 +22823,7 @@
             },
             {
               "site": "THE WRITER",
-              "offset": 164914194,
+              "offset": 164914163,
               "excerpt": "totalLines:ke,...Ue!==void 0&&{truncatedByTokenCap:!0}",
               "verdict": "The only site that assigns a value, and the value is the literal !0."
             },
@@ -26511,14 +26511,14 @@
             {
               "role": "gate",
               "name": "restoreMessageSync - the image re-hydration branch",
-              "offset": 180778472,
+              "offset": 180778232,
               "excerpt": "=T.permissionMode?{...tt.toolPermissionContext,mode:T.permissionMode}:tt.toolPermissionContext,promptSuggestion:{status:\"empty\"},...kX(Pe)===void 0&&{cacheMissAckedAtOutputTokens:_c()}})),Fe!==void 0)Eb(Ne,Fe);y(\"repl_rewind_conversation\")}restoreMessageSync=(T,I)=>{let{_setAppState:O,draft:q}=this;this.rewindConversationTo(T,I);let oe=fhn(T);if(oe)q.replaceValue(oe.text),q.setMode(oe.mode);if(Array.isArray(T.message.content)&&T.message.content.some((ue)=>ue.type===\"image\")){let ue=T.message.content.filter((Se)=>Se.type===\"image\");if(ue.length>0){let Se={},Ce={};ue.forEach((De,Ne)=>{if(De.source.type===\"base64\"){let Fe=T.imagePasteIds?.[Ne],lt=Fe??Ne+1,tt=Fe!==void 0?Se:Ce;tt[lt]={id:lt,type",
               "note": "The decisive branch: the restored record's image blocks are put BACK into the draft store keyed by the record's OWN imagePasteIds (let Fe=T.imagePasteIds?.[Ne],lt=Fe??Ne+1), so the same bytes return to the composer under their existing paste ids."
             },
             {
               "role": "gate",
               "name": "aX - the paste-id re-mint that PRESERVES ids minted this epoch",
-              "offset": 162029083,
+              "offset": 162028863,
               "excerpt": "dio\")}}function Y8e(e,n,r,o){let d=xu(e).filter((_)=>_.id===n&&NGr(_.match,o)),f=e;for(let _=d.length-1;_>=0;_--){let v=d[_];f=f.slice(0,v.index)+v.match.replace(`#${n}`,`#${r}`)+f.slice(v.index+v.match.length)}return f}function aX({display:e,pastedContents:n,allowCurrentEpochSkip:r=!1}){let o=DSe(),d=r&&o.flooredSessionId===Q(),f=Object.entries(n),_=[],v={};for(let[I,F]of f){let B=Number(I);if(!X3(B)||d&&o.wasMintedThisEpoch(B)){v[B]=F;continue}_.push([B,F])}if(_.length===0)return{display:e,pastedContents:n};let C=e;_.sort((I,F)=>I[0]-F[0]);for(let[I,F]of _){let B=w3t(o,C,n);C=Y8e(C,I,B,F.type),v[B]={...F,id:B}}return{display:C,pas",
               "note": "Ids already minted in this session epoch are skipped (wasMintedThisEpoch), so a restored image keeps its number and the same #N handle can appear twice in one transcript."
             },
@@ -26532,7 +26532,7 @@
             {
               "role": "writer",
               "name": "mc - the record builder that writes the blocks and imagePasteIds onto the new user record",
-              "offset": 169779530,
+              "offset": 169779230,
               "excerpt": ".Fe&&{\"prompt.id\":Fe},\"message.uuid\":Ee});let je=Qzn(Re),Xe=Zzn(Re),lt=eVn(Re),Ot=se?null:gZ(),nt=se?void 0:rLn();if(s(\"tengu_input_prompt\",{is_negative:je,is_keep_going:Xe,is_wakeup:lt,prompt_index:nt,prompt_length:Pe.length,...ue&&{prompt_source:u(ue)},...Ce&&{effort_level:u(Ce)},...Ot&&{interrupted_message_id:ve(Ot)}}),T.length>0){let Wt=typeof w===\"string\"?w.trim()?[{type:\"text\",text:w}]:[]:w,dn=xe({content:[...Wt,...T],uuid:Ee,imagePasteIds:I.length>0?I:void 0,permissionMode:oe,isMeta:se||void 0,promptSource:ue,promptId:Fe,origin:we});if(we)whn(dn,we);return{messages:[dn,...O],shouldQuery:!0}}let zt=xe({content:w,uuid",
               "note": "xe({content:[...Wt,...T],uuid:Ee,imagePasteIds:I.length>0?I:void 0,...}) - the second on-disk copy of the same image, carrying the ids restoreMessageSync will read next time."
             },
@@ -26553,7 +26553,7 @@
             {
               "role": "gate",
               "name": "REFUTES the claim's cause one: only pastes whose marker survives in the text are forwarded",
-              "offset": 181576900,
+              "offset": 181576620,
               "excerpt": "ool:De,onInputChange:oe,getCurrentInput:T.getCurrentInput,restoreHandedBackPrompt:T.restoreHandedBackPrompt,deferSlashToEngine:T.deferSlashToEngine,storageV5:T.storageV5});return}let{guard:Et,isExternalLoading:ft}=O,eo=T.input??\"\",oo=T.mode??\"prompt\",lo=T.pastedContents??{},to=Fe??OTo(),qt=new Set(xu(eo).map((Zo)=>Zo.id)),mo=Xs(lo,(Zo)=>Zo.type!==\"image\"&&Zo.type!==\"audio\"||qt.has(Zo.id)),ho=Object.values(mo).some((Zo)=>YOe(Zo)||Zo.type===\"audio\");if(eo.trim()===\"\")return;if(oo!==\"bash\"&&!lt&&eyt.includes(eo.trim())){if(q.find((Po)=>Po.name===\"exit\"))AY({...T,input:\"/exit\"}",
               "note": "qt=new Set(xu(eo).map(id)) then mo=Xs(lo,(Zo)=>Zo.type!==\"image\"&&Zo.type!==\"audio\"||qt.has(Zo.id)) - an image whose [Image #N] marker is gone from the text is dropped, not re-sent."
             }
@@ -26567,13 +26567,13 @@
             },
             {
               "site": "compaction summary mint (auto/manual compact)",
-              "offset": 164834441,
+              "offset": 164834321,
               "excerpt": "&cbt(n.toolState,n.agentId),Tn=[xe({content:Upe(Ge,{suppressFollowUpQuestions:o,transcriptPath:gn,replStateCleared:cn}),isCompactSummary:!0,isVisibleInTranscriptOnly:!0})],yn=LM([je]),nt=mh([xt,...Tn,...rt,...ht]);xt.compactMetadata.postTokens=nt,xt.compactMetadata.durationMs=Lt,Oie(xt,e),fe=nt;let ",
               "verdict": "same shape: xe({content:Upe(Ge,{...}),isCompactSummary:!0,isVisibleInTranscriptOnly:!0}) - string content"
             },
             {
               "site": "compaction summary mint (manual compact with summarizeMetadata)",
-              "offset": 164840504,
+              "offset": 164840384,
               "excerpt": "cbt(r.toolState,r.agentId),Tn=[xe({content:Upe(Fe,{suppressFollowUpQuestions:!1,transcriptPath:gn,replStateCleared:cn}),isCompactSummary:!0,...z.length>0?{summarizeMetadata:{messagesSummarized:W.length,userContext:f,direction:_}}:{isVisibleInTranscriptOnly:!0}})];bce(r.agentId),await S_t(r.storageV5",
               "verdict": "same shape: content:Upe(Fe,{...}); the only variation is summarizeMetadata versus isVisibleInTranscriptOnly"
             },
@@ -26585,13 +26585,13 @@
             },
             {
               "site": "transcript re-reader (in-process rebuild)",
-              "offset": 169764319,
+              "offset": 169764199,
               "excerpt": "e.isMeta===!0&&{isMeta:!0},...Ee.toolUseResult!==void 0&&{toolUseResult:Ee.toolUseResult},...Ee.isCompactSummary===!0&&{isCompactSummary:!0}}:{type:\"assistant\",uuid:Ee.uuid,timestamp:Ee.timestamp,message:Ee.message,requestId:Ee.requestId}),W.push(Buffer.byteLength(Re))}if(se<=0)return[];let{start:Ce",
               "verdict": "rebuilds a message list from disk carrying message VERBATIM and preserving the flag via ...isCompactSummary===!0&&{isCompactSummary:!0}; mints nothing"
             },
             {
               "site": "transcript re-reader (feedback payload build)",
-              "offset": 180335298,
+              "offset": 180335178,
               "excerpt": "...r.isMeta===!0&&{isMeta:!0},...r.toolUseResult!==void 0&&{toolUseResult:r.toolUseResult},...r.isCompactSummary===!0&&{isCompactSummary:!0}}:{type:\"assistant\",uuid:r.uuid,timestamp:r.timestamp,message:r.message,requestId:r.requestId})}return i}var Y=\"Feedback payload too large. Try again without th",
               "verdict": "same preserve-and-carry shape; mints nothing"
             },
@@ -29100,7 +29100,7 @@
             {
               "role": "gate",
               "name": "the harness PINS LC_ALL=C and TZ=UTC on its probe; csift's own probe does not",
-              "offset": 158136448,
+              "offset": 158136250,
               "excerpt": "t===void 0?{}:{env:t,extendEnv:!1};try{let r=t===void 0?\"ps\":dkt(\"ps\",Bd(t,\"PATH\")??\"\");if(r===null)return;let o=await Ve(r,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...n,env:{...t??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return o.code===0&&o.stdout?o.stdout.trim():void 0}catch{return}}",
               "note": "Offset in the Claude Code binary. Pinning the locale is the harness's own admission that this rendering is locale-dependent: its stored value is therefore always the month-first order, while an unpinned probe inherits LC_TIME - exactly why csift must accept both orders."
             },
@@ -30350,7 +30350,7 @@
             {
               "role": "writer",
               "name": "Ddt enqueue - the backgrounded-shell completion pulse with agentId:v??Ze()",
-              "offset": 164968656,
+              "offset": 164968326,
               "excerpt": "rBashTaskSnapshot(e,U,v);if(!B?.isAdopted)f1e(e,`\n[${r===\"killed\"?\"killed\":`exited with code ${o??\"unknown\"}`}]\n`);if(r===\"completed\")y(\"task_local_shell\");else if(r===\"failed\")p(\"task_local_shell\",\"task_local_shell_failed\");let j=Odt(_,n,r,o,C),W=pl(e);if(Ra({value:ka({taskId:e,toolUseId:f,outputFile:W,status:r,summary:Bt(j)}),mode:\"task-notification\",skipAttachments:!0,priority:\"next\",agentId:v??Ze(),taskId:e,...U&&{taskDelivery:U}}),v!==void 0)hs(e,r===\"killed\"?\"stopped\":r,{toolUseId:f,summary:j,outputFile:W})}function wz",
               "note": "The second child-capable family, caller-parameterized: a shell launched by a subagent notifies that subagent. Its summary head Odt uses Lke=\"Background command \" (156889404), which is what the other 4 child-lane records carry."
             }
@@ -30364,7 +30364,7 @@
             },
             {
               "site": "j4n (agent resumed by the user notice)",
-              "offset": 162291330,
+              "offset": 162291180,
               "excerpt": "; it is running again. Do not treat its work as cancelled or relaunch it; its result arrives in a later task-notification for this task-id.</note>`}),mode:\"task-notification\",skipAttachments:!0,priority:wDe,agentId:r,taskId:e,userResumeNotice:!0,...r===Ze()&&{passive:!0}}}function T7e(e,n){return e.",
               "verdict": "caller-supplied address, no default: `agentId:r` is the `to` parameter of j4n (definition 162291003); its sole call site (175694108) passes `to:eVe({...,delivering:!0,...})` (selector call 175694140), so the address is the owner-liveness selector's return - a boundary-anchored grep of j4n returns 8 bytes with exactly that one call"
             },
@@ -30442,7 +30442,7 @@
             },
             {
               "site": "Ddt (backgrounded shell completion pulse)",
-              "offset": 164968656,
+              "offset": 164968506,
               "excerpt": "task_local_shell\",\"task_local_shell_failed\");let j=Odt(_,n,r,o,C),W=pl(e);if(Ra({value:ka({taskId:e,toolUseId:f,outputFile:W,status:r,summary:Bt(j)}),mode:\"task-notification\",skipAttachments:!0,priority:\"next\",agentId:v??Ze(),taskId:e,...U&&{taskDelivery:U}}),v!==void 0)hs(e,r===\"killed\"?\"stopped\":r",
               "verdict": "caller-parameterized, root default: the lane is whatever the launching agent id was, else Ze() - a task launched by a subagent notifies that subagent's lane"
             },
@@ -30490,7 +30490,7 @@
             },
             {
               "site": "ultraplan session creation failed",
-              "offset": 165651622,
+              "offset": 165651472,
               "excerpt": "i_fail\":\"teleport_null\")}),v.enqueuePendingNotification({value:`ultraplan: session creation failed${Pe?` \\u2014 ${Pe}`:\". See --debug for details.\"}`,mode:\"task-notification\",agentId:Ze()});return}U=ke.id;let we=Ta(ke.id,a.SESSION_INGRESS_URL,{from:\"cli\"});f((Pe)=>({...Pe,ultraplanSessionUrl:we,ultr",
               "verdict": "root lane hardcoded: the literal carries agentId:Ze() (Ze() is the main-thread lane - fg(n){return n.agentId===Ze()} at 160411638), so this pulse can never reach a child transcript"
             },
@@ -30508,7 +30508,7 @@
             },
             {
               "site": "artifact watch ended",
-              "offset": 168762475,
+              "offset": 168762455,
               "excerpt": "${d}.`)}</event>`}),mode:\"task-notification\",...s&&{passive:!0},priority:\"next\",origin:{kind:\"task-notification\",source:B0,slug:n.slug,displayName:l,watchEnded:!0},agentId:Ze()})}function nt(e,n,r=\"watching this artifact was stopped earlier in this session\"){n.resumeAnnounce=void 0,me(e,n,r,\"stopped",
               "verdict": "root lane hardcoded: the literal carries agentId:Ze() (Ze() is the main-thread lane - fg(n){return n.agentId===Ze()} at 160411638), so this pulse can never reach a child transcript"
             },
@@ -30622,7 +30622,7 @@
             },
             {
               "site": "queue overflow coalescer (synthesized replacement item)",
-              "offset": 181123587,
+              "offset": 181123437,
               "excerpt": "<=Exe)return[...q,...O];let oe=O.slice(0,Exe-1),ue=O.slice(Exe-1),Se={value:`<${_p}>\n<${j0}>${Bt(reo(ue))}</${j0}>\n<${zx}>completed</${zx}>\n</${_p}>`,mode:\"task-notification\",agentId:Ze()};return[...q,...oe,Se]}function Fst(){let A7=_(17),VB=bf(),WVn=W(ieo),Axe=W(seo),R7=W(aeo),P7;if(A7[0]!==VB){bb0",
               "verdict": "root lane hardcoded: the literal carries agentId:Ze() (Ze() is the main-thread lane - fg(n){return n.agentId===Ze()} at 160411638), so this pulse can never reach a child transcript"
             },
@@ -30664,7 +30664,7 @@
             },
             {
               "site": "/btw constant (no agentId in the literal)",
-              "offset": 187263062,
+              "offset": 187262912,
               "excerpt": ".some(te))return;QS({...le,agentId:Ze()})}function _e(s,u){if(s.clearPendingReopen(u),!s.inFlight&&s.exchanges.length===0)Xy(te)}var le={value:\"/btw\",mode:\"task-notification\",priority:\"later\",origin:{kind:\"task-notification\"}};function te(s){return s.value===le.value&&s.mode===le.mode&&s.origin?.kin",
               "verdict": "a module constant with NO agentId; its only ENQUEUING use spreads it as QS({...le,agentId:Ze()}) at 187262929, so the effective lane is root; its other use is the comparator te(s) at 187263139, which enqueues nothing"
             },
@@ -31692,21 +31692,21 @@
             {
               "role": "trigger",
               "name": "per-request wire tool-definition builder: input_schema from each tool's inputSchema",
-              "offset": 165366305,
+              "offset": 165366245,
               "excerpt": "(e.inputJSONSchema)}`:e.name),De=g$e.get(Pe);if(!De){let Fe=g$e.stamp(),je=\"inputJSONSchema\"in e&&e.inputJSONSchema?e.inputJSONSchema:Pwe(e.inputSchema);if(!Zr())je=M6o(e.name,je);if(fj(e).supported&&!await one()){if(je=qyt(je,[Ii]),vA(e))je=I6o(je,e.entryFieldName,[Ii])}if(De={name:e.name,description:await ZJ.resolveToolDescription(e.name,await O6o(e,{...n,model:v,leanPrompt:C,preReadLineDropped:j,bashFirstTrimmed:F})),input_schema:je},I){if(e.strict===!0){let ot=$3t(je);if(ot.ok)De.strict=!0,De.input_schema=ot.schema;else t(`Tool ${",
               "note": "the entry that starts the path: once per request every registered tool is serialized as {name, description, input_schema}, je being the tool's own inputSchema. The schema shipped here is what constrains the key names the model may emit inside a tool_use input, so the per-tool schemas below are the source of the on-disk keys."
             },
             {
               "role": "gate",
               "name": "Edit inputSchema axe - payload key new_string",
-              "offset": 162402866,
+              "offset": 162402856,
               "excerpt": "nstance.`}var axe=m(()=>tt({file_path:i().describe(\"The absolute path to the file to modify\"),old_string:i().describe(\"The text to replace\"),new_string:i().describe(\"The text to replace it with (must be different from old_string)\"),replace_all:fs((e)=>e===void 0?!1:Ure(e),M().default(!1).optional()).describe(\"Replace all occurrences of old_string (default false)\"),...SCe()})),SQe=m(()=>c({oldStart:A(),oldLines:A(),newStart:A(),newLines:A(),lines:R(i())})),",
               "note": "decides Edit's shape: path key file_path, payload key new_string (plus old_string, replace_all). Its only spread SCe() returns {} at 159579791, so nothing further is added. Bound by the Edit tool object Yy at 162411726 via get inputSchema(){return axe()}."
             },
             {
               "role": "gate",
               "name": "Write inputSchema NRo - payload key content",
-              "offset": 163981535,
+              "offset": 163981529,
               "excerpt": ")}var NRo=m(()=>tt({file_path:i().describe(\"The absolute path to the file to write (must be absolute, not relative)\"),content:i().describe(\"The content to write to the file\"),...SCe()})),LRo=m(()=>c({type:ee([\"create\",\"update\"]).describe(\"Whether a new file was created or an existing file was update",
               "note": "decides Write's shape: path key file_path, payload key content. Bound by the Write tool object ty at 163982786 via get inputSchema(){return NRo()}."
             },
@@ -31734,7 +31734,7 @@
             {
               "role": "writer",
               "name": "transcript record literal and appendEntry",
-              "offset": 166105359,
+              "offset": 166105269,
               "excerpt": "\"tengu_phantom_parent_write\",{})}if(_e===fe.uuid)s(\"tengu_chain_self_reference_write\",{});let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};if(ke.type===\"user\"&&ke.toolUseResult!=null)ke.toolUseResult=Tor(ke.toolUseResult);if(await this.appendEntry(ke,C,I,v),me&&!n&&this.sessionFile&&C===Q())this.backstopThresholdBytes=r4,this.requestCompact(this.sessionFile",
               "note": "the assistant message is spread verbatim (...fe) into the record literal ke and handed to await this.appendEntry(ke,...), so each tool_use input object reaches disk with exactly the key names its schema declared."
             }
@@ -31798,13 +31798,13 @@
             },
             {
               "site": "occurrence 10 of 11 - permission-preset constant set dn",
-              "offset": 185145995,
+              "offset": 185145925,
               "excerpt": "92,jr=1024,tn=1000,Gr=1048576,dn=new Set([...Yie.filePatternTools,Wo,\"MultiEdit\",\"LS\"]),un=[dt,Wo,Yo,y6,...Iie,Yc,y3,...rsr.map((e)=>gc(Cd,e)),\"NotebookRead\",\"LS\",...Yie.bashPrefixTools,Gt,ca],Vr=Iie,Yr=[...Yie.bashPrefixTools,ca]",
               "verdict": "a name in a preset Set; not a tool"
             },
             {
               "site": "occurrence 11 of 11 - permission-preset constant set Xr",
-              "offset": 185146177,
+              "offset": 185146162,
               "excerpt": ",jn,fc,...Iie,\"MultiEdit\",...un];function qr(e){if(e===zt)return Xr;if(e===xo)return Vr;if(e===dt)return un;if(Yie.bashPrefixTools.includes(e))return Yr;let t=ea(e);if(t!==null&&t.toolName===void 0&&!Ox(e))return[`${gc(t.serverNam",
               "verdict": "a name in the Edit-rule expansion list; not a tool. This closes the enumeration: all 11 occurrences are names in tables or prose, zero constructions"
             },
@@ -31816,7 +31816,7 @@
             },
             {
               "site": "ymo's only spread - disallowed_tools inside the remote job config D_n",
-              "offset": 163140021,
+              "offset": 163139816,
               "excerpt": "}function D_n(e,n,r){return{name:O_n(e),...r===\"create\"&&{enabled:!0},job_config:{ccr:{environment_id:n,session_context:{sources:[{git_repository:{url:bmo(e)}}],allowed_tools:[..._mo],disallowed_tools:[...ymo],github_review_comment_only:!0},events:[{",
               "verdict": "CORRECTS the predecessor's inverted verdict. a grep took every ymo token: '...ymo]' occurs exactly once, here, as disallowed_tools of a remote post-review job; the only other real ymo identifier is an unrelated memo local at 181319596-181319786 and every remaining byte match is a substring of anonymous/polymorphic. ymo is a DENY LIST, so quoting MultiEdit's membership as proof it is offered inverts the evidence"
             },
@@ -36033,7 +36033,7 @@
             },
             {
               "site": "wrapper 2 of 2: a second tag builder in another module",
-              "offset": 183501747,
+              "offset": 183501687,
               "excerpt": "on cn(e,n){return{type:\"tool_result\",tool_use_id:n,content:`<tool_use_error>${e}</tool_use_error>`,is_error:!0}}function Qr(e,n){if(n.length===0)return e;let o=n.join(`\n`),{content:r}=e;if(r===void 0||r===\"\")return{...e,content:o};return typeof r===\"string\"?{.",
               "verdict": "Writer: `function cn(e,n){return{type:\"tool_result\",tool_use_id:n,content:`<tool_use_error>${e}</tool_use_error>`,is_error:!0}}`."
             },
@@ -43103,31 +43103,31 @@
             },
             {
               "site": "call site 1 of 3 - the turn-end append (main lane, persisting)",
-              "offset": 181626617,
+              "offset": 181626195,
               "excerpt": "let Go;if(O&&!I.signal.aborted)if(LLe(lt.getState().tasks).some((Po)=>Po.status===\"running\"))this._deferSwarmDuration(lt,Go);else{let Po=F1n({...});...Mo({type:\"update\",updater:(nn)=>[...nn,B_t(Po.durationMs,Go,Y(nn,KI),Po.pendingBackgroundAgentCount,Po.pendingWorkflowCount)]})}",
               "verdict": "the only path where gje reaches a written record: arg 4 and arg 5 come straight from F1n, so the never-zero rule and the absent shell count both hold; Go is declared unassigned in this same statement, so the three budget args are always undefined"
             },
             {
               "site": "call site 2 of 3 - the deferred swarm flush (persisting)",
-              "offset": 181610437,
+              "offset": 181610080,
               "excerpt": "_flushDeferredSwarmDuration(T){if(this._swarmStartTime===null)return;if(LLe(T.getState().tasks).some((oe)=>oe.status===\"running\"))return;let O=Date.now()-this._swarmStartTime,q=this._swarmBudgetInfo;...try{this._requireHost().transcript.replace((oe)=>[...oe,B_t(O,q,Y(oe,KI))])}catch(oe){h(oe)}}",
               "verdict": "the SECOND OF THREE constructors, not the second of two: three args only, so both pending counts are undefined and drop; it persists through the host transcript replace and can carry neither a zero nor a shell count"
             },
             {
               "site": "call site 3 of 3 - the async-agent keepalive park (in-memory only)",
-              "offset": 163877450,
+              "offset": 163877198,
               "excerpt": "if(nr){let dr=0,Dr=_.get(e);if(fr(Dr)&&Dr.keepaliveReasons){for(let Do of Dr.keepaliveReasons)if(Do.startsWith(\"agent:\"))dr++}_.updateTranscript(e,(Do)=>({...Do,messages:[...Do.messages.filter((pr)=>!(pr.type===\"system\"&&pr.subtype===\"turn_duration\")),B_t(Date.now()-je,void 0,void 0,dr||void 0)]}))",
               "verdict": "the third constructor, and the one that breaks the old wording: it fills the pendingBackgroundAgentCount slot with dr, a count of keepaliveReasons beginning with 'agent:', with gje never running; the never-zero rule still holds (dr||void 0) and dr is still an agent count, never a shell, so both negatives survive"
             },
             {
               "site": "the sink of call site 3 - updateTranscript inside Om(e,n)",
-              "offset": 163714567,
+              "offset": 163714489,
               "excerpt": "function Om(e,n){let r=0;return{register(o){Zvo(o,n)},update(o,d){Xvo(o,n,d)},updateTranscript(o,d){n((f)=>{let _=f.transcripts?.[o]??ODe,v=d(_);if(v===_)return f;return{...f,transcripts:{...f.transcripts,[o]:v}}})},getTranscript(o){return e().transcripts[o]},...",
               "verdict": "a pure in-memory mutation of the task-registry transcripts map through the app-state setter n, with no appendEntry / insert / write call anywhere in it - so call site 3 reaches no jsonl and leaves no specimen; that is why 'the only source of the two counts' is true only when scoped to a PERSISTED record"
             },
             {
               "site": "implementation census of updateTranscript (closing the in-memory verdict)",
-              "offset": 177664827,
+              "offset": 177664774,
               "excerpt": "var u2={register(){},update(){},updateTranscript(){},getTranscript(){return},remove(){},evictTerminal(){},applyOffsetsAndEvict(){},get(){return},all(){return{}},...",
               "verdict": "21 occurrences of the name in the binary: exactly ONE real implementation (163714567, the store mutation above), this no-op null-object stub, one string-table entry at 72662280, and 18 call sites on a registry object - no second, persisting implementation exists"
             },
@@ -45184,49 +45184,49 @@
             },
             {
               "site": "last-prompt typed literal",
-              "offset": 166113724,
+              "offset": 166113664,
               "excerpt": "d 0,o.currentSessionLeafTs=new Date().toISOString(),await o.appendEntry({type:\"last-prompt\",...o.currentSessionLastPrompt&&{lastPrompt:o.currentSessionLastPrompt},leafUuid:e,explicit:!0,...n?.rewound&&{rewound:!0},sessionId:Q()},void 0,void",
               "verdict": "Appends {type:'last-prompt',lastPrompt,...} - message-less and NOT one of the five. 29,838 such lines are on disk, the largest message-less population outside attachment."
             },
             {
               "site": "fork-context-ref typed literal",
-              "offset": 166114384,
+              "offset": 166114324,
               "excerpt": "(e),!0,n,r,void 0,d,f,o)}async function x7n(e,n){await Fi().appendEntry({type:\"fork-context-ref\",...e},void 0,void 0,n)}async function ogn(e,n){await Fi().appendEntry(e,e.sessionId,void 0,n)}function Lbr(e,n){Fi().appendEntry(e,e.sessionId,",
               "verdict": "Appends {type:'fork-context-ref',...} - message-less and NOT one of the five. 33 lines on disk."
             },
             {
               "site": "ogn generic passthrough",
-              "offset": 166114479,
+              "offset": 166114419,
               "excerpt": "\",...e},void 0,void 0,n)}async function ogn(e,n){await Fi().appendEntry(e,e.sessionId,void 0,n)}function Lbr(e,n){Fi().appendEntry(e,e.sessionId,void 0,n).catch(h)}jPn(Lbr);async function H7n(e,n){await Fi().appendEntry({type:\"observer-ref\"",
               "verdict": "Appends whatever entry the caller hands it, addressed by e.sessionId. An open-ended entry: any type its callers construct reaches disk here."
             },
             {
               "site": "Lbr generic passthrough (fire and forget)",
-              "offset": 166114538,
+              "offset": 166114478,
               "excerpt": ".appendEntry(e,e.sessionId,void 0,n)}function Lbr(e,n){Fi().appendEntry(e,e.sessionId,void 0,n).catch(h)}jPn(Lbr);async function H7n(e,n){await Fi().appendEntry({type:\"observer-ref\",...e,timestamp:new Date().toISOString()},void 0,void 0,n)}",
               "verdict": "The same open-ended passthrough with the promise caught and discarded; registered as a callback. Also open-ended."
             },
             {
               "site": "observer-ref typed literal",
-              "offset": 166114627,
+              "offset": 166114567,
               "excerpt": "d 0,n).catch(h)}jPn(Lbr);async function H7n(e,n){await Fi().appendEntry({type:\"observer-ref\",...e,timestamp:new Date().toISOString()},void 0,void 0,n)}async function I7n(e,n){if(L()&&n!==void 0)try{let r=XC(Ud(e));if(r!==void 0&&(await n.st",
               "verdict": "Appends {type:'observer-ref',...,timestamp} - message-less and NOT one of the five (0 lines on disk in this corpus)."
             },
             {
               "site": "marble-origami-commit typed literal",
-              "offset": 166129263,
+              "offset": 166129203,
               "excerpt": "}}async function Txr(e,n){let r=Q();if(!r)return;await Fi().appendEntry({type:\"marble-origami-commit\",sessionId:r,...e},void 0,void 0,n)}async function wxr(e,n){let r=Q();if(!r)return;await Fi().appendEntry({type:\"marble-origami-snapshot\",s",
               "verdict": "Message-less, NOT one of the five (0 lines on disk in this corpus)."
             },
             {
               "site": "marble-origami-snapshot typed literal",
-              "offset": 166129398,
+              "offset": 166129338,
               "excerpt": ")}async function wxr(e,n){let r=Q();if(!r)return;await Fi().appendEntry({type:\"marble-origami-snapshot\",sessionId:r,...e},void 0,void 0,n)}async function Exr(e,n){let r=Q();if(!r)return;await Fi().appendEntry({type:\"marble-origami-reset\",se",
               "verdict": "Message-less, NOT one of the five (0 lines on disk in this corpus)."
             },
             {
               "site": "marble-origami-reset typed literal",
-              "offset": 166129535,
+              "offset": 166129475,
               "excerpt": ")}async function Exr(e,n){let r=Q();if(!r)return;await Fi().appendEntry({type:\"marble-origami-reset\",sessionId:r,...e},void 0,void 0,n)}async function qc(){await Fi().flush()}function d_t(e,n,r){let o=Fi(),d=n??o.sessionFile;if(!d||pu())ret",
               "verdict": "Message-less, NOT one of the five (0 lines on disk in this corpus)."
             },
@@ -57891,25 +57891,25 @@
             },
             {
               "site": "keep-partial-message-on-abort builder ik()",
-              "offset": 165436172,
+              "offset": 165436090,
               "excerpt": "];if(Qi?.type!==\"text\"||!Qi.text.trim()||!md)return;return{message:{...md,content:Mme([Qi],o,f.agentId,{requestId:Ys??void 0,messageId:md.id},f.storageV5)},requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp",
               "verdict": "Calls the normalizer, but the arm returns early unless the pending block is a text block (Qi?.type!==\"text\"), so no tool_use ever reaches disk here."
             },
             {
               "site": "case content_block_stop (the streaming per-block record)",
-              "offset": 165442800,
+              "offset": 165442760,
               "excerpt": "ound\");let{content:Cu,batchToolUses:Pc}=e3t(Mme([Hs],o,f.agentId,{requestId:Ys??void 0,messageId:md.id},f.storageV5),o,(Ag,A_)=>EZ(Ag,A_,f.agentId,f.storageV5)),$c=Ps?Yxe([Hs]):void 0;YD||=$c?.degraded===!0;let Ay=$c?.inputs,sy={message:{...md,content:Cu},...Pc.length>0&&{batchToolUses:Pc},...Ay!==v",
               "verdict": "THE path for a streamed Edit call: Mme + EZ then the sy record literal. All 17223 on-disk Edit blocks carry the EZ key order."
             },
             {
               "site": "non-streaming assembly (fallback response) record literal vWe",
-              "offset": 165463222,
+              "offset": 165463180,
               "excerpt": "nputs,{content:Cir,batchToolUses:cvt}=e3t(Mme(TWe.content,o,f.agentId,{requestId:Ys??void 0,messageId:tg.id},f.storageV5),o,(Lc,ng)=>EZ(Lc,ng,f.agentId,f.storageV5));tw=EWe;let vWe={message:{...tg,content:Cir,usage:FY(mm,tg.usage)},...cvt.length>0&&{batchToolUses:cvt},...lvt!==void 0&&{wireToolInput",
               "verdict": "Same normalizer and same EZ lambda for a non-streamed response; an Edit call arriving this way is normalized identically."
             },
             {
               "site": "404 stream-creation fallback record literal Lv",
-              "offset": 165466274,
+              "offset": 165466232,
               "excerpt": ".inputs,{content:cp,batchToolUses:yT}=e3t(Mme(Wf.content,o,f.agentId,{requestId:Ys??void 0,messageId:bc.id},f.storageV5),o,(vy,yE)=>EZ(vy,yE,f.agentId,f.storageV5));tw=kd;let Lv={message:{...bc,content:cp,usage:FY(mm,bc.usage)},...yT.length>0&&{batchToolUses:yT},...Zh!==void 0&&{wireToolInputs:Zh},a",
               "verdict": "Same normalizer and EZ lambda on the second fallback path; identical treatment."
             },
@@ -58144,7 +58144,7 @@
             },
             {
               "site": "permission-rule validator (file-rule remap)",
-              "offset": 157293375,
+              "offset": 157293304,
               "excerpt": "let u=r.toolName===\"Write\"||r.toolName===\"NotebookEdit\"||r.toolName===\"MultiEdit\"?\"Edit\":r.toolName===\"Glob\"?\"Read\":void 0;if(u!==void 0&&!r.ruleContent.includes(\":*\"))return{valid:!0,warning:...}",
               "verdict": "validates a user-written permission rule and warns that only Edit(path) rules match file checks; operates on rule text, not on a tool object"
             },
@@ -58162,13 +58162,13 @@
             },
             {
               "site": "remote-job deny list ymo",
-              "offset": 163134834,
+              "offset": 163134741,
               "excerpt": "var ymo=[\"Bash\",\"BashOutput\",\"KillShell\",\"PowerShell\",\"Tmux\",\"Monitor\",\"REPL\",\"Read\",\"Edit\",\"MultiEdit\",\"Write\",\"NotebookEdit\",\"Glob\",\"Grep\",\"LS\",\"TodoWrite\",\"TaskCreate\",...]",
               "verdict": "the array an earlier check called 'the full tool registry'; it is the remote-job disallowed_tools list"
             },
             {
               "site": "UI verb table $r",
-              "offset": 177049049,
+              "offset": 177048995,
               "excerpt": "var $r={Read:\"Reading\",Write:\"Writing\",Edit:\"Editing\",MultiEdit:\"Editing\",Bash:\"Running\",Glob:\"Searching\",Grep:\"Searching\",WebFetch:\"Fetching\",...}",
               "verdict": "a display-string map in a separate module; no tool object"
             },
@@ -58180,13 +58180,13 @@
             },
             {
               "site": "permission-preset constant dn",
-              "offset": 185145995,
+              "offset": 185145955,
               "excerpt": "dn=new Set([...Yie.filePatternTools,Wo,\"MultiEdit\",\"LS\"])",
               "verdict": "a constant set in the permission-preset module; a string, not a registration"
             },
             {
               "site": "permission-preset constant Xr",
-              "offset": 185146177,
+              "offset": 185146156,
               "excerpt": "Xr=[zt,jn,fc,...Iie,\"MultiEdit\",...un];function qr(e){if(e===zt)return Xr;if(e===xo)return Vr;if(e===dt)return un;...}",
               "verdict": "the same module's alias expansion for an Edit rule; note the neighbours zt/jn/fc are the real name CONSTANTS while MultiEdit is a bare literal - it has none"
             }
@@ -58309,7 +58309,7 @@
             },
             {
               "site": "permission-rule validator (file-rule remap)",
-              "offset": 157293375,
+              "offset": 157293304,
               "excerpt": "let u=r.toolName===\"Write\"||r.toolName===\"NotebookEdit\"||r.toolName===\"MultiEdit\"?\"Edit\":r.toolName===\"Glob\"?\"Read\":void 0;if(u!==void 0&&!r.ruleContent.includes(\":*\"))return{valid:!0,warning:...}",
               "verdict": "validates a user-written permission rule and warns that only Edit(path) rules match file checks; operates on rule text, not on a tool object"
             },
@@ -58327,13 +58327,13 @@
             },
             {
               "site": "remote-job deny list ymo",
-              "offset": 163134834,
+              "offset": 163134741,
               "excerpt": "var ymo=[\"Bash\",\"BashOutput\",\"KillShell\",\"PowerShell\",\"Tmux\",\"Monitor\",\"REPL\",\"Read\",\"Edit\",\"MultiEdit\",\"Write\",\"NotebookEdit\",\"Glob\",\"Grep\",\"LS\",\"TodoWrite\",\"TaskCreate\",...]",
               "verdict": "the array an earlier check called 'the full tool registry'; it is the remote-job disallowed_tools list"
             },
             {
               "site": "UI verb table $r",
-              "offset": 177049049,
+              "offset": 177048995,
               "excerpt": "var $r={Read:\"Reading\",Write:\"Writing\",Edit:\"Editing\",MultiEdit:\"Editing\",Bash:\"Running\",Glob:\"Searching\",Grep:\"Searching\",WebFetch:\"Fetching\",...}",
               "verdict": "a display-string map in a separate module; no tool object"
             },
@@ -58345,13 +58345,13 @@
             },
             {
               "site": "permission-preset constant dn",
-              "offset": 185145995,
+              "offset": 185145955,
               "excerpt": "dn=new Set([...Yie.filePatternTools,Wo,\"MultiEdit\",\"LS\"])",
               "verdict": "a constant set in the permission-preset module; a string, not a registration"
             },
             {
               "site": "permission-preset constant Xr",
-              "offset": 185146177,
+              "offset": 185146156,
               "excerpt": "Xr=[zt,jn,fc,...Iie,\"MultiEdit\",...un];function qr(e){if(e===zt)return Xr;if(e===xo)return Vr;if(e===dt)return un;...}",
               "verdict": "the same module's alias expansion for an Edit rule; note the neighbours zt/jn/fc are the real name CONSTANTS while MultiEdit is a bare literal - it has none"
             }
@@ -58472,7 +58472,7 @@
             },
             {
               "site": "permission-rule validator (file-rule remap)",
-              "offset": 157293375,
+              "offset": 157293304,
               "excerpt": "let u=r.toolName===\"Write\"||r.toolName===\"NotebookEdit\"||r.toolName===\"MultiEdit\"?\"Edit\":r.toolName===\"Glob\"?\"Read\":void 0;if(u!==void 0&&!r.ruleContent.includes(\":*\"))return{valid:!0,warning:...}",
               "verdict": "validates a user-written permission rule and warns that only Edit(path) rules match file checks; operates on rule text, not on a tool object"
             },
@@ -58490,13 +58490,13 @@
             },
             {
               "site": "remote-job deny list ymo",
-              "offset": 163134834,
+              "offset": 163134741,
               "excerpt": "var ymo=[\"Bash\",\"BashOutput\",\"KillShell\",\"PowerShell\",\"Tmux\",\"Monitor\",\"REPL\",\"Read\",\"Edit\",\"MultiEdit\",\"Write\",\"NotebookEdit\",\"Glob\",\"Grep\",\"LS\",\"TodoWrite\",\"TaskCreate\",...]",
               "verdict": "the array an earlier check called 'the full tool registry'; it is the remote-job disallowed_tools list"
             },
             {
               "site": "UI verb table $r",
-              "offset": 177049049,
+              "offset": 177048995,
               "excerpt": "var $r={Read:\"Reading\",Write:\"Writing\",Edit:\"Editing\",MultiEdit:\"Editing\",Bash:\"Running\",Glob:\"Searching\",Grep:\"Searching\",WebFetch:\"Fetching\",...}",
               "verdict": "a display-string map in a separate module; no tool object"
             },
@@ -58508,13 +58508,13 @@
             },
             {
               "site": "permission-preset constant dn",
-              "offset": 185145995,
+              "offset": 185145955,
               "excerpt": "dn=new Set([...Yie.filePatternTools,Wo,\"MultiEdit\",\"LS\"])",
               "verdict": "a constant set in the permission-preset module; a string, not a registration"
             },
             {
               "site": "permission-preset constant Xr",
-              "offset": 185146177,
+              "offset": 185146156,
               "excerpt": "Xr=[zt,jn,fc,...Iie,\"MultiEdit\",...un];function qr(e){if(e===zt)return Xr;if(e===xo)return Vr;if(e===dt)return un;...}",
               "verdict": "the same module's alias expansion for an Edit rule; note the neighbours zt/jn/fc are the real name CONSTANTS while MultiEdit is a bare literal - it has none"
             }
@@ -58721,7 +58721,7 @@
             },
             {
               "site": "appendToFile -> iWe - the bytes",
-              "offset": 166118570,
+              "offset": 166118593,
               "excerpt": "try{await QEt(e,n,{mode:384})}catch{await FW(Nv(e),{recursive:!0,mode:448}),await QEt(e,n,{mode:384})}if(_)f.project?.tornTailSealLanded(e);return\"direct\"}async function tns(e,n,r){let o;try{o=await IW(e,u4.O_RDWR|u4.O_APPEND)}catch(d){...}",
               "verdict": "APPEND writer: appendFile with a mkdir-in-catch retry, or the O_RDWR|O_APPEND twin that stats, reads the last byte and writes only at the end. No seek-and-overwrite on this path"
             },
@@ -58775,7 +58775,7 @@
             },
             {
               "site": "class field localGcEnabled=!1 and its single production arming call",
-              "offset": 166076591,
+              "offset": 166076537,
               "excerpt": "class PTt{getSessionId;project=null;exitReStampRan=!1;localGcEnabled=!1;forkContextHydrationCache=new Map;...}   //  armed by: function zmn(e){Ku().setLocalGcEnabled(e)} at 166067565, whose only production call is zmn(mc()) inside if(o.sdkUrl) at 179355990",
               "verdict": "local GC is OFF by default and armed at exactly one production site, on the sdk-url resume path"
             },
@@ -58795,7 +58795,7 @@
             },
             {
               "site": "lgn - v1 remote hydration replaces the live transcript",
-              "offset": 166131641,
+              "offset": 166131626,
               "excerpt": "async function lgn(e,n,r){Xp(Gu(e),\"hydrate\");let o=Fi();try{let d=await Bvt(e,n)||[],f=fl(ye());await OTt(f,r);let _=lm(e);if(!d.some(HZ)&&await p_t(_,r))return ...,!0;return await KQ(_,d,hu(p4(_,r))),t(`Hydrated ${d.length} entries from remote`),d.length>0}",
               "verdict": "EXCEPTION 3 route A on a LIVE transcript (lm(e) is the session file). Its only production caller is 179356450, `else if(w.isUrl&&w.ingressUrl&&Le(\"true\"))await lgn(...)` in the resume driver. The only guard is the zero-content skip"
             },
@@ -59873,13 +59873,13 @@
             },
             {
               "site": "non-streaming record literal usage:FY(mm,tg.usage)",
-              "offset": 165463389,
+              "offset": 165463340,
               "excerpt": "eV5));tw=EWe;let vWe={message:{...tg,content:Cir,usage:FY(mm,tg.usage)},...cvt.length>0&&{batchToolUses:cvt},...lvt!==void 0&&{wireToolInputs:lvt},apiBlockIndex:0,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),ti",
               "verdict": "Builds the record usage by running the server object through FY over the mm seed - eleven keys."
             },
             {
               "site": "404-fallback record literal usage:FY(mm,bc.usage)",
-              "offset": 165466437,
+              "offset": 165466390,
               "excerpt": "geV5));tw=kd;let Lv={message:{...bc,content:cp,usage:FY(mm,bc.usage)},...yT.length>0&&{batchToolUses:yT},...Zh!==void 0&&{wireToolInputs:Zh},apiBlockIndex:0,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestam",
               "verdict": "Same, eleven keys."
             },
@@ -59891,13 +59891,13 @@
             },
             {
               "site": "urr - the PushNotification synthetic assistant record usage:{...mm}",
-              "offset": 160127188,
+              "offset": 160127130,
               "excerpt": ",stop_reason:\"tool_use\",stop_sequence:null,type:\"message\",usage:{...mm},content:[{type:\"tool_use\",id:A(),name:He,input:{message:e,status:\"proactive\"}}],context_management:null},parent_tool_use_id:null,is_meta:!0,session_id:n,uuid:A()}}function h4t(e,n){return{type:\"assistant\",message:{diagnostics:nu",
               "verdict": "Eleven keys, all zero/standard (is_meta record)."
             },
             {
               "site": "h4t - the plain-text synthetic assistant record usage:{...mm}",
-              "offset": 160127559,
+              "offset": 160127500,
               "excerpt": "top_reason:\"stop_sequence\",stop_sequence:\"\",type:\"message\",usage:{...mm},content:[{type:\"text\",text:e,citations:null}],context_management:null},parent_tool_use_id:null,session_id:n,uuid:A(),timestamp:new Date().toISOString()}}class QCe{capacity;ring;set=new Set;writeIdx=0;constructor(e){this.capacit",
               "verdict": "Eleven keys, all zero/standard."
             },
@@ -59915,13 +59915,13 @@
             },
             {
               "site": "normalizer copy F.message.usage=f.message.usage",
-              "offset": 165939552,
+              "offset": 165939500,
               "excerpt": "eason,F.message.stop_details=f.message.stop_details,F.message.usage=f.message.usage}if(d.push(...I.normalized),CMe(f))o=!0;continue}}let C=_es(f,_);if(r?.set(f,{isNewChain:v,normalized:C}),d.push(...C),CMe(f))o=!0}return d}function _es(e,n){switch(e.type){case\"assistant\":{let r=n||CMe(e);return e.me",
               "verdict": "Copies an existing usage object across the records a re-split message produced; introduces no key."
             },
             {
               "site": "SDK result object usage:{...mm}",
-              "offset": 160126796,
+              "offset": 160126740,
               "excerpt": "num_turns:0,result:\"\",stop_reason:null,total_cost_usd:0,usage:{...mm},modelUsage:{},permission_denials:[],session_id:e,uuid:A()}}function iEn(e,n){return{type:\"system\",subtype:\"worker_shutting_down\",reason:n,session_id:e,uuid:A()}}var He=\"PushNotification\";function urr(e,n){return{type:\"assistant\",m",
               "verdict": "NEGATIVE site: an SDK type:\"result\" object, not a transcript assistant record."
             }
@@ -60042,7 +60042,7 @@
             },
             {
               "site": "Dhn (a second merge helper)",
-              "offset": 165472936,
+              "offset": 165472900,
               "excerpt": ";let r=n.cache_creation;return{...e,output_tokens_details:{thinking_tokens:n.output_tokens_details?.thinking_tokens??e.output_tokens_details.thinking_tokens},input_tokens:n.input_tokens??e.input_tokens,output_tokens:n.output_tokens??e.output_tokens,cache_read_input_tokens:n.cache_read_input_tokens??",
               "verdict": "OBJECT always; same nested rebuild."
             },
@@ -60060,7 +60060,7 @@
             },
             {
               "site": "cost aggregation over stored usage rows",
-              "offset": 169817201,
+              "offset": 169817160,
               "excerpt": "ns),output_tokens:T((I)=>I.outputTokens),output_tokens_details:{thinking_tokens:T((I)=>I.thinkingTokens??0)},cache_read_input_tokens:T((I)=>I.cacheReadInputTokens),cache_creation_input_tokens:T((I)=>I.cacheCreationInputTokens),server_tool_use:{...mm.server_tool_use,web_search_requests:T((I)=>I.webSe",
               "verdict": "OBJECT; a {...mm} spread for cost reporting, not a record."
             },
@@ -60090,7 +60090,7 @@
             },
             {
               "site": "the Done(N tool uses) summary passed through mu into Jrr",
-              "offset": 180076897,
+              "offset": 180076860,
               "excerpt": " \")})`,Pe=mu({content:Me,usage:{...D,output_tokens_details:typeof D.output_tokens_details?.thinking_tokens===\"number\"?{thinking_tokens:D.output_tokens_details.thinking_tokens}:null,inference_geo:null,iterations:null,speed:null,service_tier:D.service_tier===\"standard\"||D.service_tier===\"priority\"||D.",
               "verdict": "NULL when the source has no numeric thinking_tokens; it reaches disk only as a Jrr-shaped record, so it does not add a shape beyond the Jrr one."
             }
@@ -70073,7 +70073,7 @@
             {
               "role": "writer",
               "name": "the registry row object literal carries pidDomain:await YG() (darwin-arm64)",
-              "offset": 158819716,
+              "offset": 158819673,
               "excerpt": "kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await YG(),...C&&{tmux:C},...{messagingSocketPath:Nb.CLAUDE_CODE_MESSAGING_SOCKET},...{name:I?.name,nameSource:I?.source===\"derived\"?\"derived\":void 0,nameSince:Date.now(),logPath:a.CLAUDE_CODE_SESSION_LOG,agent:a.CLAUDE_CODE_AGENT",
               "note": "THE field that becomes the bytes. One object literal built once per registration; the awaited producer call sits at 158819732."
             },
@@ -70140,13 +70140,13 @@
             },
             {
               "site": "darwin field byte 7/20 - messaging .key writer (direct fs)",
-              "offset": 158810005,
+              "offset": 158809954,
               "excerpt": "return await Un(f,S({peerToken:n,...OU(await LA()),pidDomain:await YG()}),384),f}",
               "verdict": "WRITES the field into a file - but a .key file, not a registry row. One of exactly three file writers of the field."
             },
             {
               "site": "darwin field byte 8/20 - messaging .key writer (storage backend)",
-              "offset": 158810376,
+              "offset": 158810309,
               "excerpt": "let f=await e.write(Ae.session(o),S({peerToken:r,...OU(await LA()),pidDomain:await YG()}),{publishDiscipline:\"atomic\",mode:384,exactMode:384});",
               "verdict": "Same .key payload through the storage backend. Second of the three file writers; still not the registry row."
             },
@@ -70164,7 +70164,7 @@
             },
             {
               "site": "darwin field byte 11/20 - THE registry row writer",
-              "offset": 158819716,
+              "offset": 158819673,
               "excerpt": "kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await YG(),...C&&{tmux:C},",
               "verdict": "The one site that puts the field into a <pid>.json registry row. Third and last of the three file writers."
             },
@@ -70182,13 +70182,13 @@
             },
             {
               "site": "darwin field byte 14/20 - row reader whitelist, typeof guard",
-              "offset": 159698084,
+              "offset": 159698010,
               "excerpt": "entrypoint:typeof o.entrypoint===\"string\"?o.entrypoint:void 0,...typeof o.pidDomain===\"string\"&&{pidDomain:o.pidDomain},",
               "verdict": "Reader. Conditional spread: a row without the field reads back without the key."
             },
             {
               "site": "darwin field byte 15/20 - row reader whitelist, the emitted key",
-              "offset": 159698107,
+              "offset": 159698072,
               "excerpt": "...typeof o.pidDomain===\"string\"&&{pidDomain:o.pidDomain},agent:typeof o.agent===\"string\"?o.agent:void 0,",
               "verdict": "Same statement, the key it re-emits in memory. Not a file write."
             },
@@ -70281,7 +70281,7 @@
             },
             {
               "site": "Sn caller 8/9",
-              "offset": 158821927,
+              "offset": 158821919,
               "excerpt": "f=await Sn({...e,updatedAt:r,...e.status!==void 0&&{statusUpdatedAt:r},...d&&{spare:void 0}},n);",
               "verdict": "Spreads a caller status payload. It cannot carry the field: the 20-byte field enumeration above contains no other object-literal pidDomain key anywhere in the binary, so no caller can build one."
             },
@@ -71714,7 +71714,7 @@
             {
               "role": "writer",
               "name": "the drop-in listing and merge",
-              "offset": 157431449,
+              "offset": 157431614,
               "excerpt": "let u=he(e,\"managed-settings.d\"); ... readdirSync(u).filter((f)=>(f.isFile()||f.isSymbolicLink())&&BCt(f.name)).map((f)=>f.name).sort(); for(let f of h){let{settings:y,errors:b}=pq(he(u,f),n,void 0,!0); ... s=k0(s,y,zU)}",
               "note": "the sorted drop-in order, with the name filter BCt requiring .json and no leading dot"
             },
@@ -71866,14 +71866,14 @@
             {
               "role": "gate",
               "name": "the customizer's array branch",
-              "offset": 157454554,
+              "offset": 157454619,
               "excerpt": "if(Array.isArray(e)&&Array.isArray(n)){if(o===\"fallbackModel\")return n;return te([...e,...n])}",
               "note": "the explicit fallbackModel exception proves the default for two arrays is concat, not replace"
             },
             {
               "role": "writer",
               "name": "the identity deduplicator",
-              "offset": 156517560,
+              "offset": 156517419,
               "excerpt": "function te(n){return[...new Set(n)]}",
               "note": "a Set over object references, so distinct parsed objects all survive"
             },
@@ -72017,7 +72017,7 @@
             {
               "role": "trigger",
               "name": "the eager flag sequence",
-              "offset": 166639447,
+              "offset": 166639967,
               "excerpt": "function UXt(){ ... let e=OVt(\"--settings\");if(e)Ypr(e);let a=OVt(\"--managed-settings\");if(a)c(a);let n=OVt(\"--setting-sources\");if(n!==void 0)g(n);if(LR(\"--restricted\")||PW())g(\"\"),gnt(!0); ...}",
               "note": "all three are consumed before the normal load, straight out of argv"
             },
@@ -72355,7 +72355,7 @@
             {
               "role": "trigger",
               "name": "the session registry row writer",
-              "offset": 158819050,
+              "offset": 158819054,
               "excerpt": "N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),version: ... ,peerProtocol:Fzt,peerFeatures:Pwr(),kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await YG(), ... {messagingSocketPath:Nb.CLAUDE_CODE_MESSAGING_SOCKET}, ...})",
               "note": "the row a reader would look in: its key set carries no teams field"
             }
@@ -72488,14 +72488,14 @@
             {
               "role": "trigger",
               "name": "the socket bind site",
-              "offset": 182763055,
+              "offset": 182762953,
               "excerpt": "if(Nb.unset(\"CLAUDE_CODE_MESSAGING_SOCKET\"),Nb.unset(\"CLAUDE_CODE_MESSAGING_TOKEN\"),!fo()||w!==void 0)if(!Vo())if(!Mn()){ ... }else t(\"[uds-messaging] Skipped: cross-session messaging gate off\");else if(Mn())t(\"[uds-messaging] Skipped: remote thin client\");else{ ... let v=await f.startCrossSessionInbox(w,n); ...}",
               "note": "the one place the gate decides whether the inbox binds, unsetting the variables first"
             },
             {
               "role": "writer",
               "name": "the registry row's socket field",
-              "offset": 158819756,
+              "offset": 158819752,
               "excerpt": "...{messagingSocketPath:Nb.CLAUDE_CODE_MESSAGING_SOCKET}",
               "note": "the row copies the boundness signal verbatim, which is the only on-disk consequence"
             }
@@ -72567,7 +72567,7 @@
             {
               "role": "writer",
               "name": "the settings watcher",
-              "offset": 161789150,
+              "offset": 161789152,
               "excerpt": "let wo=hR.watch(Dr,{persistent:!0,ignoreInitial:!0,depth:0,awaitWriteFinish:{stabilityThreshold:n,pollInterval:r},ignored:(Di,na)=>{ ... if(Do.has(ga))return!1;if(pr&&ga.startsWith(pr+jy.sep)&&ga.endsWith(\".json\"))return!1;return!0},ignorePermissionErrors:!0,usePolling:!1,atomic:!0});F=wo; ... wo.on(\"change\",bn),wo.on(\"unlink\",Dn),wo.on(\"add\",Rn)",
               "note": "what makes the snapshot refreshable without a restart, and why the pickup is not instant"
             },
@@ -72632,7 +72632,7 @@
             {
               "role": "trigger",
               "name": "the per-event hook collector",
-              "offset": 165843885,
+              "offset": 165844023,
               "excerpt": "let d=o?.managedHooksExcluded?jJo(MB(r),r):[...MB(r)],f=typeof n===\"string\"?[n]:n;if(e===void 0||jyt())return d;for(let v of f){let C=e.get(v,r).get(r);if(C)d.push(...C)}",
               "note": "the process-global union is added for every agent; the per-agent registry is additive on top"
             },
@@ -73126,7 +73126,7 @@
             {
               "role": "writer",
               "name": "the SessionStart accumulator and the attachment it joins",
-              "offset": 163199508,
+              "offset": 163198954,
               "excerpt": "if(_e.additionalContexts&&_e.additionalContexts.length>0)j.push(..._e.additionalContexts); ... if(j.length>0){let _e=Sn({type:\"hook_additional_context\",content:j,hookName:\"SessionStart\",toolUseID:\"SessionStart\",hookEvent:\"SessionStart\"});U.push(_e)}",
               "note": "The push at 163198954 and the build at 163199508 with no threshold call between them: each hook's already-thresholded string becomes one element of the content array, and the array is never measured as a whole."
             }
@@ -73146,7 +73146,7 @@
             },
             {
               "site": "call site, a hook's systemMessage",
-              "offset": 165853343,
+              "offset": 165853329,
               "excerpt": "content:await ipe(Bo.systemMessage,...)",
               "verdict": "One hook's own field."
             },
@@ -73158,7 +73158,7 @@
             },
             {
               "site": "call site, systemMessage on the second runner",
-              "offset": 165871439,
+              "offset": 165871426,
               "excerpt": "let nr=await ipe(Rn.systemMessage,`${o}-${Bn}`,\"systemMessage\",...)",
               "verdict": "One hook's own field."
             },
@@ -73170,13 +73170,13 @@
             },
             {
               "site": "call site, initialUserMessage",
-              "offset": 165872329,
+              "offset": 165872298,
               "excerpt": "yield{initialUserMessage:await ipe(Rn.initialUserMessage,...)}",
               "verdict": "One hook's own field."
             },
             {
               "site": "call site, DirectoryAdded",
-              "offset": 187316530,
+              "offset": 187316517,
               "excerpt": "P.map((g,W)=>ipe(g,`add-dir-${f}-${W}`,\"systemMessage\",...))",
               "verdict": "One call per message, never over the mapped result."
             }
