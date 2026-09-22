@@ -397,8 +397,11 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         let mut skipped_sidecar = 0usize;
         let mut seen: std::collections::BTreeSet<(&str, usize)> = std::collections::BTreeSet::new();
         // The jsonl stream goes through the shared buffer (a `--raw` dump of a broad match
-        // is hundreds of thousands of lines), and is FLUSHED before the notes below: those
-        // ride stderr and the contract puts them after the stream.
+        // is hundreds of thousands of lines), and is FLUSHED AND DROPPED before the notes
+        // below: those ride stderr and the contract puts them after the stream. The drop is
+        // the same move `show --raw` makes, and it is what makes the obligation structural
+        // rather than remembered - with the writer gone, a later stdout byte here cannot
+        // reach a buffer that still holds anything.
         let mut out = crate::text::Out::stdout();
         for ex in &outcome.exchanges {
             for h in &ex.hits {
@@ -414,8 +417,9 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
             }
         }
         out.flush()?;
+        drop(out);
         // The accounting notes ride stderr AFTER the flush above, which is the order the
-        // contract states for them; the buffer holds nothing by the time they print.
+        // contract states for them; the writer is gone by the time they print.
         #[allow(clippy::print_stderr)]
         {
             if skipped_sidecar > 0 {
