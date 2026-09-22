@@ -3156,20 +3156,25 @@ stated that way because a list of subcommands is not stable under it: a surface 
 go through the buffer but whose FIRST stdout byte is a `println!` aborts at that byte,
 before the buffer is ever reached. The scope banner is one - it prints before the `Out`
 exists, which is what makes leaving it a `println!` legitimate - so the same query reports
-or aborts depending on how wide its scope is. Measured on a one-session fixture, 45 argv
-rows covering every subcommand and every terminal mode, with stdout wired to a pipe whose
-read end was closed before the spawn (every write fails from the first byte, which a
-`| head -c 1` cannot guarantee). Exit 1 with csift's own line: `search --format json`,
-`search --raw`, `show` rendered and `--raw`, `show --turn`, `agents` in both projections,
-`files --format json`, `image` in both, and all three of `verbatim`'s streams (text, JSON
-and `--slice`) - plus `search` text and `files` text once `--no-subagents` suppresses the
-banner, which is the rule showing its seam. Exit 101 with a std backtrace, because a
-`println!` makes the first failing write: `list`, `stats` in both projections,
-`show --branch-points`, `recover` in all five of its modes, `status`, `wait`, `whoami`,
-`send`, `msg`, `deliver`, and `search`'s `-c`, `-l` and `--count-by` terminal printers.
-Against a release build of the base commit every one of those rows read 101, with two
-exceptions that never went through `println!`: `show --raw` already exited 1, and `ack`
-refuses before it writes anything.
+or aborts depending on how wide its scope is. Measured on a one-session fixture, 43
+distinct argv rows covering every subcommand and every terminal mode, with stdout wired to
+a pipe whose read end was closed before the spawn (every write fails from its first byte,
+which a `| head -c 1` race cannot guarantee). SIXTEEN rows exit 1 with csift's own line:
+`search --format json` and `--raw`, `show` rendered, `--raw` and `--turn`, `agents` in both
+projections, `files --format json`, `image` in both, and all three of `verbatim`'s streams
+(text, JSON and `--slice`) - plus `search` text, `files` text and `files --by timeline`
+once `--no-subagents` suppresses the banner, which is the rule showing its seam. TWENTY-FIVE
+abort with a std backtrace, because a `println!` makes the first failing write: `list`,
+`stats` in both projections, `show --branch-points`, `recover` in all six forms measured
+(the default restore, `--patches`, `--salvage`, `--coverage`, `--list-backups` and its JSON
+projection), `status`, `wait`, `whoami`, `send`, `msg`, `deliver`, `search`'s `-c`, `-l`
+and `--count-by` terminal printers, the three banner-printing rows above with their banner
+back, `verbatim --subagents`, whose documented span prints one, and two `recover` rows
+re-run under `--no-subagents`, which changes nothing for a surface that never buffered. The
+remaining two rows write no stdout at all: `plan` with no binding, and `ack`, which refuses
+before it writes. Against a release build of the base commit forty of
+the forty-three read 101, the exceptions being those two and `show --raw`, which never went
+through `println!` and already exited 1.
 
 **The memory bound is the look-ahead, and the look-ahead is UP TO TWICE 128 rows.** 8 rows
 per chunk and 16 chunks per wave: 128 consecutive rows are rendered before any of them is
