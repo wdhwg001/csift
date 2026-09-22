@@ -1,4 +1,8 @@
 //! run_search: resolve scope, fan out, merge the chronological timeline, cap + render.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 
@@ -6,6 +10,9 @@ use super::*;
 
 /// Pre-scan advisory notes (stderr only): a uuid-shaped PATTERN with no session target, and
 /// the truly-unbounded-search warning (empty pattern + no category/time/turn/session filter).
+// PRE-SCAN: these run before the scan, so no `Out` exists yet and there is no buffer to
+// order against.
+#[allow(clippy::print_stderr)]
 fn emit_advisory_notes(
     args: &SearchArgs,
     matcher: &Matcher,
@@ -41,6 +48,9 @@ fn emit_advisory_notes(
 
 /// `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
 /// `--max-count`), the ripgrep `-c` idiom - no per-exchange output.
+// A TERMINAL mode: one integer, or the two envelope lines. It builds no `Out` and returns
+// before the render exists, so there is no buffer to jump.
+#[allow(clippy::print_stdout)]
 fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> {
     let total = outcome.exchanges.len() + outcome.dropped_by_cap;
     match format {
@@ -65,6 +75,9 @@ fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> 
 /// deduped, UNCAPPED (the grep idiom, built to pipe into `--sessions-from -`). A
 /// `--max-count` drop could hide sessions, so it is disclosed on stderr (stdout stays a pure
 /// id stream) - no silent truncation.
+// A TERMINAL mode: one id per matched session (a few hundred at most) and one stderr note,
+// with no `Out` in the picture.
+#[allow(clippy::print_stdout, clippy::print_stderr)]
 fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> {
     if format == OutputFormat::Json {
         bail!("-l prints a plain id stream; with --format json read the summary's `transcript_ids` instead");
@@ -296,6 +309,11 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // "any pending tools?" / "which model?" / "hits per turn?". stdout = the census; the
     // accounting note goes to stderr (text) so `<count> <key>` stays pipe-clean. Records
     // outside the axis's domain are excluded AND reported (never silent).
+    //
+    // A TERMINAL mode like `-c` and `-l`: a census is one row per KEY, bounded by the axis's
+    // key space rather than by the match set, and it returns before the render builds an
+    // `Out`. Nothing here shares a stream with a buffer.
+    #[allow(clippy::print_stdout, clippy::print_stderr)]
     if let Some(axis) = args.count_by {
         let (rows, records, excluded) = axis_census(
             &outcome.exchanges,
@@ -396,24 +414,29 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
             }
         }
         out.flush()?;
-        if skipped_sidecar > 0 {
-            eprintln!(
-                "csift: note: {skipped_sidecar} sidecar-merged record(s) have no physical \
-                 transcript line — omitted under --raw"
-            );
-        }
-        if outcome.dropped_by_cap > 0 {
-            eprintln!(
-                "csift: note: {} {} exchange(s) dropped by --max-count",
-                outcome.dropped_by_cap,
-                dropped_side(args)
-            );
-        }
-        if outcome.skipped_lines > 0 {
-            eprintln!(
-                "csift: note: {}",
-                crate::text::malformed_note(outcome.skipped_lines)
-            );
+        // The accounting notes ride stderr AFTER the flush above, which is the order the
+        // contract states for them; the buffer holds nothing by the time they print.
+        #[allow(clippy::print_stderr)]
+        {
+            if skipped_sidecar > 0 {
+                eprintln!(
+                    "csift: note: {skipped_sidecar} sidecar-merged record(s) have no physical \
+                     transcript line — omitted under --raw"
+                );
+            }
+            if outcome.dropped_by_cap > 0 {
+                eprintln!(
+                    "csift: note: {} {} exchange(s) dropped by --max-count",
+                    outcome.dropped_by_cap,
+                    dropped_side(args)
+                );
+            }
+            if outcome.skipped_lines > 0 {
+                eprintln!(
+                    "csift: note: {}",
+                    crate::text::malformed_note(outcome.skipped_lines)
+                );
+            }
         }
         return Ok(());
     }

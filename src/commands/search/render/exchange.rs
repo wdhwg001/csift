@@ -9,6 +9,10 @@
 //! exchange, the header-token map and one precomputed decision, and touches nothing else -
 //! which is what lets several exchanges render at once and still reach stdout in file
 //! order.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use super::super::*;
 

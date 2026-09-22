@@ -11,13 +11,27 @@
 //!
 //! ## Why the lock is HELD, and what that obliges a caller to do
 //!
-//! [`Out`] owns a `StdoutLock` for its lifetime. Rust's stdout lock is REENTRANT, so a
-//! stray `println!` on the same thread does not deadlock - it writes to the inner
-//! `LineWriter` DIRECTLY and lands AHEAD of whatever this buffer still holds. So a surface
-//! that builds an `Out` must route EVERY later stdout byte through it, and must
-//! [`Out::flush`] before any stderr note whose order against stdout the contract states.
-//! Output printed BEFORE the `Out` exists is already flushed (that is what a `LineWriter`
-//! does at each newline), which is why the scope banners can stay `println!`.
+//! [`Out`] owns a `StdoutLock` for its lifetime, and what a stray `println!` does with it
+//! depends on WHICH THREAD prints. Both answers are bad, and only one of them is loud.
+//!
+//! On the SAME thread the lock is REENTRANT, so the print does not block - it writes to the
+//! inner `LineWriter` DIRECTLY and lands AHEAD of everything this buffer still holds. A
+//! stray line after a [`write_ordered`] call comes out FIRST, with no error and exit 0.
+//!
+//! On a WORKER thread - inside the [`write_ordered`] render closure - reentrancy does not
+//! apply, because the lock is held by ANOTHER thread. The worker parks waiting for stdout
+//! while the main thread parks waiting for that worker's buffer, and the PROCESS HANGS with
+//! nothing written. It hangs only at SCALE: rayon runs a small item set inline on the
+//! calling thread, so a handful of rows finishes and a few hundred does not.
+//!
+//! So a surface that builds an `Out` routes EVERY later stdout byte through it, and the
+//! render closure prints nothing at all. Both are guarded mechanically: every module that
+//! builds or writes through an `Out` denies `clippy::print_stdout` and
+//! `clippy::print_stderr`, and each legitimate site carries an `#[allow]` saying why it
+//! prints outside a buffer. A surface must also [`Out::flush`] before any stderr note whose
+//! order against stdout the contract states. Output printed BEFORE the `Out` exists is
+//! already flushed (that is what a `LineWriter` does at each newline), which is why the
+//! scope banners can stay `println!`.
 //!
 //! ## Why rendering is parallel, and what bounds its memory
 //!
@@ -28,6 +42,7 @@
 //! items: peak memory rises by the rendered bytes of that many CONSECUTIVE rows and by
 //! nothing else, rather than by the whole stream - which for the landmark transcript's
 //! 411 MB of JSON would otherwise be the whole 411 MB.
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write;
 

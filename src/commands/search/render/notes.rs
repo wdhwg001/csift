@@ -4,6 +4,10 @@
 //! Split out of `render.rs` when the 600-line cap bound. Each is its own function so its
 //! wording lives in ONE place - both are read by a consumer as a contract statement, and a
 //! second copy would drift.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use super::super::*;
 

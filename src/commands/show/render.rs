@@ -3,6 +3,10 @@
 //! Both go through ONE [`crate::text::Out`]: `show --turn ..` with `--max-count 0`
 //! addresses a whole transcript, and a row at a time through `println!` is a syscall a
 //! row. See the `text::out` module docs for what holding the lock obliges.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 

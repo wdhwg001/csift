@@ -4,6 +4,10 @@
 //! transcript can carry thousands. See the `text::out` module docs for what holding the
 //! lock obliges - the duplicate banner stays `println!` because it is already flushed
 //! before the writer exists.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 

@@ -1,4 +1,8 @@
 //! run_show: raw + rendered fetch drives.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use super::*;
 
@@ -192,23 +196,28 @@ pub(crate) fn run_raw(
     // the byte stream.
     out.flush()?;
     drop(out);
-    if dropped > 0 {
-        let sid = crate::subagent::session_id_from_path(file);
-        let cont = match continuation {
-            Some((a, b)) => format!(" · continue: csift show @{sid} --line {a}..{b} --raw"),
-            None => String::new(),
-        };
-        eprintln!(
-            "csift: note: +{dropped} more line(s) beyond the {cap}-unit cap{cont}, or pass \
-             --max-count 0 (uncapped)"
-        );
-    }
-    // A `--turn` window is resolved through the chain, so which lines these ARE moves with
-    // the crossing budget. `--line`/`--uuid` name their lines outright and the report stays
-    // the empty one, which says nothing. Stderr either way: stdout here is the file's own
-    // bytes and nothing else.
-    for line in crossing.lines() {
-        eprintln!("{line}");
+    // Both notes ride stderr after that flush, and the writer is gone by here, so neither
+    // can jump a buffer's queue.
+    #[allow(clippy::print_stderr)]
+    {
+        if dropped > 0 {
+            let sid = crate::subagent::session_id_from_path(file);
+            let cont = match continuation {
+                Some((a, b)) => format!(" · continue: csift show @{sid} --line {a}..{b} --raw"),
+                None => String::new(),
+            };
+            eprintln!(
+                "csift: note: +{dropped} more line(s) beyond the {cap}-unit cap{cont}, or pass \
+                 --max-count 0 (uncapped)"
+            );
+        }
+        // A `--turn` window is resolved through the chain, so which lines these ARE moves with
+        // the crossing budget. `--line`/`--uuid` name their lines outright and the report stays
+        // the empty one, which says nothing. Stderr either way: stdout here is the file's own
+        // bytes and nothing else.
+        for line in crossing.lines() {
+            eprintln!("{line}");
+        }
     }
     Ok(())
 }

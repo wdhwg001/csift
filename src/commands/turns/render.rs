@@ -6,6 +6,10 @@
 //! module docs. A session's turn lines are built into one string by the emit closures
 //! (which return nothing and so cannot carry a write error) and written through the buffer
 //! once per session, in the same order and with the same bytes a per-line print produced.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 
@@ -132,6 +136,10 @@ pub(crate) fn render_text(
     crate::path::emit_duplicate_banner(&ctx.duplicates);
     let sc = scope_summary(sessions, plans);
     let any_skipped = sc.rendered < sc.in_scope;
+    // The BANNER prints before the writer below exists, so a `LineWriter` has already
+    // flushed it and it cannot land ahead of anything - the same reason every other
+    // surface's scope banner stays a print.
+    #[allow(clippy::print_stdout)]
     if sc.in_scope > 1 || any_skipped {
         // Reuse the shared `N session(s) in scope (X top-level + Y subagent)` wording (the same
         // fragment list/files/search/recover emit), then append turns' own budget clause.

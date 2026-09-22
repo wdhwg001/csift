@@ -3,6 +3,10 @@
 //! One stream, one [`crate::text::Out`]: a `--subagents` reconstruction of a heavily
 //! spanned session is tens of thousands of rows, and nothing is printed before the
 //! envelope's own header line, so the writer is built first and every row goes through it.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 

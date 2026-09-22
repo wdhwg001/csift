@@ -7,6 +7,10 @@
 //! [`crate::text::Out`]: the banners are printed before it exists (a `LineWriter` has
 //! already flushed them), and from that point a stray `println!` would jump the buffer's
 //! queue - see the `text::out` module docs.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 mod exchange;
 mod notes;

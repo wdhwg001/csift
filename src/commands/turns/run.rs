@@ -1,4 +1,8 @@
 //! run_verbatim: scope resolution, per-file scan, candidate prefilter.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use super::*;
 
@@ -128,6 +132,10 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
     // certainly wants `show --turn` (full records, no budget/truncation). stderr only
     // (stdout stays the reconstruction); suppressed in --slice mode (the hook path is
     // deliberate and must stay quiet).
+    //
+    // PRE-RENDER: this runs before the renderer builds its `Out`, so there is no buffer for
+    // it to be ordered against.
+    #[allow(clippy::print_stderr)]
     if args.slice.is_none() {
         for sr in &sessions {
             if sr.summaries.is_empty() {

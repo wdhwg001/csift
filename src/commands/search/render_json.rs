@@ -2,6 +2,10 @@
 //! the envelope stream. Split from `render.rs`, which keeps the TEXT surface (glyphs,
 //! labels, headers, banners, footers); `show` borrows `pairing_json` from here for its
 //! own flat record rows.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 

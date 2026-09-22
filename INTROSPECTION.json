@@ -19816,7 +19816,7 @@
         },
         {
           "path": "src/commands/turns/run.rs",
-          "lines": "49-53",
+          "lines": "53-57",
           "snippet": "    // Normalize the budget to characters. `--slices N` pins the FLEET size, so the budget is\n    // derived as N windows (the slice COUNT is the hard constraint - a fixed set of registered\n    // hooks must never need to grow); otherwise it is the requested char/token amount.\n    let budget_chars = if let Some(n) = args.slices {\n        n.saturating_mul(args.window)"
         },
         {
@@ -19826,7 +19826,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "100-102",
+          "lines": "104-106",
           "snippet": "        let cap_override = slices.map(|_| window.saturating_sub(SLICE_BODY_HEADROOM).max(1));\n        let doc = build_document_body(sessions, plans, &ctx.cfg, cap_override);\n        let chunks = slice_into_windows(&doc, window);"
         }
       ],
@@ -33637,7 +33637,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "365-367",
+          "lines": "373-375",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy\n/// document is NOT 3\u00d7 over-counted the way a byte budget would). A line longer than the"
         }
       ],
@@ -33768,7 +33768,7 @@
       "code": [
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "85",
+          "lines": "89",
           "snippet": "    // inject it under the 10,000-char additionalContext cap. Two sub-modes:"
         }
       ],
@@ -35605,12 +35605,12 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "186-191",
+          "lines": "190-195",
           "snippet": "pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant\n    // coverage rides the tool-name needles below, so admitting every assistant\n    // text record here would repeal this prefilter). Finders built ONCE (per-line\n    // hot path - the stateless form rebuilt its searcher every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 6]> ="
         },
         {
           "path": "src/commands/files/run.rs",
-          "lines": "194-199",
+          "lines": "198-203",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),\n                // Settings-family external writes read the snapshot version sequence.\n                memmem::Finder::new(b\"file-history-snapshot\"),"
         }
       ],
@@ -37722,7 +37722,7 @@
       "code": [
         {
           "path": "src/commands/search/render.rs",
-          "lines": "146-149",
+          "lines": "150-153",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -42360,7 +42360,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "151-159",
+          "lines": "155-163",
           "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -45597,7 +45597,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "266-268",
+          "lines": "275-277",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         },
         {
@@ -58363,7 +58363,7 @@
       "code": [
         {
           "path": "src/commands/files/run.rs",
-          "lines": "194-197",
+          "lines": "198-201",
           "snippet": "                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Bash\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -59183,7 +59183,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "97",
+          "lines": "101",
           "snippet": "        nodes.retain(|n| window_admits(n, &time_window, args.order_by));"
         }
       ],
@@ -59345,7 +59345,7 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "133-141",
+          "lines": "137-145",
           "snippet": "            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {\n                if slot.is_none() && finder.find(line).is_some() {\n                    // Confirm structurally: the record's OWN uuid must equal it (a body\n                    // merely quoting the uuid must not satisfy the address).\n                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                        if rec.uuid.as_deref() == Some(u.as_str()) {\n                            *slot = Some(line_no);\n                            want = true;\n                        }"
         },
         {
@@ -59430,12 +59430,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "168-170",
+          "lines": "172-174",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "266-268",
+          "lines": "275-277",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         }
       ],
@@ -59640,7 +59640,7 @@
       "code": [
         {
           "path": "src/commands/search/render_json.rs",
-          "lines": "39-41",
+          "lines": "43-45",
           "snippet": "/// The ready-to-run fetch command for a hit - `csift show` addressed at the transcript that\n/// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are\n/// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG"
         }
       ],
@@ -62698,7 +62698,7 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "290-295",
+          "lines": "294-299",
           "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = \"note: teammate rows are in-process Agent subagents \u2014 address one BY NAME (the `(@name)` shown) \\\nvia SendMessage to steer it, and `message:{\\\"type\\\":\\\"shutdown_request\\\"}` to terminate it.\";\npub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =\n    \"      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \\\nbuilds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \\\nteammate has no separate OS process (it shares the orchestrator PID \u2014 `pkill` won't help).\";"
         }
       ],
@@ -79962,7 +79962,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "107-113",
+          "lines": "111-117",
           "snippet": "    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's\n    // own marker and the engine's own come out in the same shape.\n    let nd = if h.delivery == Some(false) {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    } else {\n        String::new()\n    };"
         }
       ],
@@ -84345,7 +84345,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "125-128",
+          "lines": "129-132",
           "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
         }
       ],
@@ -89154,7 +89154,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3358"
+          "lines": "3368"
         }
       ],
       "states": [
@@ -89501,7 +89501,7 @@
         },
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "73-76",
+          "lines": "77-80",
           "snippet": "    let (kept, agent_groups) = path::dedup_copies(nodes.iter().map(|n| n.path.clone()).collect());\n    if !agent_groups.is_empty() {\n        let keep: std::collections::BTreeSet<std::path::PathBuf> = kept.into_iter().collect();\n        nodes.retain(|n| keep.contains(&n.path));"
         },
         {

@@ -4,6 +4,10 @@
 //! session is one row per mutation and the landmark transcript prints 6,590 of them. See
 //! the `text::out` module docs for what holding the lock obliges - the banners stay
 //! `println!` because they are already flushed before the writer exists.
+// The `text::out` obligation, mechanically: a stray print on this thread jumps the
+// buffer's queue and one inside the parallel render closure hangs the process, so a
+// print outside an `Out` is an error here unless it says why (see `text::out`).
+#![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write as _;
 
