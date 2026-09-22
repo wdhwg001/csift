@@ -54,8 +54,12 @@
 //! than by the whole stream - which for the landmark transcript's 411 MB of JSON would
 //! otherwise be the whole 411 MB. The bound is UP TO TWICE that, not exactly it: a chunk
 //! renders into a `Vec` grown by `extend`, a `Vec` that has doubled sits at up to twice
-//! the bytes it holds, and [`ORDERED_BATCH`] of them are live at once. On megabyte-sized
-//! rows the measured peak-RSS delta ran to 1.4x the one-copy figure (SPEC 7k).
+//! the bytes it holds, and [`ORDERED_BATCH`] of them are live at once. Those buffers are
+//! not the whole of what a wave holds: while it renders, each worker also holds ONE row's
+//! intermediate structures, which for the JSON projector is the `serde_json::Value` tree it
+//! builds before serializing it into its chunk's buffer - a term bounded by the pool rather
+//! than by the look-ahead. On megabyte-sized rows the measured peak-RSS delta ran to a
+//! median of 1.4x the one-copy figure and 1.6x at worst (SPEC 7k).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write;
@@ -72,7 +76,8 @@ const ORDERED_CHUNK: usize = 8;
 
 /// Chunks in flight per wave - the LOOK-AHEAD. `ORDERED_CHUNK * ORDERED_BATCH` rows are
 /// rendered before any of them is written, and each of those chunk buffers can sit at
-/// twice the bytes it holds, which together are the whole memory bound this pipeline adds.
+/// twice the bytes it holds, which is the memory bound a reader sizing a run works from
+/// (the module docs name the one term it leaves out).
 const ORDERED_BATCH: usize = 16;
 
 /// A buffered stdout, holding the lock for its lifetime. See the module docs: a surface
