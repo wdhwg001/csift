@@ -838,7 +838,7 @@ surface change bumps the PATCH.
   a live trial. The artefact is the test and never the command, so `grep` over `src` is the
   same text pass as reading the file while `grep -ab` over a shipped build is a
   measurement, and a text pass can never back the badge. The gate is rewritten to read all
-  of it and grows from twelve rules to twenty-one, each failing by name on a hand-built
+  of it and grows from twelve rules to twenty-two, each failing by name on a hand-built
   specimen: rule 13 is the state shape, including that the open state is LAST; rule 14 is
   the prose law over every field a pass wrote, now word-bounded, first-person-aware and
   with the backtick exemption bounded; rule 10 reaches `residue` and a receipt's `note`,
@@ -849,7 +849,13 @@ surface change bumps the PATCH.
   to its own language to parse, and the receipt's artefact itself; rule 21 is the `bytes`
   probe's own literal, read in the builds its state names and in a CLOSED state's too
   wherever this host holds them, because four of them counted zero in every one and a
-  probe that counts nothing cannot be run. Rule 12 learns that a hop can name the BUILD it
+  probe that counts nothing cannot be run. Rule 22 holds a probe's KIND and its
+  SCOPE to the same artefact: the kind follows what the command reads and the scope is
+  derived from the instrument, and nothing compared the two, so thirty-eight states
+  shipped claiming `corpus` beside a scope naming the shipped binary and one claimed
+  `bytes` beside a scope naming a projects root. Only the two kinds whose artefact is
+  fixed are tested, since `csift`, `live` and `repo` name a run, a gesture and this
+  tree and any of the three may mention either noun without contradiction. Rule 12 learns that a hop can name the BUILD it
   was read in - and that a build nobody holds is not a pass, so such a hop is named rather
   than counted wherever the verified build itself is here - refuses a run of four or more
   dots the way it refuses an empty excerpt, holds an ELIDED excerpt to the run before its

@@ -30,6 +30,14 @@
 //! the SET: a literal the builds here do not carry is a defect only when every build the
 //! state names was read, because the one that is missing is exactly where the literal would
 //! be if the rewrite the probe dates is the reason.
+//!
+//! RULE 22 lives here too, because it is the same subject read from the other side: a
+//! probe's KIND and its SCOPE must name the SAME artefact. The kind is decided by the
+//! artefact the command reads and the scope is derived from the instrument, and nothing
+//! compared the two - so thirty-eight states shipped claiming `corpus` while their scope
+//! named a build, and one claimed `bytes` while its scope named a projects root. Each half
+//! was defensible on its own and the pair was not, which is exactly the shape a rule with
+//! no cross-check leaves behind.
 
 use super::anchors::BuildCache;
 use serde_json::Value;
@@ -115,4 +123,86 @@ pub(crate) fn line(p: &Probes) -> String {
          named build on this host)",
         p.found, p.uncached
     )
+}
+
+/// The words a SCOPE uses when the artefact it names is a BUILD.
+///
+/// `build` alone is not on the list and cannot be: a corpus scope says `the builds the
+/// records name` without reading one. What is here is a noun for the FILE - a binary, an
+/// executable, a bundle - and the two phrases this file uses for a set of them.
+pub(crate) const BUILD_WORDS: [&str; 6] = [
+    "binary",
+    "executable",
+    "bundle",
+    "build file",
+    "build ladder",
+    "build the state names",
+];
+
+/// The words a SCOPE uses when the artefact it names is a POPULATION ON DISK.
+pub(crate) const CORPUS_WORDS: [&str; 6] = [
+    "projects root",
+    "*.jsonl",
+    "corpus",
+    "transcripts",
+    "registry directory",
+    "jsonl population",
+];
+
+fn names<'a>(scope: &str, words: &[&'a str]) -> Option<&'a str> {
+    let low = scope.to_ascii_lowercase();
+    words.iter().copied().find(|w| low.contains(w))
+}
+
+/// Rule 22: a probe's KIND and its SCOPE name the SAME artefact.
+///
+/// The kind is decided by the artefact the command reads and the scope is derived from the
+/// instrument, and until now nothing asked whether the two agreed. They did not: thirty-eight
+/// states carried `corpus` beside a scope reading `the shipped Claude Code binary the state
+/// names`, and one carried `bytes` beside `the top-level *.jsonl of one projects root`. Each
+/// half was defensible alone, which is why the pair could ship - a reader asking the file
+/// which probes read a build got one answer from the kind and another from the scope.
+///
+/// The test is on the two kinds whose artefact is FIXED. `csift`, `live` and `repo` name a
+/// run, a gesture and this tree, and any of the three can legitimately mention either noun -
+/// a csift run reads transcripts, a live trial is taken at a build - so widening the rule to
+/// them would report vocabulary rather than a contradiction.
+///
+/// It runs over EVERY state, open and closed alike, for the reason rule 21 does: a probe is a
+/// STRING naming an artefact, and whether it names the right one is decidable whenever the
+/// state is readable at all.
+pub(crate) fn kind_scope(claims: &[Value], failures: &mut Vec<String>) {
+    for c in claims {
+        let id = c["id"].as_str().unwrap_or("");
+        for (i, state) in super::states(c).iter().enumerate() {
+            let probe = &state["probe"];
+            let (Some(kind), Some(scope)) = (probe["kind"].as_str(), probe["scope"].as_str())
+            else {
+                continue; // rule 15 names a probe with no kind or no scope
+            };
+            match kind {
+                "corpus" => {
+                    if let Some(word) = names(scope, &BUILD_WORDS) {
+                        failures.push(format!(
+                            "{id} states[{i}]: `probe.kind` is corpus while `probe.scope` \
+                             names a BUILD ({word:?}) - the kind follows the artefact the \
+                             command reads, so either the kind is bytes or the scope names \
+                             the population the census is taken over"
+                        ));
+                    }
+                }
+                "bytes" => {
+                    if let Some(word) = names(scope, &CORPUS_WORDS) {
+                        failures.push(format!(
+                            "{id} states[{i}]: `probe.kind` is bytes while `probe.scope` \
+                             names a CORPUS population ({word:?}) - a bytes probe re-locates \
+                             a literal in a build, so either the kind is corpus or the scope \
+                             names the build the literal is counted in"
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }

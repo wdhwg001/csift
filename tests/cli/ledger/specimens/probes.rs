@@ -1,8 +1,11 @@
-//! Rule 21's specimen: a `bytes` probe naming a literal no build carries.
+//! Rule 21's specimen: a `bytes` probe naming a literal no build carries. Rule 22's is here
+//! too, because it reads the same field from the other side - whether the KIND and the SCOPE
+//! name the same artefact.
 //!
-//! The rule needs a build to decide anything, so every assertion here is guarded on the
+//! Rule 21 needs a build to decide anything, so every assertion for it is guarded on the
 //! tally: on a host holding none of the named builds the probe is counted and skipped, which
-//! is the rule working rather than the rule absent.
+//! is the rule working rather than the rule absent. Rule 22 needs no build at all - it reads
+//! two strings of the ledger against each other - so its specimens are unconditional.
 
 use super::good_claim;
 use crate::ledger::probes;
@@ -92,4 +95,81 @@ fn ledger_gate_rule_21_reads_a_closed_state_whose_builds_this_host_holds() {
     let mut f = Vec::new();
     probes::check(std::slice::from_ref(&c), &mut f);
     assert!(f.is_empty(), "{f:?}");
+}
+
+/// Rule 22 fails BY NAME on both directions, because the pair is what is wrong rather than
+/// either half: a `corpus` kind beside a scope naming a build, and a `bytes` kind beside a
+/// scope naming a projects root. One specimen per direction, each naming the word it read.
+#[test]
+fn ledger_gate_rule_22_names_a_kind_and_a_scope_that_disagree() {
+    let mut c = good_claim();
+    c["states"][0]["probe"] = json!({
+        "kind": "corpus",
+        "command": "count the records",
+        "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+        "rule": "one per record",
+    });
+    let mut f = Vec::new();
+    probes::kind_scope(std::slice::from_ref(&c), &mut f);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert!(f[0].contains("TEST-001 states[0]"), "{}", f[0]);
+    assert!(f[0].contains("corpus while"), "{}", f[0]);
+    assert!(f[0].contains("\"binary\""), "{}", f[0]);
+
+    let mut c = good_claim();
+    c["states"][0]["probe"] = json!({
+        "kind": "bytes",
+        "literal": "stripForStorage",
+        "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
+        "rule": "raw byte occurrences of the literal",
+    });
+    let mut f = Vec::new();
+    probes::kind_scope(std::slice::from_ref(&c), &mut f);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert!(f[0].contains("bytes while"), "{}", f[0]);
+    assert!(f[0].contains("\"projects root\""), "{}", f[0]);
+}
+
+/// The two kinds whose artefact is FIXED are the only two tested. A `csift` run reads
+/// transcripts, a `live` trial is taken at a build and a `repo` probe reads this tree, so
+/// any of the three may name either noun without contradicting itself - widening the rule
+/// to them would report vocabulary rather than a defect. A matching pair passes too, which
+/// is what says the rule is reading rather than refusing every scope it sees.
+#[test]
+fn ledger_gate_rule_22_spares_the_kinds_whose_artefact_is_not_fixed() {
+    for (kind, field, scope) in [
+        (
+            "csift",
+            "command",
+            "the transcripts `<target>` resolves to under a projects root",
+        ),
+        (
+            "live",
+            "command",
+            "one live session taken at the shipped Claude Code binary",
+        ),
+        (
+            "repo",
+            "command",
+            "the csift worktree, whose transcripts are not read",
+        ),
+        (
+            "corpus",
+            "command",
+            "every `*.jsonl` under one projects root",
+        ),
+        (
+            "bytes",
+            "literal",
+            "the shipped Claude Code binary the state names, read whole",
+        ),
+    ] {
+        let mut c = good_claim();
+        c["states"][0]["probe"] = json!({
+            "kind": kind, field: "x", "scope": scope, "rule": "one per observation",
+        });
+        let mut f = Vec::new();
+        probes::kind_scope(std::slice::from_ref(&c), &mut f);
+        assert!(f.is_empty(), "{kind}: {f:?}");
+    }
 }

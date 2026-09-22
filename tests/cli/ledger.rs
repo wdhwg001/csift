@@ -123,6 +123,14 @@
 //!     elision inside the literal, which is not a byte string at all. The build is a SET,
 //!     because a state names up to three and a rewrite between two of them is often what the
 //!     probe is there to date. A build this host does not hold is counted and skipped.
+//! 22. A probe's KIND and its SCOPE name the SAME artefact. The kind follows what the
+//!     command reads and the scope is derived from the instrument, and nothing compared the
+//!     two: thirty-eight states carried `corpus` beside a scope naming the shipped binary,
+//!     and one carried `bytes` beside a scope naming a projects root. Each half was
+//!     defensible alone, which is exactly how a pair that contradicts itself ships. Only
+//!     the two kinds whose artefact is fixed are tested - `csift`, `live` and `repo` name a
+//!     run, a gesture and this tree, any of which may mention either noun without
+//!     contradiction.
 //!
 //! The attribution set carries `upstream`: the producer lies OUTSIDE the shipped binary
 //! by construction (the model or API side, the operating system, a native runtime
@@ -272,6 +280,8 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
     }
     println!("{}", programs::line(&embedded));
     println!("{}", probes::line(&probes::check(claims, &mut failures)));
+    // Rule 22: a probe's kind and its scope name the same artefact.
+    probes::kind_scope(claims, &mut failures);
 
     // Rule 12: every byte anchor of an open state still carries its own excerpt.
     let anchors = anchors::tally(claims, verified, &mut failures);

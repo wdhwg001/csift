@@ -18225,10 +18225,10 @@
           "depends": "csift's elicitation-sidecar hook recipe parses exactly those keys: `hook_event_name` + `tool_name` pick the kind and phase, `tool_use_id` / `elicitation_id` / `mcp_server_name` build the `csiftKey` the merge pairs `pending` against `resolved` on, and `transcript_path` derives the sidecar path (with a `session_id` glob as fallback). A renamed key never errors - the script exits 0, the sidecar is never written, and `list`'s `sidecar_present` reads false, which is the honest \"hook unknown, cannot conclude\" arm rather than a wrong \"nothing pending\".",
           "instrument": "Do NOT tally the QUOTED key (`\"hook_event_name\"`): the harness builds its hook payload as a JS object literal with bare keys, so the quoted form is 0 for hook_event_name and elicitation_id. Tally the bare token (`grep -oF hook_event_name`) or, better, read the four payload constructors directly with `strings -n 40 \"$bin\" | grep -oE 'hook_event_name:\"(PreToolUse|PostToolUse|Elicitation|ElicitationResult)\"'` and the shared base `grep -oF 'return{session_id:e.id,transcript_path:lm(e.id),cwd:n'`.",
           "probe": {
-            "kind": "corpus",
-            "command": "grep -oF hook_event_name",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "One specimen per jsonl line under a per-session elicitations.jsonl that parses as JSON; 'strict schema' = the line carries both csiftPhase and csiftKind; key prefix tested with str.startswith('toolu_')."
+            "rule": "One specimen per jsonl line under a per-session elicitations.jsonl that parses as JSON; 'strict schema' = the line carries both csiftPhase and csiftKind; key prefix tested with str.startswith('toolu_').",
+            "literal": "hook_event_name"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -23530,7 +23530,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: count `edited_text_file` snippets containing `lines truncated] ...`, one observation per attachment - measured now: 651 of 1254 non-empty snippets (52%).",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every non-empty `edited_text_file` attachment snippet over one projects root, top-level transcripts and `<uuid>/subagents/**` alike",
             "rule": "One observation per `edited_text_file` attachment whose snippet contains the truncation tail."
           },
           "producer_trace": "complete",
@@ -24203,7 +24203,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus evidence that the character branch fires: count records whose `attachment.type` is `read_truncation_notice` and whose text carries the banner `this file has very long lines and cannot be paginated by line` - measured: 31, all at CC 2.1.211, plus 3 older `tool_result` string carriers (2.1.159, 2.1.177, 2.1.231).",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every record whose `attachment.type` is `read_truncation_notice`, plus the older `tool_result` string carriers, over one projects root",
             "rule": "the two branches, the six-retry loops and the `je` flag are one expression."
           },
           "producer_trace": "complete",
@@ -24374,10 +24374,10 @@
           "depends": "csift reads none of the three in `recover`, so a resumed session and csift disagree about which reads were complete; the three-carrier OR is the ready-made specification for a csift truncation gate.",
           "instrument": "Seek the literal `let W=C.toolUseResult?.file?.truncatedByTokenCap===!0||v.has(I.tool_use_id)||I.content.startsWith(` in a `strings -a` dump of the 2.1.258 binary; the surrounding function rebuilds `readFileState` from persisted messages and sets `isPartialView` from that disjunction.",
           "probe": {
-            "kind": "corpus",
-            "command": "Seek the literal `let W=C.toolUseResult?.file?.truncatedByTokenCap===!0||v.has(I.tool_use_id)||I.content.startsWith(` in a `strings -a` dump of the 2.1.258 binary; the surrounding function rebuilds `readFileState` from persisted messages and sets `isPartialView` from that disjunction.",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "One observation per distinct tool_use id per carrier: the field = a record whose toolUseResult.file contains truncatedByTokenCap; the notice = an attachment record whose attachment.type is read_truncation_notice (its toolUseID); the banner = a tool_result block whose content string starts with `<system-reminder>[Truncated: PARTIAL view ` followed by U+2014."
+            "rule": "One observation per distinct tool_use id per carrier: the field = a record whose toolUseResult.file contains truncatedByTokenCap; the notice = an attachment record whose attachment.type is read_truncation_notice (its toolUseID); the banner = a tool_result block whose content string starts with `<system-reminder>[Truncated: PARTIAL view ` followed by U+2014.",
+            "literal": "let W=C.toolUseResult?.file?.truncatedByTokenCap===!0||v.has(I.tool_use_id)||I.content.startsWith("
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -31668,7 +31668,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: census the input key sets of `Write` / `Edit` / `MultiEdit` / `NotebookEdit` `tool_use` blocks, one observation per block, key set = the sorted top-level keys of `block.input`. csift's side is pinned by the unit test at src/commands/live/tests/conditions.rs:142, which fixtures a `NotebookEdit` tool_use carrying `notebook_path` + `new_source` and asserts the path source is consulted and that a path miss short-circuits before the line regex.",
-            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
+            "scope": "every `Write` / `Edit` / `MultiEdit` / `NotebookEdit` `tool_use` block over one projects root",
             "rule": "Corpus: census the input key sets of `Write` / `Edit` / `MultiEdit` / `NotebookEdit` `tool_use` blocks, one observation per block, key set = the sorted top-level keys of `block.input`."
           },
           "producer_trace": "complete",
@@ -40063,10 +40063,10 @@
           "depends": "csift never derives or guesses a plan file name; the binding record is the only source, and a derivation from the session id would name a wrong file on every session.",
           "instrument": "`strings` the installed Claude Code 2.1.258 bundle and grep for the word lists (e.g. `prancing`, `foraging`): the namer draws with randomBytes, not a seeded PRNG, and takes no session-id argument. Counting rule: presence of the three word arrays and absence of any session-id argument in the namer.",
           "probe": {
-            "kind": "corpus",
-            "command": "`prancing`, `foraging`): the namer draws with randomBytes, not a seeded PRNG, and takes no session-id argument. Counting rule: presence of the three word arrays and absence of any session-id argument in the namer.",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.227), read whole",
-            "rule": "One observation per word array in the build, plus one for the namer's argument list: presence of the three arrays and absence of any session-id argument."
+            "rule": "One observation per word array in the build, plus one for the namer's argument list: presence of the three arrays and absence of any session-id argument.",
+            "literal": "prancing"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -46740,7 +46740,7 @@
           "probe": {
             "kind": "corpus",
             "command": "(2) The same Python sweep over assistant records carrying `message.usage`, additionally iterating the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` when each is a dict, and counting the non-dict (null) occurrences separately.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every assistant record carrying `message.usage` over one projects root",
             "rule": "One count per assistant record per usage key, with the three nested objects iterated when each is a dict and their non-dict occurrences counted separately."
           },
           "producer_trace": "complete",
@@ -47052,7 +47052,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Python over the mixed-version sample and over the version-current subset: for each assistant record with a dict `usage.cache_creation`, compare `(ephemeral_5m_input_tokens or 0) + (ephemeral_1h_input_tokens or 0)` against `(cache_creation_input_tokens or 0)`, and bucket the disagreements by which of the three is zero; plus `strings -n 6` over the 2.1.258 binary for the fallback expression and the pick-one expression.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every assistant record with a dict `usage.cache_creation` over one projects root, read twice: the whole mixed-version population and its version-current subset",
             "rule": "Python over the mixed-version sample and over the version-current subset: for each assistant record with a dict `usage.cache_creation`, compare `(ephemeral_5m_input_tokens or 0) + (ephemeral_1h_input_tokens or 0)` against `(cache_creation_input_tokens or 0)`, and bucket the disagreements by which of the three is zero."
           },
           "producer_trace": "complete",
@@ -53130,10 +53130,10 @@
           "depends": "csift `files` reads that `type` to decide create-vs-edit and csift `recover` uses the presence-of-`type`/absence-of-`oldString` to treat the echo as a full-content anchor; a `type` added to Edit results would turn every edit into a snapshot.",
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -F 'ee([\"create\",\"update\"])' | head -1 | cut -c1-1400\nExpected: the Write-result schema literal `c({type:ee([\"create\",\"update\"]).describe(\"Whether a new file was created or an existing file was updated\"),filePath:i()...,content:i()...,structuredPatch:R(...),originalFile:i().nullable()...,gitDiff:...optional(),userModified:M().optional()...})`. Counting rule: one grep hit is the single minified schema constructor; the Edit-result constructor in the same binary (`grep -F 'oldString:i().describe'`) has no `type` member.",
           "probe": {
-            "kind": "corpus",
-            "command": "grep -F 'oldString:i().describe'",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.156), read whole",
-            "rule": "one grep hit is the single minified schema constructor; the Edit-result constructor in the same binary (`grep -F 'oldString:i().describe'`) has no `type` member."
+            "rule": "one grep hit is the single minified schema constructor; the Edit-result constructor in the same binary (`grep -F 'oldString:i().describe'`) has no `type` member.",
+            "literal": "ee([\"create\",\"update\"])"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -57593,10 +57593,10 @@
           "depends": "csift reads the input side in three places - `files`' structured-mutation extractor, `recover`'s `collect_tool_use_paths` (which attributes a later integrity error by `tool_use_id`) and `recover`'s carrier-less input fallback - so a snake/camel drift on either side breaks a different surface, and `NotebookEdit`'s different path key is the one special case each site spells out.",
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -F 'old_string:i().describe(\"The text to replace\")' | head -1 | cut -c1-600\nExpected: the Edit input schema `tt({file_path:i().describe(\"The absolute path to the file to modify\"),old_string:i()...,new_string:i()...,replace_all:...})`. Counting rule: one `strings` line holds the whole minified constructor; the Write input constructor is found with `grep -F 'The content to write to the file'`.",
           "probe": {
-            "kind": "corpus",
-            "command": "grep -F 'The content to write to the file'",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "one `strings` line holds the whole minified constructor; the Write input constructor is found with `grep -F 'The content to write to the file'`."
+            "rule": "one `strings` line holds the whole minified constructor; the Write input constructor is found with `grep -F 'The content to write to the file'`.",
+            "literal": "old_string:i().describe(\"The text to replace\")"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -68556,10 +68556,10 @@
           "depends": "csift's home_dir() (src/path/home.rs) is cfg-split to mirror those same os.homedir() semantics - unix reads HOME, Windows reads the profile variable, with the standard library's home lookup as the fallback - and then joins '.claude' behind the same config-dir override the binary applies first (csift's precedence being --claude-home > the config-dir variable > the OS home's .claude). So a POSIX-style HOME exported by a Windows shell never sends csift to a .claude directory Claude Code does not write; honoring it there would make every subcommand read an empty or nonexistent projects root. The dependency is on the RUNTIME's home resolution, not on a Claude Code platform branch: there is none to track, and what would break csift is that runtime changing which variable it prefers on Windows, not a change in Claude Code.",
           "instrument": "Binary: read the config-home expression in each artifact, then grep -abo USERPROFILE and grep -abo 'process.env.HOME' and read every hit in the application region, recording for each whether it lies on the path from the first record write to the resolver. Host: with the config-dir variable unset, compare where the projects tree exists against join(home, '.claude', 'projects'). On Windows the divergence check is a Git-Bash shell exporting a POSIX-style HOME: print both HOME and the profile variable and compare them against where the projects tree exists. Counting rules: one occurrence per byte match; one home resolution per process.",
           "probe": {
-            "kind": "corpus",
-            "command": "grep -abo USERPROFILE and grep -abo 'process.env.HOME' and read every hit in the application region, recording for each whether it lies on the path from the first record write to the resolver",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.228), read whole",
-            "rule": "one home resolution per process."
+            "rule": "one home resolution per process.",
+            "literal": "process.env.HOME"
           },
           "producer_trace": "upstream",
           "specimen": "observed",
@@ -72142,10 +72142,10 @@
           "depends": "csift's gate verdict for teams is therefore settings-env-shaped and nothing more: it reports the merged env entry with the scope that set it when one exists, and otherwise reports unknown, because the shell environment of a running session and its argv are not observable from disk. Naming the scope is the whole value of the verdict, since 'enabled' with no file behind it would be a guess.",
           "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. The entry paths are enumerated by the import literal `from\"/$bunfs/root/chunk-2cs7aavv.js\"`, the chunk whose module body declares the gate: 11 occurrences over the whole binary, one per importing module, and each importing module calls the gate directly rather than passing it on.",
           "probe": {
-            "kind": "corpus",
-            "command": "tail -c +OFFSET+1 | head -c N",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte."
+            "rule": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte.",
+            "literal": "from\"/$bunfs/root/chunk-2cs7aavv.js\""
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -72308,10 +72308,10 @@
           "depends": "csift's teams verdict therefore never claims to read the gate. It reports the settings env entry with its scope when one exists, otherwise 'no settings-level enable; shell env and CLI flags are not observable, so unknown' - and points at the two artifacts as evidence of USE. The reader keeps the per-key scope attribution precisely so that half of the verdict can be a file path instead of an assertion.",
           "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. The importing modules are the 11 occurrences of the literal `from\"/$bunfs/root/chunk-2cs7aavv.js\"`, the chunk whose module body declares the gate. A module's BOUNDS run from its own import occurrence forward to the first `// @bun @bytecode` marker at or after it. A CALL is the byte string `Zr()` whose preceding byte lies outside [A-Za-z0-9_$]: that form returns 61 over the whole binary and 46 inside the 11 windows, while the bare form returns 62 and 47 because it also matches the tail of the unrelated identifier `EZr()`. The name collides - the binary declares it locally 22 times as a function and 47 more times as a binding - but no local declaration of it lies inside any of the 11 windows, so a nearest-preceding-binder rule over the same 61 calls partitions them identically: 46 to the gate import and 15 to a local declaration.",
           "probe": {
-            "kind": "corpus",
-            "command": "tail -c +OFFSET+1 | head -c N",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte."
+            "rule": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte.",
+            "literal": "from\"/$bunfs/root/chunk-2cs7aavv.js\""
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -72826,10 +72826,10 @@
           "depends": "csift renders one chunk per slot within envelope::CHUNK_BUDGET = 9200 characters, framing included, so a delivery stays inside the inline threshold with headroom. The headroom is the point: a chunk over the threshold is not lost, but its header is replaced by a pointer, and a header that reaches the model only as a file path defeats the whole envelope - the receiver could no longer tell who sent the message or read the id it would have to reply to. Chunking counts characters rather than bytes for the same reason, since the threshold the harness applies is a character length.",
           "instrument": "Read the constants bank at 160361461 and the helper at 165809812 in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; the helper's own branch shows the return-unchanged path, the persist path and the truncate-on-failure path. Then a live capture: install a hook returning more than 10000 characters of additionalContext and read the receiving transcript for a persisted-output block with an absolute path and a 2000-character preview.",
           "probe": {
-            "kind": "corpus",
-            "command": "tail -c +OFFSET+1 | head -c N",
-            "scope": "the Claude Code 2.1.258 executable at the two named offsets, plus one live session whose hook returns more than the inline cap",
-            "rule": "One observation per constant read at its named offset, and one per branch read in the helper's body; the live capture is one observation per hook return."
+            "kind": "bytes",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "rule": "One observation per constant read at its named offset, and one per branch read in the helper's body; the live capture is one observation per hook return.",
+            "literal": "var aJ=50000,WNe=500000;var QSt=4,LQn=400000,MQn=200000,$w=50,NQn=1e4,$7e=1e4,FQn=1e5;"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -72919,10 +72919,10 @@
           "depends": "A queue delivery may use the exit2 vehicle at Stop or SubagentStop, and a channel that blocked the turn nine times in a row would wedge the receiver rather than message it. So every emit line records its vehicle, an exit2 emit records the block count it carried, and ledger::consecutive_exit2_blocks counts back from the newest line to the last emit on another vehicle or the last ack - a hold or an expiry says nothing about blocking and does not break the run. A delivery compares that count plus one against the cap before choosing exit2 and falls back to the additionalContext vehicle otherwise, which is why the cap and its comparison direction are load-bearing rather than advisory.",
           "instrument": "Binary: read 164744170 (the cap comparison and the environment-variable read), 161909054 (the construction that turns an exit 2 outside PreToolUse into a block decision carrying the hook's stderr) and 165818141 (the hook_blocking_error attachment that reaches the transcript) in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; count the environment literal with grep -a -c -F CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, counting rule = lines carrying the literal over the whole file. Live: a Stop hook exiting 2 nine times in a row with stop_hook_active ignored, once at the default cap and once with the cap set to 0, reading whether the ninth block trips the override and how the transcript records it.",
           "probe": {
-            "kind": "corpus",
-            "command": "tail -c +OFFSET+1 | head -c N",
-            "scope": "the Claude Code 2.1.258 executable at the three named offsets, plus one live session whose Stop hook exits 2",
-            "rule": "One observation per branch read at its named offset, and one per line carrying the environment literal over the whole build."
+            "kind": "bytes",
+            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "rule": "One observation per branch read at its named offset, and one per line carrying the environment literal over the whole build.",
+            "literal": "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -72993,9 +72993,9 @@
           "depends": "The channel's exit2 vehicle exists only to keep a turn alive long enough to hand the receiver a message, so csift models exactly two vehicles - additionalContext and exit2 - and never returns continue:false. Stopping a receiver's turn would make a delivery an act of control rather than a message, and the sender has no authority to do that. The vehicle is recorded on every emit line so a reader can tell which of the two paths a chunk took, and so the block count is attributed to the right one.",
           "instrument": "Read 164635300 (the consumer that branches on the hook response), 165812430 (the mapper from exit code and response to turn outcome) and 161464086 (the feedback formatter) in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm each byte for byte. Live: a Stop hook exiting 2 with text on stderr, then the same hook returning {\"continue\":false}, reading which record each produces in the receiving transcript.",
           "probe": {
-            "kind": "corpus",
+            "kind": "live",
             "command": "Live: a Stop hook exiting 2 with text on stderr, then the same hook returning {\"continue\":false}, reading which record each produces in the receiving transcript.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "two live arms in one session: a Stop hook exiting 2 with text on stderr, and the same hook returning a continue-false response, reading which record each produces in the receiving transcript",
             "rule": "One record read per live arm: the hook exiting 2 with text on stderr, and the same hook returning `{\"continue\":false}`."
           },
           "producer_trace": "complete",
@@ -73079,10 +73079,10 @@
           "depends": "The channel is thin-hook by design: the user pastes N identical delivery lines, one per slot, and each slot is its own process emitting its own chunk. That design only buys capacity if the threshold is per hook - if it applied to the joined value, adding slots would add nothing and the whole chunking scheme would be wasted work. Each slot therefore renders one chunk within envelope::CHUNK_BUDGET, slots::open_slot gives each one an ordered place in a per-event chain, and the receiver reassembles the parts from their headers. If a future build moved the threshold onto the accumulated content array, one chunk per slot would stop being the right unit and the budget would have to be divided across the installed slots instead.",
           "instrument": "grep -a -o -b -E '[^A-Za-z0-9_$]ipe\\(' over the Claude Code 2.1.258 executable returns the 8 word-boundary occurrences (1 definition, 7 call sites); read each with tail -c +OFFSET-230 | head -c 500 and confirm that every call passes one hook's single field. Then read 163198954 and 163199508 and confirm no threshold call lies between the accumulator push and the attachment build, and 162928977 for the PreToolUse inserter passing the array through. Counting rule: occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings.",
           "probe": {
-            "kind": "corpus",
-            "command": "tail -c +OFFSET-230 | head -c 500 and confirm that every call passes one hook's single field. Then read 163198954 and 163199508 and confirm no threshold call lies between the accumulator push and the attachment build, and 162928977 for the PreToolUse inserter passing the array through. Counting rule: occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings.",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings."
+            "rule": "occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings.",
+            "literal": "async function ipe(e,n,r,{threshold:o=NQn,storageV5:d}={})"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -74150,9 +74150,9 @@
           "depends": "csift's hook is synchronous and never declares `asyncRewake`, so it never leans on that wake. It uses exit 2 in the Stop family instead, where the code blocks the turn for the transcript that fired rather than being re-addressed at the top-level one. The difference matters: a wake addressed elsewhere would deliver a subagent's message into the main conversation.",
           "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial arms an asyncRewake hook that exits 2 while the session is idle and reads whether a task-notification record lands and in which transcript.",
           "probe": {
-            "kind": "corpus",
+            "kind": "live",
             "command": "A live trial arms an asyncRewake hook that exits 2 while the session is idle and reads whether a task-notification record lands and in which transcript.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "one live session with an asyncRewake hook that exits 2 while the session is idle, reading whether a task-notification record lands and in which transcript",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74311,7 +74311,7 @@
           "probe": {
             "kind": "corpus",
             "command": "1) pick a projects root and name it: `export ROOT=\"$HOME/.claude/projects\"` - the file set is every `*.jsonl` under it, the top-level transcripts and the `<uuid>/subagents/**` sidecar ones, excluding the basenames `journal.jsonl` and `elicitations.jsonl` and anything under a `csift-channel/` directory; 2) run\npython3 - \"$ROOT\" <<'EOF'\nimport os,sys\nroot=sys.argv[1]\nNEEDLE='\"SubagentStop\"'\nsub=top=0; fsub=set(); ftop=set()\nfor dirpath,dirnames,filenames in os.walk(root):\n  if 'csift-channel' in dirpath.split(os.sep): continue\n  for fn in filenames:\n    if not fn.endswith('.jsonl') or fn in ('journal.jsonl','elicitations.jsonl'): continue\n    path=os.path.join(dirpath,fn); under='subagents' in path.split(os.sep)\n    for line in open(path,errors='replace'):\n      if NEEDLE not in line: continue\n      if under: sub+=1; fsub.add(path)\n      else: top+=1; ftop.add(path)\nprint('records under a subagents component',sub,'in files',len(fsub))\nprint('records in a top-level transcript',top,'in files',len(ftop))\nEOF\n3) read the two lines: every record naming the subagent event sits under a `subagents/` component and the top-level count is zero, so the hook fires from the agent's own transcript while the `transcript_path` it is handed names the top-level session file, which is the field the channel root is derived from. The needle is the JSON string value `\"SubagentStop\"` with its quotes, which keeps out prose naming the event. Counting rule: one per matching line for records and one per matching file for files, over the whole root.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every record naming a subagent event over one projects root, with the path component each sits under",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74593,9 +74593,9 @@
           "depends": "A deferred hook is a hook that does not fire, and csift's delivery state lives in files rather than in the firing: a message with no emit line stays pending, so the next event that does fire delivers it. Nothing is lost by a pause, and nothing has to detect one.",
           "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial pauses a session, fires one of the six events and reads whether the hook ran.",
           "probe": {
-            "kind": "corpus",
+            "kind": "live",
             "command": "A live trial pauses a session, fires one of the six events and reads whether the hook ran.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "one live session paused, with one reading per fired event over the six the paused set names",
             "rule": "Occurrences of the fixed byte string over the whole build file, and one reading per fired event in the live trial."
           },
           "producer_trace": "complete",
@@ -74657,9 +74657,9 @@
           "depends": "That id is a bare hex, the same shape a built-in subagent carries, so csift's existing id grammar accepts it with no new arm and a workflow agent gets its own per-transcript inbox and ledger. This is the one receiver the official transport cannot reach at all, so it is also the case the channel exists for.",
           "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial runs a workflow with a hook that logs SubagentStart, SubagentStop and tool-event payloads, compared against a listing of the workflow subtree on disk.",
           "probe": {
-            "kind": "corpus",
+            "kind": "live",
             "command": "A live trial runs a workflow with a hook that logs SubagentStart, SubagentStop and tool-event payloads, compared against a listing of the workflow subtree on disk.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "one live workflow run with a hook logging SubagentStart, SubagentStop and tool-event payloads, against a listing of the workflow subtree on disk",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -74952,9 +74952,9 @@
           "depends": "A fork is a re-entry that is NOT a compaction and NOT a resume, so csift delivers nothing extra on it: an un-acked message is not re-offered and a held one is not released. Treating a fork as a resume would deliver into a transcript that already carries the earlier delivery.",
           "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial branches a session in place and reads the `source` value the SessionStart payload carries.",
           "probe": {
-            "kind": "corpus",
+            "kind": "live",
             "command": "A live trial branches a session in place and reads the `source` value the SessionStart payload carries.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "one live session branched in place, reading the `source` value its SessionStart payload carries",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -75025,7 +75025,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus side: census the records naming the start event, one per matching line.",
-            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
+            "scope": "every record naming the start event over one projects root",
             "rule": "LINES carrying the literal per cached build, and one observation per corpus line naming the start event."
           },
           "producer_trace": "partial",
@@ -75394,7 +75394,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus side: count the records carrying the attachment type, one per matching line.",
-            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
+            "scope": "every record carrying the attachment type over one projects root",
             "rule": "LINES carrying the literal per cached build, and one observation per corpus line carrying the attachment type."
           },
           "producer_trace": "complete",
@@ -76186,7 +76186,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On disk, partition every JSON object carried on its own line inside a relay body and count those carrying a `result` field.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every JSON object carried on its own line inside a relay body, over one projects root",
             "rule": "one per JSON object on its own line inside a relay body."
           },
           "producer_trace": "complete",
@@ -76265,7 +76265,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On disk, count every record whose attachment type is `queued_command` and inspect whether any carries an envelope header. Counting rule: one per record whose attachment type is `queued_command`.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every record whose attachment type is `queued_command` over one projects root",
             "rule": "one per record whose attachment type is `queued_command`."
           },
           "producer_trace": "complete",
@@ -78223,7 +78223,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus side: parse every row file under the registry directory and count the rows carrying each field, one per file.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every row file under the harness session registry directory",
             "rule": "One observation per row file under the registry directory, counted per field the row carries."
           },
           "producer_trace": "complete",
@@ -79157,7 +79157,7 @@
           "probe": {
             "kind": "corpus",
             "command": "On disk a real relay is a record whose string content begins with a preamble after leading whitespace is stripped; counting rule: one per record, reported against occurrences of the same literals over the whole corpus.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.145), read whole",
+            "scope": "every record whose string content begins with a relay preamble, over one projects root, against occurrences of the same literals over the whole corpus",
             "rule": "one per record, reported against occurrences of the same literals over the whole corpus."
           },
           "producer_trace": "complete",
@@ -80271,7 +80271,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: JSON-walk every line matching the same literal and tally `level`, `isMeta` and the presence of a `message` key; counting rule one observation per record.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every line matching the quoted subtype literal over one projects root",
             "rule": "one observation per byte match. Corpus: JSON-walk every line matching the same literal and tally `level`, `isMeta` and the presence of a `message` key; counting rule one observation per record."
           },
           "producer_trace": "complete",
@@ -81234,10 +81234,10 @@
           "depends": "The warning is the harness stating csift's own risk out loud: a chain built from a PARTIAL record set drops records that are in fact live. csift answers it structurally - the walk's terminating record is a floor, and an off-chain record above that floor is `pre-cut`, never `abandoned` - and it splices the structural rows of the lines its own prefilter drops back into the chain so the floor lands where the loader would put it.",
           "instrument": "Read the diagnostic and its message at 2.1.258 @166144509 and confirm the two conditions that fire it. For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it.",
           "probe": {
-            "kind": "corpus",
-            "command": "For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it.",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258, 2.1.203), read whole",
-            "rule": "One verdict per historical native build, present iff the literal's bytes occur at least once."
+            "rule": "One verdict per historical native build, present iff the literal's bytes occur at least once.",
+            "literal": "function dgn(e,n,r){let o=0;for(let v of e.values()){"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -81691,10 +81691,10 @@
           "depends": "csift's spine walk (`parse::spine_record`) reads the structural fields of a line the \u00a77d prefilter drops, and this census is why it walks the WHOLE top-level object: an early stop once the wanted keys are in hand would fire on 11,240 lines of 673,710, and a walk that assumed the envelope came first would miss `uuid` and `timestamp` on 98.3% of them. It is also why the payload skip is the hot path and is written as a `memchr2` hop through string interiors rather than a byte loop. If a future build moves the envelope in front of the payload, the early stop becomes worth taking and this claim is where the measurement to re-run lives. The second fact is why the walk stays FORWARD and reads each key at depth 1 rather than seeking the envelope from the end of the line: five real records would hand a last-occurrence reader the wrong `type`. A reverse envelope scan built on the same layout - a short front walk plus a reverse search for the `\"type\"` token, each candidate proven top level by walking forward to the line's final brace - was measured against the forward walk on this corpus and produced the same chain answers on all 75 transcripts and no useful time, so it is not in the tree: the spine's residual cost is per-line record construction and the chain build, not the payload crossing. The five exceptions are pinned as a unit case so a future attempt starts from the shape that breaks it.",
           "instrument": "Walk each line of every uuid-named top-level transcript with a depth-1 JSON key scanner that records the byte offset of each TOP-LEVEL key. Keep the lines whose `type` is user, assistant, attachment or system. For each, take the smallest offset among the payload keys `message`, `attachment`, `content`, `toolUseResult` and `snapshot`, and count the line as an exception when any present key of the chain envelope - type, uuid, parentUuid, timestamp, isSidechain, subtype, compactMetadata, logicalParentUuid, leafUuid, explicit, rewound - has a greater offset. Counting rule: one observation per line; report the exception total and the per-key totals, plus the histogram of the first top-level key. For the second fact, restrict the same scan to the lines the spine walks - one of the five `spine_type_wanted` types, including `last-prompt`, carrying neither role marker - and, for each top-level envelope key, compare its offset with the offset of the LAST `\"<key>\"` token on the line that is followed, after optional whitespace, by `:`. Counting rule: one observation per (line, key) pair, bucketed by line type and key.",
           "probe": {
-            "kind": "bytes",
-            "literal": "return{type:\"user\",message:{role:\"user\",content:e||up},isMet",
+            "kind": "corpus",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "one observation per line; report the exception total and the per-key totals, plus the histogram of the first top-level key. For the second fact, restrict the same scan to the lines the spine walks - one of the five `spine_type_wanted` types, including `last-prompt`, carrying neither role marker - and, for each top-level envelope key, compare its offset with the offset of the LAST `\"<key>\"` token on the line that is followed, after optional whitespace, by `:`. Counting rule: one observation per (line, key) pair, bucketed by line type and key."
+            "rule": "one observation per line; report the exception total and the per-key totals, plus the histogram of the first top-level key. For the second fact, restrict the same scan to the lines the spine walks - one of the five `spine_type_wanted` types, including `last-prompt`, carrying neither role marker - and, for each top-level envelope key, compare its offset with the offset of the LAST `\"<key>\"` token on the line that is followed, after optional whitespace, by `:`. Counting rule: one observation per (line, key) pair, bucketed by line type and key.",
+            "command": "1) for every uuid-named top-level `*.jsonl` of one projects root, subagent sidecars excluded, read each line with a depth-1 JSON key scanner that records the BYTE OFFSET of every top-level key; 2) keep the lines whose `type` is user, assistant, attachment or system; 3) take the smallest offset among the payload keys `message`, `attachment`, `content`, `toolUseResult` and `snapshot`, and count the line an exception when any present chain-envelope key - type, uuid, parentUuid, timestamp, isSidechain, subtype, compactMetadata, logicalParentUuid, leafUuid, explicit, rewound - carries a GREATER offset; 4) report the exception total, the per-key totals and the histogram of the first top-level key. Counting rule: one observation per line."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -81761,7 +81761,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Read the three hops at their offsets in the 2.1.258 executable and count `readFile` in the surrounding window; then, on the one corpus boundary carrying `compactMetadata.messagesSummarized`, compare that number against the uuid-bearing records preceding the boundary in the same file and against `preservedMessages.allUuids` entries that resolve to no line. Counting rule: one record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "the one boundary carrying `compactMetadata.messagesSummarized` and the uuid-bearing records preceding it in the same file, over one projects root",
             "rule": "one record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`."
           },
           "producer_trace": "complete",
@@ -82774,10 +82774,10 @@
           "depends": "csift joins a cleared session to its predecessor through the checkpoint the saver wrote, and that join is only sound because the saver runs BEFORE the id swap: the checkpoint carries the old id, sits in the old file, and its close instant is the last instant of the old session. If a build moved the saver after the regeneration the checkpoint would carry the new id and land in the new file, and the join would silently point the wrong way. The SessionEnd/SessionStart pair with their `clear` reason and source is what a hook-based instrument would key on, and the separately minted `conversation_reset` uuid is why csift never treats an SDK frame's id as a session id.",
           "instrument": "Byte-search the shipped Claude Code binary for the command registration literal `name:\"clear\",description:\"Start a new session with empty context`, the generator head `async function*wtn({session:o,setMessages:m`, and the regeneration tail `let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,`; read the generator body between them and confirm the call order `SEe(o,\"clear\",...)` then `BPn(s)` then `BIn({setCurrentAsParent:!0})` then `_V(o,\"clear\",...)`. Confirm on disk by clearing a live session and reading the two transcripts: the old file's last cost-state line carries the old session id, the new file opens in the same project directory under a fresh uuid.",
           "probe": {
-            "kind": "corpus",
-            "command": "head `async function*wtn({session:o,setMessages:m`, and the regeneration tail `let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,`",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "cleared one live session and read both transcripts plus the cost-state line the saver wrote."
+            "rule": "cleared one live session and read both transcripts plus the cost-state line the saver wrote.",
+            "literal": "name:\"clear\",description:\"Start a new session with empty context"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -86529,7 +86529,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk.",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every `queue-operation` line over one projects root, under the QT-045 walk",
             "rule": "One verdict per occurrence of the quoted literal, and one observation per `queue-operation` line under the QT-045 walk."
           },
           "producer_trace": "complete",
@@ -86611,7 +86611,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Byte-regex the executable for `\\.?(consume|remove|removeByFilter|clearCommandQueue)\\(`, and for each hit walk forward from the open paren, quote-aware, to the MATCHING close paren, accepting only a `reason:` inside that argument list and taking both arms of a ternary. On disk, bucket every `queue-operation` line by (operation, reason present).",
-            "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
+            "scope": "every `queue-operation` line over one projects root, under the QT-045 walk, bucketed by operation and by whether a reason is present",
             "rule": "A window-based form of the same probe reports a false positive (an unrelated `{ok:!1,reason:\"aborted\"}` a hundred bytes past a different object's `remove(`), so the paren walk is the counting rule. On disk, bucket every `queue-operation` line by (operation, reason present)."
           },
           "producer_trace": "complete",
@@ -86738,7 +86738,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Byte-find the factory by its object literal `{type:\"history-suppression\"`, then enumerate every occurrence of the appending writer's minified name (which differs per build) followed by `(` and read each: one definition, three direct calls, one forwarding call. Read the wrapper at that forwarding call and enumerate ITS callers. On disk, census the `cause` values and the lines carrying `vetoedAgainstAccountUuid` under the QT-045 walk.",
-            "scope": "the cached Claude Code build ladder the instrument names, one whole build file each",
+            "scope": "every `history-suppression` line over one projects root, under the QT-045 walk",
             "rule": "One verdict per occurrence of the appending writer's minified name, and one observation per `history-suppression` line under the QT-045 walk."
           },
           "producer_trace": "complete",
@@ -86833,10 +86833,10 @@
           "depends": "csift calls the whole family LLM-invisible, and that is right about CONTENT while being incomplete about EFFECT - so the family's documentation says both, and the four are named rather than left for a reader to discover. It is also why `harness.bookkeeping.fork` carries a provenance relation naming the record its prefix was cut at AND the session that record lives in, while `harness.bookkeeping.mode` carries none: only the fork line points at a place a reader can go.",
           "instrument": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
           "probe": {
-            "kind": "corpus",
-            "command": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "One verdict per applying site, recording whether it changes message CONTENT, a context flag or a header."
+            "rule": "One verdict per applying site, recording whether it changes message CONTENT, a context flag or a header.",
+            "literal": "forkContextRefs"
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -87026,10 +87026,10 @@
           "depends": "The inventory's `human` column answers \"does a person see this shape\", and SPEC section 5's table and SKILL's transparency tables print it verbatim. The row reads `Human::Indirect` on this evidence rather than `Always` or `Never`: `Always` would claim the line is rendered, which nothing does, and `Never` would deny the two effects a person does meet. csift's own render of the line is the family head plus the verbatim body, and the child session id also rides the unit as a fact, which is the address a reader follows.",
           "instrument": "Byte-find `function MYn(e,t){return{type:\"continued-in\"` for the writer and `function T9t(e){` immediately after it for the tail scan that reads it back. Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter. For the two person-facing effects, byte-find `filtered from /resume: continued in ${o.continuedInSessionId}` (the developer log, followed immediately by the `superseded` assignment) and `Your most recent conversation is running in the background (session ` (the startup sentence).",
           "probe": {
-            "kind": "corpus",
-            "command": "For the two person-facing effects, byte-find `filtered from /resume: continued in ${o.continuedInSessionId}` (the developer log, followed immediately by the `superseded` assignment) and `Your most recent conversation is running in the background (session ` (the startup sentence).",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter."
+            "rule": "Then byte-find every occurrence of `continuedInSessionId` and read each: a schema, the writer, the tail scan, the startup callback, the summary field and the resume filter.",
+            "literal": "function MYn(e,t){return{type:\"continued-in\""
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -88510,10 +88510,10 @@
           "depends": "csift states what the API DID and never what the model later received: the label-zone marker reads `[served by <to.model>, fell back from <from.model>]`, which is a fact about the turn that was written, and `Record::delivery_override` adds no arm for the block at all. That is the correct reading precisely because of the echo rule - the block is re-sent on a later request only while the beta is on it, so the block's presence on disk supports no claim about a subsequent turn's context, and a delivery verdict derived from it would be invented. The same rule explains why csift names the block at all rather than treating a text-less turn as absent: the block is the only trace of the switch, and dropping it on the request path is what makes the transcript the only place it survives. It is also why the inventory's human column for this block reads `never`.",
           "instrument": "Binary: byte-search the verified build for `function CYn(e,n){if(!Lme(e))return e;` (one occurrence) and read the rebuild, for `function its(e){` (one occurrence) to read the re-validator it calls, for `function Lme(e){return e.some(` to read the has-any predicate, and for `function xI(e){return e.type===\"fallback\"}` to read the block predicate. Then byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
           "probe": {
-            "kind": "corpus",
-            "command": "Byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
+            "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "One verdict per occurrence of the minified name, and one offset recorded per occurrence of `===\"fallback\"` against the renderer's system-handling span."
+            "rule": "One verdict per occurrence of the minified name, and one offset recorded per occurrence of `===\"fallback\"` against the renderer's system-handling span.",
+            "literal": "function CYn(e,n){if(!Lme(e))return e;"
           },
           "producer_trace": "complete",
           "specimen": "none",
