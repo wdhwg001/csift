@@ -791,12 +791,17 @@ surface change bumps the PATCH.
 - **A stdout write that cannot land is reported now, instead of aborting the process.**
   Piping a command into a reader that goes away - `| head`, a closed pipe - made `println!`
   abort: exit 101 and a std backtrace naming `library/std/src/io/stdio.rs` where csift's own
-  message belongs. On every surface whose rows go through the shared buffered stdout -
-  `search` in all three of its stream shapes, `show` rendered, `files`, `agents`, `image` -
-  the failed write now takes the one error arm every other failure takes: exit 1 and
-  `csift: error: Broken pipe (os error 32)`. `show --raw` already did. The surfaces still
-  writing with `println!`, `list` and `stats`, keep the abort. What a reader that stays
-  receives does not move; only the failure path does.
+  message belongs. Through the shared buffered stdout the failed write now takes the one
+  error arm every other failure takes: exit 1 and `csift: error: Broken pipe (os error 32)`.
+  The rule is the WRITER that makes the failing write and not the subcommand - a `println!`
+  still aborts, so a surface whose rows are buffered but whose FIRST stdout byte is a
+  `println!` aborts at that byte. The scope banner is one, which is why `search` text,
+  `files` and `verbatim` report on a single-session scope and abort on a scope wide enough
+  to print a banner. Reporting: `search --format json` and `--raw`, `show` rendered and
+  `--raw`, `agents`, `files --format json`, `image`, and all three of `verbatim`'s streams.
+  Aborting: `list`, `stats`, `recover`, `status`, `wait`, `whoami`, the channel four,
+  `show --branch-points`, and `search`'s `-c` / `-l` / `--count-by`. What a reader that
+  stays receives does not move; only the failure path does.
 
 ### Performance
 
