@@ -795,13 +795,16 @@ surface change bumps the PATCH.
   error arm every other failure takes: exit 1 and `csift: error: Broken pipe (os error 32)`.
   The rule is the WRITER that makes the failing write and not the subcommand - a `println!`
   still aborts, so a surface whose rows are buffered but whose FIRST stdout byte is a
-  `println!` aborts at that byte. The scope banner is one, which is why `search` text,
-  `files` and `verbatim` report on a single-session scope and abort on a scope wide enough
-  to print a banner. Reporting: `search --format json` and `--raw`, `show` rendered and
-  `--raw`, `agents`, `files --format json`, `image`, and all three of `verbatim`'s streams.
-  Aborting: `list`, `stats`, `recover`, `status`, `wait`, `whoami`, the channel four,
-  `show --branch-points`, and `search`'s `-c` / `-l` / `--count-by`. What a reader that
-  stays receives does not move; only the failure path does.
+  `println!` aborts at that byte. Inside a buffered surface there is no exception: its
+  `scope` and `copies` banners go through the same writer as its rows, so one query has one
+  answer for a closed pipe however wide its scope. Reporting: `search` in all four of its
+  forms, `show` rendered, `--raw`, `--turn` and `--uuid`, `agents` in both projections,
+  `files` in its three, `image` in both, and every one of `verbatim`'s streams. Aborting:
+  `list`, `stats`, `recover` in all six forms measured, `status`, `wait`, `whoami`, `send`,
+  `msg`, `deliver`, `show --branch-points`, and `search`'s `-c` / `-l` / `--count-by`.
+  `plan` with no binding and `ack` write no stdout at all, and `csift --version` is clap's
+  own writer and exits 0. What a reader that stays receives does not move; only the failure
+  path does.
 
 ### Performance
 
