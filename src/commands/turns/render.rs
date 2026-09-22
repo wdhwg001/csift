@@ -320,6 +320,12 @@ pub(crate) fn render_text(
         writeln!(out)?;
         writeln!(out, "({})", crate::text::malformed_note(ctx.skipped_lines))?;
     }
+    // Flush BEFORE the `--out` write, not after it: `write_out_guarded` refuses an empty
+    // reconstruction with a note on STDERR, and everything above is still in this buffer,
+    // so the note would come out ahead of the rows that explain it. The obligation is the
+    // CALL, not a visible `eprintln!` - that one sits in `commands::recover`, outside this
+    // module's print lint, which is why the flush has to be reasoned about here.
+    out.flush()?;
     if let Some(p) = out_path {
         if crate::commands::recover::write_out_guarded(p, &out_blob)? {
             writeln!(out)?;

@@ -28,10 +28,17 @@
 //! render closure prints nothing at all. Both are guarded mechanically: every module that
 //! builds or writes through an `Out` denies `clippy::print_stdout` and
 //! `clippy::print_stderr`, and each legitimate site carries an `#[allow]` saying why it
-//! prints outside a buffer. A surface must also [`Out::flush`] before any stderr note whose
-//! order against stdout the contract states. Output printed BEFORE the `Out` exists is
-//! already flushed (that is what a `LineWriter` does at each newline), which is why the
-//! scope banners can stay `println!`.
+//! prints outside a buffer. Output printed BEFORE the `Out` exists is already flushed
+//! (that is what a `LineWriter` does at each newline), which is why the scope banners can
+//! stay `println!`.
+//!
+//! The FLUSH obligation is WIDER THAN THE LINT, and that is the half to read twice. A
+//! surface [`Out::flush`]es before ANY CALL that can write to stderr, not only before an
+//! `eprintln!` it can see: the lint reads one module, and a callee in another module is
+//! invisible to it. `verbatim`'s `--out` block is the case that proved it - the refusal
+//! note for an empty reconstruction is printed by `commands::recover::write_out_guarded`,
+//! which no guarded module contains, and it came out AHEAD of the rows the buffer was
+//! still holding.
 //!
 //! ## Why rendering is parallel, and what bounds its memory
 //!
