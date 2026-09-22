@@ -72842,8 +72842,8 @@
           "probe": {
             "kind": "corpus",
             "command": "tail -c +OFFSET+1 | head -c N",
-            "scope": "not stated: the instrument names no population",
-            "rule": "not stated: the instrument gives no counting rule"
+            "scope": "the Claude Code 2.1.258 executable at the two named offsets, plus one live session whose hook returns more than the inline cap",
+            "rule": "One observation per constant read at its named offset, and one per branch read in the helper's body; the live capture is one observation per hook return."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -72936,7 +72936,7 @@
             "kind": "corpus",
             "command": "tail -c +OFFSET+1 | head -c N",
             "scope": "the Claude Code 2.1.258 executable at the three named offsets, plus one live session whose Stop hook exits 2",
-            "rule": "not stated: the instrument gives no counting rule"
+            "rule": "One observation per branch read at its named offset, and one per line carrying the environment literal over the whole build."
           },
           "producer_trace": "complete",
           "specimen": "none",
