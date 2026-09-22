@@ -5,22 +5,38 @@
 //! what it asserts would let any rotted anchor be quieted by typing a word, which is the one
 //! move rule 12 exists to catch.
 //!
-//! TWO ARMS NEED NO BUILD AT ALL, and both are vacuity. An EMPTY excerpt matches at every
-//! offset, so a mark on one is true wherever it is read. PROSE matches at none: an excerpt
-//! reading `a string-table copy of the property name in the non-code region` describes the
-//! bytes rather than quoting them, so `absent` is true of it by construction. Each is
-//! refused before the build is consulted, and the remedy for both is the dot run's - re-cut
+//! THREE ARMS NEED NO BUILD AT ALL, and all three are vacuity. An EMPTY excerpt matches at
+//! every offset, so a mark on one is true wherever it is read. PROSE matches at none: an
+//! excerpt reading `a string-table copy of the property name in the non-code region`
+//! describes the bytes rather than quoting them, so `absent` is true of it by construction.
+//! A LOSSY RENDER - four or more dots, where a printable filter left a run of bytes it
+//! could not show - is the same vacuity in another spelling, and it is asked HERE because
+//! `classify` decides a marked hop by its mark before it reaches the dot-run refusal. Each
+//! is refused before the build is consulted, and the remedy for all three is one: re-cut
 //! the excerpt to the run it describes.
 
 use super::Site;
 
-/// What a mark asserts about its own EXCERPT, decidable without any build. Both arms are
-/// vacuity: an empty excerpt matches everywhere, and prose matches nowhere, so a mark on
-/// either decides nothing about where the producer went.
+/// What a mark asserts about its own EXCERPT, decidable without any build. All three arms
+/// are vacuity: an empty excerpt matches everywhere, and prose and a lossy render match
+/// nowhere, so a mark on any of them decides nothing about where the producer went.
 pub(crate) fn mark_shape(excerpt: &str, status: &str) -> Option<String> {
     if excerpt.is_empty() {
         return Some(format!(
             "marked `{status}` with an empty excerpt, which asserts nothing"
+        ));
+    }
+    // A DOT RUN belongs to this family and is asked here because `classify` no longer
+    // reaches it for a marked hop: the mark arms decide first, so the refusal that used to
+    // catch a lossy render wearing a mark has to live where the mark is judged. `absent` is
+    // true of such an excerpt by construction - a picture of non-printable bytes occurs in
+    // no build - which is the same vacuity the other two arms name.
+    if super::dot_run(excerpt) {
+        return Some(format!(
+            "marked `{status}` with an excerpt carrying a run of four or more dots, which is \
+             a lossy render of bytes that are not printable rather than a quote of them, so \
+             it occurs in no build and the mark asserts nothing; re-cut the excerpt to the \
+             clean run around its literal"
         ));
     }
     if reads_as_prose(excerpt) {

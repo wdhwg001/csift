@@ -86,7 +86,7 @@ mod builds;
 mod marks;
 
 pub(crate) use builds::{build_name_ok, build_path, named_build_paths, BuildCache};
-pub(crate) use marks::{check_marks, reads_as_prose, verify_mark};
+pub(crate) use marks::{check_marks, mark_shape, reads_as_prose, verify_mark};
 
 use serde_json::Value;
 
@@ -145,8 +145,21 @@ pub(crate) fn classify(build: &[u8], offset: usize, excerpt: &str, status: Optio
         }
     }
     let want = excerpt.as_bytes();
-    // THE COMPARISON COMES FIRST, and the three refusals below are what is left once it
-    // has missed. A dot run and a prose sentence are both excerpts that CANNOT equal any
+    // A MARKED HOP IS JUDGED BY ITS MARK, and that decision sits here rather than at the
+    // bottom. An `absent` or `prefix-only` hop whose excerpt happens to carry an ellipsis
+    // reached the elided arm first and came back `Elided`, so it was counted in the elided
+    // bucket AND under its own mark by the ledger-only filter in `tally` - one hop in two
+    // of the five counts the page says partition the total. No hop in the file is shaped
+    // that way today, which is exactly why the arm order has to say what it means rather
+    // than rely on the data. It also removes a second voice: a marked hop whose excerpt
+    // reads as prose was named once here and once by `check_marks`, for one defect.
+    match status {
+        Some("absent") => return Anchor::Absent,
+        Some("prefix-only") => return Anchor::PrefixOnly,
+        _ => {}
+    }
+    // THE COMPARISON CAME FIRST, and the three refusals below are what is left once it has
+    // missed. A dot run and a prose sentence are both excerpts that CANNOT equal any
     // build's bytes - but a quote really can carry four dots, and a build string really can
     // be an English sentence (an error message, a prompt), so refusing either before the
     // comparison would fail an anchor that was sound. An excerpt that IS the bytes is
@@ -182,12 +195,8 @@ pub(crate) fn classify(build: &[u8], offset: usize, excerpt: &str, status: Optio
                 .count(),
         };
     }
-    match status {
-        Some("absent") => Anchor::Absent,
-        Some("prefix-only") => Anchor::PrefixOnly,
-        _ => Anchor::Drifted {
-            at: avail.iter().zip(want).take_while(|(a, b)| a == b).count(),
-        },
+    Anchor::Drifted {
+        at: avail.iter().zip(want).take_while(|(a, b)| a == b).count(),
     }
 }
 
@@ -433,6 +442,13 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
                 ));
             }
         }
+        // EVERY REFUSAL WHOSE REMEDY IS BYTES NAMES THE ARTIFACT THOSE BYTES ARE IN. Four
+        // of them describe the EXCERPT rather than the build - an empty one, a lossy
+        // render, a prose sentence, an excerpt that opens with its own ellipsis - and they
+        // read as though the build could not matter; but each sends the reader to re-cut
+        // the excerpt from real bytes, and a hop carrying its own `build` is re-cut from
+        // THAT one. So the verdict is decided without the build and the sentence still says
+        // which artifact to open.
         match verdict {
             // A hop naming its own build is disclosed as a COUNT, not as a verdict: the
             // page must state the same number on a host that holds thirteen artifacts and
@@ -443,7 +459,8 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
             Anchor::Absent | Anchor::PrefixOnly => {}
             Anchor::Empty => failures.push(format!(
                 "{}: {}[{}] carries offset {} beside an EMPTY excerpt, which anchors nothing \
-                 - drop the offset, or quote the bytes it points at",
+                 - drop the offset, or quote the bytes it points at in Claude Code \
+                 {at_build}",
                 site.id, site.field, site.index, site.offset
             )),
             Anchor::PastEnd { len } => failures.push(format!(
@@ -455,14 +472,15 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
             Anchor::DotRun => failures.push(format!(
                 "{}: {}[{}] offset {} carries a run of four or more dots, which is a lossy \
                  render of bytes that are not printable rather than a quote of them - re-cut \
-                 the excerpt to the clean run around its literal",
+                 the excerpt to the clean run around its literal in Claude Code {at_build}",
                 site.id, site.field, site.index, site.offset
             )),
             Anchor::Prose => failures.push(format!(
                 "{}: {}[{}] offset {} carries an excerpt that reads as prose (`{}`) - that is \
                  a DESCRIPTION of the bytes rather than a quote of them, so it equals no \
                  build's bytes and the offset decides nothing; re-cut the excerpt to the run \
-                 it describes and move the description into the entry's own prose",
+                 Claude Code {at_build} carries there and move the description into the \
+                 entry's own prose",
                 site.id,
                 site.field,
                 site.index,
@@ -472,7 +490,7 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
             Anchor::ElidedNoHead => failures.push(format!(
                 "{}: {}[{}] offset {} carries an excerpt that OPENS with its own ellipsis, so \
                  nothing of it is a quote of the bytes at that offset - re-cut it to the run \
-                 the offset carries, or drop the offset",
+                 Claude Code {at_build} carries there, or drop the offset",
                 site.id, site.field, site.index, site.offset
             )),
             Anchor::ElidedHead { at } => failures.push(format!(

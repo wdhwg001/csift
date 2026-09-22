@@ -424,3 +424,101 @@ fn ledger_gate_rule_12_sweeps_every_mark_and_names_the_false_one() {
         );
     }
 }
+
+/// A MARKED HOP IS JUDGED BY ITS MARK, and the arm order is what says so.
+///
+/// The elided arm used to run first, so a hop marked `absent` or `prefix-only` whose
+/// excerpt happened to carry an ellipsis with a head that still matched at its offset came
+/// back `Elided`: counted in the elided bucket by `tally` AND under its own mark by the
+/// ledger-only filter, which puts one hop in two of the five counts the README says
+/// partition the total. No hop in the shipped file is shaped that way, which is exactly why
+/// the order has to carry the rule rather than the data.
+#[test]
+fn ledger_gate_rule_12_judges_a_marked_hop_by_its_mark_before_eliding() {
+    let build: &[u8] = b"alpha bravo charlie ...rest delta echo";
+    // Unmarked, this is the shape the elided arm takes: the run before the first ellipsis
+    // is `bra`, and the build carries it at the offset.
+    assert_eq!(
+        anchors::classify(build, 6, "bra...vo", None),
+        anchors::Anchor::Elided
+    );
+    // Marked, the same hop lands in ONE bucket - its own.
+    assert_eq!(
+        anchors::classify(build, 6, "bra...vo", Some("absent")),
+        anchors::Anchor::Absent
+    );
+    assert_eq!(
+        anchors::classify(build, 6, "bra...vo", Some("prefix-only")),
+        anchors::Anchor::PrefixOnly
+    );
+    // The byte comparison still outranks the mark, so a hop that is exact again is exact.
+    assert_eq!(
+        anchors::classify(build, 6, "bravo", Some("absent")),
+        anchors::Anchor::Exact
+    );
+    // A LOSSY RENDER wearing a mark no longer reaches `classify`'s dot-run refusal, so the
+    // refusal lives where the mark is judged - the same vacuity as prose and an empty
+    // excerpt, and it must still be named.
+    let why = anchors::mark_shape("al....ha", "absent").expect("a marked dot run is refused");
+    assert!(why.contains("four or more dots"), "{why}");
+
+    // And the five counts still partition the total when a mark sits on an excerpt that
+    // elides something.
+    let mut c = good_claim();
+    c["states"][0]["producer_chain"] = json!([
+        {"role": "writer", "offset": 5,
+         "excerpt": "zzq-no-build-carries ... these-bytes-zzq",
+         "anchor_status": "absent", "note": "a mark on an excerpt that also elides"}
+    ]);
+    let mut f = Vec::new();
+    let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
+    if let Some((exact, elided)) = a.measured {
+        assert!(f.is_empty(), "the mark holds, so nothing is named: {f:?}");
+        assert_eq!(a.absent, 1, "the hop is counted under its mark");
+        assert_eq!(elided, 0, "and not a second time as elided");
+        assert_eq!(
+            exact + elided + a.absent + a.prefix_only + a.other_build,
+            a.total,
+            "the five counts partition the total"
+        );
+    }
+}
+
+/// EVERY REFUSAL WHOSE REMEDY IS BYTES NAMES THE ARTIFACT THOSE BYTES ARE IN.
+///
+/// Four verdicts describe the EXCERPT rather than the build - an empty one, a lossy render,
+/// a prose sentence, an excerpt opening with its own ellipsis - so they are decided without
+/// reading anything, and their sentences read as though no artifact were involved. Each one
+/// still sends the reader to re-cut the excerpt from real bytes, and a hop carrying its own
+/// `build` is re-cut from THAT artifact rather than from the badge's, so the sentence owes
+/// the name. Three of the seven already carried it.
+#[test]
+fn ledger_gate_rule_12_every_excerpt_refusal_names_the_build_to_re_cut_from() {
+    for (excerpt, want) in [
+        ("", "beside an EMPTY excerpt"),
+        ("al....ha", "four or more dots"),
+        (
+            "a string-table copy of the property name in the non-code region",
+            "reads as prose",
+        ),
+        ("...only a tail", "OPENS with its own ellipsis"),
+    ] {
+        let mut c = good_claim();
+        c["states"][0]["producer_chain"] = json!([{
+            "role": "writer", "offset": 5, "excerpt": excerpt,
+            "note": "an excerpt that cannot be the bytes"
+        }]);
+        let mut f = Vec::new();
+        let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
+        if a.measured.is_none() {
+            continue;
+        }
+        assert_eq!(f.len(), 1, "one defect, one line: {f:?}");
+        assert!(f[0].contains(want), "{}", f[0]);
+        assert!(
+            f[0].contains("Claude Code 2.1.258"),
+            "the refusal names the artifact to re-cut from: {}",
+            f[0]
+        );
+    }
+}
