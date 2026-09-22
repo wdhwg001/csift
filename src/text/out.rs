@@ -46,9 +46,12 @@
 //! only ordering requirement is that they REACH stdout in file order. [`write_ordered`]
 //! renders fixed-size chunks on the rayon pool into per-chunk byte buffers and writes the
 //! buffers in order. The look-ahead is bounded at [`ORDERED_CHUNK`] * [`ORDERED_BATCH`]
-//! items: peak memory rises by the rendered bytes of that many CONSECUTIVE rows and by
-//! nothing else, rather than by the whole stream - which for the landmark transcript's
-//! 411 MB of JSON would otherwise be the whole 411 MB.
+//! items, so peak memory rises by the rendered bytes of that many CONSECUTIVE rows rather
+//! than by the whole stream - which for the landmark transcript's 411 MB of JSON would
+//! otherwise be the whole 411 MB. The bound is UP TO TWICE that, not exactly it: a chunk
+//! renders into a `Vec` grown by `extend`, a `Vec` that has doubled sits at up to twice
+//! the bytes it holds, and [`ORDERED_BATCH`] of them are live at once. On megabyte-sized
+//! rows the measured peak-RSS delta ran to 1.4x the one-copy figure (SPEC 7k).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write;
@@ -64,8 +67,8 @@ const OUT_BUF_BYTES: usize = 1 << 20;
 const ORDERED_CHUNK: usize = 8;
 
 /// Chunks in flight per wave - the LOOK-AHEAD. `ORDERED_CHUNK * ORDERED_BATCH` rows are
-/// rendered before any of them is written, which is the whole memory bound this pipeline
-/// adds.
+/// rendered before any of them is written, and each of those chunk buffers can sit at
+/// twice the bytes it holds, which together are the whole memory bound this pipeline adds.
 const ORDERED_BATCH: usize = 16;
 
 /// A buffered stdout, holding the lock for its lifetime. See the module docs: a surface
@@ -181,7 +184,8 @@ mod tests {
     /// produced and the sink reads that count as each buffer arrives, so the largest gap
     /// between the two IS how many rendered rows were held unwritten at once. It must be
     /// 128 - a wider look-ahead is more peak memory than the contract states, a narrower
-    /// one leaves workers idle at each barrier.
+    /// one leaves workers idle at each barrier. This pins the ROW count; the BYTES bound
+    /// is up to twice it, because a growing chunk buffer holds up to twice its content.
     #[test]
     fn write_ordered_holds_at_most_one_wave_of_rendered_rows() {
         use std::sync::atomic::{AtomicUsize, Ordering};

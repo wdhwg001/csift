@@ -822,13 +822,16 @@ surface change bumps the PATCH.
   0.901, `show --branch-points` 0.397 -> 0.355, the `agents` tree 0.664 -> 0.619,
   `files --by timeline` 0.890 -> 0.858. CPU for the two wide text rows falls about 10%
   (their sys halves 1.10 -> 0.70 and 1.07 -> 0.68); the JSON dump's rises 3.9%, which is what
-  the fan-out costs to spread over ten cores. What the look-ahead costs in memory is 128
-  RENDERED ROWS, so it is 128 times whatever a row is: on that session, rows averaging 78 KB,
-  about 10 MB against a 1.65 GB peak, and the measured maximum resident set size does not
-  move; on a synthetic transcript of 4.55 MiB rows, three interleaved pairs put the delta
-  between 0 and +127 MiB, because the buffers are mostly satisfied from pages the process
-  already holds. The smallest inputs stay inside the same-binary control band, at a median
-  ratio of 1.009 against the control's 0.9997. Output bytes do not
+  the fan-out costs to spread over ten cores. What the look-ahead costs in memory is UP TO
+  TWICE 128 RENDERED ROWS - 128 rows are rendered before any is written, and each chunk
+  buffer grows by doubling, so it can sit at twice the bytes it holds. On that session, rows
+  averaging 78 KB, that is 10 to 20 MB against a peak near 1.57 GiB and it does not clear
+  the noise: medians of 13 interleaved reps differ by 0.1 MiB, against per-arm spreads of 12
+  and 17 MiB. On a synthetic transcript whose rendered rows are 4,195,818 B, five
+  interleaved pairs put the delta at 715.8 MiB median and 836.9 MiB at worst, against a
+  one-copy figure of 512.2 MiB - so the peak is not a floor on the bound, and a reader
+  sizing a run works from twice 128 rows. The smallest inputs stay inside the same-binary
+  control band, at a median ratio of 1.009 against the control's 0.9997. Output bytes do not
   move: every row of a 158-binding acid set, over three size classes, is byte-identical.
   What a render change can never reach is stated rather than claimed away: a heavy regex row
   is 1.189 s against a 1.140 s floor with the render removed entirely, because its output is
