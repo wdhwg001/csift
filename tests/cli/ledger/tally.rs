@@ -188,8 +188,15 @@ pub(crate) fn render_block(
         comma(a.closed),
     ));
     out.push_str(
-        "The five counts partition the total. An elided excerpt was quoted with an \
-         ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as \
+        "The five counts partition the total, and the gate asserts that they do. BYTE-EXACT \
+         is read over two encodings: a few excerpts were captured from regions that are not \
+         valid UTF-8 and stored one code point per byte, and 14 of these anchors match only \
+         under that second reading. An ELIDED excerpt carries an ellipsis somewhere, which is \
+         not the same as having no byte-exact form: 1,319 such excerpts ARE byte-exact at \
+         their own offsets and are counted with the rest, because minified JavaScript's \
+         spread operator wears the same three dots. What is left in the elided count really \
+         did elide something, and the gate holds each of those to the run BEFORE its first \
+         ellipsis at its own offset. An absent or prefix-only anchor is marked as \
          such in the ledger, with the residue line that says how to find its producer again; \
          those are the first thing the next pass re-locates. A hop read in an artifact the \
          badge does not name carries that build and is compared against THAT one, which is why \
@@ -233,6 +240,22 @@ pub(crate) fn ledger_tally(
             }
         },
     };
+    // THE PAGE OWNS THE ARITHMETIC. The block says the five counts partition the total, and
+    // nothing asked whether they do: a reviewer produced 7,626 against a total of 7,625 by
+    // giving an `absent`-marked hop its real bytes, so the hop was counted twice. The gate
+    // failed on that ledger for another reason, so nothing shipped - but a sum the page
+    // states is a sum the gate checks, and a host with no build can still check four of the
+    // five against the fifth's absence.
+    let (exact, elided) = measured;
+    let parts = exact + elided + anchors.absent + anchors.prefix_only + anchors.other_build;
+    if anchors.measured.is_some() && parts != anchors.total {
+        failures.push(format!(
+            "the anchor counts do not partition the total: byte-exact {exact} + elided \
+             {elided} + absent {} + prefix-only {} + read in another build {} = {parts}, \
+             against {} anchors - the README states that they do",
+            anchors.absent, anchors.prefix_only, anchors.other_build, anchors.total
+        ));
+    }
     let want = render_block(claims, anchors, verified, measured);
     if block != want {
         let at = block

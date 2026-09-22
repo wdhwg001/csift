@@ -6,13 +6,34 @@ use super::*;
 
 fn specimen_anchors() -> anchors::Anchors {
     anchors::Anchors {
-        total: 3,
+        // The five counts PARTITION the total, which the gate now asserts, so the fixture
+        // every rule-8 specimen deviates from is one that does: 1 + 1 + 1 + 0 + 1 = 4.
+        total: 4,
         absent: 1,
         prefix_only: 0,
         closed: 2,
         other_build: 1,
         measured: Some((1, 1)),
     }
+}
+
+/// The page says the five counts partition the total, so the gate checks that they do. A
+/// reviewer produced 7,626 against a total of 7,625 by giving an `absent`-marked hop its
+/// real bytes, which counted it twice; the run failed for another reason, so nothing
+/// shipped, but the arithmetic is the page's to own.
+#[test]
+fn ledger_gate_rule_8_names_anchor_counts_that_do_not_partition_the_total() {
+    let claims = vec![good_claim()];
+    let mut a = specimen_anchors();
+    a.measured = Some((3, 1)); // one more byte-exact than the total can hold
+    let good = tally::render_block(&claims, &a, "2.1.258", (2, 1));
+    let mut f = Vec::new();
+    tally::ledger_tally(&claims, &a, "2.1.258", &good, &mut f);
+    assert!(
+        f.iter()
+            .any(|m| m.contains("do not partition the total") && m.contains("= 6, against 4")),
+        "{f:?}"
+    );
 }
 
 /// Rule 8 is a GENERATOR, so its specimen is the generator's own output with one byte
