@@ -836,11 +836,15 @@ surface change bumps the PATCH.
   one-copy figure of 512.2 MiB - so the peak is not a floor on the bound, and a reader
   sizing a run works from twice 128 rows. The smallest inputs stay inside the same-binary
   control band, at a median ratio of 1.009 against the control's 0.9997. Output bytes do not
-  move: of the acid set's 169 (row, size class) pairs over three size classes, 167 are
-  byte-identical on all four streams - stdout, stderr, the exit code, and an interleaved
-  `2>&1` capture, which is the only one that can see the ORDER between the first two. The
-  two excluded are the `whoami --format json` rows, which print live lane instants that a
-  repeat of the SAME binary moves as well.
+  move: of the acid set's 169 (row, size class) pairs over three size classes, 165 are
+  compared and byte-identical on all four streams - stdout, stderr, the exit code, and an
+  interleaved `2>&1` capture, which is the only one that can see the ORDER between the
+  first two - with none differing. FOUR are excluded because they print LIVE state, and
+  both bindings are named: the `whoami --format json` rows, whose lane instants move when
+  the session they name gains a record, and the `status` rows, whose fourth stdout line
+  carries an elapsed-seconds field that a repeat of the SAME binary moved 21 s later. Run
+  anyway, all four compared identical, because the two arms of a pair land inside one
+  second - which is the condition, not a result.
   What a render change can never reach is stated rather than claimed away: a heavy regex row
   is 1.189 s against a 1.140 s floor with the render removed entirely, because its output is
   2.5 MB and its clock is the regex over that 1.18 GB.
