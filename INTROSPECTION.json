@@ -8955,7 +8955,7 @@
             "kind": "corpus",
             "command": "Same scan, re-measured later in the day: workflow 0 object / 947 string / 69,830 absent; built-in-or-teammate 12,752 object / 336 string / 6,855 absent, every object echo at 2.1.179 or later and zero at 2.1.156-2.1.177; main 31,944 object / 545 string / 0 absent; over 67 top-level and 7,584 subagent transcripts.",
             "scope": "the `<uuid>/subagents/**/agent-*.jsonl` of one projects root",
-            "rule": "built-in-or-teammate 12,752 object / 336 string / 6,855 absent, every object echo at 2.1.179 or later and zero at 2.1.156-2.1.177."
+            "rule": "One observation per spawn record, bucketed by whether its `toolUseResult` echo is an object, a string or absent: built-in-or-teammate 12,752 object / 336 string / 6,855 absent, every object echo at 2.1.179 or later and zero at 2.1.156-2.1.177."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -10339,7 +10339,7 @@
           "depends": "csift's `automation_label` fills the status slot in the fallback order `<status>`, then `<event>`, then the literal `completed`, so a monitor pulse renders the event it actually carries instead of a fabricated outcome the record does not hold.",
           "instrument": "`grep -o '<event>[^<]*' ~/.claude/projects/*/*.jsonl | sort | uniq -c` for the event census, then `csift search '' @<session> -t harness.notification.monitor --max-count 3` and read the rendered label: the status slot must show the event payload, not `completed`. Counting rule: one rendered label per pulse record.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "grep -o '<event>[^<]*' ~/.claude/projects/*/*.jsonl | sort | uniq -c",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one rendered label per pulse record."
@@ -10831,7 +10831,7 @@
           "depends": "csift prefers the structured signal and falls back to the text prefix (`Record::is_async_launch_ack`), labeling the ack `agent.tool.result` ONLY and excluding it from subagent-return detection, while the later `<result>`-bearing pulse is what additionally carries `agent.communication.inbox` with direction child to self; conflating them attributes the child's report to the launch instant.",
           "instrument": "`jq -r 'select(.toolUseResult.status==\"async_launched\") | .toolUseResult.agentId' <file> | wc -l` versus `grep -c 'Async agent launched successfully' <file>`, then `csift search 'Async agent launched' --format json | jq -r '.label'` must be `agent.tool.result` on every row and never `agent.communication.inbox`. Counting rule: one ack per launch, one inbox record per `<result>` pulse.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "jq -r 'select(.toolUseResult.status==\"async_launched\") | .toolUseResult.agentId' <file> | wc -l",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
             "rule": "one ack per launch, one inbox record per `<result>` pulse."
@@ -11392,7 +11392,7 @@
           "depends": "csift routes the fired-timer forms to `harness.schedule.wakeup` and the driver forms to `harness.schedule.tick`, matching the wakeup arm FIRST so `check` never falls through to `tick`; conflating them merges the scheduler with the driver in every census and makes a monitoring transcript unreadable. Both arms anchor at content start, because the resolver writes the marker there: matching anywhere read a skill's instruction text that embeds the preamble, and a peer message relaying a tick, as ticks - and stripped the leaf each of those had earned. A fired prompt with NO marker is `harness.schedule.fire` (claim CLS-031), which is why this pair is matched before that arm.",
           "instrument": "`rg -c \"You're being invoked on a timer\" ~/.claude/projects/*/*.jsonl` and `rg -c '# Autonomous loop tick' <same>`, then `csift search '' -t harness.schedule.wakeup -c` and `-t harness.schedule.tick -c`. Counting rule: one per raw occurrence for rg, one per classified record for csift; the two csift counts must not overlap.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c \"You're being invoked on a timer\" ~/.claude/projects/*/*.jsonl",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per raw occurrence for rg, one per classified record for csift; the two csift counts must not overlap."
@@ -11563,7 +11563,7 @@
           "depends": "csift gives the three shapes three leaves, by PRODUCER: a blocking hook's feedback is `harness.hook.feedback` and the arm answers to all four names of the table rather than to the one shape the corpus happens to hold, the `<local-command-caveat>` wrapper is the slash-command executor's and takes `harness.command.caveat`, and the edit-retry notice is one of the harness's redo nudges, `harness.enforce.retry`. None is `user.message`, so a hook's own prose is never counted as an operator turn in `search -t user` or in `verbatim`. All three arms anchor at CONTENT START after one `trim_start`, like every other arm of the injection table: an unanchored test on this path can only reach a record whose body QUOTES the template, which is the failure the content-start law names, and the three observed nesting records are `Stop hook feedback:` bodies that the arm ABOVE already claims. So the anchoring closes a hole without moving a label: under the two orders the leaf changes for 0 of 3,713 and 0 of 1,825 isMeta user records.",
           "instrument": "`rg -c 'Stop hook feedback:' --glob '*.jsonl' <the projects root>` summed over its per-file counts, then `csift search 'Stop hook feedback' -t harness.hook.feedback --count-by label` and the same pattern under `-t user.message`, which must be 0. Counting rule: `rg -c` counts matching LINES, not occurrences, so a line carrying the literal twice counts once; one record per classified record for csift. SCOPE matters as much as the rule - a `<root>/*/*.jsonl` glob reaches top-level transcripts only, while the recursive walk adds every subagent transcript, and the two differ by roughly a factor of three.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c 'Stop hook feedback:' --glob '*.jsonl' <the projects root>",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
             "rule": "`rg -c` counts matching LINES, not occurrences, so a line carrying the literal twice counts once; one record per classified record for csift. SCOPE matters as much as the rule - a `<root>/*/*.jsonl` glob reaches top-level transcripts only, while the recursive walk adds every subagent transcript, and the two differ by roughly a factor of three."
@@ -15623,7 +15623,7 @@
             "kind": "csift",
             "command": "csift search \"\" @<session> -t user.answer --format json | jq -r .hits[].line",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "AUQ tool_result carriers, split by the three signals."
+            "rule": "One observation per AUQ `tool_result` carrier, split by the three signals."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -17185,7 +17185,7 @@
             "kind": "csift",
             "command": "csift search '<key>' @<session> --raw",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "MCP keys found natively over MCP keys total (expected 0)."
+            "rule": "One observation per MCP key in the sidecar: keys found natively over keys total, expected 0."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -19828,7 +19828,7 @@
             "kind": "csift",
             "command": "csift search \"\" @<session> -t harness.hook.context --format json --no-truncate | jq '.text|length'",
             "scope": "the transcripts `@<session>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "characters of the injected attachment payload compared against the characters the hook printed; a shortfall at 10,000 is the cap."
+            "rule": "One observation per injected attachment: the characters of its payload against the characters the hook printed, a shortfall at 10,000 being the cap."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -22314,7 +22314,7 @@
           "depends": "`recover --list-backups` computes the key without needing any transcript record, so a wrong hash input (a relative path, a plan sigil) finds nothing at all rather than the wrong file.",
           "instrument": "`printf '%s' '<abs path>' | shasum -a 256 | cut -c1-16` then `ls ~/.claude/file-history/*/<that hash>@v*`, and compare with `csift recover <target> --file <abs path> --list-backups --format json | jq 'select(.kind==\"backup\")'`. Counting rule: one row per store file matching the hash prefix.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "ls ~/.claude/file-history/*/<that hash>@v*",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
             "rule": "one row per store file matching the hash prefix."
@@ -25747,7 +25747,7 @@
           "depends": "csift selects candidate lines with an OR of three needles - the compact pair `\"type\":\"image\"`, the key-only `\"media_type\"`, and the bare value substring `base64` (src/commands/image/refs.rs:96-98, combined by `.any()` at line 101). The serialization tolerance comes from the UNION: the pair needle alone would miss a line reserialized with whitespace around the colon, but the key-only and bare-value needles both survive it.",
           "instrument": "`grep -c '\"media_type\"' ~/.claude/projects/*/*.jsonl` then `csift image @<session> --format json | jq -r '[.source_kind, .media_type, .b64_len] | @tsv'`. Counting rule: one reference per image block; a url source reports zero base64 length.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "grep -c '\"media_type\"' ~/.claude/projects/*/*.jsonl",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one reference per image block; a url source reports zero base64 length."
@@ -26152,7 +26152,7 @@
           "depends": "csift joins `#N` by NUMBER: when the record carries `imagePasteIds` covering every image block, image block k takes `imagePasteIds[k]` (the submit path writes the blocks and the array in one ascending-id pass); without the array the positional marker zip stays, and only when the marker count equals the image count (a mismatch leaves `seq` unset: a back-reference to a compressed-out image, never a misassignment). A `queued_command` attachment's prompt takes the same join. The handle feeds `csift image --id N` and the `[N images: #a #b]` annotations. What breaks if the fact moves: a build that wrote the image blocks in text order instead of id order would make the array join misassign; the corpus census of marker order against `imagePasteIds` is the instrument.",
           "instrument": "`rg -o '\\[Image #[0-9]+\\]' <transcript> | sort | uniq -c` for the raw markers against `csift image @<session> --format json | jq -c '{handle, seq, line}'`. Counting rule: one marker per regex match, one row per content-deduped image.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -o '\\[Image #[0-9]+\\]' <transcript> | sort | uniq -c",
             "scope": "the transcripts `<transcript>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "one marker per regex match, one row per content-deduped image."
@@ -26335,7 +26335,7 @@
             "kind": "csift",
             "command": "csift image @<uuid> --format json | jq -r .seq | sort -n",
             "scope": "the transcripts `@<uuid>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "distinct handles present versus the dense range; non-contiguous handles are expected."
+            "rule": "One observation per distinct handle: handles present against the dense range, non-contiguous handles expected."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -34177,7 +34177,7 @@
             "kind": "csift",
             "command": "csift whoami @trap:<a fresh 3-word-plus-4-digit marker>",
             "scope": "the transcripts `<a fresh 3-word-plus-4-digit marker>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "two invocations, two outcomes."
+            "rule": "One observation per csift invocation: two invocations, two outcomes."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -35134,7 +35134,7 @@
             "kind": "bytes",
             "literal": "async function*SWt(e,n,r,o,d,f,_,v=dd,C,I,F,B){let U=r!==void 0?{id:Gu(r),project:e.project}:e,j={...Sa(U,ne()),hook_event_name:\"SessionStart\",source:n,agent_type:d,model:f,session_title:o??fu(U.id),...I};eq(\"hook_exec\",Bje);try{yield*Qy({session:e,hookInput:j,toolUseID:$wt(),matchQuery:n,signal:_,timeoutMs:v,forceSyncExecution:C,storageV5:F,credentials:B})}finally{oq(\"hook_exec\",Bje)}}async funct",
             "scope": "the one Claude Code build file the state's range names",
-            "rule": "exact array literal, deduplicated."
+            "rule": "One observation per distinct array literal in the build, deduplicated."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -37718,7 +37718,7 @@
           "depends": "csift renders `[narration summary]` in the display LABEL zone only, never as matchable text - matchable text that is not a byte substring of the raw line breaks the search prefilter laws, so `csift search narration -t agent.thinking.narration` would return zero while rows visibly rendered the marker. The same display-only status is why the fixed `--siblings` policy caps narration at 1 per turn (one summary suffices).",
           "instrument": "`rg -cNI 'narration' ~/.claude/projects -g '*.jsonl'` finds only prose mentions, never a signature-derived one, while `csift search '' <project-dir> --count-by label | rg narration` reports the real leaf count; the two numbers are unrelated by construction. Counting rule: lines for the `rg`, records per leaf for the census.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -cNI 'narration' ~/.claude/projects -g '*.jsonl'",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "lines for the `rg`, records per leaf for the census."
@@ -39232,10 +39232,11 @@
           "depends": "csift treats an empty `$CLAUDE_CONFIG_DIR` as UNSET and falls through to the OS home's `.claude` - a deliberate, documented divergence (honoring the empty value would resolve the projects root to the relative path `projects`, i.e. whatever happens to sit under the invoking cwd, and normally a hard `cannot read projects root` error rather than the corpus); the same non-empty test also gates the lazy home lookup, so a relocated root still works when `$HOME` is unset.",
           "instrument": "Harness side: `cd \"$(mktemp -d)\" && CLAUDE_CONFIG_DIR= claude --print 'Reply with exactly: ok'; find . -maxdepth 2` - the run must create `projects/`, `sessions/` and `backups/` in that cwd, and no directory named after that cwd's encoding may appear under ~/.claude/projects. Reading the operator directly: `strings -n 6 <the shipped Claude Code binary> | rg -o '.{0,120}CLAUDE_CONFIG_DIR.{0,220}'` and read the coalescing expression on the config-home resolver (`??`), noting that other read sites of the same variable use a truthiness fallback. csift side: `CLAUDE_CONFIG_DIR= csift list --max-count 1 --format json | head -1` must print the same `sessions_in_scope` as the same command with the variable unset. Counting rule: one config-home resolver per process.",
           "probe": {
-            "kind": "csift",
+            "kind": "bytes",
             "command": "strings -n 6 <the shipped Claude Code binary> | rg -o '.{0,120}CLAUDE_CONFIG_DIR.{0,220}'",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "one config-home resolver per process."
+            "rule": "one config-home resolver per process.",
+            "literal": "CLAUDE_CONFIG_DIR"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -40039,7 +40040,7 @@
             "kind": "corpus",
             "command": "`prancing`, `foraging`): the namer draws with randomBytes, not a seeded PRNG, and takes no session-id argument. Counting rule: presence of the three word arrays and absence of any session-id argument in the namer.",
             "scope": "not stated: the instrument names no population",
-            "rule": "presence of the three word arrays and absence of any session-id argument in the namer."
+            "rule": "One observation per word array in the build, plus one for the namer's argument list: presence of the three arrays and absence of any session-id argument."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -47627,7 +47628,7 @@
           "depends": "csift mmaps the file, splits it on newlines with `memchr` and parses only candidate lines, and every address (`show --line`), every count and the malformed-line census are expressed in lines; a record spread over several lines would be booked as several malformed lines rather than one record.",
           "instrument": "`wc -l <transcript>` equals the summed line-type census PLUS `skipped_lines` from the same `csift stats --format json` object, not the census alone: a torn or pretty-printed record contributes lines to skipped_lines and to none of the line_types buckets. On a clean file skipped_lines is 0 and the two figures coincide, which is why the shorter form usually appears to work.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "wc -l <transcript>",
             "scope": "the transcripts `<transcript>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "One record per physical non-blank line, whole file; the identity that must hold is sum(line_types) + skipped_lines == wc -l."
@@ -48055,7 +48056,7 @@
           "depends": "Every csift field is `Option<T>` and no surface unwraps a timestamp: the time windows (`--since`/`--until`), turn ordering and the `list`/`stats` spans are computed only over timestamped records, and `show --uuid`/`--turn` can never address a cache line (only `show --line`/`--raw` reaches it).",
           "instrument": "`rg -m5 '\"type\":\"mode\"' ~/.claude/projects/**/*.jsonl | jq -r 'has(\"timestamp\"), has(\"uuid\")'` must print `false false`, and `csift stats` over the same file must still report a span; then `csift show @<id> --line <a cache line number>` must bail with the 'no such record(s)' message while `--raw` prints the bytes. Counting rule: per raw line.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -m5 '\"type\":\"mode\"' ~/.claude/projects/**/*.jsonl | jq -r 'has(\"timestamp\"), has(\"uuid\")'",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "per raw line."
@@ -48500,7 +48501,7 @@
           "depends": "csift's `Block` enum carries a `#[serde(other)] Unknown` arm so an unmodeled future block type parses instead of failing the whole line; losing it turns one new block type into a malformed-line count across every command.",
           "instrument": "`rg -o '\"type\":\"(text|thinking|redacted_thinking|tool_use|tool_result|image)\"' <transcript> | sort | uniq -c` enumerates the live set, and `csift search '' -t agent --count-by label` must account for each. Counting rule: one per block occurrence in raw bytes for the rg, one per record for the census.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -o '\"type\":\"(text|thinking|redacted_thinking|tool_use|tool_result|image)\"' <transcript> | sort | uniq -c",
             "scope": "the transcripts `<transcript>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "one per block occurrence in raw bytes for the rg, one per record for the census."
@@ -48597,7 +48598,7 @@
           "depends": "csift keeps `tool_result.content` as a raw `Value` and inspects it on demand; a `String`-typed field would drop every array-form tool result, which is where deferred-tool schemas and image results live.",
           "instrument": "`rg -c '\"type\":\"tool_reference\"' ~/.claude/projects/**/*.jsonl` in a session that used ToolSearch, then `csift show @<id> --line <that line>` must render without error; `jq -r '.message.content[]? | select(.type==\"tool_result\") | (.content|type)' <file> | sort | uniq -c` gives the string-vs-array split. Counting rule: one per raw occurrence.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '\"type\":\"tool_reference\"' ~/.claude/projects/**/*.jsonl",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per raw occurrence."
@@ -48692,7 +48693,7 @@
           "depends": "csift gives the block the leaf `agent.thinking.redacted` and renders an EMPTY body: the `data` ciphertext reaches no rendered path and is printed on no path but `--raw`. The consequence is stated rather than hidden - with no rendered text a pattern scan cannot reach the leaf at all, so the ways in are an empty pattern plus an exact `-t`, the label census, or a `show` address.",
           "instrument": "`rg -cNI '\"redacted_thinking\"' ~/.claude/projects -g '*.jsonl'` then `csift search 'redacted' @<id> -t agent.thinking`; counting rule = per record. A zero corpus count means the block type is absent locally, not that the arm is wrong - it is exercised by a synthetic fixture and the e2e taxonomy tests pin the placeholder render.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -cNI '\"redacted_thinking\"' ~/.claude/projects -g '*.jsonl'",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "per record."
@@ -48954,7 +48955,7 @@
           "depends": "`search --resolve-persisted` prefers the structured path (exact, no regex) and falls back to scraping the inline `Full output saved to:` marker, substituting the file content BEFORE matching; a read failure is non-fatal and appends an explicit note. Without the resolution the searchable text is only the 2 KB preview.",
           "instrument": "`rg -c 'persistedOutputPath' ~/.claude/projects/**/*.jsonl` and `ls ~/.claude/projects/<enc>/<uuid>/tool-results/ | head`, then `csift search '<a needle only in the persisted file>' @<id> --resolve-persisted` must match while the same search without the flag must not. Counting rule: matched records with and without the flag; one pointer per externalised tool result.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c 'persistedOutputPath' ~/.claude/projects/**/*.jsonl",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "matched records with and without the flag; one pointer per externalised tool result."
@@ -54610,7 +54611,7 @@
           "probe": {
             "kind": "bytes",
             "scope": "the one Claude Code build file the state's range names",
-            "rule": "distinct describe literals, deduplicated.",
+            "rule": "One observation per distinct `describe` literal in the build, deduplicated.",
             "literal": "structuredPatch:R(SQe()).describe(\"Diff patch showing the changes"
           },
           "producer_trace": "complete",
@@ -57400,7 +57401,7 @@
           "probe": {
             "kind": "bytes",
             "scope": "the one Claude Code build file the state's range names",
-            "rule": "distinct string literals in the binary, deduplicated.",
+            "rule": "One observation per distinct string literal in the build, deduplicated.",
             "literal": "has been updated"
           },
           "producer_trace": "complete",
@@ -61981,7 +61982,7 @@
             "kind": "csift",
             "command": "csift agents @<session> --shape teammate --format json | jq -r .agent_id",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "teammate nodes that round-trip as targets over teammate nodes listed."
+            "rule": "One observation per teammate node: nodes that round-trip as targets over nodes listed."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -64765,7 +64766,7 @@
           "depends": "`Record::is_genuine_user` gates on content SHAPE - a bare string, or blocks carrying a `text` block and NO `tool_result` block - and is the discriminator behind the `user.message` label, turn delimiting, `list` previews and `verbatim` reconstruction. A bare `role:\"user\"` filter overcounts human turns about 20x corpus-wide and about 120x on the carrier-heaviest session.",
           "instrument": "`rg -c '\"role\":\"user\"' <transcript>` (the carrier-inflated raw count) versus `csift search '' @<id> -t user.message -c` (the genuine count); counting rule: one per physical line for rg, one per record passing `is_genuine_user` for csift. Split the raw side by shape with `jq -r 'select(.type==\"user\") | (if (.message.content|type)==\"string\" then \"string\" elif ([.message.content[]?.type]|index(\"tool_result\")) then \"tool_result\" else \"text\" end)' <transcript> | sort | uniq -c`.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '\"role\":\"user\"' <transcript>",
             "scope": "the transcripts `<transcript>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "one per physical line for rg, one per record passing `is_genuine_user` for csift."
@@ -65150,7 +65151,7 @@
           "depends": "csift gates isMeta out of is_genuine_user before any content inspection (src/model/predicates.rs), so a meta pseudo-turn never opens a turn and never enters the user.message census - verified by the claim's check with the strongest available instrument, a raw sweep of every user.message record in the top-level corpus finding no isMeta among them. Recognized markers reparent to harness.resume.prompt / harness.schedule.wakeup / harness.*; the resume-prompt test is trim_start().starts_with(...) (src/model/markers.rs), which is what makes it survive the two longer Claude-Code-set variants. An isMeta record matching no known marker classifies EMPTY - not merely unlabeled but invisible to a scan (40 of 41 skill-preamble records returned no hit at all) - so a novel hook wrapper can never be mistaken for the operator.",
           "instrument": "`rg -c '\"isMeta\":true' <transcript>` against `csift search '' @<id> --count-by label` (no `user.message` key may cover them), and `rg -c 'Continue from where you left off\\.' ~/.claude/projects/*/*.jsonl` against `csift search 'Continue from where you left off' -t harness.resume.prompt -c`. Counting rule: one per raw line for rg, one per classified record for csift.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '\"isMeta\":true' <transcript>",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per raw line for rg, one per classified record for csift."
@@ -65251,7 +65252,7 @@
           "depends": "csift matches them by exact `==` (never `contains`, so a real message quoting the phrase stays genuine), excludes them from `is_genuine_user` and from turn opening, and classifies them `harness.interrupt.user` / `harness.interrupt.tool`. Because no occurrence carries extra prose, dropping them as boundaries loses zero user content; counting them inflates every turn index downstream of an interrupt.",
           "instrument": "`rg -oNI '\\[Request interrupted by user[^]]*\\]' ~/.claude/projects -g '*.jsonl' | sort | uniq -c` - expect exactly the two strings and no third variant - then `csift search 'Request interrupted by user' --count-by label`, where every hit must key under `harness.interrupt.*` and none under `user.message`. Counting rule: one per record whose content EQUALS the marker exactly (a mid-prose quote does not count).",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -oNI '\\[Request interrupted by user[^]]*\\]' ~/.claude/projects -g '*.jsonl' | sort | uniq -c",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per record whose content EQUALS the marker exactly (a mid-prose quote does not count)."
@@ -65979,7 +65980,7 @@
             "kind": "csift",
             "command": "csift search '' @<id> -t user.answer --format json | jq -r .line",
             "scope": "the transcripts `@<id>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
-            "rule": "AUQ tool_result carriers, split by the three signals."
+            "rule": "One observation per AUQ `tool_result` carrier, split by the three signals."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -66607,7 +66608,7 @@
           "depends": "csift never treats an approval as a user message or a turn boundary: it matches no rejection delimiter and, carrying no `answers` map and no AUQ marker, it is not an answered-AUQ boundary either, so `opens_turn` stays false and the human-turn count does not grow by one per approved plan.",
           "instrument": "`rg -c 'User has approved your plan' ~/.claude/projects -g '*.jsonl'` for the raw count, then confirm `csift search '' @<that session> -t user.message -c` does not grow by it. Counting rule: one per raw occurrence for rg, one per classified record for csift.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c 'User has approved your plan' ~/.claude/projects -g '*.jsonl'",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per raw occurrence for rg, one per classified record for csift."
@@ -66918,7 +66919,7 @@
           "depends": "csift folds the form into is_peer_message on CONTENT shape rather than on isMeta - alongside <teammate-message> and, since TURN-031, <cross-session-message>, whose close tag joins the section-boundary set for the same reason the other two are in it - and anchors it at a section boundary that accepts all three preambles the binary defines (PEER_MESSAGE_PREAMBLES, src/model/markers.rs - the same set B6 strips), so an isMeta agent-message still opens a turn and classifies agent.communication.inbox with the from attribute as the direction source. Keying peer detection off isMeta drops the form entirely; carrying only the colon preamble drops every mid-turn relay into the empty label vector - no turn, no leaf, no census row, no rendered show address, only show --raw - which is what csift through that change did to the 29 mid-turn records, fixed after that reading. Carrying the third, never-emitted form costs nothing and is the safe posture: recognising a preamble the binary defines but does not write cannot mislabel anything, while missing an emitted one is silent.",
           "instrument": "`rg -c '<agent-message ' ~/.claude/projects/*/*.jsonl`, then `csift search '<agent-message from=' --count-by label` and `--raw | jq -r .isMeta | sort | uniq -c`. Counting rule: one per record carrying the open tag at a section boundary.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '<agent-message ' ~/.claude/projects/*/*.jsonl",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per record carrying the open tag at a section boundary."
@@ -67262,7 +67263,7 @@
           "depends": "csift keeps it as a turn opener (a real delivered trigger) but reparents its label to `harness.notification.<kind>` and renders `[<kind> <task-id> <status>] <summary>` via `automation_label`, so machine pulses are neither counted as operator prose nor dumped as raw XML into a reconstructed turn.",
           "instrument": "`rg -c '<task-notification>' <transcript>` against `csift search '' @<id> --count-by label | rg harness.notification`. Counting rule: one per boundary-anchored notification SECTION (a batched record yields several) for csift, one per line for rg.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '<task-notification>' <transcript>",
             "scope": "the transcripts `<transcript>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "one per boundary-anchored notification SECTION (a batched record yields several) for csift, one per line for rg."
@@ -67364,7 +67365,7 @@
           "depends": "Because it is a plain non-`isMeta` string that matches no other marker, it reads as a genuine human turn unless explicitly excluded: csift treats it as a synthetic user marker (never genuine, never a turn opener), classifies it `harness.notification.subagent` and renders `[subagent stopped] ...`; the dual-arm predicate is required because the singular template has no leading count. 9 corpus specimens were previously read as `user.message`.",
           "instrument": "`rg -oNI 'background agents? (was|were) stopped by the user' ~/.claude/projects -g '*.jsonl' | sort | uniq -c` plus the singular `Background agent \"` form (both templates must be present for the dual arm to stay necessary), then `csift search 'stopped by the user' --count-by label`, where every hit keys under `harness.notification.subagent` and none under `user.message`. Counting rule: one per raw match for rg, one per classified record for csift.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -oNI 'background agents? (was|were) stopped by the user' ~/.claude/projects -g '*.jsonl' | sort | uniq -c",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per raw match for rg, one per classified record for csift."
@@ -67525,7 +67526,7 @@
           "depends": "csift gates `isCompactSummary` out of `is_genuine_user` before any content inspection, so a summary never opens a turn and its machine recap never enters the operator census; it stays a turn MEMBER classified `harness.compaction.summary`, which is what lets `verbatim` walk backwards THROUGH a compaction rather than stopping at it.",
           "instrument": "`rg -c '\"isCompactSummary\":true' <transcript>` against `csift stats @<id> --format json | jq .compactions`, and confirm `csift search '' @<id> --count-by label` keys them under `harness.compaction.summary`, never `user.message`. Counting rule: one per record carrying the flag.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '\"isCompactSummary\":true' <transcript>",
             "scope": "the transcripts `<transcript>` resolves to under `<claude-home>/projects`, subagent sidecars included unless the command passes `--no-subagents`",
             "rule": "one per record carrying the flag."
@@ -67610,7 +67611,7 @@
           "depends": "csift deliberately does NOT gate isSidechain out of is_genuine_user (src/model/predicates.rs), so list's per-subagent preview can treat the seed as the subagent's first user message - gating it would silently blank every subagent preview for zero real benefit - and the seed classifies agent.communication.inbox with a parent-to-self direction while the per-surface scan owns the subagent-versus-parent context. That holds for the 8153 ordinary lanes and fails on the 33 fork lanes: there the first user record is not the head, and on an Agent-tool fork it carries tool_result blocks beside its text so it is not a genuine user record at all. csift reports first_user null on 32 of the 33 fork lanes; the exception is the f-key lane, whose second record is a plain string user record and is reported as its first user message. Reading an Agent-tool fork lane back shows the fork head as a non-record line, the assistant copy as agent.communication.sent and the directive seed as agent.communication.inbox rendered from the Fork started template rather than from the directive text.",
           "instrument": "`head -1 <a subagent transcript> | jq -r '[.isSidechain, .message.role] | @tsv'` must print `true` then `user`, `rg -c '\"isSidechain\":true' <a top-level transcript>` must be 0, and `csift list @<agent-id> --format json | jq -r .first_user` must be non-empty. Counting rule: one seed per subagent transcript.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '\"isSidechain\":true' <a top-level transcript>",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
             "rule": "one seed per subagent transcript."
@@ -76436,7 +76437,7 @@
             "kind": "corpus",
             "command": "Count literal occurrences of the cross-session wrapper over the projects root, then count the records whose string content OPENS with the tag or a relay preamble within the first 400 characters.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "real = content is a string opening with the tag or a preamble inside that window; a mention anywhere else is prose."
+            "rule": "One observation per record: real when its string content opens with the tag or a relay preamble inside the first 400 characters, a mention anywhere else being prose."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -79789,7 +79790,7 @@
           "depends": "`Record::delivery_override` mirrors the three predicate arms in which the harness verdict differs from csift's per-leaf default, and a bare ROLE selector (`-t harness` / `-t user` / `-t agent`) keys on it PER RECORD, so `search -t harness` surfaces a `system`/`local_command` record although `harness.system.*` is an invisible leaf, and `-t agent` drops the API-error placeholder although `agent.message` is a visible one. The `search` candidate gate admits the key-only `\"subtype\"` line shape under a bare `harness` selector so such a record can be reached at all. If the harness moved the re-mint or widened `UWt`, a bare role would report as conversation something the model never received, or hide something it did.",
           "instrument": "Binary: `grep -abo 'function LP(' <executable>` and read 120 bytes at the returned offset; the same for `function UWt(`, `function zj(`, `function LV(`, `Jc=\"<synthetic>\"` and the loop literal `for(let nt of B){if(LP(nt))continue;`. Window negative: `grep -c local-command-stdout` over the whole executable and over bytes 165390000-166100000, counting rule one observation per byte match. Corpus: sum `rg -c '\"subtype\":\"local_command\"'` over the top-level transcripts under the projects root, counting rule one observation per record, and cross-check against `csift search \"\" -t harness.system.* --no-subagents --count-by label`.",
           "probe": {
-            "kind": "csift",
+            "kind": "corpus",
             "command": "rg -c '\"subtype\":\"local_command\"'",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
             "rule": "Corpus: sum `rg -c '\"subtype\":\"local_command\"'` over the top-level transcripts under the projects root, counting rule one observation per record, and cross-check against `csift search \"\" -t harness.system.* --no-subagents --count-by label`."

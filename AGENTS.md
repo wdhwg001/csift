@@ -569,10 +569,16 @@ state = {
   "probe":    { "kind": "bytes" | "corpus" | "csift" | "live" | "repo", "literal" | "command": "...",
                 "scope": "...", "rule": "..." },
                                     the MACHINE-READABLE twin of `instrument`, and it is derived from the INSTRUMENT and
-                                    from nothing beside it. A COMMAND is a command and it is never truncated: a cut at a
-                                    semicolon, a comma or a parenthesis names a DIFFERENT command than the one that ran,
-                                    and a tool name carrying only flags is a noun in a sentence rather than a command at
-                                    all. `bytes` is for an instrument that reads the BUILD, and its `rule` says what such a
+                                    from nothing beside it. `command` is a COMMAND or a PROCEDURE a stranger can execute,
+                                    in that order of preference: a command line where the instrument gives one, and where
+                                    it gives steps instead (`For each compact_boundary, join ...`) the steps, because a
+                                    procedure a reader can follow is worth more than a command line invented to look
+                                    machine-readable. Whichever it is, it is never truncated: a cut at a semicolon, a
+                                    comma or a parenthesis names a DIFFERENT command than the one that ran, and a tool
+                                    name carrying only flags is a noun in a sentence rather than a command at all. The
+                                    KIND is decided by the ARTEFACT and never by the command word, so an instrument that
+                                    walks a projects root with rg or jq is `corpus` however it is spelled, and one that
+                                    reads the build with `strings` is `bytes`. `bytes` is for an instrument that reads the BUILD, and its `rule` says what such a
                                     probe is for: RE-LOCATION, never measurement - so where an instrument reads bytes AND
                                     censuses a corpus, the census wins, because gate rule 12 re-reads every producer hop
                                     already and the census is the half a stranger re-runs by hand. `repo` re-verifies what
@@ -583,8 +589,11 @@ state = {
                                     lands on `corpus` with its scope saying so. A `scope` that the instrument does not
                                     state reads `not stated: <what the instrument does say>` rather than a template - a
                                     field asserting a population nobody named is the defect, and the fixed prefix is
-                                    countable. A `rule` is a COUNTING rule: what ONE observation is. The instrument's own
-                                    declared `Counting rule:` sentence is taken verbatim where it has one
+                                    countable. A `rule` is a COUNTING rule: what ONE observation is, and it says so in
+                                    a countable noun rather than leaving a reader to infer one - `two invocations, two
+                                    outcomes.` names nothing that can be counted twice. The instrument's own declared
+                                    `Counting rule:` sentence is taken verbatim where it has one, and where that sentence
+                                    names no unit the unit is read off the instrument and stated in front of it
   "producer_trace": "complete" | "partial" | "none" | "upstream",
                                     the PRODUCER leg: "complete" = three hops read in the shipped binary as verbatim
                                     excerpts at byte offsets - the TRIGGER (the entry that starts the path), the GATE (the
