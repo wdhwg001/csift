@@ -4,10 +4,10 @@
 //! ## Why a writer at all
 //!
 //! `println!` writes through a process-wide `LineWriter`: one `write(2)` per line, plus a
-//! backward scan for the last newline on every call. A `search` that prints 493k text rows
-//! pays 493k syscalls - measured on the section 7 landmark transcript as 0.45 s of the
-//! 0.59 s of CPU the whole text render phase costs. One `BufWriter` over a held
-//! `StdoutLock` turns that into one syscall per buffer.
+//! backward scan for the last newline on every call. `search 'the'` over the section 7
+//! landmark transcript prints 297,976 text rows and so pays 297,976 syscalls - measured as
+//! 0.45 s of the 0.59 s of CPU its whole text render phase costs. One `BufWriter` over a
+//! held `StdoutLock` turns that into one syscall per buffer.
 //!
 //! ## Why the lock is HELD, and what that obliges a caller to do
 //!

@@ -803,8 +803,9 @@ surface change bumps the PATCH.
 - **The render was the other serial half of a search.** Everything the scan does in
   parallel was spent before the first output byte: on a 1.4 GB session a whole-scope
   `--format json` dump cost 1.94 s of CPU on ONE thread while nine rayon workers waited, and
-  a wide-match text search paid 0.45 s of that phase's 0.59 s inside `println!`, which is one
-  `write(2)` and one backward newline scan per row - 493k of them. Two changes. Every
+  a wide-match text search (`search 'the'`) paid 0.45 s of that phase's 0.59 s inside
+  `println!`, which is one `write(2)` and one backward newline scan per row - 297,976 of
+  them. Two changes. Every
   row-dumping surface (`search` text, JSON and `--raw`, both of `show`'s, `files`, `agents`,
   `image`, and both of `verbatim`'s - its documented `--subagents` span is 125,269 text rows
   on that session) now writes through one buffered stdout, one syscall per megabyte. And `search`
