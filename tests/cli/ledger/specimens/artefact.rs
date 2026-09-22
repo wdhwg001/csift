@@ -68,6 +68,37 @@ fn ledger_gate_rule_20_reads_an_artefact_named_with_a_word_between() {
     }
 }
 
+/// The two artefacts the table was missing, and both are the commonest instruments in the
+/// file: a csift RUN pointed at something reads transcripts off disk, and a count over the
+/// WHOLE BUILD is the build arm under another spelling. Each moved a receipt, which is the
+/// only way such a miss shows - the newest measurement at the verified build was passed
+/// over for an older one.
+#[test]
+fn ledger_gate_rule_20_reads_a_csift_run_and_a_whole_build_count() {
+    for instrument in [
+        "csift, read-only: csift files <project> --by timeline --format json \
+         --no-subagents over one project's top-level sessions, tallying the rows.",
+        "Read the eleven observed subtypes against csift's own subtype table \
+         (src/model/classify/system.rs), then re-ran the whole-build count of the \
+         subtype literals.",
+        "csift show @<session> --line 4 --raw, then the same record under --format json.",
+        "csift verbatim <transcript>.jsonl --budget 40000 --format json.",
+    ] {
+        assert!(
+            artefact::names_an_artefact(instrument),
+            "the artefact table must read this as a measurement: {instrument}"
+        );
+    }
+    // The TARGET is what makes a run a measurement: a subcommand named inside a sentence
+    // about what csift does touched nothing.
+    assert!(
+        !artefact::names_an_artefact(
+            "Re-read the sentence describing what csift recover reports, against src/."
+        ),
+        "a command word in a sentence is a noun, not a run"
+    );
+}
+
 /// Two sentences that NAME a real artefact and are still text passes: one declares itself
 /// one in its opening clause, and one touched nothing but a fixture somebody here wrote.
 #[test]

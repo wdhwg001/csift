@@ -14,6 +14,15 @@
 //! spelled with rather than a new kind of artefact - `shipped 2.1.258 build` names what
 //! `shipped build` names, and a pattern demanding the two words be adjacent reads it as
 //! prose. That is why the build and live arms carry one token of slack.
+//!
+//! TWO ARTEFACTS WERE MISSING FROM THE TABLE, and both are the commonest instruments in the
+//! file. A csift INVOCATION reads transcripts off disk, so `csift files <project> --by
+//! timeline` is a measurement - but the table only ever reached one through the `@` target
+//! shapes, so a run pointed at a project directory or a named transcript read as prose. And
+//! a count over the WHOLE BUILD is the build arm under another spelling: `the whole-build
+//! count of ...` says what `over the shipped binary` says. Both arms moved a receipt, which
+//! is the only way the miss shows: the newest measurement at the verified build was passed
+//! over for an older one.
 
 use serde_json::Value;
 
@@ -21,12 +30,24 @@ use serde_json::Value;
 /// stop, so it can never reach across a sentence into an artefact the check never touched.
 const GAP: &str = r"(?:[\w.+/-]+ )?";
 
+/// A csift INVOCATION, pointed at something. csift reads transcripts off disk, so the run is
+/// a measurement - but the TARGET is what makes it one: `csift search` inside a sentence
+/// about what the command does is a noun, while `csift files <project> --by timeline` walked
+/// a project directory. So the arm is a subcommand plus a target shape within the same
+/// clause - an `@` token, an angle-bracket placeholder, or a named transcript - and the
+/// window may not carry a full stop, exactly as `GAP` may not.
+const CSIFT_RUN: &str = concat!(
+    r"\bcsift (?:list|search|show|stats|agents|whoami|files|recover|plan|verbatim|image",
+    r"|status|wait|send|msg|ack|deliver)\b",
+    r"[^.\n]{0,60}(?:@[\w:.-]+|<[a-z][a-z-]*>|[\w/-]+\.jsonl)",
+);
+
 fn outside() -> &'static regex::Regex {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
         let pattern = [
             // the shipped build and its bytes
-            r"\bbinar(?:y|ies)\b|\bexecutable\b|whole-executable",
+            r"\bbinar(?:y|ies)\b|\bexecutable\b|whole-executable|\bwhole-build\b",
             &format!(
                 r"(?:shipped|cached|historical|native|verified|current|win32|windows) {GAP}builds?\b"
             ),
@@ -40,8 +61,9 @@ fn outside() -> &'static regex::Regex {
             // the harness's own state, spelled as a path or as English
             r"<config-home>|<claude-home>|\bsessions/|\btasks/|\bregistry\b|\bmeta\.json\b",
             r"\bsessions director(?:y|ies)\b|\btasks director(?:y|ies)\b",
-            // a session target handed to csift
+            // a session target handed to csift, and a csift run pointed at any target
             r"@trap:|@main\b|@[0-9a-f]{8}",
+            CSIFT_RUN,
             // a live trial, including one named by its platform rather than by the word
             &format!(
                 r"\blive {GAP}(?:trial|probe|session|arm|run|poll|pair|A/B|check|half|root|corpus|lane)\b"
@@ -83,6 +105,7 @@ fn real_artefact() -> &'static regex::Regex {
     RE.get_or_init(|| {
         let pattern = [
             r"@\d{6,}|\bcorpus\b|projects roots?\b|\bbinar(?:y|ies)\b|\bcensus|\bexecutable\b",
+            r"\bwhole-build\b",
             &format!(r"(?:shipped|cached|historical|native|verified) {GAP}builds?\b"),
             r"~/\.claude",
             r"\bClaude Code [12]\.\d{1,3}\.\d{1,3} (?:file|build|binary|executable|artifact)\b",
