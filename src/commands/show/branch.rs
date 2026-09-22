@@ -22,6 +22,18 @@
 //! SessionStart hook is parented to that hook's `attachment` record - so the uuid is
 //! located over the structural spine rows too ([`crate::parse::spine_record`]), and the
 //! fork prints the parent's line AND type.
+//!
+//! This is the one `show` file that PRINTS and does not deny the print lints, and the
+//! reason is structural rather than an omission: `run_branch_points` is reached only
+//! through the `--branch-points` early return in `show/run.rs`, which sits ABOVE that
+//! file's only [`crate::text::Out`] and above every call into `show/render.rs`. So this
+//! census prints row by row like `list` and `stats` do, and none of its fourteen `println!`
+//! can land ahead of a buffer, because on this path no buffer is ever built. If a future
+//! change moves an `Out` above that return, or gives `run_branch_points` a writer of its
+//! own, add the deny attribute that every other `show` file carries and route these prints
+//! through the writer - the rule in `text::out` then applies here too. (Spelling that
+//! attribute out here would put its literal in a file that does not carry it, and the
+//! guarded set is enumerated by grepping for exactly that literal.)
 
 use super::*;
 use crate::model::{Block, Chain, CrossingBudget, Kind, Record, Survival};
