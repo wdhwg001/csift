@@ -279,7 +279,7 @@ Every range carries one receipt, and a receipt has to have measured something ou
 |---|---:|---:|---|
 | end-to-end | 585 | 79.2% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
 | &nbsp;&nbsp;of which chain traced | 585 | 79.2% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
-| specimen-only | 47 | 6.4% | observed on disk or live; the writer not traced (or traced only in part) (24 of them with a partly traced writer) |
+| specimen-only | 47 | 6.4% | observed on disk or live; the writer not traced (or traced only in part) (21 of them with a partly traced writer) |
 | producer-only | 79 | 10.7% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 13 | 1.8% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
@@ -288,7 +288,7 @@ Every range carries one receipt, and a receipt has to have measured something ou
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
 
-`anchors byte-exact at Claude Code 2.1.258: 7,078 of 7,631 (elided 234, absent 38, prefix-only 80, read in another build 201), closed-state anchors 0, not checked`
+`anchors byte-exact at Claude Code 2.1.258: 7,078 of 7,625 (elided 230, absent 31, prefix-only 81, read in another build 205), closed-state anchors 0, not checked`
 
 The five counts partition the total. An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A hop read in an artifact the badge does not name carries that build and is compared against THAT one, which is why it is disclosed as a count rather than a verdict - whether a given machine holds those artifacts is a property of the machine. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->

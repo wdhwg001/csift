@@ -4063,10 +4063,8 @@
             },
             {
               "site": "corpus control: scheduledTaskId is never a real key on disk",
-              "offset": 0,
               "excerpt": "(census, not a binary site) 111 lines under the projects root contain the needle scheduledTaskId; parsed recursively, 0 of them carry it as a JSON key - every occurrence is prose inside a tool_result.",
-              "verdict": "Closes the consequence: even the fire side carries no joinable id in a transcript, so no id join is available to a reader at any point in the path.",
-              "anchor_status": "absent"
+              "verdict": "Closes the consequence: even the fire side carries no joinable id in a transcript, so no id join is available to a reader at any point in the path."
             }
           ],
           "verified": {
@@ -22835,7 +22833,8 @@
             "enumeration[5] excerpt occurs at no offset in the 2.1.258 artifact and 0 leading byte(s) match at the recorded offset; re-locate by its literal or by the enclosing function name in that artifact",
             "An earlier reading this claim's text was corrected against: (1) read time: Ue=!je&&Ne<ke?lfe+`${r}: showing lines 1-${Ne} of ${ke} total ...`:lfe+`${r}: showing the first ...`, carried to the transcript as an attachment {type:\"read_truncation_notice\", banner, toolUseID}. CORPUS: 527 tool_result-carried banner occurrences. The remaining 23 pathless + 7 path-bearing occurrences are EMBEDDED mid-content at versions 2.1.179-2.1.258 - Read echoes of files that quote a banner, not injected copies. The reconstruction sentence from qes appears in ZERO corpus records. csift corroborates the carrier migration independently: 'Truncated: PARTIAL view' -t agent.tool.result gives 544 records spanning 2.1.150-2.1.202 plus 19 stragglers at 2.1.231/2.1.258, while -t harness.meta.attachment gives 184 records spanning 2.1.206-2.1.258 (one outlier at 2.1.177). Attachment side: 183 banners, 183 path-bearing, 0 pathless. The claim's warning still has teeth in the opposite direction: a detector written against the attachment-only, path-bearing form would silently see nothing on any transcript at version <= 2.1.202, where 504 of the corpus's 690 genuine banner emissions live. code-site note: src/recover/carriers.rs 193-204 confirmed verbatim (the PartialRead else-arm). csift parses no banner text on any surface, so this drift changes no csift behavior. Counting rule: One observation per banner occurrence, classified on two axes: carrier (attachment.banner vs a tool_result content string) and position (HEAD = the text before the '[Truncated:' bracket is empty or exactly '<system-reminder>'; EMBEDDED otherwise). Path-bearing = the text after the U+2014 separator does not begin 'showing' or 'this view is incomplete'. Whole corpus.",
             "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced to closure in the 2.1.258 binary...): At 2.1.204 the banner is carried INSIDE the rendered tool_result: the Read tool builds it PATHLESS (pHr+`showing lines 1-N of T total ...`), stashes it in a WeakMap, and mapToolResultToToolResultBlockParam case \"text\" prepends `<system-reminder>${n}</sy The floor is Claude Code 2.1.205. The floor for FH-028 is Claude Code 2.1.205 (the read_truncation_notice attachment carrier; last absent 2.1.204, adjacent). The floor for FH-045 is Claude Code 2.1.145, a build floor replacing a corpus floor of 2.1.150: truncatedByTokenCap is absent at 2.1.144 and present at 2.1.145, which are adjacent. A text instruction addressed to FH-045 was carried in this residue entry and is cut after three characters, so it is no longer legible; it is not reconstructed, and FH-045's own state already opens at 2.1.145. Counting rule: a build carries the fact when the literal is present AND the surrounding code read confirms the behavior; a literal dates itself, not the behavior, so a floor is stated as a floor",
-            "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced to closure in the 2.1.258 binary...): The carrier migration and the successive-not-concurrent finding both stand and are now attributed at writer level: 2.1.205 is the single build that adds the attachment writer and removes the tool_result injection, with 2.1.204 adjacent and absent, re-counted on the cached ladder with both buildDates fetched. Counting rule: every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted"
+            "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced to closure in the 2.1.258 binary...): The carrier migration and the successive-not-concurrent finding both stand and are now attributed at writer level: 2.1.205 is the single build that adds the attachment writer and removes the tool_result injection, with 2.1.204 adjacent and absent, re-counted on the cached ladder with both buildDates fetched. Counting rule: every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
+            "enumeration[8] and enumeration[9] state what the 2.1.204 and 2.1.205 builds carry and quote no run of their bytes, so neither anchors a byte location; the offsets they named addressed those builds while the comparison read the verified one. Re-read the two builds at the offsets the verdicts name to turn either into a byte anchor."
           ],
           "producer_chain": [
             {
@@ -22913,13 +22912,11 @@
             },
             {
               "site": "boundary build 2.1.204 - the predecessor carrier, read whole",
-              "offset": 221262336,
               "excerpt": "[2.1.204] banner pHr at 212823260; constructions 221262336/221262588 PATHLESS (pHr+`showing lines 1-${I} of ${v} total ...`); mapper injects r=(n?`<system-reminder>${n}</system-reminder>`:\"\")+... at 221273791; read_truncation_notice 0 hits.",
               "verdict": "Confirms the predecessor form was pathless AND tool_result-embedded, and that the attachment did not exist at 2.1.204."
             },
             {
               "site": "boundary build 2.1.205 - the whole switch in one release",
-              "offset": 221765382,
               "excerpt": "[2.1.205] constructions gain the path (mUe+`${r}: showing lines 1-${k} of ${E} total ...`, 221765382/221765640); attachment writer at 221386330; qes reconstruction sentence ALREADY at 224400100; sole surviving <system-reminder> template 214930629.",
               "verdict": "The writers never coexist - one build deletes the tool_result injection and adds the attachment, confirming 'successive, not concurrent' at writer level. It also shows the reconstruction sentence is part of THIS change, not a later 2.1.258 addition."
             }
@@ -24396,7 +24393,8 @@
             "An earlier reading, superseded by the receipt now standing on this state (Two censuses over every transcript under the projects root, read-only): 174 truncated echoes across 25 Claude Code versions, earliest buckets 2.1.150 (2), 2.1.156 (2), 2.1.159 (10), 2.1.170 (3), 2.1.177 (19) - reproducing the claim's first three exactly. 183 notice-attachment records across 17 versions, earliest bucket 2.1.206 (9) - reproducing the claim's first bucket exactly. 2.1.206 minus 2.1.150 is 56 patch releases. csift code site src/recover/carriers.rs:176-181 matches the claimed snippet verbatim. Counting rule: One observation per echo (a record whose `toolUseResult.file` object contains the key `truncatedByTokenCap`) and one per notice record (a record whose `attachment.type` equals `read_truncation_notice`), each bucketed by the record's own top-level `version` string; the earliest non-empty bucket is the first-seen version.",
             "An earlier reading, superseded by the receipt now standing on this state (Two censuses over every transcript under the projects root, read-only): none producer trace: no hop located.  specimen: 179 truncated echoes across 27 versions, earliest buckets 2.1.150 (2), 2.1.156 (2), 2.1.159 (10), 2.1.170 (3), 2.1.177 (19) - the claim's first three reproduce exactly. 188 notice records across 18 versions, earliest 2.1.206 (9) - reproduces exactly. Every quoted bucket reproduces on a fresh census, but no code can witness an ordering of releases and only three adjacent builds exist locally; the census also shows the claim's operational conclusion needs strengthening, since the field is absent (not merely younger) on 513 truncated reads whose records carry no toolUseResult. Counting rule: three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (none + observed = specimen-only); One observation per carrier record bucketed by that record's own version string; the earliest non-empty bucket is the first-seen version, which is a floor bounded by the builds this machine ran. Deduped by (transcript basename, line) where noted; the version buckets are on the raw records.",
             "An earlier reading, superseded by the receipt now standing on this state (Two censuses over every transcript under the projects root, read-only): Both binaries were sha256-verified against their per-version manifests, and 2.1.203/2.1.202/2.1.191 were also checked absent, so the boundary is not an artifact of one bad download. At 2.1.204 the banner is carried INSIDE the rendered tool_result: the Read tool builds it PATHLESS (pHr+`showing lines 1-N of T total ...`), stashes it in a WeakMap, and mapToolResultToToolResultBlockParam case \"text\" prepends `<system-reminder>${n}</sy The floor moves from Claude Code 2.1.150 to Claude Code 2.1.145. The floor for FH-028 is Claude Code 2.1.205 (the read_truncation_notice attachment carrier; last absent 2.1.204, adjacent). The floor for FH-045 is Claude Code 2.1.145, a build floor replacing a corpus floor of 2.1.150: truncatedByTokenCap is absent at 2.1.144 and present at 2.1.145, which are adjacent. A text instruction addressed to this claim was carried in this residue entry and is cut after three characters, so it is no longer legible; the same fragment is carried and equally cut in FH-028's residue, so nothing reconstructs it, and this state already opens at 2.1.145. Counting rule: a build carries the fact when the literal is present AND the surrounding code read confirms the behavior; a literal dates itself, not the behavior, so a floor is stated as a floor",
-            "An earlier reading, superseded by the receipt now standing on this state (Two censuses over every transcript under the projects root, read-only): The historical-build bisection replaces them: 2.1.145 and 2.1.205, each pinned against an adjacent absent predecessor, 60 patch numbers and 49 released versions apart, with both buildDates fetched and the 49 counted off the release index. Counting rule: every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted"
+            "An earlier reading, superseded by the receipt now standing on this state (Two censuses over every transcript under the projects root, read-only): The historical-build bisection replaces them: 2.1.145 and 2.1.205, each pinned against an adjacent absent predecessor, 60 patch numbers and 49 released versions apart, with both buildDates fetched and the 49 counted off the release index. Counting rule: every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
+            "enumeration[4] is read in Claude Code 2.1.204 rather than in the verified build, and the excerpt's head matches at its offset there while the tail does not. Re-read 2.1.204 around 221273652 and re-cut the excerpt to the run that decodes cleanly."
           ],
           "producer_chain": [
             {
@@ -24477,7 +24475,8 @@
               "offset": 221273652,
               "excerpt": "MRd.get(e);if(n!==void 0){if(nzr.size>=DAy){let o=nzr.keys().next().value;if(o!==void 0)nzr.delete(o)}nzr.set(t,n)}else n=nzr.get(t);r=(n?`<system-reminder>${n}</system-reminder>..`:\"\")+PAy(e)+HAy(e.file)}else r=e.file.totalLines===0?\"<system-reminder>Warning: the file exists but the contents are em",
               "verdict": "In the adjacent earlier build the tool-result mapper prepends the stashed banner to the rendered text as a system-reminder rather than pushing an attachment; the byte string read_truncation_notice occurs 0 times in this build and in every cached earlier build against 19 at 2.1.205. Both boundary builds match their manifest checksum and size.",
-              "anchor_status": "absent"
+              "anchor_status": "prefix-only",
+              "build": "2.1.204"
             }
           ],
           "verified": {
@@ -25744,10 +25743,8 @@
           "enumeration": [
             {
               "site": "whole-binary count of the byte string type:\"url\"",
-              "offset": 0,
               "excerpt": "0 occurrences of type:\"url\" (and 0 of \"type\":\"url\" and of type:'url') in the whole 2.1.258 executable",
-              "verdict": "No url-shaped source object is constructed anywhere in the binary.",
-              "anchor_status": "absent"
+              "verdict": "No url-shaped source object is constructed anywhere in the binary."
             },
             {
               "site": "x(\"url\") occurrence 1/6 - marketplace source schema",
@@ -27000,13 +26997,13 @@
               "build": "2.1.240"
             },
             {
-              "site": "2.1.240: constant-table entry",
+              "site": "2.1.258: the property name inside the destructure-error message",
               "offset": 77312537,
               "excerpt": "firstPage",
-              "verdict": "Occurrence 4 of 12. A length-prefixed string-pool entry: the nine bytes at this offset are followed by 23 padding bytes and then the entry lastPage at 93308192, with no code on either side; not a result member."
+              "verdict": "Occurrence 4 of 12 in the verified build. The nine bytes at this offset are the property name inside the destructure message enumeration[7] quotes, which starts 29 bytes earlier; it is a message, not a result member."
             },
             {
-              "site": "2.1.240: destructure-error message",
+              "site": "2.1.258: destructure-error message",
               "offset": 77312508,
               "excerpt": "Cannot destructure property 'firstPage' from null or undefined value",
               "verdict": "Occurrence 5 of 12. An error string naming the property; not a result member."
@@ -27365,10 +27362,8 @@
             },
             {
               "site": "version ladder: the page-image arm and the strip are ABSENT at 2.1.240",
-              "offset": 0,
               "excerpt": "whole-executable byte counts at 2.1.240: 'could not be processed as an image' 0, 'type!==\"parts\"||e.pages===void 0' 0, 'firstPage:A().optional()' 0",
-              "verdict": "At 2.1.240 the mapper cannot emit page image blocks and there is no pages strip, so a parts tool_result content is the plain string - the older shape the corpus shows.",
-              "anchor_status": "absent"
+              "verdict": "At 2.1.240 the mapper cannot emit page image blocks and there is no pages strip, so a parts tool_result content is the plain string - the older shape the corpus shows."
             },
             {
               "site": "version ladder: both are PRESENT at 2.1.243",
@@ -27379,10 +27374,8 @@
             },
             {
               "site": "published versions between the two cached builds",
-              "offset": 0,
               "excerpt": "2.1.241 and 2.1.242 are published but not cached here",
-              "verdict": "Bounds the change to (2.1.240, 2.1.243]; adjacency needs those two builds.",
-              "anchor_status": "absent"
+              "verdict": "Bounds the change to (2.1.240, 2.1.243]; adjacency needs those two builds."
             }
           ],
           "verified": {
@@ -69808,7 +69801,8 @@
             "enumeration[31] excerpt occurs at no offset in the 2.1.258 artifact and 0 leading byte(s) match at the recorded offset; re-locate by its literal or by the enclosing function name in that artifact",
             "enumeration[32] excerpt occurs at no offset in the 2.1.258-win32-arm64 artifact and 0 leading byte(s) match at the recorded offset; re-locate by its literal or by the enclosing function name in that artifact",
             "enumeration[33] excerpt occurs at no offset in the 2.1.258 artifact and 0 leading byte(s) match at the recorded offset; re-locate by its literal or by the enclosing function name in that artifact",
-            "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced to closure in the 2.1.258 binary...): The literal 'darwin' is the build-inlined platform constant: this build has 0 bare process.platform and 0 bare process.arch occurrences in code against 836 process.env. occurrences, while two globalThis.process.platform member expressions survive - the signature of a targeted build-time define on the bare identifier only. one value per row file; one branch per platform in the producer; the define is established by counting bare vs globalThis-qualified process.platform occurrences This does not break csift, which compares only the head before ':' (local_pid_domain plus the split in src/live/registry.rs 130-135), but the module doc and the SKILL wording should say so. All three csift code sites match verbatim (src/live/registry.rs 105-118 and 130-135, src/live/verdict.rs 205-212)."
+            "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced to closure in the 2.1.258 binary...): The literal 'darwin' is the build-inlined platform constant: this build has 0 bare process.platform and 0 bare process.arch occurrences in code against 836 process.env. occurrences, while two globalThis.process.platform member expressions survive - the signature of a targeted build-time define on the bare identifier only. one value per row file; one branch per platform in the producer; the define is established by counting bare vs globalThis-qualified process.platform occurrences This does not break csift, which compares only the head before ':' (local_pid_domain plus the split in src/live/registry.rs 130-135), but the module doc and the SKILL wording should say so. All three csift code sites match verbatim (src/live/registry.rs 105-118 and 130-135, src/live/verdict.rs 205-212).",
+            "producer_chain[6] and producer_chain[11] and enumeration[33] are read in the linux-arm64 artifact of Claude Code 2.1.258; that artifact is not in the build cache this gate reads, so the three are counted rather than compared. Re-fetch the linux-arm64 artifact of the verified version and re-read each offset to compare them."
           ],
           "producer_chain": [
             {
@@ -69861,7 +69855,7 @@
               "offset": 178366535,
               "excerpt": "function HK(){return mie.pidDomain??=(async()=>{let t=M();if(t===\"windows\")return`linux:${e().toLowerCase()}`;if(t!==\"linux\"&&t!==\"wsl\")return\"linux\";let[n,r]=await Promise.all([u(\"/etc/machine-id\",\"utf8\").then((i)=>i.trim(),()=>\"\"),s(\"/proc/self/ns/pid\").catch(()=>\"\")]);return`linux:${n}:${r}`})().catch((t)=>{throw mie.pidDomain=void 0,t}),mie.pidDomain}",
               "note": "Closes the claim linux spelling by DIRECT READ - the leg an earlier reading said was unread in any artifact cached here. linux-arm64 was fetched for the same version; sha256 43dc490af55262edcb3e9b1cb315de22cc09ccb08bd52a4c39bc5eabaa63100f and size 215014736 both match the manifest. The machine-id is trimmed and either read defaults to the empty string on failure.",
-              "anchor_status": "absent"
+              "build": "2.1.258-linux-arm64"
             },
             {
               "role": "gate",
@@ -69887,16 +69881,18 @@
             {
               "role": "writer",
               "name": "the twin row literal in the win32-arm64 artifact: pidDomain:await GV()",
-              "offset": 174704414,
+              "offset": 174704335,
               "excerpt": "peerProtocol:P9t,peerFeatures:ivr(),kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await GV(),...k&&{tmux:k},...{messagingSocketPath:$S.CLAUDE_CODE_MESSAGING_SOCKET},...{name:P?.name,nameSource:P?.source===\"derived\"?\"derived\":void 0,nameSince:Date.now(),logPath:a.CLAUDE_CODE_SESSION_LOG,agent:a.CLAUDE_CODE_AGENT,jobId:o===\"bg\"&&a.CLAUDE_JOB_DIR?nce(a.CLAUDE_JOB_DIR):void 0,spare:d?!0:void 0}});if(n){let U=await n.write(kl(),I,{publishDiscipline:\"inPlace\"});",
-              "note": "The Windows row writer, stamping the win32 producer value into the same object literal and writing it the same two ways. Same-version cross-artifact receipt for the windows arm."
+              "note": "The Windows row writer, stamping the win32 producer value into the same object literal and writing it the same two ways. Same-version cross-artifact receipt for the windows arm.",
+              "build": "2.1.258-win32-arm64"
             },
             {
               "role": "writer",
               "name": "the twin row literal in the linux-arm64 artifact: pidDomain:await HK()",
               "offset": 179048582,
               "excerpt": "peerProtocol:k9t,peerFeatures:owr(),kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await HK(),...k&&{tmux:k},...{messagingSocketPath:LS.CLAUDE_CODE_MESSAGING_SOCKET},...{name:P?.name,nameSource:P?.source===\"derived\"?\"derived\":void 0,nameSince:Date.now(),logPath:a.CLAUDE_CODE_SESSION_LOG,agent:a.CLAUDE_CODE_AGENT,jobId:o===\"bg\"&&a.CLAUDE_JOB_DIR?oce(a.CLAUDE_JOB_DIR):void 0,spare:d?!0:void 0}});",
-              "note": "The Linux row writer. With this hop the value that lands in a row is read for every platform the harness ships, at one version."
+              "note": "The Linux row writer. With this hop the value that lands in a row is read for every platform the harness ships, at one version.",
+              "build": "2.1.258-linux-arm64"
             }
           ],
           "enumeration": [
@@ -70109,7 +70105,7 @@
               "offset": 179048582,
               "excerpt": "96221632 178366535 178366757 178367054 178367079 179038099 179038899 179039270 179039609 179043887 179048582 179052956 179052984 179842208 179842231 179842243 179843510 179843532 183373537 183373560",
               "verdict": "Same census with THE row writer at 179048582. So on none of the three platforms is there a second writer of the field, and the three spellings differ only in the folded token.",
-              "anchor_status": "absent"
+              "build": "2.1.258-linux-arm64"
             }
           ],
           "verified": {
@@ -81017,7 +81013,7 @@
             "scope": "not stated: the instrument names no population",
             "rule": "Enumerate every field read off a user record on the load path in the shipped executable and classify each as identity, ordering, content or supersession."
           },
-          "producer_trace": "partial",
+          "producer_trace": "none",
           "specimen": "observed",
           "attribution": "specimen-only",
           "open_legs": [
@@ -81112,7 +81108,7 @@
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "Census every `type:\"last-prompt\"` line under the projects root and count how many carry a `uuid` key and how many carry a `leafUuid` key."
           },
-          "producer_trace": "partial",
+          "producer_trace": "none",
           "specimen": "observed",
           "attribution": "specimen-only",
           "open_legs": [
@@ -87435,7 +87431,7 @@
             "scope": "every `*.jsonl` under EACH of the two projects roots, counted and reported per root",
             "rule": "Over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` and truthy `isMeta`, and split them by whether `message.content` yields any `text` (a string content, or an array holding at least one `{type:\"text\"}` block)."
           },
-          "producer_trace": "partial",
+          "producer_trace": "none",
           "specimen": "observed",
           "attribution": "specimen-only",
           "open_legs": [

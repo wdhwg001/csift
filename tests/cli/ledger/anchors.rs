@@ -72,6 +72,10 @@ pub(crate) enum Anchor {
     /// An excerpt carrying a run of four or more dots: a lossy render of bytes that are
     /// not printable, which no build can ever equal.
     DotRun,
+    /// The offset sits at or past the END of the compared build. That is an error about the
+    /// LOCATOR rather than about the excerpt, so it is refused before the eliding and the
+    /// marks - both of which would otherwise let an offset no file can hold pass as skipped.
+    PastEnd { len: usize },
     /// The anchor rotted. `at` is the excerpt byte where the build stops agreeing.
     Drifted { at: usize },
 }
@@ -89,6 +93,13 @@ pub(crate) fn classify(build: &[u8], offset: usize, excerpt: &str, status: Optio
     // otherwise count it skipped for carrying the `...` its own damage produced.
     if dot_run(excerpt) {
         return Anchor::DotRun;
+    }
+    // Checked THIRD, and before the eliding and the marks: an offset at or past the end of
+    // the build addresses no byte of it, which is a defect in the LOCATOR. Three enumeration
+    // offsets addressed a predecessor build and were compared against the verified one,
+    // where the ellipsis arm counted them skipped rather than naming the mismatch.
+    if offset >= build.len() {
+        return Anchor::PastEnd { len: build.len() };
     }
     let avail = build.get(offset..).unwrap_or(&[]);
     for want in readings(excerpt) {
@@ -359,7 +370,93 @@ fn check_marks(build: &[u8], sites: &[Site<'_>], verified: &str, failures: &mut 
 
 /// Classify every open state's anchor, push a failure for each one that rotted, print the
 /// tally.
+/// A build NAME is a Claude Code version, optionally an artifact of it.
+///
+/// `9.9.9` is a version triple and is not a Claude Code version: every published one carries
+/// a major of 1 or 2, which the prose law already reads. Without the shape a hop could name
+/// any string, no host would hold it, the rule would count it `not cached`, and a rotted
+/// anchor would pass by typing a build that never existed.
+fn build_name_ok(name: &str) -> bool {
+    let (version, artifact) = match name.split_once('-') {
+        Some((v, rest)) => (v, Some(rest)),
+        None => (name, None),
+    };
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() != 3 || !matches!(parts[0], "1" | "2") {
+        return false;
+    }
+    if !parts
+        .iter()
+        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return false;
+    }
+    match artifact {
+        None => true,
+        // `<platform>-<arch>`, exactly two lowercase words.
+        Some(rest) => {
+            let words: Vec<&str> = rest.split('-').collect();
+            words.len() == 2
+                && words.iter().all(|w| {
+                    !w.is_empty()
+                        && w.bytes()
+                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+                })
+        }
+    }
+}
+
+/// The SHAPE of every hop of every open state, checked on any host - it reads no build, so a
+/// container answers it exactly as this one does.
+///
+/// Two defects it names, both ways a hop could carry a mark or a build that decides nothing:
+/// a build name no Claude Code version could be, and a MARK with no locator. A mark is a
+/// claim about a byte location, and `offset` 0 is this file's placeholder for having none -
+/// four census notes carried one and asserted their excerpt was nowhere in a build they had
+/// never addressed.
+pub(crate) fn hop_shapes(claims: &[Value], failures: &mut Vec<String>) {
+    for c in claims {
+        let id = c["id"].as_str().unwrap_or("");
+        for state in super::states(c) {
+            if !state["to"].is_null() {
+                continue;
+            }
+            for field in ["producer_chain", "enumeration"] {
+                let hops = state[field].as_array().map(Vec::as_slice).unwrap_or(&[]);
+                for (index, h) in hops.iter().enumerate() {
+                    if let Some(name) = h["build"].as_str() {
+                        if !build_name_ok(name) {
+                            failures.push(format!(
+                                "{id}: {field}[{index}] names build `{name}`, which is not a \
+                                 Claude Code version (a triple with a major of 1 or 2, \
+                                 optionally `-<platform>-<arch>`)"
+                            ));
+                        }
+                    }
+                    let Some(status) = h["anchor_status"].as_str() else {
+                        continue;
+                    };
+                    match h["offset"].as_u64() {
+                        None => failures.push(format!(
+                            "{id}: {field}[{index}] is marked `{status}` and carries no offset - \
+                             a mark is a claim about a byte location, so it needs one or it \
+                             decides nothing"
+                        )),
+                        Some(0) => failures.push(format!(
+                            "{id}: {field}[{index}] is marked `{status}` at offset 0, which is \
+                             this file's placeholder for having no byte location - drop the \
+                             offset and the mark, or point them at real bytes"
+                        )),
+                        Some(_) => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>) -> Anchors {
+    hop_shapes(claims, failures);
     let (sites, closed) = sites(claims);
     let total = sites.len();
     // The five README counts PARTITION the total, so each anchor is in exactly one: a mark
@@ -431,6 +528,12 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
             Anchor::Empty => failures.push(format!(
                 "{}: {}[{}] carries offset {} beside an EMPTY excerpt, which anchors nothing \
                  - drop the offset, or quote the bytes it points at",
+                site.id, site.field, site.index, site.offset
+            )),
+            Anchor::PastEnd { len } => failures.push(format!(
+                "{}: {}[{}] offset {} is at or past the END of Claude Code {at_build} ({len} \
+                 bytes) - the locator addresses no byte of the build it is compared against, \
+                 so name the build it WAS read in (`build`) or drop the offset",
                 site.id, site.field, site.index, site.offset
             )),
             Anchor::DotRun => failures.push(format!(

@@ -22,6 +22,15 @@ fn good_claim() -> Value {
             "instrument": "Count the key over one projects root.",
             "probe": {"kind": "corpus", "command": "count", "scope": "one projects root", "rule": "one per record"},
             "producer_trace": "complete",
+            // A `complete` trace owes at least one LOCATED hop (rule 7's twin), so the base
+            // every specimen deviates from carries one.
+            "producer_chain": [{
+                "role": "writer",
+                "name": "the record factory",
+                "offset": 1,
+                "excerpt": "[package]",
+                "note": "the writer"
+            }],
             "specimen": "observed",
             "attribution": "end-to-end",
             "verified": {

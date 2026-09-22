@@ -110,11 +110,16 @@ fn ledger_gate_rule_12_counts_closed_state_anchors_without_reading_them() {
     closed["to"] = json!("2.1.200");
     closed["producer_chain"] = json!([{"role": "writer", "offset": 99, "excerpt": "gone"}]);
     c["states"][0]["from"] = json!("2.1.201");
+    // The OPEN state keeps one located hop, so the split is read off two states that each
+    // carry one rather than off an open state with none. Its excerpt is ELIDED, because this
+    // specimen is about the open/closed split and not about what the bytes say.
+    c["states"][0]["producer_chain"] =
+        json!([{"role": "writer", "offset": 1, "excerpt": "the writer ... its tail"}]);
     c["states"] = json!([closed, c["states"][0].clone()]);
     let mut f = Vec::new();
     let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
     assert_eq!(a.closed, 1, "the closed state's anchor is counted");
-    assert_eq!(a.total, 0, "and is not among the anchors that are read");
+    assert_eq!(a.total, 1, "and is not among the anchors that are read");
     assert!(f.is_empty(), "{f:?}");
 }
 
@@ -149,7 +154,7 @@ fn ledger_gate_rule_12_reads_a_hop_against_the_build_it_names() {
         "role": "writer",
         "offset": 0,
         "excerpt": "not in the verified build",
-        "build": "2.1.208-no-such-artifact-on-any-host",
+        "build": "2.1.208-aix-ppc64",
         "note": "read in an older build"
     }]);
     let mut f = Vec::new();
@@ -162,6 +167,89 @@ fn ledger_gate_rule_12_reads_a_hop_against_the_build_it_names() {
             "a build that is not here decides nothing: {f:?}"
         );
     }
+}
+
+/// A build NAME is a Claude Code version, optionally an artifact of it. Without the shape a
+/// hop could name any string, no host would hold it, the rule would count it `not cached`,
+/// and a rotted anchor would pass by typing a build that never existed.
+#[test]
+fn ledger_gate_rule_12_refuses_a_build_name_no_claude_code_version_could_be() {
+    for bad in [
+        "9.9.9",
+        "2.1",
+        "2.1.258-win32",
+        "latest",
+        "2.1.258-Win32-ARM64",
+    ] {
+        let mut c = good_claim();
+        c["states"][0]["producer_chain"] = json!([{
+            "role": "writer", "offset": 1, "excerpt": "x", "build": bad, "note": "n"
+        }]);
+        let mut f = Vec::new();
+        anchors::hop_shapes(std::slice::from_ref(&c), &mut f);
+        assert_eq!(f.len(), 1, "`{bad}` must be refused: {f:?}");
+        assert!(f[0].contains("not a Claude Code version"), "{}", f[0]);
+    }
+    for ok in [
+        "2.1.258",
+        "1.0.60",
+        "2.1.258-win32-arm64",
+        "2.1.258-linux-arm64",
+    ] {
+        let mut c = good_claim();
+        c["states"][0]["producer_chain"] = json!([{
+            "role": "writer", "offset": 1, "excerpt": "x", "build": ok, "note": "n"
+        }]);
+        let mut f = Vec::new();
+        anchors::hop_shapes(std::slice::from_ref(&c), &mut f);
+        assert!(f.is_empty(), "`{ok}` is a build name: {f:?}");
+    }
+}
+
+/// A MARK IS A CLAIM ABOUT A BYTE LOCATION, so it needs one. Four census notes carried
+/// `anchor_status: absent` at offset 0 - this file's placeholder for having no location -
+/// and asserted their excerpt was nowhere in a build they had never addressed.
+#[test]
+fn ledger_gate_rule_12_refuses_a_mark_with_no_locator() {
+    let mut c = good_claim();
+    c["states"][0]["enumeration"] = json!([
+        {"site": "a census note", "excerpt": "111 lines carry the needle",
+         "verdict": "v", "anchor_status": "absent"},
+        {"site": "another", "offset": 0, "excerpt": "0 occurrences in the whole build",
+         "verdict": "v", "anchor_status": "absent"},
+    ]);
+    let mut f = Vec::new();
+    anchors::hop_shapes(std::slice::from_ref(&c), &mut f);
+    assert_eq!(f.len(), 2, "{f:?}");
+    assert!(f[0].contains("carries no offset"), "{}", f[0]);
+    assert!(
+        f[1].contains("placeholder for having no byte location"),
+        "{}",
+        f[1]
+    );
+}
+
+/// An offset at or past the END of the build it is compared against is an error about the
+/// LOCATOR, and it is refused before the eliding and the marks - three enumeration offsets
+/// addressed a predecessor build and the ellipsis arm counted them skipped.
+#[test]
+fn ledger_gate_rule_12_refuses_an_offset_past_the_end_of_the_build() {
+    let build: &[u8] = b"alpha bravo";
+    assert_eq!(
+        anchors::classify(build, 99, "whatever ... it says", None),
+        anchors::Anchor::PastEnd { len: 11 },
+        "an ellipsis does not excuse a locator outside the file"
+    );
+    assert_eq!(
+        anchors::classify(build, 11, "x", Some("absent")),
+        anchors::Anchor::PastEnd { len: 11 },
+        "and neither does a mark"
+    );
+    assert_eq!(
+        anchors::classify(build, 10, "o", None),
+        anchors::Anchor::Exact,
+        "the last byte is still inside"
+    );
 }
 
 /// The comparison is on BYTES. A few excerpts were captured from regions that are not valid

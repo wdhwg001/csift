@@ -44,7 +44,7 @@ fn ledger_gate_rule_8_names_a_tally_block_that_disagrees_with_the_ledger() {
     assert!(only(&f).contains("the block is REGENERATED, never typed"));
 
     // The chain-traced row, whose key is not a bare word and was invisible to the regex.
-    let bad = good.replace("of which chain traced | 0 |", "of which chain traced | 5 |");
+    let bad = good.replace("of which chain traced | 1 |", "of which chain traced | 5 |");
     let mut f = Vec::new();
     tally::ledger_tally(&claims, &a, "2.1.258", &bad, &mut f);
     assert_eq!(f.len(), 1, "the chain-traced row is read: {f:?}");

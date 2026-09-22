@@ -213,6 +213,35 @@ pub(crate) fn attribution(at: &str, state: &Value, failures: &mut Vec<String>) {
             "{at}: attribution `{attribution}` with no `producer_trace`/`specimen` legs recorded"
         ));
     }
+    // A TRACED leg carries the hops it claims. `complete` means three hops were read in the
+    // shipped binary as verbatim excerpts AT BYTE OFFSETS, and `partial` means a template or
+    // field was found - so a state declaring either and carrying no such hop is asserting a
+    // reading the file does not hold, and the whole of rule 12 then has nothing to re-read.
+    // Only an OPEN state is asked: a closed one records what was read at a build this pass no
+    // longer compares against.
+    if state["to"].is_null() {
+        let hops = state["producer_chain"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        match state["producer_trace"].as_str() {
+            Some("complete") if !hops.iter().any(|h| h["offset"].is_u64()) => {
+                failures.push(format!(
+                    "{at}: `producer_trace: complete` with no offset-carrying `producer_chain` \
+                     hop - a complete trace is three hops read at byte offsets, and this state \
+                     names {} hop(s), none of them located",
+                    hops.len()
+                ));
+            }
+            Some("partial") if hops.is_empty() => {
+                failures.push(format!(
+                    "{at}: `producer_trace: partial` with an empty `producer_chain` - `partial` \
+                     asserts a template or a field was FOUND; with nothing read the leg is `none`"
+                ));
+            }
+            _ => {}
+        }
+    }
     let legs_named = state["open_legs"].as_array().is_some_and(|l| {
         l.iter()
             .any(|x| x.as_str().is_some_and(|s| !s.trim().is_empty()))
