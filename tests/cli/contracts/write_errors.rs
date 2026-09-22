@@ -14,15 +14,19 @@
 //! that returned `Ok(())` would leave behind.
 //!
 //! The print lint that holds all of this is at the PRINT SITE, so a call that prints from
-//! another module is outside it, and the tree holds TWO such edges. The one the last test
-//! sweeps is the banner sinks: `text::emit_scope_banner` and `path::emit_duplicate_banner`
-//! print with `println!` from files that carry no deny, because both legitimately print, so
-//! a call into either from inside a buffered module compiles clean, passes clippy, and puts
-//! a `println!` in the middle of a buffered stream. The other is `commands/image/run.rs`
-//! calling `extract` in `commands/image/convert.rs`, which is correct by EXCLUSIVITY (the
-//! `--out` branch builds no `Out` at all) and is deliberately outside this sweep - adding
-//! `extract` to the sink set would flag it for a call that is right. `text/out.rs` carries
-//! both edges in full.
+//! another module is outside it. No total of those edges is kept here or anywhere else: the
+//! honest source is a sweep that resolves every call in a denying module to its definition
+//! and asks whether that file denies, and `text/out.rs` names what it returns with the
+//! guard on each. The one THIS file sweeps is the banner sinks: `text::emit_scope_banner`
+//! and `path::emit_duplicate_banner` print with `println!` from files that carry no deny,
+//! because both legitimately print, so a call into either from inside a buffered module
+//! compiles clean, passes clippy, and puts a `println!` in the middle of a buffered stream.
+//! The two the sweep here deliberately leaves alone are `commands/image/run.rs` calling
+//! `extract` in `commands/image/convert.rs`, correct by EXCLUSIVITY (its `--out` branch
+//! builds no `Out`), and `commands/show/run.rs` returning through `run_branch_points` in
+//! `commands/show/branch.rs`, correct by ORDER (that early return leaves `run_show` above
+//! the file's only `Out`) - widening the sink set to reach either would flag its caller for
+//! a call that is right.
 
 use crate::harness::*;
 
