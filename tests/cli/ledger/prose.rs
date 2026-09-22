@@ -156,11 +156,15 @@ fn backticked_re() -> &'static Regex {
 /// and paths - so the test is whether PLAIN WORDS carry the span: five or more of them AND
 /// more than half its whitespace tokens.
 ///
-/// Both halves are measured over the shipped file. Five or more alone scans 987 spans and
-/// reads ONE violation, and that one is a false positive: a quoted sample of csift's own
-/// output line, half of it columns and paths, whose date is a record's instant rather than
-/// the day a pass ran. Adding the majority scans 919 and reads none, which is what a
-/// literal's shape is for.
+/// BOTH HALVES EARN THEIR PLACE, AND NEITHER COUNT BELONGS HERE. How many spans the
+/// predicate scans is a property of the shipped FILE rather than of the predicate: a
+/// figure typed into a comment is one nobody re-derives, and the two that stood here
+/// reproduced under no reading of either population. What the halves DO is the fact worth
+/// carrying. Five or more plain words alone already scans nearly every span the majority
+/// half scans; what the majority removes is the family of literals that happen to carry
+/// five words - a quoted sample of csift's own output line, half of it columns and paths,
+/// whose date is a record's instant rather than the day anything ran. It costs nothing and
+/// takes that whole family out, which is what a literal's shape is for.
 fn span_is_prose(inner: &str) -> bool {
     let (mut plain, mut total) = (0usize, 0usize);
     for token in inner.split_whitespace() {
