@@ -838,9 +838,13 @@ surface change bumps the PATCH.
   sizing a run works from twice 128 rows. The smallest inputs stay inside the same-binary
   control band, at a median ratio of 1.009 against the control's 0.9997. Output bytes do not
   move: of the acid set's 169 (row, size class) pairs over three size classes, 165 are
-  compared and byte-identical on all four streams - stdout, stderr, the exit code, and an
-  interleaved `2>&1` capture, which is the only one that can see the ORDER between the
-  first two - with none differing. FOUR are excluded because they print LIVE state, and
+  compared on all four streams - stdout, stderr, the exit code, and an interleaved `2>&1`
+  capture, which is the only one that can see the ORDER between the first two - and 163 are
+  byte-identical on every one of them, with stderr and the exit code identical on all 165.
+  The two that are not are one binding in its two size classes, `csift --help`, whose page
+  grew by the 450 bytes of the clause the exit law gained this release - a documented
+  surface change, and the only stdout difference anywhere in the set. FOUR MORE are
+  excluded because they print LIVE state, and
   both bindings are named: the `whoami --format json` rows, whose lane instants move when
   the session they name gains a record, and the `status` rows, whose fourth stdout line
   carries an elapsed-seconds field that a repeat of the SAME binary moved 21 s later. All
