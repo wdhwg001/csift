@@ -810,7 +810,8 @@ surface change bumps the PATCH.
 
 - **The render was the other serial half of a search.** Everything the scan does in
   parallel was spent before the first output byte: on a 1.18 GB session (the top-level
-  transcript plus every `*.jsonl` under its subagent tree, which is what csift parses) a
+  transcript plus every `*.jsonl` under its subagent tree except `journal.jsonl`, which is
+  what csift parses) a
   whole-scope `--format json` dump cost 1.94 s of CPU on ONE thread while nine rayon
   workers waited, and a wide-match text search (`search 'the'`) paid 0.45 s of that phase's
   0.59 s inside `println!`, which is one `write(2)` and one backward newline scan per row -

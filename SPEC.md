@@ -3254,8 +3254,9 @@ because its row loops are bounded by ONE FILE's history rather than by the trans
 selection rule is named so the numbers come back: rank the landmark's paths by how many
 `files --by timeline --format json` rows name each one, and take the busiest. That path
 prints 467 `--patches` lines (37,591 B), 2,977 `--salvage` and 48 `--coverage`. Over the
-40 busiest of that ranking - 36 real files, the other four being the `fmt:`/`git:`/`pkg:`
-class markers, which are flags rather than paths - the maxima are 2,912 lines for
+40 busiest of that ranking - 36 real files, the other four being the class markers
+`fmt:cargo`, `interp:python`, `git:add` and `git:commit`, which are flags rather than
+paths - the maxima are 2,912 lines for
 `--patches`, 2,977 for `--salvage` and 540 for `--coverage`. At the 0.24 microseconds per
 line the span above measures, the busiest mode of the busiest path is under a millisecond
 of writes inside a run of 1.1 to 1.4 s, and its default restore mode already writes the
