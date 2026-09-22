@@ -46,6 +46,19 @@ use regex::Regex;
 use serde_json::Value;
 use std::sync::OnceLock;
 
+/// The BOUNDARIES are the rule, and both of them are decisions.
+///
+/// The trailing `\b` fails against the `T` of an ISO-8601 instant, so `2026-09-01T06:33:25Z`
+/// is not a hit - and that is right rather than lucky: a record's own timestamp, a build
+/// date, the instant a snapshot was taken are FACTS the ledger states, while a bare
+/// `2026-09-04` beside a count is the day a pass ran.
+///
+/// A PARTIAL date (`2026-09`, a year and a month) is deliberately NOT barred, and the reason
+/// is measured rather than assumed: over the fields this rule scans, 66 such spans occur and
+/// 65 are either the head of a full ISO instant or a month BUCKET LABEL a census is keyed by
+/// (`0 of 5,415 (2026-05)`), which is a fact with a counting rule behind it. One was a
+/// sentence cut mid-date by an upstream capture, and one instance is a claim to rewrite by
+/// hand, not a rule to add that would fire on the other 65.
 fn date_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\b\d{4}-\d{2}-\d{2}\b").unwrap())

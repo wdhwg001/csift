@@ -42,6 +42,18 @@ fn ledger_gate_rule_14_names_every_barred_prose_family() {
     // beside the four positives it contrasts with, in the widening test below.
     // A Claude Code version is never a csift version.
     assert!(prose::hits("present from Claude Code 2.1.208").is_empty());
+
+    // The date arm's two BOUNDARIES. An ISO-8601 instant is a fact the ledger states - a
+    // record's timestamp, a build date - and the trailing word boundary is what keeps it
+    // out; a partial date is the label a month-bucketed census is keyed by. Only a bare
+    // date beside a count is the day a pass ran.
+    assert!(prose::hits("the newest record is stamped 2026-09-01T06:33:25Z").is_empty());
+    assert!(
+        prose::hits("present on 0 of 5,415 (2026-05) and 9,259 of 80,890 (2026-07)").is_empty()
+    );
+    let bare = prose::hits("measured 2026-09-04 over the corpus");
+    assert_eq!(bare.len(), 1, "{bare:?}");
+    assert_eq!(bare[0].0, "calendar date");
     // Domain vocabulary a token ban would have destroyed.
     assert!(
         prose::hits("a frozen lane of the top-level session, whose tool use was rejected")
