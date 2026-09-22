@@ -27401,9 +27401,8 @@
             {
               "site": "stripForCreation occurrence 1/5 - constant table",
               "offset": 74523300,
-              "excerpt": "a string-table copy of the property name in the non-code region",
-              "verdict": "Table copy; applies nothing.",
-              "anchor_status": "absent"
+              "excerpt": "stripForCreation",
+              "verdict": "Table copy; applies nothing. The quoted run is the property name itself: the bytes around it in the string table are not printable, so the entry's own words are all that can be said about them."
             },
             {
               "site": "stripForCreation occurrence 2/5 - the REPL descriptor",
@@ -40726,9 +40725,8 @@
             {
               "site": "grep -abo 'User has approved' over the whole binary",
               "offset": 75371984,
-              "excerpt": "User has approved the plan. There is nothing else needed from you now. Please respond with \"ok\" 9   A+z User has approved exiting plan mode. You can now proceed.       pnA User has approved your plan. You can now start coding. Start with updating your todo list if applicable  Your plan has been save",
-              "verdict": "6 occurrences: 3 in the bytecode constant table (this row) and 3 in the readable JS, all three of the latter inside ONE function - the ExitPlanMode result mapper. There is no other producer of an approval tool_result.",
-              "anchor_status": "prefix-only"
+              "excerpt": "User has approved the plan. There is nothing else needed from you now. Please respond with \"ok\"",
+              "verdict": "6 occurrences: 3 in the bytecode constant table (this row) and 3 in the readable JS, all three of the latter inside ONE function - the ExitPlanMode result mapper. There is no other producer of an approval tool_result. The quoted run is the FIRST of the three constant-table strings at this offset; the bytes separating them are not printable, and the capture that ran the three together had rendered those as spaces, which is why the old excerpt matched nothing."
             },
             {
               "site": "readable copy 1: the isAgent (subagent lane) approval",
@@ -69939,7 +69937,8 @@
             "enumeration[32] excerpt occurs at no offset in the 2.1.258-win32-arm64 artifact and 0 leading byte(s) match at the recorded offset; re-locate by its literal or by the enclosing function name in that artifact",
             "enumeration[33] excerpt occurs at no offset in the 2.1.258 artifact and 0 leading byte(s) match at the recorded offset; re-locate by its literal or by the enclosing function name in that artifact",
             "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced to closure in the 2.1.258 binary...): The literal 'darwin' is the build-inlined platform constant: this build has 0 bare process.platform and 0 bare process.arch occurrences in code against 836 process.env. occurrences, while two globalThis.process.platform member expressions survive - the signature of a targeted build-time define on the bare identifier only. one value per row file; one branch per platform in the producer; the define is established by counting bare vs globalThis-qualified process.platform occurrences The claim's Windows form is right, but its vocabulary list is wrong for linux: a linux or wsl row is NOT bare 'linux', it is a three-segment 'linux:<machine-id>:<pid-namespace>'. This does not break csift, which compares only the head before ':' (local_pid_domain plus the split in src/live/registry.rs 130-135), but the module doc and the SKILL wording should say so. The row counts also moved since the ledger was written (9 rows / 6 darwin then, 8 rows / 5 darwin now - registry rows are pid-keyed and get swept). The win32 head itself is inferred from the build-define rather than read off a Windows row; what would settle it directly is one ~/.claude/sessions/<pid>.json written by a Windows session. All three csift code sites match verbatim (src/live/registry.rs 105-118 and 130-135, src/live/verdict.rs 205-212). strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o 'function YG\\(\\)\\{return wie\\.pidDomain.{0,420}'; rg -o '[^.a-zA-Z]process\\.platform' | wc -l; rg -o 'process\\.env\\.' | wc -l  +  python3 json read of pidDomain across ~/.claude/sessions/*.json",
-            "producer_chain[6] and producer_chain[11] and enumeration[33] are read in the linux-arm64 artifact of Claude Code 2.1.258; that artifact is not in the build cache this gate reads, so the three are counted rather than compared. Re-fetch the linux-arm64 artifact of the verified version and re-read each offset to compare them."
+            "producer_chain[6] and producer_chain[11] and enumeration[33] are read in the linux-arm64 artifact of Claude Code 2.1.258; that artifact is not in the build cache this gate reads, so the three are counted rather than compared. Re-fetch the linux-arm64 artifact of the verified version and re-read each offset to compare them.",
+            "The three linux-arm64 hops of this state are read in that artifact rather than counted: producer_chain[6] and producer_chain[11] were re-anchored to the single occurrence of their own excerpt, and enumeration[33] carries the run at its offset with its census list in the verdict."
           ],
           "producer_chain": [
             {
@@ -69989,7 +69988,7 @@
             {
               "role": "gate",
               "name": "the SAME producer in the linux-arm64 artifact of the SAME version: the linux/wsl arm returns linux:<machine-id>:<pid-ns>",
-              "offset": 178366535,
+              "offset": 178366732,
               "excerpt": "function HK(){return mie.pidDomain??=(async()=>{let t=M();if(t===\"windows\")return`linux:${e().toLowerCase()}`;if(t!==\"linux\"&&t!==\"wsl\")return\"linux\";let[n,r]=await Promise.all([u(\"/etc/machine-id\",\"utf8\").then((i)=>i.trim(),()=>\"\"),s(\"/proc/self/ns/pid\").catch(()=>\"\")]);return`linux:${n}:${r}`})().catch((t)=>{throw mie.pidDomain=void 0,t}),mie.pidDomain}",
               "note": "Closes the claim linux spelling by DIRECT READ - the leg an earlier reading said was unread in any artifact cached here. linux-arm64 was fetched for the same version; sha256 43dc490af55262edcb3e9b1cb315de22cc09ccb08bd52a4c39bc5eabaa63100f and size 215014736 both match the manifest. The machine-id is trimmed and either read defaults to the empty string on failure.",
               "build": "2.1.258-linux-arm64"
@@ -70026,7 +70025,7 @@
             {
               "role": "writer",
               "name": "the twin row literal in the linux-arm64 artifact: pidDomain:await HK()",
-              "offset": 179048582,
+              "offset": 179048503,
               "excerpt": "peerProtocol:k9t,peerFeatures:owr(),kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await HK(),...k&&{tmux:k},...{messagingSocketPath:LS.CLAUDE_CODE_MESSAGING_SOCKET},...{name:P?.name,nameSource:P?.source===\"derived\"?\"derived\":void 0,nameSince:Date.now(),logPath:a.CLAUDE_CODE_SESSION_LOG,agent:a.CLAUDE_CODE_AGENT,jobId:o===\"bg\"&&a.CLAUDE_JOB_DIR?oce(a.CLAUDE_JOB_DIR):void 0,spare:d?!0:void 0}});",
               "note": "The Linux row writer. With this hop the value that lands in a row is read for every platform the harness ships, at one version.",
               "build": "2.1.258-linux-arm64"
@@ -70240,8 +70239,8 @@
             {
               "site": "cross-artifact mirror, linux-arm64 2.1.258: the field occurs exactly 20 times and the layout matches one for one",
               "offset": 179048582,
-              "excerpt": "96221632 178366535 178366757 178367054 178367079 179038099 179038899 179039270 179039609 179043887 179048582 179052956 179052984 179842208 179842231 179842243 179843510 179843532 183373537 183373560",
-              "verdict": "Same census with THE row writer at 179048582. So on none of the three platforms is there a second writer of the field, and the three spellings differ only in the folded token.",
+              "excerpt": "pidDomain:await HK()",
+              "verdict": "Same census with THE row writer at 179048582. The twenty offsets the field occurs at are 96221632 178366535 178366757 178367054 178367079 179038099 179038899 179039270 179039609 179043887 179048582 179052956 179052984 179842208 179842231 179842243 179843510 179843532 183373537 183373560. So on none of the three platforms is there a second writer of the field, and the three spellings differ only in the folded token.",
               "build": "2.1.258-linux-arm64"
             }
           ],

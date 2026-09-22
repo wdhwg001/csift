@@ -288,7 +288,7 @@ Every range carries one receipt, and a receipt has to have measured something ou
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
 
-`anchors byte-exact at Claude Code 2.1.258: 7,078 of 7,625 (elided 230, absent 31, prefix-only 81, read in another build 205), closed-state anchors 0, not checked`
+`anchors byte-exact at Claude Code 2.1.258: 7,080 of 7,625 (elided 230, absent 30, prefix-only 80, read in another build 205), closed-state anchors 0, not checked`
 
 The five counts partition the total. An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A hop read in an artifact the badge does not name carries that build and is compared against THAT one, which is why it is disclosed as a count and never as a verdict: whether a given machine holds those artifacts is a property of the machine. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->

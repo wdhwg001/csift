@@ -14,6 +14,15 @@
 //! verified against the build too: `absent` means the excerpt is there at NO offset,
 //! `prefix-only` means that plus a head that still matches where the offset points.
 //!
+//! AND "OCCURS NOWHERE" IS SATISFIED BY ENGLISH. An excerpt reading `a string-table copy of
+//! the property name in the non-code region` is not a quote of bytes at all - it is a
+//! DESCRIPTION of them - so it occurs at no offset in any build, and the mark it carries
+//! passes while deciding nothing. That is the dot-run defect in another spelling, so it is
+//! refused the same way: a marked excerpt whose every whitespace-separated token is a plain
+//! word, five or more of them, is prose and can never anchor. The test is on the MARK,
+//! because a build string really can be an English sentence - an error message, a prompt -
+//! and an unmarked one still has to equal the bytes at its offset.
+//!
 //! AN EMPTY EXCERPT IS NEVER EVIDENCE. `bytes[off..off]` equals an empty excerpt at every
 //! offset in every build, so an offset beside one passed the comparison while anchoring
 //! nothing - and an offset of 0, which is a placeholder for "no byte location", made that
@@ -30,8 +39,17 @@
 //! those hops were being compared against the verified build, failing, and then marked
 //! `absent`: 33 false marks asserting an excerpt was nowhere, about a build it was never
 //! read in. An optional `build` on a hop names the artifact it WAS read in; the rule
-//! compares against that one when the host holds it, and counts it `other-build, not
-//! cached` when it does not. The mark is then reserved for what it means.
+//! compares against that one when the host holds it.
+//!
+//! A BUILD NOBODY HOLDS IS NOT A PASS. Counting such a hop and moving on made the `build`
+//! field a way to quiet the rule by typing a version: set an excerpt to garbage, name a
+//! build this host cannot read, and the gate goes green. So the count-and-pass posture is
+//! reserved for the host that holds NO build at all - a container, a Windows guest, a
+//! downstream `cargo test` - where no anchor of any kind can be decided. On a host that
+//! holds the VERIFIED build, a hop naming an artifact the host cannot read is UNREAD rather
+//! than unreadable, and the rule says so by name: cache that artifact, or re-anchor the hop
+//! in a build this host holds. The printed line keeps its `not cached` count, which reads 0
+//! wherever the rule passes.
 //!
 //! A DOT RUN IS NOT AN ELLIPSIS. Four or more dots in an excerpt is the signature of a
 //! LOSSY RENDER: the capture printed every non-printable byte as `.`, so the excerpt is a
@@ -53,8 +71,13 @@
 //! PASSES: an anchor is a property of a build, not of this repository, and a machine that
 //! does not hold the build cannot decide one.
 
+mod builds;
+mod marks;
+
+pub(crate) use builds::{build_name_ok, build_path, named_build_paths, BuildCache};
+pub(crate) use marks::{check_marks, reads_as_prose, verify_mark};
+
 use serde_json::Value;
-use std::collections::HashMap;
 
 /// What one anchor is doing at its offset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,62 +237,6 @@ fn sites(claims: &[Value]) -> (Vec<Site<'_>>, usize) {
     (out, closed)
 }
 
-fn build_path(verified: &str) -> Option<std::path::PathBuf> {
-    if let Ok(p) = std::env::var("CSIFT_LEDGER_BINARY") {
-        if !p.trim().is_empty() {
-            return Some(std::path::PathBuf::from(p));
-        }
-    }
-    native_build(verified)
-}
-
-fn native_build(name: &str) -> Option<std::path::PathBuf> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()?;
-    Some(
-        std::path::PathBuf::from(home)
-            .join(".local/share/claude/versions")
-            .join(name),
-    )
-}
-
-/// Where a hop's OWN build is looked for, in order: the cache root `$CSIFT_LEDGER_BUILDS`
-/// names, then the native install layout. A name is a directory holding one `claude`
-/// executable, so a Windows artifact and an older version are addressed alike. No other
-/// root is consulted: a verification cache is the operator's, and naming one here would
-/// make a shipped test depend on a path that exists on one machine.
-fn named_build_paths(name: &str) -> Vec<std::path::PathBuf> {
-    let mut out = Vec::new();
-    if let Ok(root) = std::env::var("CSIFT_LEDGER_BUILDS") {
-        if !root.trim().is_empty() {
-            out.push(std::path::PathBuf::from(&root).join(name).join("claude"));
-        }
-    }
-    out.extend(native_build(name));
-    out
-}
-
-/// Reads each named build at most once. A build this host does not hold is remembered as
-/// absent, so its anchors are counted rather than compared and nothing is read twice.
-#[derive(Default)]
-pub(crate) struct BuildCache {
-    builds: HashMap<String, Option<Vec<u8>>>,
-}
-
-impl BuildCache {
-    fn get(&mut self, name: &str) -> Option<&[u8]> {
-        self.builds
-            .entry(name.to_string())
-            .or_insert_with(|| {
-                named_build_paths(name)
-                    .iter()
-                    .find_map(|p| std::fs::read(p).ok())
-            })
-            .as_deref()
-    }
-}
-
 pub(crate) fn drift_note(build: &[u8], site: &Site, at: usize) -> String {
     let want = site.excerpt.as_bytes();
     match build.get(site.offset.saturating_add(at)) {
@@ -278,131 +245,6 @@ pub(crate) fn drift_note(build: &[u8], site: &Site, at: usize) -> String {
             want[at]
         ),
         None => "the offset runs past the end of the build".to_string(),
-    }
-}
-
-/// A MARK IS A CLAIM, NOT A PASS. `absent` asserts the excerpt is in the build at no
-/// offset at all; `prefix-only` asserts the same PLUS a head that still matches where the
-/// offset points. Counting a marked hop without testing what it asserts would let any
-/// rotted anchor be quieted by typing a word, which is the one move this whole rule
-/// exists to catch. `None` = the mark holds.
-pub(crate) fn verify_mark(
-    build: &[u8],
-    offset: usize,
-    excerpt: &str,
-    status: &str,
-) -> Option<String> {
-    let want = excerpt.as_bytes();
-    if want.is_empty() {
-        return Some(format!(
-            "marked `{status}` with an empty excerpt, which asserts nothing"
-        ));
-    }
-    if let Some(at) = memchr::memmem::find(build, want) {
-        return Some(format!(
-            "marked `{status}` but the excerpt occurs in the build at offset {at} - \
-             re-anchor the offset instead of marking the hop"
-        ));
-    }
-    if status == "prefix-only" {
-        let avail = build.get(offset..).unwrap_or(&[]);
-        if avail.first() != want.first() {
-            return Some(format!(
-                "marked `prefix-only` but no leading byte of the excerpt matches at offset \
-                 {offset} - that mark asserts a head match, so the hop is `absent`"
-            ));
-        }
-    }
-    None
-}
-
-/// Every marked hop, checked against the build.
-///
-/// The expensive half of a mark is "occurs at NO offset", one whole-binary search each,
-/// so all of them run as ONE Aho-Corasick pass instead of hundreds of separate scans. It
-/// is sound as a short-circuit: if any marked excerpt occurred anywhere, the pass would
-/// report at least one match, so ZERO matches proves every "absent" half. Only when
-/// something DID match does the exact per-mark path run, and that run is failing anyway.
-fn check_marks(build: &[u8], sites: &[Site<'_>], verified: &str, failures: &mut Vec<String>) {
-    let marked: Vec<&Site<'_>> = sites
-        .iter()
-        .filter(|s| s.status.is_some() && s.build.is_none())
-        .collect();
-    if marked.is_empty() {
-        return;
-    }
-    let needles: Vec<&[u8]> = marked
-        .iter()
-        .map(|s| s.excerpt.as_bytes())
-        .filter(|b| !b.is_empty())
-        .collect();
-    let clean = needles.len() == marked.len()
-        && aho_corasick::AhoCorasick::new(&needles)
-            .expect("the marked excerpts build an automaton")
-            .find(build)
-            .is_none();
-    if clean {
-        // No marked excerpt is anywhere in the build; only the cheap head check is left.
-        for s in &marked {
-            if s.status == Some("prefix-only")
-                && build.get(s.offset) != s.excerpt.as_bytes().first()
-            {
-                failures.push(format!(
-                    "{}: {}[{}] marked `prefix-only` but no leading byte of the excerpt \
-                     matches at offset {} - that mark asserts a head match, so the hop is \
-                     `absent` (Claude Code {verified})",
-                    s.id, s.field, s.index, s.offset
-                ));
-            }
-        }
-        return;
-    }
-    for s in &marked {
-        let Some(status) = s.status else { continue };
-        if let Some(why) = verify_mark(build, s.offset, s.excerpt, status) {
-            failures.push(format!(
-                "{}: {}[{}] {why} (Claude Code {verified})",
-                s.id, s.field, s.index
-            ));
-        }
-    }
-}
-
-/// Classify every open state's anchor, push a failure for each one that rotted, print the
-/// tally.
-/// A build NAME is a Claude Code version, optionally an artifact of it.
-///
-/// `9.9.9` is a version triple and is not a Claude Code version: every published one carries
-/// a major of 1 or 2, which the prose law already reads. Without the shape a hop could name
-/// any string, no host would hold it, the rule would count it `not cached`, and a rotted
-/// anchor would pass by typing a build that never existed.
-fn build_name_ok(name: &str) -> bool {
-    let (version, artifact) = match name.split_once('-') {
-        Some((v, rest)) => (v, Some(rest)),
-        None => (name, None),
-    };
-    let parts: Vec<&str> = version.split('.').collect();
-    if parts.len() != 3 || !matches!(parts[0], "1" | "2") {
-        return false;
-    }
-    if !parts
-        .iter()
-        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
-    {
-        return false;
-    }
-    match artifact {
-        None => true,
-        // `<platform>-<arch>`, exactly two lowercase words.
-        Some(rest) => {
-            let words: Vec<&str> = rest.split('-').collect();
-            words.len() == 2
-                && words.iter().all(|w| {
-                    !w.is_empty()
-                        && w.bytes()
-                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
-                })
-        }
     }
 }
 
@@ -455,6 +297,8 @@ pub(crate) fn hop_shapes(claims: &[Value], failures: &mut Vec<String>) {
     }
 }
 
+/// Classify every open state's anchor, push a failure for each one that rotted, print
+/// the tally.
 pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>) -> Anchors {
     hop_shapes(claims, failures);
     let (sites, closed) = sites(claims);
@@ -502,7 +346,22 @@ pub(crate) fn tally(claims: &[Value], verified: &str, failures: &mut Vec<String>
             Some(name) => (cache.get(name), name),
         };
         let Some(bytes) = bytes else {
+            // The verified build IS on this host, so nothing about the anchors is
+            // undecidable in general: this ONE artifact is missing, and counting the hop
+            // would make `build` a way to pass by naming a version nobody holds.
             uncached += 1;
+            let looked = named_build_paths(at_build)
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            failures.push(format!(
+                "{}: {}[{}] names build `{at_build}`, which this host does not hold (looked \
+                 in {looked}) - the verified build is here, so the hop is UNREAD rather than \
+                 unreadable: cache that artifact under $CSIFT_LEDGER_BUILDS, or re-anchor \
+                 the hop in a build this host holds",
+                site.id, site.field, site.index
+            ));
             continue;
         };
         let verdict = classify(bytes, site.offset, site.excerpt, site.status);

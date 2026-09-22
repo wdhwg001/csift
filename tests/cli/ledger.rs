@@ -58,12 +58,16 @@
 //!     must be byte-exact there, unless it is elided or marked (see `ledger/anchors.rs`).
 //!     The build is the verified one unless the hop names its OWN in `build`, which is how
 //!     a Windows artifact and an older version stop being compared against a build they
-//!     were never read in. A MARK IS A CLAIM, NOT A PASS, so every mark is verified against
-//!     the build too. An EMPTY excerpt can never anchor anything, and neither can one
-//!     carrying a run of four or more DOTS - that is a lossy render of non-printable bytes,
-//!     and it slipped past as "elided" while checking nothing. A CLOSED state's anchors
-//!     were exact at the build its range ended on: they are counted and never compared
-//!     against a later build. A host without a build prints one line and passes.
+//!     were never read in - and a hop naming an artifact THIS host cannot read is then
+//!     UNREAD rather than unreadable, so it is named rather than counted. A MARK IS A
+//!     CLAIM, NOT A PASS, so every mark is verified against the build too, and two of its
+//!     arms need no build at all: an EMPTY excerpt matches at every offset and PROSE at
+//!     none, so a mark on either is true by construction and decides nothing. Neither can
+//!     an excerpt carrying a run of four or more DOTS anchor - that is a lossy render of
+//!     non-printable bytes, and it slipped past as "elided" while checking nothing. A
+//!     CLOSED state's anchors were exact at the build its range ended on: they are counted
+//!     and never compared against a later build. A host with NO build prints one line and
+//!     passes, which is the one place counting and moving on is honest.
 //! 13. A claim carries one or two states, exactly one of them open AND LAST; every state
 //!     names a `from` and a `from_basis` from the closed set, a closed state names its
 //!     `to`, and the states are ordered by `from`. The OPEN state's range opens at or below

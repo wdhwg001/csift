@@ -144,29 +144,63 @@ fn ledger_gate_rule_12_refuses_a_dot_run_the_way_it_refuses_an_empty_excerpt() {
     assert!(!anchors::dot_run("a...b"));
 }
 
-/// A hop can name its own BUILD. Some facts are only readable in an artifact the badge does
-/// not name, and comparing those against the verified build produced 33 marks asserting an
-/// excerpt was nowhere - about a build it was never read in.
+/// A hop can name its own BUILD, and a build NOBODY HOLDS is not a pass. Comparing a
+/// Windows or an older-version hop against the verified build produced 33 marks asserting
+/// an excerpt was nowhere - about a build it was never read in - which is why the field
+/// exists; but counting the hop when the named artifact is missing made the field a way to
+/// go green by typing a version. On a host that holds the verified build the hop is UNREAD,
+/// and the rule says so by name.
 #[test]
-fn ledger_gate_rule_12_reads_a_hop_against_the_build_it_names() {
+fn ledger_gate_rule_12_names_a_hop_whose_own_build_this_host_does_not_hold() {
     let mut c = good_claim();
     c["states"][0]["producer_chain"] = json!([{
         "role": "writer",
         "offset": 0,
-        "excerpt": "not in the verified build",
+        "excerpt": "zzq-no-build-carries-these-bytes-zzq",
         "build": "2.1.208-aix-ppc64",
-        "note": "read in an older build"
+        "note": "read in an artifact no host keeps"
     }]);
     let mut f = Vec::new();
     let a = anchors::tally(std::slice::from_ref(&c), "2.1.258", &mut f);
     assert_eq!(a.other_build, 1, "the hop is counted as another build's");
     assert_eq!(a.absent, 0, "and not as a mark");
     if a.measured.is_some() {
-        assert!(
-            f.is_empty(),
-            "a build that is not here decides nothing: {f:?}"
-        );
+        assert_eq!(f.len(), 1, "the unread hop is named: {f:?}");
+        assert!(f[0].contains("2.1.208-aix-ppc64"), "{}", f[0]);
+        assert!(f[0].contains("this host does not hold"), "{}", f[0]);
+        assert!(f[0].contains("producer_chain[0]"), "{}", f[0]);
     }
+}
+
+/// A MARK IS A CLAIM, and "occurs at no offset" is satisfied by ENGLISH. A marked excerpt
+/// that describes the bytes rather than quoting them occurs in no build by construction, so
+/// the mark passes while deciding nothing - the dot-run defect in another spelling.
+#[test]
+fn ledger_gate_rule_12_refuses_a_mark_on_an_excerpt_that_reads_as_prose() {
+    let build: &[u8] = b"alpha bravo charlie";
+    let prose = "a string-table copy of the property name in the non-code region";
+    assert!(anchors::reads_as_prose(prose));
+    let why = anchors::verify_mark(build, 6, prose, "absent").expect("prose is refused");
+    assert!(why.contains("reads as prose"), "{why}");
+    assert!(why.contains("re-cut the excerpt"), "{why}");
+    assert!(anchors::verify_mark(build, 6, prose, "prefix-only").is_some());
+    // What is NOT prose, and why each shape has to survive: a dot-joined identifier list is
+    // ONE token; a census of byte offsets carries no letters at all; a quoted literal carries
+    // code punctuation; and four words are not a sentence.
+    for kept in [
+        "Gjt.zjt.Vne.Vjt.Rw..m5e.ign",
+        "96221632 178366535 178366757 179048582",
+        "pidDomain:await HK()",
+        "the property name",
+    ] {
+        assert!(!anchors::reads_as_prose(kept), "{kept}");
+    }
+    // An unmarked English build string still has to equal the bytes at its offset: the
+    // refusal is on the MARK, not on the language.
+    assert_eq!(
+        anchors::classify(build, 0, "alpha bravo charlie", None),
+        anchors::Anchor::Exact
+    );
 }
 
 /// A build NAME is a Claude Code version, optionally an artifact of it. Without the shape a
