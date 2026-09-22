@@ -7,10 +7,11 @@
 //! non-zero exit, exactly like any other failure.
 //!
 //! Both ways of getting that wrong are reachable from here. `println!` PANICS on a write
-//! error - exit 101 and a std backtrace in place of csift's message, which is what a
-//! `| head` read used to produce. And `BufWriter::drop` SWALLOWS one - exit 0 with the
-//! stream short and nothing said, which is the silent failure the output contract forbids
-//! and which is what an `Out::flush` that returned `Ok(())` would leave behind.
+//! error - exit 101 and a std panic message; a backtrace only under `RUST_BACKTRACE=1`.
+//! That is what a `| head` read used to produce in place of csift's own message. And
+//! `BufWriter::drop` SWALLOWS one - exit 0 with the stream short and nothing said, which
+//! is the silent failure the output contract forbids and which is what an `Out::flush`
+//! that returned `Ok(())` would leave behind.
 //!
 //! The print lint that holds all of this is at the PRINT SITE, and that leaves one
 //! residual a call cannot be read off the calling module: `text::emit_scope_banner` and

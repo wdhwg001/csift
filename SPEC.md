@@ -3144,12 +3144,12 @@ image-extraction hint - is taken once, before any worker starts.
 
 **What DID move: the exit code of a write that cannot land.** `println!` PANICS on a write
 error, so a command piped into a reader that goes away - `| head`, a closed pipe - aborted
-the process with exit 101 and a std backtrace where csift's own message belongs. Through
-the buffer the failure is an ordinary `Err` and takes the one arm every other failure
-takes: `csift: error: Broken pipe (os error 32)` on stderr, a non-zero exit. That is also
-why every render calls `Out::flush` explicitly instead of leaving the last write to
-`BufWriter::drop`, which SWALLOWS the error - exit 0 on a stream the consumer never
-received is the silent failure the output contract forbids.
+the process with exit 101 and a std panic message where csift's own belongs; a backtrace
+prints only under `RUST_BACKTRACE=1`. Through the buffer the failure is an ordinary `Err`
+and takes the one arm every other failure takes: `csift: error: Broken pipe (os error 32)`
+on stderr, a non-zero exit. That is also why every render calls `Out::flush` explicitly
+instead of leaving the last write to `BufWriter::drop`, which SWALLOWS the error - exit 0
+on a stream the consumer never received is the silent failure the output contract forbids.
 
 The RULE is the writer that makes the FAILING write, not the subcommand, and it has to be
 stated that way because a list of subcommands is not stable under it: a surface whose rows
@@ -3170,20 +3170,21 @@ every terminal mode: TWENTY-FOUR exit 1 with csift's own line - `search` text, J
 projections, `files` in its text, `--by timeline` and JSON forms, `image` in both, and all
 six `verbatim` rows (text, JSON, `--slice`, the `--subagents` span and a `--budget 1` skip
 in both formats), with the three `--no-subagents` repeats of `search` and `files` reading
-the same, which is the seam closing. TWENTY-ONE abort with a std backtrace, because a `println!` makes the
-first failing write: `list`, `stats` in both projections, `show --branch-points`, `recover`
-in all six forms measured (the default restore, `--patches`, `--salvage`, `--coverage`,
-`--list-backups` and the JSON projection) plus two of them re-run under `--no-subagents`,
-`status`, `wait`, `whoami`, `send`, `msg`, `deliver`, and `search`'s `-c`, `-l` and
-`--count-by` terminal printers. The remaining two rows write no stdout at all: `plan` with
-no binding, and `ack`, which refuses before it writes. On a second fixture holding TWO
-byte-identical copies of one session, where the `copies` banner is the first stdout byte of
-every spanning surface, 15 rows split 11 reporting, 3 aborting (`list`, `stats`,
-`recover --patches`) and one writing nothing (`show`, which refuses on unmerged copies).
-Against a release build of the base commit 44 of the 47 read 101, the exceptions being those
-two and `show --raw`, which never went through `println!` and already exited 1. One row is
-outside the rule on both arms and is named so nobody re-discovers it as a regression:
-`csift --version` is clap's own writer, and it exits 0 on a closed pipe.
+the same, which is the seam closing. TWENTY-ONE abort with a std panic message, because a
+`println!` makes the first failing write: `list`, `stats` in both projections, `show
+--branch-points`, `recover` in all six forms measured (the default restore, `--patches`,
+`--salvage`, `--coverage`, `--list-backups` and the JSON projection) plus two of them
+re-run under `--no-subagents`, `status`, `wait`, `whoami`, `send`, `msg`, `deliver`, and
+`search`'s `-c`, `-l` and `--count-by` terminal printers. The remaining two rows write no
+stdout at all: `plan` with no binding, and `ack`, which refuses before it writes. On a
+second fixture holding TWO byte-identical copies of one session, where the `copies` banner
+is the first stdout byte of every spanning surface, 15 rows split 11 reporting, 3 aborting
+(`list`, `stats`, `recover --patches`) and one writing nothing (`show`, which refuses on
+unmerged copies). Against a release build of the base commit 44 of the 47 read 101, the
+exceptions being those two and `show --raw`, which never went through `println!` and
+already exited 1. One row is outside the rule on both arms and is named so nobody
+re-discovers it as a regression: `csift --version` is clap's own writer, and it exits 0 on
+a closed pipe.
 
 **The memory bound is the look-ahead, and the look-ahead is UP TO TWICE 128 rows.** 8 rows
 per chunk and 16 chunks per wave: 128 consecutive rows are rendered before any of them is

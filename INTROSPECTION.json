@@ -33547,7 +33547,7 @@
       "code": [
         {
           "path": "src/cli/root.rs",
-          "lines": "209-211",
+          "lines": "210-212",
           "snippet": "          Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\\n  \\\n        Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\\n  \\\n        it; csift can only read what survives.\\n\\n\\"
         },
         {
@@ -89154,7 +89154,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3432"
+          "lines": "3433"
         }
       ],
       "states": [

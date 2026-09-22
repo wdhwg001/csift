@@ -790,21 +790,21 @@ surface change bumps the PATCH.
   of matchable text.
 - **A stdout write that cannot land is reported now, instead of aborting the process.**
   Piping a command into a reader that goes away - `| head`, a closed pipe - made `println!`
-  abort: exit 101 and a std backtrace naming `library/std/src/io/stdio.rs` where csift's own
-  message belongs. Through the shared buffered stdout the failed write now takes the one
-  error arm every other failure takes: exit 1 and `csift: error: Broken pipe (os error 32)`.
-  The rule is the WRITER that makes the failing write and not the subcommand - a `println!`
-  still aborts, so a surface whose rows are buffered but whose FIRST stdout byte is a
-  `println!` aborts at that byte. Inside a buffered surface there is no exception: its
-  `scope` and `copies` banners go through the same writer as its rows, so one query has one
-  answer for a closed pipe however wide its scope. Reporting: `search` in all four of its
-  forms, `show` rendered, `--raw`, `--turn` and `--uuid`, `agents` in both projections,
-  `files` in its three, `image` in both, and every one of `verbatim`'s streams. Aborting:
-  `list`, `stats`, `recover` in all six forms measured, `status`, `wait`, `whoami`, `send`,
-  `msg`, `deliver`, `show --branch-points`, and `search`'s `-c` / `-l` / `--count-by`.
-  `plan` with no binding and `ack` write no stdout at all, and `csift --version` is clap's
-  own writer and exits 0. What a reader that stays receives does not move; only the failure
-  path does.
+  abort: exit 101 and a std panic message naming `library/std/src/io/stdio.rs` where csift's
+  own belongs, with a backtrace only under `RUST_BACKTRACE=1`. Through the shared buffered
+  stdout the failed write now takes the one error arm every other failure takes: exit 1 and
+  `csift: error: Broken pipe (os error 32)`. The rule is the WRITER that makes the failing
+  write and not the subcommand - a `println!` still aborts, so a surface whose rows are
+  buffered but whose FIRST stdout byte is a `println!` aborts at that byte. Inside a
+  buffered surface there is no exception: its `scope` and `copies` banners go through the
+  same writer as its rows, so one query has one answer for a closed pipe however wide its
+  scope. Reporting: `search` in all four of its forms, `show` rendered, `--raw`, `--turn`
+  and `--uuid`, `agents` in both projections, `files` in its three, `image` in both, and
+  every one of `verbatim`'s streams. Aborting: `list`, `stats`, `recover` in all six forms
+  measured, `status`, `wait`, `whoami`, `send`, `msg`, `deliver`, `show --branch-points`,
+  and `search`'s `-c` / `-l` / `--count-by`. `plan` with no binding and `ack` write no
+  stdout at all, and `csift --version` is clap's own writer and exits 0. What a reader that
+  stays receives does not move; only the failure path does.
 
 ### Performance
 
@@ -842,7 +842,7 @@ surface change bumps the PATCH.
   capture, which is the only one that can see the ORDER between the first two - and 163 are
   byte-identical on every one of them, with stderr and the exit code identical on all 165.
   The two that are not are one binding in its two size classes, `csift --help`, whose page
-  grew by the 450 bytes of the clause the exit law gained this release - a documented
+  grew by the 512 bytes of the clause the exit law gained this release - a documented
   surface change, and the only stdout difference anywhere in the set. FOUR MORE are
   excluded because they print LIVE state, and
   both bindings are named: the `whoami --format json` rows, whose lane instants move when
