@@ -829,7 +829,7 @@ surface change bumps the PATCH.
   the fan-out costs to spread over ten cores. What the look-ahead costs in memory is UP TO
   TWICE 128 RENDERED ROWS - 128 rows are rendered before any is written, and each chunk
   buffer grows by doubling, so it can sit at twice the bytes it holds. On that session, rows
-  averaging 78 KB, that is 10 to 20 MB against a peak near 1.57 GiB and it does not clear
+  averaging 78 KB, that is 10 to 20 MB against a peak of about 1,570 MiB and it does not clear
   the noise: medians of 13 interleaved reps differ by 0.1 MiB, against per-arm spreads of 12
   and 17 MiB. On a synthetic transcript whose rendered rows are 4,195,818 B, five
   interleaved pairs put the delta at 715.8 MiB median and 836.9 MiB at worst, against a
