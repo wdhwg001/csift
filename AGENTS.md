@@ -531,7 +531,7 @@ claim = {
                                     ONE id predates the shape and is KEPT: `QT-SYS-001`, minted when the leaf that became
                                     the `harness.system.*` family shipped. An id is a stable handle the SPEC ledger and the
                                     changelog cite by name, so renaming it would orphan those citations to tidy a string
-  "area":     "record-model",       one of the 18 areas
+  "area":     "record-model",       one of the 19 areas
   "code":     [ { "path": "src/commands/live/verdict.rs", "lines": "296-302", "snippet": "<verbatim excerpt>" }, ... ],
                                     CLAIM-LEVEL and >= 1 site; snippet copied byte-for-byte (indentation included); `lines`
                                     is 1-based inclusive and gate rule 4 requires the snippet to sit INSIDE it, so the range
