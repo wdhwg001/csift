@@ -54,11 +54,15 @@ use std::sync::OnceLock;
 /// `2026-09-04` beside a count is the day a pass ran.
 ///
 /// A PARTIAL date (`2026-09`, a year and a month) is deliberately NOT barred, and the reason
-/// is measured rather than assumed: over the fields this rule scans, 66 such spans occur and
-/// 65 are either the head of a full ISO instant or a month BUCKET LABEL a census is keyed by
-/// (`0 of 5,415 (2026-05)`), which is a fact with a counting rule behind it. One was a
-/// sentence cut mid-date by an upstream capture, and one instance is a claim to rewrite by
-/// hand, not a rule to add that would fire on the other 65.
+/// is measured rather than assumed - with BOTH halves of the instrument named, because the
+/// count moves with each. Over the field set `prose_fields` walks, with THIS rule's own
+/// backtick masking applied, 74 such spans occur: 51 are the head of a full ISO-8601 instant,
+/// and the other 23 are readings of a census keyed by MONTH - `0 of 5,415 (2026-05)` beside
+/// its count, and the per-month tables of FH-002 and FH-017, which hold all 23 between them -
+/// which is a fact with a counting rule behind it. NONE is the day a pass ran. Without the
+/// masking the same walk reads 83: nine more ISO heads, and the identical 23. So an arm here
+/// would fire on 74 facts to catch nothing: a date that IS the day a pass ran is a claim to
+/// rewrite by hand, which is what the one such span got - and why this reading finds none.
 fn date_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\b\d{4}-\d{2}-\d{2}\b").unwrap())
