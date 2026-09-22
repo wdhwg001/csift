@@ -3564,7 +3564,7 @@
           "instrument": "Read the background gate at 165033229, the result-promise handler at 164973415 and the notifier's enqueue at 164968551 in the shipped binary; read the write queue at 166084081, the drain's item-kind branch at 166086064, performRemoveByUuid at 166095622, performCompactTranscript at 166098791 and its rename at 166100780, and the localGcEnabled guard at 166084451 with its class default at 166076591. Enumerate the notifier's call sites with grep -abo 'Ddt(' and read each. On disk: walk every transcript under the projects root, byte-prefiltered on backgroundTaskId; take each distinct backgroundTaskId at the first toolUseResult line carrying it, find the first later line in the same file that names that id and carries a task-notification marker, and report the byte and line distance between line starts; for a launch with no such line report the distance to end of file. Counting rule: one launch per distinct backgroundTaskId per file.",
           "probe": {
             "kind": "corpus",
-            "command": "grep -abo 'Ddt(' and read each",
+            "command": "For each transcript under the projects root, byte-prefiltered on `backgroundTaskId`: take each distinct backgroundTaskId at the first toolUseResult line carrying it, find the first later line in the same file that names that id and carries a task-notification marker, and report the byte and line distance between line starts; for a launch with no such line report the distance to end of file.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one launch per distinct backgroundTaskId per file."
           },
@@ -8443,7 +8443,7 @@
           "instrument": "Read the translator pair at 157586967 in both directions, the absolutizer ct at 157587730, the tool module's import of ct at 160765941 against the exporting chunk's list at 157602857, the cwd slot's writers at 157582573, the NFC normalizer at 156647287, the per-record stamp at 166074084, the entry literal at 166105359 and the Write result literal at 163988510; enumerate backfillObservableInput with grep -abo (eleven occurrences) and read each. On disk: walk every transcript under the projects root and bucket by shape every structured tool-input path field on every tool_use block and every record cwd; repeat on a Windows-recorded tree for the drive-form half.",
           "probe": {
             "kind": "corpus",
-            "command": "grep -abo (eleven occurrences) and read each",
+            "command": "For each transcript under the projects root: bucket by shape every structured tool-input path field on every tool_use block and every record cwd, the shapes being leading /, ^[A-Za-z]:[\\/], leading \\\\, leading ~, else relative; repeat the walk on a Windows-recorded tree for the drive-form half.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "One value per structured tool-input path field per tool_use block; shape buckets are leading /, ^[A-Za-z]:[\\/], leading \\\\, leading ~, else relative. Record cwd: one value per line carrying a top-level cwd."
           },
@@ -18227,7 +18227,7 @@
           "probe": {
             "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "One specimen per jsonl line under a per-session elicitations.jsonl that parses as JSON; 'strict schema' = the line carries both csiftPhase and csiftKind; key prefix tested with str.startswith('toolu_').",
+            "rule": "One match per occurrence of the bare byte string in the whole build file; the QUOTED form is deliberately not tallied, the harness building its hook payload as an object literal with bare keys.",
             "literal": "hook_event_name"
           },
           "producer_trace": "complete",
@@ -24024,7 +24024,7 @@
           "instrument": "Corpus: for every echo carrying `truncatedByTokenCap`, count `startLine != 1`; one observation per echo. Measured now over all of ~/.claude/projects: 0 of 174. Binary: the `let ht={type:\"text\",file:{filePath:n,content:De,numLines:Ne,startLine:Ue!==void 0?Math.max(1,f):f` construction, reachable via `python3 -c` seeking that literal in a `strings -a` dump.",
           "probe": {
             "kind": "corpus",
-            "command": "Measured now over all of ~/.claude/projects: 0 of 174. Binary: the `let ht={type:\"text\",file:{filePath:n,content:De,numLines:Ne,startLine:Ue!==void 0?Math.max(1,f):f` construction, reachable via `python3 -c` seeking that literal in a `strings -a` dump.",
+            "command": "For each transcript under the projects root: for every echo carrying `truncatedByTokenCap`, count the ones whose `startLine` is not 1, and report that count against the number of echoes carrying the key.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one observation per echo."
           },
@@ -53486,7 +53486,7 @@
           "instrument": "python3 over every *.jsonl under the projects root (journal and elicitation sidecars excluded), json.loads per line after a byte prefilter, one tally per Write echo (a `toolUseResult` object whose `type` is create or update and which carries a `content` key), bucketed by `content == \"\"` and keyed by the record's top-level `version`; for each empty-content record its file, line, `originalFile`, `structuredPatch` length, and its line distance to the next human message and to the preceding compaction boundary. Collapse byte-identical copies before quoting a distinct-record count: one transcript is present under two project directories with identical line numbers, which double-counts its records. Binary side: grep -abo stripForStorage and stripToolUseResultAtCreation in a build and read every occurrence; date a guard by byte-searching its literal across the cached native builds, one match per artifact.",
           "probe": {
             "kind": "corpus",
-            "command": "grep -abo stripForStorage and stripToolUseResultAtCreation in a build and read every occurrence; date a guard by byte-searching its literal across the cached native builds, one match per artifact",
+            "command": "For each `*.jsonl` under the projects root, journal and elicitation sidecars excluded: json.loads each line after a byte prefilter and tally each Write echo (a `toolUseResult` object whose `type` is create or update and which carries a `content` key), bucketed by `content == \"\"` and keyed by the record's top-level `version`; for each empty-content record report its file, line, `originalFile`, `structuredPatch` length, its line distance to the next human message and the position of the file's preceding compaction boundary; collapse byte-identical copies of a transcript before quoting a distinct-record count.",
             "scope": "every `*.jsonl` under one projects root, journal and elicitation sidecars excluded, plus every cached native build for the guard's floor",
             "rule": "python3 over every *.jsonl under the projects root (journal and elicitation sidecars excluded), json.loads per line after a byte prefilter, one tally per Write echo (a `toolUseResult` object whose `type` is create or update and which carries a `content` key), bucketed by `content == \"\"` and keyed by the record's top-level `version`; for each empty-content record its file, line, `originalFile`, `structuredPatch` length, and its line distance to the next human message and to the preceding compaction boundary. Collapse byte-identical copies before quoting a distinct-record count: one transcript is present under two project directories with identical line numbers, which double-counts its records. Binary side: grep -abo stripForStorage and stripToolUseResultAtCreation in a build and read every occurrence; date a guard by byte-searching its literal across the cached native builds, one match per artifact."
           },
@@ -74883,7 +74883,7 @@
           "probe": {
             "kind": "bytes",
             "literal": "\"CLAUDECODE\",\"CLAUDE_CODE_SESSION_ID\",\"CLAUDE_CODE_BRIDGE_SESSION_ID\"",
-            "scope": "the harness session registry under the claude home",
+            "scope": "the shipped Claude Code binary the state names, read whole",
             "rule": "a count is occurrences of the fixed byte string over the whole file."
           },
           "producer_trace": "complete",
@@ -82776,7 +82776,7 @@
           "probe": {
             "kind": "bytes",
             "scope": "the shipped Claude Code binary the state names (2.1.258), read whole",
-            "rule": "cleared one live session and read both transcripts plus the cost-state line the saver wrote.",
+            "rule": "One match per occurrence of the fixed byte string in the whole build file, taken for each of the three literals in turn - the command registration, the generator head and the regeneration tail - so that the generator body read between them is the one the registration names.",
             "literal": "name:\"clear\",description:\"Start a new session with empty context"
           },
           "producer_trace": "complete",

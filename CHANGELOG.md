@@ -849,30 +849,33 @@ surface change bumps the PATCH.
   to its own language to parse, and the receipt's artefact itself; rule 21 is the `bytes`
   probe's own literal, read in the builds its state names and in a CLOSED state's too
   wherever this host holds them, because four of them counted zero in every one and a
-  probe that counts nothing cannot be run. Rule 22 holds a probe's KIND and its
-  SCOPE to the same artefact: the kind follows what the command reads and the scope is
-  derived from the instrument, and nothing compared the two, so thirty-eight states
-  shipped claiming `corpus` beside a scope naming the shipped binary and one claimed
-  `bytes` beside a scope naming a projects root. Only the two kinds whose artefact is
-  fixed are tested, since `csift`, `live` and `repo` name a run, a gesture and this
-  tree and any of the three may mention either noun without contradiction. Rule 12 learns that a hop can name the BUILD it
-  was read in - and that a build nobody holds is not a pass, so such a hop is named rather
-  than counted wherever the verified build itself is here - refuses a run of four or more
-  dots the way it refuses an empty excerpt, holds an ELIDED excerpt to the run before its
-  first ellipsis at its own offset - that bucket used to be compared against nothing, so
-  replacing an already-elided excerpt with fabricated text moved no figure - refuses an
-  excerpt that reads as prose whether or not the hop wears a MARK, since English occurs in
-  no build and satisfies `absent` by construction, decides a marked hop by its mark BEFORE
-  the eliding so it lands in one of the five counts and never in two, and compares bytes
-  rather than a UTF-8 round trip. How many `...`-bearing excerpts are byte-exact anyway is
-  derived by the walk and carried on the README rather than typed anywhere. Rule 8 stops matching rows with a regex
-  and REGENERATES the README block, comparing it byte for byte. A folded check is not
-  simply dropped: every fact token with no survivor in the state is carried into `residue`,
-  and each carried entry names what superseded it. The prose rewrite masks every quoted
-  run, literal, offset, version and whitespace run before it fires and restores each byte
-  for byte, so it can neither cut a comma out of a jq argument list, nor normalise the
-  double space out of an asctime literal, nor flatten the indent a python heredoc's block
-  structure lives in; and a date that is the object of an epoch stays.
+  probe that counts nothing cannot be run. Rule 22 holds a probe's KIND and its SCOPE to the
+  same artefact: the kind follows what the command reads and the scope is derived from the
+  instrument, and nothing compared the two, so thirty-eight states shipped claiming `corpus`
+  beside a scope naming the shipped binary and one claimed `bytes` beside a scope naming a
+  projects root. Only the two kinds whose artefact is fixed are tested, since `csift`, `live`
+  and `repo` name a run, a gesture and this tree and any of the three may mention either noun
+  without contradiction; its corpus word list learns the harness session REGISTRY under its
+  English names, a row set on disk having been reachable only as a path before. It stops at the
+  scope and never reads the command, a scope being a noun phrase a word list decides while a
+  program classified by the words in it has the same false-negative shape the pair had. Rule 12
+  learns that a hop can name the BUILD it was read in - and that a build nobody holds is not a
+  pass, so such a hop is named rather than counted wherever the verified build itself is here -
+  refuses a run of four or more dots the way it refuses an empty excerpt, holds an ELIDED
+  excerpt to the run before its first ellipsis at its own offset - that bucket used to be
+  compared against nothing, so replacing an already-elided excerpt with fabricated text moved no
+  figure - refuses an excerpt that reads as prose whether or not the hop wears a MARK, since
+  English occurs in no build and satisfies `absent` by construction, decides a marked hop by its
+  mark BEFORE the eliding so it lands in one of the five counts and never in two, and compares
+  bytes rather than a UTF-8 round trip. How many `...`-bearing excerpts are byte-exact anyway is
+  derived by the walk and carried on the README rather than typed anywhere. Rule 8 stops
+  matching rows with a regex and REGENERATES the README block, comparing it byte for byte. A
+  folded check is not simply dropped: every fact token with no survivor in the state is carried
+  into `residue`, and each carried entry names what superseded it. The prose rewrite masks every
+  quoted run, literal, offset, version and whitespace run before it fires and restores each byte
+  for byte, so it can neither cut a comma out of a jq argument list, nor normalise the double
+  space out of an asctime literal, nor flatten the indent a python heredoc's block structure
+  lives in; and a date that is the object of an epoch stays.
 
 ## [0.12.3] - 2026-09-13
 

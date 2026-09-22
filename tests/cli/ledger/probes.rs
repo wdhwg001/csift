@@ -140,12 +140,20 @@ pub(crate) const BUILD_WORDS: [&str; 6] = [
 ];
 
 /// The words a SCOPE uses when the artefact it names is a POPULATION ON DISK.
-pub(crate) const CORPUS_WORDS: [&str; 6] = [
+///
+/// The harness's session REGISTRY is one of those populations and was reachable only as a
+/// path (`registry directory`), so a scope calling it by its English name - `the harness
+/// session registry under the claude home` - read as a build to this rule and a `bytes`
+/// kind sat beside it unchallenged. A row set on disk is a corpus population whichever of
+/// its two names the scope uses.
+pub(crate) const CORPUS_WORDS: [&str; 8] = [
     "projects root",
     "*.jsonl",
     "corpus",
     "transcripts",
     "registry directory",
+    "session registry",
+    "registry row",
     "jsonl population",
 ];
 
@@ -167,6 +175,14 @@ fn names<'a>(scope: &str, words: &[&'a str]) -> Option<&'a str> {
 /// run, a gesture and this tree, and any of the three can legitimately mention either noun -
 /// a csift run reads transcripts, a live trial is taken at a build - so widening the rule to
 /// them would report vocabulary rather than a contradiction.
+///
+/// It stops at the SCOPE and does not reach the `command`, deliberately. A scope is a NOUN
+/// PHRASE and a word list decides it; a command is a program, and classifying one by the
+/// words in it has the same false-negative shape the kind-and-scope pair had - a census walk
+/// that happens to say `binary` would read as a build read, and a build grep piped through
+/// python would read as neither. What holds the command instead is the procedure law (a
+/// command RUNS as written, naming the artefact its kind reads) and rule 15, which refuses a
+/// probe whose kind arrives without the field that answers it.
 ///
 /// It runs over EVERY state, open and closed alike, for the reason rule 21 does: a probe is a
 /// STRING naming an artefact, and whether it names the right one is decidable whenever the
