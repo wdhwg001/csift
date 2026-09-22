@@ -3154,9 +3154,15 @@ and `--raw`), `show` rendered, `files`, `agents` and `image` move from 101 to 1;
 
 **The memory bound is the look-ahead, and it is fixed.** 8 rows per chunk and 16 chunks per
 wave: 128 consecutive rows are rendered before any of them is written, so peak memory rises
-by the rendered bytes of 128 rows rather than by the stream. On the landmark's 411 MB of
-JSON (rows averaging 78 KB) that is about 10 MB against a 1.65 GB peak, and the measured
-maximum resident set size is unchanged at 1.65 GB.
+by the rendered bytes of 128 rows rather than by the stream. The cost is therefore 128 times
+whatever a ROW is, and neither half of that sentence may be dropped. On the landmark's
+411 MB of JSON (rows averaging 78 KB) it is about 10 MB against a 1.65 GB peak, and the
+measured maximum resident set size is unchanged at 1.65 GB. On a synthetic transcript whose
+rendered rows are 4.55 MiB each - 160 of them, read with `--no-truncate` so a row IS the
+whole message - the bound is 582 MiB, and three interleaved pairs measured a peak-RSS delta
+between 0 and +127 MiB against a 2,941 MiB base: the buffers are mostly satisfied out of
+pages the process already holds, so the observable peak is a floor on the bound rather than
+the bound itself. A reader sizing a run works from the bound.
 
 **The numbers, with their caveat.** This host was LOADED throughout (one-minute load
 average 7 to 27 from other builds), so wall carries noise that the CPU columns do not; the
