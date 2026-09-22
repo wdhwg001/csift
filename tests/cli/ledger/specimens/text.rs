@@ -290,6 +290,27 @@ fn ledger_gate_rule_17_names_a_retired_selector_in_an_argument() {
         );
     }
 
+    // `tool` is the one spelling that is also something else, and the ARGUMENT decides: the
+    // pre-v0.5 flat path hard-errors, the census axis of the same name always ran.
+    for (argv, refused) in [
+        ("csift search '' -t tool", true),
+        ("csift search '' --count-by tool", false),
+    ] {
+        let mut c = good_claim();
+        c["states"][0]["probe"] = json!({
+            "kind": "csift", "command": argv,
+            "scope": "one projects root", "rule": "one per record"
+        });
+        let mut f = Vec::new();
+        legs::retired_spellings("TEST-001 states[0]", &c["states"][0], &mut f);
+        assert_eq!(
+            f.iter()
+                .any(|m| m.contains("names the retired selector `tool`")),
+            refused,
+            "{argv}: {f:?}"
+        );
+    }
+
     // History, not an instruction.
     let mut c = good_claim();
     c["states"][0]["residue"] =

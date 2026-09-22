@@ -87,7 +87,12 @@ fn mid_field_instruction(s: &str) -> Option<usize> {
 /// (`retired_successors`, src/cli/selectors.rs), so a probe naming one cannot run at all.
 /// The list is the table's own keys; `agent.message` and `agent.thinking` are deliberately
 /// absent, because they became CATEGORIES rather than disappearing.
-pub(crate) const RETIRED_SELECTORS: [&str; 12] = [
+///
+/// `tool` is the one spelling that is ALSO something else: `-t tool` is the pre-v0.5 flat
+/// path and hard-errors, while `--count-by tool` is a valid census axis and always has
+/// been. The list carries it and the `--count-by` position excludes it (`axis_spelling`),
+/// so the rule reads the argument rather than the word - which is the whole of rule 17.
+pub(crate) const RETIRED_SELECTORS: [&str; 13] = [
     "harness.meta.attachment",
     "harness.meta.away-summary",
     "harness.meta.hook",
@@ -100,7 +105,15 @@ pub(crate) const RETIRED_SELECTORS: [&str; 12] = [
     "harness.meta",
     "tool-response",
     "thinking",
+    "tool",
 ];
+
+/// A retired spelling that is a VALID `--count-by` axis under the same word. Only `tool` is
+/// one: the census axes and the label paths are different vocabularies that happen to share
+/// it, so the argument position decides and the word never does.
+fn axis_spelling(spelling: &str) -> bool {
+    spelling == "tool"
+}
 
 /// Rule 17: no field hands a RETIRED spelling to csift as an argument.
 ///
@@ -118,7 +131,7 @@ pub(crate) fn retired_spellings(at: &str, state: &Value, failures: &mut Vec<Stri
                 if after.is_some_and(|c| c.is_alphanumeric() || c == '.' || c == '-') {
                     continue;
                 }
-                if argument_position(&s[..i]) {
+                if argument_position(&s[..i], spelling) {
                     failures.push(format!(
                         "{at}.{path}: names the retired selector `{spelling}` as a csift \
                          argument - the shipped binary hard-errors on it, so this probe \
@@ -147,7 +160,7 @@ pub(crate) fn retired_spellings(at: &str, state: &Value, failures: &mut Vec<Stri
 /// Is the text immediately before this spelling a selector FLAG? Reading a short window is
 /// enough: the flag and its value are adjacent by construction, and a sentence that merely
 /// mentions the old name has ordinary words there.
-fn argument_position(before: &str) -> bool {
+fn argument_position(before: &str, spelling: &str) -> bool {
     let tail: String = before
         .chars()
         .rev()
@@ -163,5 +176,5 @@ fn argument_position(before: &str) -> bool {
         || tail.ends_with("--label-not")
         || tail.ends_with(".label==")
         || tail.ends_with("label ==")
-        || tail.ends_with("--count-by")
+        || (tail.ends_with("--count-by") && !axis_spelling(spelling))
 }
