@@ -109,13 +109,6 @@
 //!     pass that normalises whitespace can leave every word intact and every program dead,
 //!     and no other rule here would see it. An interpreter this host does not hold is
 //!     counted and skipped, exactly as rule 12 skips a build it does not hold.
-//! 21. A `bytes` probe names a literal the BUILD carries. The probe's whole content is the
-//!     literal a later pass re-locates, and four shipped counting zero in every build their
-//!     state names - two cut past where the build stops agreeing, two carrying a ` ... `
-//!     elision inside the literal, which is not a byte string at all. The build is a SET,
-//!     because a state names up to three and a rewrite between two of them is often what the
-//!     probe is there to date. A build this host does not hold is counted and skipped.
-//!
 //! 20. An OPEN state's receipt names an ARTEFACT OUTSIDE csift's own tree - a Claude Code
 //!     build or a byte offset in one, a corpus or projects root, the harness's own
 //!     directories, a session target, a live trial. The artefact is the test and never the
@@ -123,6 +116,13 @@
 //!     documents decided nothing about Claude Code, and a badge resting on one rests on
 //!     nothing. The classifier lives in `ledger/artefact.rs`, in the gate rather than only
 //!     in the pass that writes the file.
+//!
+//! 21. A `bytes` probe names a literal the BUILD carries. The probe's whole content is the
+//!     literal a later pass re-locates, and four shipped counting zero in every build their
+//!     state names - two cut past where the build stops agreeing, two carrying a ` ... `
+//!     elision inside the literal, which is not a byte string at all. The build is a SET,
+//!     because a state names up to three and a rewrite between two of them is often what the
+//!     probe is there to date. A build this host does not hold is counted and skipped.
 //!
 //! The attribution set carries `upstream`: the producer lies OUTSIDE the shipped binary
 //! by construction (the model or API side, the operating system, a native runtime
