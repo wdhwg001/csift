@@ -60,9 +60,11 @@ pub fn malformed_note(n: usize) -> String {
 }
 
 /// The canonical SCOPE-span text fragment, e.g. `4 sessions in scope (1 top-level + 3
-/// subagent)`. EVERY subagent-spanning subcommand (`list`/`files`/`search`/`recover`/`turns`)
-/// reports a bare-uuid fan-out with this SAME wording so an agent reads one format. `turns`
-/// prefixes `scope  ` and appends its budget clause; the others use [`scope_banner_text`].
+/// subagent)`. EVERY subagent-spanning subcommand (`list`/`stats`/`search`/`files`/`recover`/
+/// `verbatim`) reports a bare-uuid fan-out with this SAME wording so an agent reads one
+/// format. `verbatim` prefixes `scope  ` and appends its budget clause; the other five frame
+/// it through [`emit_scope_banner`] or [`write_scope_banner`], which differ in the SINK and
+/// in nothing else.
 #[must_use]
 pub fn scope_span_fragment(top: usize, sub: usize) -> String {
     let total = top + sub;
@@ -81,18 +83,18 @@ fn scope_banner_text(top: usize, sub: usize) -> Option<String> {
 }
 
 /// Emit the scope banner to the process stdout with `println!`, for the surfaces that print
-/// EVERY row that way (`list`, `stats`, `recover`). This is the ONE emit site for the four
-/// non-turns spanning subcommands (`list`/`files`/`search`/`recover`): a bare
+/// EVERY row that way - `list`, `stats` and `recover`, which are its three callers. A bare
 /// `csift <cmd> <uuid>` that silently balloons from 1 transcript to N must announce the
 /// fan-out up front, identically across surfaces, and stay silent (no banner) under
-/// `--no-subagents` or a genuinely single-transcript scope. `turns` keeps its own richer
-/// banner (it folds in the per-session budget math) but reuses [`scope_span_fragment`] for
-/// the wording.
+/// `--no-subagents` or a genuinely single-transcript scope.
 ///
-/// A surface that holds an [`Out`] calls [`write_scope_banner`] instead. The difference is
-/// not stylistic: a write that cannot land ABORTS inside `println!` and is REPORTED through
-/// the buffer, so a banner printed here by a buffered surface would give that one surface
-/// two exit codes for one closed pipe, decided by how wide its scope happened to be.
+/// The banner's other two callers, `search` and `files`, hold an [`Out`] and go through
+/// [`write_scope_banner`]. The difference is not stylistic: a write that cannot land ABORTS
+/// inside `println!` and is REPORTED through the buffer, so a banner printed here by a
+/// buffered surface would give that one surface two exit codes for one closed pipe, decided
+/// by how wide its scope happened to be. `verbatim` reaches neither sink: it folds the
+/// per-session budget math into a banner of its own, built from [`scope_span_fragment`] and
+/// written through its own `Out`.
 pub fn emit_scope_banner(top: usize, sub: usize) {
     if let Some(banner) = scope_banner_text(top, sub) {
         print!("{banner}");
