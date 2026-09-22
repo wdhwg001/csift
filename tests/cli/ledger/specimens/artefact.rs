@@ -99,6 +99,30 @@ fn ledger_gate_rule_20_reads_a_csift_run_and_a_whole_build_count() {
     );
 }
 
+/// A build named by its PATH, and a byte offset written without the `@` sigil. The table
+/// read words for both - `binary`, `the build`, `@158550335` - so a check that simply gave
+/// the path it opened or wrote `at 158550335` named neither and read as prose.
+#[test]
+fn ledger_gate_rule_20_reads_a_build_by_its_path_and_an_offset_without_a_sigil() {
+    for instrument in [
+        "grep -c \"CLAUDE_CONFIG_DIR\" <builds cache>/2.1.258/claude, counting the hits.",
+        "Read the drop predicate at 165953664 and the two callers below it.",
+        "Counted the literal in ~/.local/share/claude/versions/2.1.258 and in its \
+         predecessor.",
+        "Re-read the writer at offset 158550335 and the gate above it.",
+    ] {
+        assert!(
+            artefact::names_an_artefact(instrument),
+            "the artefact table must read this as a measurement: {instrument}"
+        );
+    }
+    // A count is not a location: the word in front is what makes the digits an offset.
+    assert!(
+        !artefact::names_an_artefact("The claim states 158550335 records, which src/ agrees with."),
+        "a bare nine-digit number is a count until a locating word says otherwise"
+    );
+}
+
 /// Two sentences that NAME a real artefact and are still text passes: one declares itself
 /// one in its opening clause, and one touched nothing but a fixture somebody here wrote.
 #[test]
@@ -122,5 +146,15 @@ fn ledger_gate_rule_20_refuses_a_declared_text_pass_and_a_fixture_only_reading()
              projects root corpus."
         ),
         "a fixture beside a real artefact is still a measurement"
+    );
+    // The veto stands down for EVERY artefact the outside table reads, not a narrower set:
+    // an arm missing from the real-artefact table overrides an arm present in the other one,
+    // which is the veto doing the opposite of its job.
+    assert!(
+        artefact::names_an_artefact(
+            "Read the writer at 158550335 in the shipped build, twice, then ran the same \
+             command in a fixture home to see what it prints with nothing there."
+        ),
+        "a build read by offset outranks a later mention of a fixture home"
     );
 }

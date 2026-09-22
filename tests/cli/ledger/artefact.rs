@@ -30,6 +30,27 @@ use serde_json::Value;
 /// stop, so it can never reach across a sentence into an artefact the check never touched.
 const GAP: &str = r"(?:[\w.+/-]+ )?";
 
+/// A build named by its PATH rather than by an English word for it.
+///
+/// The table read `binary`, `executable`, `the build` and the product-plus-version forms,
+/// and a check that simply gave the path it opened named none of them: `grep -c "literal"
+/// <cache>/2.1.258/claude` reads the shipped build and was classified a text pass. Three
+/// shapes, all of them generic: a path whose last component is the executable's own name, a
+/// path through a `versions/<triple>` directory (the native install layout), and one through
+/// a `builds/<name>` directory (a cache of them). No machine's own path is spelled here.
+const BUILD_PATH: &str = concat!(
+    r"[\w.~$/{}<>-]*/claude\b",
+    r"|\bversions/[12]\.\d{1,3}\.\d{1,3}",
+    r"|\bbuilds/[\w.+-]+",
+);
+
+/// A BYTE OFFSET written without the `@` sigil. 23 base checks across the messaging family
+/// say `at 158550335`, which is the same locator the table reads as `@158550335`; reading
+/// only the sigil form passed over the newest measurement at the verified build on one of
+/// them. The digit run is eight or nine, which is what an offset into this build is, and it
+/// is anchored on the word that makes it a location rather than a count.
+const BARE_OFFSET: &str = r"\b(?:at|offset|offsets)\s+\d{8,9}\b";
+
 /// A csift INVOCATION, pointed at something. csift reads transcripts off disk, so the run is
 /// a measurement - but the TARGET is what makes it one: `csift search` inside a sentence
 /// about what the command does is a noun, while `csift files <project> --by timeline` walked
@@ -55,6 +76,8 @@ fn outside() -> &'static regex::Regex {
             // the build named by product and version, whatever noun the sentence chose
             r"\bClaude Code [12]\.\d{1,3}\.\d{1,3} (?:file|build|binary|executable|artifact)\b",
             r"@\d{6,}|\bbyte offsets?\b|\bstrings -|\bgrep -ab\b|\bbyte-search|byte-exact",
+            BUILD_PATH,
+            BARE_OFFSET,
             // the corpus
             r"\bcorpus\b|corpus-wide|whole-corpus|projects roots?\b|projects director(?:y|ies)\b",
             r"\bjsonl\b|\.jsonl|\btranscripts?\b|\bcensus(?:ed|es)?\b|\bon disk\b|~/\.claude",
@@ -100,13 +123,23 @@ fn fixture_only() -> &'static regex::Regex {
 }
 
 /// ... and these are the artefacts a fixture cannot be.
+///
+/// It is a SUPERSET of `outside`'s build and offset arms, and that is load-bearing rather
+/// than tidy: the `fixture_only` veto only stands down when a real artefact is also named,
+/// so an arm missing here OVERRIDES an arm present there. A check that read the shipped
+/// binary twice was refused because a later clause mentioned a fixture home, which is the
+/// veto doing the opposite of its job.
 fn real_artefact() -> &'static regex::Regex {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
         let pattern = [
             r"@\d{6,}|\bcorpus\b|projects roots?\b|\bbinar(?:y|ies)\b|\bcensus|\bexecutable\b",
-            r"\bwhole-build\b",
-            &format!(r"(?:shipped|cached|historical|native|verified) {GAP}builds?\b"),
+            r"\bwhole-build\b|\bstrings -|\bgrep -ab\b|\bbyte-search|byte-exact",
+            r"\bbyte offsets?\b|\bthe build\b|\bhistorical builds\b",
+            r"builds? (?:at|of|from|carrying|lacking|named)\b",
+            &format!(r"(?:shipped|cached|historical|native|verified|current|win32|windows) {GAP}builds?\b"),
+            BUILD_PATH,
+            BARE_OFFSET,
             r"~/\.claude",
             r"\bClaude Code [12]\.\d{1,3}\.\d{1,3} (?:file|build|binary|executable|artifact)\b",
             &format!(r"\blive {GAP}(?:trial|session|run)\b"),
