@@ -232,15 +232,18 @@ const PRINT_DENY: &str = "#![deny(clippy::print_stdout";
 /// either of these, so a plain substring separates them.
 const PRINT_SINKS: [&str; 2] = ["emit_scope_banner", "emit_duplicate_banner"];
 
-/// POSITIVE CONTROL for the CALLER half. These three modules print every row with
-/// `println!` and reach a print-form sink today; if the sweep stops finding them it has
-/// narrowed, and a narrowed sweep reads as a clean bill of health while checking nothing.
-/// A module that moves out of this list either gained an `Out` (then it calls the writer
-/// form and belongs in the list below) or stopped printing a banner (then say so here).
-const PRINT_FORM_CALLERS: [&str; 3] = [
-    "src/commands/recover/render.rs",
-    "src/commands/session/render.rs",
-    "src/commands/stats/render.rs",
+/// POSITIVE CONTROL for the CALLER half, and it names the SINKS rather than the modules.
+/// These three print every row with `println!` and reach a print-form sink today; if the
+/// sweep stops finding them it has narrowed, and a narrowed sweep reads as a clean bill of
+/// health while checking nothing. Asked only whether a module names SOME sink, the control
+/// still passes when a module with two calls migrates ONE of them and leaves the other
+/// behind - and the one left behind is the `println!` this whole file is about. A module
+/// that moves out of this list either gained an `Out` (then it calls the writer form and
+/// belongs in the list below) or stopped printing that banner (then say so here).
+const PRINT_FORM_CALLERS: [(&str, &[&str]); 3] = [
+    ("src/commands/recover/render.rs", &PRINT_SINKS),
+    ("src/commands/session/render.rs", &["emit_scope_banner"]),
+    ("src/commands/stats/render.rs", &PRINT_SINKS),
 ];
 
 /// POSITIVE CONTROL for the GUARDED half, which can narrow the same way: these five are
@@ -314,12 +317,21 @@ fn no_module_that_denies_the_print_lints_calls_a_println_form_banner_sink() {
         .filter(|(_, code)| PRINT_SINKS.iter().any(|sink| code.contains(sink)))
         .map(|(path, _)| path.as_str())
         .collect();
-    for want in PRINT_FORM_CALLERS {
-        assert!(
-            callers.contains(&want),
-            "{want} calls a print-form banner sink and must be seen doing it; the callers \
-             found were {callers:?}"
-        );
+    for (want, sinks) in PRINT_FORM_CALLERS {
+        let code = sources
+            .iter()
+            .find(|(path, _)| path == want)
+            .map(|(_, code)| code.as_str())
+            .unwrap_or_else(|| panic!("{want} is not among the {} files read", sources.len()));
+        for sink in sinks {
+            assert!(
+                code.contains(sink),
+                "{want} calls `{sink}` today and must be seen doing it. This is asked per \
+                 SINK because that module calls {sinks:?}: asked only whether it names SOME \
+                 sink, a half-migrated module passes while the call left behind is still a \
+                 `println!`. The callers found were {callers:?}"
+            );
+        }
     }
 
     let offenders: Vec<&str> = callers
