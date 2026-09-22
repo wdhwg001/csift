@@ -78,12 +78,15 @@
 //! intermediate structures, which for the JSON projector is the `serde_json::Value` tree it
 //! builds before serializing it into its chunk's buffer - a term bounded by the pool rather
 //! than by the look-ahead. On ONE measured fixture (SPEC 7k names it: 200 records whose
-//! rendered rows are 4.2 MB each, so 128 of them is 512.2 MiB) the peak-RSS delta read
-//! 715.8 MiB median and 836.9 MiB at worst - both under the bound, and neither a ratio to
-//! carry anywhere else. SPEC 7k's second shape, 160 rows of 4.55 MiB, moved between 0 and
-//! +127 MiB: what a peak SHOWS depends on the fixture's own parse footprint and on the
-//! pages the process already holds, which is why a reader sizing a run works from the
-//! bound above rather than from an observed delta.
+//! rendered rows are 4.2 MB each, so 128 of them is 512.2 MiB) the peak-RSS delta is a
+//! RANGE, and one pair of numbers would state a property of one run rather than of the
+//! pipeline: three runs of five interleaved pairs, at one-minute load averages of 7 to 27,
+//! 8 to 10 and 7, read medians of 715.8, 844.2 and 723.7 MiB, with the widest single
+//! observation at 929.3 and the narrowest at 522.3 - every one of them under the bound, and
+//! none of them a ratio to carry anywhere else. SPEC 7k's second shape, 160 rows of 4.55
+//! MiB, moved between 0 and +127 MiB: what a peak SHOWS depends on the fixture's own parse
+//! footprint and on the pages the process already holds, which is why a reader sizing a run
+//! works from the bound above rather than from an observed delta.
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 use std::io::Write;

@@ -831,27 +831,28 @@ surface change bumps the PATCH.
   it holds. On that session, rows averaging 78 KB, that is 10 to 20 MB against a peak of
   about 1,570 MiB and it does not clear the noise: medians of 13 interleaved reps differ by
   0.1 MiB, against per-arm spreads of 12 and 17 MiB. On a synthetic transcript whose
-  rendered rows are 4,195,818 B, five interleaved pairs put the delta at 715.8 MiB median
-  and 836.9 MiB at worst, against a one-copy figure of 512.2 MiB - so the peak is not a
-  floor on the bound, and a reader sizing a run works from twice 128 rows. The smallest
-  inputs stay inside the same-binary control band, at a median ratio of 1.009 against the
-  control's 0.9997. Output bytes do not move: of the acid set's 169 (row, size class) pairs
-  over three size classes, 165 are compared on all four streams - stdout, stderr, the exit
-  code, and an interleaved `2>&1` capture, which is the only one that can see the ORDER
-  between the first two - and 163 are byte-identical on every one of them, with stderr and
-  the exit code identical on all 165. The two that are not are one binding in its two size
-  classes, `csift --help`, whose page grew by the 512 bytes of the clause the exit law
-  gained this release - a documented surface change, and the only stdout difference anywhere
-  in the set. FOUR MORE are excluded because they print LIVE state, and both bindings are
-  named: the `whoami --format json` rows, whose lane instants move when the session they
-  name gains a record, and the `status` rows, whose fourth stdout line carries an
-  elapsed-seconds field that a repeat of the SAME binary moved 21 s later. All four are run
-  anyway, under the condition that makes their comparison mean anything: the two arms of a
-  pair land inside one second. Whether a given pair then matches is a property of when it
-  ran, which is exactly why it is not counted among the 165. What a render change can never
-  reach is stated rather than claimed away: a heavy regex row is 1.189 s against a 1.140 s
-  floor with the render removed entirely, because its output is 2.5 MB and its clock is the
-  regex over that 1.18 GB.
+  rendered rows are 4,195,818 B, three runs of five interleaved pairs read medians of 715.8,
+  844.2 and 723.7 MiB, the widest single observation 929.3 and the narrowest 522.3, against
+  a one-copy figure of 512.2 MiB - so the peak is not a floor on the bound, one run is not a
+  property of the pipeline, and a reader sizing a run works from twice 128 rows. The
+  smallest inputs stay inside the same-binary control band, at a median ratio of 1.009
+  against the control's 0.9997. Output bytes do not move: of the acid set's 169 (row, size
+  class) pairs over three size classes, 165 are compared on all four streams - stdout,
+  stderr, the exit code, and an interleaved `2>&1` capture, which is the only one that can
+  see the ORDER between the first two - and 163 are byte-identical on every one of them,
+  with stderr and the exit code identical on all 165. The two that are not are one binding
+  in its two size classes, `csift --help`, whose page grew by the 512 bytes of the clause
+  the exit law gained this release - a documented surface change, and the only stdout
+  difference anywhere in the set. FOUR MORE are excluded because they print LIVE state, and
+  both bindings are named: the `whoami --format json` rows, whose lane instants move when
+  the session they name gains a record, and the `status` rows, whose fourth stdout line
+  carries an elapsed-seconds field that a repeat of the SAME binary moved 21 s later. All
+  four are run anyway, under the condition that makes their comparison mean anything: the
+  two arms of a pair land inside one second. Whether a given pair then matches is a property
+  of when it ran, which is exactly why it is not counted among the 165. What a render change
+  can never reach is stated rather than claimed away: a heavy regex row is 1.189 s against a
+  1.140 s floor with the render removed entirely, because its output is 2.5 MB and its clock
+  is the regex over that 1.18 GB.
 - **A record's width is a number now, and it is written down.** The amendment gave `Record`
   a second conversion key and a memo holding both parsed conversions, and the memo held its
   payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
