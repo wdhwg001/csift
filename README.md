@@ -270,14 +270,13 @@ csift never loads a whole transcript when it doesn't have to: it **mmaps** each 
 
 ## How much of this is verified
 
-csift rests on hundreds of small facts about what Claude Code writes. Each one is a claim in [`INTROSPECTION.json`](./INTROSPECTION.json), and each claim records how completely it is attributed: whether the code that writes the fact was traced in the shipped Claude Code binary, and whether a specimen of the fact was observed. The table is regenerated from the ledger and checked by the pre-commit gate; the numbers are what they are.
+csift rests on hundreds of small facts about what Claude Code writes. Each one is a claim in [`INTROSPECTION.json`](./INTROSPECTION.json), carrying the Claude Code version range it holds over and how completely it is attributed: whether the code that writes the fact was traced in the shipped Claude Code binary, and whether a specimen of the fact was observed. A claim keeps its current reading and at most one superseded one, so the table below counts the current reading of each. It is regenerated from the ledger and checked by the pre-commit gate; the numbers are what they are.
 
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
 | end-to-end | 585 | 79.2% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
 | &nbsp;&nbsp;of which chain traced | 585 | 79.2% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
-| &nbsp;&nbsp;of which audit-graded, chain not yet traced | 0 | 0.0% | graded end-to-end from the release-audit checks (writer offsets cited there) before the three-hop tracing existed; the next audit traces them |
 | specimen-only | 47 | 6.4% | observed on disk or live; the writer not traced (or traced only in part) (24 of them with a partly traced writer) |
 | producer-only | 79 | 10.7% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 13 | 1.8% | a template or field located without its gate and trigger; no specimen |
@@ -287,9 +286,9 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
 
-`anchors byte-exact at Claude Code 2.1.258: 7,018 of 7,633 (elided 342, absent 191, prefix-only 82)`
+`anchors byte-exact at Claude Code 2.1.258: 7,013 of 7,628 (elided 342, absent 191, prefix-only 82), closed-state anchors 0, not checked`
 
-An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates.
+An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->
 
 A claim that is not end-to-end lists the exact instrument that would close it, and a claim attributed by elimination can never be marked as holding.
