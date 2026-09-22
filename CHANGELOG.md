@@ -818,6 +818,31 @@ surface change bumps the PATCH.
   run that silently scanned fewer lines than the caller asked for would read as the definitive
   absence an empty result promises.
 
+- **The introspection ledger moves to schema 2: version-ranged states, one receipt each,
+  and the prose law as a gate.** `INTROSPECTION.json` had grown a `checks[]` history - one
+  appended record per release audit - and the history became the file: 1,856 checks behind
+  739 claims, 1,117 of them superseded by a later check on the same claim, every one
+  carrying the calendar dates, csift versions and audit-process words the ledger's own prose
+  law bars. A fact record does not need its own minutes. A claim now carries its `code[]`
+  sites at claim level, because csift's tree is one tree at any time and where a fact is
+  relied on is never a property of a Claude Code version range, plus one or two `states[]`
+  with exactly one of them open. A state is a version range (`from`, and `to` = null while
+  it is open) holding the claim text for that range, the two attribution legs, the
+  provenance and ONE `verified` receipt; `located` and `first_seen_claude_code` retire into
+  the first state's `from`, and the per-check dates and csift versions retire outright. Each
+  state also gains a `probe`, the machine-readable twin of `instrument` naming the half a
+  stranger re-runs first as one of bytes, corpus, csift or live. The gate is rewritten to
+  read it, grows two rules and mends one: rule 13 is the state shape, rule 14 is the prose
+  law itself over every field a pass wrote, and rule 12 now counts a closed state's anchors
+  without re-reading them against a later build and refuses an offset beside an empty
+  excerpt, which had been passing as byte-exact while anchoring nothing. Every rule fails by
+  name on a hand-built specimen. The receipt is a MEASUREMENT - a check that only re-reads
+  csift's own source is a text pass and can never back the badge - and a folded check is not
+  simply dropped: every fact token with no survivor in the state is carried into `residue`.
+  The prose rewrite masks every quoted run, literal and byte offset before it fires, so it
+  can never cut a comma out of a jq argument list or a semicolon out of a verbatim build
+  quote. The README's tally block counts the open states.
+
 ## [0.12.3] - 2026-09-13
 
 ### Added
