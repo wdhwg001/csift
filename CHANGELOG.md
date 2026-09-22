@@ -846,10 +846,11 @@ surface change bumps the PATCH.
   difference anywhere in the set. FOUR MORE are excluded because they print LIVE state, and
   both bindings are named: the `whoami --format json` rows, whose lane instants move when
   the session they name gains a record, and the `status` rows, whose fourth stdout line
-  carries an elapsed-seconds field that a repeat of the SAME binary moved 21 s later. All
-  four are run anyway, under the condition that makes their comparison mean anything: the
-  two arms of a pair land inside one second. Whether a given pair then matches is a property
-  of when it ran, which is exactly why it is not counted among the 165. What a render change
+  carries an elapsed-seconds field that advances by the gap between the two captures, so a
+  repeat of the SAME binary differs from itself by exactly however long it waited. All four
+  are run anyway, under the condition that makes their comparison mean anything: the two
+  arms of a pair land inside one second. Whether a given pair then matches is a property of
+  when it ran, which is exactly why it is not counted among the 165. What a render change
   can never reach is stated rather than claimed away: a heavy regex row is 1.189 s against a
   1.140 s floor with the render removed entirely, because its output is 2.5 MB and its clock
   is the regex over that 1.18 GB.
