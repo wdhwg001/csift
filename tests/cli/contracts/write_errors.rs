@@ -13,12 +13,16 @@
 //! is the silent failure the output contract forbids and which is what an `Out::flush`
 //! that returned `Ok(())` would leave behind.
 //!
-//! The print lint that holds all of this is at the PRINT SITE, and that leaves one
-//! residual a call cannot be read off the calling module: `text::emit_scope_banner` and
-//! `path::emit_duplicate_banner` print with `println!` from files that carry no deny,
-//! because both legitimately print. So a call into either from inside a buffered module
-//! compiles clean, passes clippy, and puts a `println!` in the middle of a buffered stream.
-//! The last test here is the sweep that closes it.
+//! The print lint that holds all of this is at the PRINT SITE, so a call that prints from
+//! another module is outside it, and the tree holds TWO such edges. The one the last test
+//! sweeps is the banner sinks: `text::emit_scope_banner` and `path::emit_duplicate_banner`
+//! print with `println!` from files that carry no deny, because both legitimately print, so
+//! a call into either from inside a buffered module compiles clean, passes clippy, and puts
+//! a `println!` in the middle of a buffered stream. The other is `commands/image/run.rs`
+//! calling `extract` in `commands/image/convert.rs`, which is correct by EXCLUSIVITY (the
+//! `--out` branch builds no `Out` at all) and is deliberately outside this sweep - adding
+//! `extract` to the sink set would flag it for a call that is right. `text/out.rs` carries
+//! both edges in full.
 
 use crate::harness::*;
 

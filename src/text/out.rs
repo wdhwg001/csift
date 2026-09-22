@@ -36,15 +36,24 @@
 //! and duplicate banners through it. Otherwise one query answers a closed pipe two ways,
 //! chosen by whether its scope was wide enough to print a banner.
 //!
-//! The lint fires at the PRINT SITE, and that leaves exactly one residual. The two banner
-//! sinks named `emit_scope_banner` and `emit_duplicate_banner` print from files that carry
-//! no deny, because both of those files legitimately print - so a CALL to either from
-//! inside a buffered module compiles clean, passes clippy, and puts a `println!` back in
-//! front of the buffer. Their callers are the three surfaces that print every row with
-//! `println!` (`commands/session/render.rs`, `commands/stats/render.rs`,
-//! `commands/recover/render.rs`); a surface that holds an `Out` takes the writer form
-//! instead, and a tree sweep in `tests/cli/contracts/write_errors.rs` refuses a module that
-//! carries the deny and names either sink.
+//! The lint fires at the PRINT SITE, so a CALL that prints from ANOTHER module is outside
+//! it, and the tree holds TWO such edges. The banner sinks named `emit_scope_banner` and
+//! `emit_duplicate_banner` print from files that carry no deny, because both of those files
+//! legitimately print - so a CALL to either from inside a buffered module compiles clean,
+//! passes clippy, and puts a `println!` back in front of the buffer. Their callers are the
+//! three surfaces that print every row with `println!` (`commands/session/render.rs` names
+//! the scope sink; `commands/stats/render.rs` and `commands/recover/render.rs` name both);
+//! a surface that holds an `Out` takes the writer form instead, and a tree sweep in
+//! `tests/cli/contracts/write_errors.rs` refuses a module that carries the deny and names
+//! either sink, asking PER SINK so that half a migration fails too. The SECOND edge is
+//! `commands/image/run.rs`, which carries the deny and calls `extract` in
+//! `commands/image/convert.rs`, a file that carries none and holds six prints. It is safe
+//! by EXCLUSIVITY rather than by the lint: `run_image` dispatches `extract` and the two
+//! listing renders in either/or branches and only the renders build an `Out`, so on the
+//! `--out` path there is no buffer for a print to land ahead of. `convert.rs` says that at
+//! its own module doc and names the condition that would end it. The sweep is deliberately
+//! not widened to reach it - its sink set is the two banner names, and adding `extract`
+//! would flag `run.rs` for a call that is correct.
 //!
 //! The FLUSH obligation is WIDER THAN THE LINT, and that is the half to read twice. A
 //! surface [`Out::flush`]es before ANY CALL that can write to stderr, not only before an
