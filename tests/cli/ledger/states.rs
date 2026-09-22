@@ -13,8 +13,9 @@ use serde_json::Value;
 /// `first_seen` is a build the behaviour was OBSERVED at; `parsed` is the same, read out of
 /// a value that also carried prose; `verified` is the earliest build a receipt ran at,
 /// which BOUNDS the floor without measuring it; `located` is the build the claim was pinned
-/// at, a default that says nothing about when the behaviour began. Without the word, the
-/// 107 defaulted floors and the 110 measured ones read alike.
+/// at, a default that says nothing about when the behaviour began. Without the word, the 519
+/// floors that are a pinning default and the 114 a reading actually observed read alike, and
+/// so do the 108 a receipt only BOUNDS.
 pub(crate) const FROM_BASES: [&str; 4] = ["first_seen", "parsed", "verified", "located"];
 
 /// Rule 13: the shape of the state list. One or two states, exactly one open AND LAST, a

@@ -231,8 +231,13 @@ pub(crate) fn hits(s: &str) -> Vec<(&'static str, String)> {
     out
 }
 
-/// Every field of a state a PASS wrote, as (path, text). An `excerpt` and a build literal
-/// are quotations and are deliberately absent.
+/// Every field of a state a PASS wrote, as (path, text). THREE kinds are deliberately
+/// absent, and all three are quotations rather than prose: an `excerpt`, a `probe.literal`,
+/// and every member of `writer_literal_floor` - its `literal` is a build's own bytes and its
+/// `lowest_present`, `highest_absent` and `ladder` are the versions that literal was counted
+/// across, which is a measurement written in Claude Code versions and in nothing else. The
+/// law's own sentence says every text field of every state; this is the list of what a pass
+/// WROTE, which is what the law is about.
 fn prose_fields(state: &Value) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut push = |path: String, v: &Value| {
@@ -291,9 +296,9 @@ fn prose_fields(state: &Value) -> Vec<(String, String)> {
 pub(crate) fn check_state(at: &str, state: &Value, failures: &mut Vec<String>) {
     for (path, text) in prose_fields(state) {
         for (rule, token) in hits(&text) {
-            // The article follows the LABEL, because `a audit-process word` is the one
-            // reading a person gets of this rule and a gate that misspells its own finding
-            // reads as one nobody maintains.
+            // The article follows the LABEL: three of the five names begin with a vowel, so
+            // a fixed `a` would print `a audit-process word` - and a gate that misspells its
+            // own finding reads as one nobody maintains.
             let article = if rule.starts_with(['a', 'e', 'i', 'o', 'u']) {
                 "an"
             } else {
