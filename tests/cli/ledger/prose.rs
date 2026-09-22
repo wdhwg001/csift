@@ -157,11 +157,23 @@ fn round_is_csifts(s: &str, end: usize) -> bool {
 /// FIRST PERSON, case-sensitive and whitespace-anchored. See the module doc for why: `we`
 /// is a real identifier name in the shipped bundle, so the test is whether the token stands
 /// alone as an English word rather than whether the letters occur.
+///
+/// THE VERB IS NOT ENUMERABLE. The arm used to list the verbs it knew - `am`, `was`, `did`,
+/// anything ending in `ed` - and English is not a closed set, so `I then`, `I caught`,
+/// `I actually`, `I made`, `I now` and `I declare` all shipped. `I` plus ANY word closes
+/// that, and the cost is measured: six spans where `I` is a minified binding name rather
+/// than a pronoun, which take the backticks a quote owes and which the exemption then
+/// masks - the same remedy this rule's own note already records for `we`.
+///
+/// THE BOUNDARY ADMITS A CLOSING QUOTE. `us` needed whitespace or a mark after it, so
+/// `not visible to us'.` was invisible for the apostrophe. A pronoun ends at the end of a
+/// quoted phrase as readily as at a full stop, and `my`, `we`, `our` and `us` are bare
+/// tokens now rather than a pronoun plus a word they need not govern.
 fn first_person_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?:^|\s)(I (?:am|was|have|had|will|would|could|can|do|did|re-[a-z]+|[a-z]+ed)|I'(?:m|ve|ll|d)|[Mm]y [a-z]+|[Ww]e|[Oo]ur [a-z]+|us)(?:[\s,.;:]|$)",
+            r#"(?:^|\s)(I [A-Za-z][A-Za-z'-]*|I'(?:m|ve|ll|d)|[Mm]y|[Ww]e|[Oo]ur|us)(?:[\s,.;:)\]'"`]|$)"#,
         )
         .unwrap()
     })

@@ -135,6 +135,17 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
         "the equality is telling us the stored form",
         "our reading of the preserved set",
         "Our second pass over the same corpus",
+        // The VERB IS NOT ENUMERABLE: six spellings the closed list let through, and the
+        // two the review planted live, in a receipt and in a residue line.
+        "I then read the product back off disk",
+        "in a 240 s poll I caught one session go idle",
+        "every row whose JSON I actually parsed",
+        "and I declare it as such",
+        "point by point I now cite a trigger",
+        "I ran the census over the whole projects root.",
+        "the band rests on the existing check, not on a measurement I made.",
+        // The BOUNDARY admits a closing quote, which an apostrophe used to defeat.
+        "ESRCH-proven, not merely 'not visible to us'.",
     ] {
         let hits = prose::hits(text);
         assert!(
