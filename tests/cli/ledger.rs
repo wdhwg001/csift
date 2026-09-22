@@ -88,6 +88,12 @@
 //!     history, which is what a superseded reading is for.
 //! 18. The file's own shape: `schema` is 2, the claim list is non-empty, and every claim
 //!     carries a unique non-empty `id` and a non-empty `area`.
+//! 19. An instrument that carries a PROGRAM carries one that parses: every heredoc in an
+//!     `instrument` or a `probe.command` is handed back to its own language (python
+//!     `compile`, `bash -n`, `jq -n`). A heredoc's indent is its block structure, so a prose
+//!     pass that normalises whitespace can leave every word intact and every program dead,
+//!     and no other rule here would see it. An interpreter this host does not hold is
+//!     counted and skipped, exactly as rule 12 skips a build it does not hold.
 //!
 //! The attribution set carries `upstream`: the producer lies OUTSIDE the shipped binary
 //! by construction (the model or API side, the operating system, a native runtime
@@ -96,6 +102,7 @@
 
 mod anchors;
 mod legs;
+mod programs;
 mod prose;
 mod rules;
 mod specimens;
@@ -198,6 +205,7 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
     let claims = doc["claims"].as_array().map(Vec::as_slice).unwrap_or(&[]);
     let mut evidence: HashMap<String, String> = HashMap::new();
     let mut file_cache: HashMap<String, Option<rules::FileText>> = HashMap::new();
+    let mut embedded = programs::Programs::default();
 
     for c in kept {
         let id = c["id"].as_str().unwrap_or("");
@@ -212,8 +220,10 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
             legs::text_instructions(&at, state, &mut failures);
             legs::retired_spellings(&at, state, &mut failures);
             prose::check_state(&at, state, &mut failures);
+            programs::check_state(&at, state, &mut embedded, &mut failures);
         }
     }
+    println!("{}", programs::line(&embedded));
 
     // Rule 12: every byte anchor of an open state still carries its own excerpt.
     let anchors = anchors::tally(claims, verified, &mut failures);

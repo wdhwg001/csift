@@ -42,6 +42,7 @@ fn only(failures: &[String]) -> &str {
 }
 
 mod byte_anchors;
+mod programs;
 mod readme;
 mod receipts;
 mod shape;
