@@ -179,6 +179,70 @@ fn the_image_hint_prints_under_its_own_row_and_nowhere_else() {
 }
 
 #[test]
+fn a_pointer_is_printed_only_when_it_addresses_something() {
+    // Two guards, both against printing an address that resolves to nothing. A subagent
+    // hit's `--line` refetch exists because a line number is per-FILE, so a line of 0 -
+    // which `csift show` does not accept, lines being 1-based - must print no pointer at
+    // all rather than a command that errors. The capped-siblings pointer is the same shape:
+    // `(+0 more)` announces a cap that took nothing, and a `--line 0..N` span addresses a
+    // line the transcript does not have.
+    let unlined = hit(Class::UserMessage, 0, "x", Vec::new());
+    let mut sub = exchange(0, vec![unlined], Vec::new());
+    sub.is_subagent = true;
+    let tok = tokens(std::slice::from_ref(&sub));
+    let mut buf: Vec<u8> = Vec::new();
+    write_exchange(&mut buf, &sub, &tok, None).expect("sink");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(
+        !text.contains("csift show @"),
+        "no refetch at line 0: {text}"
+    );
+
+    // The same exchange with a real line DOES carry the pointer - so the guard above is
+    // the line number's doing and not the subagent flag's.
+    let mut lined = sub.clone();
+    lined.hits = vec![hit(Class::UserMessage, 12, "x", Vec::new())];
+    let mut buf: Vec<u8> = Vec::new();
+    write_exchange(&mut buf, &lined, &tok, None).expect("sink");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(text.contains("↳ csift show @"), "{text}");
+    assert!(text.contains("--line 12"), "{text}");
+
+    // siblings_hidden 0 with a real span, and a real count with no span: neither prints.
+    let mut zero_hidden = exchange(
+        0,
+        vec![hit(Class::UserMessage, 1, "x", Vec::new())],
+        Vec::new(),
+    );
+    zero_hidden.siblings_hidden = 0;
+    zero_hidden.turn_lines = (4, 9);
+    let mut buf: Vec<u8> = Vec::new();
+    write_exchange(&mut buf, &zero_hidden, &tok, None).expect("sink");
+    assert!(!String::from_utf8(buf)
+        .expect("utf8")
+        .contains("more · csift show"));
+
+    let mut no_span = zero_hidden.clone();
+    no_span.siblings_hidden = 3;
+    no_span.turn_lines = (0, 9);
+    let mut buf: Vec<u8> = Vec::new();
+    write_exchange(&mut buf, &no_span, &tok, None).expect("sink");
+    assert!(!String::from_utf8(buf)
+        .expect("utf8")
+        .contains("more · csift show"));
+
+    // Both present: the pointer prints, with its count and its span.
+    let mut both = zero_hidden.clone();
+    both.siblings_hidden = 3;
+    both.turn_lines = (4, 9);
+    let mut buf: Vec<u8> = Vec::new();
+    write_exchange(&mut buf, &both, &tok, None).expect("sink");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(text.contains("(+3 more · csift show @"), "{text}");
+    assert!(text.contains("--line 4..9)"), "{text}");
+}
+
+#[test]
 fn every_row_writer_propagates_a_write_error() {
     // Each of the four: a refusing sink must come back as an Err, never as a short write
     // reported as success.

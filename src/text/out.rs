@@ -154,6 +154,56 @@ mod tests {
         assert!(format!("{err:#}").contains("row 40 refused"));
     }
 
+    /// The LOOK-AHEAD is what bounds the memory this pipeline adds, so it is measured
+    /// rather than asserted from the constants: the renderer counts the rows it has
+    /// produced and the sink reads that count as each buffer arrives, so the largest gap
+    /// between the two IS how many rendered rows were held unwritten at once. It must be
+    /// 128 - a wider look-ahead is more peak memory than the contract states, a narrower
+    /// one leaves workers idle at each barrier.
+    #[test]
+    fn write_ordered_holds_at_most_one_wave_of_rendered_rows() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Counting<'a> {
+            rendered: &'a AtomicUsize,
+            written: usize,
+            peak: usize,
+        }
+        impl Write for Counting<'_> {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                // Read the gap BEFORE booking this buffer: what is held unwritten at the
+                // moment a write begins is the peak. One byte per row, so the two counts
+                // are in the same unit.
+                let gap = self.rendered.load(Ordering::SeqCst) - self.written;
+                self.peak = self.peak.max(gap);
+                self.written += buf.len();
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let items: Vec<usize> = (0..1000).collect();
+        let rendered = AtomicUsize::new(0);
+        let mut sink = Counting {
+            rendered: &rendered,
+            written: 0,
+            peak: 0,
+        };
+        write_ordered(&mut sink, &items, |_i, _item, buf| {
+            buf.push(b'.');
+            rendered.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .expect("the counting sink never fails");
+        assert_eq!(sink.written, items.len(), "every row reached the sink");
+        assert_eq!(
+            sink.peak, 128,
+            "the look-ahead the memory bound is stated as"
+        );
+    }
+
     /// A wave is a barrier, not a boundary in the byte stream: an item count that is not a
     /// multiple of the chunk or the wave still emits every item exactly once, in order.
     #[test]
