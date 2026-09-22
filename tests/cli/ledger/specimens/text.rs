@@ -172,6 +172,58 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
     assert!(prose::hits("`a short literal saying today`").is_empty());
 }
 
+/// Rule 14's two later widenings: the word the alphabet was missing, and the sentence
+/// boundary the version arm could not see past.
+#[test]
+fn ledger_gate_rule_14_bars_the_pass_and_reads_a_version_at_a_full_stop() {
+    // `round` names the pass that produced a sentence, and it led 85 carried readings.
+    for text in [
+        "round three of the attribution push: the producer leg traced to closure",
+        "round two of the attribution push: the specimen leg re-run",
+        "Unlisted by the previous round.",
+        "33 transcripts, 15 rounds, 495 file observations",
+        "the round-two hop at 172652965 supplied what the mac build could not",
+    ] {
+        let hits = prose::hits(text);
+        assert!(
+            hits.iter().any(|(r, _)| *r == "audit-process word"),
+            "{text}: {hits:?}"
+        );
+    }
+    // csift's OWN spelling survives by shape: the compound in either spelling, and the call.
+    for text in [
+        "the value round-trips through input.command with an identical md5",
+        "no unknown key can round-trip",
+        "a gate round trip on a phrase a hook injects",
+        "Round trip: the same search returned 'matched 1 exchange'",
+        "out.append((n, round(sum(naive) / max(sum(ded), 1), 2)))",
+    ] {
+        assert!(
+            !prose::hits(text)
+                .iter()
+                .any(|(r, _)| *r == "audit-process word"),
+            "{text}: {:?}",
+            prose::hits(text)
+        );
+    }
+    // A csift version at the END of a sentence: the trailing class refused the full stop and
+    // `$` could not see past it, so `0.10.0.` shipped.
+    for text in [
+        "while the neighbours are 0.10.0.",
+        "the reading was taken at 0.9.4. The next one moved it.",
+        "at v0.12.3, and again after",
+    ] {
+        let hits = prose::hits(text);
+        assert!(
+            hits.iter().any(|(r, _)| *r == "csift version"),
+            "{text}: {hits:?}"
+        );
+    }
+    // A Claude Code version is `1.x.y` or `2.x.y`, so the two never collide - at a full stop
+    // either.
+    assert!(prose::hits("verified at Claude Code 2.1.258.").is_empty());
+}
+
 /// Rule 10's widening: an instruction is an instruction wherever it is written down.
 /// Fourteen of them sat in `residue` and in a receipt's `note`, the two places the rule did
 /// not look.

@@ -103,7 +103,12 @@ fn month_re() -> &'static Regex {
 /// look-around the regex crate does not have.
 fn csift_version_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?:^|[^\w.])(v?0\.\d{1,2}\.\d{1,3})(?:[^\w.]|$)").unwrap())
+    // The TRAILING class has a third arm, and it is the one a sentence ends on: a version
+    // followed by a full stop that is not part of a longer number. `[^\w.]` alone refused
+    // the `.`, `$` could not see past it, and `0.10.0.` at the end of a sentence shipped.
+    RE.get_or_init(|| {
+        Regex::new(r"(?:^|[^\w.])(v?0\.\d{1,2}\.\d{1,3})(?:[^\w.]|\.(?:\s|$)|$)").unwrap()
+    })
 }
 
 /// The PLURALS and the agent noun are in the alphabet, because a word list that stops at
@@ -115,7 +120,7 @@ fn audit_word_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?i)\b(re-audits|re-audited|re-audit|verifiers|verifier|verify lane|auditors|auditor|tracers|tracer|scribes|scribe|adjudications|adjudication|adjudicated|adjudicate|kicked|today|yesterday|planted fakes|planted fake|planted|adversarial|devil's advocate|blind review|audits|audited|audit)\b",
+            r"(?i)\b(re-audits|re-audited|re-audit|verifiers|verifier|verify lane|auditors|auditor|tracers|tracer|scribes|scribe|adjudications|adjudication|adjudicated|adjudicate|kicked|today|yesterday|planted fakes|planted fake|planted|adversarial|devil's advocate|blind review|audits|audited|audit|rounds|round)\b",
         )
         .unwrap()
     })
@@ -128,6 +133,25 @@ const BACKTICK_MAX: usize = 400;
 fn backticked_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(&format!(r"`[^`\n]{{0,{BACKTICK_MAX}}}`")).unwrap())
+}
+
+/// `round` is an audit-process word - "the previous round", "round three of the attribution
+/// push" - and it is also csift's own: a value that survives a serialize ROUND-TRIPS, and a
+/// probe's arithmetic ROUNDS a ratio. Those two are decided by SHAPE, on what follows the
+/// token: `-trip` and ` trip` are the hyphenated and open spellings of the same compound,
+/// which one sentence writes either way, and `(` is the call. Everything else is the pass
+/// that produced the sentence, whatever noun it wears.
+fn round_is_csifts(s: &str, end: usize) -> bool {
+    let rest = &s[end..];
+    if rest.starts_with('(') {
+        return true;
+    }
+    let head = rest
+        .chars()
+        .take(5)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    head == "-trip" || head == " trip"
 }
 
 /// FIRST PERSON, case-sensitive and whitespace-anchored. See the module doc for why: `we`
@@ -193,7 +217,9 @@ pub(crate) fn hits(s: &str) -> Vec<(&'static str, String)> {
     }
     for c in audit_word_re().captures_iter(s) {
         let Some(m) = c.get(1) else { continue };
-        if !csift_spelling(s, m.start(), m.end()) {
+        let spared = csift_spelling(s, m.start(), m.end())
+            || (m.as_str().eq_ignore_ascii_case("round") && round_is_csifts(s, m.end()));
+        if !spared {
             out.push(("audit-process word", m.as_str().to_string()));
         }
     }
