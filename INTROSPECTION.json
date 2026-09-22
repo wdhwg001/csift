@@ -5907,7 +5907,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift search 'cd ' <target> -t agent.tool.use --format json | jq -r .cwd",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its Bash tool_use records, read as adjacent pairs",
             "rule": "one comparison per adjacent (use, next-use) pair in one transcript."
           },
           "producer_trace": "complete",
@@ -6742,7 +6742,7 @@
           "probe": {
             "kind": "corpus",
             "command": "python over one transcript: for Bash results with empty `toolUseResult.stderr`, compare `toolUseResult.stdout` to the tool_result block's rendered text. Counting rule: one byte comparison per Bash result with empty stderr.",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its Bash results whose `toolUseResult.stderr` is empty",
             "rule": "one byte comparison per Bash result with empty stderr."
           },
           "producer_trace": "complete",
@@ -9009,7 +9009,7 @@
             "kind": "corpus",
             "command": "Corpus census widened from top-level transcripts to EVERY *.jsonl under ~/.claude/projects (7,831 files, 1,312,236 lines), one tally per line containing the quoted key name.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "Corpus census widened from top-level transcripts to EVERY *.jsonl under ~/.claude/projects (7,831 files, 1,312,236 lines), one tally per line containing the quoted key name."
+            "rule": "One tally per line containing the quoted key name."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -11684,7 +11684,7 @@
             "kind": "corpus",
             "command": "Corpus: walk every .jsonl under the projects root with a json parser, reconstruct each record's text (message.content when it is a string, else the newline-join of its text blocks) and count ONE per record whose text STARTS with `[Image: ` or `[Image source: `; bucket by prefix form, by (type, message.role, isMeta, turnCompanion) and by version. A line that merely mentions a prefix mid-prose is excluded. Binary: grep the two constants, then read the reference builder, its call sites, the two record writers and the harness recogniser at their offsets.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Corpus: walk every .jsonl under the projects root with a json parser, reconstruct each record's text (message.content when it is a string, else the newline-join of its text blocks) and count ONE per record whose text STARTS with `[Image: ` or `[Image source: `; bucket by prefix form, by (type, message.role, isMeta, turnCompanion) and by version. A line that merely mentions a prefix mid-prose is excluded. Binary: grep the two constants, then read the reference builder, its call sites, the two record writers and the harness recogniser at their offsets."
+            "rule": "One count per record whose reconstructed text STARTS with the prefix, keyed by prefix form, by (type, `message.role`, `isMeta`, `turnCompanion`) and by version; a line that merely mentions a prefix mid-prose is excluded."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -11801,7 +11801,7 @@
           "instrument": "strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o '.{0,110}redacted_thinking.{0,110}' | sort -u (the deciding instrument), plus a scoped rg for '\"type\":\"redacted_thinking\"' to record that the corpus has no instance.",
           "probe": {
             "kind": "corpus",
-            "command": "strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o '.{0,110}redacted_thinking.{0,110}' | sort -u (the deciding instrument), plus a scoped rg for '\"type\":\"redacted_thinking\"' to record that the corpus has no instance",
+            "command": "rg '\"type\":\"redacted_thinking\"' over every *.jsonl under one projects root",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "One non-overlapping byte occurrence per binary count; one regex match per comparison site; one block observation per entry of a list `message.content` whose `type` is `redacted_thinking`, deduped by (record uuid, block index) over the whole root, so a record replayed inside a file and a transcript duplicated across two project directories each count once."
           },
@@ -17463,7 +17463,7 @@
           "probe": {
             "kind": "live",
             "command": "csift status @<uuid>",
-            "scope": "the one transcript the instrument names",
+            "scope": "one live session held at a permission prompt, read from a second session: that session's transcript and its registry row",
             "rule": "one blocked session, one status read; the absence in the transcript is the observation."
           },
           "producer_trace": "complete",
@@ -19675,10 +19675,10 @@
           "depends": "Absolute script paths in csift's recipes remain good practice - they make the registration independent of which project the session opened in, which is a real hazard when one global hook serves many repositories - but the stated REASON (no CLAUDE_PROJECT_DIR for global installs) does not hold at 2.1.258, so a relative path in a global registration does not fail for that reason.",
           "instrument": "Quote the counting rule: `strings -n 10 \"$bin\" | grep -c 'CLAUDE_PROJECT_DIR'` = 29 LINES at 2.1.258; occurrences are 46. Neither number tests the claim - the deciding instrument is `grep -oF 'CLAUDE_PROJECT_DIR:Ue(je)'` and `grep -oF 'CLAUDE_PROJECT_DIR:n.projectDir'`, showing the ungated env injection.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 10 \"$bin\" | grep -c 'CLAUDE_PROJECT_DIR'",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One record per corpus match; a hit counts as a specimen only if it shows a value that a hook child received from the harness, not one a command set for itself."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "One occurrence of each fixed byte string over the whole build file. A LINE count is not an occurrence count and neither decides the claim: the two injection sites do.",
+            "literal": "CLAUDE_PROJECT_DIR:Ue(je)"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -21364,7 +21364,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift stats @<session>",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its `file-history-snapshot` lines and the records their `messageId` names",
             "rule": "one row per snapshot line, one turn per csift turn index, a messageId with no matching uuid in its own unresolved bucket. To separate the two cadences, mark every line that sits in a run of adjacent snapshot lines and, within those, the runs that precede the transcript's first user or assistant record: those are the resume copies."
           },
           "producer_trace": "complete",
@@ -21599,7 +21599,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift files @<session> --format json | jq 'select(.op==\"external_write\")'",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: every (snapshot line, tracked path) pair of its `trackedFileBackups`",
             "rule": "one version transition per (snapshot line, tracked path) pair."
           },
           "producer_trace": "complete",
@@ -22467,7 +22467,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift recover <target> --file <path> --list-backups --format json | jq -r '.backup_time'",
-            "scope": "the one transcript the instrument names",
+            "scope": "one session: the blob files of its backup store, against the `backupTime` values its transcript carries",
             "rule": "one row per store file."
           },
           "producer_trace": "complete",
@@ -22565,7 +22565,7 @@
             "kind": "corpus",
             "command": "Corpus: over every jsonl under ~/.claude/projects count echoes carrying the key, one observation per Read echo - measured: 174.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Corpus: over every jsonl under ~/.claude/projects count echoes carrying the key, one observation per Read echo - measured: 174."
+            "rule": "One hit per schema literal for the build half, and one observation per Read echo carrying the key for the corpus half."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -22690,7 +22690,7 @@
             "kind": "corpus",
             "command": "Corpus check: over every jsonl under ~/.claude/projects, count the distinct JSON values of the key, one observation per echo carrying it - measured now: 174 occurrences, value `true` on 174, `false` on 0.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Corpus check: over every jsonl under ~/.claude/projects, count the distinct JSON values of the key, one observation per echo carrying it - measured now: 174 occurrences, value `true` on 174, `false` on 0."
+            "rule": "One observation per echo carrying the key, keyed by the key's distinct JSON values."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -23034,7 +23034,7 @@
             "kind": "corpus",
             "command": "Corpus: count records whose `attachment.banner` contains `very long lines and cannot be paginated by line`, one observation per record.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus: count records whose `attachment.banner` contains `very long lines and cannot be paginated by line`, one observation per record."
+            "rule": "One observation per record whose `attachment.banner` contains the literal."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -23112,10 +23112,10 @@
           "depends": "csift uses an Edit's `originalFile` versus the replayed buffer as an AUTHORITATIVE drift boundary, so a null `originalFile` disarms that cross-check for that op; the majority of real Edits are in exactly that state, which is why the boundary set is explicitly an honestly-bounded detectable subset rather than a guarantee.",
           "instrument": "strings -a <the Claude Code 2.1.258 executable> | grep -o 'originalFile:i().nullable().describe(\"The original file content before the write[^\"]*\"' - expect the describe string naming both null cases. Counting rule: one hit per schema literal.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 executable> | grep -o 'originalFile:i().nullable().describe(\"The original file content before the write[^\"]*\"' - expect the describe string naming both null cases",
-            "scope": "not stated: the instrument names no population",
-            "rule": "one hit per schema literal."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "one hit per schema literal.",
+            "literal": "originalFile:i().nullable().describe(\"The original file content before the write"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -23456,7 +23456,7 @@
             "kind": "corpus",
             "command": "Corpus: count `edited_text_file` snippets containing `lines truncated] ...`, one observation per attachment - measured now: 651 of 1254 non-empty snippets (52%).",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus: count `edited_text_file` snippets containing `lines truncated] ...`, one observation per attachment - measured now: 651 of 1254 non-empty snippets (52%)."
+            "rule": "One observation per `edited_text_file` attachment whose snippet contains the truncation tail."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -23651,7 +23651,7 @@
           "instrument": "strings -a <the Claude Code 2.1.258 executable> | grep -o 'staleRecovered:f[^`]\\{0,260\\}' for the note literal; python3 over ~/.claude/projects counting Edit carriers (a dict `toolUseResult` carrying `oldString`) whose `staleRecovered` is truthy. Counting rule: one count per carrier RECORD. Observed 92 out of 13372 Edit carriers.",
           "probe": {
             "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 executable> | grep -o 'staleRecovered:f[^`]\\{0,260\\}' for the note literal; python3 over ~/.claude/projects counting Edit carriers (a dict `toolUseResult` carrying `oldString`) whose `staleRecovered` is truthy. Counting rule: one count per carrier RECORD.",
+            "command": "python3 over ~/.claude/projects counting Edit carriers (a dict `toolUseResult` carrying `oldString`) whose `staleRecovered` is truthy",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one count per carrier RECORD."
           },
@@ -23724,10 +23724,10 @@
           "depends": "csift's `FileOp` enum recognises exactly the same four structured tools as authoritative mutations, so `files --by-file` create-vs-edit accounting and `recover`'s replay stay aligned with the harness's own definition; a fifth mutating tool added to that array would produce mutations csift silently omits.",
           "instrument": "`strings -n 30 <the Claude Code 2.1.258 executable> | grep -oE '.{160}\\[\"Write\",\"Edit\",\"MultiEdit\",\"NotebookEdit\"\\].{80}'` -> one hit showing `var opr=[\"Write\",\"Edit\",\"MultiEdit\",\"NotebookEdit\"],LPt=new Set(opr);function cGe(e,n){...return LPt.has(r)||...}`, and `grep -oE 'function FPt\\(e,n\\)\\{.{0,420}'` -> `switch(e.hook_event_name){case\"PostToolUse\":case\"PostToolUseFailure\":return cGe(e.tool_name,n);case\"PostToolBatch\":return (e.tool_calls??[]).some(...)}`. Counting rule: exact array literal match, one occurrence.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 30 <the Claude Code 2.1.258 executable> | grep -oE '.{160}\\[\"Write\",\"Edit\",\"MultiEdit\",\"NotebookEdit\"\\].{80}'",
-            "scope": "not stated: the instrument names no population",
-            "rule": "exact array literal match, one occurrence."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "exact array literal match, one occurrence.",
+            "literal": "[\"Write\",\"Edit\",\"MultiEdit\",\"NotebookEdit\"]"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -23797,10 +23797,10 @@
           "depends": "The three-element list governs only a telemetry dimension, so it cannot make csift's four-element `FileOp` over-read any consumed signal. The claim's hazard is not reachable through this list; the real exposure to a fifth mutating tool remains the four-element `opr` set covered by FH-037.",
           "instrument": "`strings -n 30 <the Claude Code 2.1.258 executable> | grep -oE '.{100}\\[\"Edit\",\"Write\",\"NotebookEdit\"\\].{60}'` -> `var Ufo=[\"Edit\",\"Write\",\"NotebookEdit\"];function fot(e){return Ufo.includes(e)}`. Counting rule: exact array literal, one occurrence, distinct from the four-element `opr`.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 30 <the Claude Code 2.1.258 executable> | grep -oE '.{100}\\[\"Edit\",\"Write\",\"NotebookEdit\"\\].{60}'",
-            "scope": "not stated: the instrument names no population",
-            "rule": "exact array literal, one occurrence, distinct from the four-element `opr`."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "exact array literal, one occurrence, distinct from the four-element `opr`.",
+            "literal": "[\"Edit\",\"Write\",\"NotebookEdit\"]"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -23875,10 +23875,10 @@
           "depends": "csift's settings-family detector matches exactly a basename of `settings.json` or `settings.local.json` whose immediate parent directory is `.claude`, so a version bump on a managed-settings file, on the per-project state file, or on an MCP/plugin config is reported as an ORDINARY external write and the replay's settings-mutation annotation is not applied.",
           "instrument": "`strings -n 8 <the Claude Code 2.1.258 executable> | grep -oE '\\.claude/settings[a-z.]*json|managed-settings\\.json|\"\\.claude\\.json\"' | sort | uniq -c`. Counting rule: one per string-table occurrence; compare the resulting path set against `is_settings_family`'s two accepted basenames.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 8 <the Claude Code 2.1.258 executable> | grep -oE '\\.claude/settings[a-z.]*json|managed-settings\\.json|\"\\.claude\\.json\"' | sort | uniq -c",
-            "scope": "not stated: the instrument names no population",
-            "rule": "one per string-table occurrence; compare the resulting path set against `is_settings_family`'s two accepted basenames."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "one per string-table occurrence; compare the resulting path set against `is_settings_family`'s two accepted basenames.",
+            "literal": "managed-settings.json"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -24051,10 +24051,10 @@
           "depends": "The cap is a moving target, so csift must never hard-code a token threshold to infer truncation - the only stable instrument is the `truncatedByTokenCap` key or the banner, both of which csift currently ignores in `recover`.",
           "instrument": "`strings -a <the Claude Code 2.1.258 executable> | grep -o 'var gYr=[0-9]*'` prints `var gYr=25000`; the same grep for `var nhe=[0-9]*` prints `var nhe=262144`. The env override appears as `let e=a.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS;if(e!==void 0&&e>0)return e` in the `hYr` function.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 executable> | grep -o 'var gYr=[0-9]*'",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One count per regex occurrence of the banner cap over raw jsonl lines returned by csift --raw; a record counts as a Read result iff its toolUseResult is an object carrying a file object; the size figure is counted per rendered occurrence of the parenthesised size in the size-limit error."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "One occurrence of each constant literal over the whole build file.",
+            "literal": "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -24379,7 +24379,7 @@
             "kind": "corpus",
             "command": "Corpus: bucket by the record's `version` field, counting one observation per record carrying `truncatedByTokenCap` and one per record whose `attachment.type` is `read_truncation_notice`; separately count the user records carrying the partial-view banner literal and split them by whether a `toolUseResult` object is present at all. Dating: byte-count the two names in the boundary builds and read the writer in the first build that carries it - the result-object spread for the key, the dispatch push for the attachment - after checking each build against its release manifest.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus: bucket by the record's `version` field, counting one observation per record carrying `truncatedByTokenCap` and one per record whose `attachment.type` is `read_truncation_notice`; separately count the user records carrying the partial-view banner literal and split them by whether a `toolUseResult` object is present at all. Dating: byte-count the two names in the boundary builds and read the writer in the first build that carries it - the result-object spread for the key, the dispatch push for the attachment - after checking each build against its release manifest."
+            "rule": "One observation per record carrying `truncatedByTokenCap` and one per record whose `attachment.type` is `read_truncation_notice`, both bucketed by the record's `version`; the banner half counts one per user record carrying the partial-view literal, split by whether a `toolUseResult` object is present at all."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -24673,7 +24673,7 @@
             "kind": "repo",
             "command": "Read the csift unit test `src/commands/recover/tests/coverage.rs` for the coverage arithmetic, then re-derive by hand: with `content` empty, `split_lines` returns an empty vector (pinned by `split_lines_drops_only_trailing_newline` in `src/commands/recover/tests/render.rs`), so `observed=0` and `total = 0.max(1+0) = 1`, and `is_full` is false because `0 >= 1` is false.",
             "scope": "the csift worktree at the state's range",
-            "rule": "One Read result object. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
+            "rule": "One observation per Read result object the arithmetic is re-derived over. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -26191,7 +26191,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift image @<session>",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: every `[Image #N]` handle it carries and the images those handles resolve to",
             "rule": "distinct images (by content fingerprint) per `#N` handle within one transcript."
           },
           "producer_trace": "complete",
@@ -26563,7 +26563,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift image @<uuid> --format json | jq -c '{handle, seq, line, media_type}'",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its image blocks and the human-turn records carrying them",
             "rule": "528 counted one per `{type:\"image\"}` block before content dedup; 159 of 774 counted one per human-turn record carrying at least one such block, in a single transcript."
           },
           "producer_trace": "complete",
@@ -26639,7 +26639,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift image @<session> --format json | jq -r .media_type | sort | uniq -c",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its image blocks, against the files Claude Code's image cache holds for them",
             "rule": "one media type per image block, one file per cached image."
           },
           "producer_trace": "complete",
@@ -27770,7 +27770,7 @@
             "kind": "live",
             "command": "For each `~/.claude/sessions/*.json`, compare `updatedAt` against `statusUpdatedAt` and watch `statusUpdatedAt` across a poll.",
             "scope": "every file under `<claude-home>/sessions`",
-            "rule": "For each `~/.claude/sessions/*.json`, compare `updatedAt` against `statusUpdatedAt` and watch `statusUpdatedAt` across a poll."
+            "rule": "One comparison per registry row between `updatedAt` and `statusUpdatedAt`, and one reading of `statusUpdatedAt` per poll. The file mtime is never the observation: it advances on writes that touch neither timestamp."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -29293,10 +29293,10 @@
           "depends": "csift parses only the liveness-relevant fields (pid, status, statusUpdatedAt, procStart, pidDomain) and ignores `kind` entirely, so no verdict, lane or lineage is ever derived from it.",
           "instrument": "Read the enum and the writer straight out of the binary (`strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o 'kind:.{0,60}\"interactive\".{0,120}'`), then watch a live row: poll ~/.claude/sessions/*.json and dump each new row's full JSON, correlating appearances and removals against ~/.claude/daemon.log `[bg]` lines.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o 'kind:.{0,60}\"interactive\".{0,120}'",
+            "kind": "live",
+            "command": "Poll ~/.claude/sessions/*.json and dump each new row's full JSON, correlating appearances and removals against ~/.claude/daemon.log `[bg]` lines.",
             "scope": "every file under `<claude-home>/sessions`",
-            "rule": "Read the enum and the writer straight out of the binary (`strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o 'kind:.{0,60}\"interactive\".{0,120}'`), then watch a live row: poll ~/.claude/sessions/*.json and dump each new row's full JSON, correlating appearances and removals against ~/.claude/daemon.log `[bg]` lines."
+            "rule": "One row read per appearance and per removal under `<claude-home>/sessions`, correlated against the `[bg]` lines of the daemon log."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -34012,7 +34012,7 @@
             "kind": "csift",
             "command": "csift search '' @main",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
-            "rule": "`skipped_lines` from the JSON summary across repeated runs."
+            "rule": "One observation per run: the `skipped_lines` value from that run's JSON summary."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -34186,9 +34186,9 @@
           "instrument": "Of the two e2e tests named, `p6_history_never_fires_and_timeout_is_124` is at tests/cli/live/wait.rs:45 but `wait_demands_a_timeout_and_reports_what_it_saw` lives at tests/cli/live/background.rs:198, not in wait.rs.",
           "probe": {
             "kind": "repo",
-            "command": "Of the two e2e tests named, `p6_history_never_fires_and_timeout_is_124` is at tests/cli/live/wait.rs:45 but `wait_demands_a_timeout_and_reports_what_it_saw` lives at tests/cli/live/background.rs:198, not in wait.rs.",
+            "command": "Locate the two named e2e tests in tests/cli/live/wait.rs and tests/cli/live/background.rs and read each against the behaviour the state names.",
             "scope": "the csift worktree at the state's range",
-            "rule": "Line counts summed across every *.jsonl under the corpus root, one count per line carrying the template text; the two templates are mutually exclusive branches of the same expression. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
+            "rule": "One observation per e2e test read. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -34596,7 +34596,7 @@
             "kind": "repo",
             "command": "The unit tests `probe_pid_own_process_guard_states` and `probe_pid_reports_a_reaped_pid_dead` in src/commands/live/tests/surfaces.rs pin csift's alive and dead arms.",
             "scope": "the csift worktree at the state's range",
-            "rule": "Read the probe, both guard forms and the delayed-SIGKILL consumer at the cited offsets, then enumerate every ps-shelling call in that module and every in-process liveness probe beside them, and separately every other caller of the `-o lstart=` form in the executable, giving each a verdict on whether it feeds the reuse guard. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
+            "rule": "One observation per unit test read, and one verdict per enumerated call site. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
           },
           "producer_trace": "upstream",
           "specimen": "observed",
@@ -35156,7 +35156,7 @@
             "kind": "corpus",
             "command": "`strings -n 20` over the installed binary for the describe() text, the flag registration and the two validator messages; then a byte scan of every top-level transcript for `forkSession` (0 of 67) and an rg for `{\"type\":\"continued-in\"` (1 of 67, its successor id resolving to a sibling transcript).",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "then a byte scan of every top-level transcript for `forkSession` (0 of 67) and an rg for `{\"type\":\"continued-in\"` (1 of 67, its successor id resolving to a sibling transcript)."
+            "rule": "One observation per top-level transcript: the scan counts the files carrying each literal, 0 of 67 for `forkSession` and 1 of 67 for the `continued-in` line."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -35531,7 +35531,7 @@
             "kind": "repo",
             "command": "Read `line_is_files_candidate` in src/commands/files/run.rs and count the memmem::Finder::new entries inside its LazyLock array (6), then test each name in a tool-name array for case-sensitive containment of one of those needles.",
             "scope": "the csift worktree at the state's range",
-            "rule": "Read `line_is_files_candidate` in src/commands/files/run.rs and count the memmem::Finder::new entries inside its LazyLock array (6), then test each name in a tool-name array for case-sensitive containment of one of those needles. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
+            "rule": "One observation per `Finder::new` entry in the array, and one verdict per tool name tested for case-sensitive containment of a needle. Reported against two populations because no single binary array enumerates every first-party writing tool. A `repo` probe re-verifies what csift does, never what Claude Code does, so it can never be the measurement a receipt rests on."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -35628,7 +35628,7 @@
             "kind": "corpus",
             "command": "Corpus half: count jsonl lines per spelling with a fixed-string search (`rg -c -F`, one count per matching line summed over the transcripts of a project directory), then count the user records whose message.content holds a tool_result block whose content STARTS with `<tool_use_error>`, bucketed by message head and by the shape of the record's toolUseResult, counting rule one observation per record.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus half: count jsonl lines per spelling with a fixed-string search (`rg -c -F`, one count per matching line summed over the transcripts of a project directory), then count the user records whose message.content holds a tool_result block whose content STARTS with `<tool_use_error>`, bucketed by message head and by the shape of the record's toolUseResult, counting rule one observation per record."
+            "rule": "One needle per `memmem::Finder::new` call inside the `LazyLock` array for the code half; one count per matching line per spelling and one observation per user record whose tool_result content starts with the error tag for the corpus half."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -36832,7 +36832,7 @@
           "probe": {
             "kind": "corpus",
             "command": "rg -c 'bmFycmF0aW9u' <transcript>",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript for the mixed-alignment count, every narration signature under one projects root for the soundness and precision passes, and the whole shipped build for the occurrence enumeration",
             "rule": "a file counts as mixed when two or more distinct needles occur among its narration signatures."
           },
           "producer_trace": "upstream",
@@ -37009,7 +37009,7 @@
             "kind": "corpus",
             "command": "Client half, in the shipped binary: read the content_block_start thinking seed, the signature_delta assignment, the content-block normalizer's thinking arm with its heal literal and the non-streaming fallback callers that reach it, the content_block_stop record template and the jsonl serializer; then enumerate every occurrence of the field name under both write forms (`.signature=`, `signature:`) and under the quoted form `\"signature\"`, read each and record its verdict, and confirm that the bracketed and spaced write forms (`[\"signature\"]`, `\"signature\":`, `signature =`) return no occurrence. Value half, on disk: extract every thinking block's signature from every transcript under the projects root and test each for an ASCII whitespace character, one test per signature string, censusing in the same pass the empty-string and absent-key shapes, the thinking text, block count, stop_reason and writing client version of every empty case, the longest signature, and the number of lines carrying an isVirtual key.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Client half, in the shipped binary: read the content_block_start thinking seed, the signature_delta assignment, the content-block normalizer's thinking arm with its heal literal and the non-streaming fallback callers that reach it, the content_block_stop record template and the jsonl serializer; then enumerate every occurrence of the field name under both write forms (`.signature=`, `signature:`) and under the quoted form `\"signature\"`, read each and record its verdict, and confirm that the bracketed and spaced write forms (`[\"signature\"]`, `\"signature\":`, `signature =`) return no occurrence. Value half, on disk: extract every thinking block's signature from every transcript under the projects root and test each for an ASCII whitespace character, one test per signature string, censusing in the same pass the empty-string and absent-key shapes, the thinking text, block count, stop_reason and writing client version of every empty case, the longest signature, and the number of lines carrying an isVirtual key."
+            "rule": "One verdict per occurrence of the field name for the client half, and one test per signature string for the value half."
           },
           "producer_trace": "upstream",
           "specimen": "observed",
@@ -38506,7 +38506,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift list",
-            "scope": "the one transcript the instrument names",
+            "scope": "both platform builds of one Claude Code version, every project directory and transcript under a Unix host's `.claude/projects`, and one Windows shell for the profile-variable read",
             "rule": "one home resolution per process."
           },
           "producer_trace": "upstream",
@@ -39435,7 +39435,7 @@
           "instrument": "Writer side: python over every `~/.claude/projects/*/*.jsonl` - count a line if any of its raw bytes is in 0xF0..=0xF4, and separately if a match of `\\\\u[dD][89abAB][0-9a-fA-F]{2}` is preceded by an ODD run of consecutive backslash bytes (the parity guard is required: without it the corpus returns 1 false positive, a doubled backslash in quoted content). Counting rule: one observation per whole line, not prefix-bounded. Whole-corpus rather than a random sample, so a stranger reruns the identical number. Measured at CC 2.1.258: 803,946 lines, 8,633 four-byte-lead lines, 0 real surrogate escapes. Encoder side: `strings -n 6 <cc-binary> | rg -o 'function k\\(e\\)\\{return e\\.replace\\(/\\[\\^a-zA-Z0-9\\]/g,\"-\"\\)\\}.{0,300}'` recovers the sanitizer and its >200-cap wrapper, the `\"projects\"` path builder shows that wrapper is what names the project directory, a search for a unicode-flag variant (`/gu`, `/ug`, `/gv`) returns zero matches, and evaluating the extracted regex in a JS engine yields two dashes for one astral character against one dash for one BMP character. The csift unit test `encode_matches_cc_exactly_on_non_ascii_and_windows_paths` (src/path/tests/encode.rs) then pins the same law crate-side, but it is a regression guard with csift, not an instrument on Claude Code.",
           "probe": {
             "kind": "corpus",
-            "command": "strings -n 6 <cc-binary> | rg -o 'function k\\(e\\)\\{return e\\.replace\\(/\\[\\^a-zA-Z0-9\\]/g,\"-\"\\)\\}.{0,300}'",
+            "command": "python3 over every `~/.claude/projects/*/*.jsonl`, counting a line when any of its raw bytes is in 0xF0..=0xF4 and, separately, when a match of `\\\\u[dD][89abAB][0-9a-fA-F]{2}` is preceded by an ODD run of consecutive backslash bytes",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one observation per whole line, not prefix-bounded."
           },
@@ -41549,10 +41549,10 @@
           "depends": "The harness containment predicate has THREE rejection arms, not two, and csift models only the first: (a) the lexical prefix test n!==e && !n.startsWith(e+separator), which csift mirrors; (b) a filesystem probe over the joined path (an lstat / opendir-nofollow / readlink walker) whose non-undefined result rejects the value outright - unmodeled and not mentioned in the claim; (c) the realpath walk up to the nearest existing ancestor, compared against realpath(root) - the divergence the claim already names. Arms (b) and (c) can only make the harness STRICTER than csift, so csift's lexical mirror is a superset: it can accept a directory the harness refused, never refuse one the harness accepted.",
           "instrument": "'exactly two literals' needs a counting rule: strings -n 20 | rg 'plansDirectory' returns 5 LINES, of which 2 are standalone string-table entries ('plansDirectoryResolutions' and 'plansDirectory must be within project root: ') and 3 are occurrences inside larger minified-JavaScript chunks (the export map, the settings-schema describe, and the resolver body). Counting rule for 'exactly two': lines matching ^[^{}();=]*plansDirectory[^{}();=]*$.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 20 | rg 'plansDirectory' returns 5 LINES, of which 2 are standalone string-table entries ('plansDirectoryResolutions' and 'plansDirectory must be within project root: ') and 3 are occurrences inside larger minified-JavaScript chunks (the export map, the settings-schema describe, and the resolver body)",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One row per plan_file_reference record for the directory census; one probe per (distinct first-record cwd, settings filename) pair for the settings probe; for the search, one matched record per csift label census key, with a hit counted as a harness emission only if it rides a system or attachment record rather than agent tool traffic."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "Lines matching `^[^{}();=]*plansDirectory[^{}();=]*$`, which is what `exactly two` counts; the bare line count is 5.",
+            "literal": "plansDirectory"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -43302,7 +43302,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Replay one transcript line by line maintaining a running set of `tool_use` ids minus the seen `tool_result` `tool_use_id`s; at every `subtype:\"turn_duration\"` line record the set size. Counting rule = one observation per turn_duration record; the expected census is 0 open ids in every observation.",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its `turn_duration` lines, each read against the open `tool_use` set at that line",
             "rule": "one observation per turn_duration record; the expected census is 0 open ids in every observation."
           },
           "producer_trace": "complete",
@@ -46526,8 +46526,8 @@
           "probe": {
             "kind": "corpus",
             "command": "(2) Python over the transcript corpus: count each usage key across assistant records, once per record, reported separately for the version-current subset (records whose `version` is 2.1.258) and for a mixed-version sample.",
-            "scope": "the one transcript the instrument names",
-            "rule": "(2) Python over the transcript corpus: count each usage key across assistant records, once per record, reported separately for the version-current subset (records whose `version` is 2.1.258) and for a mixed-version sample."
+            "scope": "the shipped build for the two usage literals, and every assistant record of the transcript corpus for the key census",
+            "rule": "One count per assistant record per usage key, reported separately for the version-current subset and for a mixed-version sample; the build half counts one occurrence per literal."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -46618,7 +46618,7 @@
             "kind": "corpus",
             "command": "(2) The same Python sweep over assistant records carrying `message.usage`, additionally iterating the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` when each is a dict, and counting the non-dict (null) occurrences separately.",
             "scope": "not stated: the instrument names no population",
-            "rule": "(2) The same Python sweep over assistant records carrying `message.usage`, additionally iterating the keys of `usage['cache_creation']`, `usage['server_tool_use']` and `usage['output_tokens_details']` when each is a dict, and counting the non-dict (null) occurrences separately."
+            "rule": "One count per assistant record per usage key, with the three nested objects iterated when each is a dict and their non-dict occurrences counted separately."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -48154,7 +48154,7 @@
           "probe": {
             "kind": "corpus",
             "command": "rg -m1 '\"type\":\"assistant\"' <one transcript> | jq '.message | keys'",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: every assistant record in it",
             "rule": "`rg -m1 '\"type\":\"assistant\"' <one transcript> | jq '.message | keys'` samples exactly one record, which cannot distinguish a universal key from a 99.98% key."
           },
           "producer_trace": "complete",
@@ -49324,7 +49324,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift stats @<id> --format json | jq .tokens",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: its assistant records, summed per record and again per distinct `message.id`",
             "rule": "per session, per model, per field."
           },
           "producer_trace": "complete",
@@ -51372,7 +51372,7 @@
             "kind": "csift",
             "command": "csift search '' @main",
             "scope": "every project under the configured Claude Code home (`<claude-home>/projects/**`), which is what a csift command with no target positional resolves to",
-            "rule": "`skipped_lines` from the JSON summary across repeated runs."
+            "rule": "One observation per run: the `skipped_lines` value from that run's JSON summary."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -51897,7 +51897,7 @@
             "kind": "corpus",
             "command": "Corpus: for records carrying both a `toolUseResult.file` and a string `tool_result` block, test the render's first line against `^\\s*\\d+\\t`; one observation per record. Measured now: 8343 gutter-rendered, 265 other (all `<system-reminder>` warnings).",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus: for records carrying both a `toolUseResult.file` and a string `tool_result` block, test the render's first line against `^\\s*\\d+\\t`; one observation per record. Measured now: 8343 gutter-rendered, 265 other (all `<system-reminder>` warnings)."
+            "rule": "One observation per record carrying both a `toolUseResult.file` and a string `tool_result` block."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -52316,7 +52316,7 @@
             "kind": "corpus",
             "command": "(2) Corpus, over every *.jsonl under ~/.claude/projects: for full reads (startLine==1, numLines==totalLines) whose content ends in a newline - 3481 echoes - 3480 report totalLines == content.count('\\n')+1, one more than the content's own line count. Of all 4512 echoes with newline-terminated content, 4512 have numLines == count('\\n')+1 and 4508 have numLines == len(splitlines())+1.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "(2) Corpus, over every *.jsonl under ~/.claude/projects: for full reads (startLine==1, numLines==totalLines) whose content ends in a newline - 3481 echoes - 3480 report totalLines == content.count('\\n')+1, one more than the content's own line count. Of all 4512 echoes with newline-terminated content, 4512 have numLines == count('\\n')+1 and 4508 have numLines == len(splitlines())+1."
+            "rule": "One render per controlled Read for the trial half; one observation per `toolUseResult.file` echo whose content ends in a newline for the corpus half."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -52394,7 +52394,7 @@
             "kind": "corpus",
             "command": "Over every *.jsonl under the projects root (no sampling), count `toolUseResult.file` echoes carrying integer `numLines` and `totalLines`, one observation per echo, splitting on `numLines < totalLines` and on the presence of `truncatedByTokenCap`, and join each partial back to its Read `tool_use` input by `tool_use_id` within the same transcript to attribute it to a caller window, to the cap, to both or to neither.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Over every *.jsonl under the projects root (no sampling), count `toolUseResult.file` echoes carrying integer `numLines` and `totalLines`, one observation per echo, splitting on `numLines < totalLines` and on the presence of `truncatedByTokenCap`, and join each partial back to its Read `tool_use` input by `tool_use_id` within the same transcript to attribute it to a caller window, to the cap, to both or to neither."
+            "rule": "One observation per `toolUseResult.file` echo carrying integer `numLines` and `totalLines`, split on `numLines < totalLines` and on the presence of `truncatedByTokenCap`."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -53226,7 +53226,7 @@
             "kind": "corpus",
             "command": "Use the whole-corpus cross-tab (226 / 46 / 19 of 291) rather than the live 120-newest-file window that reported 190 str vs 57 null of 247 and drifts every run.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Use the whole-corpus cross-tab (226 / 46 / 19 of 291) rather than the live 120-newest-file window that reported 190 str vs 57 null of 247 and drifts every run."
+            "rule": "One observation per Write echo, cross-tabulated over the whole corpus rather than over a newest-file window, which drifts every run."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -53344,7 +53344,7 @@
           "probe": {
             "kind": "corpus",
             "command": "grep -abo stripForStorage and stripToolUseResultAtCreation in a build and read every occurrence; date a guard by byte-searching its literal across the cached native builds, one match per artifact",
-            "scope": "the one transcript the instrument names",
+            "scope": "every `*.jsonl` under one projects root, journal and elicitation sidecars excluded, plus every cached native build for the guard's floor",
             "rule": "python3 over every *.jsonl under the projects root (journal and elicitation sidecars excluded), json.loads per line after a byte prefilter, one tally per Write echo (a `toolUseResult` object whose `type` is create or update and which carries a `content` key), bucketed by `content == \"\"` and keyed by the record's top-level `version`; for each empty-content record its file, line, `originalFile`, `structuredPatch` length, and its line distance to the next human message and to the preceding compaction boundary. Collapse byte-identical copies before quoting a distinct-record count: one transcript is present under two project directories with identical line numbers, which double-counts its records. Binary side: grep -abo stripForStorage and stripToolUseResultAtCreation in a build and read every occurrence; date a guard by byte-searching its literal across the cached native builds, one match per artifact."
           },
           "producer_trace": "complete",
@@ -53962,8 +53962,8 @@
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -F 'replaceAll:M().describe(\"Whether all occurrences were replaced\")' | wc -l  # expect 1\nCounting rule: one matching `strings` line = the Edit-result schema constructor. Corpus check: one tally per Edit echo keyed by `replaceAll`; the key was present on all 11421 measured Edit echoes.",
           "probe": {
             "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -F 'replaceAll:M().describe(\"Whether all occurrences were replaced\")' | wc -l  # expect 1",
-            "scope": "not stated: the instrument names no population",
+            "command": "Count every Edit echo under one projects root and bucket each by whether its `toolUseResult` carries a `replaceAll` key.",
+            "scope": "every *.jsonl under one projects root, top-level and <uuid>/subagents/**, excluding journal.jsonl, elicitations.jsonl and anything under a csift-channel directory",
             "rule": "Corpus check: one tally per Edit echo keyed by `replaceAll`."
           },
           "producer_trace": "complete",
@@ -54095,7 +54095,7 @@
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -cF 'c({oldStart:A(),oldLines:A(),newStart:A(),newLines:A(),lines:R(i())})'  # expect 1\npython3 - <<'EOF'\nimport json,glob,os,collections\nfiles=sorted(glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl')),key=lambda p:-os.path.getmtime(p))[:120]\nk=collections.Counter()\nfor f in files:\n  for line in open(f,errors='replace'):\n    if 'structuredPatch' not in line: continue\n    try: t=json.loads(line).get('toolUseResult')\n    except Exception: continue\n    if isinstance(t,dict) and isinstance(t.get('structuredPatch'),list):\n      for h in t['structuredPatch']:\n        if isinstance(h,dict): k[tuple(sorted(h))]+=1\nprint(k.most_common(4))\nEOF\nCounting rule: one tally per hunk object across every `structuredPatch` array, keyed by its sorted key tuple. Measured: `('lines','newLines','newStart','oldLines','oldStart')` 12638 hunks and NO other tuple.",
           "probe": {
             "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -cF 'c({oldStart:A(),oldLines:A(),newStart:A(),newLines:A(),lines:R(i())})'  # expect 1",
+            "command": "python3 - <<'EOF'\nimport json,glob,os,collections\nfiles=sorted(glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl')),key=lambda p:-os.path.getmtime(p))[:120]\nk=collections.Counter()\nfor f in files:\n  for line in open(f,errors='replace'):\n    if 'structuredPatch' not in line: continue\n    try: t=json.loads(line).get('toolUseResult')\n    except Exception: continue\n    if isinstance(t,dict) and isinstance(t.get('structuredPatch'),list):\n      for h in t['structuredPatch']:\n        if isinstance(h,dict): k[tuple(sorted(h))]+=1\nprint(k.most_common(4))\nEOF",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "One tally per hunk object across every toolUseResult.structuredPatch array in the corpus, keyed by its sorted key tuple."
           },
@@ -54230,7 +54230,7 @@
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -cF 'No newline at end of file'  # expect 3\npython3 - <<'EOF'\nimport json,glob,os,collections\nfiles=sorted(glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl')),key=lambda p:-os.path.getmtime(p))[:120]\nk=collections.Counter()\nfor f in files:\n  for line in open(f,errors='replace'):\n    if 'structuredPatch' not in line: continue\n    try: t=json.loads(line).get('toolUseResult')\n    except Exception: continue\n    if isinstance(t,dict) and isinstance(t.get('structuredPatch'),list):\n      for h in t['structuredPatch']:\n        for l in (h.get('lines') or []): k[l[:1] if l else '<empty>']+=1\nprint(k.most_common(6))\nEOF\nCounting rule: one tally per element of every hunk's `lines` array, keyed by its first character. Measured: `+` 139469, ` ` 83202, `-` 30191, `\\` 21 - and no other prefix.",
           "probe": {
             "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -cF 'No newline at end of file'  # expect 3",
+            "command": "python3 - <<'EOF'\nimport json,glob,os,collections\nfiles=sorted(glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl')),key=lambda p:-os.path.getmtime(p))[:120]\nk=collections.Counter()\nfor f in files:\n  for line in open(f,errors='replace'):\n    if 'structuredPatch' not in line: continue\n    try: t=json.loads(line).get('toolUseResult')\n    except Exception: continue\n    if isinstance(t,dict) and isinstance(t.get('structuredPatch'),list):\n      for h in t['structuredPatch']:\n        for l in (h.get('lines') or []): k[l[:1] if l else '<empty>']+=1\nprint(k.most_common(6))\nEOF",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "One tally per element of every hunk's lines array across the corpus, keyed by its first character; then a second pass over the backslash bucket keyed by the full string and by whether the carrying toolUseResult has an oldString key."
           },
@@ -54506,10 +54506,10 @@
           "depends": "csift parses `structuredPatch` into positional hunks and falls back to a string replacement when it is absent or unusable, and an edit whose anchor neighbourhood is unknown becomes a counted un-anchorable coverage hole rather than a fabricated line - which is why an empty patch degrades coverage rather than corrupting content.",
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'structuredPatch:R(SQe()).describe(\"Diff patch showing the changes[^\"]*\"' - expect two describe variants, the Write one carrying the three-cause caveat and the Edit one the bare form. Counting rule: distinct describe literals, deduplicated.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'structuredPatch:R(SQe()).describe(\"Diff patch showing the changes[^\"]*\"' - expect two describe variants, the Write one carrying the three-cause caveat and the Edit one the bare form",
-            "scope": "not stated: the instrument names no population",
-            "rule": "distinct describe literals, deduplicated."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "distinct describe literals, deduplicated.",
+            "literal": "structuredPatch:R(SQe()).describe(\"Diff patch showing the changes"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -55128,7 +55128,7 @@
             "kind": "corpus",
             "command": "python3 over every *.jsonl under the projects root (journal and elicitation sidecars excluded). Pass A: one tally per echo whose `toolUseResult` is an object carrying a `filePath` anywhere or a `file` sub-object, keyed by (top-level `filePath` present, `file.filePath` present).",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "python3 over every *.jsonl under the projects root (journal and elicitation sidecars excluded)."
+            "rule": "One tally per echo whose `toolUseResult` is an object carrying a `filePath` anywhere or a `file` sub-object, keyed by (top-level `filePath` present, `file.filePath` present); and one tally per assistant `tool_use` block named Read/Write/Edit/MultiEdit/NotebookEdit/LSP, keyed by which path key its `input` carries."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -55659,10 +55659,10 @@
           "depends": "csift's carrier join `Record::carrier_create_paths` reads ONLY `toolUseResult.filePath`, so a NotebookEdit carrier never joins its tool_use: the notebook mutation's `is_create` stays at its `false` default (\"unknown / treat as edit\") forever, and `files --by file` can never report a notebook as created.",
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'notebook_path:i().describe(\"The path to the notebook file\")[^`]\\{0,200\\}' - expect the NotebookEdit output schema `{notebook_path, original_file, updated_file}` with no `filePath` member. Counting rule: one hit per schema literal.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'notebook_path:i().describe(\"The path to the notebook file\")[^`]\\{0,200\\}' - expect the NotebookEdit output schema `{notebook_path, original_file, updated_file}` with no `filePath` member",
-            "scope": "not stated: the instrument names no population",
-            "rule": "one hit per schema literal."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "one hit per schema literal.",
+            "literal": "notebook_path:i().describe(\"The path to the notebook file\")"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -57222,10 +57222,10 @@
           "depends": "csift never parses these strings - `recover` routes on the presence or absence of the structured `toolUseResult` object and supplies bytes from the tool_use input instead - so a reworded success message changes nothing; the templates matter only as the observable marker of the carrier-less workflow-subagent shape, where they are the sole trace of a write and carry the path but never the content.",
           "instrument": "strings -n 6 ~/.local/share/claude/versions/2.1.258 | grep -cF 'File created successfully at'  # 2\nstrings -n 6 ~/.local/share/claude/versions/2.1.258 | grep -cF 'has been updated'  # 5, not 6",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 6 ~/.local/share/claude/versions/2.1.258 | grep -cF 'File created successfully at'  # 2",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One count per tool_result BLOCK whose rendered text contains the substring; suffix counted by the exact 62-character constant including its em dash. Substring rather than startswith, because a result may carry a prefix before the sentence."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "LINES of the `strings` output carrying the literal, one per line.",
+            "literal": "File created successfully at"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -57293,10 +57293,10 @@
           "depends": "csift's input-side fallback therefore dispatches on the tool_use `name`, never on the result text: `Write` becomes a full-snapshot anchor that RESETS the reconstruction buffer while `Edit` becomes a hunk applied to it, and confusing the two would either wipe or corrupt the replay.",
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'has been updated[^\"]\\{0,120\\}' | sort -u - expect the three distinct forms (`has been updated successfully.`, `has been updated successfully${v}.${C}` from the Write path, and `has been updated${v}. All occurrences were successfully replaced.${C}` from the Edit replace_all path). Counting rule: distinct string literals in the binary, deduplicated.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'has been updated[^\"]\\{0,120\\}' | sort -u - expect the three distinct forms (`has been updated successfully.`, `has been updated successfully${v}.${C}` from the Write path, and `has been updated${v}. All occurrences were successfully replaced.${C}` from the Edit replace_all path)",
-            "scope": "not stated: the instrument names no population",
-            "rule": "distinct string literals in the binary, deduplicated."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "distinct string literals in the binary, deduplicated.",
+            "literal": "has been updated"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -57797,9 +57797,9 @@
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'notebook_path:i().describe(\"The absolute path to the Jupyter notebook[^`]\\{0,400\\}' for the schema; then python3 over ~/.claude/projects counting tool_use blocks with `name == \"NotebookEdit\"` (counting rule: one per block; observed 0).",
           "probe": {
             "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -o 'notebook_path:i().describe(\"The absolute path to the Jupyter notebook[^`]\\{0,400\\}' for the schema; then python3 over ~/.claude/projects counting tool_use blocks with `name == \"NotebookEdit\"` (counting rule: one per block; observed 0).",
+            "command": "python3 over ~/.claude/projects counting tool_use blocks with `name == \"NotebookEdit\"`",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "then python3 over ~/.claude/projects counting tool_use blocks with `name == \"NotebookEdit\"` (counting rule: one per block."
+            "rule": "One count per `tool_use` block named `NotebookEdit`."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -58398,10 +58398,10 @@
           "depends": "csift `files` derives create-vs-edit ONLY from `toolUseResult.type == \"create\"`, so an empty-old_string Edit is reported `edit` with `is_create:false`; csift `recover` refuses the same op outright, because `apply_string_edit` returns `UnAnchorable` on an empty `old_string`.",
           "instrument": "strings -a <the Claude Code 2.1.258 binary> | grep -F 'if(e.old_string===\"\")return\"Create\"' | wc -l  # expect 1\nCounting rule: one `strings` output line contains the whole label function; read the surrounding `function cxe(e){...}` to confirm it is the Edit tool's display-label helper, not a result-shape branch.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -a <the Claude Code 2.1.258 binary> | grep -F 'if(e.old_string===\"\")return\"Create\"' | wc -l  # expect 1",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One observation per tool_use block and one per toolUseResult object; shape membership is by key set, not by tool name, so a result is classified from what it actually carries."
+            "kind": "bytes",
+            "scope": "the one Claude Code build file the state's range names",
+            "rule": "One `strings` output line contains the whole label function; read the surrounding `function cxe(e){...}` to confirm it is the Edit tool's display-label helper, not a result-shape branch.",
+            "literal": "if(e.old_string===\"\")return\"Create\""
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -59297,7 +59297,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift stats --format json over the whole projects root, whose summary carries the line-type census and skipped_lines, plus an independent pass parsing every non-blank line of every .jsonl under that root",
-            "scope": "the one transcript the instrument names",
+            "scope": "the whole projects root: every non-blank line of every `*.jsonl` under it, plus the transcript-store region of the shipped executable",
             "rule": "one observation per line, a line counted malformed when it is non-blank and is not a complete JSON object."
           },
           "producer_trace": "complete",
@@ -62047,7 +62047,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift search 'teammate_spawned' <project dir> --raw",
-            "scope": "the one transcript the instrument names",
+            "scope": "one transcript: every line carrying a `toolUseResult`, plus the corpus-wide result set the refuted pattern returned",
             "rule": "The ledger's instrument does not work: `csift search 'teammate_spawned' <project dir> --raw` matches RENDERED record text, and `toolUseResult` is never rendered, so the pattern only finds prose that mentions the literal (corpus-wide it returned 86 records, 36 with a dict toolUseResult, and `.toolUseResult.status` was null on all 36). Use a direct pass over the transcript instead: for each line, parse `toolUseResult` and keep those whose `status` is `teammate_spawned`, then join `tool_use_id` back to the spawning tool_use in the same file. csift's labelling half of the check works as written (`csift show @<session-uuid> --line <n> --format json`)."
           },
           "producer_trace": "complete",
@@ -63641,7 +63641,7 @@
             "kind": "corpus",
             "command": "Walk every jsonl under the projects root (journal and elicitation sidecars excluded), decide the lane from the path components, and count one observation per non-null `toolUseResult` value bucketed by JSON type, plus one per tool_result BLOCK whose text starts with `File created successfully at:` or matches `The file ... has been updated`, marking whether the carrying record's toolUseResult is a dict; bucket the string values by leading token. In the executable, byte-scan the `toolUseResult:` sites and the `InputValidationError` template to separate gated writers from ungated error exits. Only the zero is stable - the corpus is append-only and the absolute counts drift.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Walk every jsonl under the projects root (journal and elicitation sidecars excluded), decide the lane from the path components, and count one observation per non-null `toolUseResult` value bucketed by JSON type, plus one per tool_result BLOCK whose text starts with `File created successfully at:` or matches `The file ... has been updated`, marking whether the carrying record's toolUseResult is a dict; bucket the string values by leading token. In the executable, byte-scan the `toolUseResult:` sites and the `InputValidationError` template to separate gated writers from ungated error exits. Only the zero is stable - the corpus is append-only and the absolute counts drift."
+            "rule": "One observation per non-null `toolUseResult` value bucketed by JSON type, plus one per tool_result block whose text opens with a create or update sentence. Only the zero is stable: the corpus is append-only and the absolute counts drift."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -63975,7 +63975,7 @@
             "kind": "corpus",
             "command": "The subagent 'file' and 'other' buckets reproduce the claim's 3129 and 626 exactly, so the pairing rule is the same one; 'missing' grew 23183 -> 23230 with new activity. The top-level buckets came in LOWER than the claim's 6071 / 84, so top-level counts are not monotone - a top-level transcript can leave the corpus - and only the 0-missing result is stable.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "The subagent 'file' and 'other' buckets reproduce the claim's 3129 and 626 exactly, so the pairing rule is the same one; 'missing' grew 23183 -> 23230 with new activity. The top-level buckets came in LOWER than the claim's 6071 / 84, so top-level counts are not monotone - a top-level transcript can leave the corpus - and only the 0-missing result is stable."
+            "rule": "One observation per subagent-return record per lane, bucketed into file echo, other and missing. Only the 0-missing result is stable, because a top-level transcript can leave the corpus."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -64450,7 +64450,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift search '' <target> -t harness.system.* --count-by label",
-            "scope": "the one transcript the instrument names",
+            "scope": "one project directory's `*.jsonl` for the subtype census, and the shipped build for the writer's field set",
             "rule": "the four modeled ones aside, every other value must classify under harness.system.*: csift search '' <target> -t harness.system.* --count-by label)."
           },
           "producer_trace": "complete",
@@ -67849,8 +67849,8 @@
           "probe": {
             "kind": "corpus",
             "command": "Group all turn-opening user records of one transcript by `parentUuid` and count groups of size greater than one (counting rule: drafts = group size minus one, one per group), then cross-validate against csift's own `N superseded draft(s)` footer. Measured draft rates over four sessions: 11% (62 genuine / 7 drafts), 26% (1,216 / 317), 6% (86 / 5), 3% (32 / 1).",
-            "scope": "the one transcript the instrument names",
-            "rule": "Group all turn-opening user records of one transcript by `parentUuid` and count groups of size greater than one (counting rule: drafts = group size minus one, one per group), then cross-validate against csift's own `N superseded draft(s)` footer. Measured draft rates over four sessions: 11% (62 genuine / 7 drafts), 26% (1,216 / 317), 6% (86 / 5), 3% (32 / 1)."
+            "scope": "four transcripts: every turn-opening user record of each",
+            "rule": "Drafts = group size minus one, one per group of turn-opening user records sharing a `parentUuid`."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -68763,10 +68763,10 @@
           "depends": "csift cannot assume a Windows transcript uses `Bash`: the bashless fallback is mandatory rather than optional, so every shell-tool consumer must accept both names or go blind on exactly the machines that have no bash installed.",
           "instrument": "strings -n 6 <claude-versions-dir>/<version> and read the selection function and the bash-discovery function whole, rather than only checking that both env names appear; the fourth probe and the env-override validation are only visible in the full function body.",
           "probe": {
-            "kind": "corpus",
-            "command": "strings -n 6 <claude-versions-dir>/<version> and read the selection function and the bash-discovery function whole, rather than only checking that both env names appear; the fourth probe and the env-override validation are only visible in the full function body",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One probe per candidate path, tried in source order; one census key per tool name over one session's transcript."
+            "kind": "bytes",
+            "scope": "the Claude Code build named by the state's range",
+            "rule": "One probe per candidate path, tried in source order; one census key per tool name over one session's transcript.",
+            "literal": "CLAUDE_CODE_USE_POWERSHELL_TOOL"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -72702,7 +72702,7 @@
           "probe": {
             "kind": "corpus",
             "command": "tail -c +OFFSET+1 | head -c N",
-            "scope": "the one transcript the instrument names",
+            "scope": "the Claude Code 2.1.258 executable at the three named offsets, plus one live session whose Stop hook exits 2",
             "rule": "not stated: the instrument gives no counting rule"
           },
           "producer_trace": "complete",
@@ -72774,7 +72774,7 @@
             "kind": "corpus",
             "command": "Live: a Stop hook exiting 2 with text on stderr, then the same hook returning {\"continue\":false}, reading which record each produces in the receiving transcript.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Live: a Stop hook exiting 2 with text on stderr, then the same hook returning {\"continue\":false}, reading which record each produces in the receiving transcript."
+            "rule": "One record read per live arm: the hook exiting 2 with text on stderr, and the same hook returning `{\"continue\":false}`."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -74359,7 +74359,7 @@
             "kind": "corpus",
             "command": "A live trial pauses a session, fires one of the six events and reads whether the hook ran.",
             "scope": "not stated: the instrument names no population",
-            "rule": "A live trial pauses a session, fires one of the six events and reads whether the hook ran."
+            "rule": "Occurrences of the fixed byte string over the whole build file, and one reading per fired event in the live trial."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -74789,7 +74789,7 @@
             "kind": "corpus",
             "command": "Corpus side: census the records naming the start event, one per matching line.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus side: census the records naming the start event, one per matching line."
+            "rule": "LINES carrying the literal per cached build, and one observation per corpus line naming the start event."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -75154,7 +75154,7 @@
             "kind": "corpus",
             "command": "Corpus side: count the records carrying the attachment type, one per matching line.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus side: count the records carrying the attachment type, one per matching line."
+            "rule": "LINES carrying the literal per cached build, and one observation per corpus line carrying the attachment type."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -75747,7 +75747,7 @@
             "kind": "live",
             "command": "Run a teammate turn with a hook that logs every payload with a capture stamp, then compare each SubagentStop payload against the agent's own transcript records; count one per fire and one per record.",
             "scope": "one running Claude Code session and the files it writes while it runs",
-            "rule": "Run a teammate turn with a hook that logs every payload with a capture stamp, then compare each SubagentStop payload against the agent's own transcript records; count one per fire and one per record."
+            "rule": "One observation per SubagentStop fire and one per record of the agent's own transcript."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -75852,7 +75852,7 @@
           "instrument": "Read the six offsets in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm each excerpt byte for byte. Then parse every `teams/*/inboxes/*.json` array in the corpus and bucket the objects by their `read` value. Counting rule: one per JSON object in a parsed array.",
           "probe": {
             "kind": "corpus",
-            "command": "Then parse every `teams/*/inboxes/*.json` array in the corpus and bucket the objects by their `read` value.",
+            "command": "Parse every `teams/*/inboxes/*.json` array in the corpus and bucket the objects by their `read` value.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "one per JSON object in a parsed array."
           },
@@ -76097,7 +76097,7 @@
           "probe": {
             "kind": "csift",
             "command": "csift search \"\" -t harness.hook.context --format json",
-            "scope": "the one transcript the instrument names",
+            "scope": "the whole projects root: every `harness.hook.context` record naming the SubagentStart event",
             "rule": "one per matching line for records, one per matching file for files; the lane is read from the path, independent of the record's own sidechain flag."
           },
           "producer_trace": "complete",
@@ -77941,7 +77941,7 @@
             "kind": "corpus",
             "command": "Corpus side: parse every row file under the registry directory and count the rows carrying each field, one per file.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Corpus side: parse every row file under the registry directory and count the rows carrying each field, one per file."
+            "rule": "One observation per row file under the registry directory, counted per field the row carries."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -80672,7 +80672,7 @@
           "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line`, `floor_line`, `floor_cause` and the `survival` values above and below it at `--cross-compactions 0`, at the default and at `all`; counting rule: one survival observation per emitted search hit. Byte-compare the budget-0 stream against a build that predates the flag over the differential's eight transcripts - every uuid-named top-level transcript of one projects root carrying at least one `compact_boundary` and sized 9 to 21 MiB inclusive (1 MiB = 1,048,576 bytes), seven of them, plus the section 7 performance landmark. Counting rule: one byte comparison per (transcript, stream); 32 of 32 match. The equality has ONE known exception the corpus holds no specimen of: a boundary whose own `parentUuid` is non-null and names no record, which the pre-flag walk crossed through the `logicalParentUuid` guard and budget 0 refuses - a difference on that shape alone is not drift.",
           "probe": {
             "kind": "corpus",
-            "command": "Then take a transcript with a compaction boundary and read csift's `boundary_cut_line`, `floor_line`, `floor_cause` and the `survival` values above and below it at `--cross-compactions 0`, at the default and at `all`; counting rule: one survival observation per emitted search hit. Byte-compare the budget-0 stream against a build that predates the flag over the differential's eight transcripts - every uuid-named top-level transcript of one projects root carrying at least one `compact_boundary` and sized 9 to 21 MiB inclusive (1 MiB = 1,048,576 bytes), seven of them, plus the section 7 performance landmark. The equality has ONE known exception the corpus holds no specimen of: a boundary whose own `parentUuid` is non-null and names no record, which the pre-flag walk crossed through the `logicalParentUuid` guard and budget 0 refuses - a difference on that shape alone is not drift.",
+            "command": "Take a transcript with a compaction boundary and read csift's `boundary_cut_line`, `floor_line`, `floor_cause` and the `survival` values above and below it at `--cross-compactions 0`, at the default and at `all`; counting rule: one survival observation per emitted search hit. Byte-compare the budget-0 stream against a build that predates the flag over the differential's eight transcripts - every uuid-named top-level transcript of one projects root carrying at least one `compact_boundary` and sized 9 to 21 MiB inclusive (1 MiB = 1,048,576 bytes), seven of them, plus the section 7 performance landmark. The equality has ONE known exception the corpus holds no specimen of: a boundary whose own `parentUuid` is non-null and names no record, which the pre-flag walk crossed through the `logicalParentUuid` guard and budget 0 refuses - a difference on that shape alone is not drift.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
             "rule": "one survival observation per emitted search hit. Byte-compare the budget-0 stream against a build that predates the flag over the differential's eight transcripts - every uuid-named top-level transcript of one projects root carrying at least one `compact_boundary` and sized 9 to 21 MiB inclusive (1 MiB = 1,048,576 bytes), seven of them, plus the section 7 performance landmark. Counting rule: one byte comparison per (transcript, stream); 32 of 32 match. The equality has ONE known exception the corpus holds no specimen of: a boundary whose own `parentUuid` is non-null and names no record, which the pre-flag walk crossed through the `logicalParentUuid` guard and budget 0 refuses - a difference on that shape alone is not drift."
           },
@@ -80743,7 +80743,7 @@
           "instrument": "Read the relink pass at 2.1.258 @166141698 and its preserved-set resolver at @166142944, and list its four effects in order. Then run csift over a transcript whose newest boundary carries `preservedMessages` and read the `survival` of a preserved record and of a pre-boundary record outside the preserved set.",
           "probe": {
             "kind": "corpus",
-            "command": "Then run csift over a transcript whose newest boundary carries `preservedMessages` and read the `survival` of a preserved record and of a pre-boundary record outside the preserved set.",
+            "command": "Run csift over a transcript whose newest boundary carries `preservedMessages` and read the `survival` of a preserved record and of a pre-boundary record outside the preserved set.",
             "scope": "not stated: the instrument names no population",
             "rule": "One read per hop; one survival value per record inspected."
           },
@@ -80810,9 +80810,9 @@
           "instrument": "Read the re-interleave at 2.1.258 @166145690 and the trailing-descendant append at @166145108 with its parent index at @166144919. Then build a transcript whose assistant turn spans two records with one `message.id` and a `tool_result` carrier under the second, and confirm csift marks every one of them live.",
           "probe": {
             "kind": "corpus",
-            "command": "Then build a transcript whose assistant turn spans two records with one `message.id` and a `tool_result` carrier under the second, and confirm csift marks every one of them live.",
+            "command": "Build a transcript whose assistant turn spans two records with one `message.id` and a `tool_result` carrier under the second, and confirm csift marks every one of them live.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Then build a transcript whose assistant turn spans two records with one `message.id` and a `tool_result` carrier under the second, and confirm csift marks every one of them live."
+            "rule": "One survival verdict per record of the built transcript."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -80877,9 +80877,9 @@
           "instrument": "Read the snapshot writer at 2.1.258 @166091868 and the two explicit writers at @166113838 and @166114075. Then census every `last-prompt` line under the projects root: total lines, lines with a `leafUuid` key, lines with `explicit:true`, lines with `rewound:true`.",
           "probe": {
             "kind": "corpus",
-            "command": "Then census every `last-prompt` line under the projects root: total lines, lines with a `leafUuid` key, lines with `explicit:true`, lines with `rewound:true`.",
+            "command": "Census every `last-prompt` line under the projects root: total lines, lines with a `leafUuid` key, lines with `explicit:true`, lines with `rewound:true`.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Then census every `last-prompt` line under the projects root: total lines, lines with a `leafUuid` key, lines with `explicit:true`, lines with `rewound:true`."
+            "rule": "One observation per `last-prompt` line, counted in total and again per key the line carries."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -80941,7 +80941,7 @@
             "kind": "corpus",
             "command": "For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it.",
             "scope": "not stated: the instrument names no population",
-            "rule": "For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it."
+            "rule": "One verdict per historical native build, present iff the literal's bytes occur at least once."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -81060,7 +81060,7 @@
             "kind": "corpus",
             "command": "Run csift's chain rule (`Chain::build`) over every top-level transcript under the projects root and count, one observation per record: records carrying two or more distinct conversation children, and pairs of turn-opening user records sharing a parentUuid, splitting the earlier member of each pair by whether an assistant record hangs below it and by whether it is on the final chain. The rule is the loader hops mirrored with exactly ONE difference, and it widens what is counted rather than narrowing it: csift keeps every record the walk does not reach, flagged, where the loader drops it. The walk itself stops where the loader's stops, a `compact_boundary` carrying a null parentUuid, so no link is followed across a cut.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "Run csift's chain rule (`Chain::build`) over every top-level transcript under the projects root and count, one observation per record: records carrying two or more distinct conversation children, and pairs of turn-opening user records sharing a parentUuid, splitting the earlier member of each pair by whether an assistant record hangs below it and by whether it is on the final chain. The rule is the loader hops mirrored with exactly ONE difference, and it widens what is counted rather than narrowing it: csift keeps every record the walk does not reach, flagged, where the loader drops it. The walk itself stops where the loader's stops, a `compact_boundary` carrying a null parentUuid, so no link is followed across a cut."
+            "rule": "One observation per record."
           },
           "producer_trace": "none",
           "specimen": "observed",
@@ -81106,7 +81106,7 @@
             "kind": "corpus",
             "command": "Census every `type:\"last-prompt\"` line under the projects root and count how many carry a `uuid` key and how many carry a `leafUuid` key.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Census every `type:\"last-prompt\"` line under the projects root and count how many carry a `uuid` key and how many carry a `leafUuid` key."
+            "rule": "One observation per `type:\"last-prompt\"` line, counted again per key the line carries."
           },
           "producer_trace": "none",
           "specimen": "observed",
@@ -81706,7 +81706,7 @@
             "kind": "corpus",
             "command": "One python pass per top-level transcript: build the uuid map, take the file-order LAST conversation record (type user or assistant) as the leaf, walk `parentUuid` upward with a cycle guard following `logicalParentUuid` when `parentUuid` is null, then count abandoned roots (a conversation record off that chain whose parent uuid is on it, where the child uuid and the parent uuid each occupy exactly one line) and walk each root's subtree downward through `parentUuid`, skipping chain members. Separately read the loader's own walk in the 2.1.258 executable and classify every occurrence of `logicalParentUuid`.",
             "scope": "the top-level `*.jsonl` of one projects root, subagent sidecars excluded",
-            "rule": "One python pass per top-level transcript: build the uuid map, take the file-order LAST conversation record (type user or assistant) as the leaf, walk `parentUuid` upward with a cycle guard following `logicalParentUuid` when `parentUuid` is null, then count abandoned roots (a conversation record off that chain whose parent uuid is on it, where the child uuid and the parent uuid each occupy exactly one line) and walk each root's subtree downward through `parentUuid`, skipping chain members. Separately read the loader's own walk in the 2.1.258 executable and classify every occurrence of `logicalParentUuid`."
+            "rule": "One python pass per top-level transcript, and one observation per conversation record off the chain whose parent uuid is on it, where the child uuid and the parent uuid each occupy exactly one line."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -83004,7 +83004,7 @@
             "kind": "corpus",
             "command": "On disk, read every `<claude-home>/sessions/*.json` row and every `<claude-home>/teams/*/config.json`, and for each row count the team configs whose `createdAt` is within five seconds of the row's `startedAt`; separately count how many team names equal `session-` plus the first eight characters of their own `leadSessionId`, and how many team names have a directory under `<claude-home>/tasks/`.",
             "scope": "every file under `<claude-home>/sessions`",
-            "rule": "On disk, read every `<claude-home>/sessions/*.json` row and every `<claude-home>/teams/*/config.json`, and for each row count the team configs whose `createdAt` is within five seconds of the row's `startedAt`; separately count how many team names equal `session-` plus the first eight characters of their own `leadSessionId`, and how many team names have a directory under `<claude-home>/tasks/`."
+            "rule": "One observation per registry row against the team configs whose `createdAt` is within five seconds of that row's `startedAt`, plus one per team name equal to `session-` and the first eight characters of its own `leadSessionId`, and one per team name with a directory under `<claude-home>/tasks/`."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -84747,7 +84747,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Over every `*.jsonl` under the projects root, read each file as BYTES and split on `\\n` only. Report the number of transcripts carrying at least one carrier, the histogram of DISTINCT values per transcript, the histogram of change points per transcript, the three transition totals, and the `type` of each transcript's first carrier. In the same pass, for each line carrying the literal `plan_file_reference`, decode it and count the transcript when its `attachment.type` equals that literal; report how many such transcripts also carry a slug and how many carry none.",
-            "scope": "the one transcript the instrument names",
+            "scope": "every `*.jsonl` under one projects root, read as bytes",
             "rule": "Over every `*.jsonl` under the projects root, read each file as BYTES and split on `\\n` only."
           },
           "producer_trace": "none",
@@ -85241,7 +85241,7 @@
           "instrument": "In the shipped executable, byte-find `hook_permission_decision:()=>[]`, walk back to the enclosing `{` and forward to its matching `}` - that window IS the conversion object - and collect every match of `(\\w+):\\(\\)=>\\[\\]` inside it. Then byte-find `Unknown attachment type: ` and read backwards from it for the `.includes(e.type))return[]` early return and the default arm. For each payload type the inventory models, decide: empty arm (named in the window), early return (in that list), or default arm (the type name occurs zero times in the whole executable). On disk, count files naming the quoted type and lines carrying `\"attachment\":{\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
           "probe": {
             "kind": "corpus",
-            "command": "Then byte-find `Unknown attachment type: ` and read backwards from it for the `.includes(e.type))return[]` early return and the default arm. On disk, count files naming the quoted type and lines carrying `\"attachment\":{\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
+            "command": "Byte-find `Unknown attachment type: ` and read backwards from it for the `.includes(e.type))return[]` early return and the default arm. On disk, count files naming the quoted type and lines carrying `\"attachment\":{\"type\":\"<type>\"` over every `*.jsonl` under one projects root.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
             "rule": "On disk, count files naming the quoted type and lines carrying `\"attachment\":{\"type\":\"<type>\"` over every `*.jsonl` under one projects root."
           },
@@ -85481,9 +85481,9 @@
           "instrument": "In the shipped executable, byte-find `\"atis-latch\"` and read every occurrence with 240 bytes of context, classifying each as a table key, a writer, a loader dispatch or a fork re-writer. Then byte-find the latch getter's definition (`function X1(){` at this build) and read every call site of it, classifying each the same way. A rendering reader is an occurrence that reaches a component. On disk, count lines opening `{\"type\":\"atis-latch\"` and files naming `\"type\":\"atis-latch\"` over every `*.jsonl` under one projects root.",
           "probe": {
             "kind": "corpus",
-            "command": "Then byte-find the latch getter's definition (`function X1(){` at this build) and read every call site of it, classifying each the same way. A rendering reader is an occurrence that reaches a component. On disk, count lines opening `{\"type\":\"atis-latch\"` and files naming `\"type\":\"atis-latch\"` over every `*.jsonl` under one projects root.",
+            "command": "Count lines opening `{\"type\":\"atis-latch\"` and files naming `\"type\":\"atis-latch\"` over every top-level transcript and every subagent transcript of one projects root.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Then byte-find the latch getter's definition (`function X1(){` at this build) and read every call site of it, classifying each the same way. A rendering reader is an occurrence that reaches a component. On disk, count lines opening `{\"type\":\"atis-latch\"` and files naming `\"type\":\"atis-latch\"` over every `*.jsonl` under one projects root."
+            "rule": "One observation per line opening `{\"type\":\"atis-latch\"` and one per file naming the quoted type; the build half takes one verdict per occurrence read."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -85608,7 +85608,7 @@
             "kind": "corpus",
             "command": "Over every `*.jsonl` under one projects root, parse each line carrying the byte run `\"rendered` and record: whether `rendered` and `renderedInHumanTurn` are keys of the line's own object, whether either is a key of its `attachment` payload instead, the JSON type of each value, the type of each array entry's `content`, the line's `type` and payload `type`, and whether the two arrays' joined `content` strings are equal.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Over every `*.jsonl` under one projects root, parse each line carrying the byte run `\"rendered` and record: whether `rendered` and `renderedInHumanTurn` are keys of the line's own object, whether either is a key of its `attachment` payload instead, the JSON type of each value, the type of each array entry's `content`, the line's `type` and payload `type`, and whether the two arrays' joined `content` strings are equal."
+            "rule": "One observation per line carrying the byte run `\"rendered`, counted per key, per line carrying both, per payload-level occurrence, per array entry and per equal-versus-differing pair."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -85901,7 +85901,7 @@
             "kind": "corpus",
             "command": "Over every `*.jsonl` under one projects root, parse each `type:\"user\"` line whose bytes carry `\"image\"` or `\"document\"`, keep those whose `message.content` is an ARRAY in which no `text` block carries non-blank text, and bucket each by the SET of its non-text block types and by the truthiness of `isMeta`.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Over every `*.jsonl` under one projects root, parse each `type:\"user\"` line whose bytes carry `\"image\"` or `\"document\"`, keep those whose `message.content` is an ARRAY in which no `text` block carries non-blank text, and bucket each by the SET of its non-text block types and by the truthiness of `isMeta`."
+            "rule": "One observation per `type:\"user\"` line whose `message.content` is an ARRAY carrying no non-blank text block, bucketed by the SET of its non-text block types and by the truthiness of `isMeta`."
           },
           "producer_trace": "none",
           "specimen": "observed",
@@ -86091,7 +86091,7 @@
           "probe": {
             "kind": "corpus",
             "command": "Corpus: walk every transcript under a projects root, parse each non-blank line, bucket by top-level `type`, and count per type the lines carrying `uuid`, `message` and `timestamp` plus the distinct sorted key sets. Two roots are walked so a count that is an artefact of one machine's history shows up as a disagreement; the roots overlap in history, so a figure that agrees on both is not two independent samples. Binary: byte-find `function zI(e){if(!Re(e))return!1;` for the transcript predicate and `\"queue-operation\":\"last-wins\"` for the retention table, then walk that object literal quote-aware to its matching brace and read every `\"<type>\":\"<policy>\"` pair. Counting rule: A transcript is a `*.jsonl` whose basename is neither `journal.jsonl` nor `elicitations.jsonl`; a line counts when it is non-blank; a line counts under its top-level `type` when that is a string; a key counts as present when it is a top-level key of the line whatever its value; a key SET is the sorted tuple of a line's top-level keys.",
-            "scope": "the one transcript the instrument names",
+            "scope": "two projects roots: every `*.jsonl` whose basename is neither `journal.jsonl` nor `elicitations.jsonl`, plus the shipped build for the transcript predicate and the retention table",
             "rule": "A transcript is a `*.jsonl` whose basename is neither `journal.jsonl` nor `elicitations.jsonl`; a line counts when it is non-blank; a line counts under its top-level `type` when that is a string; a key counts as present when it is a top-level key of the line whatever its value; a key SET is the sorted tuple of a line's top-level keys."
           },
           "producer_trace": "complete",
@@ -86218,9 +86218,9 @@
           "instrument": "Byte-find the quoted literal `\"queue-operation\"` over the whole executable and read each occurrence: a writer, a reader or a table entry. Then read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk.",
           "probe": {
             "kind": "corpus",
-            "command": "Then read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk.",
+            "command": "Read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Then read the loader's per-entry else-if chain for a branch on the type. On disk, census the `operation` and `reason` values and the distinct key sets of every `queue-operation` line under the QT-045 walk."
+            "rule": "One verdict per occurrence of the quoted literal, and one observation per `queue-operation` line under the QT-045 walk."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -86429,7 +86429,7 @@
             "kind": "corpus",
             "command": "Byte-find the factory by its object literal `{type:\"history-suppression\"`, then enumerate every occurrence of the appending writer's minified name (which differs per build) followed by `(` and read each: one definition, three direct calls, one forwarding call. Read the wrapper at that forwarding call and enumerate ITS callers. On disk, census the `cause` values and the lines carrying `vetoedAgainstAccountUuid` under the QT-045 walk.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Byte-find the factory by its object literal `{type:\"history-suppression\"`, then enumerate every occurrence of the appending writer's minified name (which differs per build) followed by `(` and read each: one definition, three direct calls, one forwarding call. Read the wrapper at that forwarding call and enumerate ITS callers. On disk, census the `cause` values and the lines carrying `vetoedAgainstAccountUuid` under the QT-045 walk."
+            "rule": "One verdict per occurrence of the appending writer's minified name, and one observation per `history-suppression` line under the QT-045 walk."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -86526,7 +86526,7 @@
             "kind": "corpus",
             "command": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header.",
             "scope": "not stated: the instrument names no population",
-            "rule": "For each of the four types, byte-find the loader field its value is stored under (`forkContextRefs`, `modes`, `permissionModes`, `atisLatches`) and follow it to the site that applies it: the agent transcript builder's destructure of the fork refs, the resume mode matcher, the tool-permission-context assignment, and the request header map set. Read each site and record whether it changes message CONTENT, a context flag or a header."
+            "rule": "One verdict per applying site, recording whether it changes message CONTENT, a context flag or a header."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -86650,7 +86650,7 @@
           "instrument": "Byte-find `\"queue-operation\":\"last-wins\"` and `\"queue-operation\":\"always\"`, walk each surrounding object literal quote-aware from its `{` to the matching `}` and read every `\"<type>\":\"<policy>\"` pair; the key count and the policy domain are what that walk returns. Byte-find `async appendEntry(` for the switch. Then subtract the four types the retention table values `transcript` and the 18 types `crate::model::classify::bookkeeping::classify` names a leaf for, and census the remainder over two projects roots under the QT-045 counting rule.",
           "probe": {
             "kind": "corpus",
-            "command": "Then subtract the four types the retention table values `transcript` and the 18 types `crate::model::classify::bookkeeping::classify` names a leaf for, and census the remainder over two projects roots under the QT-045 counting rule.",
+            "command": "Subtract the four types the retention table values `transcript` and the 18 types `crate::model::classify::bookkeeping::classify` names a leaf for, and census the remainder over two projects roots under the QT-045 counting rule.",
             "scope": "every `*.jsonl` under EACH of the two projects roots, counted and reported per root",
             "rule": "Byte-find `\"queue-operation\":\"last-wins\"` and `\"queue-operation\":\"always\"`, walk each surrounding object literal quote-aware from its `{` to the matching `}` and read every `\"<type>\":\"<policy>\"` pair."
           },
@@ -86824,7 +86824,7 @@
             "kind": "corpus",
             "command": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, count (a) raw lines carrying the literal anywhere and (b) entries of a list `message.content` whose `type` is `text` and whose `text` EQUALS the literal exactly - the second is the count that decides the claim.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\" only, count (a) raw lines carrying the literal anywhere and (b) entries of a list `message.content` whose `type` is `text` and whose `text` EQUALS the literal exactly - the second is the count that decides the claim."
+            "rule": "One count per raw line carrying the literal anywhere, and one per entry of a list `message.content` whose `type` is `text` and whose `text` EQUALS the literal exactly - the second is the count that decides the claim."
           },
           "producer_trace": "partial",
           "specimen": "none",
@@ -86995,7 +86995,7 @@
             "kind": "corpus",
             "command": "Corpus: over every *.jsonl under a projects root except journal.jsonl / elicitations.jsonl, split on b\"\\n\", count one observation per `thinking` block whose `signature` is the empty string, deduped by (record uuid, block index) over the whole root, and tally the carrying record's `message.model`, `message.stop_reason`, message id prefix, integer usage sum, the carrying record's `version`, and the VALUES of `isApiErrorMessage` / `isVirtual` separately from their presence.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Corpus: over every *.jsonl under a projects root except journal.jsonl / elicitations.jsonl, split on b\"\\n\", count one observation per `thinking` block whose `signature` is the empty string, deduped by (record uuid, block index) over the whole root, and tally the carrying record's `message.model`, `message.stop_reason`, message id prefix, integer usage sum, the carrying record's `version`, and the VALUES of `isApiErrorMessage` / `isVirtual` separately from their presence."
+            "rule": "One observation per `thinking` block whose `signature` is the empty string, deduped by (record uuid, block index) over the whole root; the build half takes one non-overlapping count per held build."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -87160,7 +87160,7 @@
             "kind": "corpus",
             "command": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\", count (a) lines carrying the literal anywhere, (b) parsed records carrying it as a TOP-LEVEL key and (c) parsed records carrying it as a key anywhere below the top level - the second and third are the counts that decide whether a transcript ever holds it.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Corpus: over every *.jsonl under a projects root except basenames journal.jsonl / elicitations.jsonl, split on b\"\\n\", count (a) lines carrying the literal anywhere, (b) parsed records carrying it as a TOP-LEVEL key and (c) parsed records carrying it as a key anywhere below the top level - the second and third are the counts that decide whether a transcript ever holds it."
+            "rule": "One non-overlapping count of the literal per held build; for the corpus half one count per line carrying the literal anywhere, per record carrying it as a TOP-LEVEL key and per record carrying it as a key below the top level."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -87652,7 +87652,7 @@
             "kind": "corpus",
             "command": "Byte-search separately for `Unknown attachment type:` (the default arm) and for each of csift's own `NEVER_CONVERTS` entries; an entry with zero whole-build occurrences is one the table does not name. Corpus: walk every `*.jsonl` at any depth under a projects root, `journal.jsonl` skipped, one JSON parse per non-blank line, collecting the distinct `attachment.type` values per root and their union.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Byte-search separately for `Unknown attachment type:` (the default arm) and for each of csift's own `NEVER_CONVERTS` entries; an entry with zero whole-build occurrences is one the table does not name. Corpus: walk every `*.jsonl` at any depth under a projects root, `journal.jsonl` skipped, one JSON parse per non-blank line, collecting the distinct `attachment.type` values per root and their union."
+            "rule": "One JSON parse per non-blank line, collecting the distinct `attachment.type` values per root and their union; the build half reports one byte distance per empty arm from the anchor."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -88201,9 +88201,9 @@
           "instrument": "Binary: byte-search the verified build for `function CYn(e,n){if(!Lme(e))return e;` (one occurrence) and read the rebuild, for `function its(e){` (one occurrence) to read the re-validator it calls, for `function Lme(e){return e.some(` to read the has-any predicate, and for `function xI(e){return e.type===\"fallback\"}` to read the block predicate. Then byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
           "probe": {
             "kind": "corpus",
-            "command": "Then byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
+            "command": "Byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000.",
             "scope": "not stated: the instrument names no population",
-            "rule": "Then byte-search for `CYn(` (THREE occurrences) and read each: one is this function's own signature, one is `uje(CYn(to,ms),Qs,` at the request layer whose surrounding closure compares `Bo.fallbackBeta===ms`, and one is `o=CYn().safeParse(e)` - a DIFFERENT minified binding of the same name in the background-roster module, which is why the name alone is not the enumeration. Then byte-search for `===\"fallback\"` (13 occurrences) and record each offset against the renderer's system-handling span, bytes 180030000 to 180070000."
+            "rule": "One verdict per occurrence of the minified name, and one offset recorded per occurrence of `===\"fallback\"` against the renderer's system-handling span."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -88887,7 +88887,7 @@
             "kind": "corpus",
             "command": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `case\"parts\":{let r=`PDF pages extracted:` and read the mapper arm whole - it is the one occurrence - then `firstPage:A().optional().describe(` for the schema sentence, `if(VNe(d)){if(v!==void 0)` for the extension branch and `let w=be(b,\"page\"),m=[\"-jpeg\"` for the renderer. LADDER: byte-search `could not be processed as an image` in every cached build directory holding a `claude` file, one verdict per build - present iff the bytes occur at least once. CORPUS: a python3 os.walk over every *.jsonl under a projects root, json-parsing a line only when it carries the bytes \"tool_result\" or \"document\". One count per tool_use BLOCK named Read whose input.file_path case-folds to a .pdf suffix, keyed by block id; one row per tool_result BLOCK whose tool_use_id is one of those ids; image-bearing means that block's content is a list holding at least one element of type image; one count per such image element.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `case\"parts\":{let r=`PDF pages extracted:` and read the mapper arm whole - it is the one occurrence - then `firstPage:A().optional().describe(` for the schema sentence, `if(VNe(d)){if(v!==void 0)` for the extension branch and `let w=be(b,\"page\"),m=[\"-jpeg\"` for the renderer. LADDER: byte-search `could not be processed as an image` in every cached build directory holding a `claude` file, one verdict per build - present iff the bytes occur at least once. CORPUS: a python3 os.walk over every *.jsonl under a projects root, json-parsing a line only when it carries the bytes \"tool_result\" or \"document\". One count per tool_use BLOCK named Read whose input.file_path case-folds to a .pdf suffix, keyed by block id; one row per tool_result BLOCK whose tool_use_id is one of those ids; image-bearing means that block's content is a list holding at least one element of type image; one count per such image element."
+            "rule": "One count per `tool_use` block named Read whose `input.file_path` case-folds to a `.pdf` suffix, keyed by block id; one row per `tool_result` block whose `tool_use_id` is one of those ids; one count per image element in such a block. The ladder half takes one verdict per cached build, present iff the bytes occur at least once."
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -88974,7 +88974,7 @@
             "kind": "corpus",
             "command": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `case\"pdf\":{let r=`PDF file read:` - one occurrence - and read the arm whole. LADDER: byte-search `media_type:\"application/pdf\",data:e.file.base64` in every cached build directory holding a `claude` file, one verdict per build; read the 2.1.240 arm at 298771694 and the 2.1.243 arm at 206270260 to see the string-only and block forms side by side (the literal carries the mapper's parameter name, so it dates this arm only while that name holds). CORPUS: a python3 os.walk over every *.jsonl under a projects root; one count per {\"type\":\"document\"} object at message.content[], at a tool_result block's content[], or in a list inside an attachment payload, grouped by location and by the carrying record's type and isMeta flag.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `case\"pdf\":{let r=`PDF file read:` - one occurrence - and read the arm whole. LADDER: byte-search `media_type:\"application/pdf\",data:e.file.base64` in every cached build directory holding a `claude` file, one verdict per build; read the 2.1.240 arm at 298771694 and the 2.1.243 arm at 206270260 to see the string-only and block forms side by side (the literal carries the mapper's parameter name, so it dates this arm only while that name holds). CORPUS: a python3 os.walk over every *.jsonl under a projects root; one count per {\"type\":\"document\"} object at message.content[], at a tool_result block's content[], or in a list inside an attachment payload, grouped by location and by the carrying record's type and isMeta flag."
+            "rule": "One count per `{\"type\":\"document\"}` object at `message.content[]`, at a `tool_result` block's `content[]` or in a list inside an attachment payload, grouped by location and by the carrying record's `type` and `isMeta`. The ladder half takes one verdict per cached build."
           },
           "producer_trace": "partial",
           "specimen": "observed",
@@ -89064,7 +89064,7 @@
             "kind": "corpus",
             "command": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `else if(d.type===\"parts\"&&Array.isArray(d.pages))` and read the collector through its return, then `var Olt=8,Dlt=8`, `documents:n.slice(0,Nlt)`, `var Nlt=4` and `function D0o(e){return`[Page ` for the caps and the template; `userFacingName(){return\"REPL\"}` is the one occurrence naming the tool. CORPUS: a python3 os.walk over every *.jsonl under a projects root - one count per image element inside ANY tool_result content list, with the tool name taken from the tool_use block carrying the same id anywhere under the root, unknown when no such block is found.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "PRODUCER: in the Claude Code 2.1.258 binary byte-search `else if(d.type===\"parts\"&&Array.isArray(d.pages))` and read the collector through its return, then `var Olt=8,Dlt=8`, `documents:n.slice(0,Nlt)`, `var Nlt=4` and `function D0o(e){return`[Page ` for the caps and the template; `userFacingName(){return\"REPL\"}` is the one occurrence naming the tool. CORPUS: a python3 os.walk over every *.jsonl under a projects root - one count per image element inside ANY tool_result content list, with the tool name taken from the tool_use block carrying the same id anywhere under the root, unknown when no such block is found."
+            "rule": "One count per image element inside ANY `tool_result` content list, with the tool name taken from the `tool_use` block carrying the same id anywhere under the root and unknown when no such block is found."
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -89347,7 +89347,7 @@
             "kind": "corpus",
             "command": "Over one projects root, for every jsonl line whose type is system and subtype is compact_boundary, build the uuid -> line map of that line's own file (last write wins) and resolve compactMetadata.preservedSegment.{headUuid,anchorUuid,tailUuid}. Count one row per boundary: whether preservedSegment is present, whether each member resolves, whether the anchor's record carries isCompactSummary true, and whether head and tail resolve above or below the boundary's own line. In the shipped binary, byte-search the literal preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)} for the one builder, then enumerate every occurrence of that builder's minified name and read each caller for the value it passes as the anchor.",
             "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "Over one projects root, for every jsonl line whose type is system and subtype is compact_boundary, build the uuid -> line map of that line's own file (last write wins) and resolve compactMetadata.preservedSegment.{headUuid,anchorUuid,tailUuid}. Count one row per boundary: whether preservedSegment is present, whether each member resolves, whether the anchor's record carries isCompactSummary true, and whether head and tail resolve above or below the boundary's own line. In the shipped binary, byte-search the literal preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)} for the one builder, then enumerate every occurrence of that builder's minified name and read each caller for the value it passes as the anchor."
+            "rule": "One row per boundary: whether `preservedSegment` is present, whether each member resolves, whether the anchor's record carries `isCompactSummary` true, and whether head and tail resolve above or below the boundary's own line."
           },
           "producer_trace": "complete",
           "specimen": "observed",
