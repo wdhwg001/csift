@@ -33,14 +33,18 @@
 //!
 //! A BACKTICKED span is exempt, for the reason an `excerpt` is: it quotes the build or a
 //! command verbatim, and Claude Code really does intern a beta named
-//! `server-side-fallback-2026-06-01`. TWO conditions bound that exemption. The backticks
+//! `server-side-fallback-2026-06-01`. THREE conditions bound that exemption. The backticks
 //! must BALANCE - an odd count means one span is unclosed, and pairing left to right from
 //! there exempts prose instead of a literal, which is how a date and a first-person clause
-//! once hid behind an exemption they had no claim to. And the span must be SHORT: a run of
+//! once hid behind an exemption they had no claim to. The span must be SHORT: a run of
 //! more than `BACKTICK_MAX` characters between two backticks is not a literal anyone
 //! quotes, it is prose that happens to sit between them, and one such run of 2.2 KB shipped
-//! a bare `today`. `probe.literal` is exempt for the same reason a quotation is. Everything
-//! a pass WROTE is scanned.
+//! a bare `today`. And it must not READ as prose: 400 characters is a lot of English, so a
+//! sentence carrying a date, a process word and a first-person clause fits inside the bound
+//! comfortably and was exempt for sitting between two backticks. A literal is not made of
+//! words, so the test is whether plain words carry the span (`span_is_prose`).
+//! `probe.literal` is exempt for the same reason a quotation is. Everything a pass WROTE is
+//! scanned.
 
 use regex::Regex;
 use serde_json::Value;
@@ -116,11 +120,18 @@ fn csift_version_re() -> &'static Regex {
 /// receipt sentence and `auditor` four times, while `adjudication` and `audit` were both
 /// already barred. So are the two phrases a graded re-read leaves behind - `planted fake`
 /// and `adversarial` - which name how a sentence was checked and never what a build does.
+///
+/// `auditing` and `attempted` join them, and the split there is by SHAPE. `attempted` can
+/// only be the pass describing what it tried; `attempt` and `attempts` are a countable noun
+/// this domain really uses - `one discovery attempt per poll` is a counting rule - so the
+/// bare noun stays and only that one inflected form is barred. `attempting` is NOT barred,
+/// and the reason is measured: the build's own edit-validator message says `Read it again
+/// before attempting to write it`, so barring it would flag Claude Code's words.
 fn audit_word_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?i)\b(re-audits|re-audited|re-audit|verifiers|verifier|verify lane|auditors|auditor|tracers|tracer|scribes|scribe|adjudications|adjudication|adjudicated|adjudicate|kicked|today|yesterday|planted fakes|planted fake|planted|adversarial|devil's advocate|blind review|audits|audited|audit|rounds|round)\b",
+            r"(?i)\b(re-audits|re-audited|re-audit|verifiers|verifier|verify lane|auditors|auditor|auditing|tracers|tracer|scribes|scribe|adjudications|adjudication|adjudicated|adjudicate|kicked|today|yesterday|planted fakes|planted fake|planted|adversarial|devil's advocate|blind review|audits|audited|audit|attempted|rounds|round)\b",
         )
         .unwrap()
     })
@@ -133,6 +144,37 @@ const BACKTICK_MAX: usize = 400;
 fn backticked_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(&format!(r"`[^`\n]{{0,{BACKTICK_MAX}}}`")).unwrap())
+}
+
+/// A backticked span that is PROSE rather than a literal, decided on its shape rather than
+/// on its length alone.
+///
+/// The length bound was the only test, and 400 characters is a lot of English: a sentence
+/// carrying a date, a process word and a first-person clause fits inside it comfortably and
+/// was exempt for sitting between two backticks. A literal is not made of words - a command
+/// is flags and paths, an excerpt is minified syntax, an output sample is columns, numbers
+/// and paths - so the test is whether PLAIN WORDS carry the span: five or more of them AND
+/// more than half its whitespace tokens.
+///
+/// Both halves are measured over the shipped file. Five or more alone scans 987 spans and
+/// reads ONE violation, and that one is a false positive: a quoted sample of csift's own
+/// output line, half of it columns and paths, whose date is a record's instant rather than
+/// the day a pass ran. Adding the majority scans 919 and reads none, which is what a
+/// literal's shape is for.
+fn span_is_prose(inner: &str) -> bool {
+    let (mut plain, mut total) = (0usize, 0usize);
+    for token in inner.split_whitespace() {
+        total += 1;
+        let core = token.trim_matches(|c| c == '.' || c == ',');
+        if !core.is_empty()
+            && core
+                .chars()
+                .all(|c| c.is_ascii_alphabetic() || "-'".contains(c))
+        {
+            plain += 1;
+        }
+    }
+    plain >= 5 && plain * 2 > total
 }
 
 /// `round` is an audit-process word - "the previous round", "round three of the attribution
@@ -207,7 +249,14 @@ pub(crate) fn hits(s: &str) -> Vec<(&'static str, String)> {
     // Blank the quotations, keeping the offsets, and only where the quoting is balanced.
     let scanned = if s.matches('`').count() % 2 == 0 {
         backticked_re()
-            .replace_all(s, |c: &regex::Captures| " ".repeat(c[0].len()))
+            .replace_all(s, |c: &regex::Captures| {
+                let whole = &c[0];
+                if span_is_prose(&whole[1..whole.len() - 1]) {
+                    whole.to_string()
+                } else {
+                    " ".repeat(whole.len())
+                }
+            })
             .into_owned()
     } else {
         s.to_string()

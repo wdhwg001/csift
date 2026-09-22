@@ -172,7 +172,34 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
         "a bare `we` is read as the pronoun, which is what forces the literal to be quoted"
     );
 
-    // (d) The backtick exemption is BOUNDED. A 2.2 KB run between two backticks is prose
+    // (d) The backtick exemption is BOUNDED by SHAPE as well as by length: 400 characters
+    // is a lot of English, so a sentence carrying a date, a process word and a first-person
+    // clause fits inside the bound and was exempt for sitting between two backticks.
+    let sentence = "`the third round re-read the preserved set on 2026-09-04 and I then \
+                    counted the boundaries it names, which is what the claim states here`";
+    assert!(
+        sentence.len() < 200,
+        "the specimen is well inside the length bound"
+    );
+    let shaped = prose::hits(sentence);
+    for want in ["calendar date", "audit-process word", "first-person phrase"] {
+        assert!(
+            shaped.iter().any(|(r, _)| *r == want),
+            "{want} must be read through a backticked span that is prose: {shaped:?}"
+        );
+    }
+    // ... and a literal of the same length is still a literal: a command is flags and
+    // paths, an output sample is columns and numbers, and neither is carried by words.
+    assert!(
+        prose::hits(
+            "`L4973  2026-06-29 11:51:38 AEST(UTC+10)  turn 20  external write  \
+             ~/.claude/settings.json  (inferred: v3->v4, no tool record)`"
+        )
+        .is_empty(),
+        "a quoted output line is a literal whatever its length"
+    );
+
+    // (e) The backtick exemption is BOUNDED. A 2.2 KB run between two backticks is prose
     // that happens to sit there, and one shipped a bare `today` behind the exemption.
     let long = format!("`{} today {}`", "x ".repeat(150), "y ".repeat(150));
     let hits = prose::hits(&long);
@@ -180,7 +207,11 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
         hits.iter().any(|(r, _)| *r == "audit-process word"),
         "a long run is scanned as prose: {hits:?}"
     );
-    assert!(prose::hits("`a short literal saying today`").is_empty());
+    // A SHORT span is exempt when it is a literal by shape. `a short literal saying today`
+    // is five plain words and nothing else, which is a sentence between two backticks, so
+    // the shape test reads it as prose exactly as it reads the long one.
+    assert!(prose::hits("`kicked:!1,lastSeen:\"today\",tempo:\"idle\"`").is_empty());
+    assert!(!prose::hits("`a short literal saying today`").is_empty());
 }
 
 /// Rule 14's two later widenings: the word the alphabet was missing, and the sentence
