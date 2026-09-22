@@ -183,11 +183,14 @@ pub(crate) fn run_raw(
         keep = keep.into_iter().take(cap).collect();
     }
 
-    let mut out = std::io::stdout().lock();
+    let mut out = crate::text::Out::stdout();
     for line in keep.values() {
         out.write_all(line)?;
         out.write_all(b"\n")?;
     }
+    // Flushed before the notes below: they ride stderr and the contract puts them after
+    // the byte stream.
+    out.flush()?;
     drop(out);
     if dropped > 0 {
         let sid = crate::subagent::session_id_from_path(file);
@@ -338,7 +341,7 @@ pub(crate) fn run_rendered(
                 remainder_cmd.as_deref(),
                 non_record_lines,
                 &crossing,
-            );
+            )?;
         }
         OutputFormat::Json => render_json(
             &exchanges,

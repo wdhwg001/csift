@@ -11,6 +11,15 @@
 //! violation). Folding them here keeps the algorithm - and the marker - singular; callers
 //! still pass their own cap (200 for the scannable `list`/`agents` previews, 400 for the
 //! context-rich `search`/`recover` excerpts), so the legitimately-different caps stay.
+//!
+//! A PAIRED ROOT: the excerpt/banner/envelope/range helpers live here, and `out` carries
+//! the shared buffered stdout plus the ordered-parallel row pipeline every row-dumping
+//! surface writes through - the same "one implementation" reason, applied to HOW output
+//! reaches the terminal rather than to what it says.
+
+mod out;
+
+pub(crate) use out::*;
 
 /// Truncate `s` to at most `max` CHARACTERS, marking any elision with an explicit
 /// `… (+N chars)` suffix (N = dropped char count). Counts CHARACTERS, never bytes, so

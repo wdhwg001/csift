@@ -1,5 +1,7 @@
 //! run_search: resolve scope, fan out, merge the chronological timeline, cap + render.
 
+use std::io::Write as _;
+
 use super::*;
 
 /// Pre-scan advisory notes (stderr only): a uuid-shaped PATTERN with no session target, and
@@ -376,6 +378,10 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         }
         let mut skipped_sidecar = 0usize;
         let mut seen: std::collections::BTreeSet<(&str, usize)> = std::collections::BTreeSet::new();
+        // The jsonl stream goes through the shared buffer (a `--raw` dump of a broad match
+        // is hundreds of thousands of lines), and is FLUSHED before the notes below: those
+        // ride stderr and the contract puts them after the stream.
+        let mut out = crate::text::Out::stdout();
         for ex in &outcome.exchanges {
             for h in &ex.hits {
                 if h.from_sidecar {
@@ -384,11 +390,12 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                 }
                 if let Some(raw) = &h.raw {
                     if seen.insert((ex.session_id.as_str(), h.line)) {
-                        println!("{raw}");
+                        writeln!(out, "{raw}")?;
                     }
                 }
             }
         }
+        out.flush()?;
         if skipped_sidecar > 0 {
             eprintln!(
                 "csift: note: {skipped_sidecar} sidecar-merged record(s) have no physical \
@@ -483,7 +490,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     };
 
     match args.format {
-        OutputFormat::Text => render_text(&outcome, args),
+        OutputFormat::Text => render_text(&outcome, args)?,
         OutputFormat::Json => render_json(&outcome, diagnosis.as_ref())?,
     }
     Ok(())

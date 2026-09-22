@@ -37722,7 +37722,7 @@
       "code": [
         {
           "path": "src/commands/search/render.rs",
-          "lines": "130-133",
+          "lines": "146-149",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -42360,7 +42360,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "135-143",
+          "lines": "151-159",
           "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -45597,7 +45597,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "263-265",
+          "lines": "266-268",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         },
         {
@@ -59435,7 +59435,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "263-265",
+          "lines": "266-268",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
         }
       ],
@@ -59640,7 +59640,7 @@
       "code": [
         {
           "path": "src/commands/search/render_json.rs",
-          "lines": "37-39",
+          "lines": "39-41",
           "snippet": "/// The ready-to-run fetch command for a hit - `csift show` addressed at the transcript that\n/// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are\n/// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG"
         }
       ],
@@ -79962,7 +79962,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "91-97",
+          "lines": "107-113",
           "snippet": "    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's\n    // own marker and the engine's own come out in the same shape.\n    let nd = if h.delivery == Some(false) {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    } else {\n        String::new()\n    };"
         }
       ],
@@ -84345,7 +84345,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "109-112",
+          "lines": "125-128",
           "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
         }
       ],

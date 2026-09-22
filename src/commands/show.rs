@@ -21,7 +21,7 @@ use anyhow::{bail, Result};
 
 use crate::cli::{OutputFormat, ShowArgs};
 use crate::commands::search::{
-    fetch_records, merged_any_sidecar, print_record_line, role_glyph, Exchange,
+    fetch_records, merged_any_sidecar, role_glyph, write_record_line, Exchange,
 };
 use crate::model::CrossingBudget;
 use crate::parse::{mmap_bytes, scan_lines_bytes};

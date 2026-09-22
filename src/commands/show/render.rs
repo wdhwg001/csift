@@ -1,4 +1,10 @@
 //! Text + JSON projections.
+//!
+//! Both go through ONE [`crate::text::Out`]: `show --turn ..` with `--max-count 0`
+//! addresses a whole transcript, and a row at a time through `println!` is a syscall a
+//! row. See the `text::out` module docs for what holding the lock obliges.
+
+use std::io::Write as _;
 
 use super::*;
 
@@ -14,80 +20,91 @@ pub(crate) fn render_text(
     remainder_cmd: Option<&str>,
     non_record_lines: usize,
     crossing: &crate::model::CrossingReport,
-) {
+) -> Result<()> {
+    let mut out = crate::text::Out::stdout();
     if is_subagent {
-        println!("SUBAGENT {session_id} · parent SESSION {parent_session_id}");
+        writeln!(
+            out,
+            "SUBAGENT {session_id} · parent SESSION {parent_session_id}"
+        )?;
     } else {
-        println!("SESSION {session_id}");
+        writeln!(out, "SESSION {session_id}")?;
     }
     let mut units = 0usize;
     let mut image_hint_done = false;
     for ex in exchanges {
-        println!();
+        writeln!(out)?;
         if ex.superseded_draft {
             // C-18 + C-31: an abandoned record sits OUTSIDE turn numbering - name what it
             // is, never fabricate a t<N>.
-            println!(
+            writeln!(
+                out,
                 "{}  {}",
                 crate::commands::search::abandoned_tag(ex),
                 format_local_compact(ex.started_utc.as_deref())
-            );
+            )?;
             // C-27: the distance from the message that replaced it, so a fetched
             // draft is never read as the message the model received.
             if let Some(d) = &ex.draft_diff {
-                println!("  {}", d.text_line_for(ex.abandoned_kind));
+                writeln!(out, "  {}", d.text_line_for(ex.abandoned_kind))?;
             }
         } else {
-            println!(
+            writeln!(
+                out,
                 "t{}  {}",
                 ex.turn_index.unwrap_or_default(),
                 format_local_compact(ex.started_utc.as_deref())
-            );
+            )?;
         }
         for h in &ex.hits {
-            print_record_line(role_glyph(h.class), h);
+            write_record_line(&mut out, role_glyph(h.class), h)?;
             if !image_hint_done {
                 if let Some(l) = crate::commands::search::image_hint_line(session_id, &h.image_ids)
                 {
-                    println!("{l}");
+                    writeln!(out, "{l}")?;
                     image_hint_done = true;
                 }
             }
             units += 1;
         }
     }
-    println!();
-    println!("fetched {units} record unit(s)");
+    writeln!(out)?;
+    writeln!(out, "fetched {units} record unit(s)")?;
     if dropped > 0 {
         match remainder_cmd {
-            Some(cmd) => println!(
+            Some(cmd) => writeln!(
+                out,
                 "+{dropped} more record unit(s) beyond the {cap}-unit cap · continue: {cmd}  \
                  (or --max-count 0 = uncapped)"
-            ),
-            None => println!(
+            )?,
+            None => writeln!(
+                out,
                 "+{dropped} more record unit(s) beyond the {cap}-unit cap — pass \
                  --max-count 0 (uncapped)"
-            ),
+            )?,
         }
     }
     if non_record_lines > 0 {
-        println!(
+        writeln!(
+            out,
             "{non_record_lines} line(s) in the addressed range are not records \
              (metadata/attachment — inspect with --raw)"
-        );
+        )?;
     }
     if merged_any_sidecar(exchanges) {
-        println!("with elicitation sidecar");
+        writeln!(out, "with elicitation sidecar")?;
     }
     // An ADDRESS moves with the crossing budget - the record it names reads `live` at one
     // budget and `pre-cut` at another - so `show` discloses what the walk crossed to decide
     // that, in the same two lines every other survival-printing surface prints.
     for line in crossing.lines() {
-        println!("{line}");
+        writeln!(out, "{line}")?;
     }
     if skipped > 0 {
-        println!("({})", crate::text::malformed_note(skipped));
+        writeln!(out, "({})", crate::text::malformed_note(skipped))?;
     }
+    out.flush()?;
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -104,6 +121,7 @@ pub(crate) fn render_json(
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
     use serde_json::json;
+    let mut out = crate::text::Out::stdout();
     let header = json!({
         "kind": "header",
         "command": "show",
@@ -112,7 +130,7 @@ pub(crate) fn render_json(
         "parent_session_id": parent_session_id,
         "path": file.display().to_string(),
     });
-    println!("{}", serde_json::to_string(&header)?);
+    writeln!(out, "{}", serde_json::to_string(&header)?)?;
     let mut units = 0usize;
     for ex in exchanges {
         for h in &ex.hits {
@@ -197,7 +215,7 @@ pub(crate) fn render_json(
             // edit here. Appended after the fixed keys, only when the hit carries a
             // fact, and folded by the SAME `attach_facts` rule the hit rows use.
             crate::commands::search::attach_facts(&mut row, &h.facts);
-            println!("{}", serde_json::to_string(&row)?);
+            writeln!(out, "{}", serde_json::to_string(&row)?)?;
         }
     }
     let mut summary = json!({
@@ -214,6 +232,7 @@ pub(crate) fn render_json(
     for (k, v) in crossing.json_fields() {
         summary[k] = v;
     }
-    println!("{}", serde_json::to_string(&summary)?);
+    writeln!(out, "{}", serde_json::to_string(&summary)?)?;
+    out.flush()?;
     Ok(())
 }

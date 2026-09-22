@@ -1,4 +1,20 @@
-//! Text + JSON rendering: headers, tokens, footers, envelope emission.
+//! The TEXT surface: what a row says about itself (the role glyph, the decorated label,
+//! the header token) and the stream those rows sit in.
+//!
+//! A PAIRED ROOT, split when the 600-line cap bound: `exchange` holds the writers BELOW an
+//! exchange header (one record line and its image annotations), `notes` the two closing
+//! disclosures. Every stdout byte below the scope banners goes through ONE
+//! [`crate::text::Out`]: the banners are printed before it exists (a `LineWriter` has
+//! already flushed them), and from that point a stray `println!` would jump the buffer's
+//! queue - see the `text::out` module docs.
+
+mod exchange;
+mod notes;
+
+pub(crate) use exchange::*;
+pub(crate) use notes::*;
+
+use std::io::Write as _;
 
 use super::*;
 
@@ -254,17 +270,23 @@ pub(crate) fn header_tokens(exchanges: &[Exchange]) -> HashMap<&str, String> {
     tok
 }
 
-pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
+pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) -> Result<()> {
     // SCOPE banner FIRST (before the empty check) so a bare `csift search '' <uuid>` fan-out
     // announces it spanned N subagents up front - same disclosure as list/files/turns.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     crate::path::emit_duplicate_banner(&outcome.duplicates);
+    let mut out = crate::text::Out::stdout();
     if outcome.exchanges.is_empty() {
-        println!("no matching exchanges");
+        writeln!(out, "no matching exchanges")?;
         if outcome.skipped_lines > 0 {
-            println!("({})", crate::text::malformed_note(outcome.skipped_lines));
+            writeln!(
+                out,
+                "({})",
+                crate::text::malformed_note(outcome.skipped_lines)
+            )?;
         }
-        return;
+        out.flush()?;
+        return Ok(());
     }
 
     // ── MATCH banner (head): the TRUE totals + the emission direction, echoed BEFORE the
@@ -273,24 +295,26 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     //    must survive a consumer that amputates one end). Free: the timeline is fully
     //    materialized before the first output byte. An active cap discloses the emitted
     //    window inline; undated exchanges (sorted last) are called out only when present. ──
-    print!(
+    write!(
+        out,
         "matches  {} {} · {} {} · oldest first",
         outcome.total_matched,
         noun(outcome.total_matched, "exchange", "exchanges"),
         outcome.total_sessions,
         noun(outcome.total_sessions, "session", "sessions"),
-    );
+    )?;
     if outcome.dropped_by_cap > 0 {
-        print!(
+        write!(
+            out,
             " · showing {} {}",
             window_end(args),
             outcome.exchanges.len()
-        );
+        )?;
     }
     if outcome.exchanges.iter().any(|ex| ex.started_utc.is_none()) {
-        print!(" · undated last");
+        write!(out, " · undated last")?;
     }
-    println!();
+    writeln!(out)?;
 
     // ── Self-resolving exchange headers: each header opens with a STABLE token - the leading
     //    chars of the owning transcript id - derived from the id alone, never from enumeration
@@ -302,7 +326,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
 
     let mut image_hint_done = false;
     for ex in &outcome.exchanges {
-        println!();
+        writeln!(out)?;
         // `<tok>·t6` - the id-prefix token + 0-based turn index (the SAME numbering
         // `show --turn` addresses) + the single compact local instant (offset already pins it;
         // no second UTC copy). Per-hit timestamps are omitted in text (this turn time covers
@@ -317,25 +341,27 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             None => abandoned_tag(ex),
         };
         if ex.is_subagent {
-            println!(
+            writeln!(
+                out,
                 "{t}·{turn_tag} (parent {})  {}",
                 id_prefix(&ex.parent_session_id, 8),
                 format_local_compact(ex.started_utc.as_deref())
-            );
+            )?;
         } else {
-            println!(
+            writeln!(
+                out,
                 "{t}·{turn_tag}  {}",
                 format_local_compact(ex.started_utc.as_deref())
-            );
+            )?;
         }
         // C-27: what the user changed before sending. Printed once per draft unit,
         // under the header, so the reader weighs the draft against what replaced it
         // instead of reading an abandoned text as the message.
         if let Some(d) = &ex.draft_diff {
-            println!("      ↳ {}", d.text_line_for(ex.abandoned_kind));
+            writeln!(out, "      ↳ {}", d.text_line_for(ex.abandoned_kind))?;
         }
         for hit in &ex.hits {
-            print_record_line(role_glyph(hit.class), hit);
+            write_record_line(&mut out, role_glyph(hit.class), hit)?;
             // Close the text-mode ID-law hole for SUBAGENT hits: a line number is per-FILE, so
             // it must be fetched with the SUBAGENT's own id (`session_id`), NEVER the parent
             // uuid (that would silently fetch the WRONG record). Top-level hits are safe (the
@@ -343,11 +369,15 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             // rows carry the explicit ready-to-run command (with the FULL id - zero ambiguity
             // risk) - the same address JSON's per-hit `refetch` gives.
             if ex.is_subagent && !hit.from_sidecar && hit.line > 0 {
-                println!("      ↳ csift show @{} --line {}", ex.session_id, hit.line);
+                writeln!(
+                    out,
+                    "      ↳ csift show @{} --line {}",
+                    ex.session_id, hit.line
+                )?;
             }
             if !image_hint_done {
                 if let Some(l) = image_hint_line(&ex.session_id, &hit.image_ids) {
-                    println!("{l}");
+                    writeln!(out, "{l}")?;
                     image_hint_done = true;
                 }
             }
@@ -355,10 +385,10 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
         // they read as surrounding back-and-forth, not as matches.
         for sib in &ex.siblings {
-            print_record_line('·', sib);
+            write_record_line(&mut out, '·', sib)?;
             if !image_hint_done {
                 if let Some(l) = image_hint_line(&ex.session_id, &sib.image_ids) {
-                    println!("{l}");
+                    writeln!(out, "{l}")?;
                     image_hint_done = true;
                 }
             }
@@ -367,10 +397,11 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // command (self-healing escape hatch; `@<session_id>` round-trips for both a
         // top-level uuid and a subagent id).
         if ex.siblings_hidden > 0 && ex.turn_lines.0 > 0 {
-            println!(
+            writeln!(
+                out,
                 "  · (+{} more · csift show @{} --line {}..{})",
                 ex.siblings_hidden, ex.session_id, ex.turn_lines.0, ex.turn_lines.1
-            );
+            )?;
         }
     }
 
@@ -381,29 +412,37 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     } else {
         args.labels.join(",")
     };
-    println!();
+    writeln!(out)?;
     let n = outcome.total_matched;
     let ex_word = noun(n, "exchange", "exchanges");
     let n_sessions = outcome.total_sessions;
     let sess_word = noun(n_sessions, "session", "sessions");
-    print!("matched {n} {ex_word} · {n_sessions} {sess_word} · label={cat}");
+    write!(
+        out,
+        "matched {n} {ex_word} · {n_sessions} {sess_word} · label={cat}"
+    )?;
     if !args.labels_not.is_empty() {
-        print!(" · label-not={}", args.labels_not.join(","));
+        write!(out, " · label-not={}", args.labels_not.join(","))?;
     }
     if outcome.dropped_by_cap > 0 {
-        print!(
+        write!(
+            out,
             " · {} {} dropped by --max-count",
             outcome.dropped_by_cap,
             dropped_side(args)
-        );
+        )?;
     }
-    println!();
+    writeln!(out)?;
     if merged_any_sidecar(&outcome.exchanges) {
-        println!("with elicitation sidecar");
+        writeln!(out, "with elicitation sidecar")?;
     }
-    emit_chain_disclosure(&outcome.chain);
+    write_chain_disclosure(&mut out, &outcome.chain)?;
     if outcome.skipped_lines > 0 {
-        println!("({})", crate::text::malformed_note(outcome.skipped_lines));
+        writeln!(
+            out,
+            "({})",
+            crate::text::malformed_note(outcome.skipped_lines)
+        )?;
     }
     // ── Reader-caution (LAST, only when the default cap actually CLIPPED ≥1 excerpt) ──
     // The excerpts above are match-centered FRAGMENTS, not summaries - a consumer that trusts the
@@ -411,15 +450,18 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // exactly how to get the whole text. Auto-suppressed under --no-truncate / --line / --uuid (those
     // lift the cap, so nothing is truncated → `any_truncated_excerpt` is false).
     if any_image_ids(&outcome.exchanges) {
-        println!(
+        writeln!(
+            out,
             "note: image annotations above are extractable, not decorative: \
              csift image <target> --id <ID> --out DIR (bare number for a #N handle), then \
              Read the decoded file."
-        );
+        )?;
     }
     if any_truncated_excerpt(&outcome.exchanges) {
-        emit_truncation_caution();
+        write_truncation_caution(&mut out)?;
     }
+    out.flush()?;
+    Ok(())
 }
 
 /// The header tag an ABANDONED unit carries in place of `t<N>`: what kind of thing it is
@@ -435,128 +477,4 @@ pub(crate) fn abandoned_tag(ex: &Exchange) -> String {
         }
         None => "abandoned (off the surviving conversation — outside turn numbering)".to_string(),
     }
-}
-
-/// The SURVIVAL AXIS disclosure: what the scan hid from turn numbering and from the bare
-/// role selectors, and how to reach it. Never silent - the same law the draft disclosure
-/// has always followed - and printed only when there is something to say, so an ordinary
-/// transcript's footer is unchanged.
-pub(crate) fn emit_chain_disclosure(c: &ChainCounts) {
-    if c.drafts > 0 {
-        println!(
-            "({} superseded draft(s) outside turn numbering — esc-edit resends; searchable \
-             as -t user.unsent, addressable via csift show --line/--uuid)",
-            c.drafts
-        );
-    }
-    if c.rewound_turns > 0 {
-        println!(
-            "({} rewound turn(s) outside turn numbering — answered, then rewound past; \
-             searchable as -t user.rewound)",
-            c.rewound_turns
-        );
-    }
-    if c.abandoned_records > 0 {
-        println!(
-            "({} record(s) off the surviving conversation — Claude Code's parentUuid chain \
-             no longer reaches them, so a bare -t user/agent/harness skips them; marked \
-             [abandoned]/[rewound] and always addressable)",
-            c.abandoned_records
-        );
-    }
-    if c.replay_copies > 0 {
-        println!(
-            "({} replay copy line(s) — a compaction re-anchor re-appended these records; the \
-             LAST copy is the survivor and the earlier line is marked)",
-            c.replay_copies
-        );
-    }
-    if let Some(line) = c.boundary_cut_line {
-        println!(
-            "(the surviving conversation is cut at the compaction boundary L{line}; csift \
-             keeps reading above it — Claude Code's own loader stops there)"
-        );
-    }
-    for line in c.crossing.lines() {
-        println!("{line}");
-    }
-    if let Some(src) = c.leaf_source.filter(|_| c.any()) {
-        println!("(chain leaf: {src})");
-    }
-}
-
-/// The trailing reader-caution printed when ≥1 excerpt was truncated: what the excerpts ARE
-/// (clipped fragments, not summaries), why that matters (a fragment can misrepresent the whole),
-/// and the exact flags to read the full text. Kept as its own fn so the wording lives in one
-/// place (text only - JSON callers read the `excerpts_truncated` summary flag instead).
-pub(crate) fn emit_truncation_caution() {
-    println!();
-    println!(
-        "note: matches above are TRUNCATED, match-centered FRAGMENTS — not summaries. A fragment \
-         can read very differently from the record's full intent, so do NOT draw conclusions from \
-         it alone."
-    );
-    println!("  whole records: re-run with --no-truncate");
-    println!(
-        "  one record in full: csift show <@session|@agent-id> --line <N> (the L<n> shown on \
-         a row) or --uuid <U>"
-    );
-}
-
-/// One hit/sibling line: `<marker> <label>[ <tool>]  L<line>  <excerpt>` (excerpt inline; its
-/// newlines are already collapsed to single spaces). `marker` is the role glyph for a match or a
-/// dim `·` for a `--siblings` context record; `<label>` is the dotted path with the GOLD §4/§7
-/// `⇨`/`▹` decorations ([`render_label`]).
-pub(crate) fn print_record_line(marker: char, h: &Hit) {
-    let label = render_label(h);
-    let name = h
-        .tool_name
-        .as_deref()
-        .map(|n| format!(" {n}"))
-        .unwrap_or_default();
-    let images = image_suffix(&h.image_ids);
-    // A merged elicitation-sidecar hit has no physical jsonl line - render the provenance
-    // locator instead of a fabricated `Lnnnn` (§3.10).
-    let locator = if h.from_sidecar {
-        "(elicitation sidecar)".to_string()
-    } else {
-        format!("L{}", h.line)
-    };
-    println!(
-        "  {marker} {label}{name}  {locator}  {}{}",
-        h.excerpt, images
-    );
-}
-
-/// ` [N image(s): …]` suffix when the hit's record carries images - the SAME ids `turns` shows,
-/// feedable straight to `csift image <session> --id <ID>`. Empty string when there are none.
-pub(crate) fn image_suffix(ids: &[String]) -> String {
-    if ids.is_empty() {
-        return String::new();
-    }
-    let noun = if ids.len() == 1 { "image" } else { "images" };
-    format!("  [{} {}: {}]", ids.len(), noun, ids.join(", "))
-}
-
-/// The paste-ready extraction command for a row's images, printed ONCE per run under the
-/// first image-bearing row (C-11: the inline `[N image(s): #7]` annotation taught nothing
-/// about extraction, and fleets classified images as unreadable without ever testing).
-/// INPUT forms only: `#7` is display, `--id` takes the bare number; `L<line>i<n>` is
-/// identical in both. Addressed at the row's OWNING transcript id (the per-FILE ID law).
-pub(crate) fn image_hint_line(session_id: &str, ids: &[String]) -> Option<String> {
-    let first = ids.first()?;
-    let input = first.strip_prefix('#').unwrap_or(first);
-    Some(format!(
-        "      ↳ read the image(s): csift image @{session_id} --id {input} --out DIR           (decodes to a file you can then Read - an image-bearing turn is evidence, not a blank)"
-    ))
-}
-
-/// True when any hit or sibling row carries image ids - gates the capability footer note.
-pub(crate) fn any_image_ids(exchanges: &[Exchange]) -> bool {
-    exchanges.iter().any(|ex| {
-        ex.hits
-            .iter()
-            .chain(ex.siblings.iter())
-            .any(|h| !h.image_ids.is_empty())
-    })
 }

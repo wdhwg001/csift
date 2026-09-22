@@ -3,6 +3,8 @@
 //! labels, headers, banners, footers); `show` borrows `pairing_json` from here for its
 //! own flat record rows.
 
+use std::io::Write as _;
+
 use super::*;
 
 /// The JSON rendering of a tool hit's `▹` pairing state (shared with `show`).
@@ -198,8 +200,10 @@ pub(crate) fn render_json(
     diagnosis: Option<&EmptyDiagnosis>,
 ) -> Result<()> {
     use serde_json::json;
+    let mut out = crate::text::Out::stdout();
     // envelope v2: header (always) → kind-tagged exchange rows → summary (always).
-    println!(
+    writeln!(
+        out,
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
             "search",
@@ -207,7 +211,7 @@ pub(crate) fn render_json(
             outcome.scope_sub,
             crate::path::duplicate_header_fields(&outcome.duplicates)
         ))?
-    );
+    )?;
     for ex in &outcome.exchanges {
         let hits: Vec<_> = ex.hits.iter().map(|h| hit_json(ex, h)).collect();
         let mut obj = json!({
@@ -241,7 +245,7 @@ pub(crate) fn render_json(
             obj["siblings_hidden"] = json!(ex.siblings_hidden);
             obj["turn_lines"] = json!([ex.turn_lines.0, ex.turn_lines.1]);
         }
-        println!("{}", serde_json::to_string(&obj)?);
+        writeln!(out, "{}", serde_json::to_string(&obj)?)?;
     }
     // envelope v2 summary. `session_ids` = the distinct matching transcript ids (sorted,
     // first-100 capped with an EXPLICIT truncation flag - never silent) so "WHICH sessions
@@ -321,6 +325,7 @@ pub(crate) fn render_json(
         };
     }
     let summary = crate::text::envelope_summary(summary_fields);
-    println!("{}", serde_json::to_string(&summary)?);
+    writeln!(out, "{}", serde_json::to_string(&summary)?)?;
+    out.flush()?;
     Ok(())
 }
