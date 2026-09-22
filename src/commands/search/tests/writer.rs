@@ -243,6 +243,35 @@ fn a_pointer_is_printed_only_when_it_addresses_something() {
 }
 
 #[test]
+fn a_capped_sibling_count_reaches_json_even_with_no_siblings_left() {
+    // The `--siblings` cap is disclosed or it is silent truncation, and the two facts are
+    // independent: an exchange can have every sibling capped away, leaving an EMPTY list
+    // and a non-zero hidden count. The keys ride on either, so the count is never lost -
+    // and an exchange with neither keeps the common envelope lean.
+    let base = exchange(
+        0,
+        vec![hit(Class::UserMessage, 1, "x", Vec::new())],
+        Vec::new(),
+    );
+
+    let mut buf: Vec<u8> = Vec::new();
+    exchange_json(&base, &mut buf).expect("serialize");
+    let row: serde_json::Value = serde_json::from_slice(&buf).expect("one json object");
+    assert!(row.get("siblings").is_none(), "{row}");
+    assert!(row.get("siblings_hidden").is_none(), "{row}");
+
+    let mut capped = base.clone();
+    capped.siblings_hidden = 4;
+    capped.turn_lines = (7, 19);
+    let mut buf: Vec<u8> = Vec::new();
+    exchange_json(&capped, &mut buf).expect("serialize");
+    let row: serde_json::Value = serde_json::from_slice(&buf).expect("one json object");
+    assert_eq!(row["siblings"], serde_json::json!([]));
+    assert_eq!(row["siblings_hidden"], serde_json::json!(4));
+    assert_eq!(row["turn_lines"], serde_json::json!([7, 19]));
+}
+
+#[test]
 fn every_row_writer_propagates_a_write_error() {
     // Each of the four: a refusing sink must come back as an Err, never as a short write
     // reported as success.

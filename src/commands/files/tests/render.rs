@@ -52,23 +52,57 @@ fn footer_filter_context_all_arms() {
 }
 
 #[test]
-fn footer_reports_skipped_lines() {
-    // The skipped-lines footer branch (> 0) fires.
+fn the_footer_names_skipped_lines_only_when_there_are_some() {
+    // The malformed note is a DISCLOSURE, so it must appear exactly when lines were
+    // skipped: printing it at zero claims a loss that did not happen, and suppressing it
+    // above zero is the silent truncation the output contract forbids.
     let mut o = outcome(FilesDetail::Summary, extract(&fixture()));
+    o.skipped_lines = 0;
+    let mut buf: Vec<u8> = Vec::new();
+    write_footer(&mut buf, &o).expect("footer");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(!text.contains("malformed"), "{text}");
+
     o.skipped_lines = 3;
-    // Written to a sink: the arm under test is the footer's, not the terminal's.
-    write_footer(&mut Vec::new(), &o).expect("footer"); // the `skipped_lines > 0` true arm
+    let mut buf: Vec<u8> = Vec::new();
+    write_footer(&mut buf, &o).expect("footer");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(text.contains("3 malformed line(s) skipped"), "{text}");
 }
 
 #[test]
-fn render_multi_session_separator() {
-    // Two sessions → the per_session blank-line separator arm (`!first`) fires.
+fn a_session_header_names_its_id_domain_and_the_separator_sits_between() {
+    // Two things the grouping owes a reader. A SUBAGENT group is branded as one beside its
+    // re-feedable parent, because a bare agent hex read as `SESSION` is not a target any
+    // command accepts; and the blank line separates two groups rather than leading the
+    // first, so a `| head` read opens on the header.
     let ln: Vec<usize> = (1..=fixture().len()).collect();
     let fx = fixture();
     let mut a = extract_mutations("aaaa-sess", &fx, &ln, &view_of(&fx));
     let b = extract_mutations("bbbb-sess", &fx, &ln, &view_of(&fx));
     a.extend(b);
-    render_text(&outcome(FilesDetail::Summary, a)).expect("text render");
+    let mut buf: Vec<u8> = Vec::new();
+    render_summary(&mut buf, &outcome(FilesDetail::Summary, a)).expect("summary");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(
+        text.starts_with("SESSION aaaa-sess\n"),
+        "no leading blank, and a top-level group is a SESSION: {text}"
+    );
+    assert!(text.contains("\n\nSESSION bbbb-sess\n"), "{text}");
+
+    // The same two mutations branded as a subagent take the other header arm.
+    let mut sub = extract_mutations("cccc-agent", &fx, &ln, &view_of(&fx));
+    for m in &mut sub {
+        m.is_subagent = true;
+        m.parent_session_id = "dddd-parent".to_string();
+    }
+    let mut buf: Vec<u8> = Vec::new();
+    render_summary(&mut buf, &outcome(FilesDetail::Summary, sub)).expect("summary");
+    let text = String::from_utf8(buf).expect("utf8");
+    assert!(
+        text.starts_with("SUBAGENT cccc-agent  ·  parent SESSION dddd-parent\n"),
+        "{text}"
+    );
 }
 
 #[test]

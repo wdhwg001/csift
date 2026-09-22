@@ -305,7 +305,7 @@ pub(crate) fn render_json(
 /// ONE exchange row, serialized straight into its chunk's buffer - the UNIT the
 /// ordered-parallel pipeline renders. A pure projection of its own exchange, which is what
 /// lets several render at once.
-fn exchange_json(ex: &Exchange, buf: &mut Vec<u8>) -> Result<()> {
+pub(crate) fn exchange_json(ex: &Exchange, buf: &mut Vec<u8>) -> Result<()> {
     use serde_json::json;
     let hits: Vec<_> = ex.hits.iter().map(|h| hit_json(ex, h)).collect();
     let mut obj = json!({
