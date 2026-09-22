@@ -7740,10 +7740,10 @@
           "depends": "csift predicts the decision so `agents` can split a frozen lane's `pending_classification` into `escalation-blocked` - the one state the jsonl can positively confirm - versus `awaiting-execution`. Because both checkers produce the same immune ask, the prediction has to run the one the harness would have run: attributing a structured removal's verdict to the lexical classifier mispredicts both ways. Where the deciding arm reads the filesystem csift answers `Unresolved` and says so, rather than guessing in either direction.",
           "instrument": "Grepping the literal 'Dangerous rm operation' no longer finds anything -- the reason string is assembled from a template. Grep `possibly-empty variable path` (still literal, two forms) or the template `Dangerous ${` instead.",
           "probe": {
-            "kind": "corpus",
-            "command": "Grepping the literal 'Dangerous rm operation' no longer finds anything -- the reason string is assembled from a template.",
-            "scope": "not stated: the instrument names no population",
-            "rule": "One decision object per ask, counted by its factory; one branch per checker, read at the offsets named above."
+            "kind": "bytes",
+            "scope": "the shipped Claude Code binary the state names, read whole; the literal is counted over its bytes",
+            "rule": "One decision object per ask, counted by its factory; one branch per checker, read at the offsets named above.",
+            "literal": "possibly-empty variable path"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -15747,7 +15747,7 @@
           "instrument": "Count the fixed byte string 'The user answered: ' and the other four answer templates over each cached build file. One occurrence count of the fixed byte string over each whole build file, on the cached builds 1.0.60, 2.0.0, 2.0.30, 2.1.100, 2.1.124, 2.1.139, 2.1.142, 2.1.143, 2.1.144, 2.1.145, 2.1.150, 2.1.214, 2.1.215, 2.1.216, 2.1.219 and 2.1.258.",
           "probe": {
             "kind": "bytes",
-            "literal": "The user answered: ",
+            "literal": "Your questions have been answered",
             "scope": "each cached Claude Code build file the instrument names, plus the two that bracket the state's range",
             "rule": "One occurrence count of the fixed byte string over each whole build file, on the cached builds 1.0.60, 2.0.0, 2.0.30, 2.1.100, 2.1.124, 2.1.139, 2.1.142, 2.1.143, 2.1.144, 2.1.145, 2.1.150, 2.1.152, 2.1.160, 2.1.197, 2.1.198, 2.1.214, 2.1.215, 2.1.216, 2.1.219 and 2.1.258."
           },
@@ -19492,7 +19492,7 @@
           "depends": "csift's registration recipe remains correct in practice for a different reason than stated: registering Elicitation and ElicitationResult with NO matcher matches every MCP server, which is what the SKILL.md recipe wants - a matcher would narrow it to one server and silently stop writing the sidecar for the rest. The claim that those events take no matcher at all is what is wrong. Two knock-on cautions for the recipe: because both elicitation events sit in the lenient set, a matcher containing a colon fails the character class, so Cnr returns undefined and Kwt falls through to new RegExp(n), where the colon is an ordinary literal - such a matcher still matches rather than disabling the hook, so the live check the old instrument proposed would not show what it expected; and a matcher of .* reaches the same regex fallback rather than the * short-circuit, with the same match-everything result.",
           "instrument": "resolve the Claude Code binary (`bin=$(command -v claude)`; follow symlinks with `readlink -f`) and `strings -n 40 \"$bin\" | grep -oE 'if\\(e!==\"PostToolUse\"&&e!==\"PostToolUseFailure\"\\)return!1;.{0,200}'`: the early return is followed by the `/^[a-zA-Z0-9_|, -]+$/` test and the `.split(/[|,]/)` with a trim per part. Counting rule: exact literal presence of the regex and of the split expression (one match each). Live check: register the elicitation recipe with a matcher containing a colon and confirm the sidecar is never created.",
           "probe": {
-            "kind": "corpus",
+            "kind": "live",
             "command": "Live check: register the elicitation recipe with a matcher containing a colon and confirm the sidecar is never created.",
             "scope": "not stated: the instrument names no population",
             "rule": "exact literal presence of the regex and of the split expression (one match each)."
@@ -24914,10 +24914,10 @@
           "depends": "csift's `strip_gutter` accepts only TAB and U+2192 and `continue`s on anything else, so a colon-guttered `edited_text_file` snippet line is silently dropped from the external-edit snippet - no fabrication, but a lost line with no disclosure.",
           "instrument": "Read the condition from the RAW executable bytes, not from a `strings` dump: the template literal holds a real newline followed by a real TAB, and `strings` splits the line at the newline and drops the one-byte tab remainder, which makes the condition read as the much broader `e.includes(\"\\n\")`. Use python3 to slice around `function j8t({content:e,startLine:r`.",
           "probe": {
-            "kind": "corpus",
-            "command": "Use python3 to slice around `function j8t({content:e,startLine:r`.",
-            "scope": "not stated: the instrument names no population",
-            "rule": "Read the condition from the RAW executable bytes, not from a `strings` dump: the template literal holds a real newline followed by a real TAB, and `strings` splits the line at the newline and drops the one-byte tab remainder, which makes the condition read as the much broader `e.includes(\"\\n\")`."
+            "kind": "bytes",
+            "scope": "the shipped Claude Code binary the state names, read whole; the literal is counted over its bytes",
+            "rule": "Read the condition from the RAW executable bytes, not from a `strings` dump: the template literal holds a real newline followed by a real TAB, and `strings` splits the line at the newline and drops the one-byte tab remainder, which makes the condition read as the much broader `e.includes(\"\\n\")`.",
+            "literal": "function j8t({content:e,startLine:r"
           },
           "producer_trace": "complete",
           "specimen": "observed",
@@ -64525,10 +64525,10 @@
           "depends": "that is the exact inverse csift would need for the echo-less subagent Reads, and the trailing trim is why such a reconstruction is not byte-exact - a csift implementation must decide whether to copy the trim or diverge; csift's own gutter stripper already implements the per-line half.",
           "instrument": "Seek the literal `content.replace(/<system-reminder>` in a `strings -a` dump of the 2.1.258 Claude Code binary; the same expression continues with a split on newlines, a map through the gutter-stripping helper, a rejoin and a trim. The helper itself is a one-line function returning the first capture of `/^\\s*\\d+[\\u2192\\t:](.*)$/` or the line unchanged, findable by the same seek. Counting rule: one `strings` output line holds each minified expression; expect exactly one construction site.",
           "probe": {
-            "kind": "corpus",
-            "command": "Seek the literal `content.replace(/<system-reminder>` in a `strings -a` dump of the 2.1.258 Claude Code binary; the same expression continues with a split on newlines, a map through the gutter-stripping helper, a rejoin and a trim.",
-            "scope": "not stated: the instrument names no population",
-            "rule": "one `strings` output line holds each minified expression; expect exactly one construction site."
+            "kind": "bytes",
+            "scope": "the shipped Claude Code binary the state names, read whole; the literal is counted over its bytes",
+            "rule": "one `strings` output line holds each minified expression; expect exactly one construction site.",
+            "literal": "content.replace(/<system-reminder>"
           },
           "producer_trace": "complete",
           "specimen": "none",
@@ -64623,7 +64623,7 @@
           "to": null,
           "behavior": "Claude Code writes `type:\"system\"` records for its own UI whose `subtype` falls outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`). Measured over 8225 transcripts under the projects root (journal and elicitation-sidecar files excluded): 13087 system records under exactly 11 subtypes - stop_hook_summary 5798, turn_duration 4791, away_summary 1683, scheduled_task_fire 459, compact_boundary 235, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2. `informational` is a notice with a string `content` and a `level` (warning 9, notice 5); its live specimen is the Remote Control disconnect notice, composed at 181648256 - which also dedupes against the last transcript record - and reached from the bridge failure arm at 181655786. Every one of the 13087 carries `uuid`, `timestamp` and `parentUuid`, and NONE carries a `message{}` field. `isMeta` is NOT universal, which the old text asserted: the key is ABSENT on api_error (29 of 29), on stop_hook_summary (5798 of 5798) and on 134 of the 235 compaction boundaries, and is `false` on the remaining 7126. The constructors agree - the api_error constructor (166032184) returns {type, subtype, level:\"error\", error, retryInMs, retryAttempt, maxRetries, source, timestamp, uuid} with no isMeta field, and the stop_hook_summary constructor (166030639) likewise, while every other transcript-writing constructor in that cluster sets isMeta:false. A subtype the corpus has not yet seen is not guaranteed isMeta:false either: the file_snapshot record literal (163818846) writes isMeta:true. `parentUuid` is set by no system-record constructor at all - it is stamped by the shared envelope hop (166105359) after the write-policy table (166066498) routes type `system` to the transcript sink like user and assistant records - which is also why a compaction boundary is the one system record whose parentUuid is null. The 11 observed subtypes are a CORPUS property, not the shipped set: the 2.1.258 executable holds 92 adjacent `type:\"system\",subtype:\"...\"` literals over 48 DISTINCT subtype names, and the transcript-writing constructor cluster alone builds four with zero corpus specimens (permission_retry, bridge_status, cloud_session_status, memory_saved). Two of the eleven have a second literal outside that cluster and neither is a counterexample: an informational wire projection (163575905) whose only call site (179104884) spreads it into a control-protocol message carrying session_id and never appends a transcript record, and a local_command rehydration mapper (163578281) that supplies timestamp, uuid and isMeta explicitly. Only two literals in the whole executable put a `message` key inside a system-subtype object, both permission_denied (169797551, 178901181), and both are control-protocol wire projections with session_id and snake_case fields, never transcript records. The two model_refusal subtypes are inline yields in the query loop (164720173, 164725713) rather than factory functions, and model_refusal_fallback has a second producer on the banner path (164575450) that adds the `scope` key - so a later pass reading only the constructor cluster would miss them.",
           "depends": "The eleven observed subtypes now reach NINE leaves across four categories rather than one catch-all: `harness.compaction.boundary`, the three `harness.turn.*` closers, `harness.schedule.event`, and the five `harness.system.*` event kinds - refusal, api-error, notice, kill and command (src/model/classify/system.rs). Each of the five renders the fields that make its own event useful rather than the one-size `[<subtype> <level>] <content>` head the catch-all printed, and a subtype the table does not name reaches NO leaf: `show --line` renders it `? unmodeled: system/<subtype>` under the 1:1 law, which names the shape csift has not caught up with. Two csift laws still rest on the record SHAPE rather than on the subtype list, and the open shipped set is why: every one of these leaves defaults to `llm_visible:false` because no such record carries a `message{}` field (0 of 13,087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the gated admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026, CLS-068), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the mapping is the harness moving a subtype into a differently-typed record; a NEW subtype no longer breaks anything, because it lands on the unmodeled unit by construction.",
-          "instrument": "Corpus: rg --no-filename -o '\"type\":\"system\",\"subtype\":\"[a-z_]+\"' -- <project-dir>/*.jsonl | sort | uniq -c (count every subtype; the four modeled ones aside, every other value must classify under harness.system.*: csift search '' <target> -t harness.system.* --count-by label). Binary: strings -n 6 <claude-binary> | rg -c 'subtype:\"informational\"|\"informational\"' (and the same for each other subtype) plus rg -o 'subtype:\"informational\"[^}]{0,120}' to read the writer's field set (content, level). Visibility: none of these records carries a message{} field (jq 'select(.type==\"system\") | has(\"message\")' over the transcript).",
+          "instrument": "Build: strings -n 6 <claude-binary> | rg -c 'subtype:\"informational\"|\"informational\"' (and the same for each other subtype) plus rg -o 'subtype:\"informational\"[^}]{0,120}' to read the writer's field set (content, level). Visibility: none of these records carries a message{} field (jq 'select(.type==\"system\") | has(\"message\")' over the transcript). Then the Corpus: rg --no-filename -o '\"type\":\"system\",\"subtype\":\"[a-z_]+\"' -- <project-dir>/*.jsonl | sort | uniq -c (count every subtype; the four modeled ones aside, every other value must classify under harness.system.*: csift search '' <target> -t harness.system.* --count-by label).",
           "probe": {
             "kind": "csift",
             "command": "csift search '' <target> -t harness.system.* --count-by label",
@@ -81318,10 +81318,10 @@
           "depends": "This is why both opener leaves are retroactive and assigned at the SCAN layer: there is nothing on the record to read. csift reports a superseded opener from the DAG around it - a later same-parent opener, or the chain threading past it - and never asserts a flag the format does not carry.",
           "instrument": "Enumerate every field read off a user record on the load path in the shipped executable and classify each as identity, ordering, content or supersession; then byte-search `retractedMessageUuids` and read its one reader.",
           "probe": {
-            "kind": "corpus",
-            "command": "Enumerate every field read off a user record on the load path in the shipped executable and classify each as identity, ordering, content or supersession; then byte-search `retractedMessageUuids` and read its one reader.",
-            "scope": "not stated: the instrument names no population",
-            "rule": "Enumerate every field read off a user record on the load path in the shipped executable and classify each as identity, ordering, content or supersession."
+            "kind": "bytes",
+            "scope": "the shipped Claude Code binary the state names, read whole; the literal is counted over its bytes",
+            "rule": "Enumerate every field read off a user record on the load path in the shipped executable and classify each as identity, ordering, content or supersession.",
+            "literal": "retractedMessageUuids"
           },
           "producer_trace": "none",
           "specimen": "observed",

@@ -60,15 +60,34 @@ fn ledger_gate_rule_21_reads_every_build_the_state_names() {
     assert_eq!(tally.uncached, 1);
 }
 
-/// Rule 21 asks the OPEN state only, for rule 12's reason: a closed state's probe was
-/// runnable at the build its range ended on, which this host may no longer hold.
+/// Rule 21 reads a CLOSED state too, which is where it parts company with rule 12. An
+/// anchor is a byte LOCATION and a later build moves it; a probe's literal is a STRING, and
+/// whether the builds a closed range names carry it is decidable wherever this host holds
+/// them. One shipped that could not be run at all: a literal counting zero at every build of
+/// its own range, first occurring at the build the NEXT state opens at.
 #[test]
-fn ledger_gate_rule_21_leaves_a_closed_state_alone() {
+fn ledger_gate_rule_21_reads_a_closed_state_whose_builds_this_host_holds() {
     let mut c = with_probe(ABSENT, "2.1.100");
     let mut closed = c["states"][0].clone();
     closed["to"] = json!("2.1.200");
     c["states"][0]["from"] = json!("2.1.201");
     c["states"][0]["probe"]["literal"] = json!(PRESENT);
+    c["states"] = json!([closed, c["states"][0].clone()]);
+    let mut f = Vec::new();
+    probes::check(std::slice::from_ref(&c), &mut f);
+    assert_eq!(
+        f.len(),
+        1,
+        "the closed state's absent literal is named: {f:?}"
+    );
+    assert!(f[0].contains("occurs 0 times in every build this state names"));
+
+    // ... and a closed state whose literal the build carries passes exactly as an open one
+    // does, so the rule is reading rather than merely failing everything it newly reaches.
+    let mut c = with_probe(PRESENT, "2.1.100");
+    let mut closed = c["states"][0].clone();
+    closed["to"] = json!("2.1.200");
+    c["states"][0]["from"] = json!("2.1.201");
     c["states"] = json!([closed, c["states"][0].clone()]);
     let mut f = Vec::new();
     probes::check(std::slice::from_ref(&c), &mut f);

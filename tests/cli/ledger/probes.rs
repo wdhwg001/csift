@@ -16,8 +16,14 @@
 //! regex it dates was rewritten at the build its range opens at, so the verified build the
 //! badge names carries it zero times and carrying it zero times there is the FACT.
 //!
-//! OPEN STATES ONLY, for rule 12's reason: a closed state's probe was runnable at the build
-//! its range ended on, and a host that no longer holds that build cannot decide it.
+//! A CLOSED STATE'S PROBE IS READ TOO, which is where rule 12 and this rule part company.
+//! An anchor is a byte LOCATION and a later build moves it, so re-reading a closed state's
+//! anchors would demand that a superseded fact still sit at its old bytes; a probe's literal
+//! is a STRING, and whether the builds a closed range names carry it is decidable on this
+//! host whenever it holds them. One shipped that could not be: a literal counting zero at
+//! every build of its own range, first occurring at the build the NEXT state opens at, so it
+//! dated that event rather than its own. The skip is the same as everywhere else - a build
+//! this host does not hold is counted and moved past, never passed.
 //!
 //! A build this host does not hold is COUNTED and skipped, exactly as rules 12 and 19 skip
 //! what they cannot read, and the rule prints its own tally beside theirs. The skip is on
@@ -60,9 +66,6 @@ pub(crate) fn check(claims: &[Value], failures: &mut Vec<String>) -> Probes {
     for c in claims {
         let id = c["id"].as_str().unwrap_or("");
         for state in super::states(c) {
-            if !state["to"].is_null() {
-                continue;
-            }
             if state["probe"]["kind"].as_str() != Some("bytes") {
                 continue;
             }
