@@ -61,14 +61,6 @@ impl Out {
             w: std::io::BufWriter::with_capacity(OUT_BUF_BYTES, std::io::stdout().lock()),
         }
     }
-
-    /// Push everything buffered to the OS. Called at the end of a render and before any
-    /// stderr note the contract orders against stdout - never silently, so a write error
-    /// (a closed pipe, a full disk) reaches the caller's `Result` instead of being
-    /// swallowed by the drop.
-    pub fn flush(&mut self) -> std::io::Result<()> {
-        self.w.flush()
-    }
 }
 
 impl Write for Out {
@@ -76,10 +68,10 @@ impl Write for Out {
         self.w.write(buf)
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
-        self.w.write_all(buf)
-    }
-
+    /// Push everything buffered to the OS. Called at the end of a render and before any
+    /// stderr note the contract orders against stdout - never silently, so a write error
+    /// (a closed pipe, a full disk) reaches the caller's `Result` instead of being
+    /// swallowed by the drop.
     fn flush(&mut self) -> std::io::Result<()> {
         self.w.flush()
     }
