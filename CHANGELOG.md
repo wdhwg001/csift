@@ -808,52 +808,50 @@ surface change bumps the PATCH.
 
 ### Performance
 
-- **The render was the other serial half of a search.** Everything the scan does in
-  parallel was spent before the first output byte: on a 1.18 GB session (the top-level
-  transcript plus every `*.jsonl` under its subagent tree except `journal.jsonl`, which is
-  what csift parses) a
-  whole-scope `--format json` dump cost 1.94 s of CPU on ONE thread while nine rayon
-  workers waited, and a wide-match text search (`search 'the'`) paid 0.45 s of that phase's
-  0.59 s inside `println!`, which is one `write(2)` and one backward newline scan per row -
-  297,976 of them. Two changes. Every row-dumping surface (`search` text, JSON and `--raw`,
-  both of `show`'s, `files`, `agents`, `image`, and both of `verbatim`'s - its documented
-  `--subagents` span is 125,269 text rows on that session) now writes through one buffered
-  stdout, one syscall per megabyte. And `search` renders its per-exchange rows in bounded
-  parallel chunks, writing the chunk buffers in index order, so the byte stream is the one
-  a serial loop produced. Medians of 7 interleaved
-  reps on that session, at a host load of 7 to 27 that the wall numbers carry and the CPU
-  numbers do not: the JSON dump 2.958 s -> 1.532 s, `search 'x'` 1.247 -> 1.040,
-  `search 'the'` 1.140 -> 0.931 (at its own `-c` floor now), a `--for` closure 1.080 ->
-  0.901, `show --branch-points` 0.397 -> 0.355, the `agents` tree 0.664 -> 0.619,
-  `files --by timeline` 0.890 -> 0.858. CPU for the two wide text rows falls about 10%
-  (their sys halves 1.10 -> 0.70 and 1.07 -> 0.68); the JSON dump's rises 3.9%, which is what
-  the fan-out costs to spread over ten cores. What the look-ahead costs in memory is UP TO
-  TWICE 128 RENDERED ROWS - 128 rows are rendered before any is written, and each chunk
-  buffer grows by doubling, so it can sit at twice the bytes it holds. On that session, rows
-  averaging 78 KB, that is 10 to 20 MB against a peak of about 1,570 MiB and it does not clear
-  the noise: medians of 13 interleaved reps differ by 0.1 MiB, against per-arm spreads of 12
-  and 17 MiB. On a synthetic transcript whose rendered rows are 4,195,818 B, five
-  interleaved pairs put the delta at 715.8 MiB median and 836.9 MiB at worst, against a
-  one-copy figure of 512.2 MiB - so the peak is not a floor on the bound, and a reader
-  sizing a run works from twice 128 rows. The smallest inputs stay inside the same-binary
-  control band, at a median ratio of 1.009 against the control's 0.9997. Output bytes do not
-  move: of the acid set's 169 (row, size class) pairs over three size classes, 165 are
-  compared on all four streams - stdout, stderr, the exit code, and an interleaved `2>&1`
-  capture, which is the only one that can see the ORDER between the first two - and 163 are
-  byte-identical on every one of them, with stderr and the exit code identical on all 165.
-  The two that are not are one binding in its two size classes, `csift --help`, whose page
-  grew by the 512 bytes of the clause the exit law gained this release - a documented
-  surface change, and the only stdout difference anywhere in the set. FOUR MORE are
-  excluded because they print LIVE state, and
-  both bindings are named: the `whoami --format json` rows, whose lane instants move when
-  the session they name gains a record, and the `status` rows, whose fourth stdout line
-  carries an elapsed-seconds field that a repeat of the SAME binary moved 21 s later. All
-  four are run anyway, under the condition that makes their comparison mean anything: the
-  two arms of a pair land inside one second. Whether a given pair then matches is a
-  property of when it ran, which is exactly why it is not counted among the 165.
-  What a render change can never reach is stated rather than claimed away: a heavy regex row
-  is 1.189 s against a 1.140 s floor with the render removed entirely, because its output is
-  2.5 MB and its clock is the regex over that 1.18 GB.
+- **The render was the other serial half of a search.** Everything the scan does in parallel
+  was spent before the first output byte: on a 1.18 GB session (the top-level transcript
+  plus every `*.jsonl` under its subagent tree except `journal.jsonl`, which is what csift
+  parses) a whole-scope `--format json` dump cost 1.94 s of CPU on ONE thread while nine
+  rayon workers waited, and a wide-match text search (`search 'the'`) paid 0.45 s of that
+  phase's 0.59 s inside `println!`, which is one `write(2)` and one backward newline scan
+  per row - 297,976 of them. Two changes. Every row-dumping surface (`search` text, JSON and
+  `--raw`, both of `show`'s, `files`, `agents`, `image`, and both of `verbatim`'s - its
+  documented `--subagents` span is 125,269 text rows on that session) now writes through one
+  buffered stdout, one syscall per megabyte. And `search` renders its per-exchange rows in
+  bounded parallel chunks, writing the chunk buffers in index order, so the byte stream is
+  the one a serial loop produced. Medians of 7 interleaved reps on that session, at a host
+  load of 7 to 27 that the wall numbers carry and the CPU numbers do not: the JSON dump
+  2.958 s -> 1.532 s, `search 'x'` 1.247 -> 1.040, `search 'the'` 1.140 -> 0.931 (at its own
+  `-c` floor now), a `--for` closure 1.080 -> 0.901, `show --branch-points` 0.397 -> 0.355,
+  the `agents` tree 0.664 -> 0.619, `files --by timeline` 0.890 -> 0.858. CPU for the two
+  wide text rows falls about 10% (their sys halves 1.10 -> 0.70 and 1.07 -> 0.68); the JSON
+  dump's rises 3.9%, which is what the fan-out costs to spread over ten cores. What the
+  look-ahead costs in memory is UP TO TWICE 128 RENDERED ROWS - 128 rows are rendered before
+  any is written, and each chunk buffer grows by doubling, so it can sit at twice the bytes
+  it holds. On that session, rows averaging 78 KB, that is 10 to 20 MB against a peak of
+  about 1,570 MiB and it does not clear the noise: medians of 13 interleaved reps differ by
+  0.1 MiB, against per-arm spreads of 12 and 17 MiB. On a synthetic transcript whose
+  rendered rows are 4,195,818 B, five interleaved pairs put the delta at 715.8 MiB median
+  and 836.9 MiB at worst, against a one-copy figure of 512.2 MiB - so the peak is not a
+  floor on the bound, and a reader sizing a run works from twice 128 rows. The smallest
+  inputs stay inside the same-binary control band, at a median ratio of 1.009 against the
+  control's 0.9997. Output bytes do not move: of the acid set's 169 (row, size class) pairs
+  over three size classes, 165 are compared on all four streams - stdout, stderr, the exit
+  code, and an interleaved `2>&1` capture, which is the only one that can see the ORDER
+  between the first two - and 163 are byte-identical on every one of them, with stderr and
+  the exit code identical on all 165. The two that are not are one binding in its two size
+  classes, `csift --help`, whose page grew by the 512 bytes of the clause the exit law
+  gained this release - a documented surface change, and the only stdout difference anywhere
+  in the set. FOUR MORE are excluded because they print LIVE state, and both bindings are
+  named: the `whoami --format json` rows, whose lane instants move when the session they
+  name gains a record, and the `status` rows, whose fourth stdout line carries an
+  elapsed-seconds field that a repeat of the SAME binary moved 21 s later. All four are run
+  anyway, under the condition that makes their comparison mean anything: the two arms of a
+  pair land inside one second. Whether a given pair then matches is a property of when it
+  ran, which is exactly why it is not counted among the 165. What a render change can never
+  reach is stated rather than claimed away: a heavy regex row is 1.189 s against a 1.140 s
+  floor with the render removed entirely, because its output is 2.5 MB and its clock is the
+  regex over that 1.18 GB.
 - **A record's width is a number now, and it is written down.** The amendment gave `Record`
   a second conversion key and a memo holding both parsed conversions, and the memo held its
   payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
