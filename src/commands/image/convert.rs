@@ -5,10 +5,11 @@
 //! listing renders, and it never builds a [`crate::text::Out`]. Nothing here can land
 //! ahead of a buffer, because on this path there is no buffer to be ahead of. Its six
 //! prints are the JSON envelope's two lines, the per-file row in each format, the text
-//! tail, and the stderr note for a URL image, which carries no inline bytes to write. If a future change gives this branch a writer, add the deny attribute that every
-//! other converted module carries - the rule in `text::out` then applies here too.
-//! (Spelling that attribute out here would put its literal in a file that does not carry
-//! it, and the guarded set is enumerated by grepping for exactly that literal.)
+//! tail, and the stderr note for a URL image, which carries no inline bytes to write. If
+//! a future change gives this branch a writer, add the deny attribute that every other
+//! converted module carries - the rule in `text::out` then applies here too. (Spelling
+//! that attribute out here would put its literal in a file that does not carry it, and
+//! the guarded set is enumerated by grepping for exactly that literal.)
 
 use super::*;
 

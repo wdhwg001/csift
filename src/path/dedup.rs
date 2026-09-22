@@ -449,7 +449,7 @@ pub fn duplicate_note(g: &DuplicateGroup) -> String {
     }
 }
 
-/// The shared TEXT disclosure as one string, one `copies …` line plus a blank line per
+/// The shared TEXT disclosure as one string, one `copies ...` line plus a blank line per
 /// duplicated session id - empty when nothing was duplicated. ONE builder behind the two
 /// sinks below, exactly as the scope banner's is.
 fn duplicate_banner_text(groups: &[DuplicateGroup]) -> String {
