@@ -286,7 +286,7 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
 
-`anchors byte-exact at Claude Code 2.1.258: 7,013 of 7,628 (elided 342, absent 191, prefix-only 82), closed-state anchors 0, not checked`
+`anchors byte-exact at Claude Code 2.1.258: 7,016 of 7,631 (elided 342, absent 191, prefix-only 82), closed-state anchors 0, not checked`
 
 An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->
