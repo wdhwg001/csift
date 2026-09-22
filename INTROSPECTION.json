@@ -85849,7 +85849,7 @@
         },
         {
           "path": "tests/cli/show/fetch_domain.rs",
-          "lines": "383",
+          "lines": "451",
           "snippet": "fn home_with_an_unmodeled_headers_record() -> Home {"
         }
       ],

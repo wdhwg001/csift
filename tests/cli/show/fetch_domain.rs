@@ -250,6 +250,74 @@ fn a_line_that_is_not_a_record_at_all_stays_a_hard_miss() {
     assert!(raw.stdout.contains("lastProm"), "{}", raw.stdout);
 }
 
+/// The RANGE counterpart of the miss above. A torn line NAMED on its own bails, but inside
+/// an addressed range it is simply a line the range covered and no unit came back from, so
+/// the footer says HOW MANY - and it says it in both directions. Silence above zero is the
+/// silent truncation the output contract forbids: a reader counting two units against a
+/// three-line range would conclude a record went missing. A note at zero is the opposite
+/// lie, a loss claimed where nothing was lost.
+#[test]
+fn a_non_record_line_inside_an_addressed_range_is_counted_and_disclosed() {
+    const NOTE: &str = "line(s) in the addressed range are not records";
+    let h = Home::new();
+    let torn = "00000000-0000-4000-8000-0000000000fb";
+    h.write(
+        &format!("{ENC}/{torn}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            "this line is not a JSON object at all\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["show", at(torn).as_str(), "--line", "1..3"]);
+    assert!(
+        out.success,
+        "a range does not bail on a line it merely covered: {}",
+        out.stderr
+    );
+    assert!(
+        out.stdout.contains("fetched 2 record unit(s)"),
+        "two of the three lines are records: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(&format!("1 {NOTE}")),
+        "the third is disclosed with its count: {}",
+        out.stdout
+    );
+    let j = h.run(&[
+        "show",
+        at(torn).as_str(),
+        "--line",
+        "1..3",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(
+        json_summary(&j.stdout)["non_record_lines"],
+        serde_json::json!(1),
+        "the machine echo of the same count: {}",
+        j.stdout
+    );
+
+    // The other direction: a range whose every line IS a record has nothing to disclose.
+    let whole = "00000000-0000-4000-8000-0000000000fc";
+    h.write(
+        &format!("{ENC}/{whole}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+        ),
+    );
+    let clean = h.run(&["show", at(whole).as_str(), "--line", "1..2"]);
+    assert!(clean.success, "stderr: {}", clean.stderr);
+    assert!(
+        !clean.stdout.contains(NOTE),
+        "nothing was lost, so nothing is claimed: {}",
+        clean.stdout
+    );
+}
+
 /// The 1:1 law over ROLE-BEARING records: a message line with no renderable text used to
 /// hard-miss under an address, because the fallback had neither text nor raw bytes to
 /// build a unit from. Each shape below names the axis its leaf would have been decided
