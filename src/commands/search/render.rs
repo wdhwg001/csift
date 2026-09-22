@@ -324,86 +324,14 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) -> Result<
     //    O(matched-sessions) legend block ahead of the first hit. ──
     let tok = header_tokens(&outcome.exchanges);
 
-    let mut image_hint_done = false;
-    for ex in &outcome.exchanges {
-        writeln!(out)?;
-        // `<tok>·t6` - the id-prefix token + 0-based turn index (the SAME numbering
-        // `show --turn` addresses) + the single compact local instant (offset already pins it;
-        // no second UTC copy). Per-hit timestamps are omitted in text (this turn time covers
-        // them); the JSON envelope still carries each hit's `ts_utc`. A subagent exchange
-        // carries its parent on EVERY header (a tail-truncated read must still resolve); the
-        // parent token is the plain first-8 of the owning top-level uuid - no collision
-        // machinery (the resolver's fail-loud ambiguity check is the backstop).
-        let t = &tok[ex.session_id.as_str()];
-        // An abandoned unit sits OUTSIDE turn numbering - name it, never fabricate a t<N>.
-        let turn_tag = match ex.turn_index {
-            Some(t) => format!("t{t}"),
-            None => abandoned_tag(ex),
-        };
-        if ex.is_subagent {
-            writeln!(
-                out,
-                "{t}·{turn_tag} (parent {})  {}",
-                id_prefix(&ex.parent_session_id, 8),
-                format_local_compact(ex.started_utc.as_deref())
-            )?;
-        } else {
-            writeln!(
-                out,
-                "{t}·{turn_tag}  {}",
-                format_local_compact(ex.started_utc.as_deref())
-            )?;
-        }
-        // C-27: what the user changed before sending. Printed once per draft unit,
-        // under the header, so the reader weighs the draft against what replaced it
-        // instead of reading an abandoned text as the message.
-        if let Some(d) = &ex.draft_diff {
-            writeln!(out, "      ↳ {}", d.text_line_for(ex.abandoned_kind))?;
-        }
-        for hit in &ex.hits {
-            write_record_line(&mut out, role_glyph(hit.class), hit)?;
-            // Close the text-mode ID-law hole for SUBAGENT hits: a line number is per-FILE, so
-            // it must be fetched with the SUBAGENT's own id (`session_id`), NEVER the parent
-            // uuid (that would silently fetch the WRONG record). Top-level hits are safe (the
-            // header token IS an `@`-targetable prefix of the fetch id), so only the hazard
-            // rows carry the explicit ready-to-run command (with the FULL id - zero ambiguity
-            // risk) - the same address JSON's per-hit `refetch` gives.
-            if ex.is_subagent && !hit.from_sidecar && hit.line > 0 {
-                writeln!(
-                    out,
-                    "      ↳ csift show @{} --line {}",
-                    ex.session_id, hit.line
-                )?;
-            }
-            if !image_hint_done {
-                if let Some(l) = image_hint_line(&ex.session_id, &hit.image_ids) {
-                    writeln!(out, "{l}")?;
-                    image_hint_done = true;
-                }
-            }
-        }
-        // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
-        // they read as surrounding back-and-forth, not as matches.
-        for sib in &ex.siblings {
-            write_record_line(&mut out, '·', sib)?;
-            if !image_hint_done {
-                if let Some(l) = image_hint_line(&ex.session_id, &sib.image_ids) {
-                    writeln!(out, "{l}")?;
-                    image_hint_done = true;
-                }
-            }
-        }
-        // The FIXED policy's capped-away remainder - explicit, with the exact fetch
-        // command (self-healing escape hatch; `@<session_id>` round-trips for both a
-        // top-level uuid and a subagent id).
-        if ex.siblings_hidden > 0 && ex.turn_lines.0 > 0 {
-            writeln!(
-                out,
-                "  · (+{} more · csift show @{} --line {}..{})",
-                ex.siblings_hidden, ex.session_id, ex.turn_lines.0, ex.turn_lines.1
-            )?;
-        }
-    }
+    // The exchanges render in bounded parallel chunks and reach stdout in file order. An
+    // exchange's block depends on nothing but the exchange, the token map and ONE
+    // cross-row decision - which row owns the single image-extraction hint - so that
+    // decision is taken here, once, before any worker starts (§7k).
+    let hint = first_image_row(&outcome.exchanges);
+    crate::text::write_ordered(&mut out, &outcome.exchanges, |i, ex, buf| {
+        write_exchange(buf, ex, &tok, hint.filter(|h| h.exchange == i))
+    })?;
 
     // ── Compact lowercase footer: the SAME true totals the head banner carries (the both-ends
     //    law - `-c`/`-l` isolate a single number for piping), drop accounting, unresolved. ──

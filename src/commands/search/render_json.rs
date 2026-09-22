@@ -212,41 +212,13 @@ pub(crate) fn render_json(
             crate::path::duplicate_header_fields(&outcome.duplicates)
         ))?
     )?;
-    for ex in &outcome.exchanges {
-        let hits: Vec<_> = ex.hits.iter().map(|h| hit_json(ex, h)).collect();
-        let mut obj = json!({
-            "kind": "exchange",
-            "session_id": ex.session_id,
-            // Discriminate the id-domain so a consumer can tell a re-feedable parent UUID
-            // from a non-re-feedable subagent transcript hex: `is_subagent` + the always-
-            // re-feedable `parent_session_id` (= session_id for a top-level hit).
-            "is_subagent": ex.is_subagent,
-            "parent_session_id": ex.parent_session_id,
-            "turn_index": ex.turn_index,
-            "superseded_draft": ex.superseded_draft,
-            // Envelope-level chronological position = the turn-opening timestamp, the key
-            // the combined timeline is sorted on. `ts_local` is the same instant in the
-            // host TZ. Per-hit `ts_utc` (in `hits`) can diverge for a deep tool_use match.
-            "ts_utc": ex.started_utc,
-            "ts_local": ex.started_utc.as_deref().and_then(local_iso),
-            "hits": hits,
-            "record_uuids": ex.record_uuids,
-        });
-        // C-27: on a draft unit, the address of the message that replaced it and the
-        // distance between the two texts.
-        if let Some(d) = &ex.draft_diff {
-            d.attach_json(&mut obj);
-        }
-        // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
-        // Present only when there are siblings - absent ⇒ none (keeps the common envelope lean).
-        if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
-            let sibs: Vec<_> = ex.siblings.iter().map(|h| hit_json(ex, h)).collect();
-            obj["siblings"] = json!(sibs);
-            obj["siblings_hidden"] = json!(ex.siblings_hidden);
-            obj["turn_lines"] = json!([ex.turn_lines.0, ex.turn_lines.1]);
-        }
-        writeln!(out, "{}", serde_json::to_string(&obj)?)?;
-    }
+    // The exchange rows render in bounded parallel chunks and reach stdout in file order.
+    // Each row is a pure projection of its own exchange - the header above and the summary
+    // below are the only cross-row parts, and both are written serially around the
+    // pipeline (§7k).
+    crate::text::write_ordered(&mut out, &outcome.exchanges, |_i, ex, buf| {
+        exchange_json(ex, buf)
+    })?;
     // envelope v2 summary. `session_ids` = the distinct matching transcript ids (sorted,
     // first-100 capped with an EXPLICIT truncation flag - never silent) so "WHICH sessions
     // matched" is one `tail -1 | jq .session_ids` away, no per-row jq pipeline.
@@ -327,5 +299,47 @@ pub(crate) fn render_json(
     let summary = crate::text::envelope_summary(summary_fields);
     writeln!(out, "{}", serde_json::to_string(&summary)?)?;
     out.flush()?;
+    Ok(())
+}
+
+/// ONE exchange row, serialized straight into its chunk's buffer - the UNIT the
+/// ordered-parallel pipeline renders. A pure projection of its own exchange, which is what
+/// lets several render at once.
+fn exchange_json(ex: &Exchange, buf: &mut Vec<u8>) -> Result<()> {
+    use serde_json::json;
+    let hits: Vec<_> = ex.hits.iter().map(|h| hit_json(ex, h)).collect();
+    let mut obj = json!({
+        "kind": "exchange",
+        "session_id": ex.session_id,
+        // Discriminate the id-domain so a consumer can tell a re-feedable parent UUID
+        // from a non-re-feedable subagent transcript hex: `is_subagent` + the always-
+        // re-feedable `parent_session_id` (= session_id for a top-level hit).
+        "is_subagent": ex.is_subagent,
+        "parent_session_id": ex.parent_session_id,
+        "turn_index": ex.turn_index,
+        "superseded_draft": ex.superseded_draft,
+        // Envelope-level chronological position = the turn-opening timestamp, the key
+        // the combined timeline is sorted on. `ts_local` is the same instant in the
+        // host TZ. Per-hit `ts_utc` (in `hits`) can diverge for a deep tool_use match.
+        "ts_utc": ex.started_utc,
+        "ts_local": ex.started_utc.as_deref().and_then(local_iso),
+        "hits": hits,
+        "record_uuids": ex.record_uuids,
+    });
+    // C-27: on a draft unit, the address of the message that replaced it and the
+    // distance between the two texts.
+    if let Some(d) = &ex.draft_diff {
+        d.attach_json(&mut obj);
+    }
+    // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
+    // Present only when there are siblings - absent ⇒ none (keeps the common envelope lean).
+    if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
+        let sibs: Vec<_> = ex.siblings.iter().map(|h| hit_json(ex, h)).collect();
+        obj["siblings"] = json!(sibs);
+        obj["siblings_hidden"] = json!(ex.siblings_hidden);
+        obj["turn_lines"] = json!([ex.turn_lines.0, ex.turn_lines.1]);
+    }
+    serde_json::to_writer(&mut *buf, &obj)?;
+    buf.push(b'\n');
     Ok(())
 }
