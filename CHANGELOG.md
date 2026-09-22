@@ -806,16 +806,17 @@ surface change bumps the PATCH.
 ### Performance
 
 - **The render was the other serial half of a search.** Everything the scan does in
-  parallel was spent before the first output byte: on a 1.4 GB session a whole-scope
-  `--format json` dump cost 1.94 s of CPU on ONE thread while nine rayon workers waited, and
-  a wide-match text search (`search 'the'`) paid 0.45 s of that phase's 0.59 s inside
-  `println!`, which is one `write(2)` and one backward newline scan per row - 297,976 of
-  them. Two changes. Every
-  row-dumping surface (`search` text, JSON and `--raw`, both of `show`'s, `files`, `agents`,
-  `image`, and both of `verbatim`'s - its documented `--subagents` span is 125,269 text rows
-  on that session) now writes through one buffered stdout, one syscall per megabyte. And `search`
-  renders its per-exchange rows in bounded parallel chunks, writing the chunk buffers in
-  index order, so the byte stream is the one a serial loop produced. Medians of 7 interleaved
+  parallel was spent before the first output byte: on a 1.18 GB session (the top-level
+  transcript plus every `*.jsonl` under its subagent tree, which is what csift parses) a
+  whole-scope `--format json` dump cost 1.94 s of CPU on ONE thread while nine rayon
+  workers waited, and a wide-match text search (`search 'the'`) paid 0.45 s of that phase's
+  0.59 s inside `println!`, which is one `write(2)` and one backward newline scan per row -
+  297,976 of them. Two changes. Every row-dumping surface (`search` text, JSON and `--raw`,
+  both of `show`'s, `files`, `agents`, `image`, and both of `verbatim`'s - its documented
+  `--subagents` span is 125,269 text rows on that session) now writes through one buffered
+  stdout, one syscall per megabyte. And `search` renders its per-exchange rows in bounded
+  parallel chunks, writing the chunk buffers in index order, so the byte stream is the one
+  a serial loop produced. Medians of 7 interleaved
   reps on that session, at a host load of 7 to 27 that the wall numbers carry and the CPU
   numbers do not: the JSON dump 2.958 s -> 1.532 s, `search 'x'` 1.247 -> 1.040,
   `search 'the'` 1.140 -> 0.931 (at its own `-c` floor now), a `--for` closure 1.080 ->
@@ -835,7 +836,7 @@ surface change bumps the PATCH.
   move: every row of a 158-binding acid set, over three size classes, is byte-identical.
   What a render change can never reach is stated rather than claimed away: a heavy regex row
   is 1.189 s against a 1.140 s floor with the render removed entirely, because its output is
-  2.5 MB and its clock is the regex over 1.4 GB.
+  2.5 MB and its clock is the regex over that 1.18 GB.
 - **A record's width is a number now, and it is written down.** The amendment gave `Record`
   a second conversion key and a memo holding both parsed conversions, and the memo held its
   payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
