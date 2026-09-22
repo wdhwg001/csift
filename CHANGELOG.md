@@ -838,15 +838,20 @@ surface change bumps the PATCH.
   a live trial. The artefact is the test and never the command, so `grep` over `src` is the
   same text pass as reading the file while `grep -ab` over a shipped build is a
   measurement, and a text pass can never back the badge. The gate is rewritten to read all
-  of it and grows from fourteen rules to twenty, each failing by name on a hand-built
+  of it and grows from twelve rules to twenty-one, each failing by name on a hand-built
   specimen: rule 13 is the state shape, including that the open state is LAST; rule 14 is
   the prose law over every field a pass wrote, now word-bounded, first-person-aware and
   with the backtick exemption bounded; rule 10 reaches `residue` and a receipt's `note`,
   which is where every unconsumed text instruction was hiding; rules 15 to 20 are the
   state's own text and probe, a closed state's receipt, a retired selector handed to csift
   as an argument, the file's own shape, every heredoc handed back to its own language
-  to parse, and the receipt's artefact itself. Rule 12 learns that a hop can name the BUILD it
-  was read in, refuses a run of four or more dots the way it refuses an empty excerpt, and
+  to parse, and the receipt's artefact itself; rule 21 is the `bytes` probe's own literal,
+  read in the builds its state names, because four of them counted zero in every one and a
+  probe that counts nothing cannot be run. Rule 12 learns that a hop can name the BUILD it
+  was read in - and that a build nobody holds is not a pass, so such a hop is named rather
+  than counted wherever the verified build itself is here - refuses a run of four or more
+  dots the way it refuses an empty excerpt, refuses a MARK on an excerpt that reads as
+  prose, since English occurs in no build and satisfies `absent` by construction, and
   compares bytes rather than a UTF-8 round trip. Rule 8 stops matching rows with a regex
   and REGENERATES the README block, comparing it byte for byte. A folded check is not
   simply dropped: every fact token with no survivor in the state is carried into `residue`,

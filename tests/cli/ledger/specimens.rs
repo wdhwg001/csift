@@ -52,6 +52,7 @@ fn only(failures: &[String]) -> &str {
 
 mod artefact;
 mod byte_anchors;
+mod probes;
 mod programs;
 mod readme;
 mod receipts;

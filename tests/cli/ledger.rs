@@ -102,6 +102,13 @@
 //!     pass that normalises whitespace can leave every word intact and every program dead,
 //!     and no other rule here would see it. An interpreter this host does not hold is
 //!     counted and skipped, exactly as rule 12 skips a build it does not hold.
+//! 21. A `bytes` probe names a literal the BUILD carries. The probe's whole content is the
+//!     literal a later pass re-locates, and four shipped counting zero in every build their
+//!     state names - two cut past where the build stops agreeing, two carrying a ` ... `
+//!     elision inside the literal, which is not a byte string at all. The build is a SET,
+//!     because a state names up to three and a rewrite between two of them is often what the
+//!     probe is there to date. A build this host does not hold is counted and skipped.
+//!
 //! 20. An OPEN state's receipt names an ARTEFACT OUTSIDE csift's own tree - a Claude Code
 //!     build or a byte offset in one, a corpus or projects root, the harness's own
 //!     directories, a session target, a live trial. The artefact is the test and never the
@@ -118,6 +125,7 @@
 mod anchors;
 mod artefact;
 mod legs;
+mod probes;
 mod programs;
 mod prose;
 mod rules;
@@ -256,6 +264,7 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
         }
     }
     println!("{}", programs::line(&embedded));
+    println!("{}", probes::line(&probes::check(claims, &mut failures)));
 
     // Rule 12: every byte anchor of an open state still carries its own excerpt.
     let anchors = anchors::tally(claims, verified, &mut failures);

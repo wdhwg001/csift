@@ -2718,7 +2718,7 @@
           "instrument": "Read the aggregation templates out of the installed Claude Code binary's own strings (`strings <binary> | grep __orphan_summary`), and corpus-side count the `<task-id>` tags on each orphan notification. Counting rule: one template per distinct literal; the aggregation branch is a single threshold comparison per kind.",
           "probe": {
             "kind": "bytes",
-            "literal": "function st(e,n,o,r,i,d){let c=r.slice(0,Fe).map(i),f=[...c,`${tt}${n}`,...d.map((x)=>`${nt}${Bt(x)}`)].map((x)=>`<${Use}>${x}</${Use}>`).join(``),C=e===\"failed\"?\"They were running when the previous Claude Code process exited and did not complete; their in-process state was lost. Check each worktree/output for partial work before assuming a task landed.\":\"They may have been stopped (via the UI, Monitor timeout, or agent teardown \\u2014 these leave no transcript marker), or they may have been running when the previous Claude Code process exited.\",I=c.length===r.length?`Task ids: ${c.join(\", \")}.`:`First ${Fe} task ids: ${c.join(\", \")}.`;Ra({value:`<${_p}>${f}<${zx}>${e}</${zx}><${j0}>${r.",
+            "literal": "function st(e,n,o,r,i,d){let c=r.slice(0,Fe).map(i),f=[...c,`${tt}${n}`,...d.map((x)=>`${nt}${Bt(x)}`)].map((x)=>`<${Use}>${x}</${Use}>`).join(`",
             "scope": "the one Claude Code build file the state's range names",
             "rule": "one template per distinct literal; the aggregation branch is a single threshold comparison per kind."
           },
@@ -50693,7 +50693,7 @@
           "instrument": "compactMetadata.preservedMessages is a JSON OBJECT {anchorUuid, uuids:[...], allUuids?:[...]}, not an array. Treating it as a list of uuids yields 0 preserved uuids and makes the instrument vacuously pass; the object shape is confirmed in the 2.1.258 binary, which builds 'preservedMessages:{anchorUuid:r.anchor_uuid,uuids:[...r.uuids],...r.all_uuids!==void 0&&{allUuids'.",
           "probe": {
             "kind": "bytes",
-            "literal": "function $it(e,n,r,o=r){let d=r.map((_)=>_.uuid),f=dMe([...r],o).map((_)=>_.uuid);if(d.length===0)return e;return{...e,compactMetadata:{...e.compactMetadata,...f.length>0&&{preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}},preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}}}}function ojt(e,n){if(!n)return e||void 0;if(!e)return n;return`${e}..${n}`}async function ijt(e,n,",
+            "literal": "function $it(e,n,r,o=r){let d=r.map((_)=>_.uuid),f=dMe([...r],o).map((_)=>_.uuid);if(d.length===0)return e;return{...e,compactMetadata:{...e.compactMetadata,...f.length>0&&{preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}},preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}}}}function ojt(e,n){if(!n)return e||void 0;if(!e)return n;return`${e}",
             "scope": "the one Claude Code build file the state's range names",
             "rule": "Per file: drafts = all but the last member of each multi-member parentUuid group; intersection taken against that same file's preserved uuid set."
           },
@@ -71612,7 +71612,7 @@
           "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
           "probe": {
             "kind": "bytes",
-            "literal": "let u=he(e,\"managed-settings.d\"); ... readdirSync(u).filter((f)=>(f.isFile()||f.isSymbolicLink())&&BCt(f.name)).map((f)=>f.name).sort(); for(let f of h){let{settings:y,errors:b}=pq(he(u,f),n,void 0,!0); ... s=k0(s,y,zU)}",
+            "literal": "let u=he(e,\"managed-settings.d\");",
             "scope": "not stated: the instrument names no population",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
@@ -72465,7 +72465,7 @@
           "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
           "probe": {
             "kind": "bytes",
-            "literal": "let wo=hR.watch(Dr,{persistent:!0,ignoreInitial:!0,depth:0,awaitWriteFinish:{stabilityThreshold:n,pollInterval:r},ignored:(Di,na)=>{ ... if(Do.has(ga))return!1;if(pr&&ga.startsWith(pr+jy.sep)&&ga.endsWith(\".json\"))return!1;return!0},ignorePermissionErrors:!0,usePolling:!1,atomic:!0});F=wo; ... wo.on(\"change\",bn),wo.on(\"unlink\",Dn),wo.on(\"add\",Rn)",
+            "literal": "let wo=hR.watch(Dr,{persistent:!0,ignoreInitial:!0,depth:0,awaitWriteFinish:{stabilityThreshold:n,pollInterval:r},ignored:(Di,na)=>{",
             "scope": "not stated: the instrument names no population",
             "rule": "for any count: occurrences of the fixed byte string over the whole binary."
           },
