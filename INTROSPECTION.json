@@ -25893,7 +25893,7 @@
       "code": [
         {
           "path": "src/commands/image/convert.rs",
-          "lines": "5-12",
+          "lines": "13-20",
           "snippet": "/// A source `media_type` \u2192 an [`ImageOutFormat`]. `None` for a media type outside the four\n/// Claude-API image types (shouldn't occur - CC only stores those).\npub(crate) fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {\n    match mt {\n        \"image/png\" => Some(ImageOutFormat::Png),\n        \"image/jpeg\" | \"image/jpg\" => Some(ImageOutFormat::Jpeg),\n        \"image/gif\" => Some(ImageOutFormat::Gif),\n        \"image/webp\" => Some(ImageOutFormat::Webp),"
         },
         {
@@ -26700,7 +26700,7 @@
       "code": [
         {
           "path": "src/commands/image/convert.rs",
-          "lines": "5-12",
+          "lines": "13-20",
           "snippet": "/// A source `media_type` \u2192 an [`ImageOutFormat`]. `None` for a media type outside the four\n/// Claude-API image types (shouldn't occur - CC only stores those).\npub(crate) fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {\n    match mt {\n        \"image/png\" => Some(ImageOutFormat::Png),\n        \"image/jpeg\" | \"image/jpg\" => Some(ImageOutFormat::Jpeg),\n        \"image/gif\" => Some(ImageOutFormat::Gif),\n        \"image/webp\" => Some(ImageOutFormat::Webp),"
         },
         {

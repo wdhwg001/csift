@@ -1,4 +1,12 @@
 //! Media-type mapping + transcode (png/jpg/gif/webp) + extraction write.
+//!
+//! This is the one `image` file with NO `#![deny(clippy::print_stdout)]`, and the reason
+//! is structural rather than an omission: `--out` is an EITHER/OR branch against the two
+//! listing renders, and it never builds a [`crate::text::Out`]. Nothing here can land
+//! ahead of a buffer, because on this path there is no buffer to be ahead of. Its six
+//! `println!`s are the JSON envelope's two lines, the per-file row in each format, and the
+//! text tail. If a future change gives this branch a writer, add the deny - the rule in
+//! `text::out` then applies here like anywhere else.
 
 use super::*;
 
