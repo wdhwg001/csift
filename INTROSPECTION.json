@@ -8178,7 +8178,7 @@
             "verdict": "refined",
             "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger S3, the per-tool-call executor generator @164430674; trigger addTool and processQueue, the scheduler  @164579064; gate the in-memory permission await inside S3 @164444711; trigger the streaming query generator: the assis @164729216",
             "observed": "complete producer chain of 18 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, read as a verbatim excerpt at its own byte offset in Claude Code 2.1.258, and counted once for the role it carries. The chain holds 18 such hops.",
             "note": "the producer leg is closed; the behavior needed no correction."
           }
         }
@@ -12077,7 +12077,7 @@
             "verdict": "refined",
             "instrument": "[CLS-020, floor None] historical-build bisection (bisect-Q3.json, question Q3): native builds fetched by version from the distribution bucket the installer names, the literal 'deferred_tools_record' byte-searched per build, the first carrying build read around the hit; last absent 2.1.258, first present 2.1.259",
             "observed": "The deferred_tools_record attachment payload was introduced in Claude Code 2.1.259, and the bisection is closed with an adjacent pair rather than an interval. The literal has zero occurrences in the whole binary of 2.1.191 (the cached ladder floor), 2.1.257 and 2.1.258 (the checked build), and eight occurrences in 2.1.259. 2.1.258 and 2.1.259 are adjacent published releases: the release channel serves manifests for 2.1.252, 2.1.257, 2.1.258 and 2.1.259 and returns 404 for 2.1.253 through 2.1.256 and for 2.1.260, with build dates one day apart (2026-09-01T22:02:56Z and 2026-09-02T20:40:41Z), and the fleet's 504-entry version list carries the same gap. The literal did not merely move: in 2.1.2",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `deferred_tools_record` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.258 reading 0 and 2.1.259 reading more.",
             "note": "Refined: the payload-type set is version-mixed, and the one key that shows it is dated by measurement rather than by inference. deferred_tools_record entered at Claude Code 2.1.259 - the literal occurs 0 times in 2.1.191, 2.1.252 and 2.1.258 and 8 times in 2.1.259, the adjacent published release - and every corpus record carrying that payload type is stamped 2.1.259, a build newer than the one this state names. The open leg the instruction pointed at is gone: this state carries none."
           }
         }
@@ -13768,7 +13768,7 @@
             "verdict": "refined",
             "instrument": "[CMP-005, floor None] historical-build bisection (bisect-Q1.json, question Q1): native builds fetched by version from the distribution bucket the installer names, the literal 'tengu_shoji_engine (with its siblings CLAUDE_CODE_SHOJI_ENGINE and the [shoji-engine] log prefix) - the ROUTING needle. ' byte-searched per build, the first carrying build read around the hit; last absent 2.1.191, first present 2.1.193",
             "observed": "The switch is 2.1.193, and the named literal was a false needle. flushBeforeCompactBoundary is absent from 2.1.191, 2.1.193, 2.1.195, 2.1.196, 2.1.198 AND 2.1.199 (0 occurrences in each) yet the corpus already shows an isMeta-less main-thread boundary written by 2.1.199, so that literal dates a later refactor and cannot date this fact; it appears with applyCompactBoundary only by 2.1.257 (3/3), in the same builds where the shoji strings have vanished. The real discriminator is which code can put an engine behind the REPL. Both boundary constructors coexist from 2.1.191 on - the local one writing isMeta:!1 (K8t at 210984578 in 2.1.191, yGt at 212081140 in 2.1.193, the same shape as Sce in the",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string the instrument names over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.191 reading 0 and 2.1.193 reading more.",
             "note": "Refined: the isMeta rider is decided by which route the record took, not by a constructor change, which is what closes the question of when the main-thread boundary switched. Both constructors coexist in the checked build; the engine and its gate enter at 2.1.193 and are absent at 2.1.191; and the corpus brackets the observed flip between 2.1.191, where the key is present, and 2.1.199, where it is not."
           }
         }
@@ -17079,7 +17079,7 @@
             "verdict": "refined",
             "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger stream loop content_block_stop: one assi @165443045; gate query loop: each streamed tool_use block @164729736; gate gut.addTool / canExecuteTool / processQu @164579064; gate gut.executeTool: the queued block enters @164582237",
             "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, read as a verbatim excerpt at its own byte offset in Claude Code 2.1.258, and counted once for the role it carries. The chain holds 14 such hops.",
             "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
           }
         }
@@ -17495,7 +17495,7 @@
             "verdict": "refined",
             "instrument": "[ELI-012, floor None] historical-build bisection (bisect-Q4.json, question Q4): native builds fetched by version from the distribution bucket the installer names, the literal 'isResponseInFlight' byte-searched per build, the first carrying build read around the hit; last absent 2.1.232, first present 2.1.233",
             "observed": "The literal is a rename, not the introduction. Bisecting the version list gives an adjacent pair: isResponseInFlight is absent at 2.1.232 (count 0) and present at 2.1.233 (count 3, first byte 157733456), and reading both builds shows the delta is purely the recorder's shape. At 2.1.232 the REPL recorder is a free hook, function l2h(e,t=!1,r=!1), holding its state in eight useRef cells and calling the write frontier positionally as H6n(e,Math.max(v,E),r); at 2.1.233 that identical body has been extracted into a class, class lic with record(e,{ignore:t,isResponseInFlight:r,teamName:n,selfAgentName:o,storageV5:i}) calling Xqn(e,Math.max(p,f),r), the useRef cells having become class fields and t",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `isResponseInFlight` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.232 reading 0 and 2.1.233 reading more.",
             "note": "The floor for SUB-022 is Claude Code 2.1.100 (floor for the main-lane deferred flush: the frontier is live and wired at 2.1.100 and absent at 2.1.23; the exact introduction build remains open inside (2.1.23, 2.1.100]). The phrase dating the buffered-ask shape to Claude Code 2.1.258 is refuted and is gone from ELI-009's behavior text, which reports the frontier body as byte-identical at 2.1.257 and 2.1.258 and only minifier-renamed at 2.1.259; the phrase survives solely inside quoted copies of the source comment that once carried it."
           }
         }
@@ -20132,7 +20132,7 @@
             "verdict": "refined",
             "instrument": "[FH-002, floor 2.1.216] historical-build bisection (bisect-Q14.json, question Q14): native builds fetched by version from the distribution bucket the installer names, the literal 'realParentDir' byte-searched per build, the first carrying build read around the hit; last absent 2.1.215, first present 2.1.216",
             "observed": "2.1.216 is the build that began emitting realParentDir, and 2.1.215 is the last build without it; the two are adjacent in the release list, so the boundary is exact and needs no interpolation. Both were already on the local ladder, so no downloads were required. The literal count over every downloaded build from 1.0.60 to 2.1.259 is a single monotone step, 0 through 2.1.215 and 10 from 2.1.216 onward, with no earlier appearance, so this is an introduction rather than a re-introduction; the file-history subsystem itself is present in 2.1.215 (trackedFileBackups, backupFileName and the backup telemetry event all occur), so the zero is the field's absence and not the feature's. Reading 2.1.216",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `realParentDir` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.215 reading 0 and 2.1.216 reading more.",
             "note": "The floor is Claude Code 2.1.216. The floor for FH-002 is Claude Code 2.1.216 (the floor for the realParentDir half of the behavior; the three-key entry shape itself predates the whole ladder and is not datable from these builds). The boundary is a step and not an interval: the literal realParentDir occurs 0 times through 2.1.215 and 10 times from 2.1.216, and those two are adjacent entries in the published version list, so the earlier reading that placed it between 2.1.208 and 2.1.234 stands nowhere in this claim."
           }
         }
@@ -21926,7 +21926,7 @@
             "verdict": "refined",
             "instrument": "[FH-017, floor 2.1.208] historical-build bisection (bisect-Q2.json, question Q2): native builds fetched by version from the distribution bucket the installer names, the literal 'file-history-delta' byte-searched per build, the first carrying build read around the hit; last absent 2.1.207, first present 2.1.208",
             "observed": "The file-history-delta line was introduced in 2.1.208, built; 2.1.207 is the last build in which the literal does not occur at all and the two are adjacent in the published version list, so the hedge in FH-014 should read 2.1.208 rather than about 2.1.227. Greps over five cached builds give counts of 0 at 2.1.191, 2.1.200, 2.1.204, 2.1.206 and 2.1.207 against 6 at 2.1.208 and 6 at the checked 2.1.258, and reading the code around the first 2.1.208 occurrence shows the fact really landed with the literal rather than ahead of it: the file-history reducer track case, which fires when a tool backs up a path that is not yet in the newest snapshot, changed in exactly one sta",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `file-history-delta` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.207 reading 0 and 2.1.208 reading more.",
             "note": "The floor is Claude Code 2.1.208. The floor for FH-014 is Claude Code 2.1.208 (the delta half; the snapshot cadence itself predates the probed window) and for FH-017 the same 2.1.208 as the build from which the flag can no longer be written true - the isSnapshotUpdate literal itself is present at or below 2.1.191, so it is the ARGU"
           }
         }
@@ -23850,7 +23850,7 @@
             "verdict": "holds",
             "instrument": "the producer leg traced in the 2.1.258 binary (trigger the device-hook forwarding path asking whether this post-tool event touched a file @161926305; gate FPt selects which tool name(s) to test, by hook event kind @161641578; writer the four-element array, its Set, and the membership predicate with alias expansion @161641405), each excerpt re-read within 400 bytes of its offset; specimen leg: None run. The claim's existing check is a byte census of the array literal and the predicate text, which is producer evidence, not observation of the predicate taking effect. The only nearby corpus fact gathered is that the corpus records zero MultiEdit tool calls, so one of the four members is never exercised here.",
             "observed": "complete producer trace: trigger the device-hook forwarding path asking whether this post-tool event touched a file @161926305; gate FPt selects which tool name(s) to test, by hook event kind @161641578; writer the four-element array, its Set, and the membership predicate with alias expansion @161641405. writer excerpt: r opr=[\"Write\",\"Edit\",\"MultiEdit\",\"NotebookEdit\"],LPt=new Set(opr);function cGe(e,n){if(e===void 0)return!1;let r=bu(e);return LPt.has(r)||T5(r,n).some((o)=>LPt.has(bu(o)))}function FPt(e,n){switch(e.hook_event_name){case\"PostToolUse\":case\"PostToolUseFailure\":return cGe(e.tool_name,n);case\"PostToolBatch\":return(e.tool_",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, its excerpt re-read within 400 bytes of its own offset in Claude Code 2.1.258 and counted once for the role it carries. The chain holds 3 such hops.",
             "note": "All three hops are verbatim in the binary - the array and its membership predicate, the hook-event switch that selects the tool name, and the live consumer that holds an edit event - but nothing the predicate decides reaches disk, so no specimen exists."
           }
         }
@@ -23923,7 +23923,7 @@
             "verdict": "holds",
             "instrument": "the producer leg traced in the 2.1.258 binary (trigger the permission-decision recorder, which consults the three-element list on every resolved tool decision @163094629; gate the three-element list and its membership test @163091431; writer the attribute builder that resolves the path and attaches a language dimension to the metric @163091510), each excerpt re-read within 400 bytes of its offset; specimen leg: None run. The claim's existing check classifies all six occurrences of the membership function by enclosing expression that classification was re-read at its offsets and confirmed: one definition, two membership tests feeding the metric attribute builder, and three occurrences of an unrelated same-named helper in a remote-session module that returns a timeout of 180000 or 60000 (read at 179546741).",
             "observed": "complete producer trace: trigger the permission-decision recorder, which consults the three-element list on every resolved tool decision @163094629; gate the three-element list and its membership test @163091431; writer the attribute builder that resolves the path and attaches a language dimension to the metric @163091510. writer excerpt: async function pot(e,n,r,o){let d;if(e.getPath&&n){let f=e.inputSchema.safeParse(n);if(f.success){let _=e.getPath(f.data);if(_)d=await gDe(_)}}return{decision:r,source:o,tool_name:e.name,...d&&{language:d}}}function Hfo(e){if(e.type===\"classifier\")return\"classifier\";switch(e.type){case\"hook\":return\"",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, its excerpt re-read within 400 bytes of its own offset in Claude Code 2.1.258 and counted once for the role it carries. The chain holds 3 such hops.",
             "note": "All six occurrences of the membership function were read at their offsets: one definition, two permission-decision sites whose sink is a metric counter attribute, and three belonging to an unrelated timeout helper - so the narrow list governs telemetry only and leaves nothing on disk to observe."
           }
         }
@@ -29679,7 +29679,7 @@
             "verdict": "refined",
             "instrument": "[REG-016, floor 2.1.246] historical-build bisection (bisect-Q11.json, question Q11): native builds fetched by version from the distribution bucket the installer names, the literal 'pidDomain' byte-searched per build, the first carrying build read around the hit; last absent 2.1.245, first present 2.1.246",
             "observed": "pidDomain arrived in 2.1.246, and it arrived on the registry row and on the .key companion in the SAME build - there is no intermediate release where one carried it and the other did not. The literal is absent from every build from 2.1.191 through 2.1.245 (34 builds counted, including the immediate predecessor) and present from 2.1.246 onward (15 sites at 2.1.246, 16 at 2.1.247/2.1.248, 20 at 2.1.257/2.1.258/2.1.259). 2.1.244 was never published (manifest 404), so 2.1.245 and 2.1.246 are adjacent releases and nothing sits between the last absent and the first present build. The two builds are the same day, about 14.5 hours apart: 2.1.245 built 2026-08-25T04:00:18Z, 2.1.246 built 2026-08-25T1",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `pidDomain` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.245 reading 0 and 2.1.246 reading more.",
             "note": "The floor is Claude Code 2.1.246. The floor for REG-016 is Claude Code 2.1.246 (the row field and the .key companion field enter in the SAME build; last absent 2.1.245, adjacent because 2.1.244 was never published). Both companion shapes are dated in the behavior text rather than only the newer one - the 108-byte {peerToken, procStart, pidDomain} form from 2.1.246 and the 87-byte {peerToken, procStart} form at or below 2.1.245. Counting rule: whole-executable byte occurrences of the exact literal per cached build. The literal pidDomain reads 0 at 2.1.245 and 15 at 2.1.246."
           }
         }
@@ -48262,7 +48262,7 @@
             "verdict": "refined",
             "instrument": "[REC-006, floor 2.1.150] historical-build bisection (bisect-Q5.json, question Q5): native builds fetched by version from the distribution bucket the installer names, the literal 'Resume re-append failed' byte-searched per build, the first carrying build read around the hit; last absent 2.1.202, first present 2.1.203",
             "observed": "The literal 'Resume re-append failed' is absent in 2.1.202 and present in 2.1.203, which are adjacent in the version list (2.1.202 count 0; 2.1.203 count 2, first occurrence at byte 122301216 in the constant table and the readable copy at 223777583). But the literal does NOT date the resume-adopt path, it dates an error handler wrapped around it: the adopt function is otherwise identical either side of the boundary. In 2.1.202 it reads function Bge(){let e=Qc();e.sessionFile=Nh();let t=new Date;Hl.utimes(e.sessionFile,t,t).catch(()=>{}),e.reAppendSessionMetadata(!0)} at 232409028, and in 2.1.203 the same statement is simply moved inside a try{...}catch that logs 'Resume re-append failed' and",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `Resume re-append failed` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.202 reading 0 and 2.1.203 reading more.",
             "note": "The floor is Claude Code 2.1.150. The floor for REC-006 is Claude Code 2.1.150, recorded as a FLOOR not an introduction (the oldest build probed, chosen because it is also the oldest build stamp in the corpus; the path is present and unchanged there and in all 33 builds probed up to 2.1.259). 2.1.203 is not the adopt path's introduction and is cited as one nowhere in this claim: the literal 'Resume re-append failed' is absent at 2.1.202 and occurs twice at 2.1.203, but it dates an error handler wrapped around the adopt statement, which is otherwise identical either side of that pair."
           }
         }
@@ -63093,7 +63093,7 @@
             "verdict": "refined",
             "instrument": "[SUB-022, floor 2.1.100] historical-build bisection (bisect-Q4.json, question Q4): native builds fetched by version from the distribution bucket the installer names, the literal 'isResponseInFlight' byte-searched per build, the first carrying build read around the hit; last absent 2.1.232, first present 2.1.233",
             "observed": "The literal is a rename, not the introduction. Bisecting the version list gives an adjacent pair: isResponseInFlight is absent at 2.1.232 (count 0) and present at 2.1.233 (count 3, first byte 157733456), and reading both builds shows the delta is purely the recorder's shape. At 2.1.232 the REPL recorder is a free hook, function l2h(e,t=!1,r=!1), holding its state in eight useRef cells and calling the write frontier positionally as H6n(e,Math.max(v,E),r); at 2.1.233 that identical body has been extracted into a class, class lic with record(e,{ignore:t,isResponseInFlight:r,teamName:n,selfAgentName:o,storageV5:i}) calling Xqn(e,Math.max(p,f),r), the useRef cells having become class fields and t",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One occurrence count of the byte string `isResponseInFlight` over each whole build file, one count per build, taken over the builds the instrument names. The boundary is the adjacent published pair whose counts differ, 2.1.232 reading 0 and 2.1.233 reading more.",
             "note": "The floor is Claude Code 2.1.100. The floor for SUB-022 is Claude Code 2.1.100 (floor for the main-lane deferred flush: the frontier is live and wired at 2.1.100 and absent at 2.1.23; the exact introduction build remains open inside (2.1.23, 2.1.100]). The phrase dating the buffered-ask shape to Claude Code 2.1.258 is refuted and is gone from ELI-009's behavior text, which reports the frontier body as byte-identical at 2.1.257 and 2.1.258 and only minifier-renamed at 2.1.259; the phrase survives solely inside quoted copies of the source comment that once carried it."
           }
         }
@@ -64590,7 +64590,7 @@
             "verdict": "holds",
             "instrument": "the producer leg traced in the 2.1.258 binary (trigger restoreOnMount - hydrating a resumed transcript @180768997; trigger mergeReadFileStateFrom - the one hop from restoreReadFileState into the extractor @180634148; gate zgt (extractReadFilesFromMessages): the tool_result admission condition @163598606; gate function zgt - the index it builds first @163597446; writer the reconstruction expression and the state write @163598805; writer function adr - the gutter stripper (exactly one occurrence in the binary) @157596167), each excerpt re-read within 400 bytes of its offset; specimen leg: None available on disk: the rebuild writes only in-memory read state, so it leaves no record in any transcript. The claim's existing check is a producer measurement (byte counts of the two literals), not a specimen.",
             "observed": "complete producer trace: trigger restoreOnMount - hydrating a resumed transcript @180768997; trigger mergeReadFileStateFrom - the one hop from restoreReadFileState into the extractor @180634148; gate zgt (extractReadFilesFromMessages): the tool_result admission condition @163598606; gate function zgt - the index it builds first @163597446; writer the reconstruction expression and the state write @163598805; writer function adr - the gutter stripper (exactly one occurrence in the binary) @157596167. writer excerpt: fe=I.content.replace(/<system-reminder>[\\s\\S]*?</system-reminder>/g,\"\").split(`\n`).map(adr).join(`\n`).trim();if(C.timestamp){let me=new Date(C.timestamp).getTime(),_e=WQ(F.filePath);o.set(F.filePath,{content:fe,timestamp:me,offset:_e?1:F.offset??1,limit:_e?void 0:F.limit,...W&&{",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, its excerpt re-read within 400 bytes of its own offset in Claude Code 2.1.258 and counted once for the role it carries. The chain holds 6 such hops.",
             "note": "All three hops are in the binary - the resume trigger at 180768997, the string-only admission gate at 163598606 and the strip/map/join/trim writer at 163598805 with adr at 157596167 - and the site turns out to be STRONGER than the claim's last check note: content is ALWAYS taken from the rendered string, the structured echo being consulted only for the isPartialView flag."
           }
         }
@@ -66412,7 +66412,7 @@
             "verdict": "refined",
             "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger permission pipeline: an interactive tool @162914062; gate AskUserQuestion declares requiresUserInt @164277453; gate AskUserQuestion checkPermissions asks it @164277738; gate every terminal branch of the answer ladd @164278529",
             "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, read as a verbatim excerpt at its own byte offset in Claude Code 2.1.258, and counted once for the role it carries. The chain holds 14 such hops.",
             "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
           }
         }
@@ -68450,7 +68450,7 @@
             "verdict": "refined",
             "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger AY - the REPL submit dispatcher hands ev @181580347; gate xn - queue admission and the !unlogged l @162035115; writer kun - the default sink binding and the q @162031847; writer FGr - the default sink @162029731",
             "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, read as a verbatim excerpt at its own byte offset in Claude Code 2.1.258, and counted once for the role it carries. The chain holds 14 such hops.",
             "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
           }
         }
@@ -85170,7 +85170,7 @@
             "verdict": "refined",
             "instrument": "re-read the chain hop by hop in the verified build and classified each by role; for REC-108 the search for an entry point was bounded to the span around the recorded offsets and the identifiers they name",
             "observed": "5 hops, all gates and writers; no hop is the entry that starts the path",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per hop of this state's producer chain, classified once by its role - trigger, gate or writer - against the bytes at its own offset in Claude Code 2.1.258. The chain holds 5 such hops, and the absence the figure reports is of a hop whose role is trigger.",
             "note": "the trace was recorded as complete while carrying no trigger hop, so it was a stronger word than the evidence; partial plus an observed specimen derives specimen-only, and the open leg names the instrument"
           }
         }
@@ -85249,7 +85249,7 @@
             "verdict": "refined",
             "instrument": "re-read the chain hop by hop in the verified build and classified each by role; for REC-109 the search for an entry point was bounded to the span around the recorded offsets and the identifiers they name",
             "observed": "3 hops, all gates and writers; no hop is the entry that starts the path",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per hop of this state's producer chain, classified once by its role - trigger, gate or writer - against the bytes at its own offset in Claude Code 2.1.258. The chain holds 3 such hops, and the absence the figure reports is of a hop whose role is trigger.",
             "note": "the trace was recorded as complete while carrying no trigger hop, so it was a stronger word than the evidence; partial plus an observed specimen derives specimen-only, and the open leg names the instrument"
           }
         }
@@ -85329,7 +85329,7 @@
             "verdict": "refined",
             "instrument": "re-read the chain hop by hop in the verified build and classified each by role; for CLS-033 the search for an entry point was bounded to the span around the recorded offsets and the identifiers they name",
             "observed": "4 hops, all gates and writers; no hop is the entry that starts the path",
-            "rule": "not stated: the check records no counting rule",
+            "rule": "One observation per hop of this state's producer chain, classified once by its role - trigger, gate or writer - against the bytes at its own offset in Claude Code 2.1.258. The chain holds 4 such hops, and the absence the figure reports is of a hop whose role is trigger.",
             "note": "the trace was recorded as complete while carrying no trigger hop, so it was a stronger word than the evidence; partial plus an observed specimen derives specimen-only, and the open leg names the instrument"
           }
         }
