@@ -496,7 +496,7 @@ Claude Code's loader stops dead at a `compact_boundary` (every boundary carries 
 
 The flag is GLOBAL and on every chain-walking command (`search`/`show`/`stats`/`files`/`recover`/`verbatim`/`image`), and every one of them DISCLOSES what it crossed, in every mode — `recover` says it in all five of restore / `--at` / `--salvage` / `--patches` / `--coverage`. Three modes put the lines on STDERR so their stdout stays the datum you asked for: `search --count-by` (stdout is the census table), `show --raw` (the file's own bytes) and `recover`'s default restore (the restored file).
 
-**`--cross-compactions 0` is Claude Code's own reading** and says nothing about crossing at all — no footer line, no JSON key, because csift crossed nothing on purpose. It reproduced csift before the flag existed on 32 of 32 measured streams, with ONE known exception: a boundary whose own `parentUuid` is non-null and names no record was crossed by the old guard and is not crossed at budget 0. No transcript of the measured corpus carries that shape, so if you need the old reading exactly on a transcript that does, compare rather than assume.
+**`--cross-compactions 0` is Claude Code's own reading** and says nothing about crossing at all — no footer line, no JSON key, because csift crossed nothing on purpose. The walk ends at EVERY boundary at that budget, with no exception for one whose own `parentUuid` is non-null and names no record the file carries; no transcript of the measured corpus carries that shape, so a transcript that does is worth comparing across budgets rather than assuming.
 
 **The shipped default is `3`, and it is a CANDIDATE.** The value is picked by measurement against the performance contract and that measurement is still pending, so it can change in a later release — pass the number explicitly wherever you need it stable. `csift --help` prints it as `[default: 3]`, and every run at a non-zero budget names the value it used in its own footer.
 
@@ -549,7 +549,7 @@ A retired prefix plus `.*` is the same retirement and looks up bare, so `-t 'har
 | `search --additional-context` | it gated ONE leaf and the leaf has a name: `-t harness.hook.context`. `--attachments` is untouched and keeps its wide meaning (§11) |
 | `csift turns …` | renamed `csift verbatim` (§13). Plain turn READING was never what it did: that is `csift show <target> --turn -3..` |
 
-`agent.message` and `agent.thinking` are NOT retired — they were leaf paths and are now CATEGORIES, so a selector that used to name one leaf now names a whole face (§7.1).
+`agent.message` and `agent.thinking` are NOT retired — both are CATEGORIES, so each parses as a selector and names a whole face rather than one leaf (§7.1).
 
 ## 11. Reading a transcript: `search` · `show` · `list` · `stats`
 
@@ -911,7 +911,7 @@ No lens means everything counts, so a session with `npm run dev` never reaches `
 
 ### 15.4 What the evidence is made of, and what it cannot see
 
-The join reads the harness's own REGISTRY (`<claude-home>/sessions/<pid>.json`), the transcript TAIL, and process LIVENESS. The registry is TRANSITION-WRITTEN and never a heartbeat, so an hours-old `statusUpdatedAt` just means "unchanged"; its `status` is the closed set `busy | shell | idle | waiting` (§15.1 for what `shell` and `waiting` mean). A `claude -p` session writes a row too, with a `status:null` that never transitions. Process liveness is `ps -o lstart=` pinned to `LC_ALL=C` and `TZ=UTC` exactly as the harness pins its own `procStart` acquisition (so a German or French host locale no longer skips the pid-reuse guard), then `/proc`; on Windows PowerShell `Get-Process` plus `tasklist`, where the row's `procStart` is a FILETIME tick count. csift compares instants either way, and a row from another `pidDomain` is never probed and says so.
+The join reads the harness's own REGISTRY (`<claude-home>/sessions/<pid>.json`), the transcript TAIL, and process LIVENESS. The registry is TRANSITION-WRITTEN and never a heartbeat, so an hours-old `statusUpdatedAt` just means "unchanged"; its `status` is the closed set `busy | shell | idle | waiting` (§15.1 for what `shell` and `waiting` mean). A `claude -p` session writes a row too, with a `status:null` that never transitions. Process liveness is `ps -o lstart=` pinned to `LC_ALL=C` and `TZ=UTC` exactly as the harness pins its own `procStart` acquisition (an unpinned locale renders the month name in its own language, the parse fails and the pid-reuse guard is skipped), then `/proc`; on Windows PowerShell `Get-Process` plus `tasklist`, where the row's `procStart` is a FILETIME tick count. csift compares instants either way, and a row from another `pidDomain` is never probed and says so.
 
 **CHILD LANES** classify `in-flight` (an unreturned call) · `generating` (a tail record younger than 300 s AND no end_turn yet — a long generation writes nothing for minutes, so recency plus a non-final stop_reason is the live signal and either alone misreads) · `settled` (also whenever the main transcript already carries that agent's completion notification: the harness's own word outranks the tail, so a lane that finished seconds ago never lingers as `generating`). Settled lanes FOLD to one count line so live work stays visible.
 
