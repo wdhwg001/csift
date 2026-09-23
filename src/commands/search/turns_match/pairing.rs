@@ -22,8 +22,8 @@ pub(crate) struct ToolIndex {
     /// wins (ids are unique).
     pub(crate) names: HashMap<String, String>,
     /// Every `tool_use` block's `id` in this transcript - the use side of the use/result
-    /// pairing join, which is membership and not contiguity so a use pairs
-    /// with its result across records and parallel calls.
+    /// pairing join, which is membership and not contiguity so a use pairs with its result
+    /// across records and parallel calls.
     pub(crate) uses: HashSet<String>,
     /// Every `tool_result` block's `tool_use_id` - the result side of the same join.
     pub(crate) results: HashSet<String>,
@@ -68,17 +68,17 @@ pub(crate) fn build_tool_index(rows: &[Row<'_>]) -> ToolIndex {
     ix
 }
 
-/// Resolve a tool hit's [`Pairing`] against the file-level id sets. Pairing is a
-/// property of the underlying tool_use/tool_result BLOCK, so it rides EVERY view of that
-/// block - the plain `agent.tool.*` views AND the communication views that supersede them
-/// under the richest-view law (a SendMessage/spawn `agent.communication.sent`/`.signal`
-/// rides a tool_use block; a subagent-return `agent.communication.inbox` rides a
-/// tool_result block). Without this, a FROZEN SendMessage (the dominant stuck-lane shape
-/// in a teams session) fell outside the `pairing` census whenever its comm view won the
+/// Resolve a tool hit's [`Pairing`] against the file-level id sets. Pairing is a property
+/// of the underlying tool_use/tool_result BLOCK, so it rides EVERY view of that block - the
+/// plain `agent.tool.*` views AND the communication views that supersede them under the
+/// richest-view law (a SendMessage/spawn `agent.communication.sent`/`.signal` rides a
+/// tool_use block; a subagent-return `agent.communication.inbox` rides a tool_result
+/// block). Read off the VIEW instead, a FROZEN SendMessage (the dominant stuck-lane shape
+/// in a teams session) falls outside the `pairing` census whenever its comm view wins the
 /// dedup. A use-side hit is paired iff its result-id is present (else pending - frozen /
 /// elicitation / unreturned); a result-side hit is paired iff its use-id is present (else
-/// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit:
-/// an inbound teammate-message, an idle signal section) stays `None` - outside the axis.
+/// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit: an
+/// inbound teammate-message, an idle signal section) stays `None` - outside the axis.
 pub(crate) fn set_pairing(h: &mut Hit, ix: &ToolIndex) {
     let (use_ids, result_ids) = (&ix.uses, &ix.results);
     let Some(id) = h.tool_use_id.as_deref() else {

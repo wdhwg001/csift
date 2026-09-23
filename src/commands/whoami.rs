@@ -37,8 +37,8 @@ use crate::cli::{OutputFormat, WhoamiArgs};
 use crate::commands::live::channel;
 use crate::path;
 
-/// Primary env var Claude Code sets per session (verified empirically): its value
-/// equals the calling session's own jsonl basename, exactly.
+/// Primary env var Claude Code sets per session: its value equals the calling session's
+/// own jsonl basename, exactly.
 const SESSION_ID_ENV: &str = "CLAUDE_CODE_SESSION_ID";
 
 /// Secondary alias mirrored by the Codex companion plugin. Accepted only when the

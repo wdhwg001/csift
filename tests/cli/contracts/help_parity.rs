@@ -25,6 +25,12 @@
 //!
 //! The positive control for that rule: deleting the `to` row from the key table must fail
 //! this file BY NAME (`emits keys show --help does not name: ["to"]`).
+//!
+//! The strictness earns its keep beyond formatting. Of the keys the WHERE rule names that
+//! a characters-occur-anywhere reading passes, TWO - `tool_use_id` and `source` on a
+//! search hit - were ABSENT FROM THE HIT SCHEMA the help renders, not merely unbackticked
+//! in the prose beside it. A rule that asks only whether the characters occur cannot tell
+//! a key the page DOCUMENTS from a key the page happens to spell.
 
 use crate::harness::*;
 
