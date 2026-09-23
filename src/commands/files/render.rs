@@ -96,10 +96,11 @@ pub(crate) fn survival_marker(survival: &str) -> String {
 
 /// Group mutations under their session header, then call `body` per session with that
 /// session's mutations. Sessions render in sorted id order for determinism. A SUBAGENT
-/// group's header is branded `SUBAGENT <hex>  ·  parent SESSION <uuid>` (mirroring `search`'s
-/// header + `turns`' `(subagent transcript)` annotation) so a consumer never reads a bare
-/// subagent hex as a re-feedable `@<uuid>` target. All mutations in one group share the
-/// same id-domain (same transcript), so the first row's flags brand the whole header.
+/// group's header is branded `SUBAGENT <hex>  ·  parent SESSION <uuid>` - one space after
+/// the word and two around the separator, the spelling `recover`, `stats` and `verbatim`
+/// print too, against `list`'s two after the word and `show`'s one on each side - so a
+/// consumer never reads a bare subagent hex as a re-feedable `@<uuid>` target. All
+/// mutations in one group share one transcript, so the first row's flags brand the header.
 pub(crate) fn per_session<W, F>(w: &mut W, outcome: &Outcome, body: F) -> Result<()>
 where
     W: std::io::Write,
