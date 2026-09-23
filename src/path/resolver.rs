@@ -270,7 +270,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     session_prefixes.push(id.to_string());
                     session_target = true;
                 }
-                // `@-Users-...` / `@C--Users-...` -> an encoded project-dir name (a Unix cwd's
+                // `@-Users-…` / `@C--Users-…` -> an encoded project-dir name (a Unix cwd's
                 // leading `/` encodes to `-`; a Windows cwd's `C:\` encodes to `C--`).
                 _ if id.starts_with('-') || is_drive_encoded_token(id) => {
                     explicit_dirs.push(resolve_target(Path::new(id))?);

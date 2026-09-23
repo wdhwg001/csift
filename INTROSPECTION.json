@@ -68460,7 +68460,7 @@
         {
           "path": "src/path/resolver.rs",
           "lines": "273-277",
-          "snippet": "                // `@-Users-...` / `@C--Users-...` -> an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
+          "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` -> an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
       "states": [
