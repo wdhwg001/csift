@@ -133,8 +133,8 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
 #[test]
 fn turns_slices_keeps_newest_discards_oldest() {
     // The fleet fills newest-first; the oldest turns that don't fit are DISCARDED (not truncated).
-    // A tight 2-slice fleet keeps the live tail and drops the oldest round-trip (the first ask of
-    // the document).
+    // A tight 2-slice fleet keeps the live tail and drops the oldest round-trip
+    // ("the very first ask ...").
     let h = turns_home();
     let mut doc = String::new();
     for i in 1..=2 {

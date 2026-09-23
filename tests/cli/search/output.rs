@@ -278,7 +278,7 @@ fn search_siblings_fixed_policy_renders_turn_and_json_carries_array() {
 #[test]
 fn search_no_truncate_emits_the_untruncated_record() {
     // A message far longer than the ~400-char excerpt cap, with a token at the very TAIL.
-    // The default excerpt truncates (explicit `... (+N chars)` marker) and hides the tail;
+    // The default excerpt truncates (explicit `… (+N chars)` marker) and hides the tail;
     // `--no-truncate` emits the whole record so the tail is readable - the gap that otherwise
     // forces a drop to the raw jsonl.
     let h = Home::new();

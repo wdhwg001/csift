@@ -104,7 +104,7 @@ fn search_body_keeps_newlines_and_excerpt_keeps_its_flat_bytes() {
          second full copy of every matched record"
     );
     // The needle leads the text, so `win_start` saturates to 0: the window is the first
-    // EXCERPT_MAX chars, collapsed, plus the explicit remainder marker. No leading `...`.
+    // EXCERPT_MAX chars, collapsed, plus the explicit remainder marker. No leading `…`.
     let window: String = body.chars().take(EXCERPT_MAX).collect();
     let expected_default = format!(
         "{}… (+{} chars)",

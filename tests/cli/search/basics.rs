@@ -163,7 +163,7 @@ fn search_text_output_is_token_lean() {
         "no ordinal header: {}",
         out.stdout
     );
-    // The header carries no `===` rule and no uppercase `SESSION `/`TURN `: a hit is one
+    // The header carries no `═══` rule and no uppercase `SESSION `/`TURN `: a hit is one
     // scannable row, not a banner.
     assert!(
         !out.stdout.contains("═══"),

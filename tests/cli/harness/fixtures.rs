@@ -281,7 +281,7 @@ pub(crate) fn turns_two_sessions_home() -> Home {
 }
 
 /// The captured LAST-ONLY baseline: the EXACT stdout for the section fixture with one agent
-/// message per turn - the turn's last - and no `△ L...-L...` collapsed-agents placeholder and
+/// message per turn - the turn's last - and no `△ L...–L...` collapsed-agents placeholder and
 /// no intermediate rich member. The
 /// DEFAULT keeps the LONGEST agent message + the first-if-substantive + the rich
 /// middles, so this baseline is reproduced by the `--agent-msgs eot-only` ESCAPE, not by

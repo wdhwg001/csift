@@ -64,7 +64,7 @@ fn brace_block(hay: &str, marker: &str) -> String {
 ///
 /// The name is the span's LEADING IDENTIFIER, because the page writes a key with its shape
 /// attached where it has one (`produced_by:{command,hook_name,payload_type}`,
-/// `labels:[...]`). A backtick on each side is the boundary that makes this different from
+/// `labels:[…]`). A backtick on each side is the boundary that makes this different from
 /// asking whether the characters occur: `to` in a sentence is not `` `to` ``.
 fn backticked_names(help: &str) -> Vec<String> {
     let mut names = Vec::new();
@@ -87,7 +87,7 @@ fn backticked_names(help: &str) -> Vec<String> {
 
 /// The TOP-LEVEL entry names of a rendered key block.
 ///
-/// An entry is `name`, or `name` followed by its value set or shape - `labels:[...]`,
+/// An entry is `name`, or `name` followed by its value set or shape - `labels:[…]`,
 /// `pairing (paired | pending | orphan | null)` - so the name is the leading identifier
 /// run. Splitting is depth-aware for the same reason the extraction is.
 fn top_level_names(block: &str) -> Vec<String> {

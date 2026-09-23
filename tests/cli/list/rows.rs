@@ -438,7 +438,7 @@ fn list_skipped_lines_is_a_window_census_stats_is_the_authority() {
 fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     // `list` spans subagents by default: a bare `csift list <uuid>` returns the top-level row
     // + each subagent row. JSON carries is_subagent + the re-feedable parent_session_id; text
-    // leads with a scope banner and brands subagent rows `SUBAGENT <hex> · parent SESSION <uuid>`.
+    // leads with a scope banner and brands subagent rows `SUBAGENT  <hex>  ·  parent SESSION <uuid>`.
     let h = Home::new();
     subagents_only_scenario(&h);
 

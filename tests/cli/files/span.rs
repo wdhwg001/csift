@@ -95,7 +95,7 @@ fn files_timeline_json_marks_subagent_rows_with_refeedable_parent() {
 fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
     // The id trio (is_subagent + parent_session_id) reaches the GROUPED views as well
     // (not just --timeline): a --by-file subagent row carries the discriminator in JSON and
-    // is branded `SUBAGENT <hex> · parent SESSION <uuid>` in text (never a bare-hex SESSION).
+    // is branded `SUBAGENT <hex>  ·  parent SESSION <uuid>` in text (never a bare-hex SESSION).
     let h = Home::new();
     subagents_only_scenario(&h);
 

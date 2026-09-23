@@ -280,7 +280,7 @@ fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {
             out.stderr
         );
     }
-    // The `@-Users-...` encoded-dir spelling STILL resolves (encoded cwds lead with `-`).
+    // The `@-Users-…` encoded-dir spelling STILL resolves (encoded cwds lead with `-`).
     let enc = h.run(&["list", &format!("@{ENC}")]);
     assert!(enc.success, "stderr: {}", enc.stderr);
     assert!(
