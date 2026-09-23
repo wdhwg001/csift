@@ -39522,7 +39522,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "418-420",
+          "lines": "417-419",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || c == '\\\\' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
@@ -51166,7 +51166,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "406-407",
+          "lines": "405-406",
           "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, `\\`, any C0 control char (`< 0x20`), or DEL."
         }
       ],
@@ -59350,7 +59350,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "423-429",
+          "lines": "422-428",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -59711,7 +59711,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "418-420",
+          "lines": "417-419",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || c == '\\\\' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],

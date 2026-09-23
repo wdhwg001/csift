@@ -32,8 +32,8 @@ pub struct Matcher {
     /// ANOTHER record, the compact-boundary `trigger=…` excerpt, `--resolve-persisted`
     /// external file content). The literal prefilter can only prove absence for
     /// VERBATIM-derived text, so a marker-bearing line/file always passes to the parse +
-    /// regex stage. This also FIXES a latent pre-existing gap: the old case-sensitive
-    /// `memmem` prefilter silently skipped regex work on exactly these records.
+    /// regex stage. Without the marker set a `memmem` prefilter silently skips the regex
+    /// work on exactly these records: absence proved over text the prefilter never sees.
     ///
     /// One `memmem::Finder` per needle - deliberately NOT one Aho-Corasick automaton:
     /// the `"answers"` needle starts with a quote, and in JSON lines a quote is one of
@@ -307,8 +307,7 @@ pub(crate) fn required_literal(pattern: &str) -> Option<Vec<u8>> {
     // (`hello world`) whose raw bytes hold `hello\nworld` - a `memmem` for it would
     // falsely prove absence. A whitespace-FREE literal always sits inside one
     // unrewritten non-whitespace run, which survives verbatim in the raw bytes, so
-    // only those stay prefilter-eligible. (This also closes a latent gap the old
-    // case-sensitive prefilter had for space-carrying patterns.)
+    // only those stay prefilter-eligible.
     if pattern.chars().any(char::is_whitespace) {
         return None;
     }

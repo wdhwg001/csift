@@ -422,8 +422,8 @@ pub(crate) fn uncapped_body(text: &str, max: usize) -> Option<String> {
 }
 
 /// Build the inline excerpt, CENTERED on the match so a hit DEEP in a long message is
-/// actually visible - not just the message head (the old behavior, which silently hid
-/// any match past the first `max` chars and forced readers back to the raw jsonl).
+/// actually visible - not just the message head: a head-only excerpt silently hides any
+/// match past the first `max` chars and sends a reader back to the raw jsonl.
 ///
 /// `span` is the first match's BYTE range, or `None` for the pure filter (no specific
 /// match → show the head). When the message fits in `max` chars it is shown whole.

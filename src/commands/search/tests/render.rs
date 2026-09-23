@@ -7,8 +7,8 @@ use super::*;
 #[test]
 fn class_path_and_role_glyph_cover_every_leaf() {
     // Every Class::ALL leaf round-trips through path() (the rendered/JSON label) and maps to a
-    // role glyph (◂ user, ▸ agent, ⚙ harness) - the cutover replacement for the old flat
-    // category_label/glyph table.
+    // role glyph (◂ user, ▸ agent, ⚙ harness). Both are total over the leaf space: a leaf
+    // reaching neither would render with no label or with no glyph.
     for &c in Class::ALL {
         assert!(!c.path().is_empty());
         let g = role_glyph(Some(c));
@@ -118,9 +118,9 @@ fn truncate_excerpt_long_and_short() {
 
 #[test]
 fn match_excerpt_centers_on_a_deep_match() {
-    // The needle sits ~800 chars in - far past EXCERPT_MAX. The OLD head-only
-    // excerpt hid it entirely (the bug that forced raw-jsonl reads); centering
-    // must surface it, with explicit clipping markers on both sides.
+    // The needle sits ~800 chars in - far past EXCERPT_MAX. A head-only excerpt hides
+    // it entirely and sends a reader to the raw jsonl; centering must surface it, with
+    // explicit clipping markers on both sides.
     // Synthetic multi-byte placeholder (neutral emoji) + neutral padding.
     let needle = "🤖🎉✅🚀🌟";
     let text = format!("{}{needle}{}", "🔵".repeat(800), "🟥".repeat(800));
