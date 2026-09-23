@@ -76,7 +76,7 @@ fn pins_single_session_covers_at_tokens_and_jsonl() {
     assert!(pins_single_session("@ae24045bd6d4bdaff"));
     assert!(pins_single_session("@aVSRepro-68a2a1661c9390c1")); // teammate id pins one
     assert!(pins_single_session("@aP1-engine-9cf2f06d6235ca64")); // dashed-name teammate
-    assert!(pins_single_session("@13d9645a")); // uuid-prefix
+    assert!(pins_single_session("@1a2b3c4d")); // uuid-prefix
     assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
     // A bare uuid (no `@`), an encoded token, a plain path, `.` → NOT a session pin.
     assert!(!pins_single_session("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
@@ -86,18 +86,18 @@ fn pins_single_session_covers_at_tokens_and_jsonl() {
 
 #[test]
 fn is_uuid_prefix_covers_first_segment_not_full_or_agent() {
-    assert!(is_uuid_prefix("13d9")); // 4 hex (minimum)
-    assert!(is_uuid_prefix("13d9645a")); // 8 hex (the uuid first segment)
-    assert!(is_uuid_prefix("13d9645a3a5")); // 11 hex (max dash-less)
+    assert!(is_uuid_prefix("1a2b")); // 4 hex (minimum)
+    assert!(is_uuid_prefix("1a2b3c4d")); // 8 hex (the uuid first segment)
+    assert!(is_uuid_prefix("1a2b3c4d5e6")); // 11 hex (max dash-less)
                                             // Too short (<4), dash-less ≥12 (agent-hex territory), non-hex, off-template dash → NOT a prefix.
-    assert!(!is_uuid_prefix("13d")); // 3
-    assert!(!is_uuid_prefix("13d9645a3a5b")); // 12 dash-less → agent hex
-    assert!(!is_uuid_prefix("13d9645g")); // non-hex g
-    assert!(!is_uuid_prefix("13d9-645a")); // dash off the 8-4-4-4-12 template
+    assert!(!is_uuid_prefix("1a2")); // 3
+    assert!(!is_uuid_prefix("1a2b3c4d5e6f")); // 12 dash-less → agent hex
+    assert!(!is_uuid_prefix("1a2b3c4g")); // non-hex g
+    assert!(!is_uuid_prefix("1a2b-3c4d")); // dash off the 8-4-4-4-12 template
                                            // LITERAL layout prefixes (collision-lengthened header tokens) ARE prefixes.
-    assert!(is_uuid_prefix("13d9645a-3a5")); // 12 chars, dash at template position 8
-    assert!(is_uuid_prefix("13d9645a-3a5b-4a92")); // deeper into the layout
-    assert!(is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b9")); // 35 (max - one short of full)
-    assert!(!is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b90")); // 36 = a FULL uuid, not a prefix
-    assert!(!is_uuid_prefix("13d9645a-3a5g")); // non-hex inside the layout
+    assert!(is_uuid_prefix("1a2b3c4d-5e6")); // 12 chars, dash at template position 8
+    assert!(is_uuid_prefix("1a2b3c4d-5e6f-4a7b")); // deeper into the layout
+    assert!(is_uuid_prefix("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5")); // 35 (max - one short of full)
+    assert!(!is_uuid_prefix("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")); // 36 = a FULL uuid, not a prefix
+    assert!(!is_uuid_prefix("1a2b3c4d-5e6g")); // non-hex inside the layout
 }

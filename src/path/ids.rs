@@ -95,10 +95,10 @@ pub(crate) fn split_teammate_routing_id(s: &str) -> Option<(&str, &str)> {
 }
 
 /// True for a session-uuid PREFIX in either emitted form:
-/// - the short dash-less run (`@13d9645a`, 4..=11 hex) - long enough to be near-collision-free
+/// - the short dash-less run (`@1a2b3c4d`, 4..=11 hex) - long enough to be near-collision-free
 ///   (a uuid's first segment is 8 hex = 4 billion), short enough that it is unambiguously
 ///   NEITHER a full uuid (32 hex + dashes) NOR an agent hex (≥12);
-/// - a longer LITERAL prefix of the canonical `8-4-4-4-12` layout (`@13d9645a-3a5b`, 12..=35
+/// - a longer LITERAL prefix of the canonical `8-4-4-4-12` layout (`@1a2b3c4d-5e6f`, 12..=35
 ///   chars, a dash exactly at each template position) - the collision-lengthened header token
 ///   `search` emits when two in-scope transcript ids share their first 8 chars.
 ///

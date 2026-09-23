@@ -37,7 +37,7 @@ fn ledger_gate_rule_20_admits_a_receipt_that_touched_the_build_or_the_corpus() {
     for instrument in [
         "grep -abo on the shipped build at @164082185.",
         "A census over one projects root of every *.jsonl line carrying the key.",
-        "csift search over @13d9645a with --count-by label.",
+        "csift search over @1a2b3c4d with --count-by label.",
         "The registry row read from <claude-home>/sessions while the session ran.",
     ] {
         let state = with_receipt(instrument);

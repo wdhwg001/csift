@@ -188,7 +188,7 @@ pub fn resolve_session_files_reported(
 /// matches ANY collected id.
 struct Targets {
     session_ids: Vec<String>,
-    /// Session-UUID PREFIXES (`@13d9645a` - the leading hex of a uuid, e.g. its first
+    /// Session-UUID PREFIXES (`@1a2b3c4d` - the leading hex of a uuid, e.g. its first
     /// segment): resolved by prefix-match against the enumerated sessions, UNIQUE or an
     /// ambiguity error.
     session_prefixes: Vec<String>,
@@ -458,7 +458,7 @@ fn admit_entry(
             }
         }
     }
-    // An exact id OR a uuid-PREFIX (`@13d9645a…`) keeps the file.
+    // An exact id OR a uuid-PREFIX (`@1a2b3c4d…`) keeps the file.
     let matched_prefix = session_prefixes
         .iter()
         .find(|pfx| stem.starts_with(pfx.as_str()))

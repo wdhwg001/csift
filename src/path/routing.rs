@@ -74,7 +74,7 @@ mod tests {
         assert!(!is_teammate_routing_id(
             "00000000-0000-4000-8000-000000000001"
         ));
-        assert!(!is_teammate_routing_id("13d9645a"));
+        assert!(!is_teammate_routing_id("1a2b3c4d"));
         assert!(!is_teammate_routing_id("aRelay-0123456789abcdef"));
         assert!(!is_teammate_routing_id("-Users-dev-Projects-relay"));
         // Malformed: an empty half, two `@`s, or a character outside the name charset.

@@ -54,7 +54,7 @@ use super::*;
         already-encoded `-Users-...` projects-dir token; with no target, every \
         project under ~/.claude/projects is scanned.\n\n\
         TARGETING a session/agent (always positional): `@<uuid>` (or its \
-        leading-hex prefix, e.g. `@13d9645a`) scopes to one session; `@<agent-id>` to one \
+        leading-hex prefix, e.g. `@1a2b3c4d`) scopes to one session; `@<agent-id>` to one \
         subagent + its subtree (a bare hex ≥12 OR a teammate `aName-<hex>` id; exactly what \
         `csift agents` prints); `@<Name>@<Team>` is a teammate's ROUTING form (the `routing:` \
         field `agents` prints beside that transcript id, and the value the official send tool \

@@ -31,10 +31,10 @@
  ❯ what that session decide about rate limiting and wheres the code?
 ──────────────────────────────────────────────────────────────────────────────
 
-⏺ Bash(csift search "rate limit" @13d9645a -t agent --since 1d)
+⏺ Bash(csift search "rate limit" @1a2b3c4d -t agent --since 1d)
   matches  1 exchange · 1 session · oldest first
 
-  13d9645a·t42  2026-06-20 22:14:07.811 AEST(UTC+10)
+  1a2b3c4d·t42  2026-06-20 22:14:07.811 AEST(UTC+10)
     ▸ agent.message  L8821  Added a sliding-window limiter (10 req/min/IP); the 429 path now
                     returns Retry-After and logs the offending IP — gateway/src/rate_limit.rs:88.
   matched 1 exchange · 1 session · label=agent
