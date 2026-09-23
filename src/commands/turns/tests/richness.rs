@@ -243,11 +243,7 @@ fn longest_default_tie_breaks_to_the_last_maximum() {
             _ => None,
         })
         .collect();
-    assert_eq!(
-        kept,
-        vec![c],
-        "tie → the LAST maximum (== old agents.last())"
-    );
+    assert_eq!(kept, vec![c], "tie → the LAST maximum (the last-only pick)");
 }
 
 #[test]

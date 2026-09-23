@@ -243,7 +243,7 @@ fn a_parent_uuid_absent_from_the_file_says_exactly_that() {
     );
     assert!(
         !out.stdout.contains("parent line not located"),
-        "the old wording is gone:\n{}",
+        "`parent line not located` is not a wording csift emits:\n{}",
         out.stdout
     );
     let j = h.run(&[

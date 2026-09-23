@@ -371,8 +371,8 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     assert!(eot_only.success, "stderr: {}", eot_only.stderr);
     assert_eq!(
         eot_only.stdout, TURNS_PRE_FEATURE_BASELINE,
-        "`--agent-msgs eot-only` must be byte-identical to the captured pre-feature \
-         (single-EOT) baseline; an INTENDED eot-only-output change requires re-capturing \
+        "`--agent-msgs eot-only` must be byte-identical to the captured last-only \
+         baseline; an INTENDED eot-only-output change requires re-capturing \
          tests/turns_pre_feature_baseline.txt under TZ=UTC --agent-msgs eot-only"
     );
 
@@ -391,8 +391,8 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     assert!(implicit.success, "stderr: {}", implicit.stderr);
     assert_ne!(
         implicit.stdout, eot_only.stdout,
-        "the implicit default must NO LONGER equal eot-only — it keeps the longest + \
-         rich members the single-EOT default silently dropped"
+        "the implicit default differs from eot-only: it keeps the longest + rich \
+         members a last-only pick drops"
     );
 }
 
