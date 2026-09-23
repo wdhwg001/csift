@@ -238,7 +238,7 @@ fn normalize_short_value_flag_followed_by_flag_does_not_consume_it() {
 
 #[test]
 fn normalize_leaves_encoded_token_with_letter_short_collision_as_positional() {
-    // An encoded `-Users-...` token's first char `U` is NOT a declared short flag, so it
+    // An encoded `-Users-…` token's first char `U` is NOT a declared short flag, so it
     // stays a positional even though `-t`/`-i` exist. The short-flag set is per-char.
     let out = normalize_argv(
         [

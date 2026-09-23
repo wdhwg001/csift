@@ -20,7 +20,7 @@ pub fn parse_argv() -> Cli {
 }
 
 /// Value parser for a project-target positional/option. Accepts a real cwd, an encoded
-/// token (`-Users-...` with a SINGLE leading `-`, or the Windows drive shape `C--Users-...`),
+/// token (`-Users-…` with a SINGLE leading `-`, or the Windows drive shape `C--Users-…`),
 /// or `.`. It REJECTS a `--`-leading token: overwhelmingly that is an unknown / typo'd
 /// flag the `allow_hyphen_values` positional would otherwise swallow, surfacing the
 /// misleading `no project dir named "--xxx"` error instead of clap's clean
@@ -83,7 +83,7 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 ///   flag ahead of an `allow_hyphen_values` positional - the positional swallows it - so
 ///   we reorder it here too. A leading-dash ENCODED token (a single `-` followed by
 ///   alphanumerics/dashes, whose first char is NOT a declared short flag, e.g.
-///   `-Users-...`) is NOT a flag and stays a positional.
+///   `-Users-…`) is NOT a flag and stays a positional.
 /// - Everything else is a positional.
 ///
 /// Flags (with paired values) are emitted first, then positionals, preserving each
@@ -300,7 +300,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
                 // INCLUDING a leading-`-` token when that flag carries `allow_hyphen_values`.
                 // The only tokens that are NOT its value: the `--` terminator, or another
                 // DECLARED long flag (a user typo such as `--format --kind`, which we leave
-                // for clap to report). A bare short `-x` or an encoded `-Users-...` IS consumed.
+                // for clap to report). A bare short `-x` or an encoded `-Users-…` IS consumed.
                 if i + 1 < rest.len() && rest[i + 1] != "--" && !all_long.contains(&rest[i + 1]) {
                     flags.push(rest[i + 1].clone());
                     i += 2;
@@ -326,7 +326,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
             // that takes a value consumes the NEXT token as its value (the same pairing
             // rule as a value-taking long flag); a bundled `-xVALUE` (`-tuser`) or a boolean
             // `-i` carries everything inline and is emitted as one token. A leading-`-`
-            // ENCODED token (`-Users-...`) never reaches here - its first char is not a
+            // ENCODED token (`-Users-…`) never reaches here - its first char is not a
             // declared short flag, so `declared_short_flag` returns `None` and it falls to
             // the positional arm below.
             flags.push(tok.clone());
@@ -356,7 +356,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
 /// short flag of the active subcommand, return that character; else `None`. Used by
 /// [`normalize_argv`] to distinguish a real short flag (`-t`, `-i`, a bundled `-tuser`)
 /// -- which must be hoisted ahead of an `allow_hyphen_values` positional - from a
-/// leading-`-` ENCODED project token (`-Users-...`, whose first char is not a declared
+/// leading-`-` ENCODED project token (`-Users-…`, whose first char is not a declared
 /// short flag) which stays a positional. A bare `-` or `--`-leading token is never a
 /// short flag here (the caller handles `--` separately; a lone `-` has no flag char).
 pub(crate) fn declared_short_flag(
