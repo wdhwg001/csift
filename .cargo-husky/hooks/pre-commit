@@ -24,6 +24,15 @@ set -euo pipefail
 #    `src/<m>/`). Clippy's `mod_module_files` enforces the same rule in-build.
 # 6. No em dash (U+2014) in any .rs comment: comments stay ASCII; use `-`.
 #    String literals are exempt (output glyphs and fixtures are deliberate).
+# 7. A non-ASCII character in a .rs comment only as a QUOTATION of csift's own
+#    rendering: an allowlisted glyph inside a backtick span (`child (arrow) self`,
+#    `SUBAGENT <hex> (dot) parent SESSION <uuid>`, a lone role glyph). Used for
+#    the comment's own typography or its logic instead, one character carries a
+#    quotation in one line and an arrow in the next, and nothing in the character
+#    says which, so those are spelled `->`, `=>`, `<=`, `>=`, `...`, `-`,
+#    `section N`, `-- heading --`. The rule governs COMMENTARY: a doc comment on
+#    a clap `#[arg(...)]`/`#[command(...)]` field is the help page's own text,
+#    printed verbatim, so there is nothing in it to quote and it is not read.
 # Per-function complexity is enforced by clippy (cognitive_complexity, threshold
 # in clippy.toml) inside the clippy step below.
 echo "[csift pre-commit] structure gate (file/folder limits)"
@@ -53,6 +62,71 @@ while IFS= read -r hit; do
     echo "  EM DASH in a comment: $hit"
     fail=1
 done < <(grep -rnE "^[[:space:]]*//.*${EMD}|[^:\"]//[^\"]*${EMD}" src tests --include='*.rs' || true)
+# The glyphs csift itself PRINTS, DERIVED from the source and never typed: every
+# non-ASCII character inside a string or char literal of a non-test file under
+# src/ is something a render, a banner, a marker or a help page puts on a
+# terminal. To re-derive after a render gains or drops one: lex src/**/*.rs, keep
+# the literals of the files outside tests/ and outside an inline #[cfg(test)]
+# region, and collect their non-ASCII characters. The em dash is deliberately
+# absent - rule 6 bans it in a comment outright, quotation or not.
+ASCII_ALLOW='·|…|→|×|≥|◂|⚠|↳|⇨|≤|─|△|▸|§|•|≈|–|▹|⚙|↑|↔|⏳|═|▽'
+while IFS= read -r hit; do
+    echo "  NON-ASCII in a comment: $hit"
+    fail=1
+done < <(find src tests -name '*.rs' -print0 | LC_ALL=C xargs -0 awk -v ALLOWLIST="$ASCII_ALLOW" '
+BEGIN { na = split(ALLOWLIST, allow, "|"); nd = 0 }
+FNR == 1 { flushdoc(0) }
+{
+    t = $0
+    sub(/^[ \t]+/, "", t)
+    if (t ~ /^\/\/\//) { doc[++nd] = FILENAME SUBSEP FNR SUBSEP t; next }
+    if (nd && t == "") { doc[++nd] = ""; next }
+    if (nd) flushdoc(t ~ /^#\[arg\(/ || t ~ /^#\[command\(/)
+    if (t ~ /^\/\//) { check(FILENAME, FNR, t); next }
+    c = trailing($0)
+    if (c != "") check(FILENAME, FNR, c)
+}
+END { flushdoc(0) }
+# A doc block is read only once its item is known, because the item decides
+# whether the block is commentary or the help page itself.
+function flushdoc(exempt,   i, p) {
+    if (!exempt)
+        for (i = 1; i <= nd; i++) {
+            if (doc[i] == "") continue
+            split(doc[i], p, SUBSEP)
+            check(p[1], p[2], p[3])
+        }
+    nd = 0
+    delete doc
+}
+# The comment a code line carries, "" when it carries none: a double-quoted
+# string hides a `//` inside it.
+function trailing(s,   i, n, q, c) {
+    n = length(s); q = 0
+    for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (q) { if (c == "\\") i++; else if (c == "\"") q = 0; continue }
+        if (c == "\"") { q = 1; continue }
+        if (c == "/" && substr(s, i + 1, 1) == "/") return substr(s, i)
+    }
+    return ""
+}
+# Backticks toggle, so part k is inside a span when k is even. Outside one, no
+# non-ASCII character at all; inside one, only a glyph csift prints. Stripping
+# printable ASCII leaves exactly the bytes to report.
+function check(f, ln, txt,   n, parts, i, j, r) {
+    n = split(txt, parts, "`")
+    for (i = 1; i <= n; i++) {
+        r = parts[i]
+        if (i % 2 == 0)
+            for (j = 1; j <= na; j++) gsub(allow[j], "", r)
+        gsub(/[ -~\t]/, "", r)
+        if (r != "")
+            printf "%s:%s carries %s %s\n", f, ln, r,
+                (i % 2 == 0 ? "(not a glyph csift prints)" : "(outside a backtick span)")
+    }
+}
+' || true)
 while IFS= read -r d; do
     n=$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
     if [ "$n" -gt 16 ]; then
