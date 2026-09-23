@@ -653,7 +653,7 @@ csift list [target…] [--since W] [--until W] [--max-count N] [--sessions-from 
 
 Head+tail read only, so it is fast at any size. An unscoped all-projects run caps at the 50 most-recently-active rows (drop reported; a scoped query is uncapped; `--max-count N` overrides). The scope banner and the JSON header `sessions_in_scope` stay the PRE-cap resolved range — "how big is my corpus" reads off line 1, and only the ROWS are capped. `--since`/`--until` keep a session iff its [first, last] activity span intersects the window.
 
-**Rows** carry cwd (FIRST-seen on purpose: the record cwd follows the tracked shell cwd, so last-seen could be a transient subdirectory), branch and Claude Code version — `git_branch`/`version` are LAST-seen, what the session is on NOW, with the opening values beside them and a drift arrow `branch a->b, CC x->y` in text when they moved mid-session. Then first ◂ / last ◂ / last ▸ excerpts (200 chars) with timestamps. A subagent row reads `SUBAGENT <hex> · parent SESSION <uuid>`; pending elicitations annotate (§17).
+**Rows** carry cwd (FIRST-seen on purpose: the record cwd follows the tracked shell cwd, so last-seen could be a transient subdirectory), branch and Claude Code version — `git_branch`/`version` are LAST-seen, what the session is on NOW, with the opening values beside them and a drift arrow `branch a->b, CC x->y` in text when they moved mid-session. Then first ◂ / last ◂ / last ▸ excerpts (200 chars) with timestamps. A subagent row reads `SUBAGENT  <hex>  ·  parent SESSION <uuid>`; pending elicitations annotate (§17).
 
 **FOUR LINEAGE LINKS a row can carry, and only two are STATED.** They are independent, and one row can carry all four.
 

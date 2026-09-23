@@ -33,7 +33,7 @@ use super::*;
         SCOPE: because the default SPANS subagents, a `csift list @<uuid>` can return 1 \
         top-level + N subagent rows. The text output then leads with a `scope  N sessions in \
         scope (1 top-level + M subagent)` banner, brands each subagent row \
-        `SUBAGENT <hex> · parent SESSION <uuid>` (a bare hex is NOT a re-feedable target; \
+        `SUBAGENT  <hex>  ·  parent SESSION <uuid>` (a bare hex is NOT a re-feedable target; \
         re-feed the parent uuid), and a top-level row keeps the plain `SESSION <uuid>` header.\n\n\
         JSON SCHEMA (per --format json)\n  \
           The standard envelope v2 (same as every command): a `{kind:\"header\", \
