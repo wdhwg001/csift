@@ -393,7 +393,8 @@ fn phase2_empty_turn_no_user_no_assistant_selects_nothing() {
 fn shown_user_and_assistant_cover_all_combinations() {
     let complete = mk_turn(0, Some("u"), Some("a"), 0, 0);
     // The assistant LANE (shown_agent_lane) is non-empty exactly when the side is shown
-    // AND the turn has agent messages; empty otherwise (replaces the old shown_assistant).
+    // AND the turn has agent messages; empty otherwise. It answers for the whole RUN,
+    // which a single-message accessor cannot.
     let lane = |t: &TurnSlice, s: SelSides| !shown_agent_lane(t, s, &cfg()).is_empty();
     // Both → both sides shown.
     assert!(shown_user(&complete, SelSides::Both).is_some());

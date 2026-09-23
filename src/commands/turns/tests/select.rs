@@ -4,8 +4,8 @@ use super::*;
 
 #[test]
 fn select_eot_only_keeps_only_the_last_agent_message() {
-    // The non-breaking default: a multi-agent turn collapses to its last message, no
-    // placeholder, byte-identical selection to the pre-expansion single EOT.
+    // The force-last-only escape: a multi-agent turn collapses to its last message and
+    // nothing else - no placeholder, no rich middle, no first-if-substantive.
     let t = mk_turn_agents(
         0,
         Some("ask"),

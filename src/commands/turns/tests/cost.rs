@@ -21,8 +21,9 @@ fn unit_cost_charges_real_header_line_plus_newlines() {
     let small = unit(Role::User, 1, "hi", 0);
     let hdr = unit_header_line(&small).chars().count();
     assert_eq!(unit_cost(&small), hdr + NEWLINE_COST + 2 + NEWLINE_COST);
-    // The real header is far longer than the old flat 24 (glyph + L + role + the full
-    // `YYYY-MM-DD HH:MM:SS TZ (RAW_UTC)` timestamp expansion) - proving the old undercharge.
+    // The real header is far longer than 24 chars (glyph + L + role + the full
+    // `YYYY-MM-DD HH:MM:SS TZ (RAW_UTC)` timestamp expansion), so a flat 24 undercharges
+    // every unit.
     assert!(
         hdr > 24,
         "real header line is {hdr} chars, the removed flat HEADER_COST=24 undercharged it"

@@ -90,8 +90,8 @@ fn agent_msg_is_droppable_and_keep_on_doubt() {
 #[test]
 fn longest_default_keeps_the_longest_not_the_last() {
     // THE HEADLINE CASE. A turn = [a long substantive Rich Response, a ~50-char throwaway
-    // wrap-up]. The OLD default kept `agents.last()` → the wrap-up, silently dropping the
-    // substance. The NEW default keeps the LONGEST → the Rich Response; the short non-rich
+    // wrap-up]. A last-only pick takes `agents.last()` → the wrap-up, silently dropping the
+    // substance. The default keeps the LONGEST → the Rich Response; the short non-rich
     // wrap-up collapses into a placeholder. The Rich Response is the FIRST message here, so
     // this proves the default is "longest", NOT "last" and NOT merely "first".
     let rich_response = body_chars("RICHRESP", 600); // longest, > rich_min_chars
@@ -227,7 +227,7 @@ fn longest_default_single_message_turn_keeps_it() {
 #[test]
 fn longest_default_tie_breaks_to_the_last_maximum() {
     // All messages equal length → `max_by_key` returns the LAST maximum, so the default
-    // coincides with the old `agents.last()` pick on an all-equal run (documented tie rule).
+    // coincides with a last-only pick on an all-equal run (documented tie rule).
     // None are rich/substantive, so ONLY the tie-winning last survives.
     let a = "alpha beta gamma"; // 16 chars
     let b = "delta epsilon ze"; // 16 chars
@@ -334,7 +334,7 @@ fn longest_default_keep_flag_tunes_the_substantive_first_gate() {
 #[test]
 fn richness_cfg_default_is_longest() {
     // The default config is Longest - keep the longest agent message + the first-if-
-    // substantive + the rich middles (NOT the old `agents.last()` single-EOT default).
+    // substantive + the rich middles, never `agents.last()` alone.
     let d = RichnessCfg::default();
     assert_eq!(d.mode, AgentMsgMode::Longest);
     assert_eq!(d.run_threshold, 6);

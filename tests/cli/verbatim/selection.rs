@@ -77,8 +77,8 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
     //   • AGENTEOT - a SHORT, non-rich LAST (the ~35-char throwaway wrap-up) → dropped
     //     (THE headline: the last is NOT kept unconditionally; the substance is).
     //   • the pure LETMEDECL declarations.
-    // This is exactly the substance the OLD `agents.last()` default silently dropped, plus
-    // the deliberate dropping of the throwaway last.
+    // This is exactly the substance a last-only pick silently drops, plus the deliberate
+    // dropping of the throwaway last.
     let h = turns_home();
     let dflt = h.run(&[
         "verbatim",
@@ -347,9 +347,9 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
 
 #[test]
 fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
-    // The `eot-only` ESCAPE reproduces the pre-feature single-EOT document byte-for-byte
-    // (the "force last-only" guarantee), asserted TWO ways:
-    //   (1) `--agent-msgs eot-only` is byte-identical to a CAPTURED pre-feature baseline -
+    // The `eot-only` ESCAPE emits the LAST-ONLY document byte-for-byte (the "force
+    // last-only" guarantee), asserted TWO ways:
+    //   (1) `--agent-msgs eot-only` is byte-identical to the CAPTURED last-only baseline -
     //       catches a drift in the last-only path even if the default moved with it;
     //   (2) the IMPLICIT default DIFFERS from it - it keeps intermediate substance (the
     //       longest + rich members) that a last-only pick drops.
