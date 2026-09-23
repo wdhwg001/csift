@@ -184,7 +184,7 @@ pub(crate) fn extract_xml_tag(s: &str, tag: &str) -> Option<String> {
 
 /// Collapse all runs of ASCII whitespace (incl. newlines/tabs) to single spaces
 /// and trim the ends, so an excerpt renders on one line. Does NOT truncate -
-/// length capping with an explicit `... (+N chars)` marker is the caller's job.
+/// length capping with an explicit `… (+N chars)` marker is the caller's job.
 pub(crate) fn normalize_line(s: &str) -> String {
     normalize_collapse(s, |_| {})
 }

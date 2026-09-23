@@ -36910,7 +36910,7 @@
         {
           "path": "src/model/narration.rs",
           "lines": "38-46",
-          "snippet": "/// The three base64 alignments of the tag bytes (`narration` at stream offset 0/1/2\n/// mod 3). A signature containing NONE of them cannot decode to `narration`, so the\n/// hot path skips the full decode - a us substring check instead of decoding a 200KB\n/// signature (classify runs on every thinking block of every candidate record; the\n/// ungated form cost ~+20% wall on a 685MB transcript). Verified sound on 13,957 real\n/// signatures (alignment MIXES within one file - all three needles are required).\n/// Whitespace inside the base64 (tolerated by the decoder, never observed in real\n/// signatures) would break needle adjacency, so it conservatively re-opens the gate.\nconst NARRATION_B64_ALIGNMENTS: [&str; 3] = [\"bmFycmF0aW9u\", \"5hcnJhdGlv\", \"uYXJyYXRp\"];"
+          "snippet": "/// The three base64 alignments of the tag bytes (`narration` at stream offset 0/1/2\n/// mod 3). A signature containing NONE of them cannot decode to `narration`, so the\n/// hot path skips the full decode - a microsecond substring check instead of decoding a 200KB\n/// signature (classify runs on every thinking block of every candidate record; the\n/// ungated form cost ~+20% wall on a 685MB transcript). Verified sound on 13,957 real\n/// signatures (alignment MIXES within one file - all three needles are required).\n/// Whitespace inside the base64 (tolerated by the decoder, never observed in real\n/// signatures) would break needle adjacency, so it conservatively re-opens the gate.\nconst NARRATION_B64_ALIGNMENTS: [&str; 3] = [\"bmFycmF0aW9u\", \"5hcnJhdGlv\", \"uYXJyYXRp\"];"
         },
         {
           "path": "src/model/narration.rs",

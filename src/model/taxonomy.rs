@@ -119,7 +119,7 @@ pub enum Class {
     CommSignal,
     /// `agent.communication.channel` - a csift-channel delivery: a
     /// `hook_additional_context` attachment whose FIRST content string opens with the
-    /// envelope header `[csift-channel v1 ...]`. A MESSAGE addressed at this lane, so it
+    /// envelope header `[csift-channel v1 …]`. A MESSAGE addressed at this lane, so it
     /// is the RICHEST view of a record that also carries [`Class::HookContext`] - and
     /// unlike that leaf it is admitted by a DEFAULT scan.
     CommChannel,

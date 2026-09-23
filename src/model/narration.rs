@@ -37,7 +37,7 @@ pub(crate) fn thinking_signature_tag(signature: Option<&str>) -> Option<String> 
 
 /// The three base64 alignments of the tag bytes (`narration` at stream offset 0/1/2
 /// mod 3). A signature containing NONE of them cannot decode to `narration`, so the
-/// hot path skips the full decode - a us substring check instead of decoding a 200KB
+/// hot path skips the full decode - a microsecond substring check instead of decoding a 200KB
 /// signature (classify runs on every thinking block of every candidate record; the
 /// ungated form cost ~+20% wall on a 685MB transcript). Verified sound on 13,957 real
 /// signatures (alignment MIXES within one file - all three needles are required).
