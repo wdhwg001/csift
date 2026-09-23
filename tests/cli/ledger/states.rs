@@ -23,9 +23,9 @@ pub(crate) const FROM_BASES: [&str; 4] = ["first_seen", "parsed", "verified", "l
 /// and the OPEN state's range opens at or below the verified build unless it says why not.
 ///
 /// The open state is LAST because every other rule and every reader treats the list as a
-/// timeline: `states[-1]` is the current reading, a closed state is what a build no longer
-/// does. Ordering by `from` alone does not force it - a closed state can open at the same
-/// build as the open one, and then "ordered" admits the pair in either order.
+/// timeline: `states[-1]` is the current reading, a closed state a reading a later build
+/// left behind. Ordering by `from` alone does not force it - a closed state can open at
+/// the same build as the open one, and then "ordered" admits the pair in either order.
 pub(crate) fn state_shape(id: &str, claim: &Value, verified: &str, failures: &mut Vec<String>) {
     let sts = states(claim);
     if sts.is_empty() || sts.len() > 2 {

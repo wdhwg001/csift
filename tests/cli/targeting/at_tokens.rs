@@ -6,7 +6,8 @@ use crate::harness::*;
 fn dashed_teammate_name_id_round_trips_as_target() {
     // A teammate NAME may carry dashes (real data: teammate "P1-engine" → agent id
     // `aP1-engine-9cf2f06d6235ca64`). The id `csift agents` prints must round-trip as an
-    // `@<agent-id>` target - it used to fall through to the project-dir branch and fail.
+    // `@<agent-id>` target: an entry gate keyed on bare hex alone drops it into the
+    // project-dir branch, where it fails.
     let enc = "-Users-testuser-Projects-dashmate";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let id = "aP1-engine-9cf2f06d6235ca64";
@@ -118,7 +119,8 @@ fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
 #[test]
 fn cross_surface_session_id_is_identical_for_a_subagent() {
     // id-form unification: the SAME subagent transcript reports the SAME bare-hex
-    // session_id from files, search, and turns (search/turns previously kept `agent-`).
+    // session_id from `files`, `search` and `verbatim` - reading the path STEM instead
+    // gives the `agent-` prefixed form, which is no re-feedable id.
     let h = populated_home();
     let files = h.run(&[
         "files",
@@ -489,10 +491,10 @@ fn bare_id_shaped_tokens_get_the_at_hint() {
 
 #[test]
 fn bare_basename_jsonl_target_resolves_from_its_own_dir() {
-    // A `*.jsonl` token with NO path separator used to feed its empty parent ("") into
-    // the project scan (a wrong "no session file found" bail), and the same shape
-    // misclassified a bare `agent-<hex>.jsonl` as a top-level session (the `subagents`
-    // component test sees no components). The token is absolutized first now, so every
+    // A `*.jsonl` token with NO path separator has an EMPTY parent (""): fed to the
+    // project scan as it stands it bails with a wrong "no session file found", and a
+    // bare `agent-<hex>.jsonl` misclassifies as a top-level session (the `subagents`
+    // component test sees no components). The token is absolutized first, so every
     // spelling of the same file resolves identically.
     let h = Home::new();
     let sess = "3f2e1d0c-9b8a-4756-a432-10fedcba9876";

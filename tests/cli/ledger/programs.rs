@@ -4,8 +4,8 @@
 //! heredoc carries a program whose INDENT is its block structure. A prose pass that
 //! normalises whitespace runs destroys that structure without touching a single word, and
 //! the result reads exactly like the original to every other rule here: the sentence is
-//! intact, the counting rule is intact, and the program no longer runs. Seven of them
-//! shipped that way, so the parse is a RULE rather than a habit.
+//! intact, the counting rule is intact, and the program is dead. Nothing else in this file
+//! can see that, which is why the parse is a RULE rather than a habit.
 //!
 //! Each language is asked in its own words - python `compile`, `bash -n`, `jq -n` - and an
 //! interpreter this host does not hold is COUNTED and skipped, exactly as rule 12 skips a

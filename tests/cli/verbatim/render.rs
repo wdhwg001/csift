@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn turns_teammate_opener_renders_clean_inbound_comm() {
-    // #14 / GOLD §1: an inbound `<teammate-message>` opener (it still OPENS a turn - count
+    // An inbound `<teammate-message>` opener (it OPENS a turn, so the turn count is
     // unchanged) must render as `agent.communication.inbox  <from> ⇨ self` with a CLEAN body
     // (the relay preamble, the `<teammate-message …>` wrapper tags, and the trailing harness
     // security footer all stripped) - NOT the raw XML blob dumped into the `▽ USER` lane.

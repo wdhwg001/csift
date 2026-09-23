@@ -28,7 +28,7 @@ fn a_rewound_turn_leaves_the_numbering_and_takes_its_subtree_with_it() {
         "the resend is not rewound:\n{}",
         rewound.stdout
     );
-    // The C-27 line names where the conversation went instead.
+    // The draft-distance line names where the conversation went instead.
     assert!(
         rewound
             .stdout

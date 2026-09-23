@@ -328,8 +328,8 @@ fn files_invalid_regex_and_glob_are_hard_errors() {
 
 #[test]
 fn files_detects_new_bash_idioms_end_to_end() {
-    // The previously-MISSED idiom classes (fd-redirects, curl -o, --junit-xml=, dd of=,
-    // zip) reach the real CLI surface and surface their /tmp destinations; the noisy
+    // The write idioms beyond a plain redirect (fd-redirects, curl -o, --junit-xml=, dd
+    // of=, zip) reach the real CLI surface and surface their /tmp destinations; the noisy
     // precision cases ($VAR, /dev/null) are dropped.
     let h = Home::new();
     let cmds = [

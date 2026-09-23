@@ -1,7 +1,7 @@
 //! The `for` PROVENANCE edges the taxonomy renders, pinned over the one reachability
 //! fixture.
 //!
-//! Each family lane pinned the edges IT builds, in its own suite, from its own fixture.
+//! Each family's own suite pins the edges THAT family builds, from its own fixture.
 //! What no per-family suite can answer is what the taxonomy as a WHOLE says about
 //! provenance: which relation words exist, which basis each carries, and what shape a
 //! target takes. That is a cross-family contract - a reader learns ONE vocabulary, not

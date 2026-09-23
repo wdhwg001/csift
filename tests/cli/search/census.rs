@@ -211,7 +211,8 @@ fn search_count_by_other_axes() {
         out.stderr
     );
 
-    // The old v0.4 spelling is gone (zero-BC): unknown argument + tip at the new one.
+    // The retired `--count-by-label` spelling gets no alias (zero-BC): an unknown
+    // argument, and clap's tip names `--count-by`.
     let out = h.run(&["search", "", "--count-by-label"]);
     assert!(!out.success);
     assert!(
@@ -496,7 +497,7 @@ fn count_by_version_censuses_the_cc_version_stamp() {
 
 #[test]
 fn count_by_result_separates_errored_results_and_marks_them_inline() {
-    // C-13: an errored result is still `paired` (a result came back), so the pairing
+    // An errored result is still `paired` (a result came back), so the pairing
     // census is structurally blind to "any failed reads?". The result axis answers it,
     // the errored row says so inline, and JSON carries is_error.
     let h = Home::new();

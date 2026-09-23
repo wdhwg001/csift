@@ -1,4 +1,4 @@
-//! Background tasks in status/wait (v0.10.0): the seventh verdict, the lens flags, the
+//! Background tasks in status/wait: the seventh verdict, the lens flags, the
 //! required timeout, the at-exit activity report, the last-message excerpts, and the
 //! harness's agents-stopped notice.
 
@@ -471,7 +471,7 @@ fn the_last_section_prints_with_only_a_prompt_on_disk() {
 fn a_blocked_or_unknown_completion_status_is_its_own_bucket() {
     // Claude Code's remote-agent notifier writes a fifth terminal value, `blocked`
     // (ledger BG-011, traced in the 2.1.258 binary); an unknown literal must be
-    // disclosed rather than booked as completed (v0.10.3).
+    // disclosed rather than booked as completed.
     let h = Home::new();
     let blocked = r#"{"type":"user","uuid":"n1","parentUuid":"a2","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b1a2b3c4d</task-id>\n<tool-use-id>t1</tool-use-id>\n<status>blocked</status>\n<summary>Background command \"Serve the harbor app\" is blocked: waiting on input</summary>\n</task-notification>"}}"#;
     h.write(

@@ -1,7 +1,7 @@
-//! C-18 + user.unsent: a draft stays outside turn numbering but is searchable under
-//! its own leaf; the collapse count is disclosed; addresses still fetch. v0.12.0 keeps
-//! every one of those answers and re-derives them from the SURVIVAL AXIS, so the header
-//! wording moved from "superseded draft" to the axis's own "draft (superseded …)".
+//! `user.unsent`: a draft stays outside turn numbering but is searchable under its own
+//! leaf; the collapse count is disclosed; addresses still fetch. Every one of those
+//! answers is derived from the SURVIVAL AXIS, so the header carries the axis's own
+//! wording, "draft (superseded …)".
 
 use crate::harness::*;
 

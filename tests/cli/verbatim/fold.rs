@@ -30,9 +30,10 @@ fn fold_preview_home() -> (Home, &'static str) {
 
 #[test]
 fn turns_fold_marker_names_the_chars_and_previews_the_substantive_bodies() {
-    // The fold used to say only HOW MANY messages it swallowed. It now names the summed chars
-    // and shows the head of every collapsed message at or above 210 chars, so a reader can
-    // tell a folded finding from a folded "let me look" without fetching the range.
+    // A fold that says only HOW MANY messages it swallowed tells a reader nothing about what
+    // is inside. It names the summed chars and shows the head of every collapsed message at
+    // or above 210 chars, so a reader can tell a folded finding from a folded "let me look"
+    // without fetching the range.
     let (h, sess) = fold_preview_home();
     let text = h.run(&["verbatim", at(sess).as_str(), "--budget", "40000"]);
     assert!(text.success, "stderr: {}", text.stderr);

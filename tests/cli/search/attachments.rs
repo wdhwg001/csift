@@ -255,10 +255,10 @@ fn show_renders_an_addressed_attachment_flag_free() {
 
 #[test]
 fn image_bearing_rows_teach_extraction_once_and_in_input_form() {
-    // C-11: the image annotation used to be decorative - fleets classified images as
-    // unreadable without ever testing extraction. The first image-bearing row now
-    // carries a paste-ready hint (INPUT id forms: a #N handle as the bare number),
-    // printed once per run, and a capability note rides the footer.
+    // The image annotation has to be ACTIONABLE, not decorative: one that names an image
+    // without saying how to read it leaves a reader calling images unreadable. The first
+    // image-bearing row carries a paste-ready hint (INPUT id forms: a #N handle as the
+    // bare number), printed once per run, and a capability note rides the footer.
     let h = image_home();
     let out = h.run(&["search", "screenshot", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);

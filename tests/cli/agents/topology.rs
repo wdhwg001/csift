@@ -86,8 +86,9 @@ fn agents_classifies_teammate_and_id_round_trips() {
         bt.stdout
     );
 
-    // (3) the printed id round-trips as an `@<id>` target (previously failed - fell through to
-    // path resolution). search default-spans the teammate subtree and finds its content.
+    // (3) the printed id round-trips as an `@<id>` target: a teammate id is NOT bare hex, so
+    // an entry gate keyed on bare hex alone drops it into path resolution, where it fails.
+    // search default-spans the teammate subtree and finds its content.
     let refed = h.run(&["search", "matrix result", &format!("@{tid}"), "-t", "agent"]);
     assert!(refed.success, "re-feed failed: {}", refed.stderr);
     assert!(
@@ -144,7 +145,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
         r#"{"agentType":"Explore","description":"child agent","toolUseId":"call_child"}"#,
     );
 
-    // JSON (v0.5 FLAT rows): one `kind:"agent"` row per node in tree PRE-ORDER - the
+    // JSON (FLAT rows): one `kind:"agent"` row per node in tree PRE-ORDER - the
     // child follows its parent, links via parent_agent_id, carries depth 1, and the
     // child's trigger/description come from the PARENT transcript's spawn (not main).
     let j = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
@@ -220,7 +221,7 @@ fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // v0.5 flat rows: the run is a `kind:"run"` row; its member agent row FOLLOWS it
+    // Flat rows: the run is a `kind:"run"` row; its member agent row FOLLOWS it
     // (emission order = run, then its agents pre-order, then built-ins).
     let runs = json_rows(&out.stdout, "run");
     assert_eq!(runs.len(), 1, "one workflow run");
@@ -291,7 +292,7 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     // the manifested run, topo33 in the manifest-less wf_orphan). The tree must surface ALL.
     let expected_ids = ["topo11", "topo22", "topo33"];
 
-    // v0.5 flat rows: topo33 must still surface - a SYNTHESIZED `kind:"run"` row stands
+    // Flat rows: topo33 must still surface - a SYNTHESIZED `kind:"run"` row stands
     // in for the manifest-less wf_orphan (null run fields), and the agent rides as its
     // own `kind:"agent"` row joined by workflow_id.
     let tree = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);

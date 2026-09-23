@@ -20,8 +20,8 @@ fn keys_home() -> Home {
         r#"{"type":"assistant","uuid":"a-1","parentUuid":"u-1","timestamp":"2026-06-07T05:00:01.000Z","requestId":"req_abc123","apiBlockIndex":2,"attributionAgent":"general-purpose","attributionSkill":"csift","attributionPlugin":"omc","attributionMcpServer":"srv","attributionMcpTool":"srv__probe","message":{"role":"assistant","id":"msg_a1","model":"claude","content":[{"type":"text","text":"zzkeys attributed reply"}]}}"#.to_string(),
         // L3 the full API-failure set
         r#"{"type":"assistant","uuid":"a-2","parentUuid":"a-1","timestamp":"2026-06-07T05:00:02.000Z","isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1790000000,"status":"exceeded"},"truncatedAfterOutput":true,"isAbortedMidStream":true,"message":{"role":"assistant","id":"msg_a2","model":"<synthetic>","content":[{"type":"text","text":"zzkeys api failure"}]}}"#.to_string(),
-        // L4 the flag and a QUOTA and nothing else - the record that used to render a
-        // headline naming nothing
+        // L4 the flag and a QUOTA and nothing else - the record whose headline names
+        // nothing unless the quota is read
         r#"{"type":"assistant","uuid":"a-3","parentUuid":"a-2","timestamp":"2026-06-07T05:00:03.000Z","isApiErrorMessage":true,"quotaLimits":{"rateLimitType":"weekly","resetsAt":1790000001},"message":{"role":"assistant","id":"msg_a3","model":"<synthetic>","content":[{"type":"text","text":"zzkeys quota only"}]}}"#.to_string(),
         // L5 a turn-ending tool result
         r#"{"type":"user","uuid":"u-2","parentUuid":"a-3","timestamp":"2026-06-07T05:00:04.000Z","toolEndsTurn":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu-1","content":"zzkeys structured output"}]}}"#.to_string(),

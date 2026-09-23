@@ -8,7 +8,7 @@
 //!
 //! Both ways of getting that wrong are reachable from here. `println!` PANICS on a write
 //! error - exit 101 and a std panic message; a backtrace only under `RUST_BACKTRACE=1`.
-//! That is what a `| head` read used to produce in place of csift's own message. And
+//! That is what a `| head` read produces in place of csift's own message. And
 //! `BufWriter::drop` SWALLOWS one - exit 0 with the stream short and nothing said, which
 //! is the silent failure the output contract forbids and which is what an `Out::flush`
 //! that returned `Ok(())` would leave behind.

@@ -47,8 +47,8 @@ fn ledger_gate_rule_20_admits_a_receipt_that_touched_the_build_or_the_corpus() {
     }
 }
 
-/// The five the shape used to walk past, each one an artefact spelled with a word in the
-/// middle. They are the classifier's own regression rows.
+/// Five artefacts, each spelled with a word in the MIDDLE of its name - the shape a
+/// classifier matching only adjacent words walks past. Its own regression rows.
 #[test]
 fn ledger_gate_rule_20_reads_an_artefact_named_with_a_word_between() {
     for instrument in [

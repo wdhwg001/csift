@@ -246,7 +246,7 @@ fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // v0.5 flat rows: the built-in topo11 is its own `kind:"agent"` row.
+    // Flat rows: the built-in topo11 is its own `kind:"agent"` row.
     let rows = json_rows(&out.stdout, "agent");
     let builtin = rows
         .iter()
@@ -316,7 +316,7 @@ fn agents_returned_message_three_way_resolution() {
         "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // v0.5 flat rows: builtin + workflow agents are both `kind:"agent"` rows; the run is
+    // Flat rows: builtin + workflow agents are both `kind:"agent"` rows; the run is
     // its own `kind:"run"` row (workflow_id joins them).
     let rows = json_rows(&out.stdout, "agent");
     let builtin = rows

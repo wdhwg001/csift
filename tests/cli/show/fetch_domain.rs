@@ -318,10 +318,10 @@ fn a_non_record_line_inside_an_addressed_range_is_counted_and_disclosed() {
     );
 }
 
-/// The 1:1 law over ROLE-BEARING records: a message line with no renderable text used to
-/// hard-miss under an address, because the fallback had neither text nor raw bytes to
-/// build a unit from. Each shape below names the axis its leaf would have been decided
-/// on, so a reader learns what the line IS.
+/// The 1:1 law over ROLE-BEARING records: a message line with no renderable text must not
+/// hard-miss under an address, and it is the shape that can - the fallback has neither
+/// text nor raw bytes to build a unit from. Each shape below names the axis its leaf would
+/// have been decided on, so a reader learns what the line IS.
 #[test]
 fn a_textless_message_record_renders_its_shape_under_an_address() {
     let h = Home::new();
@@ -339,7 +339,7 @@ fn a_textless_message_record_renders_its_shape_under_an_address() {
 
     // The fallback-only assistant record is still the assistant's TURN: it carries the
     // plain message leaf with an empty body, so it is a labeled unit and not an
-    // unmodeled one. Naming the fallback in the render belongs to the family lane.
+    // unmodeled one. Naming the fallback in the render belongs to the system family.
     let fb = h.run(&["show", &at(sess), "--line", "2"]);
     assert!(fb.success, "stderr: {}", fb.stderr);
     assert!(

@@ -25,7 +25,7 @@ fn search_category_filter_and_max_count() {
     let h = populated_home();
     // "carry" matches the top-level session AND both subagents (each is one exchange), so
     // --max-count 1 caps to one and DROPS the rest (the drop note appears only when something is
-    // actually dropped - the footer no longer prints "0 dropped"). (No `-t`: the subagent "carry"
+    // actually dropped - never a "0 dropped" footer). (No `-t`: the subagent "carry"
     // records are spawn-prompt openers, now `agent.communication.inbox`, not `user`.)
     let out = h.run(&["search", "carry", "--max-count", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -46,9 +46,10 @@ fn search_category_filter_and_max_count() {
 
 #[test]
 fn search_short_t_after_positional_parses_and_filters() {
-    // The reported critical bug: a trailing short flag after the positional path used to
-    // be swallowed ("no project dir named -t"). End-to-end through the real binary, a
-    // `-t user` after the path must now parse and filter to user turns.
+    // A trailing short flag after the positional path must not be swallowed: clap's
+    // allow_hyphen_values lets the PATH positional absorb it and the run dies with "no
+    // project dir named -t". End-to-end through the real binary, a `-t user` after the
+    // path parses and filters to user turns.
     let h = populated_home();
     let out = h.run(&["search", "carry", ENC, "-t", "user", "--no-subagents"]);
     assert!(
@@ -300,7 +301,7 @@ fn search_since_until_window() {
 
 #[test]
 fn search_rejects_old_flat_category_selector() {
-    // 0 back-compat (GOLD §6): the old flat `-t tool-response` is a HARD clap error that lists the
+    // 0 back-compat: the retired flat `-t tool-response` is a HARD clap error that lists the
     // valid selectors; the dotted form works.
     let h = populated_home();
     let bad = h.run(&["search", "carry", "-t", "tool-response"]);

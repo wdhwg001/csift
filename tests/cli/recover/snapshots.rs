@@ -52,8 +52,9 @@ fn snapshot_home(with_store: bool) -> Home {
 #[test]
 fn divergent_snapshot_rebases_the_replay() {
     let h = snapshot_home(true);
-    // 0.9.3 replayed the never-existed state (the deleted key still present) and
-    // called it complete. The verified v2 blob now rebases the replay.
+    // Replaying the events alone reconstructs a state that never existed (the
+    // deleted key still present) and calls it complete. The verified v2 blob
+    // rebases the replay instead.
     let out = h.run(&[
         "recover",
         at(SSESS).as_str(),

@@ -254,7 +254,7 @@ fn image_id_selection_json_and_unresolved() {
     ]);
     assert!(!miss.success);
     assert!(miss.stderr.contains("L999i9"), "stderr: {}", miss.stderr);
-    // v0.6.2: the miss explains itself - inventory (this fixture's images carry no
+    // The miss explains itself - inventory (this fixture's images carry no
     // [Image #N] markers, so all are unnumbered) + the paste-time numbering provenance.
     assert!(
         miss.stderr.contains("unnumbered image(s)"),
@@ -435,7 +435,7 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
 
 #[test]
 fn image_lists_a_queued_command_attachment_image() {
-    // The third image carrier (v0.10.3): a prompt queued and then edited or recalled
+    // The third image carrier: a prompt queued and then edited or recalled
     // never becomes a user record, so its pasted image lives only in the
     // `queued_command` attachment's `prompt[]`. The walker reads it like a user record,
     // markers included; a prompt-less attachment carries nothing.

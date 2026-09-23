@@ -77,9 +77,10 @@ fn range_grammar_is_n_or_dotdot_everywhere() {
 
 #[test]
 fn turn_range_old_spelling_hard_errors() {
-    // v0.5.0 renamed `--turn-range` → `--turn` on every windowing command (zero-BC
-    // policy: no alias). The old spelling must be an unknown argument, and clap's
-    // similarity tip must point at the new one - the stale-knowledge recovery path.
+    // `--turn` is the ONE spelling on every command that windows on turns, and the
+    // retired `--turn-range` gets no alias (zero-BC policy). It must be an unknown
+    // argument, and clap's similarity tip must point at `--turn` - a reader holding
+    // stale knowledge recovers from the error alone.
     let h = populated_home();
     let out = h.run(&["search", "go", ENC, "--turn-range", "0"]);
     assert!(
@@ -101,10 +102,10 @@ fn turn_range_old_spelling_hard_errors() {
 
 #[test]
 fn timestamps_canonical_local_marker_everywhere() {
-    // v0.5 W1-7: every TEXT timestamp is `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`
-    // - name AND offset together (zero conversion arithmetic left to the reader), the
-    // raw-UTC parenthetical copy is GONE, and the marker is a FORMAT derived from the
-    // system zone per instant, never a hardcoded value.
+    // Every TEXT timestamp is `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` - name AND
+    // offset together (zero conversion arithmetic left to the reader), with NO raw-UTC
+    // parenthetical copy, and the marker is a FORMAT derived from the system zone per
+    // instant, never a hardcoded value.
     let h = populated_home();
     let at_s = at(SESS);
     let tz_syd = [("TZ", "Australia/Sydney")];
@@ -268,11 +269,11 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
 fn reserialized_spaced_json_records_are_full_citizens() {
     // R13: a valid-JSON record whose serialization differs from CC's compact wire
     // format by one space (`"role": "user"` - python json.dumps defaults, a jq /
-    // editor round-trip) used to vanish one layer BEFORE any malformed counter
-    // could see it: no preview, no record count, no search match, skipped_lines 0 -
-    // invisible on every surface with zero disclosure. Stage-1 candidate detection
-    // is now serialization-tolerant (`parse::line_has_role_marker`), so such
-    // records are full citizens everywhere.
+    // editor round-trip) is a full citizen on every surface. A stage-1 candidate
+    // detector keyed on the compact spelling drops such a record one layer BEFORE
+    // any malformed counter can see it: no preview, no record count, no search
+    // match, skipped_lines 0 - invisible everywhere with zero disclosure. Detection
+    // is serialization-tolerant instead (`parse::line_has_role_marker`).
     let h = Home::new();
     let enc = "-Users-test-Projects-spaced";
     let sess = "eeeeeeee-aaaa-4bbb-8ccc-00000005aced";

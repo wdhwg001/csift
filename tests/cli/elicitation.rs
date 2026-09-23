@@ -3,9 +3,10 @@ use crate::harness::*;
 #[test]
 fn sidecar_schema_skewed_marker_is_counted_never_invisible() {
     // R12 §2: a sentinel-bearing sidecar line the CURRENT schema cannot read (a
-    // pre-release fossil: `phase`/`kind`/`key` instead of `csiftPhase`/…) used to be
-    // fully invisible - correctly never merged, but not counted either. It now moves
-    // `skipped_lines` on every sidecar-merging surface (valid-JSON-ness ≠ silence).
+    // pre-release fossil: `phase`/`kind`/`key` instead of `csiftPhase`/...) is provably
+    // ours and uninterpretable, so it is never merged AND never invisible: it moves
+    // `skipped_lines` on every sidecar-merging surface. Valid JSON is not a reason to
+    // say nothing.
     let h = Home::new();
     let enc = "-Users-test-Projects-fossil";
     let sess = "eeeeeeee-aaaa-4bbb-8ccc-00000000f055";

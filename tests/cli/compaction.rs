@@ -1,6 +1,6 @@
-//! C-33, across every surface that renders a compaction: the boundary excerpt's survivor
-//! fields, the `/rewind` summarize MODE on both the boundary and its summary, and the
-//! legacy four-scalar boundary that must still render byte-for-byte what it always did.
+//! Every surface that renders a compaction: the boundary excerpt's survivor fields, the
+//! `/rewind` summarize MODE on both the boundary and its summary, and a boundary carrying
+//! only the four original scalars, which must still render byte-for-byte without them.
 
 use crate::harness::*;
 

@@ -12,10 +12,10 @@ use serde_json::Value;
 /// rewrite. Both mean a refuted text is still shipping, and both are consumed only by
 /// rewriting the claim.
 ///
-/// The scan covers `open_legs`, `residue` AND `verified.note`. It used to cover the legs
-/// alone, which is the one place the instructions were NOT: fourteen of them sat in
-/// `residue` and in a receipt's `note`, where the rule could not see them. An instruction
-/// is an instruction wherever it is written down.
+/// The scan covers `open_legs`, `residue` AND `verified.note`. The legs alone are the one
+/// place the instructions are NOT: they sit in `residue` and in a receipt's `note`, where
+/// a legs-only scan cannot see them. An instruction is an instruction wherever it is
+/// written down.
 pub(crate) fn text_instructions(at: &str, state: &Value, failures: &mut Vec<String>) {
     let mut check = |path: &str, s: &str| {
         let t = s.trim_start();
@@ -88,7 +88,7 @@ fn mid_field_instruction(s: &str) -> Option<usize> {
 /// The list is the table's own keys; `agent.message` and `agent.thinking` are deliberately
 /// absent, because they became CATEGORIES rather than disappearing.
 ///
-/// `tool` is the one spelling that is ALSO something else: `-t tool` is the pre-v0.5 flat
+/// `tool` is the one spelling that is ALSO something else: `-t tool` is the retired flat
 /// path and hard-errors, while `--count-by tool` is a valid census axis and always has
 /// been. The list carries it and the `--count-by` position excludes it (`axis_spelling`),
 /// so the rule reads the argument rather than the word - which is the whole of rule 17.

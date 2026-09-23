@@ -12,7 +12,7 @@ const SESS: &str = "00000000-0000-4000-8000-0000000000c1";
 const RELAY: &str = "aRelay-0123456789abcdef";
 /// Enqueued and emitted: the ordinary shape.
 const QUEUED: &str = "aaaaaaaaaaaaaaa1";
-/// Emitted, with its inbox line no longer on disk (a hand-pruned inbox).
+/// Emitted, with no inbox line on disk (a hand-pruned inbox).
 const LEDGER_ONLY: &str = "bbbbbbbbbbbbbbb2";
 
 fn channel_path(rel: &str) -> String {

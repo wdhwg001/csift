@@ -256,8 +256,8 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
         &format!("{ENC}/{SESS}.jsonl"),
         concat!(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"make a config"}}"#, "\n",
-            // Bash creates the file - a LITERAL printf, so since v0.9.4 the content
-            // is a first-class bash-write anchor (not a mere heuristic touch).
+            // Bash creates the file - a LITERAL printf, so the content is a
+            // first-class bash-write anchor (not a mere heuristic touch).
             r#"{"type":"assistant","uuid":"ab","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"printf 'B1\nB2\nB3\n' > /p/cfg.txt"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"cb","timestamp":"2026-06-07T05:00:01.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b0","content":""}]}}"#, "\n",
             // Direct Edit with no prior Read → fails.

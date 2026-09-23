@@ -18,9 +18,9 @@ fn specimen_anchors() -> anchors::Anchors {
 }
 
 /// The page says the five counts partition the total, so the gate checks that they do. A
-/// reviewer produced 7,626 against a total of 7,625 by giving an `absent`-marked hop its
-/// real bytes, which counted it twice; the run failed for another reason, so nothing
-/// shipped, but the arithmetic is the page's to own.
+/// PARTITION is what makes the arithmetic re-derivable: every anchor falls in exactly ONE
+/// bucket, so an `absent`-marked hop also credited with its real bytes is counted twice
+/// and the sum runs over the total. The arithmetic is the page's to own.
 #[test]
 fn ledger_gate_rule_8_names_anchor_counts_that_do_not_partition_the_total() {
     let claims = vec![good_claim()];

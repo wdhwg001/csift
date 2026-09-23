@@ -6,8 +6,8 @@ use super::*;
 #[test]
 fn a_replayed_block_marks_the_earlier_line_and_keeps_both_searchable() {
     // A compaction re-anchor re-appends a block with its uuids preserved. The loader's map
-    // holds the LAST line, so the earlier one is the copy - the opposite of the v0.11.1
-    // rule, which kept the first.
+    // holds the LAST line carrying a uuid, so the EARLIER line is the copy: a reader who
+    // assumes the first occurrence wins addresses the wrong record.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

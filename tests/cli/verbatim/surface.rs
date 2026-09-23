@@ -34,7 +34,7 @@ fn turns_command_renamed_to_verbatim() {
     // sends a stale model back to re-read SKILL rather than silently mis-running.
     let old = h.run(&["turns", t.as_str()]);
     assert!(!old.success, "the old `turns` command must never run");
-    // v0.6.4: the wall is still a wall, but a POINTED one - the hidden tombstone names the
+    // The wall is still a wall, but a POINTED one - the hidden tombstone names the
     // successor (the `-t thinking` treatment) instead of clap's generic unrecognized error.
     assert!(
         old.stderr.contains("RENAMED to `csift verbatim`"),
@@ -81,10 +81,10 @@ fn turns_bare_uuid_positional_routes_to_session() {
 
 #[test]
 fn turns_old_subcommand_name_gets_the_rename_error() {
-    // R8: the v0.5 `turns`→`verbatim` rename used to surface as clap's teach-nothing
+    // The `turns` -> `verbatim` rename would otherwise surface as clap's teach-nothing
     // "unrecognized subcommand" - the one error below the tool's water line. The hidden
-    // tombstone now bails with the successor (and swallows any flags, so the message
-    // never loses to a flag-parse error).
+    // tombstone bails with the successor instead, and swallows any flags, so the message
+    // never loses to a flag-parse error.
     let h = populated_home();
     let out = h.run(&["turns", &at(SESS), "--slices", "4", "--turn", "-3.."]);
     assert!(!out.success, "the tombstone must never run: {}", out.stdout);

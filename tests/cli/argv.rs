@@ -4,13 +4,14 @@ use crate::harness::*;
 
 #[test]
 fn pre_subcommand_global_flag_with_trailing_flags() {
-    // REGRESSION (≤v0.4.1): normalize_argv assumed argv[1] was the subcommand, so a
-    // GLOBAL flag placed BEFORE the subcommand disabled normalization entirely and the
-    // allow_hyphen_values PATH positional swallowed every flag that followed a
-    // positional - `csift --claude-home DIR list <ENC> --max-count 1` died with a
-    // misleading "not a project target". The subcommand is now located by SCANNING over
-    // declared root flags (+ their values), so "flag order is free" and "--claude-home
-    // any position" hold in combination.
+    // normalize_argv must not assume argv[1] is the subcommand: a GLOBAL flag placed
+    // BEFORE the subcommand sits ahead of it with its value, and reading argv[1] as the
+    // subcommand disables normalization for the whole line - the allow_hyphen_values
+    // PATH positional then swallows every flag that follows a positional, and
+    // `csift --claude-home DIR list <ENC> --max-count 1` dies with a misleading "not a
+    // project target". The subcommand is located by SCANNING over declared root flags
+    // (+ their values), so "flag order is free" and "--claude-home any position" hold in
+    // combination.
     let h = populated_home();
     let claude_home = h.projects().parent().unwrap().to_path_buf();
     let home_s = claude_home.to_str().unwrap().to_string();

@@ -320,9 +320,9 @@ fn show_unknown_agent_id_fails_closed() {
 
 #[test]
 fn show_turn_oob_and_flood_guard() {
-    // v0.5.0: (a) an EXPLICIT `--turn N`/`A..B` is an ADDRESS - fully out of range is a
-    // hard error naming the transcript's turn domain (it used to be a silent empty, the
-    // one address-miss that violated law 1); (b) open ranges are capped (DEFAULT 200,
+    // (a) an EXPLICIT `--turn N`/`A..B` is an ADDRESS - fully out of range is a
+    // hard error naming the transcript's turn domain, never a silent empty: an address
+    // that resolves to nothing has to say so; (b) open ranges are capped (DEFAULT 200,
     // here forced low) with the exact continuation command reported; (c) non-record
     // lines inside an addressed range are counted, never silently absorbed.
     let h = Home::new();
@@ -475,7 +475,7 @@ fn show_span_flag_is_rejected_with_the_pointed_rule() {
 
 #[test]
 fn show_turn_explicit_miss_errors_and_open_forms_clamp() {
-    // Mutation pin on the v0.5 turn-address law: an EXPLICIT single --turn miss is a hard
+    // Mutation pin on the turn-address law: an EXPLICIT single --turn miss is a hard
     // error naming the turn; an OPEN out-of-range form CLAMPS (never a hard error); and a
     // clean in-range fetch prints no cap/non-record notes.
     let h = Home::new();

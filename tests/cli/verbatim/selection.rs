@@ -75,7 +75,7 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
     //   • AGENTRICHFIRST - a SHORT first (43 < 280 rich-min) and not the longest → dropped
     //     (proves the first is kept only when SUBSTANTIVE, not merely rich/present).
     //   • AGENTEOT - a SHORT, non-rich LAST (the ~35-char throwaway wrap-up) → dropped
-    //     (THE headline: the last is no longer unconditionally kept; the substance is).
+    //     (THE headline: the last is NOT kept unconditionally; the substance is).
     //   • the pure LETMEDECL declarations.
     // This is exactly the substance the OLD `agents.last()` default silently dropped, plus
     // the deliberate dropping of the throwaway last.

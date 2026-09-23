@@ -371,7 +371,8 @@ fn a_view_leaf_reaches_its_records_without_opening_the_whole_attachment_gate() {
     // steer (`user.message` through a `queued_command` payload whose origin says human)
     // and the model's structured answer. Each has its own payload needle, so naming it
     // must reach its own records and NOT admit every attachment line in the file - which
-    // is what `-t user` used to do, at four times the cost of a flagless scan.
+    // is what a `-t user` keyed on the wide attachment gate does, at four times the cost
+    // of a flagless scan.
     let h = shapes_home();
     let user = census_keys(&h, &["-t", "user.message"]);
     assert!(

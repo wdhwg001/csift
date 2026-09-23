@@ -168,7 +168,7 @@ fn role_selector_excludes_drafts_and_the_glob_reaches_them() {
     );
 }
 
-/// C-27: the draft states its distance from the message that replaced it.
+/// The draft states its distance from the message that replaced it.
 #[test]
 fn a_rendered_draft_carries_the_diff_against_the_sent_message() {
     let h = unsent_home();
@@ -455,7 +455,7 @@ fn an_unchanged_resend_says_identical_rather_than_zero_chars() {
 #[test]
 fn a_sectioned_draft_keeps_the_single_unsent_label() {
     // A superseded draft shaped like a sectioned text (a pulse) must not fan out into
-    // per-section classes its own labels[] does not carry (v0.10.2): one hit, class
+    // per-section classes its own labels[] does not carry: one hit, class
     // and labels both `user.unsent`, and the notification selector never sees it.
     let h = Home::new();
     h.write(

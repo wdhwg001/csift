@@ -26,11 +26,11 @@ pub(crate) fn mark_shape(excerpt: &str, status: &str) -> Option<String> {
             "marked `{status}` with an empty excerpt, which asserts nothing"
         ));
     }
-    // A DOT RUN belongs to this family and is asked here because `classify` no longer
-    // reaches it for a marked hop: the mark arms decide first, so the refusal that used to
-    // catch a lossy render wearing a mark has to live where the mark is judged. `absent` is
-    // true of such an excerpt by construction - a picture of non-printable bytes occurs in
-    // no build - which is the same vacuity the other two arms name.
+    // A DOT RUN belongs to this family and is asked here because `classify` does not reach
+    // it for a marked hop: the mark arms decide first, so the refusal that catches a lossy
+    // render wearing a mark has to live where the mark is judged. `absent` is true of such
+    // an excerpt by construction - a picture of non-printable bytes occurs in no build -
+    // which is the same vacuity the other two arms name.
     if super::dot_run(excerpt) {
         return Some(format!(
             "marked `{status}` with an excerpt carrying a run of four or more dots, which is \

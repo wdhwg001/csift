@@ -261,8 +261,8 @@ fn sessions_from_scopes_like_at_positionals() {
 
 #[test]
 fn unresolvable_target_errors_before_scope_warning() {
-    // R9 §16.4: the empty-pattern "may emit a lot" advisory used to fire BEFORE target
-    // resolution - a warning about a run that was never going to happen. Resolution now
+    // The empty-pattern "may emit a lot" advisory must fire AFTER target resolution -
+    // ahead of it, it warns about a run that was never going to happen. Resolution
     // fails first; the advisory never fires on an unreachable target.
     let h = populated_home();
     let out = h.run(&["search", "", "@abc"]);
@@ -300,8 +300,8 @@ fn sessions_from_accepts_every_id_shape() {
 fn resolve_long_path_uses_prefix_scan_fallback() {
     // A project whose ENCODED cwd exceeds 200 chars is stored by Claude Code as
     // `<first-200>-<hash>` (the hash is not reconstructible - Bun vs djb2). csift must
-    // PREFIX-SCAN to find it, mirroring CC's findProjectDir. Regression: csift used to look
-    // up the full >200-char name (which never exists on disk) and bail.
+    // PREFIX-SCAN to find it, mirroring CC's findProjectDir: looking the full >200-char
+    // name up finds nothing, because that name never exists on disk.
     let h = Home::new();
     let seg = "a".repeat(210);
     let long_cwd = format!("/Users/testuser/Projects/{seg}");

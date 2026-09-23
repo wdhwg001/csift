@@ -95,7 +95,7 @@ fn two_transcript_home(same_path: bool) -> Home {
 /// The document is named exactly ONCE per record group, and a record group is the whole
 /// coordinate (transcript, line, document) - not `(line, document)`, and remembered as a
 /// SET rather than as the previous row. Both shapes a weaker rule breaks on are covered,
-/// and each was confirmed to fail under its own canary: two transcripts naming the SAME
+/// and each fails under its own weakening of the key: two transcripts naming the SAME
 /// path at one line (dropping the transcript from the key names only the first session's
 /// group), and two naming DIFFERENT paths (a single previous-row memo alternates keys and
 /// names every row).

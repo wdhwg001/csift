@@ -107,7 +107,7 @@ fn a_turn_window_resolves_against_live_numbering() {
 ///
 /// The abandoned image is on the REPLY, not on the opener, and that is the whole point of
 /// this fixture. Every other survival fixture here puts it on the rewound PROMPT, which
-/// the pre-0.12.0 grouper ALSO dropped (a superseded opener was its one exclusion), so
+/// the conservative grouper ALSO drops (a superseded opener is its one exclusion), so
 /// those cases cannot tell the two rules apart. An abandoned MEMBER can: the survival axis
 /// gives it no numbered turn at all, while the conservative grouper keeps it as a member
 /// of the turn above and a window would admit it.

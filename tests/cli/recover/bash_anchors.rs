@@ -8,8 +8,8 @@ const BSESS: &str = "bbbbcccc-1111-4222-8333-444455556666";
 #[test]
 fn recover_restores_a_file_written_only_by_bash_heredoc() {
     // The shell-first session shape: no structured Write ever ran - the whole
-    // history is one quoted-delimiter heredoc. Before v0.9.4 this was "no
-    // recoverable history"; now the body is a first-class anchor.
+    // history is one quoted-delimiter heredoc. Its body is a first-class anchor;
+    // without that, such a session has no recoverable history at all.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{BSESS}.jsonl"),

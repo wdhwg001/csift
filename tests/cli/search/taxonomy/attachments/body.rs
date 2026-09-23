@@ -70,10 +70,10 @@ fn a_second_conversion_for_a_human_turn_is_reported_never_chosen() {
 fn the_persons_mid_turn_steer_renders_the_text_the_model_received() {
     // The steer is a `user.message` unit on an attachment line, and it takes the family's
     // ordinary body rule like every other view of that line: the conversion the harness
-    // persisted, which is what the model received. `record_text_emission` used to try the
-    // VERBATIM payload before falling through to the seam, so this ONE view showed the
-    // payload JSON while an address on the same line showed the conversion - two readers,
-    // two bodies, one record.
+    // persisted, which is what the model received. `record_text_emission` must NOT try the
+    // VERBATIM payload before falling through to the seam: that makes this ONE view show
+    // the payload JSON while an address on the same line shows the conversion - two
+    // readers, two bodies, one record.
     let h = attachment_home();
     let out = h.run(&["search", "zzatt also map", &at_sess(), "--attachments"]);
     assert!(out.success, "stderr {}", out.stderr);

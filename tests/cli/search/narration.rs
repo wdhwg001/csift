@@ -115,7 +115,7 @@ fn probe2_census_conservation_and_degradation() {
     // 2 reasoning (the thinking-tagged + the unparseable-signature record), 1 narration
     // and 1 omitted (the narration-tagged record with EMPTY text, whose leaf follows the
     // absent text rather than the tag): the three keys conserve the 4 records a single
-    // `agent.thinking` key used to hold.
+    // `agent.thinking` key would hold.
     assert!(
         out.stdout.contains("2  agent.thinking.summary\n")
             || out.stdout.contains("2 agent.thinking.summary"),

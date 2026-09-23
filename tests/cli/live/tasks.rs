@@ -123,7 +123,7 @@ fn p13_settled_children_fold_and_tasks_section() {
 #[test]
 fn p14_no_tasks_dir_means_null_not_empty() {
     // A tasks dir that EXISTS but holds nothing: it ANSWERED, so the store line prints
-    // with the candidate that found it and says it is empty (v0.12.2), while no task row
+    // with the candidate that found it and says it is empty, while no task row
     // and no counts line appear. JSON below keeps the found distinction.
     let h_empty = Home::new();
     live_eot_main(&h_empty);

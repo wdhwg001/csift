@@ -157,9 +157,9 @@ fn ledger_gate_rule_12_refuses_a_dot_run_only_where_the_bytes_do_not_match() {
     assert!(!anchors::dot_run("a...b"));
 }
 
-/// AN ELLIPSIS EXCUSES THE TAIL, NEVER THE HEAD. The elided bucket used to be compared
-/// against nothing, so replacing an already-elided excerpt with fabricated text moved no
-/// figure and the gate exited 0. The run before the first ellipsis is a quote of bytes like
+/// AN ELLIPSIS EXCUSES THE TAIL, NEVER THE HEAD. An elided bucket compared against nothing
+/// is an escape hatch: replace an already-elided excerpt with fabricated text, no figure
+/// moves and the gate exits 0. The run before the first ellipsis is a quote of bytes like
 /// any other, so it is held to the offset exactly as `prefix-only` holds a head.
 #[test]
 fn ledger_gate_rule_12_holds_an_elided_excerpt_to_its_own_head() {
@@ -186,10 +186,10 @@ fn ledger_gate_rule_12_holds_an_elided_excerpt_to_its_own_head() {
     );
 }
 
-/// PROSE CAN NEVER ANCHOR, and the refusal reaches an EXCERPT rather than only a mark: it
-/// used to be asked by `verify_mark` alone, so census prose wearing an ellipsis was counted
-/// skipped and anchored nothing. A numeral is a word in that test, because prose carrying
-/// one number is still prose.
+/// PROSE CAN NEVER ANCHOR, and the refusal reaches an EXCERPT rather than only a mark:
+/// asked by `verify_mark` alone it never reaches census prose wearing an ellipsis, which is
+/// then counted skipped and anchors nothing. A numeral is a word in that test, because
+/// prose carrying one number is still prose.
 #[test]
 fn ledger_gate_rule_12_refuses_an_unmarked_excerpt_that_reads_as_prose() {
     let build = b"a string-table copy of the property name";
@@ -427,12 +427,12 @@ fn ledger_gate_rule_12_sweeps_every_mark_and_names_the_false_one() {
 
 /// A MARKED HOP IS JUDGED BY ITS MARK, and the arm order is what says so.
 ///
-/// The elided arm used to run first, so a hop marked `absent` or `prefix-only` whose
-/// excerpt happened to carry an ellipsis with a head that still matched at its offset came
-/// back `Elided`: counted in the elided bucket by `tally` AND under its own mark by the
-/// ledger-only filter, which puts one hop in two of the five counts the README says
-/// partition the total. No hop in the shipped file is shaped that way, which is exactly why
-/// the order has to carry the rule rather than the data.
+/// With the elided arm FIRST, a hop marked `absent` or `prefix-only` whose excerpt carries
+/// an ellipsis with a head that still matches at its offset comes back `Elided`: counted in
+/// the elided bucket by `tally` AND under its own mark by the ledger-only filter, which
+/// puts one hop in two of the five counts the README says partition the total. No hop in
+/// the shipped file is shaped that way, which is exactly why the order has to carry the
+/// rule rather than the data.
 #[test]
 fn ledger_gate_rule_12_judges_a_marked_hop_by_its_mark_before_eliding() {
     let build: &[u8] = b"alpha bravo charlie ...rest delta echo";
@@ -456,9 +456,9 @@ fn ledger_gate_rule_12_judges_a_marked_hop_by_its_mark_before_eliding() {
         anchors::classify(build, 6, "bravo", Some("absent")),
         anchors::Anchor::Exact
     );
-    // A LOSSY RENDER wearing a mark no longer reaches `classify`'s dot-run refusal, so the
-    // refusal lives where the mark is judged - the same vacuity as prose and an empty
-    // excerpt, and it must still be named.
+    // A LOSSY RENDER wearing a mark never reaches `classify`'s dot-run refusal, since the
+    // mark arms decide first, so the refusal lives where the mark is judged - the same
+    // vacuity as prose and an empty excerpt, and it must still be named.
     let why = anchors::mark_shape("al....ha", "absent").expect("a marked dot run is refused");
     assert!(why.contains("four or more dots"), "{why}");
 

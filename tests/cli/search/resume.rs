@@ -1,4 +1,4 @@
-//! C-34: the resume repair pair, `harness.resume.prompt` + `harness.resume.placeholder`.
+//! The resume repair pair, `harness.resume.prompt` + `harness.resume.placeholder`.
 //!
 //! Both leaves are reachable by their own path, by the `harness.resume` prefix and by the
 //! bare `harness` role (no gate); neither is a `user` or an `agent` record; the placeholder

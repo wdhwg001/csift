@@ -10,26 +10,21 @@
 //! The direction asserted here is the first one. The second cannot be asserted from one
 //! fixture, because most keys are CONDITIONAL (present only on a record that carries them),
 //! so an absent key is usually a fixture fact rather than a contract failure. What makes
-//! the first direction worth a test on its own is that it fails exactly when a lane adds a
-//! key and forgets the table, which is what six parallel lanes did to the `for` array.
+//! the first direction worth a test on its own is that it fails exactly when a key reaches
+//! the wire and its table entry is forgotten, which is how the `for` array got there.
 //!
-//! WHERE a key has to appear is the whole strength of the test, and the first draft got it
-//! wrong: it asked whether the key's characters occur anywhere on the page, so the nine
-//! short keys (`to`, `from`, `line`, `uuid`, `mode`, `kind`, `text`, `body`, `for`) matched
-//! ordinary English prose and were documented by accident. Deleting the `to` row from the
-//! key table left the whole suite green. A key counts as NAMED here only if it is an entry
-//! of the rendered KEY BLOCK - the `{a, b, c}` list the help builds from the table - or is
-//! written in BACKTICKS somewhere on the page, which is how the prose names a key it
+//! WHERE a key has to appear is the whole strength of the test. Asking whether the key's
+//! characters occur anywhere on the page documents the nine short keys (`to`, `from`,
+//! `line`, `uuid`, `mode`, `kind`, `text`, `body`, `for`) by accident, because each matches
+//! ordinary English prose - under that reading the `to` row can be deleted from the key
+//! table with the whole suite staying green. A key counts as NAMED here only if it is an
+//! entry of the rendered KEY BLOCK - the `{a, b, c}` list the help builds from the table -
+//! or is written in BACKTICKS somewhere on the page, which is how the prose names a key it
 //! explains beside its feature. Both forms have a boundary on each side; running prose has
 //! neither.
 //!
-//! Two receipts that the rule now bites. Deleting the `to` row from the key table fails
-//! this file by name (`emits keys show --help does not name: ["to"]`) where it used to
-//! leave the suite green. And the tightened rule, run for the first time, found ten keys
-//! the loose one had been passing by accident: the five draft-distance keys on `show` and
-//! `produced_by`, `signature_len`, `thinking_text_absent`, `tool_use_id` and `source` on
-//! `search` - the last two genuinely absent from the hit schema rather than merely
-//! unbackticked. All ten are named in the help now.
+//! The positive control for that rule: deleting the `to` row from the key table must fail
+//! this file BY NAME (`emits keys show --help does not name: ["to"]`).
 
 use crate::harness::*;
 

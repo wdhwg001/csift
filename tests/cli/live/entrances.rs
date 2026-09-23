@@ -1,4 +1,4 @@
-//! The three harness-side entrances into the background (v0.12.0): a shell the MODEL
+//! The three harness-side entrances into the background: a shell the MODEL
 //! ran in the foreground that ctrl+b, a timeout, or a message delivery moved aside. The
 //! launching tool_use carries no `run_in_background` and is never rewritten, so the
 //! receipt sentence is the whole instrument.

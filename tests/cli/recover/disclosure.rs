@@ -29,9 +29,9 @@ fn join_scenario_home() -> Home {
 
 #[test]
 fn coverage_joins_relative_bash_to_the_absolute_file() {
-    // THE join fix: `--file` is absolute, the bash operand was typed relative. The
-    // resolved spelling matches, so the event and its soft boundary appear (before
-    // v0.8.0 this printed `events: …` with no bash and `boundaries: (none)`).
+    // THE join: `--file` is absolute, the bash operand was typed relative. The RESOLVED
+    // spellings match, so the event and its soft boundary appear; joining on the operand
+    // as typed prints `events: …` with no bash and `boundaries: (none)`.
     let h = join_scenario_home();
     let out = h.run(&[
         "recover",

@@ -104,8 +104,8 @@ fn every_survival_printing_surface_carries_the_same_crossing_facts() {
             "image",
             vec!["image", t.as_str(), "--no-subagents", "--format", "json"],
         ),
-        // The two surfaces that MOVE with the budget and used to say nothing: an ADDRESS
-        // (the record it names reads live at one budget and pre-cut at another) and a
+        // The two surfaces that MOVE with the budget and are easiest to leave silent: an
+        // ADDRESS (the record it names reads live at one budget and pre-cut at another) and a
         // CENSUS (crossing a cut resolves records above it, so every axis counts differently).
         (
             "show --line",
@@ -311,9 +311,9 @@ fn a_raw_turn_window_discloses_on_stderr_and_a_line_address_has_nothing_to_say()
 
 #[test]
 fn every_recover_mode_discloses_what_the_walk_crossed() {
-    // `recover` is five modes over one scan, and the DEFAULT one - restore - used to be the
-    // silent one. It is also the mode most likely to be piped straight into a file, so a
-    // reader who never sees the other four has to be told there which budget produced the
+    // `recover` is five modes over one scan and EVERY one discloses, the DEFAULT one -
+    // restore - most of all: it is the mode most likely to be piped straight into a file, so
+    // a reader who never sees the other four has to be told there which budget produced the
     // replay. Its stdout is the restored FILE, so the lines ride stderr with the rest of its
     // status report; the other four print to stdout with their own reports.
     let h = crossing_home();

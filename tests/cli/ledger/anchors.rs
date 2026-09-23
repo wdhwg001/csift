@@ -2,9 +2,9 @@
 //!
 //! Every `producer_chain` hop and every `enumeration` entry may carry a byte `offset` into
 //! the build. An offset is a locator and the excerpt is the evidence, so the check is one
-//! comparison: the bytes at the offset ARE the excerpt, or the anchor no longer points at
-//! its producer. Three anchors are counted instead of being compared WHOLE - an ELIDED
-//! excerpt, which is held to its own head instead (below), and one the ledger itself marks
+//! comparison: the bytes at the offset ARE the excerpt, or the anchor points at something
+//! that is not its producer. Three anchors are counted instead of being compared WHOLE - an
+//! ELIDED excerpt, which is held to its own head instead (below), and one the ledger marks
 //! `anchor_status: "absent"` or `"prefix-only"`, the two outcomes recorded when an excerpt
 //! cannot be located at all. Those marks are the standing worklist: they are what a later
 //! pass re-locates first.
@@ -33,10 +33,10 @@
 //! passes while deciding nothing. That is the dot-run defect in another spelling, so it is
 //! refused the same way: an excerpt whose every whitespace-separated token is a plain word,
 //! five or more of them, is prose and can never anchor. The refusal reaches an EXCERPT and
-//! not only a mark: it used to be asked by `verify_mark` alone, so census prose wearing an
-//! ellipsis was counted skipped and anchored nothing. It is asked AFTER the comparison,
-//! because a build string really can be an English sentence - an error message, a prompt -
-//! and an excerpt that IS the bytes is byte-exact whatever it reads like.
+//! not only a mark: asked by `verify_mark` alone it never sees census prose wearing an
+//! ellipsis, which is then counted skipped and anchors nothing. It is asked AFTER the
+//! comparison, because a build string really can be an English sentence - an error message,
+//! a prompt - and an excerpt that IS the bytes is byte-exact whatever it reads like.
 //!
 //! AN EMPTY EXCERPT IS NEVER EVIDENCE. `bytes[off..off]` equals an empty excerpt at every
 //! offset in every build, so an offset beside one passed the comparison while anchoring

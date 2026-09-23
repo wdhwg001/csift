@@ -98,7 +98,7 @@
 //!     a verdict from the closed set, a non-empty instrument and observed. It is never
 //!     re-made against a later build, but a range nothing ever stood behind is not a range.
 //! 17. No field hands a RETIRED selector spelling to csift as an argument. The shipped
-//!     binary hard-errors on `harness.meta.*` and the pre-0.5 flat paths, so a probe naming
+//!     binary hard-errors on `harness.meta.*` and the retired flat paths, so a probe naming
 //!     one cannot run at all; a residue line saying what a leaf USED to be called is
 //!     history, which is what a superseded reading is for.
 //! 18. The file's own shape: `schema` is 2, the claim list is non-empty, and every claim

@@ -135,8 +135,8 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
         "the equality is telling us the stored form",
         "our reading of the preserved set",
         "Our second pass over the same corpus",
-        // The VERB IS NOT ENUMERABLE: six spellings the closed list let through, and the
-        // two the review planted live, in a receipt and in a residue line.
+        // The VERB IS NOT ENUMERABLE: six spellings a closed verb list lets through, plus
+        // two taken live, one from a receipt and one from a residue line.
         "I then read the product back off disk",
         "in a 240 s poll I caught one session go idle",
         "every row whose JSON I actually parsed",
@@ -144,7 +144,8 @@ fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
         "point by point I now cite a trigger",
         "I ran the census over the whole projects root.",
         "the band rests on the existing check, not on a measurement I made.",
-        // The BOUNDARY admits a closing quote, which an apostrophe used to defeat.
+        // The BOUNDARY admits a closing quote: a pronoun ends at the end of a quoted
+        // phrase as readily as at a full stop, and an apostrophe alone would hide it.
         "ESRCH-proven, not merely 'not visible to us'.",
     ] {
         let hits = prose::hits(text);
@@ -248,8 +249,8 @@ fn ledger_gate_rule_14_bars_the_pass_and_reads_a_version_at_a_full_stop() {
             prose::hits(text)
         );
     }
-    // A csift version at the END of a sentence: the trailing class refused the full stop and
-    // `$` could not see past it, so `0.10.0.` shipped.
+    // A csift version at the END of a sentence: the trailing class refuses the full stop and
+    // `$` cannot see past it, so without the third arm `0.10.0.` passes the gate.
     for text in [
         "while the neighbours are 0.10.0.",
         "the reading was taken at 0.9.4. The next one moved it.",
@@ -333,7 +334,7 @@ fn ledger_gate_rule_17_names_a_retired_selector_in_an_argument() {
     }
 
     // `tool` is the one spelling that is also something else, and the ARGUMENT decides: the
-    // pre-v0.5 flat path hard-errors, the census axis of the same name always ran.
+    // retired flat path hard-errors, the census axis of the same name always ran.
     for (argv, refused) in [
         ("csift search '' -t tool", true),
         ("csift search '' --count-by tool", false),

@@ -152,7 +152,7 @@ pub(crate) fn range_too_wide(first: usize, last: usize, snippet: &str) -> Option
 
 /// Rules 6 and 4: a claim cites at least one code site; every site is real, its snippet
 /// still exists verbatim, and it sits INSIDE the declared `lines`. The range is
-/// documentation - a reader jumps to it - so a range that no longer holds its own snippet
+/// documentation - a reader jumps to it - so a range that does not hold its own snippet
 /// points the reader at unrelated code. `code[]` stays at CLAIM level under schema 2:
 /// csift's tree is one tree at any time, so where a fact is relied on is not a property
 /// of a Claude Code version range.

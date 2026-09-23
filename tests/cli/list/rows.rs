@@ -159,8 +159,8 @@ fn list_unknown_target_errors_nonzero() {
 
 #[test]
 fn list_bare_uuid_positional_routes_to_session() {
-    // The scope-unification win: `csift list <uuid>` now identifies THAT one session via
-    // the shared resolver (it previously encoded the uuid as a project dir and errored).
+    // The scope-unification win: `csift list @<uuid>` identifies THAT one session via the
+    // shared resolver - a per-command resolver encodes the uuid as a project dir and errors.
     let h = populated_home();
     let out = h.run(&["list", at(SESS).as_str()]);
     assert!(
@@ -258,9 +258,9 @@ fn list_window_admits_by_span_intersection() {
 
 #[test]
 fn list_renders_clean_automation_and_inbound_previews() {
-    // #14: `list`'s first/last previews must render a `<task-notification>` as its automation
-    // attribution label and an inbound `<teammate-message>` as a clean inbound-comm line - never
-    // the raw XML blobs they used to dump under `first ◂` / `last ◂`.
+    // `list`'s first/last previews must render a `<task-notification>` as its automation
+    // attribution label and an inbound `<teammate-message>` as a clean inbound-comm line under
+    // `first ◂` / `last ◂` - never the raw XML blob.
     let h = Home::new();
     let sess = "cccccccc-dddd-eeee-ffff-000000000000";
     let lines = [

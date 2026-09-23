@@ -1,11 +1,11 @@
 //! ONE fixture home carrying at least one line per leaf of `Class::ALL`.
 //!
-//! The taxonomy advertises 73 leaves. Each family lane pinned its own, which leaves the
-//! question no per-family suite can answer: is EVERY advertised leaf reachable from a
-//! transcript on disk, through the real binary, at once? A leaf nothing can produce is a
-//! selector that reports a definitive absence over records that exist, and that is
-//! exactly the failure the empty-result diagnosis is built to make legible - so it must
-//! never be csift's own doing.
+//! The taxonomy advertises 73 leaves, and each family's own suite pins the leaves that
+//! family owns, which leaves the question none of them answers: is EVERY advertised leaf
+//! reachable from a transcript on disk, through the real binary, at once? A leaf nothing
+//! can produce is a selector that reports a definitive absence over records that exist,
+//! and that is exactly the failure the empty-result diagnosis is built to make legible -
+//! so it must never be csift's own doing.
 //!
 //! Every line here is built from the shape `model::inventory` names for that leaf, never
 //! copied from a corpus. The two transcripts split on one fact only: the SUBAGENT file

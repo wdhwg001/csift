@@ -1,7 +1,7 @@
 //! A gated ATTACHMENT the scan cannot search is still a node of the chain.
 //!
 //! The two default-on candidate needles admit attachment lines a flagless scan has no
-//! leaf for: the v0.11.0 channel literal, and the D7 `compact_boundary` value substring,
+//! leaf for: the channel literal, and the D7 `compact_boundary` value substring,
 //! which keeps any payload that merely mentions the word. Such a record is demoted to a
 //! structural spine row rather than removed, because the survival axis walks `parentUuid`
 //! THROUGH attachment records - drop one and the walk cannot resolve the parent below it,
@@ -96,8 +96,8 @@ fn an_attachment_the_flagless_scan_cannot_search_still_carries_the_chain() {
     );
     let census = h.run(&["search", "", &at(SSESS), "--count-by", "label"]);
     assert!(census.success, "stderr: {}", census.stderr);
-    // Every LIVE attachment-carried leaf, by name: the first half of this pair used to
-    // assert the absence of a retired spelling, which no build could ever produce.
+    // Every LIVE attachment-carried leaf, by name: asserting the absence of a retired
+    // spelling proves nothing, because no build can produce one.
     for leaf in [
         "harness.hook.context",
         "harness.hook.outcome",

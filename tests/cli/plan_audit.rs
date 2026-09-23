@@ -419,7 +419,7 @@ fn plan_slug_binding_resolves_plans_directory_against_the_first_recorded_cwd() {
     // The record-level `cwd` follows the tracked shell cwd (a `cd` into a subdir
     // persists), while the harness resolves plansDirectory against the session's
     // ORIGINAL cwd. The slug-carrying record here already sits in a subdirectory; the
-    // binding must still land under the root's plans dir (v0.10.2).
+    // binding must still land under the root's plans dir.
     const SLUGSESS: &str = "abab4444-5555-4666-8777-888899990000";
     let h = Home::new();
     let proj = h.root.join("harbor-project");

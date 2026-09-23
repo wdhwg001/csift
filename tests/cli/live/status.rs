@@ -462,9 +462,10 @@ fn p16_a_completion_pulse_settles_its_lane_while_an_open_agent_stays_live() {
 
 #[test]
 fn the_last_section_walks_past_the_resume_repair_pair() {
-    // C-34: a session resumed onto a dangling prompt ends with the LOADER's repair pair -
-    // "Continue from where you left off." and the fabricated "No response requested.".
-    // Neither is this session's last exchange, so `status` must report the real ones.
+    // The RESUME REPAIR PAIR: a session resumed onto a dangling prompt ends with the
+    // LOADER's own two records - "Continue from where you left off." and the fabricated
+    // "No response requested.". Neither is this session's last exchange, so `status` must
+    // report the real ones.
     let h = Home::new();
     let enc = "-Users-dev-example-project";
     let sess = "3f2e1d0c-9b8a-4756-8342-1a0b9c8d7e6f";

@@ -166,7 +166,7 @@ fn a_turn_window_resolves_against_live_numbering() {
 
 #[test]
 fn a_target_version_jump_with_no_tool_write_names_the_interval() {
-    // The C-24 instrument on the recover TARGET (any path, not just the settings family):
+    // The file-history instrument on the recover TARGET (any path, not just settings):
     // a snapshot version jump with nothing replayed in between is an out-of-band write.
     let h = Home::new();
     h.write(

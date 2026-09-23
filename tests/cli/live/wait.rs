@@ -326,7 +326,7 @@ fn p12_no_subagents_scopes_the_watch_and_the_verdict() {
 fn p12_notification_fires_on_a_queue_enqueue_line_not_on_its_remove() {
     // A pulse absorbed mid-turn never becomes a user record: it lives on a
     // queue-operation ENQUEUE line (and a queued_command attachment). `--until
-    // notification` fires on that carrier (v0.10.2); the later REMOVE line for the
+    // notification` fires on that carrier; the later REMOVE line for the
     // same pulse is not a second delivery.
     let h = Home::new();
     let main = live_eot_main(&h);
@@ -390,7 +390,7 @@ fn p17_notification_delivered_in_a_child_lane_fires() {
     // The harness normally delivers a pulse to the main transcript, but one addressed to
     // the owning agent lands in that agent's lane (2 of 2906 delivered records in the
     // reference corpus at Claude Code 2.1.258). `--until notification` watches every
-    // lane (v0.10.3); a child born mid-wait starts at baseline 0.
+    // lane; a child born mid-wait starts at baseline 0.
     let h = Home::new();
     let _main = live_eot_main(&h);
     let target = at(LIVE_SESS);
@@ -435,7 +435,7 @@ fn p18_a_transcript_that_shrinks_mid_wait_is_reported_and_keeps_being_watched() 
     // rewrites the tail). A memory map of the file would fault with SIGBUS on the
     // first page touched past the new end; `wait` reads its increments with plain
     // positional reads instead, moves the baseline to the new end, says so, and still
-    // fires on what lands afterwards (v0.10.4).
+    // fires on what lands afterwards.
     let h = Home::new();
     let main = live_eot_main(&h);
     let target = at(LIVE_SESS);

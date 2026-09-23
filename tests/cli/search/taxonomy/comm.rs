@@ -97,9 +97,9 @@ fn acceptance_communication_signals_render_direction() {
 
 #[test]
 fn search_teammate_message_is_inbox_not_user_regression() {
-    // GOLD §1 / oracle §H: an inbound `<teammate-message>` is `type:user/role:user/string` and
-    // matches NO synthetic marker, so the OLD `is_genuine_user` counted it as the human. The
-    // cutover classifies it `agent.communication.inbox` (from ⇨ self) and DROPS it from `user`.
+    // An inbound `<teammate-message>` is `type:user/role:user/string` and matches NO synthetic
+    // marker, so an `is_genuine_user` that does not exclude it counts it as the human. It
+    // classifies `agent.communication.inbox` (from ⇨ self) and is DROPPED from `user`.
     let h = Home::new();
     let sess = "11111111-2222-3333-4444-555555555555";
     let lines = [
@@ -182,7 +182,7 @@ fn a_teammate_signals_body_is_the_payload_not_the_wrapper() {
 /// label any more.
 ///
 /// The scan layer replaces an abandoned opener's whole label set with `user.unsent` or
-/// `user.rewound` - the record is no longer "an inbound message", it is a draft the
+/// `user.rewound` - such a record is not "an inbound message" but a draft the
 /// conversation left behind - and the direction is gated on the label set for exactly
 /// that reason. A peer relay is the shape where the two disagree: the RECORD still has a
 /// direction to compute, so a gate that answered for every class would print

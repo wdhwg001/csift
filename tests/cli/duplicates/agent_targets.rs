@@ -133,7 +133,8 @@ fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
     // Two copies of one session whose contents DIFFER merge into nothing, so both sidecars
     // are in scope and each carries its own copy of the agent transcript: two lanes that
     // share an agent id by construction. That is the shape where the count row and the rows
-    // it counts used to disagree - the walk deduped by id, the count did not.
+    // it counts can disagree: an id-keyed walk emits one of the pair while the count counts
+    // both, so both must be keyed on a node's POSITION in the set.
     let h = Home::new();
     h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
     h.write(
@@ -206,11 +207,12 @@ fn the_agents_count_row_equals_the_rows_it_counts_and_the_tree_prints_them() {
 fn a_session_and_its_agent_in_one_invocation_resolve_one_copy_of_that_agent() {
     // TWO paths reach the same `agent-<hex>.jsonl`: the session target gathers it from the
     // sidecar of the session it kept, the agent target finds it under both directories.
-    // They used to merge separately and pick DIFFERENT winners - the session path inherits
-    // the session's winner, the agent path decides on its own bytes and, at equal sizes,
-    // takes the smallest path (the cwd tie-break reads a parent directory name and a
-    // sidecar's is `subagents`, so it never fires here) - so both copies survived
-    // the path-level dedup and every row claimed the other had been dropped.
+    // Merged SEPARATELY the two pick DIFFERENT winners - the session path inherits the
+    // session's winner, the agent path decides on its own bytes and, at equal sizes, takes
+    // the smallest path (the cwd tie-break reads a parent directory name and a sidecar's is
+    // `subagents`, so it never fires here) - so both copies survive the path-level dedup and
+    // every row claims the other was dropped. ONE merge over the whole resolved union is
+    // what collapses them.
     let child = agent_record(1, "child ask");
     let h = agent_home(&child, &child);
     let out = h.run(&["list", &at(SESS), &at(AGENT), "--format", "json"]);
@@ -245,9 +247,9 @@ fn a_session_and_its_agent_in_one_invocation_resolve_one_copy_of_that_agent() {
 #[test]
 fn agents_merges_its_own_sidecar_copies_and_agrees_with_list_and_search() {
     // `agents` resolves TopLevelOnly and walks the sidecars itself, so the resolver's merge
-    // never sees them - and this is the shape where that mattered: the sessions DIFFER so
-    // both stay, and their two sidecars hold ONE byte-identical agent transcript. The
-    // command whose whole job is counting agents used to be the one that counted this twice.
+    // never sees them - and this is the shape where that bites: the sessions DIFFER so both
+    // stay, and their two sidecars hold ONE byte-identical agent transcript. Without a merge
+    // of its own, the command whose whole job is counting agents counts this one twice.
     let h = Home::new();
     h.write(&format!("{ENC}/{SESS}.jsonl"), &record(1, "one branch"));
     h.write(

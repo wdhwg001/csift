@@ -251,11 +251,11 @@ fn add_shut_door_transcript(h: &Home, id: &str) {
 #[test]
 fn a_scope_that_crossed_nothing_still_says_what_it_did_not_cross() {
     // The keys and the lines answer ONE question - is there anything to say about crossing -
-    // and they used to answer it differently. A transcript whose walk stops at a shut door
-    // crosses nothing, so the only fact it has is the boundary left above its floor; alone it
-    // printed both lines, because the CAUSE was there to say so. Fold two such transcripts
-    // and the fold drops the cause, which is a rule about not naming one file's floor for a
-    // scope - and the text went silent while the JSON still read
+    // and they must answer it alike. A transcript whose walk stops at a shut door crosses
+    // nothing, so the only fact it has is the boundary left above its floor; alone it prints
+    // both lines, because the CAUSE is there to say so. Fold two such transcripts and the
+    // fold drops the cause, by the rule that one file's floor is never named for a scope, so
+    // a text emission keyed on the cause goes silent while the JSON still reads
     // `boundaries_above_floor: 2`. Silence and a non-zero count are not the same answer.
     let h = Home::new();
     add_shut_door_transcript(&h, "1a2b3c4d-5566-4777-8888-99aabbccdd01");

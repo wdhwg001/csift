@@ -1,4 +1,4 @@
-//! v0.12.2: `harness.schedule.fire`, the prompt a scheduled task fires, and the
+//! `harness.schedule.fire`, the prompt a scheduled task fires, and the
 //! content-start anchoring that keeps a record QUOTING a loop tick from being read as one.
 //!
 //! The fixture carries the three shapes measured live: a cron task firing a plain armed

@@ -34,7 +34,7 @@ fn count_by_turn_gives_the_abandoned_records_their_own_bucket_never_t0() {
     let out = h.run(&["search", "", &at(CSESS), "--count-by", "turn"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // One numbered turn, and the records outside it are named as such rather than folded
-    // into turn zero - which is what a numeric placeholder used to do to every one of them.
+    // into turn zero - which is where a numeric placeholder puts every one of them.
     assert!(
         out.stdout.contains("t0") && !out.stdout.contains("t1"),
         "exactly one numbered turn:\n{}",

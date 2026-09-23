@@ -108,8 +108,9 @@ fn month_re() -> &'static Regex {
 fn csift_version_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     // The TRAILING class has a third arm, and it is the one a sentence ends on: a version
-    // followed by a full stop that is not part of a longer number. `[^\w.]` alone refused
-    // the `.`, `$` could not see past it, and `0.10.0.` at the end of a sentence shipped.
+    // followed by a full stop that is not part of a longer number. `[^\w.]` alone refuses
+    // the `.` and `$` cannot see past it, so without the arm a version closing a sentence
+    // (`0.10.0.`) passes the gate.
     RE.get_or_init(|| {
         Regex::new(r"(?:^|[^\w.])(v?0\.\d{1,2}\.\d{1,3})(?:[^\w.]|\.(?:\s|$)|$)").unwrap()
     })
@@ -204,9 +205,9 @@ fn round_is_csifts(s: &str, end: usize) -> bool {
 /// is a real identifier name in the shipped bundle, so the test is whether the token stands
 /// alone as an English word rather than whether the letters occur.
 ///
-/// THE VERB IS NOT ENUMERABLE. The arm used to list the verbs it knew - `am`, `was`, `did`,
-/// anything ending in `ed` - and English is not a closed set, so `I then`, `I caught`,
-/// `I actually`, `I made`, `I now` and `I declare` all shipped. `I` plus ANY word closes
+/// THE VERB IS NOT ENUMERABLE. An arm listing the verbs it knows - `am`, `was`, `did`,
+/// anything ending in `ed` - is a list against an open set, and `I then`, `I caught`,
+/// `I actually`, `I made`, `I now` and `I declare` all walk past it. `I` plus ANY word closes
 /// that, and the cost is measured: six spans where `I` is a minified binding name rather
 /// than a pronoun, which take the backticks a quote owes and which the exemption then
 /// masks - the same remedy this rule's own note already records for `we`.
@@ -227,10 +228,10 @@ fn first_person_re() -> &'static Regex {
 
 /// csift's own surface spells the flag `--audit`, the module `src/commands/plan/audit.rs`
 /// and the mode `plan --audit`, and what makes those spellings csift's is their SHAPE: a
-/// flag, a path, a source file. The older guard spared any match ADJACENT to `.`, `/` or
-/// `-`, which spared `kicked-back`, `re-verifier`, `outside the audit.` and `re-run today.`:
-/// four process words shipping because a hyphen or a full stop sat beside them. So the
-/// whole non-space run around the match is read, and only these three shapes are exempt.
+/// flag, a path, a source file. Sparing any match merely ADJACENT to `.`, `/` or `-` also
+/// spares `kicked-back`, `re-verifier`, `outside the audit.` and `re-run today.` - four
+/// process words let through because a hyphen or a full stop sat beside them. So the whole
+/// non-space run around the match is read, and only these three shapes are exempt.
 fn csift_spelling(s: &str, start: usize, end: usize) -> bool {
     let a = s[..start]
         .rfind(char::is_whitespace)

@@ -26,9 +26,10 @@ fn peer_receiver_home() -> Home {
 
 #[test]
 fn a_cross_session_peer_message_is_inbox_never_the_operator() {
-    // C-30: the third peer framing. It is `type:user`/`role:user`/string and matches no
-    // synthetic marker, so before it was folded into the peer detector the isMeta gate left
-    // it with NO label at all - invisible to every search in the receiving session.
+    // `<cross-session-message>`, the third peer framing. It is `type:user`/`role:user`/string
+    // and matches no synthetic marker, so a peer detector that does not know it leaves the
+    // isMeta gate to drop it with NO label at all - invisible to every search in the
+    // receiving session.
     let h = peer_receiver_home();
     let inbox = h.run(&[
         "search",
@@ -346,7 +347,7 @@ fn all_five_open_tag_attributes_parse_in_their_fixed_order() {
 fn a_fork_clone_has_no_spawn_seed_but_a_genuine_child_does() {
     // A `/fork` child's line 1 is a `fork-context-ref` record and its transcript is a
     // clone of the parent's: its first turn-opener is the parent's own human message,
-    // never a spawn-prompt seed (v0.10.2). A genuine Task child keeps the seed.
+    // never a spawn-prompt seed. A genuine Task child keeps the seed.
     let h = Home::new();
     let enc = "-Users-dev-example-project";
     let sess = "13131313-2424-4535-8646-757575757575";

@@ -6,11 +6,11 @@
 //! closed state records what was true of an older build, and the page speaks about the
 //! build the badge names.
 //!
-//! RULE 8 REGENERATES THE WHOLE BLOCK AND COMPARES IT BYTE FOR BYTE. It used to read the
-//! rows with a regex (`^\| ([a-z-]+) \| (\d+) \|`), and a regex checks what it names: the
-//! `&nbsp;&nbsp;of which chain traced` row has no `[a-z-]+` key so it was never read, the
-//! `share` column was never read at all, and the `(24 of them with a partly traced writer)`
-//! parenthetical was a hand-typed number in a sentence. Three numbers on a page that
+//! RULE 8 REGENERATES THE WHOLE BLOCK AND COMPARES IT BYTE FOR BYTE. Reading the rows with
+//! a regex (`^\| ([a-z-]+) \| (\d+) \|`) checks only what the regex names: the
+//! `&nbsp;&nbsp;of which chain traced` row has no `[a-z-]+` key, so it is never read; the
+//! `share` column is never read at all; and the `(24 of them with a partly traced writer)`
+//! parenthetical is a hand-typed number in a sentence. Three numbers on a page that
 //! promises re-derivable ones. A generator has no such holes: whatever it does not
 //! generate is not in the block, and whatever is in the block it generated.
 //!
@@ -256,12 +256,11 @@ pub(crate) fn ledger_tally(
             }
         },
     };
-    // THE PAGE OWNS THE ARITHMETIC. The block says the five counts partition the total, and
-    // nothing asked whether they do: a reviewer produced 7,626 against a total of 7,625 by
-    // giving an `absent`-marked hop its real bytes, so the hop was counted twice. The gate
-    // failed on that ledger for another reason, so nothing shipped - but a sum the page
-    // states is a sum the gate checks, and a host with no build can still check four of the
-    // five against the fifth's absence.
+    // THE PAGE OWNS THE ARITHMETIC. The block says the five counts partition the total, so
+    // every anchor falls in exactly ONE bucket: credit an `absent`-marked hop with its real
+    // bytes as well and it is counted twice, and the sum runs over. A sum the page states is
+    // a sum the gate checks, and a host with no build can still check four of the five
+    // against the fifth's absence.
     let (exact, elided, _) = measured;
     let parts = exact + elided + anchors.absent + anchors.prefix_only + anchors.other_build;
     if anchors.measured.is_some() && parts != anchors.total {

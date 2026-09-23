@@ -6,9 +6,9 @@ use crate::harness::*;
 
 #[test]
 fn search_sendmessage_dedups_to_comm_sent_with_direction() {
-    // GOLD §3 Q4 dedup + §4 direction: a `SendMessage` tool_use carries BOTH `agent.tool.use` and
-    // `agent.communication.sent`; with no `-t` the richest (comm) view wins (ONE hit), rendering
-    // `self ⇨ to`, and JSON `labels` still lists both.
+    // Richest-view dedup + the comm DIRECTION: a `SendMessage` tool_use carries BOTH
+    // `agent.tool.use` and `agent.communication.sent`; with no `-t` the richest (comm) view
+    // wins (ONE hit), rendering `self ⇨ to`, and JSON `labels` still lists both.
     let h = Home::new();
     let sess = "33333333-4444-5555-6666-777777777777";
     let lines = [
@@ -177,7 +177,7 @@ fn search_batched_cross_family_sections_render_per_section() {
         .expect("the teammate inbox section");
     assert_eq!(inbox["from"], "PeerOne", "inbox FROM = the peer sender");
     assert_eq!(inbox["to"], "self");
-    // Each per-section hit carries the FULL label union (GOLD §3).
+    // Each per-section hit carries the FULL label union.
     let labels = inbox["labels"].as_array().expect("labels");
     assert!(
         labels

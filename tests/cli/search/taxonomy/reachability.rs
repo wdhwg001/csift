@@ -1,7 +1,7 @@
 //! EVERY advertised leaf is reachable from a transcript on disk, through the binary.
 //!
-//! Each family lane pinned the leaves it owns. What no per-family suite can answer is
-//! whether the taxonomy as a WHOLE is inhabited: a leaf the selector space advertises and
+//! Each family's own suite pins the leaves that family owns. What no per-family suite can
+//! answer is whether the taxonomy as a WHOLE is inhabited: a leaf the selector space advertises and
 //! nothing on disk can produce is a query that reports a definitive absence over records
 //! that exist - the exact reading the empty-result diagnosis exists to rule out, and the
 //! one csift must never cause itself.

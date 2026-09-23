@@ -116,8 +116,8 @@ fn turns_and_search_label_automation_triggers() {
 
 #[test]
 fn search_renders_tool_use_result_pairing() {
-    // GOLD §7: a tool_use joined to its tool_result by tool_use_id renders `▹`; an unreturned
-    // tool_use renders `(no result - pending)`.
+    // The PAIRING marker: a tool_use joined to its tool_result by tool_use_id renders `▹`;
+    // an unreturned tool_use renders `(no result - pending)`.
     let h = Home::new();
     let sess = "22222222-3333-4444-5555-666666666666";
     let lines = [
@@ -166,8 +166,8 @@ fn search_renders_tool_use_result_pairing() {
 
 #[test]
 fn search_auq_answer_dedups_to_user_answer() {
-    // GOLD §3 Q4: an AUQ answer carries BOTH `user.answer` and `agent.tool.result`; with no `-t`
-    // the richest (user.answer) view wins - ONE hit, not two.
+    // The richest-view dedup: an AUQ answer carries BOTH `user.answer` and
+    // `agent.tool.result`; with no `-t` the richest (user.answer) view wins - ONE hit, not two.
     let h = Home::new();
     let sess = "44444444-5555-6666-7777-888888888888";
     let lines = [
@@ -254,8 +254,8 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
         desc.stdout
     );
     // (2) A phrase that lives ONLY in the answer's `annotations.notes` must be searchable
-    //     under `user` - it IS the user's typed message. (Regression: previously dropped,
-    //     so this returned "no matching exchanges".)
+    //     under `user` - it IS the user's typed message, and an AUQ render that reads the
+    //     `answers` map alone drops it, leaving this search "no matching exchanges".
     let notes = h.run(&[
         "search",
         "more involved than a quick tweak",
@@ -271,13 +271,13 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
     );
 }
 
-/// J2: an assistant turn carrying TEXT and an IMAGE is ONE hit under one leaf. The image
-/// block used to carry `harness.context.image` of its own, so the turn emitted two hits
-/// with the harness view printed first while `labels[]`, ordered richest-first, put the
-/// plain message first - the emission order and the label order disagreeing about a
-/// single record. `harness.context.image` is a SHAPE the harness writes (the isMeta
-/// image-only user record, and the `[Image: ` reference in its text form), and over two
-/// projects roots an image block rides an assistant record zero times.
+/// An assistant turn carrying TEXT and an IMAGE is ONE hit under one leaf. Give the image
+/// block a `harness.context.image` of its own and the turn emits two hits, the harness view
+/// printed first while `labels[]`, ordered richest-first, puts the plain message first - the
+/// emission order and the label order disagreeing about a single record.
+/// `harness.context.image` is a SHAPE the harness writes (the isMeta image-only user
+/// record, and the `[Image: ` reference in its text form), and over two projects roots an
+/// image block rides an assistant record zero times.
 #[test]
 fn an_assistant_turn_with_text_and_an_image_is_one_hit() {
     let h = Home::new();

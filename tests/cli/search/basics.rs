@@ -215,7 +215,7 @@ fn search_help_mentions_regex_dialect_boundaries() {
     assert!(out.stdout.contains("lookahead") || out.stdout.contains("lookbehind"));
 }
 
-/// Help IS surface (the five-document contract), so the C-27 diff line is pinned in
+/// Help IS surface (the five-document contract), so the DRAFT-DISTANCE line is pinned in
 /// BOTH manuals: the taxonomy's `.unsent` entry in `search --help`, its own section in
 /// `show --help`. Each must name the metric, the "can exceed 100" caveat and the JSON
 /// keys, so a help edit that drops one fails here instead of silently thinning the
@@ -258,7 +258,7 @@ fn help_pins_the_unsent_diff_line_in_both_manuals() {
 
 #[test]
 fn regex_alternation_extracts_needles_and_still_matches() {
-    // The v0.9.4 required-needle gate: a metachar alternation is prefiltered by the
+    // The required-needle gate: a metachar alternation is prefiltered by the
     // union of its branches' safe literals - matches survive, needle-less files gate.
     let h = Home::new();
     let enc = "-Users-dev-example-project";

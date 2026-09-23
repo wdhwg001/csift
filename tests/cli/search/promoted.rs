@@ -1,4 +1,4 @@
-//! v0.10.0 promoted non-record leaves: gated behind an explicit selector, each
+//! The promoted non-record leaves: gated behind an explicit selector, each
 //! reachable by its own path, fabricated excerpts sound under the whole-file gate,
 //! `show` renders them flag-free, and the zero-match diagnosis names the gate.
 
@@ -100,7 +100,7 @@ fn explicit_selectors_reach_each_promoted_leaf() {
         q.stdout
     );
     // The glob reaches the rest of the user face; the two harness categories reach
-    // their own leaves (the family no longer shares one prefix).
+    // their own leaves - they share no prefix, so each needs its own path.
     let glob = h.run(&["search", "", &at(SESS), "-t", "user.*"]);
     assert!(
         glob.stdout.contains("reef shoals") && glob.stdout.contains("harbor survey"),
