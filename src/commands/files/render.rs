@@ -290,7 +290,7 @@ pub(crate) fn filter_context(outcome: &Outcome) -> String {
 pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
     use serde_json::json;
     let mut out = crate::text::Out::stdout();
-    // envelope v2: header (always) → kind-tagged rows → summary (always).
+    // envelope v2: header (always) -> kind-tagged rows -> summary (always).
     writeln!(
         out,
         "{}",
@@ -368,7 +368,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             "turn_index": b.stamp.index(),
             "survival": b.survival,
             "abandoned_root_line": b.stamp.root_line(),
-            // WHAT changed the file out of band (formatter/git/external-editor/…) -
+            // WHAT changed the file out of band (formatter/git/external-editor/...) -
             // named `cause` so `kind` stays the envelope discriminator exclusively.
             "cause": b.kind,
             "ts_utc": b.timestamp_utc,
@@ -422,7 +422,7 @@ pub(crate) fn json_grouped<W: std::io::Write, F: Fn(&FileMutation) -> String>(
     row_kind: &str,
 ) -> Result<()> {
     use serde_json::json;
-    // session_id → key → counts (deterministic order via BTreeMap).
+    // session_id -> key -> counts (deterministic order via BTreeMap).
     let mut by_session: BTreeMap<&str, Vec<&TaggedMutation>> = BTreeMap::new();
     for m in &outcome.mutations {
         by_session.entry(m.session_id.as_str()).or_default().push(m);

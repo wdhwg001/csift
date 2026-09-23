@@ -1,7 +1,7 @@
 //! Summary bucketing and per-file rollups: keys, counts, op labels, ordering.
 
 use super::*;
-// ── scan_one_file branch coverage (mmap-None, skipped-line counting) ──
+// -- scan_one_file branch coverage (mmap-None, skipped-line counting) --
 
 #[test]
 fn summary_bucketing_collapses_by_parent_dir() {
@@ -11,7 +11,7 @@ fn summary_bucketing_collapses_by_parent_dir() {
     let tmp = buckets.get("/tmp").expect("/tmp bucket");
     assert_eq!(tmp.write, 2, "two /tmp writes");
     assert_eq!(tmp.bash, 1, "one bash rm under /tmp");
-    // /p/spec bucket: one edit (the fixture's parent dirs are ≤4 segments deep, so the
+    // /p/spec bucket: one edit (the fixture's parent dirs are <=4 segments deep, so the
     // coarse rollup keeps them - the collapse only fires on DEEPER paths, see below).
     let spec = buckets.get("/p/spec").expect("/p/spec bucket");
     assert_eq!(spec.edit, 1);
@@ -22,7 +22,7 @@ fn summary_bucketing_collapses_by_parent_dir() {
 
 #[test]
 fn summary_rollup_collapses_deep_paths_unlike_by_dir() {
-    // The fix: `--summary` is a COARSE top-level rollup (≤SUMMARY_BUCKET_SEGMENTS
+    // The fix: `--summary` is a COARSE top-level rollup (<=SUMMARY_BUCKET_SEGMENTS
     // segments), NOT the full parent dir `--by-dir` keys on. Two deeply-nested files
     // sharing a top-level prefix collapse to ONE summary bucket but stay TWO by-dir rows.
     let deep_a = "/Users/testuser/Projects/demo_app/components/wireframe/tabs/Foo.tsx";
@@ -59,7 +59,7 @@ fn summary_git_pseudo_path_is_its_own_bucket_not_the_dot_sink() {
 
 #[test]
 fn bucket_key_edge_cases() {
-    // A top-level file `/foo` → parent `/` → the root bucket.
+    // A top-level file `/foo` -> parent `/` -> the root bucket.
     assert_eq!(bucket_key("/foo"), "/");
     // A shallow path keeps all the segments it has (fewer than the cap).
     assert_eq!(bucket_key("/tmp/x.md"), "/tmp");
@@ -109,7 +109,7 @@ fn distinct_file_count() {
 fn parent_dir_and_bucket_key_rules() {
     assert_eq!(parent_dir("/tmp/x.md").as_deref(), Some("/tmp"));
     assert_eq!(parent_dir("/p/spec/gaps.md").as_deref(), Some("/p/spec"));
-    // A top-level path → parent is "/".
+    // A top-level path -> parent is "/".
     assert_eq!(parent_dir("/foo").as_deref(), Some("/"));
     // A bare relative filename has no parent.
     assert_eq!(parent_dir("relative.md"), None);

@@ -1,7 +1,7 @@
 //! Text/JSON rendering across detail levels, footers, separators.
 
 use super::*;
-// ── scan_one_file branch coverage (mmap-None, skipped-line counting) ──
+// -- scan_one_file branch coverage (mmap-None, skipped-line counting) --
 
 #[test]
 fn render_text_all_detail_levels_run() {
@@ -18,7 +18,7 @@ fn render_text_all_detail_levels_run() {
 
 #[test]
 fn render_text_empty_prints_none() {
-    // The empty-mutations branch of render_text (→ "no file mutations found").
+    // The empty-mutations branch of render_text (-> "no file mutations found").
     render_text(&outcome(FilesDetail::Summary, Vec::new())).expect("text render");
 }
 

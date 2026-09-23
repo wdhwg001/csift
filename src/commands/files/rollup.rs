@@ -19,7 +19,7 @@ pub(crate) struct Outcome {
     /// shared SCOPE banner / JSON `session_header`, suppressed when `scope_sub == 0`.
     pub(crate) scope_top: usize,
     pub(crate) scope_sub: usize,
-    /// Session ids the resolver found under more than one project directory (§2 `dedup`):
+    /// Session ids the resolver found under more than one project directory (section 2 `dedup`):
     /// the merged copies are named beside the scope banner and counted in the JSON header,
     /// because every mutation count above was taken after the merge removed them.
     pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
@@ -39,7 +39,7 @@ impl Outcome {
     }
 }
 
-// ── Aggregation ──
+// -- Aggregation --
 
 /// Per-op counts for one bucket/dir/file, plus first/last touch + distinct files.
 #[derive(Debug, Clone, Default)]
@@ -93,7 +93,7 @@ impl OpCounts {
             + self.external_write
     }
 
-    /// The op-count fragment as `"N write, N edit, …"`, omitting zero counts; Bash is
+    /// The op-count fragment as `"N write, N edit, ..."`, omitting zero counts; Bash is
     /// suffixed `(heuristic)`. Empty groups render `"0"`.
     pub(crate) fn ops_label(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
@@ -138,23 +138,23 @@ pub(crate) const SUMMARY_BUCKET_SEGMENTS: usize = 4;
 /// `--summary` the smallest output and a real rollup - distinct from `--by-dir`, which keys
 /// on the full parent. Examples (depth 4): `/Users/testuser/Projects/p/spec/gaps.md` and
 /// `/Users/testuser/Projects/p/src/main.rs` BOTH bucket to `/Users/testuser/Projects/p`;
-/// `/tmp/x.md` → `/tmp`. A `git:<sub>` pseudo-path keeps its own `git:` bucket (it is not a
+/// `/tmp/x.md` -> `/tmp`. A `git:<sub>` pseudo-path keeps its own `git:` bucket (it is not a
 /// real file path). A bare relative filename (no `/`) buckets under `./`.
 pub(crate) fn bucket_key(path: &str) -> String {
     // The intentional `git:<sub>` coarse pseudo-path is its own bucket, never split as a dir
-    // (all `git:add`/`git:commit`/… roll up under one `git:` row, out of the `./` sink).
+    // (all `git:add`/`git:commit`/... roll up under one `git:` row, out of the `./` sink).
     if path.starts_with("git:") {
         return "git:".to_string();
     }
     // Roll up the PARENT directory (never the basename) to at most SUMMARY_BUCKET_SEGMENTS
-    // segments. A bare relative filename has no parent → the `./` bucket.
+    // segments. A bare relative filename has no parent -> the `./` bucket.
     let Some(parent) = parent_dir(path) else {
         return "./".to_string();
     };
     let absolute = parent.starts_with('/');
     let segs: Vec<&str> = parent.split('/').filter(|s| !s.is_empty()).collect();
     if segs.is_empty() {
-        // Parent is `/` (a top-level file like `/foo`) → the root bucket.
+        // Parent is `/` (a top-level file like `/foo`) -> the root bucket.
         return "/".to_string();
     }
     let take = segs.len().min(SUMMARY_BUCKET_SEGMENTS);
@@ -195,4 +195,4 @@ pub(crate) fn group_by<F: Fn(&FileMutation) -> String>(
     map
 }
 
-// ── Rendering ──
+// -- Rendering --

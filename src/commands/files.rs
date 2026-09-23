@@ -1,7 +1,7 @@
 //! `files` subcommand - which files/dirs a session modified, and when.
 //!
 //! Extracts file mutations from a session's transcript (spanning subagents by
-//! default), attributes each to its genuine-user turn (the same §6.4 delimiter
+//! default), attributes each to its genuine-user turn (the same section 6.4 delimiter
 //! `search` uses, via [`crate::model::group_turn_indices`]), then aggregates at the
 //! requested detail level (summary / by-dir / by-file / timeline) into text or JSON.
 //!

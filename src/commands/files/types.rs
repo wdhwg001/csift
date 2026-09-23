@@ -34,7 +34,7 @@ pub(crate) struct TaggedMutation {
 /// An Edit-before-Read boundary `files` detected: the file changed OUTSIDE the Read/Write/Edit
 /// stream (a formatter, husky/pre-commit, git, an external editor) and the harness rejected an
 /// Edit/Write with `File has been modified since read`, forcing a fresh Read. Attributed to its
-/// file via the failed op's `tool_use_id` ↔ that op's `file_path` join, carrying the jsonl line.
+/// file via the failed op's `tool_use_id` joined to that op's `file_path`, carrying the jsonl line.
 #[derive(Debug, Clone)]
 pub(crate) struct TaggedBoundary {
     pub(crate) session_id: String,

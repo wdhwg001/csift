@@ -18,12 +18,12 @@ pub fn run_files(args: &FilesArgs, cross: CrossingBudget) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    // ── Compile the optional path filters BEFORE any scan, so an invalid --regex/--glob
-    //    fails fast (a hard error) rather than after a full pass ──
+    // -- Compile the optional path filters BEFORE any scan, so an invalid --regex/--glob
+    //    fails fast (a hard error) rather than after a full pass --
     let path_filter = PathFilter::from_args(args.regex.as_deref(), args.glob.as_deref())?;
 
-    // ── Resolve targets → session files (subagent span per --no-subagents; default spans
-    //    subagents, matching every other default-on command) ──
+    // -- Resolve targets -> session files (subagent span per --no-subagents; default spans
+    //    subagents, matching every other default-on command) --
     let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
@@ -37,13 +37,13 @@ pub fn run_files(args: &FilesArgs, cross: CrossingBudget) -> Result<()> {
     // DISTINCT session ids, through the shared rule (a divergent duplicate pair is one).
     let (scope_top, scope_sub) = crate::subagent::scope_span_files(&session_files);
 
-    // ── Parallel scan across files (default rayon pool = CPU count) ──
+    // -- Parallel scan across files (default rayon pool = CPU count) --
     let per_file: Vec<FileResult> = session_files
         .par_iter()
         .map(|p| scan_one_file(p, cross))
         .collect::<Result<Vec<_>>>()?;
 
-    // ── Merge + filter by turn / time-window per mutation + boundary ──
+    // -- Merge + filter by turn / time-window per mutation + boundary --
     let mut mutations: Vec<TaggedMutation> = Vec::new();
     let mut boundaries: Vec<TaggedBoundary> = Vec::new();
     let mut skipped_lines = 0usize;
@@ -109,7 +109,7 @@ pub fn run_files(args: &FilesArgs, cross: CrossingBudget) -> Result<()> {
     }
 }
 
-/// Scan one session file: mmap → prefilter → parse → delimit turns → extract + join.
+/// Scan one session file: mmap -> prefilter -> parse -> delimit turns -> extract + join.
 pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {

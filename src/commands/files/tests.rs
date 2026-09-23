@@ -26,7 +26,7 @@ fn extract(records: &[Record]) -> Vec<TaggedMutation> {
 /// joins correctly.
 fn fixture() -> Vec<Record> {
     vec![
-        // ── turn 0 ──
+        // -- turn 0 --
         rec(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"set up the docs"}}"#,
         ),
@@ -55,7 +55,7 @@ fn fixture() -> Vec<Record> {
         rec(
             r#"{"type":"user","uuid":"meta","isMeta":true,"timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"Continue from where you left off."}}"#,
         ),
-        // ── turn 1 ──
+        // -- turn 1 --
         rec(
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"clean up and refactor"}}"#,
         ),
@@ -78,8 +78,8 @@ mod filters;
 mod mutations;
 mod render;
 
-// ── Rendering branches (called directly so coverage does not depend on the
-//    integration-binary merge; output goes to test stdout, harmless). ──
+// -- Rendering branches (called directly so coverage does not depend on the
+//    integration-binary merge; output goes to test stdout, harmless). --
 
 fn outcome(detail: FilesDetail, muts: Vec<TaggedMutation>) -> Outcome {
     // Derive the scope span from the mutations' distinct transcripts (test-only proxy for

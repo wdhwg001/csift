@@ -1,7 +1,7 @@
 //! Mutation extraction from records: structured tools, bash heuristics, scan.
 
 use super::*;
-// ── scan_one_file branch coverage (mmap-None, skipped-line counting) ──
+// -- scan_one_file branch coverage (mmap-None, skipped-line counting) --
 use std::io::Write as _;
 
 #[test]
@@ -40,8 +40,8 @@ fn mutations_in_records_carrier_join_backfill_and_bash() {
 #[test]
 fn mutations_in_records_excludes_cancelled_and_errored_writes() {
     // A Write whose RESULT is `is_error:true` (a failed Edit, or a `Cancelled: parallel tool
-    // call … errored` when a sibling op in the same batch failed) NEVER landed → it must not
-    // be counted as a mutation (the `files`↔`recover` consistency fix; recover already
+    // call ... errored` when a sibling op in the same batch failed) NEVER landed -> it must not
+    // be counted as a mutation (the `files`/`recover` consistency fix; recover already
     // excludes it via the same failed-id gate). A successful Write is still counted.
     let recs = vec![
         // turn 0: a SUCCESSFUL Write (create carrier, no error).
@@ -133,10 +133,10 @@ fn create_join_marks_writes_as_create_edits_as_not() {
             .find(|m| m.mutation.path == p && !m.mutation.op.is_heuristic())
             .unwrap_or_else(|| panic!("missing {p}"))
     };
-    // The two Writes joined their carrier type:"create" → is_create true.
+    // The two Writes joined their carrier type:"create" -> is_create true.
     assert!(by_path("/tmp/a.md").mutation.is_create);
     assert!(by_path("/tmp/b.md").mutation.is_create);
-    // The Edit / MultiEdit joined type:"update" → is_create false.
+    // The Edit / MultiEdit joined type:"update" -> is_create false.
     assert!(!by_path("/p/spec/gaps.md").mutation.is_create);
     assert!(!by_path("/p/src/lib.rs").mutation.is_create);
 }
@@ -155,7 +155,7 @@ fn bash_mutation_is_heuristic_op() {
 
 #[test]
 fn structured_notebook_edit_flows_through_extract() {
-    // A NotebookEdit tool_use → a notebook-edit op in the extracted mutations.
+    // A NotebookEdit tool_use -> a notebook-edit op in the extracted mutations.
     let records = vec![
         rec(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"edit nb"}}"#,
@@ -176,10 +176,10 @@ fn tool_use_id_for_finds_first_and_none() {
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"Write","input":{"file_path":"/p/a"}}]}}"#,
     );
     assert_eq!(tool_use_id_for(&with).as_deref(), Some("x1"));
-    // A record with no tool_use → None.
+    // A record with no tool_use -> None.
     let without = rec(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
     assert!(tool_use_id_for(&without).is_none());
-    // A tool_use with no id → None.
+    // A tool_use with no id -> None.
     let no_id = rec(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/p/a"}}]}}"#,
     );
@@ -205,7 +205,7 @@ fn line_prefilter_keeps_candidates_drops_noise() {
 
 #[test]
 fn extract_handles_missing_carrier_defaults_is_create_false() {
-    // A Write tool_use with NO paired carrier in the turn → is_create stays false
+    // A Write tool_use with NO paired carrier in the turn -> is_create stays false
     // (honest "unknown / treat as edit"), and the path comes from the tool_use.
     let records = vec![
         rec(
@@ -245,7 +245,7 @@ fn tmp_jsonl(lines: &[&str]) -> (crate::testfs::Scratch, std::path::PathBuf) {
 
 #[test]
 fn scan_one_file_empty_is_safe() {
-    // A zero-byte file → mmap_bytes None → empty result (the early-return arm).
+    // A zero-byte file -> mmap_bytes None -> empty result (the early-return arm).
     let (_dir, p) = crate::testfs::Scratch::file("files-empty", "empty.jsonl");
     std::fs::File::create(&p).unwrap();
     let fr = scan_one_file(&p, CrossingBudget::NONE).expect("scan empty");
@@ -256,7 +256,7 @@ fn scan_one_file_empty_is_safe() {
 #[test]
 fn scan_one_file_extracts_mutations_and_counts_skips() {
     // A populated file: a genuine user, a Write tool_use + carrier, plus a
-    // malformed line that survives the prefilter (carries "Write") → counted.
+    // malformed line that survives the prefilter (carries "Write") -> counted.
     let (_dir, p) = tmp_jsonl(&[
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
         r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/tmp/scan.md","content":"x"}}]}}"#,

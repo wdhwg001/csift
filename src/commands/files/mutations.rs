@@ -10,7 +10,7 @@ use super::*;
 /// over the whole slice (a subagent transcript is one logical scope).
 #[must_use]
 pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
-    // Build the carrier join map once over the whole slice: tool_use_id → (filePath,
+    // Build the carrier join map once over the whole slice: tool_use_id -> (filePath,
     // is_create). A subagent transcript is a single scope, so a global join is correct.
     let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
     // tool_use_ids whose RESULT errored / was cancelled (`is_error:true`) - those ops never
@@ -141,10 +141,10 @@ pub(crate) fn extract_mutations(
     let mut out = Vec::new();
 
     for (stamp, idxs) in view.groups() {
-        // Build the carrier join map for this turn: tool_use_id → (filePath, is_create).
+        // Build the carrier join map for this turn: tool_use_id -> (filePath, is_create).
         let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
         // tool_use_ids whose RESULT was an error (`is_error:true`) - a failed Edit/Write, or a
-        // Write `Cancelled: parallel tool call … errored` when a sibling op in the same batch
+        // Write `Cancelled: parallel tool call ... errored` when a sibling op in the same batch
         // failed. The op NEVER landed, so it must NOT be counted as a real mutation: a `files`
         // `write:1` on a cancelled Write contradicts `recover` (which correctly finds no
         // history) and is a forensic FALSE POSITIVE ("did this session write X?"). Same
@@ -245,7 +245,7 @@ pub(crate) fn is_modified_since_read(content: &serde_json::Value) -> bool {
 /// with `File has been modified since read` (the file changed outside the Read/Write/Edit
 /// stream). Attribution: the error `tool_result`'s `tool_use_id` matches the rejected op, whose
 /// `file_path` lives on its tool_use record (even though the op never landed) - so a per-turn
-/// `id → path` map (built from EVERY edit/write tool_use, failed or not) names the file. The
+/// `id -> path` map (built from EVERY edit/write tool_use, failed or not) names the file. The
 /// jsonl line is taken from `line_nos` (aligned with `records` by index).
 pub(crate) fn extract_boundaries(
     session_id: &str,
@@ -255,7 +255,7 @@ pub(crate) fn extract_boundaries(
 ) -> Vec<TaggedBoundary> {
     let mut out = Vec::new();
     for (stamp, idxs) in view.groups() {
-        // id → file_path for every Edit/Write tool_use in this turn (incl. failed ones - the
+        // id -> file_path for every Edit/Write tool_use in this turn (incl. failed ones - the
         // rejected edit's INPUT still carries its file_path).
         let mut tool_use_path: BTreeMap<String, String> = BTreeMap::new();
         for &i in idxs {

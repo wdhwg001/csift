@@ -1,7 +1,7 @@
 //! Path filtering: regex, glob, and their conjunction.
 
 use super::*;
-// ── scan_one_file branch coverage (mmap-None, skipped-line counting) ──
+// -- scan_one_file branch coverage (mmap-None, skipped-line counting) --
 
 #[test]
 fn path_filter_none_keeps_everything() {
