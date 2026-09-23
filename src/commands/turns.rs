@@ -66,7 +66,7 @@
 //! ## Never fabricate, never silently drop
 //!
 //! An over-cap unit is MIDDLE-truncated (head+tail kept) with an explicit
-//! `... [+K chars, L lines elided] ...` marker that carries the exact elided counts; its
+//! `… [+K chars, L lines elided] …` marker that carries the exact elided counts; its
 //! `Lnnnnn` points at the full record. Dedup against the live summary is
 //! DEMOTE-AND-FLAG, never delete. A collapsed agent-message run is NEVER silently
 //! dropped either - its placeholder carries the exact counts + the line range to fetch.

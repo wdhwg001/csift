@@ -336,7 +336,7 @@ pub(crate) fn collapsed_preview(unit: &TurnUnit) -> Option<CollapsedPreview> {
 }
 
 /// The EXACT placeholder line a collapsed span renders to (no trailing newline):
-///   `△ L{first}-L{last}  [X agent message(s) collapsed, N chars, Y tool call(s)[, Z failed]]`
+///   `△ L{first}–L{last}  [X agent message(s) collapsed, N chars, Y tool call(s)[, Z failed]]`
 /// X/Y are always shown (Y even at 0 - a zero-tool reasoning span is informative); the Z
 /// clause is OMITTED when Z == 0. N is the summed `full_chars` of the collapsed bodies, so the
 /// marker says HOW MUCH prose it stands for and not only how many messages. Pluralization is
@@ -362,7 +362,7 @@ pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
 }
 
 /// The EXACT line for one collapsed message's preview (no trailing newline), indented under
-/// the fold marker: `    L{line}  {first 60 chars}... (+N chars)`.
+/// the fold marker: `    L{line}  {first 60 chars}… (+N chars)`.
 pub(crate) fn collapsed_preview_line(p: &CollapsedPreview) -> String {
     format!("    L{}  {}", p.line, p.excerpt)
 }

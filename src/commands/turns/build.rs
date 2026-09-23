@@ -91,7 +91,7 @@ pub(crate) fn build(
             // rejection-with-message). `group_turn_indices` opens a turn on `opens_turn`,
             // so the FIRST such record is the opener; keep the earliest. The rendered
             // body is the unified reconstruction (Q+options+answer for an AUQ; the typed
-            // instruction + a `[plan: ...]` pointer for a rejection).
+            // instruction + a `[plan: …]` pointer for a rejection).
             if user.is_none() && rec.opens_turn() {
                 // An automation trigger (`<task-notification>`) opens a turn like a human
                 // message, but its body must render as the parsed `[workflow <id> ...]

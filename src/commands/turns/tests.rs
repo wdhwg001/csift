@@ -1,8 +1,8 @@
 //! Unit tests for the `turns` engine over small, locale-neutral fixtures.
 //!
 //! Charset discipline (CLAUDE.md / design section 0): fixture strings use accented-Latin +
-//! emoji multi-byte tokens only (accented Latin, a 4-byte emoji), the house fixture style. The
-//! end-to-end feature exercise on a real-shaped, multi-summary transcript lives in
+//! emoji multi-byte tokens only, the house fixture style. The end-to-end feature
+//! exercise on a real-shaped, multi-summary transcript lives in
 //! `tests/cli_integration.rs`.
 
 use super::*;

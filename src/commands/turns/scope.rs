@@ -35,7 +35,7 @@ pub(crate) fn plan_has_sidecar(plan: &SessionPlan) -> bool {
 }
 
 /// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a
-/// `--subagents` query that spans S subagents realizes up to `budget x (1 + S)`
+/// `--subagents` query that spans S subagents realizes up to `budget × (1 + S)`
 /// chars. The banner must report the TRUE scope (every discovered session) - NOT only what
 /// fit in the budget - so a rendering knob (`--budget`) can never silently rewrite "scope"
 /// and a targeted top-level uuid can never read as `0 top-level`. Returns the full

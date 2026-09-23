@@ -12,10 +12,10 @@ pub(crate) const ASST_CAP: usize = 900;
 
 /// Headroom subtracted from `--window` to size the per-body cap in `--slices` (fixed-fleet) mode.
 /// There the per-role 600/900 caps are REPLACED by a window cap: a body renders whole up to
-/// `window - SLICE_BODY_HEADROOM`, so its rendered body LINE (incl. the `... [+K chars, L lines
-/// elided] ...` wrapper) AND the unit's separate header line each stay under one window - no single
-/// line can force [`slice_into_windows`] to hard-split mid-content. Only a turn that ALONE exceeds
-/// a window is ellipsized; everything else is kept verbatim (the user-directive recovery target).
+/// `window - SLICE_BODY_HEADROOM`, so its rendered body LINE (incl. the wrapper
+/// `… [+K chars, L lines elided] …`) AND the unit's separate header line each stay under one window - no
+/// single line can force [`slice_into_windows`] to hard-split mid-content. Only a turn that ALONE
+/// exceeds a window is ellipsized; everything else is kept verbatim (the user-directive recovery target).
 pub(crate) const SLICE_BODY_HEADROOM: usize = 200;
 
 /// Head fraction for an ASSISTANT unit's middle-truncation: EOT prose front-loads
@@ -45,7 +45,7 @@ pub(crate) const NEWLINE_COST: usize = 1;
 pub(crate) const COLLAPSED_PREVIEW_MIN_CHARS: usize = 210;
 
 /// How many chars of a collapsed message the preview line shows (via
-/// `text::truncate_excerpt`, so the line discloses its own elision as `... (+N chars)`).
+/// `text::truncate_excerpt`, so the line discloses its own elision as `… (+N chars)`).
 pub(crate) const COLLAPSED_PREVIEW_CHARS: usize = 60;
 
 /// Normalized-prefix length used for the summary-dedup fingerprint (section 6.2): a unit whose
