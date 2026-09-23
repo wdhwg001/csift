@@ -1,8 +1,8 @@
 //! The refetch law's edge: an explicit address renders the record it names even when csift
 //! models NO leaf for it. `classify` deliberately emits nothing for an `isMeta` user record
-//! matching no harness marker (the M2b rule - better silent than mislabeled `user.message`),
-//! and until the fetch domain caught that case the address bailed with "no such record(s)"
-//! on a line that is plainly a message.
+//! matching no harness marker (better silent than mislabeled `user.message`), and a fetch
+//! domain narrower than the parseable lines bails with "no such record(s)" on a line that
+//! is plainly a message.
 
 use crate::harness::*;
 
@@ -117,7 +117,7 @@ fn a_tagless_peer_record_is_unlabeled_and_still_addressable() {
     // preamble followed by bare prose. csift classifies a peer by TAG, matching Claude Code's own
     // reader, so such a record falls into the same empty-label hole as any other isMeta
     // pseudo-turn: no leaf, no census row, no `-t` result. That is deliberate; what is NOT
-    // acceptable is the address failing on it. Fails pre-fix, where `show --line` bailed.
+    // acceptable is the address failing on it, which is what this pins.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-0000000000fc";
     h.write(

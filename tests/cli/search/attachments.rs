@@ -98,8 +98,8 @@ fn attachments_are_invisible_by_default() {
         "default scan must not see attachment payloads:\n{}",
         out.stdout
     );
-    // Naming the LEAF is now a gate of its own (the `--additional-context` retirement
-    // generalised): the payload surfaces without `--attachments`.
+    // Naming the LEAF is a gate of its own, which is what the `--additional-context`
+    // retirement generalised: the payload surfaces without `--attachments`.
     let labeled = h.run(&[
         "search",
         "glowlantern",
@@ -190,7 +190,7 @@ fn attachments_flag_surfaces_payloads_under_their_own_leaves() {
 fn count_by_attachment_censuses_payload_types_and_implies_the_gate() {
     let h = Home::new();
     attachment_scenario(&h);
-    // NO --attachments flag: the axis implies the gate (the D7 implied-widening law).
+    // NO --attachments flag: the axis is unanswerable without the gate, so it implies it.
     let out = h.run(&["search", "", &at(ATTACH_SESS), "--count-by", "attachment"]);
     assert!(out.success, "stderr: {}", out.stderr);
     for key in [
@@ -418,7 +418,7 @@ fn a_human_origin_queued_command_is_reachable_as_the_persons_message() {
         raw.stdout
     );
 
-    // I1: a FLAGLESS scan is a SUPERSET of `-t user`, so the leaf the narrower query
+    // A FLAGLESS scan is a SUPERSET of `-t user`, so the leaf the narrower query
     // reaches cannot be one the wider query misses. The needle is default-on for the same
     // reason the csift-channel delivery keep is: a message no ordinary query surfaces is a
     // message nobody can audit.
@@ -453,7 +453,7 @@ fn a_human_origin_queued_command_is_reachable_as_the_persons_message() {
     );
 }
 
-/// I2, the twin of the case above on the other side of the conversation. A schema-bound
+/// The twin of the case above on the other side of the conversation. A schema-bound
 /// subagent's final answer rides a `structured_output` ATTACHMENT, and `agent.message.
 /// structured` is LLM-visible because the MODEL produced the text. A flagless scan is a
 /// superset of `-t agent`, so a leaf that query reaches cannot be one a bare

@@ -79,11 +79,11 @@ fn acceptance_harness_schedule_and_meta() {
 
 #[test]
 fn acceptance_compaction_summary_and_boundary_searchable() {
-    // §D6 the isCompactSummary record is a `type:"user"` record → searchable as
-    // `harness.compaction.summary`. §D7 (user-reversed): the `compact_boundary` is a `type:"system"`
-    // record NOW ALSO search-surfaced - the §7 prefilter keeps it (one memmem on `compact_boundary`)
-    // and `record_raw_text` renders its top-level content + compactMetadata as the match/excerpt, so
-    // compaction points can be enumerated + inspected.
+    // The isCompactSummary record is a `type:"user"` record, so it is searchable as
+    // `harness.compaction.summary`. The `compact_boundary` is a `type:"system"` record and is
+    // search-surfaced too - the §7 prefilter keeps it (one memmem on `compact_boundary`) and
+    // `record_raw_text` renders its top-level content + compactMetadata as the
+    // match/excerpt, so compaction points can be enumerated and inspected.
     let h = acceptance_home();
 
     let summary = acc(&h, "zzsummary", "harness.compaction.summary");

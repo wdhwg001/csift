@@ -320,7 +320,7 @@ fn sessions_with_matches_pipes_into_sessions_from_and_refetch_round_trips() {
 
 #[test]
 fn count_by_label_census_respects_label_filters() {
-    // R7 §2.3: `-t`/`-T` decide which records ENTER the census, and the label-axis KEYS pass
+    // `-t`/`-T` decide which records ENTER the census, and the label-axis KEYS pass
     // the same predicate - a dual-labeled record (an AUQ answer = user.answer +
     // agent.tool.result) must not leak its filtered-out twin into the census keys.
     let h = Home::new();

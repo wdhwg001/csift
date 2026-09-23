@@ -114,10 +114,10 @@ fn acceptance_user_role_message_shapes() {
 
 #[test]
 fn search_quoted_tags_mid_prose_stay_user_message() {
-    // FINDING-1: a genuine user message that merely QUOTES `<task-notification>` /
-    // `<teammate-message>` mid-prose stays `user.message` - it is NOT reclassified
-    // `harness.notification` / `agent.communication.inbox` (this bit csift's OWN dev sessions,
-    // which quote these tags constantly).
+    // The section-boundary rule: a genuine user message that merely QUOTES
+    // `<task-notification>` / `<teammate-message>` mid-prose stays `user.message` - it is
+    // NOT reclassified `harness.notification` / `agent.communication.inbox`. Without the
+    // boundary test this bites csift's OWN dev sessions, which quote these tags constantly.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

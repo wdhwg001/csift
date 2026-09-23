@@ -38,7 +38,8 @@ fn search_skips_non_transcript_noise_lines() {
     // A session padded with attachment / file-history-snapshot / queue-operation lines (no
     // role marker) → search's pre-JSON category prefilter drops them (the
     // `!line_is_transcript_candidate` TRUE arm) while still matching the real turn. (The
-    // `compact_boundary` line IS kept by the prefilter now (D7), but carries no `carry` literal
+    // `compact_boundary` line IS kept by the prefilter (the boundary keep), but carries no
+    // `carry` literal
     // and no compactMetadata here, so it produces no spurious hit.)
     let h = Home::new();
     h.write(
@@ -192,7 +193,7 @@ fn search_at_uuid_path_scopes_to_session() {
 
 #[test]
 fn search_bare_uuid_is_a_literal_pattern_not_a_scope() {
-    // A BARE uuid (no `@`) as the sole positional is now a LITERAL pattern, NOT a session scope.
+    // A BARE uuid (no `@`) as the sole positional is a LITERAL pattern, NOT a session scope.
     // It is searched verbatim across the corpus and emits no scope-routing note.
     let h = Home::new();
     subagents_only_scenario(&h);
@@ -229,7 +230,7 @@ fn boundary_and_two_mentions_home() -> Home {
 
 #[test]
 fn the_boundary_keep_admits_the_boundary_and_not_a_payload_that_names_it() {
-    // The D7 keep is what lets a flagless scan reach a boundary at all, and it is the ONE
+    // The boundary keep is what lets a flagless scan reach a boundary at all, and it is the ONE
     // keep whose needle is a word a payload can use in prose. Narrowed to the conjunction
     // with the key-only `"subtype"` needle, it still admits every boundary and stops
     // admitting the two line shapes no other flagless keep reaches.
@@ -288,7 +289,7 @@ fn the_boundary_keep_admits_the_boundary_and_not_a_payload_that_names_it() {
 
 #[test]
 fn the_narrowed_keep_leaves_the_proper_gates_and_the_address_untouched() {
-    // Refusing a line from the D7 keep must not put it out of reach: the leaf's OWN gate
+    // Refusing a line from the boundary keep must not put it out of reach: the leaf's OWN gate
     // still parses the queue line, and an address still renders the attachment flag-free.
     let h = boundary_and_two_mentions_home();
 

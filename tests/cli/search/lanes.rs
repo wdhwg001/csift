@@ -149,8 +149,9 @@ fn the_peer_record_refetches_by_its_own_line() {
 
 #[test]
 fn a_quoted_cross_session_tag_mid_prose_stays_the_human() {
-    // FINDING-1 for the third framing: this repo's own docs quote the literal tag, so a
-    // `contains` check would reclassify the operator's prose as an inbound peer message.
+    // The section-boundary rule for the third framing: this repo's own docs quote the
+    // literal tag, so a `contains` check would reclassify the operator's prose as an
+    // inbound peer message.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-0000000000c4";
     h.write(
@@ -180,8 +181,8 @@ fn a_wrapper_attribute_is_unsearchable_and_raw_does_not_recover_it() {
     // T1. The body render strips the wrapper, and `search` matches RENDERED text only, so the
     // attributes left the matchable surface entirely. `--raw` is OUTPUT-only - the per-file
     // mmap backfill runs AFTER the match phase over lines that already matched - so it cannot
-    // bring them back. Fails on the pre-fix render, which emitted the whole tagged section and
-    // matched `teammate_id=` once.
+    // bring them back. A render that emitted the whole tagged section would match
+    // `teammate_id=` once, which is exactly what this pins as gone.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-0000000000c5";
     h.write(

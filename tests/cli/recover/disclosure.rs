@@ -487,7 +487,7 @@ fn restore_prefers_the_freshest_candidate_across_unrelated_sessions() {
 #[test]
 fn merged_group_keeps_the_parent_uuid_as_its_id() {
     // A parent + its own subagent both touch the file: the merged row's id must be
-    // the re-feedable parent uuid, never the subagent's bare hex (the r5 id law).
+    // the re-feedable parent uuid, never the subagent's bare hex (the id trio's law).
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

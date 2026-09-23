@@ -49,11 +49,11 @@ fn search_sendmessage_dedups_to_comm_sent_with_direction() {
 }
 #[test]
 fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
-    // P3a G1 + G4/G5 + self-alias: a `<task-notification>` carrying a `<result>` is the background
-    // agent's report → it classifies BOTH `harness.notification.*` (the pulse) AND
-    // `agent.communication.inbox` (child ⇨ self, via the embedded `<tool-use-id>`). The render now
-    // emits ONE hit PER label (per-section), the inbox hit carrying the RESOLVED child ⇨ self
-    // direction - and the owner's own uuid renders as `self`.
+    // A `<task-notification>` carrying a `<result>` is the background agent's report, so it
+    // classifies BOTH `harness.notification.*` (the pulse) AND `agent.communication.inbox`
+    // (child ⇨ self, via the embedded `<tool-use-id>`). The render emits ONE hit PER label
+    // (per-section), the inbox hit carrying the RESOLVED child ⇨ self direction - and the
+    // owner's own uuid renders as `self`.
     let enc = "-Users-x-bg";
     let sess = "12121212-3434-5656-7878-9a9a9a9a9a9a";
     let child = "c0ffee1234567890";
@@ -129,7 +129,7 @@ fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
 }
 #[test]
 fn search_batched_cross_family_sections_render_per_section() {
-    // P3a G4/G5: ONE `type:user` record batching a `<task-notification>` AND an inbound
+    // ONE `type:user` record batching a `<task-notification>` AND an inbound
     // `<teammate-message>` of MIXED family → the render emits ONE hit PER section, each with its
     // OWN label + direction (not one collapsed richest-label hit). A shared token in both sections
     // surfaces both; `labels` lists the full union on each hit.
@@ -190,7 +190,7 @@ fn search_batched_cross_family_sections_render_per_section() {
 }
 #[test]
 fn search_comm_direction_aliases_owner_to_self_both_sides() {
-    // P3a self-alias: the transcript owner's own uuid renders as `self` on EITHER side - a
+    // SELF-ALIAS: the transcript owner's own uuid renders as `self` on EITHER side - a
     // `SendMessage` (sent) shows `self ⇨ <peer>` (FROM aliased), an inbound `<teammate-message>`
     // (inbox) shows `<peer> ⇨ self` (TO aliased); the peer id is kept verbatim.
     let enc = "-Users-x-self";
@@ -237,11 +237,11 @@ fn search_comm_direction_aliases_owner_to_self_both_sides() {
 }
 #[test]
 fn search_subagent_scope_spawn_lookup_resolves_in_subagent_spawn_and_return() {
-    // P3a subagent-scope spawn lookup: when scanning a SUBAGENT transcript, the spawn lookup is
-    // built from its PARENT session (whose sidecar holds the flat set of ALL subagents), so an
-    // IN-SUBAGENT spawn resolves `self ⇨ <grandchild>` and an in-subagent Task-return resolves to
-    // `agent.communication.inbox <grandchild> ⇨ self`. (Before the fix the lookup was top-level
-    // only → both degraded.)
+    // SUBAGENT-SCOPE SPAWN LOOKUP: when scanning a SUBAGENT transcript, the spawn lookup is
+    // built from its PARENT session (whose sidecar holds the flat set of ALL subagents), so
+    // an IN-SUBAGENT spawn resolves `self ⇨ <grandchild>` and an in-subagent Task-return
+    // resolves to `agent.communication.inbox <grandchild> ⇨ self`. A top-level-only lookup
+    // degrades both to the raw name or `?`.
     let enc = "-Users-x-nest";
     let sess = "15151515-2626-3737-4848-595959595959";
     let agent_a = "aaaa1111bbbb2222";

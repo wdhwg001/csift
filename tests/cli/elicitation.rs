@@ -2,7 +2,7 @@ use crate::harness::*;
 
 #[test]
 fn sidecar_schema_skewed_marker_is_counted_never_invisible() {
-    // R12 §2: a sentinel-bearing sidecar line the CURRENT schema cannot read (a
+    // A sentinel-bearing sidecar line the CURRENT schema cannot read (a
     // pre-release fossil: `phase`/`kind`/`key` instead of `csiftPhase`/...) is provably
     // ours and uninterpretable, so it is never merged AND never invisible: it moves
     // `skipped_lines` on every sidecar-merging surface. Valid JSON is not a reason to
@@ -175,7 +175,7 @@ fn epm_pending_renders_kind_and_plan_body() {
 
 #[test]
 fn elicitation_ghost_pending_dropped_when_natively_closed() {
-    // R7 §3 (the ghost-pending guard): Claude Code fires NO PostToolUse for a REJECTED
+    // THE GHOST-PENDING GUARD: Claude Code fires NO PostToolUse for a REJECTED
     // AUQ/ExitPlanMode, so the hook never writes its `resolved` marker - sidecar-internal
     // pairing alone would report the elicitation pending FOREVER while the native transcript
     // long since holds the flushed tool_use + rejection tool_result. The native record
@@ -385,7 +385,8 @@ fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
     );
 
     // Tri-state ②: a sidecar with only a RESOLVED pair (nothing pending) → present:true,
-    // with_elicitation_sidecar:false - "hook installed AND not blocked" is now assertable.
+    // with_elicitation_sidecar:false - which is what makes "hook installed AND not
+    // blocked" assertable.
     h.write(
         &format!("{ENC}/{SESS}/elicitations.jsonl"),
         concat!(

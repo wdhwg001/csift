@@ -111,10 +111,10 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
 
 #[test]
 fn agents_returned_message_on_open_lane_carries_history_caution() {
-    // R8: a frozen teammate's newest returned message read like a clean finale ("work is
-    // complete, confirming shutdown") and nearly fooled a real reader. On a NON-completed
-    // lane the text render brands the message as history inline; a completed lane stays
-    // unbranded.
+    // A frozen teammate's newest returned message reads like a clean finale ("work is
+    // complete, confirming shutdown") while the lane is still blocked, so a reader takes
+    // history for an outcome. On a NON-completed lane the text render brands the message
+    // as history inline; a completed lane stays unbranded.
     let enc = "-Users-testuser-Projects-rmcaution";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let hex = "ab8a4c5868015a8be";

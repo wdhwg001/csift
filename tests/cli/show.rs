@@ -458,7 +458,7 @@ fn show_multi_transcript_target_errors() {
 
 #[test]
 fn show_span_flag_is_rejected_with_the_pointed_rule() {
-    // R7 §2.3: ten sibling commands take the span pair; `show` does not - the muscle-memory
+    // Ten sibling commands take the span pair; `show` does not - the muscle-memory
     // slip gets the actual rule, not the generic "did you mistype a flag?" guess.
     let h = populated_home();
     for flag in ["--no-subagents", "--subagents"] {

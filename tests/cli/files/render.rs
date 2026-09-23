@@ -166,7 +166,7 @@ fn files_help_mentions_detail_levels_and_heuristic() {
     let h = Home::new();
     let out = h.run(&["files", "--help"]);
     assert!(out.success);
-    // The detail level is now a single `--by <summary|dir|file|timeline>` value-enum.
+    // The detail level is ONE `--by <summary|dir|file|timeline>` value-enum.
     assert!(out.stdout.contains("--by"));
     assert!(out.stdout.contains("summary"));
     assert!(out.stdout.contains("dir"));

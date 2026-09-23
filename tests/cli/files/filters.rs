@@ -4,9 +4,10 @@ use crate::harness::*;
 
 #[test]
 fn files_bare_uuid_positional_routes_to_session() {
-    // The documented `csift files <uuid>` form (a bare uuid in the positional slot) now
-    // resolves as a session filter across all projects, not as a (nonexistent) project
-    // dir. Previously errored "no Claude Code project dir for …/<uuid>".
+    // The documented `csift files <uuid>` form (a bare uuid in the positional slot)
+    // resolves as a session filter across all projects. Read as a project target it names
+    // a directory that does not exist, and the run dies with "no Claude Code project dir
+    // for …/<uuid>".
     let h = populated_home();
     let out = h.run(&[
         "files",
@@ -119,7 +120,7 @@ fn files_detects_edit_before_read_boundaries() {
     // A session Writes /p/app.rs, then an Edit to it is rejected with `File has been modified
     // since read` (the file changed outside the tool stream). `files` surfaces that as an
     // Edit-before-Read boundary attributed to the file, carrying the jsonl line number - and
-    // every row (mutation + boundary) now carries `Lnnnn` (the line-number threading fix).
+    // every row, mutation and boundary alike, carries its `Lnnnn` jsonl line.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

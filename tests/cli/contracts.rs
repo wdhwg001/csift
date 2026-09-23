@@ -165,10 +165,10 @@ fn timestamps_canonical_local_marker_everywhere() {
 
 #[test]
 fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
-    // R9 §18a: jiff's civil-Date parser accepts a full datetime string (keeping only the
-    // date part), so `--since "…T20:00:00"` (bare, no offset) silently collapsed to local
-    // MIDNIGHT - a bounded window that read exactly like a quiet time period. Bare
-    // datetimes are now system-LOCAL wall-clock time (the bare-date convention extended).
+    // jiff's civil-Date parser accepts a full datetime string and keeps only the date
+    // part, so a Date arm tried first collapses `--since "…T20:00:00"` (bare, no offset)
+    // to local MIDNIGHT - a bounded window that reads exactly like a quiet time period.
+    // A bare datetime is system-LOCAL wall-clock time, the bare-date convention extended.
     let h = Home::new();
     let enc = "-Users-test-Projects-tw";
     let sess = "cccccccc-dddd-4eee-8fff-000000000000";
@@ -216,10 +216,10 @@ fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
 
 #[test]
 fn malformed_non_candidate_lines_are_counted_never_invisible() {
-    // R10: a syntactically-invalid line carries no role marker, so the §7 byte prefilter
-    // routed it to the silent Ignore branch - `skipped_lines` reported 0 on a corrupted
-    // file, indistinguishable from a clean one (the exact failure the malformed law
-    // exists to rule out). The O(1) shape check now counts the two realistic corruption
+    // A syntactically-invalid line carries no role marker, so a §7 byte prefilter that
+    // drops a non-candidate silently reports `skipped_lines` 0 on a corrupted file,
+    // indistinguishable from a clean one - the exact failure the malformed-line rule
+    // exists to rule out. The O(1) shape check counts the two realistic corruption
     // shapes: free-text garbage (no leading '{') and crash-truncation (no trailing '}').
     let h = Home::new();
     let enc = "-Users-test-Projects-corrupt";
@@ -230,8 +230,8 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
         "THIS IS COMPLETE GARBAGE NOT JSON AT ALL !!!",
         "\n",
         // Crash-truncated mid-string: brace-opened, never closed. It CARRIES a role
-        // marker, so it exercises the candidate parse-failure path (already counted
-        // pre-R10) while the garbage line above exercises the new shape path.
+        // marker, so it exercises the candidate parse-failure path, while the garbage
+        // line above exercises the shape path.
         r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"te"#,
         "\n",
         "\n", // blank - NOT malformed, never counted
@@ -267,7 +267,7 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
 
 #[test]
 fn reserialized_spaced_json_records_are_full_citizens() {
-    // R13: a valid-JSON record whose serialization differs from CC's compact wire
+    // The needle law: a valid-JSON record whose serialization differs from CC's compact wire
     // format by one space (`"role": "user"` - python json.dumps defaults, a jq /
     // editor round-trip) is a full citizen on every surface. A stage-1 candidate
     // detector keyed on the compact spelling drops such a record one layer BEFORE

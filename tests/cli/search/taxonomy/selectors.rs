@@ -110,8 +110,8 @@ fn retirement_hint(stderr: &str, retired: &str) -> String {
 
 #[test]
 fn the_two_renamed_leaves_stay_valid_as_categories() {
-    // `agent.message` and `agent.thinking` were LEAF paths and are now CATEGORIES, so
-    // they never reach the retired table: they still parse, and they select their face.
+    // `agent.message` and `agent.thinking` are CATEGORIES rather than leaf paths, so they
+    // never reach the retired table: they parse, and they select their face.
     let h = selector_home();
     for sel in ["agent.message", "agent.thinking"] {
         let out = h.run(&["search", "", &at(SESS), "-t", sel]);

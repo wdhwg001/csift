@@ -104,8 +104,8 @@ fn search_empty_pattern_with_category_does_not_warn() {
 fn search_empty_pattern_with_uuid_positional_does_not_warn() {
     // A bare-uuid POSITIONAL routes to the SAME session filter as `--session` (via
     // resolve_session_files), so the empty-pattern warning - which claims "no session
-    // filter" - must be SUPPRESSED. Previously the gate only inspected `--session` and
-    // printed the misleading warning here.
+    // filter" - must be SUPPRESSED. A gate that inspects `--session` alone prints the
+    // misleading warning here.
     let h = populated_home();
     let out = h.run(&["search", "", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);

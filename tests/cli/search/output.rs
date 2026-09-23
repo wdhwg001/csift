@@ -457,9 +457,9 @@ fn search_resolve_persisted_reads_pointed_file() {
 
 #[test]
 fn search_hit_rows_carry_the_id_trio() {
-    // R9: bare `.hits[]` flattening is the most natural jq idiom against the most-piped
-    // command; the trio now rides every hit row (matching the exchange row's copy), so the
-    // idiom yields real ids instead of silent nulls.
+    // Bare `.hits[]` flattening is the most natural jq idiom against the most-piped
+    // command, and the trio rides every hit row (matching the exchange row's copy), so
+    // the idiom yields real ids instead of silent nulls.
     let h = populated_home();
     let out = h.run(&["search", "carry", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);

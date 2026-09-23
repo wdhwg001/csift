@@ -28,7 +28,7 @@ fn no_subagents_restricts_span_end_to_end() {
         at(SESS).as_str(),
         "--no-subagents"
     ])));
-    // The removed `--include-subagents` is now an unknown argument on a default-on command.
+    // `--include-subagents` is gone: an unknown argument on a default-on command.
     let gone = h.run(&["list", at(SESS).as_str(), "--include-subagents"]);
     assert!(
         !gone.success,
@@ -117,9 +117,10 @@ fn list_and_stats_max_count_cap_and_report() {
     );
 }
 
-/// The shared `scope  N sessions in scope (X top-level + Y subagent)` banner is now emitted
-/// by EVERY subagent-spanning text surface (list/files/search/recover/turns), not just
-/// list/turns. populated_home spans 2 subagents under 1 top-level session.
+/// The shared `scope  N sessions in scope (X top-level + Y subagent)` banner is emitted by
+/// EVERY subagent-spanning text surface (list/files/search/recover/verbatim), so a
+/// default-span surprise is announced on all of them. populated_home spans 2 subagents
+/// under 1 top-level session.
 #[test]
 fn scope_banner_uniform_across_spanning_subcommands() {
     let h = populated_home();

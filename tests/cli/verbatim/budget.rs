@@ -4,8 +4,8 @@ use crate::harness::*;
 
 #[test]
 fn verbatim_header_carries_budget_accounting_in_json_and_spanned_of_total_in_text() {
-    // R10: `spanned N compaction boundaries` read as a TRANSCRIPT property when it is a
-    // QUERY property (budget-window-relative) - the text now prints `spanned K of N … in
+    // A bare `spanned N compaction boundaries` reads as a TRANSCRIPT property when it is a
+    // QUERY property (budget-window-relative), so the text prints `spanned K of N … in
     // scope`, and the JSON header carries the full budget accounting the text header
     // shows (the machine format must never be thinner than the human one).
     let h = populated_home();
@@ -143,8 +143,8 @@ fn turns_budget_respected_real_emitted_chars() {
             "REAL --out file is {out_chars} chars, exceeds budget {budget}"
         );
 
-        // The reported "chars used" header line is itself within budget (it is now a real
-        // upper bound on the emitted length, not a self-fulfilling cost() echo).
+        // The reported "chars used" header line is itself within budget: a real upper bound
+        // on the emitted length, not a self-fulfilling cost() echo.
         let reported: usize = text
             .stdout
             .lines()

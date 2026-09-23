@@ -1,7 +1,7 @@
 //! A gated ATTACHMENT the scan cannot search is still a node of the chain.
 //!
 //! The two default-on candidate needles admit attachment lines a flagless scan has no
-//! leaf for: the channel literal, and the D7 `compact_boundary` value substring,
+//! leaf for: the channel literal, and the boundary keep's `compact_boundary` value substring,
 //! which keeps any payload that merely mentions the word. Such a record is demoted to a
 //! structural spine row rather than removed, because the survival axis walks `parentUuid`
 //! THROUGH attachment records - drop one and the walk cannot resolve the parent below it,
@@ -13,7 +13,7 @@ const SENC: &str = "-Users-dev-example-lagoon";
 const SSESS: &str = "5c3d2b1a-7e6f-4d5c-9b8a-2f1e0d9c8b7a";
 
 /// L1 the prompt, L2 its reply, L3 an attachment whose payload MENTIONS
-/// `compact_boundary` (the D7 needle admits it on a flagless scan; the payload type is
+/// `compact_boundary` (the boundary keep's needle admits it on a flagless scan; the payload type is
 /// not `hook_additional_context`, so no leaf a flagless scan can reach renders it), L4 a
 /// prompt parented to that attachment, L5 its reply, L6 the `last-prompt` leaf marker.
 ///
