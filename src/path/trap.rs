@@ -21,11 +21,11 @@ pub(crate) enum TrapSelf {
 /// (whose record has landed by then) resolves. @trap therefore earns its keep for subagents
 /// (which cannot name themselves); a main thread should prefer `@main` (env-based, no race) -
 /// the no-match error routes both. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
-/// transcripts; a subagent match → that agent (then its subtree, per scope); only the main
-/// transcript → the session. The marker grammar is enforced strictly (see
+/// transcripts; a subagent match -> that agent (then its subtree, per scope); only the main
+/// transcript -> the session. The marker grammar is enforced strictly (see
 /// [`validate_trap_marker`]) precisely so the discipline cannot be shortcut: it must be a fresh,
 /// one-shot, imaginative token the model invents on the spot - never script-generated (a
-/// generator would itself be a `csift`-ish Bash call carrying the marker → ambiguity). Errors on
+/// generator would itself be a `csift`-ish Bash call carrying the marker -> ambiguity). Errors on
 /// a malformed marker, no match (marker not literal / mistyped / its record not landed yet, or the command
 /// did not actually run `csift`), or >1 subagent (use a fresher random marker).
 pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
@@ -85,7 +85,7 @@ pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
 }
 
 /// One node in the `whoami @trap` UPSTREAM ancestry chain - a subagent (or the top-level session)
-/// the caller belongs to. The chain runs SELF → ancestors → top-level root, so a subagent learns
+/// the caller belongs to. The chain runs SELF -> ancestors -> top-level root, so a subagent learns
 /// its own bare hex AND the whole re-feedable session lineage above it: `agents` walks the topology
 /// DOWN, `whoami` walks it UP.
 pub struct WhoNode {
@@ -105,14 +105,14 @@ pub struct WhoNode {
 /// topology's `parent_agent_id`, ending at the top-level session. Reuses [`resolve_trap`]'s strict
 /// grammar + marker scan and [`crate::subagent::build_topology`] for the walk. Env-independent -
 /// reliable for a built-in Task AND a workflow subagent (whose env id is the PARENT, not itself).
-/// The topology is flat today (every subagent is depth 0), so the chain is `subagent → top-level`;
+/// The topology is flat today (every subagent is depth 0), so the chain is `subagent -> top-level`;
 /// the walk is future-proof for real nesting (depth > 0).
 pub fn resolve_trap_who(marker: &str) -> Result<Vec<WhoNode>> {
     let root = resolve_env_session()?;
     let main_jsonl = locate_session_jsonl(&root);
 
     match resolve_trap(marker)? {
-        // The marker was in the MAIN transcript → the caller IS the top-level session (no ancestry).
+        // The marker was in the MAIN transcript -> the caller IS the top-level session (no ancestry).
         TrapSelf::Session(session_id) => {
             let path = locate_session_jsonl(&session_id);
             Ok(vec![WhoNode {
@@ -123,7 +123,7 @@ pub fn resolve_trap_who(marker: &str) -> Result<Vec<WhoNode>> {
                 path,
             }])
         }
-        // A subagent carried it → walk UP from that hex to the top-level session.
+        // A subagent carried it -> walk UP from that hex to the top-level session.
         TrapSelf::Agent(agent_id) => {
             let nodes = main_jsonl
                 .as_deref()
@@ -262,7 +262,7 @@ pub(crate) fn camel_words(s: &str) -> Option<Vec<&str>> {
 }
 
 /// True when four ASCII digits form a trivial arithmetic run - a constant step in `-2..=2`
-/// (all-equal `0` / consecutive `±1` / simple odd-or-even `±2`), e.g. `0000` `1234` `9876` `1357`
+/// (all-equal `0` / consecutive `+/-1` / simple odd-or-even `+/-2`), e.g. `0000` `1234` `9876` `1357`
 /// `2468`. Such markers are too guessable / boilerplate to make a unique trap. Caller guarantees
 /// exactly four ASCII digits.
 pub(crate) fn is_trivial_4_digits(d: &str) -> bool {

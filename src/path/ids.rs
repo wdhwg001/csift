@@ -25,7 +25,7 @@ pub(crate) fn is_uuid(s: &str) -> bool {
 }
 
 /// True for a bare-hex SUBAGENT id: a dash-less run of hex digits long enough to be an
-/// agent id (≥12), never a short word. (`agents` prints these; `bare_agent_id` produces
+/// agent id (>=12), never a short word. (`agents` prints these; `bare_agent_id` produces
 /// them.) Used to GUIDE the error (subagent transcripts are not top-level jsonl basenames)
 /// and, via [`is_subagent_id`], to route `@<agent-id>` targets.
 pub fn is_bare_subagent_hex(s: &str) -> bool {
@@ -34,7 +34,7 @@ pub fn is_bare_subagent_hex(s: &str) -> bool {
 
 /// True for the NEW "teammate" subagent id shape (`taskKind:"in_process_teammate"`): the
 /// canonical agent id EMBEDS the teammate name, e.g. `aVSRepro-68a2a1661c9390c1` - a leading
-/// `a`, the name, then `-<hex≥12>`. Unlike a built-in/workflow agent (a bare hex run) it
+/// `a`, the name, then `-<hex>=12>`. Unlike a built-in/workflow agent (a bare hex run) it
 /// carries a dash + uppercase, so [`is_bare_subagent_hex`] rejects it. The NAME itself may
 /// carry dashes (a real `aP1-engine-9cf2f06d6235ca64` was minted from the teammate name
 /// `P1-engine`), so the head accepts `[A-Za-z0-9-]`; the explicit `!is_uuid` guard keeps an
@@ -97,13 +97,13 @@ pub(crate) fn split_teammate_routing_id(s: &str) -> Option<(&str, &str)> {
 /// True for a session-uuid PREFIX in either emitted form:
 /// - the short dash-less run (`@1a2b3c4d`, 4..=11 hex) - long enough to be near-collision-free
 ///   (a uuid's first segment is 8 hex = 4 billion), short enough that it is unambiguously
-///   NEITHER a full uuid (32 hex + dashes) NOR an agent hex (≥12);
+///   NEITHER a full uuid (32 hex + dashes) NOR an agent hex (>=12);
 /// - a longer LITERAL prefix of the canonical `8-4-4-4-12` layout (`@1a2b3c4d-5e6f`, 12..=35
 ///   chars, a dash exactly at each template position) - the collision-lengthened header token
 ///   `search` emits when two in-scope transcript ids share their first 8 chars.
 ///
 /// The caller prefix-matches either form against the enumerated ids and errors if it is not
-/// unique. (A dash-less run of ≥12 hex is claimed as an agent id BEFORE this predicate runs.)
+/// unique. (A dash-less run of >=12 hex is claimed as an agent id BEFORE this predicate runs.)
 pub(crate) fn is_uuid_prefix(s: &str) -> bool {
     if (4..=11).contains(&s.len()) {
         return s.bytes().all(|b| b.is_ascii_hexdigit());

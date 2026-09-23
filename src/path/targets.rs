@@ -3,8 +3,8 @@
 use super::*;
 
 /// Resolve a `*.jsonl` session-file TARGET to `(project_dir, session_id)`. A top-level
-/// `<enc>/<uuid>.jsonl` → its parent dir + the uuid stem. A SUBAGENT transcript
-/// `<enc>/<uuid>/subagents/[…/]agent-<hex>.jsonl` → the PARENT session (`<enc>/<uuid>`) so the
+/// `<enc>/<uuid>.jsonl` -> its parent dir + the uuid stem. A SUBAGENT transcript
+/// `<enc>/<uuid>/subagents/[.../]agent-<hex>.jsonl` -> the PARENT session (`<enc>/<uuid>`) so the
 /// whole conversation is in scope (the agent is reached via subagent expansion). Errors if the
 /// file does not exist (never fabricates a target).
 pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
@@ -90,11 +90,11 @@ pub fn extend_with_session_list(paths: &mut Vec<PathBuf>, src: &Path) -> Result<
     Ok(())
 }
 
-/// Shared target assembly for the multi-target commands: positional `paths` ∪ the
+/// Shared target assembly for the multi-target commands: positional `paths` plus the
 /// `--sessions-from` id list, resolved through [`resolve_session_files`]. An EXPLICITLY
 /// given but EMPTY id list with no positional targets resolves to an EMPTY scope - the
 /// honest-empty a pipeline stage that found nothing should propagate - never a silent
-/// widening to every project (0 targets ⇒ ALL is the rule for a BARE invocation only).
+/// widening to every project (0 targets => ALL is the rule for a BARE invocation only).
 pub fn resolve_targets_with_session_list(
     positionals: &[PathBuf],
     sessions_from: Option<&Path>,
@@ -108,7 +108,7 @@ pub fn resolve_targets_with_session_list(
 }
 
 /// [`resolve_targets_with_session_list`] for a surface that DISCLOSES the resolution's
-/// duplicate report (§2 `dedup`) - the same assembly, returning [`Resolved`] whole.
+/// duplicate report (section 2 `dedup`) - the same assembly, returning [`Resolved`] whole.
 pub fn resolve_targets_with_session_list_reported(
     positionals: &[PathBuf],
     sessions_from: Option<&Path>,

@@ -27,7 +27,7 @@ fn strip_prefix_rejects_real_path() {
     // A real cwd with slashes is NOT a bare token and is not under the root.
     assert!(strip_projects_root_prefix(Path::new("/Users/testuser/Projects/foo"), root).is_none());
     // Under-root but with an extra nested component (a session dir, not an
-    // encoded project token) → not a single-component encoded token.
+    // encoded project token) -> not a single-component encoded token.
     assert!(
         strip_projects_root_prefix(Path::new("/home/u/.claude/projects/-Users-foo/sub"), root)
             .is_none()
@@ -73,24 +73,24 @@ fn resolve_claude_home_precedence_flag_then_env_then_home() {
         resolve_claude_home(None, Some(OsStr::new("/env/dir")), home),
         PathBuf::from("/env/dir")
     );
-    // 3. An EMPTY $CLAUDE_CONFIG_DIR is ignored → falls through to $HOME/.claude.
+    // 3. An EMPTY $CLAUDE_CONFIG_DIR is ignored -> falls through to $HOME/.claude.
     assert_eq!(
         resolve_claude_home(None, Some(OsStr::new("")), home),
         PathBuf::from("/home/u/.claude")
     );
-    // 4. Nothing set → $HOME/.claude (the default).
+    // 4. Nothing set -> $HOME/.claude (the default).
     assert_eq!(
         resolve_claude_home(None, None, home),
         PathBuf::from("/home/u/.claude")
     );
 }
 
-// ── Branch-completeness for the pure helpers (env-touching arms are covered by
-//    the tests/cli_integration.rs suite, which sets a child-scoped $HOME). ──
+// -- Branch-completeness for the pure helpers (env-touching arms are covered by
+//    the tests/cli_integration.rs suite, which sets a child-scoped $HOME). --
 
 #[test]
 fn absolutize_existing_path_canonicalizes() {
-    // An existing dir → the `canonicalize` Ok arm.
+    // An existing dir -> the `canonicalize` Ok arm.
     let tmp = std::env::temp_dir();
     let abs = absolutize(&tmp).expect("absolutize existing");
     assert!(abs.is_absolute());
@@ -98,7 +98,7 @@ fn absolutize_existing_path_canonicalizes() {
 
 #[test]
 fn absolutize_nonexistent_absolute_path_normalizes_lexically() {
-    // A non-existent ABSOLUTE path → canonicalize fails → the `p.is_absolute()`
+    // A non-existent ABSOLUTE path -> canonicalize fails -> the `p.is_absolute()`
     // true arm + lexical_normalize (resolving the `..`). Spelled per platform:
     // a bare `/x` path is not absolute on Windows.
     #[cfg(windows)]
@@ -111,7 +111,7 @@ fn absolutize_nonexistent_absolute_path_normalizes_lexically() {
 
 #[test]
 fn absolutize_nonexistent_relative_path_joins_cwd() {
-    // A non-existent RELATIVE path → canonicalize fails → the `else` (join cwd)
+    // A non-existent RELATIVE path -> canonicalize fails -> the `else` (join cwd)
     // arm. The result is absolute and ends with our unique segment.
     let rel = Path::new("csift-nonexistent-xyzzy-rel");
     let abs = absolutize(rel).expect("absolutize relative");
@@ -140,7 +140,7 @@ fn strip_prefix_under_root_with_token() {
         Some("-Enc-Token")
     );
     // Under root but the single component is NOT a valid encoded token (no leading
-    // dash) → None (the `looks_like_encoded_token` false arm under-root).
+    // dash) -> None (the `looks_like_encoded_token` false arm under-root).
     assert!(
         strip_projects_root_prefix(Path::new("/home/u/.claude/projects/plain"), root).is_none()
     );
@@ -148,7 +148,7 @@ fn strip_prefix_under_root_with_token() {
 
 #[test]
 fn strip_prefix_under_root_empty_remainder_is_none() {
-    // `target == root` exactly → zero components remain → not a single-token match.
+    // `target == root` exactly -> zero components remain -> not a single-token match.
     let root = Path::new("/home/u/.claude/projects");
     assert!(strip_projects_root_prefix(root, root).is_none());
 }
@@ -156,7 +156,7 @@ fn strip_prefix_under_root_empty_remainder_is_none() {
 #[test]
 fn resolve_target_real_path_that_does_not_resolve_errors() {
     // A real absolute path whose encoded dir does not exist under the projects
-    // root → the final `bail!` arm (step 4). Uses a path guaranteed absent.
+    // root -> the final `bail!` arm (step 4). Uses a path guaranteed absent.
     let err = resolve_target(Path::new(
         "/Users/csift-definitely-no-such-project-9999/zzz",
     ))
@@ -170,7 +170,7 @@ fn resolve_target_real_path_that_does_not_resolve_errors() {
 
 #[test]
 fn resolve_target_encoded_token_not_a_dir_errors() {
-    // A leading-`-` token that is NOT an existing dir under the root → the
+    // A leading-`-` token that is NOT an existing dir under the root -> the
     // token-branch bail (does not fall through to path-encoding).
     let err = resolve_target(Path::new("-csift-no-such-encoded-token-zzzz")).unwrap_err();
     assert!(

@@ -31,7 +31,7 @@ pub fn session_id_from_path(path: &Path) -> String {
 
 /// The re-feedable PARENT session uuid for a transcript path, or `None` when the path is a
 /// top-level `<uuid>.jsonl` (which IS its own session). A subagent transcript lives at
-/// `…/<PARENT-UUID>/subagents/[workflows/wf_*/]agent-<hex>.jsonl`, so the parent uuid is the
+/// `.../<PARENT-UUID>/subagents/[workflows/wf_*/]agent-<hex>.jsonl`, so the parent uuid is the
 /// directory component immediately BEFORE the `subagents` segment. This is what makes a
 /// search/files subagent match re-feedable: its bare-hex `session_id` is NOT a re-feedable
 /// `@<uuid>` target, but the `parent_session_id` this returns is (`csift verbatim @<parent>` works).
@@ -62,7 +62,7 @@ pub fn is_subagent_path(path: &Path) -> bool {
 ///
 /// Distinct IDS, never transcripts. One session id can be on disk under two project
 /// directories, and a pair whose contents DIVERGE merges into nothing and keeps both files
-/// in scope (§2.5) - counting files there reported two sessions where the disk holds one
+/// in scope (section 2.5) - counting files there reported two sessions where the disk holds one
 /// session twice. The header key is named `sessions_in_scope` and is read as a session
 /// census, so the rule lives in ONE place rather than once per surface.
 pub fn scope_span(rows: impl IntoIterator<Item = (String, bool)>) -> (usize, usize) {

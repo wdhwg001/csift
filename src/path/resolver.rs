@@ -5,7 +5,7 @@ use super::*;
 /// What one target resolution produced: the concrete transcripts to operate on, plus what
 /// the resolution had to DECIDE about them.
 ///
-/// Today the only decision is the duplicate merge (§2, `dedup`): a session id can be on
+/// Today the only decision is the duplicate merge (section 2, `dedup`): a session id can be on
 /// disk under more than one project directory, and collapsing those copies changes what
 /// every count downstream means. The no-silent-truncation law therefore makes the report
 /// part of the return value rather than a fact only the resolver knows - a surface that
@@ -37,7 +37,7 @@ pub fn resolve_session_files(
 /// `recover` / `turns` / `image`. There is NO `--session` flag - a session is targeted by a
 /// positional `@<uuid>` / `@<agent-hex>` / `@<name>@<team>` / `@main` / `@trap:<marker>` token or a
 /// `*.jsonl` file; a real
-/// path / encoded-dir token / `~/.claude/projects/<enc>` scopes to project dir(s). 0 `paths` ⇒
+/// path / encoded-dir token / `~/.claude/projects/<enc>` scopes to project dir(s). 0 `paths` =>
 /// every project under the projects root. The subagent transcripts of a selected session
 /// (built-in Task/Agent-tool + workflow / OMC agents under `subagents/**`) are gathered from
 /// the already-id-filtered top-level set; workflow `journal.jsonl` event logs are never
@@ -93,7 +93,7 @@ pub fn resolve_session_files_reported(
     let mut files: Vec<PathBuf> = Vec::new();
     let mut duplicates: Vec<DuplicateGroup> = Vec::new();
 
-    // ── SESSION path: the top-level `<uuid>.jsonl` session files (+ subagents per scope).
+    // -- SESSION path: the top-level `<uuid>.jsonl` session files (+ subagents per scope).
     // Skipped for an AGENT-ONLY invocation (no session target), so `@<agent-hex>` alone does
     // not list every session - only the agent subtree below runs.
     let session_path_active = session_target || agent_hexes.is_empty();
@@ -142,7 +142,7 @@ pub fn resolve_session_files_reported(
         files.extend(session_files);
     }
 
-    // ── AGENT path: each `@<agent-hex>` resolves to the subagent + (unless `--no-subagents`)
+    // -- AGENT path: each `@<agent-hex>` resolves to the subagent + (unless `--no-subagents`)
     // its TOPOLOGICAL descendants. Errors when no such agent exists in scope.
     for hex in &agent_hexes {
         // Every copy the agent owns, unmerged: the union merge below decides them together
@@ -192,7 +192,7 @@ struct Targets {
     /// segment): resolved by prefix-match against the enumerated sessions, UNIQUE or an
     /// ambiguity error.
     session_prefixes: Vec<String>,
-    /// AGENT targets (`@<agent-hex>` / `@trap:<marker>`→agent / a subagent `*.jsonl`): each
+    /// AGENT targets (`@<agent-hex>` / `@trap:<marker>`->agent / a subagent `*.jsonl`): each
     /// resolves to that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
     agent_hexes: Vec<String>,
     /// Teammate ROUTING targets (`@<Name>@<Team>`) as `(name, team)`. Kept apart from
@@ -203,7 +203,7 @@ struct Targets {
     /// apart from `project_paths` so they don't trigger the all-projects scan.
     explicit_dirs: Vec<ProjectDir>,
     /// True once any SESSION/PROJECT target is seen, so the all-session enumeration runs. An
-    /// AGENT-ONLY invocation (e.g. just `@<agent-hex>`) leaves it false → only the agent path
+    /// AGENT-ONLY invocation (e.g. just `@<agent-hex>`) leaves it false -> only the agent path
     /// runs.
     session_target: bool,
 }
@@ -220,7 +220,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         let t = p.to_str().unwrap_or_default();
         // `@`-prefixed IDENTIFIER tokens (never a path): `@main` (env), `@trap:<marker>` (find
         // the CALLER's transcript by a unique literal marker it embedded in this command),
-        // `@<uuid>`, `@<agent-hex>` (the agent subtree), `@<uuid-prefix>` (leading hex → unique
+        // `@<uuid>`, `@<agent-hex>` (the agent subtree), `@<uuid-prefix>` (leading hex -> unique
         // session), `@<encoded-dir>` (a project dir by its encoded name).
         if let Some(id) = t.strip_prefix('@') {
             match id {
@@ -241,7 +241,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                 // `@trap:<marker>` - the SELF identifier. The caller (an in-process subagent
                 // whose own id CC withholds from the env) puts a unique, LITERAL marker in this
                 // very command; csift finds the transcript whose Bash tool_use carries it. A
-                // subagent match → that agent's subtree; a main-thread match → the session.
+                // subagent match -> that agent's subtree; a main-thread match -> the session.
                 _ if id.starts_with("trap:") => {
                     match resolve_trap(id.strip_prefix("trap:").unwrap_or(""))? {
                         TrapSelf::Agent(hex) => agent_hexes.push(hex),
@@ -265,12 +265,12 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     }
                 }
                 // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
-                // never a full uuid (32+dashes) or an agent hex (≥12) - resolve it uniquely.
+                // never a full uuid (32+dashes) or an agent hex (>=12) - resolve it uniquely.
                 _ if is_uuid_prefix(id) => {
                     session_prefixes.push(id.to_string());
                     session_target = true;
                 }
-                // `@-Users-…` / `@C--Users-…` → an encoded project-dir name (a Unix cwd's
+                // `@-Users-...` / `@C--Users-...` -> an encoded project-dir name (a Unix cwd's
                 // leading `/` encodes to `-`; a Windows cwd's `C:\` encodes to `C--`).
                 _ if id.starts_with('-') || is_drive_encoded_token(id) => {
                     explicit_dirs.push(resolve_target(Path::new(id))?);
@@ -303,8 +303,8 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
             }
             continue;
         }
-        // A `*.jsonl` transcript target. A SUBAGENT transcript → that agent (+ its subtree); a
-        // top-level `<uuid>.jsonl` → that session. Either way its project dir scopes the search.
+        // A `*.jsonl` transcript target. A SUBAGENT transcript -> that agent (+ its subtree); a
+        // top-level `<uuid>.jsonl` -> that session. Either way its project dir scopes the search.
         if t.ends_with(".jsonl") {
             // Absolutize FIRST: a bare-basename token (`x.jsonl` with no separator) has
             // `parent() == Some("")`, which feeds an empty dir into the scan (a tolerated
@@ -341,7 +341,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
             continue;
         }
         // A BARE session/agent id (no `@`) can never be a project path in practice, and
-        // the path branch's fall-through error ("no project dir named …") describes the
+        // the path branch's fall-through error ("no project dir named ...") describes the
         // WRONG mental model back to the caller. Catch the id SHAPE (unless a real path of
         // that name exists) and say the exact fix.
         if let Some(tok) = p.to_str() {
@@ -458,7 +458,7 @@ fn admit_entry(
             }
         }
     }
-    // An exact id OR a uuid-PREFIX (`@1a2b3c4d…`) keeps the file.
+    // An exact id OR a uuid-PREFIX (`@1a2b3c4d...`) keeps the file.
     let matched_prefix = session_prefixes
         .iter()
         .find(|pfx| stem.starts_with(pfx.as_str()))

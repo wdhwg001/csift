@@ -2,13 +2,13 @@
 
 use super::*;
 
-/// Resolve a user-supplied target (actual cwd OR a pre-encoded dir, §2.3) to a
+/// Resolve a user-supplied target (actual cwd OR a pre-encoded dir, section 2.3) to a
 /// concrete `<encoded>` directory under `~/.claude/projects`. Errors (never an
 /// empty silent result) when neither interpretation resolves to a directory.
 pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
     let root = projects_root()?;
 
-    // §2.3 step 1: pre-encoded projects-dir token (bare or under the root).
+    // section 2.3 step 1: pre-encoded projects-dir token (bare or under the root).
     if let Some(token) = strip_projects_root_prefix(target, &root) {
         let dir = root.join(&token);
         if dir.is_dir() {
@@ -21,7 +21,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         }
         // A leading-`-` token that doesn't exist as a dir: don't silently fall
         // through to path-encoding (it can't be a real absolute path anyway). A
-        // WINDOWS-shaped token (`C--…`) CAN also be a real relative path, so that
+        // WINDOWS-shaped token (`C--...`) CAN also be a real relative path, so that
         // shape falls through to the real-path interpretation below instead.
         if token.starts_with('-') {
             bail!(
@@ -32,7 +32,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         }
     }
 
-    // §2.3 step 2: treat as a real filesystem path - absolutize + encode + look up.
+    // section 2.3 step 2: treat as a real filesystem path - absolutize + encode + look up.
     let abs = absolutize(target)?;
     let encoded = encode_cwd(&abs);
     let dir = root.join(&encoded);
@@ -43,7 +43,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         });
     }
 
-    // §2.3 step 3: LONG-PATH fallback. Claude Code caps the encoded dir name at
+    // section 2.3 step 3: LONG-PATH fallback. Claude Code caps the encoded dir name at
     // MAX_SANITIZED_LENGTH (200) chars and appends a hash suffix for anything longer -
     // `<first-200>-<hash>` - so the full encoding above does not exist on disk for a
     // deeply-nested project. The suffix is NOT reconstructible (the CLI uses Bun.hash,
@@ -59,7 +59,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         }
     }
 
-    // §2.3 step 4: neither resolved - surface the attempted path, no empty result.
+    // section 2.3 step 4: neither resolved - surface the attempted path, no empty result.
     bail!(
         "no Claude Code project dir for {} (looked for {})",
         abs.display(),
@@ -68,7 +68,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
 }
 
 /// Claude Code's `MAX_SANITIZED_LENGTH`: a project's encoded dir-name is capped at 200
-/// chars; a longer cwd is stored as `<first-200>-<hash>` (§2.1). Matches the shipping
+/// chars; a longer cwd is stored as `<first-200>-<hash>` (section 2.1). Matches the shipping
 /// binary's sanitizer (`Siq`).
 pub(crate) const MAX_SANITIZED_LENGTH: usize = 200;
 
@@ -103,7 +103,7 @@ pub(crate) fn find_dir_by_prefix(root: &Path, prefix: &str, abs: &Path) -> Resul
 }
 
 /// Cheaply read the `cwd` of ONE session file from its first record - a BOUNDED head read
-/// (≤64 KiB; the `cwd` field sits in the first record's first ~200 bytes), so a first line
+/// (<=64 KiB; the `cwd` field sits in the first record's first ~200 bytes), so a first line
 /// that is huge (an image record on line 1) never forces a full-line load. No full JSON
 /// parse - mirrors CC's `extractJsonStringField`.
 pub(crate) fn read_first_cwd(path: &Path) -> Option<String> {

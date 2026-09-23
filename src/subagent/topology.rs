@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// One fully-linked subagent node in the topology (§new-model). Carries the flat
+/// One fully-linked subagent node in the topology (section new-model). Carries the flat
 /// lifecycle facts PLUS the toolUseId-linked spawn linkage (trigger time, parent agent,
 /// returned message) and the per-node files-changed list. `children` is the tool_use-graph
 /// nesting (real multi-level chains exist since CC 2.1.25x: measured 190 nodes at depth
@@ -34,7 +34,7 @@ pub struct SubagentNode {
     /// The `teamName` for a teammate (`kind == Teammate`); `None` otherwise.
     pub team_name: Option<String>,
     pub description: Option<String>,
-    /// TRUE trigger time = the parent tool_use ts (§4); falls back to the child-head ts
+    /// TRUE trigger time = the parent tool_use ts (section 4); falls back to the child-head ts
     /// (`started_utc`) when the spawn index has no entry.
     pub trigger_utc: Option<String>,
     /// Child transcript HEAD ts (the lagging secondary "when").
@@ -49,7 +49,7 @@ pub struct SubagentNode {
     /// transcript has any timestamp regardless of status. Equals `completed_utc` on a
     /// completed lane; on a frozen lane it equals `pending_since_utc`.
     pub last_activity_utc: Option<String>,
-    /// The subagent's returned message (§3), resolved 3-ways. `None` when unresolved.
+    /// The subagent's returned message (section 3), resolved 3-ways. `None` when unresolved.
     pub returned_message: Option<String>,
     pub returned_message_source: Option<ReturnedMsgSource>,
     pub status: SubagentStatus,
@@ -132,10 +132,10 @@ pub(crate) fn pending_facts(pending: Option<&PendingToolUse>) -> PendingFacts {
     facts
 }
 
-/// Resolve a subagent's returned message 3 ways (§3):
-/// - **workflow** → the `journal.jsonl` `result` payload ([`journal_result`]);
-/// - **sync built-in** → the parent tool_result text for its spawn id;
-/// - **async built-in** (`Async agent launched …` sentinel) → the child transcript tail's
+/// Resolve a subagent's returned message 3 ways (section 3):
+/// - **workflow** -> the `journal.jsonl` `result` payload ([`journal_result`]);
+/// - **sync built-in** -> the parent tool_result text for its spawn id;
+/// - **async built-in** (`Async agent launched ...` sentinel) -> the child transcript tail's
 ///   assistant text.
 ///
 /// Returns `(message, source)`; `(None, None)` when nothing resolves.
@@ -156,11 +156,11 @@ pub(crate) fn resolve_returned_message(
     if let Some(id) = subagent.spawn_tool_use_id.as_deref() {
         if let Some(text) = index.tool_result_text(id) {
             if text.contains(ASYNC_LAUNCH_SENTINEL) {
-                // Async launch → the real message is the child transcript tail.
+                // Async launch -> the real message is the child transcript tail.
                 if let Some(tail) = child_tail_text(&subagent.path) {
                     return (Some(tail), Some(ReturnedMsgSource::AsyncChildTail));
                 }
-                // Tail unavailable → honestly report the sentinel as what we have.
+                // Tail unavailable -> honestly report the sentinel as what we have.
                 return (
                     Some(text.to_string()),
                     Some(ReturnedMsgSource::SyncToolResult),
@@ -172,7 +172,7 @@ pub(crate) fn resolve_returned_message(
             );
         }
     }
-    // No spawn id / no parent result (e.g. parent transcript absent) → fall back to the
+    // No spawn id / no parent result (e.g. parent transcript absent) -> fall back to the
     // child tail so a returned message is still surfaced when possible.
     if let Some(tail) = child_tail_text(&subagent.path) {
         return (Some(tail), Some(ReturnedMsgSource::AsyncChildTail));
@@ -195,9 +195,9 @@ pub(crate) fn child_tail_text(path: &Path) -> Option<String> {
     found
 }
 
-/// A workflow RUN node (§5), parsed from a top-level `<session>/workflows/wf_*.json`
+/// A workflow RUN node (section 5), parsed from a top-level `<session>/workflows/wf_*.json`
 /// manifest (NOT `subagents/workflows/`). Surfaced as the parent of its workflow agents in
-/// the `--tree` view. Fields are best-effort (a key absent in an older manifest → `None`).
+/// the `--tree` view. Fields are best-effort (a key absent in an older manifest -> `None`).
 #[derive(Debug, Clone)]
 pub struct WorkflowRun {
     /// The session whose sidecar holds this manifest. A `run_id` is unique WITHIN a session
@@ -220,7 +220,7 @@ pub struct WorkflowRun {
     pub started_utc: Option<String>,
 }
 
-/// Read every top-level `<session>/workflows/wf_*.json` manifest (§5) as a [`WorkflowRun`].
+/// Read every top-level `<session>/workflows/wf_*.json` manifest (section 5) as a [`WorkflowRun`].
 /// Returns an empty vec when the session has no sidecar / no `workflows/` dir (never an
 /// error for the common no-workflow case). The `workflows/scripts/` subdir and any
 /// non-`wf_*.json` entry are ignored.
@@ -250,7 +250,7 @@ pub fn discover_workflow_runs(session_jsonl: &Path) -> Result<Vec<WorkflowRun>> 
             continue;
         };
         let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-            continue; // malformed manifest → skip (never crash)
+            continue; // malformed manifest -> skip (never crash)
         };
         let str_f = |k: &str| {
             v.get(k)
@@ -278,7 +278,7 @@ pub fn discover_workflow_runs(session_jsonl: &Path) -> Result<Vec<WorkflowRun>> 
     Ok(out)
 }
 
-/// Build the fully-linked [`SubagentNode`] list for one session (§Part A): discover the
+/// Build the fully-linked [`SubagentNode`] list for one session (section Part A): discover the
 /// subagents, index the parent spawns, then for each subagent join the spawn meta (true
 /// trigger time + returned message) and, when `with_files`, extract its files-changed.
 ///
@@ -311,7 +311,7 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
 }
 
 /// Set each node's `depth` = its number of AGENT ancestors (0 = a direct subagent of the
-/// session). Walks the `parent_agent_id` chain via an id→parent map, with a cycle guard (a
+/// session). Walks the `parent_agent_id` chain via an id->parent map, with a cycle guard (a
 /// corrupt/forged chain can never hang the walk). The on-disk set is flat, so this is the
 /// only place depth>0 is established.
 pub(crate) fn assign_depths(nodes: &mut [SubagentNode]) {
@@ -448,7 +448,7 @@ pub(crate) fn node_for(
 }
 
 /// Extract a subagent's files-changed by running the SAME structured + Bash mutation
-/// extractors `files` uses, over the node's own transcript (§query-5). Returns
+/// extractors `files` uses, over the node's own transcript (section query-5). Returns
 /// `(path, op_label, is_create)` per mutation, de-duplicated to one row per (path, op).
 pub(crate) fn node_files_changed(path: &Path) -> Result<Vec<(String, String, bool)>> {
     let Some(mmap) = mmap_bytes(path)? else {

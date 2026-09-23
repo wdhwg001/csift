@@ -2,13 +2,13 @@
 
 use super::*;
 
-// ── Bare-uuid positional routing (so `csift files <uuid>` works as documented) ──
+// -- Bare-uuid positional routing (so `csift files <uuid>` works as documented) --
 
 #[test]
 fn is_uuid_recognizes_canonical_form() {
     assert!(is_uuid("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
     assert!(is_uuid("00000000-0000-0000-0000-000000000000"));
-    // Wrong group lengths, non-hex, missing dashes, real paths → not a uuid.
+    // Wrong group lengths, non-hex, missing dashes, real paths -> not a uuid.
     assert!(!is_uuid("0a1b2c3d-4e5f-4a6b-8c7d"));
     assert!(!is_uuid("zzzzzzzz-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
     assert!(!is_uuid("-Users-testuser-Projects-foo"));
@@ -20,7 +20,7 @@ fn is_uuid_recognizes_canonical_form() {
 fn is_bare_subagent_hex_recognizes_agent_ids() {
     assert!(is_bare_subagent_hex("ae24045bd6d4bdaff"));
     assert!(is_bare_subagent_hex("a585e25a580c59e7a"));
-    // Too short, dashed (uuid), or a word → not a bare subagent hex.
+    // Too short, dashed (uuid), or a word -> not a bare subagent hex.
     assert!(!is_bare_subagent_hex("abc123")); // < 12
     assert!(!is_bare_subagent_hex(
         "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
@@ -38,7 +38,7 @@ fn is_teammate_agent_id_recognizes_name_embedded_ids() {
     // A teammate NAME may itself carry dashes (real data: teammate "P1-engine") - the
     // head is dash-tolerant so the id `csift agents` prints still round-trips.
     assert!(is_teammate_agent_id("aP1-engine-9cf2f06d6235ca64"));
-    // A bare hex (built-in/workflow) has no dash → NOT teammate-shaped (it routes via
+    // A bare hex (built-in/workflow) has no dash -> NOT teammate-shaped (it routes via
     // is_bare_subagent_hex instead).
     assert!(!is_teammate_agent_id("ae24045bd6d4bdaff"));
     // A uuid is rejected: the explicit is_uuid guard (an `a`-led uuid would otherwise
@@ -49,9 +49,9 @@ fn is_teammate_agent_id_recognizes_name_embedded_ids() {
     assert!(!is_teammate_agent_id(
         "a93b39f8-1681-4535-88eb-5b8ecce0abcd"
     ));
-    // An encoded project dir starts with `-` (leading-slash sanitisation) → head not `a`.
+    // An encoded project dir starts with `-` (leading-slash sanitisation) -> head not `a`.
     assert!(!is_teammate_agent_id("-Users-testuser-Projects-foo"));
-    // Hex tail too short, or a non-hex tail → rejected.
+    // Hex tail too short, or a non-hex tail -> rejected.
     assert!(!is_teammate_agent_id("aVSRepro-68a2a1")); // tail < 12
     assert!(!is_teammate_agent_id("aVSRepro-zzzzzzzzzzzz")); // non-hex tail
 }
@@ -78,7 +78,7 @@ fn pins_single_session_covers_at_tokens_and_jsonl() {
     assert!(pins_single_session("@aP1-engine-9cf2f06d6235ca64")); // dashed-name teammate
     assert!(pins_single_session("@1a2b3c4d")); // uuid-prefix
     assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
-    // A bare uuid (no `@`), an encoded token, a plain path, `.` → NOT a session pin.
+    // A bare uuid (no `@`), an encoded token, a plain path, `.` -> NOT a session pin.
     assert!(!pins_single_session("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
     assert!(!pins_single_session("-Users-testuser-Projects-foo"));
     assert!(!pins_single_session("."));
@@ -89,9 +89,9 @@ fn is_uuid_prefix_covers_first_segment_not_full_or_agent() {
     assert!(is_uuid_prefix("1a2b")); // 4 hex (minimum)
     assert!(is_uuid_prefix("1a2b3c4d")); // 8 hex (the uuid first segment)
     assert!(is_uuid_prefix("1a2b3c4d5e6")); // 11 hex (max dash-less)
-                                            // Too short (<4), dash-less ≥12 (agent-hex territory), non-hex, off-template dash → NOT a prefix.
+                                            // Too short (<4), dash-less >=12 (agent-hex territory), non-hex, off-template dash -> NOT a prefix.
     assert!(!is_uuid_prefix("1a2")); // 3
-    assert!(!is_uuid_prefix("1a2b3c4d5e6f")); // 12 dash-less → agent hex
+    assert!(!is_uuid_prefix("1a2b3c4d5e6f")); // 12 dash-less -> agent hex
     assert!(!is_uuid_prefix("1a2b3c4g")); // non-hex g
     assert!(!is_uuid_prefix("1a2b-3c4d")); // dash off the 8-4-4-4-12 template
                                            // LITERAL layout prefixes (collision-lengthened header tokens) ARE prefixes.

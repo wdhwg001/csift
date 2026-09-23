@@ -17,7 +17,7 @@ fn lifecycle_builtin_from_transcript_terminal_message() {
         lc.completed_utc.as_deref(),
         Some("2026-06-07T05:03:20.000Z")
     );
-    // Terminal assistant text ⇒ completed (no journal for a built-in).
+    // Terminal assistant text => completed (no journal for a built-in).
     assert_eq!(lc.status, SubagentStatus::Completed);
     assert_eq!(lc.agent_type.as_deref(), Some("oh-my-claudecode:executor"));
     assert_eq!(lc.description.as_deref(), Some("run it"));
@@ -34,7 +34,7 @@ fn lifecycle_workflow_completion_from_journal_result() {
         .unwrap();
     let lc = lifecycle(wf, &JournalCache::build(std::slice::from_ref(wf))).unwrap();
     // The workflow transcript ends on a tool_use (no terminal text), but the
-    // journal carries a `result` event ⇒ completed.
+    // journal carries a `result` event => completed.
     assert_eq!(lc.status, SubagentStatus::Completed);
     assert_eq!(lc.agent_type.as_deref(), Some("workflow-subagent"));
     assert_eq!(lc.started_utc.as_deref(), Some("2026-06-07T06:00:00.000Z"));
@@ -141,9 +141,9 @@ fn kind_and_status_labels() {
 
 #[test]
 fn journal_completion_false_for_builtin_no_workflow() {
-    // A built-in subagent has no workflow_id → journal_reports_completion is false
+    // A built-in subagent has no workflow_id -> journal_reports_completion is false
     // via the `let Some(wf_id) else` arm (reached through lifecycle: a built-in
-    // ending on a tool_use with no terminal text → Running, proving no journal).
+    // ending on a tool_use with no terminal text -> Running, proving no journal).
     let fx = Fixture::new();
     let enc = "-Users-nojournal";
     let session = fx.write(
@@ -169,9 +169,9 @@ fn journal_completion_false_for_builtin_no_workflow() {
 #[test]
 fn journal_completion_handles_missing_malformed_and_nonmatching() {
     // A workflow subagent whose journal exists but carries ONLY a `started` event
-    // (no `result`) AND a malformed line AND a result for a DIFFERENT agent →
+    // (no `result`) AND a malformed line AND a result for a DIFFERENT agent ->
     // completion not reported from the journal; the transcript ends on a tool_use
-    // (no terminal text) → Running. Exercises the journal scan's continue arms
+    // (no terminal text) -> Running. Exercises the journal scan's continue arms
     // (blank line, malformed line, non-result type, wrong agentId) + the
     // fall-off-the-end `false`.
     let fx = Fixture::new();
@@ -190,10 +190,10 @@ fn journal_completion_handles_missing_malformed_and_nonmatching() {
     fx.write(
         &format!("{enc}/{SESS}/subagents/workflows/wf_z/journal.jsonl"),
         concat!(
-            "\n",                                                   // blank line → continue
-            "{ this is not valid json }\n",                         // malformed → continue
-            "{\"type\":\"started\",\"agentId\":\"ggg777\"}\n",      // non-result → no match
-            "{\"type\":\"result\",\"agentId\":\"someone-else\"}\n"  // result, wrong agent → no match
+            "\n",                                                   // blank line -> continue
+            "{ this is not valid json }\n",                         // malformed -> continue
+            "{\"type\":\"started\",\"agentId\":\"ggg777\"}\n",      // non-result -> no match
+            "{\"type\":\"result\",\"agentId\":\"someone-else\"}\n" // result, wrong agent -> no match
         ),
     );
     let subs = discover_subagents(&session).unwrap();
@@ -211,7 +211,7 @@ fn journal_completion_handles_missing_malformed_and_nonmatching() {
 
 #[test]
 fn journal_completion_false_when_journal_absent() {
-    // A workflow subagent with NO journal.jsonl at all → the `std::fs::read` Err
+    // A workflow subagent with NO journal.jsonl at all -> the `std::fs::read` Err
     // arm. The transcript here ends with terminal assistant text, so the AGENT is
     // still Completed (via transcript), but the journal path itself returns false.
     let fx = Fixture::new();
@@ -240,8 +240,8 @@ fn journal_completion_false_when_journal_absent() {
 
 #[test]
 fn lifecycle_unknown_when_no_timestamps() {
-    // A transcript whose records carry NO timestamp at all → started_utc stays
-    // None, no terminal text, no journal → status Unknown (resolve_status's else
+    // A transcript whose records carry NO timestamp at all -> started_utc stays
+    // None, no terminal text, no journal -> status Unknown (resolve_status's else
     // arm). The head scan also exercises the `if let Some(ts)` false arm (record
     // with no timestamp) before falling off the end.
     let fx = Fixture::new();
@@ -272,7 +272,7 @@ fn lifecycle_tail_terminal_flag_short_circuits_on_later_record() {
     // To reach the `!terminal_agent_msg` FALSE arm of the tail guard, the NEWEST
     // record must set terminal_agent_msg=true but leave completed_utc still None
     // (no timestamp) so the scan CONTINUES; the next (older) record is then
-    // evaluated with terminal already true → `!terminal_agent_msg && …` short-
+    // evaluated with terminal already true -> `!terminal_agent_msg && ...` short-
     // circuits on its false left operand.
     let fx = Fixture::new();
     let enc = "-Users-shortcirc";
@@ -286,7 +286,7 @@ fn lifecycle_tail_terminal_flag_short_circuits_on_later_record() {
                 "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"jjj000\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"start\"}}\n",
                 // older assistant WITH a timestamp (provides completed_utc later in the scan)
                 "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:00:10.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"older text\"}]}}\n",
-                // NEWEST assistant text but NO timestamp → terminal=true, completed_utc stays None → scan continues
+                // NEWEST assistant text but NO timestamp -> terminal=true, completed_utc stays None -> scan continues
                 "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"newest no-ts text\"}]}}\n"
             ),
         );
@@ -331,10 +331,10 @@ fn resolve_status_all_arms() {
 
 #[test]
 fn duration_label_none_for_unparseable_bounds() {
-    // Both bounds present but one is unparseable → None (the `.parse().ok()?` arm).
+    // Both bounds present but one is unparseable -> None (the `.parse().ok()?` arm).
     assert!(duration_label(Some("garbage"), Some("2026-06-07T05:00:00Z")).is_none());
     assert!(duration_label(Some("2026-06-07T05:00:00Z"), Some("not-a-time")).is_none());
-    // Completion before start → clamped to 0 ("0s"), never negative.
+    // Completion before start -> clamped to 0 ("0s"), never negative.
     assert_eq!(
         duration_label(Some("2026-06-07T05:00:10Z"), Some("2026-06-07T05:00:00Z")).as_deref(),
         Some("0s")
@@ -350,8 +350,8 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
     );
     // (1) FROZEN at a dangerous-rm Bash (unreturned), PRECEDED by assistant TEXT - the exact
-    // L629→L630 shape a tail walk-back for an end-of-turn text mis-reads as `completed`.
-    // → escalation-blocked.
+    // L629->L630 shape a tail walk-back for an end-of-turn text mis-reads as `completed`.
+    // -> escalation-blocked.
     // The command parses cleanly, so the STRUCTURED checker `_9` (@162770807) decides it: the
     // decomposer leaves a tracked-variable sentinel, the trailing glob is stripped, and the
     // unresolvable-target arm (@162771609) asks with the bypass-immune breaker.
@@ -375,7 +375,7 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
                 "{\"type\":\"assistant\",\"version\":\"2.1.258\",\"timestamp\":\"2026-06-07T05:02:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_kw\",\"name\":\"Bash\",\"input\":{\"command\":\"for f in a b; do rm -rf \\\"$SCRATCH/$f\\\"; done\"}}]}}\n"
             ),
         );
-    // (2) FROZEN at a non-danger tool_use (Read, unreturned) → awaiting-execution.
+    // (2) FROZEN at a non-danger tool_use (Read, unreturned) -> awaiting-execution.
     fx.write(
             &format!("{enc}/{SESS}/subagents/agent-await22.jsonl"),
             concat!(
@@ -383,7 +383,7 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
                 "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:02:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_read\",\"name\":\"Read\",\"input\":{\"file_path\":\"/x/big.log\"}}]}}\n"
             ),
         );
-    // (3) RESOLVED: a dangerous Bash whose tool_result + closing text arrived → NOT pending.
+    // (3) RESOLVED: a dangerous Bash whose tool_result + closing text arrived -> NOT pending.
     fx.write(
             &format!("{enc}/{SESS}/subagents/agent-done333.jsonl"),
             concat!(

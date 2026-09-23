@@ -28,7 +28,7 @@ pub enum Caller {
 }
 
 impl From<bool> for SubagentScope {
-    /// `true` (subagents spanned) ⇒ `WithSubagents`; `false` (`--no-subagents`) ⇒
+    /// `true` (subagents spanned) => `WithSubagents`; `false` (`--no-subagents`) =>
     /// `TopLevelOnly`.
     fn from(include_subagents: bool) -> Self {
         if include_subagents {

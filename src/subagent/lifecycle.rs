@@ -36,7 +36,7 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     // terminates with a visible assistant message (a clean finish), AND whether the lane is
     // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful
     // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no
-    // tool_result followed it (it IS the last record) ⇒ the lane is blocked there, NOT done. The
+    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The
     // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane.
     let mut completed_utc: Option<String> = None;
     let mut terminal_agent_msg = false;
@@ -54,12 +54,12 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
         }
         if !newest_decided {
             if let Some(tu) = newest_pending_tool_use(rec) {
-                pending = Some(tu); // newest meaningful record is an unreturned tool_use → frozen
+                pending = Some(tu); // newest meaningful record is an unreturned tool_use -> frozen
                 newest_decided = true;
             } else if record_is_meaningful(rec) {
-                newest_decided = true; // newest meaningful record is resolved/active → not frozen
+                newest_decided = true; // newest meaningful record is resolved/active -> not frozen
             }
-            // else: isMeta / system / metadata-only → keep looking for the newest meaningful one
+            // else: isMeta / system / metadata-only -> keep looking for the newest meaningful one
         }
         // The newest assistant record carrying visible text == a clean end-of-turn.
         if !terminal_agent_msg && rec.agent_text().is_some() {
@@ -104,7 +104,7 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     })
 }
 
-/// The newest-meaningful-record frozen check: if `rec` is an assistant carrying ≥1 tool_use block,
+/// The newest-meaningful-record frozen check: if `rec` is an assistant carrying >=1 tool_use block,
 /// return the pending tool_use (the DANGEROUS Bash one if present, else the first) - because it is
 /// the last record, no tool_result resolved it. `None` for any non-(assistant-with-tool_use) record.
 pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
@@ -171,10 +171,10 @@ pub(crate) fn record_is_meaningful(rec: &Record) -> bool {
 }
 
 /// Status resolution rule (honest, never over-claiming "failed"):
-/// - journal `result` event present ⇒ `Completed` (the authoritative workflow signal);
-/// - else a terminal visible-assistant message ⇒ `Completed` (clean transcript end);
-/// - else if we saw records but no completion signal ⇒ `Running`;
-/// - else (no records / no start) ⇒ `Unknown`.
+/// - journal `result` event present => `Completed` (the authoritative workflow signal);
+/// - else a terminal visible-assistant message => `Completed` (clean transcript end);
+/// - else if we saw records but no completion signal => `Running`;
+/// - else (no records / no start) => `Unknown`.
 pub(crate) fn resolve_status(
     saw_any: bool,
     journal_done: bool,
@@ -214,11 +214,11 @@ pub(crate) fn fmt_secs(total: i64) -> String {
     }
 }
 
-// ───────────────────────── TOPOLOGY (Part A) ─────────────────────────
+// ------------------------- TOPOLOGY (Part A) -------------------------
 //
 // csift modelled subagents as a flat list of detached session-like files. The topology
 // builder LINKS each subagent back to the parent tool_use that spawned it, via the
-// `meta.json` `toolUseId` ⇆ parent transcript `tool_use.id` join. From that join it
+// `meta.json` `toolUseId` to the parent transcript's `tool_use.id` join. From that join it
 // recovers (a) the TRUE trigger time (the parent tool_use ts, which the child-head ts
 // lags by seconds), and (b) the RETURNED MESSAGE through a 3-way resolver. Workflow runs
 // are surfaced as `WorkflowRun` parent nodes from the unscanned top-level

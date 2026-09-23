@@ -17,7 +17,7 @@
 //!   Its `cwd` is often a DEEPER in-session path - never re-encode a subagent cwd to
 //!   find its project dir.
 //! - **(C) workflow journal** - `subagents/workflows/wf_<id>/journal.jsonl`. **NOT a
-//!   transcript**: records are workflow events `{agentId, key, type}` (`type` ∈
+//!   transcript**: records are workflow events `{agentId, key, type}` (`type` is one of
 //!   {`started`, `result`}) with no `message`/role. Excluded from every transcript
 //!   list/search; read ONLY to corroborate completion status.
 //!
@@ -26,8 +26,8 @@
 //! `agentType` is NOT a reliable kind discriminator: both (A) and (B) carry the same
 //! spread of values (`Explore`, `general-purpose`, `oh-my-claudecode:*`); only the
 //! special `workflow-subagent` value is workflow-exclusive. So the authoritative kind
-//! is the on-disk location - directly under `subagents/` ⇒ [`SubagentKind::BuiltinTask`];
-//! under `subagents/workflows/wf_*/` ⇒ [`SubagentKind::Workflow`] - with `agentType`
+//! is the on-disk location - directly under `subagents/` => [`SubagentKind::BuiltinTask`];
+//! under `subagents/workflows/wf_*/` => [`SubagentKind::Workflow`] - with `agentType`
 //! retained as a descriptive per-row sub-label.
 //!
 //! ## Linkage back to the parent session

@@ -66,7 +66,7 @@ fn defensive_recursion_catches_a_hypothetical_nested_sub_sub_agent() {
         .iter()
         .find(|s| s.agent_id == "ccc333")
         .expect("the nested sub-sub-agent");
-    // Classified by path location: under a `subagents/` dir ⇒ BuiltinTask.
+    // Classified by path location: under a `subagents/` dir => BuiltinTask.
     assert_eq!(nested.kind, SubagentKind::BuiltinTask);
     assert!(nested.path.ends_with("agent-ccc333.jsonl"));
     // No path is double-counted (dedup-by-absolute-path holds).
@@ -87,7 +87,7 @@ fn defensive_recursion_does_not_change_the_flat_real_layout() {
     assert_eq!(subs.len(), 2, "flat layout unchanged by the defensive walk");
 }
 
-// ───────────────────── TOPOLOGY (Part A) tests ─────────────────────
+// --------------------- TOPOLOGY (Part A) tests ---------------------
 
 #[test]
 fn index_parent_spawns_finds_agent_and_workflow_tool_uses() {
@@ -117,7 +117,7 @@ fn index_parent_spawns_finds_agent_and_workflow_tool_uses() {
 
 #[test]
 fn index_parent_spawns_empty_for_empty_parent_transcript() {
-    // An EMPTY parent jsonl (mmap → Ok(None)) → an empty index (degrade, never error).
+    // An EMPTY parent jsonl (mmap -> Ok(None)) -> an empty index (degrade, never error).
     // This is the real graceful path; a TRULY-missing file is a genuine I/O error
     // (and `build_topology` only indexes a session whose file exists).
     let fx = Fixture::new();
@@ -140,7 +140,7 @@ fn journal_result_captures_the_payload_not_just_a_bool() {
         journal_result(wf, &JournalCache::build(std::slice::from_ref(wf))).as_deref(),
         Some("WF RETURN: workflow journal payload")
     );
-    // A built-in has no journal → None.
+    // A built-in has no journal -> None.
     let builtin = subs
         .iter()
         .find(|s| s.kind == SubagentKind::BuiltinTask)
@@ -170,7 +170,7 @@ fn build_topology_links_trigger_time_and_sync_returned_message() {
     );
     assert_ne!(builtin.trigger_utc, builtin.started_utc);
     assert_eq!(builtin.spawn_tool.as_deref(), Some("Agent"));
-    // SYNC built-in → the returned message is the parent tool_result text.
+    // SYNC built-in -> the returned message is the parent tool_result text.
     assert_eq!(
         builtin.returned_message.as_deref(),
         Some("SYNC RETURN: the built-in answer")
@@ -190,7 +190,7 @@ fn build_topology_resolves_workflow_returned_message_from_journal() {
         .iter()
         .find(|n| n.kind == SubagentKind::Workflow)
         .unwrap();
-    // Workflow → the journal `result` payload, NOT the parent Workflow-tool echo.
+    // Workflow -> the journal `result` payload, NOT the parent Workflow-tool echo.
     assert_eq!(
         wf.returned_message.as_deref(),
         Some("WF RETURN: workflow journal payload")
@@ -203,7 +203,7 @@ fn build_topology_resolves_workflow_returned_message_from_journal() {
 
 #[test]
 fn async_launch_falls_back_to_child_transcript_tail() {
-    // A built-in whose parent tool_result is the `Async agent launched …` sentinel
+    // A built-in whose parent tool_result is the `Async agent launched ...` sentinel
     // must resolve its returned message from the CHILD transcript tail.
     let fx = Fixture::new();
     let enc = "-Users-async";
@@ -240,7 +240,7 @@ fn async_launch_falls_back_to_child_transcript_tail() {
 
 #[test]
 fn build_topology_with_files_attaches_node_files_changed() {
-    // A built-in whose transcript edits a file → its files_changed lists that path.
+    // A built-in whose transcript edits a file -> its files_changed lists that path.
     let fx = Fixture::new();
     let enc = "-Users-nodefiles";
     let session = fx.write(

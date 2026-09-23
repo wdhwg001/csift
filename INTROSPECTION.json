@@ -8002,7 +8002,7 @@
         {
           "path": "src/subagent/lifecycle.rs",
           "lines": "35-40",
-          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) \u21d2 the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
+          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
         },
         {
           "path": "src/commands/live/tail.rs",
@@ -17268,7 +17268,7 @@
         {
           "path": "src/subagent/lifecycle.rs",
           "lines": "35-40",
-          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) \u21d2 the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
+          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
         }
       ],
       "states": [
@@ -38001,7 +38001,7 @@
         {
           "path": "src/path/tests/encode.rs",
           "lines": "97-103",
-          "snippet": "    // An astral char is TWO surrogate units \u2192 TWO dashes (the JS regex's view).\n    assert_eq!(encode_cwd(Path::new(\"/tmp/x\\u{1D11E}y\")), \"-tmp-x--y\");\n    // A Windows cwd: the drive colon and each backslash are one dash \u2192 `C--\u2026`.\n    assert_eq!(\n        encode_cwd(Path::new(r\"C:\\Users\\dev\\proj\")),\n        \"C--Users-dev-proj\"\n    );"
+          "snippet": "    // An astral char is TWO surrogate units -> TWO dashes (the JS regex's view).\n    assert_eq!(encode_cwd(Path::new(\"/tmp/x\\u{1D11E}y\")), \"-tmp-x--y\");\n    // A Windows cwd: the drive colon and each backslash are one dash -> `C--...`.\n    assert_eq!(\n        encode_cwd(Path::new(r\"C:\\Users\\dev\\proj\")),\n        \"C--Users-dev-proj\"\n    );"
         }
       ],
       "states": [
@@ -38253,17 +38253,17 @@
         {
           "path": "src/path/home.rs",
           "lines": "135-145",
-          "snippet": "/// True iff `token` is a plausible pre-encoded projects-dir basename, per \u00a72.3 step 1:\n/// only `[A-Za-z0-9-]` (so no `/`), and one of the two shapes CC's encoder can emit for\n/// an absolute path - a Unix cwd leads with `-` (the leading `/` encodes to `-`; a UNC\n/// `\\\\server\\\u2026` leads with `--`), a WINDOWS cwd leads with `<drive-letter>--` (the `:`\n/// and `\\` of `C:\\` each encode to `-`, verbatim from the 2.1.228 binary's sanitizer).\npub(crate) fn looks_like_encoded_token(token: &str) -> bool {\n    if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {\n        return false;\n    }\n    token.starts_with('-') || is_drive_encoded_token(token)\n}"
+          "snippet": "/// True iff `token` is a plausible pre-encoded projects-dir basename, per section 2.3 step 1:\n/// only `[A-Za-z0-9-]` (so no `/`), and one of the two shapes CC's encoder can emit for\n/// an absolute path - a Unix cwd leads with `-` (the leading `/` encodes to `-`; a UNC\n/// `\\\\server\\...` leads with `--`), a WINDOWS cwd leads with `<drive-letter>--` (the `:`\n/// and `\\` of `C:\\` each encode to `-`, verbatim from the 2.1.228 binary's sanitizer).\npub(crate) fn looks_like_encoded_token(token: &str) -> bool {\n    if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {\n        return false;\n    }\n    token.starts_with('-') || is_drive_encoded_token(token)\n}"
         },
         {
           "path": "src/path/home.rs",
           "lines": "147-154",
-          "snippet": "/// The Windows drive-letter encoded shape: `<letter>--\u2026` (`C:\\Users\\x` \u2192 `C--Users-x`).\n/// Distinct from every other token class: a Unix encoded dir leads with `-`, an id is\n/// hex/uuid-shaped, and a real RELATIVE path named like this is disambiguated by the\n/// caller (encoded-dir lookup first, real-path fallthrough on a miss).\npub(crate) fn is_drive_encoded_token(token: &str) -> bool {\n    let b = token.as_bytes();\n    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b'-' && b[2] == b'-'\n}"
+          "snippet": "/// The Windows drive-letter encoded shape: `<letter>--...` (`C:\\Users\\x` -> `C--Users-x`).\n/// Distinct from every other token class: a Unix encoded dir leads with `-`, an id is\n/// hex/uuid-shaped, and a real RELATIVE path named like this is disambiguated by the\n/// caller (encoded-dir lookup first, real-path fallthrough on a miss).\npub(crate) fn is_drive_encoded_token(token: &str) -> bool {\n    let b = token.as_bytes();\n    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b'-' && b[2] == b'-'\n}"
         },
         {
           "path": "src/path/tests/encode.rs",
           "lines": "106-113",
-          "snippet": "#[test]\nfn encoded_token_shapes_unix_windows_unc() {\n    assert!(looks_like_encoded_token(\"-Users-dev-example-project\"));\n    assert!(looks_like_encoded_token(\"C--Users-dev-proj\")); // Windows drive shape\n    assert!(looks_like_encoded_token(\"--server-share-proj\")); // UNC (leads with --)\n    assert!(!looks_like_encoded_token(\"Users-dev\")); // no encoded lead-in\n    assert!(!looks_like_encoded_token(\"C--Users/dev\")); // a separator disqualifies\n    assert!(!looks_like_encoded_token(\"C-Users-dev\")); // one dash after the drive \u2260 `C:\\`"
+          "snippet": "#[test]\nfn encoded_token_shapes_unix_windows_unc() {\n    assert!(looks_like_encoded_token(\"-Users-dev-example-project\"));\n    assert!(looks_like_encoded_token(\"C--Users-dev-proj\")); // Windows drive shape\n    assert!(looks_like_encoded_token(\"--server-share-proj\")); // UNC (leads with --)\n    assert!(!looks_like_encoded_token(\"Users-dev\")); // no encoded lead-in\n    assert!(!looks_like_encoded_token(\"C--Users/dev\")); // a separator disqualifies\n    assert!(!looks_like_encoded_token(\"C-Users-dev\")); // one dash after the drive != `C:\\`"
         }
       ],
       "states": [
@@ -38844,7 +38844,7 @@
         {
           "path": "src/path/home.rs",
           "lines": "126-132",
-          "snippet": "    /// The canonical cwd of a REAL-path target - `Some` when the user passed an actual\n    /// filesystem path, `None` for a pre-encoded `<ENCODED>` dir token (where the user\n    /// explicitly named the dir) or an all-projects scan. When `Some`, session enumeration\n    /// filters this dir's files to those whose recorded `cwd` IS this path, so a lossy-\n    /// encoding COLLISION (a different cwd that encodes to the same dir, \u00a72.1) never leaks a\n    /// sibling's sessions - or their subagents - into the result.\n    pub target_cwd: Option<PathBuf>,"
+          "snippet": "    /// The canonical cwd of a REAL-path target - `Some` when the user passed an actual\n    /// filesystem path, `None` for a pre-encoded `<ENCODED>` dir token (where the user\n    /// explicitly named the dir) or an all-projects scan. When `Some`, session enumeration\n    /// filters this dir's files to those whose recorded `cwd` IS this path, so a lossy-\n    /// encoding COLLISION (a different cwd that encodes to the same dir, section 2.1) never leaks a\n    /// sibling's sessions - or their subagents - into the result.\n    pub target_cwd: Option<PathBuf>,"
         },
         {
           "path": "src/path/resolver.rs",
@@ -60585,7 +60585,7 @@
         {
           "path": "src/subagent/meta.rs",
           "lines": "110-113",
-          "snippet": "/// True iff the workflow journal alongside a workflow subagent carries a `result`\n/// event for `agent_id` (the completion signal, \u00a7C). For a built-in subagent (no\n/// journal) this is always `false` - completion is inferred from the transcript.\npub(crate) fn journal_reports_completion(subagent: &Subagent, journals: &JournalCache) -> bool {"
+          "snippet": "/// True iff the workflow journal alongside a workflow subagent carries a `result`\n/// event for `agent_id` (the completion signal, section C). For a built-in subagent (no\n/// journal) this is always `false` - completion is inferred from the transcript.\npub(crate) fn journal_reports_completion(subagent: &Subagent, journals: &JournalCache) -> bool {"
         }
       ],
       "states": [
@@ -60741,7 +60741,7 @@
         {
           "path": "src/subagent/ids.rs",
           "lines": "32-36",
-          "snippet": "/// The re-feedable PARENT session uuid for a transcript path, or `None` when the path is a\n/// top-level `<uuid>.jsonl` (which IS its own session). A subagent transcript lives at\n/// `\u2026/<PARENT-UUID>/subagents/[workflows/wf_*/]agent-<hex>.jsonl`, so the parent uuid is the\n/// directory component immediately BEFORE the `subagents` segment. This is what makes a\n/// search/files subagent match re-feedable: its bare-hex `session_id` is NOT a re-feedable"
+          "snippet": "/// The re-feedable PARENT session uuid for a transcript path, or `None` when the path is a\n/// top-level `<uuid>.jsonl` (which IS its own session). A subagent transcript lives at\n/// `.../<PARENT-UUID>/subagents/[workflows/wf_*/]agent-<hex>.jsonl`, so the parent uuid is the\n/// directory component immediately BEFORE the `subagents` segment. This is what makes a\n/// search/files subagent match re-feedable: its bare-hex `session_id` is NOT a re-feedable"
         },
         {
           "path": "src/subagent/ids.rs",
@@ -60849,7 +60849,7 @@
         {
           "path": "src/subagent/topology.rs",
           "lines": "5-9",
-          "snippet": "/// One fully-linked subagent node in the topology (\u00a7new-model). Carries the flat\n/// lifecycle facts PLUS the toolUseId-linked spawn linkage (trigger time, parent agent,\n/// returned message) and the per-node files-changed list. `children` is the tool_use-graph\n/// nesting (real multi-level chains exist since CC 2.1.25x: measured 190 nodes at depth\n/// 1-3 with a distinct parent across the corpus)."
+          "snippet": "/// One fully-linked subagent node in the topology (section new-model). Carries the flat\n/// lifecycle facts PLUS the toolUseId-linked spawn linkage (trigger time, parent agent,\n/// returned message) and the per-node files-changed list. `children` is the tool_use-graph\n/// nesting (real multi-level chains exist since CC 2.1.25x: measured 190 nodes at depth\n/// 1-3 with a distinct parent across the corpus)."
         },
         {
           "path": "src/subagent/topology.rs",
@@ -61152,7 +61152,7 @@
         {
           "path": "src/subagent/meta.rs",
           "lines": "54-58",
-          "snippet": "/// The fields csift reads from a subagent's `meta.json`. A built-in meta carries\n/// `{agentType, description, toolUseId}` (+ often `name`); a workflow agent meta carries only\n/// `{agentType}`; a TEAMMATE meta carries `{agentType, description, name, taskKind, teamName,\n/// color, model, \u2026}` and NO `toolUseId`. All are optional - a malformed / missing / key-absent\n/// meta yields all-`None` (never an error; the lifecycle still resolves from the transcript)."
+          "snippet": "/// The fields csift reads from a subagent's `meta.json`. A built-in meta carries\n/// `{agentType, description, toolUseId}` (+ often `name`); a workflow agent meta carries only\n/// `{agentType}`; a TEAMMATE meta carries `{agentType, description, name, taskKind, teamName,\n/// color, model, ...}` and NO `toolUseId`. All are optional - a malformed / missing / key-absent\n/// meta yields all-`None` (never an error; the lifecycle still resolves from the transcript)."
         },
         {
           "path": "src/subagent/meta.rs",
@@ -61649,7 +61649,7 @@
         {
           "path": "src/subagent/topology.rs",
           "lines": "223-226",
-          "snippet": "/// Read every top-level `<session>/workflows/wf_*.json` manifest (\u00a75) as a [`WorkflowRun`].\n/// Returns an empty vec when the session has no sidecar / no `workflows/` dir (never an\n/// error for the common no-workflow case). The `workflows/scripts/` subdir and any\n/// non-`wf_*.json` entry are ignored."
+          "snippet": "/// Read every top-level `<session>/workflows/wf_*.json` manifest (section 5) as a [`WorkflowRun`].\n/// Returns an empty vec when the session has no sidecar / no `workflows/` dir (never an\n/// error for the common no-workflow case). The `workflows/scripts/` subdir and any\n/// non-`wf_*.json` entry are ignored."
         },
         {
           "path": "src/subagent/tests.rs",
@@ -62118,7 +62118,7 @@
         {
           "path": "src/subagent/spawn.rs",
           "lines": "38-42",
-          "snippet": "    /// `spawn input.name \u2192 [(trigger_utc, tool_use_id)]` for every spawn tool_use that named\n    /// its agent. The NAME-join fallback for a TEAMMATE, whose meta carries no `toolUseId` (so\n    /// the usual id-join can't reach its spawning `Agent` tool_use). Keyed by the `Agent` tool's\n    /// `name` param (== the teammate's meta `name`). A name may recur across a session, so the\n    /// values are a list disambiguated by trigger time in [`Self::spawn_id_for_name`]."
+          "snippet": "    /// `spawn input.name -> [(trigger_utc, tool_use_id)]` for every spawn tool_use that named\n    /// its agent. The NAME-join fallback for a TEAMMATE, whose meta carries no `toolUseId` (so\n    /// the usual id-join can't reach its spawning `Agent` tool_use). Keyed by the `Agent` tool's\n    /// `name` param (== the teammate's meta `name`). A name may recur across a session, so the\n    /// values are a list disambiguated by trigger time in [`Self::spawn_id_for_name`]."
         }
       ],
       "states": [
@@ -62475,7 +62475,7 @@
         {
           "path": "src/subagent/spawn.rs",
           "lines": "264-271",
-          "snippet": "pub enum ReturnedMsgSource {\n    /// A synchronous built-in: the parent tool_result text IS the returned message.\n    SyncToolResult,\n    /// An async built-in (`Async agent launched \u2026` sentinel): the message is the child\n    /// transcript's tail assistant text.\n    AsyncChildTail,\n    /// A workflow agent: the message is the `journal.jsonl` `result` event payload.\n    WorkflowJournal,"
+          "snippet": "pub enum ReturnedMsgSource {\n    /// A synchronous built-in: the parent tool_result text IS the returned message.\n    SyncToolResult,\n    /// An async built-in (`Async agent launched ...` sentinel): the message is the child\n    /// transcript's tail assistant text.\n    AsyncChildTail,\n    /// A workflow agent: the message is the `journal.jsonl` `result` event payload.\n    WorkflowJournal,"
         }
       ],
       "states": [
@@ -62600,7 +62600,7 @@
         {
           "path": "src/subagent/spawn.rs",
           "lines": "260-266",
-          "snippet": "/// Where a subagent's returned message was resolved FROM (\u00a73) - surfaced so a consumer\n/// knows whether it read the parent tool_result, the child transcript tail, or the\n/// workflow journal.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum ReturnedMsgSource {\n    /// A synchronous built-in: the parent tool_result text IS the returned message.\n    SyncToolResult,"
+          "snippet": "/// Where a subagent's returned message was resolved FROM (section 3) - surfaced so a consumer\n/// knows whether it read the parent tool_result, the child transcript tail, or the\n/// workflow journal.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum ReturnedMsgSource {\n    /// A synchronous built-in: the parent tool_result text IS the returned message.\n    SyncToolResult,"
         },
         {
           "path": "src/cli/agents_args.rs",
@@ -63223,7 +63223,7 @@
         {
           "path": "src/subagent/lifecycle.rs",
           "lines": "35-40",
-          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) \u21d2 the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
+          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
         }
       ],
       "states": [
@@ -68455,12 +68455,12 @@
         {
           "path": "src/path/home.rs",
           "lines": "147-154",
-          "snippet": "/// The Windows drive-letter encoded shape: `<letter>--\u2026` (`C:\\Users\\x` \u2192 `C--Users-x`).\n/// Distinct from every other token class: a Unix encoded dir leads with `-`, an id is\n/// hex/uuid-shaped, and a real RELATIVE path named like this is disambiguated by the\n/// caller (encoded-dir lookup first, real-path fallthrough on a miss).\npub(crate) fn is_drive_encoded_token(token: &str) -> bool {\n    let b = token.as_bytes();\n    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b'-' && b[2] == b'-'\n}"
+          "snippet": "/// The Windows drive-letter encoded shape: `<letter>--...` (`C:\\Users\\x` -> `C--Users-x`).\n/// Distinct from every other token class: a Unix encoded dir leads with `-`, an id is\n/// hex/uuid-shaped, and a real RELATIVE path named like this is disambiguated by the\n/// caller (encoded-dir lookup first, real-path fallthrough on a miss).\npub(crate) fn is_drive_encoded_token(token: &str) -> bool {\n    let b = token.as_bytes();\n    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b'-' && b[2] == b'-'\n}"
         },
         {
           "path": "src/path/resolver.rs",
           "lines": "273-277",
-          "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` \u2192 an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
+          "snippet": "                // `@-Users-...` / `@C--Users-...` -> an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
       "states": [

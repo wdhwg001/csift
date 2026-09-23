@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── Forward encoding: a table of real (cwd, encoded) ground-truth pairs ──
+// -- Forward encoding: a table of real (cwd, encoded) ground-truth pairs --
 // Every pair below is taken from an actual `~/.claude/projects` dir name.
 
 #[test]
@@ -71,14 +71,14 @@ fn encode_space_and_dot_become_dash() {
     assert_eq!(encode_cwd(Path::new("/a b/c.d")), "-a-b-c-d");
 }
 
-// ── Encoded-token detection (§2.3 step 1) ──
+// -- Encoded-token detection (section 2.3 step 1) --
 
 #[test]
 fn encoded_token_detection() {
     assert!(looks_like_encoded_token("-Users-testuser-Projects-foo"));
     assert!(looks_like_encoded_token("-a--claude-b"));
     assert!(looks_like_encoded_token("-")); // degenerate but well-formed
-                                            // A real absolute path has slashes → not a bare token.
+                                            // A real absolute path has slashes -> not a bare token.
     assert!(!looks_like_encoded_token("/Users/testuser/Projects/foo"));
     // Must start with `-` (a real absolute cwd encodes to a leading `-`).
     assert!(!looks_like_encoded_token("Users-foo"));
@@ -94,9 +94,9 @@ fn encode_matches_cc_exactly_on_non_ascii_and_windows_paths() {
     // NFC and NFD spellings of the same accented path encode IDENTICALLY.
     assert_eq!(encode_cwd(Path::new("/tmp/caf\u{e9}")), "-tmp-caf-");
     assert_eq!(encode_cwd(Path::new("/tmp/cafe\u{301}")), "-tmp-caf-");
-    // An astral char is TWO surrogate units → TWO dashes (the JS regex's view).
+    // An astral char is TWO surrogate units -> TWO dashes (the JS regex's view).
     assert_eq!(encode_cwd(Path::new("/tmp/x\u{1D11E}y")), "-tmp-x--y");
-    // A Windows cwd: the drive colon and each backslash are one dash → `C--…`.
+    // A Windows cwd: the drive colon and each backslash are one dash -> `C--...`.
     assert_eq!(
         encode_cwd(Path::new(r"C:\Users\dev\proj")),
         "C--Users-dev-proj"
@@ -110,11 +110,11 @@ fn encoded_token_shapes_unix_windows_unc() {
     assert!(looks_like_encoded_token("--server-share-proj")); // UNC (leads with --)
     assert!(!looks_like_encoded_token("Users-dev")); // no encoded lead-in
     assert!(!looks_like_encoded_token("C--Users/dev")); // a separator disqualifies
-    assert!(!looks_like_encoded_token("C-Users-dev")); // one dash after the drive ≠ `C:\`
+    assert!(!looks_like_encoded_token("C-Users-dev")); // one dash after the drive != `C:\`
 }
 
 #[test]
 fn looks_like_encoded_token_empty_is_false() {
-    // An empty string has no leading `-` → false (the `chars.next()` None arm).
+    // An empty string has no leading `-` -> false (the `chars.next()` None arm).
     assert!(!looks_like_encoded_token(""));
 }

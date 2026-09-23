@@ -3,7 +3,7 @@
 use super::*;
 
 /// Build a [`Subagent`], locating its `.meta.json` companion if present and reading the
-/// `toolUseId` + `name` from it (the spawn linkage for the topology, §1).
+/// `toolUseId` + `name` from it (the spawn linkage for the topology, section 1).
 pub(crate) fn make_subagent(
     path: PathBuf,
     kind: SubagentKind,
@@ -54,7 +54,7 @@ pub(crate) fn make_subagent(
 /// The fields csift reads from a subagent's `meta.json`. A built-in meta carries
 /// `{agentType, description, toolUseId}` (+ often `name`); a workflow agent meta carries only
 /// `{agentType}`; a TEAMMATE meta carries `{agentType, description, name, taskKind, teamName,
-/// color, model, …}` and NO `toolUseId`. All are optional - a malformed / missing / key-absent
+/// color, model, ...}` and NO `toolUseId`. All are optional - a malformed / missing / key-absent
 /// meta yields all-`None` (never an error; the lifecycle still resolves from the transcript).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MetaFields {
@@ -108,7 +108,7 @@ pub(crate) fn read_meta(meta_path: Option<&Path>) -> MetaFields {
 }
 
 /// True iff the workflow journal alongside a workflow subagent carries a `result`
-/// event for `agent_id` (the completion signal, §C). For a built-in subagent (no
+/// event for `agent_id` (the completion signal, section C). For a built-in subagent (no
 /// journal) this is always `false` - completion is inferred from the transcript.
 pub(crate) fn journal_reports_completion(subagent: &Subagent, journals: &JournalCache) -> bool {
     journals
@@ -118,22 +118,22 @@ pub(crate) fn journal_reports_completion(subagent: &Subagent, journals: &Journal
 
 /// Per-topology-build cache of every distinct `wf_<id>/journal.jsonl`, read + parsed
 /// ONCE and shared across the whole node/lifecycle fan-out. Without it each of a
-/// workflow run's N agents re-read and re-parsed the SAME journal (an O(N × journal)
+/// workflow run's N agents re-read and re-parsed the SAME journal (an O(N x journal)
 /// blowup - a 104-agent run re-parsed its 236 KB journal 104 times, and a 3.5k-agent
 /// session re-parsed ~600 MB of journal JSON in aggregate). The cached view is exactly
 /// what the two former per-agent scans extracted - first `result` event per agentId -
 /// so behaviour is byte-identical, only WHEN the journal is read changes.
 #[derive(Debug, Default)]
 pub struct JournalCache {
-    /// journal path → its parsed per-agent result events. An unreadable/absent journal
-    /// has no entry (the same "no journal ⇒ no completion signal" the direct reads had).
+    /// journal path -> its parsed per-agent result events. An unreadable/absent journal
+    /// has no entry (the same "no journal => no completion signal" the direct reads had).
     pub(crate) by_path: HashMap<PathBuf, JournalData>,
 }
 
 /// The per-agent `result`-event facts one journal carries.
 #[derive(Debug, Default)]
 pub(crate) struct JournalData {
-    /// agentId → the FIRST `result` event's payload for that agent: `Some(text)` when the
+    /// agentId -> the FIRST `result` event's payload for that agent: `Some(text)` when the
     /// event carries a `result` field (string kept as-is, non-string JSON-rendered so it
     /// is never lost), `None` when it does not (a completion signal with no payload).
     /// Key PRESENCE == "the journal reports this agent completed".
@@ -153,7 +153,7 @@ impl JournalCache {
                 continue;
             }
             let Ok(bytes) = std::fs::read(&journal) else {
-                continue; // unreadable/absent → no entry, never a failed build
+                continue; // unreadable/absent -> no entry, never a failed build
             };
             let mut data = JournalData::default();
             for line in bytes.split(|&b| b == b'\n') {
@@ -183,7 +183,7 @@ impl JournalCache {
     }
 
     /// The journal path a workflow subagent's events live in (`None` for a built-in /
-    /// teammate - no `workflow_id` ⇒ no journal, the same guard the direct reads had).
+    /// teammate - no `workflow_id` => no journal, the same guard the direct reads had).
     pub(crate) fn journal_path(subagent: &Subagent) -> Option<PathBuf> {
         subagent.workflow_id.as_ref()?;
         Some(subagent.path.parent()?.join("journal.jsonl"))

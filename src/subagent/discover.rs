@@ -107,11 +107,11 @@ pub fn discover_subagents(session_jsonl: &Path) -> Result<Vec<Subagent>> {
 pub(crate) const MAX_NESTED_DEPTH: usize = 3;
 
 /// Defensive bounded walk: descend into any directory literally named `subagents` nested
-/// under `dir` (a hypothetical future `subagents/agent-<hex>/subagents/…` layout),
+/// under `dir` (a hypothetical future `subagents/agent-<hex>/subagents/...` layout),
 /// collecting flat `agent-<hex>.jsonl` transcripts there as built-in subagents. Skips
 /// symlinks (no follow), excludes the `workflows/` subtree (handled by (B)) and any path
 /// already discovered, and stops at `depth == 0`. Kind is classified by path location
-/// (these nested ones sit under a `subagents/` dir ⇒ `BuiltinTask`).
+/// (these nested ones sit under a `subagents/` dir => `BuiltinTask`).
 pub(crate) fn discover_nested_defensive(
     dir: &Path,
     parent_session_id: &str,
@@ -124,7 +124,7 @@ pub(crate) fn discover_nested_defensive(
     }
     let read = match std::fs::read_dir(dir) {
         Ok(r) => r,
-        Err(_) => return Ok(()), // unreadable dir → degrade silently (insurance path)
+        Err(_) => return Ok(()), // unreadable dir -> degrade silently (insurance path)
     };
     for entry in read {
         let Ok(entry) = entry else { continue };
@@ -156,7 +156,7 @@ pub(crate) fn discover_nested_defensive(
                 }
             }
         }
-        // Recurse into every non-symlink subdir (agent-<hex>/, a nested subagents/, …).
+        // Recurse into every non-symlink subdir (agent-<hex>/, a nested subagents/, ...).
         discover_nested_defensive(&p, parent_session_id, already, depth - 1, out)?;
     }
     Ok(())

@@ -98,7 +98,7 @@ pub(crate) fn resolve_agent_subtree(
 /// `None` when this session does not own the agent, which is the common answer.
 fn agent_files_under(top: &Path, hex: &str, scope: SubagentScope) -> Result<Option<Vec<PathBuf>>> {
     let subs = crate::subagent::subagent_transcript_files(top)?;
-    // agent_id (bare hex) → its transcript path, for this session.
+    // agent_id (bare hex) -> its transcript path, for this session.
     let by_id: std::collections::HashMap<String, PathBuf> = subs
         .iter()
         .map(|p| (crate::subagent::session_id_from_path(p), p.clone()))
@@ -106,7 +106,7 @@ fn agent_files_under(top: &Path, hex: &str, scope: SubagentScope) -> Result<Opti
     let Some(own) = by_id.get(hex) else {
         return Ok(None);
     };
-    // The descendants come from the agent→agent topology (`parent_agent_id`); on flat real
+    // The descendants come from the agent->agent topology (`parent_agent_id`); on flat real
     // data an agent has none, so the result is just the agent itself - correct, and it
     // nests automatically once CC nests subagents.
     let mut out = vec![own.clone()];
@@ -121,7 +121,7 @@ fn agent_files_under(top: &Path, hex: &str, scope: SubagentScope) -> Result<Opti
     Ok(Some(out))
 }
 
-/// The bare-hex agent ids in `nodes` that DESCEND from `root` (children, grandchildren, …) via
+/// The bare-hex agent ids in `nodes` that DESCEND from `root` (children, grandchildren, ...) via
 /// the `parent_agent_id` chain. Excludes `root` itself. Cycle-safe (a `visited` set).
 pub(crate) fn subtree_agent_ids(
     nodes: &[crate::subagent::SubagentNode],

@@ -52,7 +52,7 @@ fn no_sidecar_is_empty_not_error() {
 
 #[test]
 fn discover_empty_when_sidecar_exists_but_no_subagents_dir() {
-    // The sidecar `<uuid>/` dir exists but has NO `subagents/` child → empty, not
+    // The sidecar `<uuid>/` dir exists but has NO `subagents/` child -> empty, not
     // an error (the `!subagents_dir.is_dir()` early return).
     let fx = Fixture::new();
     let enc = "-Users-x";
@@ -82,7 +82,7 @@ fn discover_ignores_stray_file_under_workflows() {
             &format!("{enc}/{SESS}/subagents/workflows/wf_real/agent-kkk111.jsonl"),
             "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"kkk111\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"x\"}}\n",
         );
-    // A STRAY FILE (not a dir) directly under workflows/ → must be ignored.
+    // A STRAY FILE (not a dir) directly under workflows/ -> must be ignored.
     fx.write(
         &format!("{enc}/{SESS}/subagents/workflows/stray-not-a-dir.txt"),
         "ignore me",
@@ -119,16 +119,16 @@ fn discover_handles_subagents_dir_without_workflows() {
 
 #[test]
 fn read_meta_none_for_missing_unreadable_and_malformed() {
-    // No meta path at all → all-None (the `let Some(p) else` arm).
+    // No meta path at all -> all-None (the `let Some(p) else` arm).
     assert_eq!(read_meta(None), MetaFields::default());
     let fx = Fixture::new();
-    // A path that does not exist → the `std::fs::read` Err arm.
+    // A path that does not exist -> the `std::fs::read` Err arm.
     let missing = fx.root.join("does-not-exist.meta.json");
     assert_eq!(read_meta(Some(&missing)), MetaFields::default());
-    // A file with invalid JSON → the `serde_json::from_slice` Err arm.
+    // A file with invalid JSON -> the `serde_json::from_slice` Err arm.
     let bad = fx.write("bad.meta.json", "{ not valid json");
     assert_eq!(read_meta(Some(&bad)), MetaFields::default());
-    // Valid JSON carrying ONLY toolUseId → the topology join key is CAPTURED on its own;
+    // Valid JSON carrying ONLY toolUseId -> the topology join key is CAPTURED on its own;
     // agentType/description/name stay None.
     let only_id = fx.write("only-id.meta.json", "{\"toolUseId\":\"toolu_x\"}");
     assert_eq!(
@@ -148,7 +148,7 @@ fn read_meta_none_for_missing_unreadable_and_malformed() {
 #[test]
 fn read_meta_captures_all_builtin_fields() {
     // A real built-in meta.json carries agentType + description + toolUseId; csift
-    // must capture all three (the toolUseId is the topology spawn-link, §1).
+    // must capture all three (the toolUseId is the topology spawn-link, section 1).
     let fx = Fixture::new();
     let full = fx.write(
             "full.meta.json",
@@ -190,7 +190,7 @@ fn make_subagent_threads_tool_use_id_onto_struct() {
 
 #[test]
 fn meta_without_agent_type_yields_none_label() {
-    // A workflow agent whose meta.json lacks agentType → agent_type None on the
+    // A workflow agent whose meta.json lacks agentType -> agent_type None on the
     // lifecycle, exercising read_meta's both-keys-absent path end to end.
     let fx = Fixture::new();
     let enc = "-Users-z";
@@ -233,7 +233,7 @@ fn discover_workflow_runs_reads_top_level_manifests() {
     assert_eq!(r.total_tokens, Some(12345));
     assert_eq!(r.total_tool_calls, Some(7));
     assert_eq!(r.default_model.as_deref(), Some("claude-opus-4-8[1m]"));
-    // The run_id matches the subagents/workflows/wf_abc/ dir → joins to its agent.
+    // The run_id matches the subagents/workflows/wf_abc/ dir -> joins to its agent.
     let nodes = build_topology(&session, false).unwrap();
     assert!(nodes
         .iter()
@@ -242,7 +242,7 @@ fn discover_workflow_runs_reads_top_level_manifests() {
 
 #[test]
 fn discover_workflow_runs_empty_without_workflows_dir() {
-    // A session whose sidecar has no top-level workflows/ dir → empty, not an error.
+    // A session whose sidecar has no top-level workflows/ dir -> empty, not an error.
     let fx = Fixture::new();
     let enc = "-Users-nowf";
     let session = fx.write(

@@ -15,17 +15,17 @@
 //!   NO consecutive-dash collapse, and `.` -> `-`).
 //!
 //! Forward (cwd -> encoded) is therefore deterministic. Reverse (encoded -> cwd)
-//! is **lossy** (a `-` could have been `/`, `_`, `.`, space, …) so we never try to
+//! is **lossy** (a `-` could have been `/`, `_`, `.`, space, ...) so we never try to
 //! reverse it; instead a caller-supplied real path is re-encoded and matched.
 //!
-//! ## Target resolution (§2.3)
+//! ## Target resolution (section 2.3)
 //!
 //! A user-supplied target is EITHER (a) an actual filesystem cwd - encode it and
 //! locate the matching dir under `~/.claude/projects` - OR (b) a pre-encoded
 //! `<ENCODED>` dir (optionally under `~/.claude/projects/`). We treat the arg as a
 //! pre-encoded token only when, after stripping a leading `~/.claude/projects/`,
 //! the remainder has no `/`, matches `^-[A-Za-z0-9-]*$`, AND resolves to a dir.
-//! Otherwise it is a real path: absolutize, encode (§2.1), look up the dir.
+//! Otherwise it is a real path: absolutize, encode (section 2.1), look up the dir.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};

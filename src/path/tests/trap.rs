@@ -40,7 +40,7 @@ fn validate_trap_marker_enforces_the_strict_grammar() {
         "OneTwo4283",               // 2 words (must be EXACTLY 3)
         "WistfulAmberGlenMoor8135", // 4 words (must be EXACTLY 3, not >=3)
         "GoFooBars4283",            // "Go" is a 2-letter word (need >=3 chars)
-        "HTTPSPROXYGATE4827",       // ALLCAPS "word" — no lowercase tail
+        "HTTPSPROXYGATE4827",       // ALLCAPS "word" - no lowercase tail
         "HTML0000",                 // the acronym + zeros loophole
         "DeepRiverStone1234",       // trivial: consecutive
         "DeepRiverStone0000",       // trivial: all-equal

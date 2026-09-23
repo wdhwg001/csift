@@ -127,15 +127,15 @@ pub struct ProjectDir {
     /// filesystem path, `None` for a pre-encoded `<ENCODED>` dir token (where the user
     /// explicitly named the dir) or an all-projects scan. When `Some`, session enumeration
     /// filters this dir's files to those whose recorded `cwd` IS this path, so a lossy-
-    /// encoding COLLISION (a different cwd that encodes to the same dir, §2.1) never leaks a
+    /// encoding COLLISION (a different cwd that encodes to the same dir, section 2.1) never leaks a
     /// sibling's sessions - or their subagents - into the result.
     pub target_cwd: Option<PathBuf>,
 }
 
-/// True iff `token` is a plausible pre-encoded projects-dir basename, per §2.3 step 1:
+/// True iff `token` is a plausible pre-encoded projects-dir basename, per section 2.3 step 1:
 /// only `[A-Za-z0-9-]` (so no `/`), and one of the two shapes CC's encoder can emit for
 /// an absolute path - a Unix cwd leads with `-` (the leading `/` encodes to `-`; a UNC
-/// `\\server\…` leads with `--`), a WINDOWS cwd leads with `<drive-letter>--` (the `:`
+/// `\\server\...` leads with `--`), a WINDOWS cwd leads with `<drive-letter>--` (the `:`
 /// and `\` of `C:\` each encode to `-`, verbatim from the 2.1.228 binary's sanitizer).
 pub(crate) fn looks_like_encoded_token(token: &str) -> bool {
     if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
@@ -144,7 +144,7 @@ pub(crate) fn looks_like_encoded_token(token: &str) -> bool {
     token.starts_with('-') || is_drive_encoded_token(token)
 }
 
-/// The Windows drive-letter encoded shape: `<letter>--…` (`C:\Users\x` → `C--Users-x`).
+/// The Windows drive-letter encoded shape: `<letter>--...` (`C:\Users\x` -> `C--Users-x`).
 /// Distinct from every other token class: a Unix encoded dir leads with `-`, an id is
 /// hex/uuid-shaped, and a real RELATIVE path named like this is disambiguated by the
 /// caller (encoded-dir lookup first, real-path fallthrough on a miss).

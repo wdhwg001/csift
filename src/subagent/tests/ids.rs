@@ -2,14 +2,14 @@
 
 use super::*;
 
-// ── Branch-completeness ──
+// -- Branch-completeness --
 
 #[test]
 fn sidecar_dir_none_for_pathological_paths() {
-    // A path with no file stem (root) → the `file_stem()?` None arm.
+    // A path with no file stem (root) -> the `file_stem()?` None arm.
     assert!(sidecar_dir_for_session(Path::new("/")).is_none());
     // A bare relative filename has no parent dir component that is a real dir, and
-    // the sidecar dir won't exist → None.
+    // the sidecar dir won't exist -> None.
     assert!(sidecar_dir_for_session(Path::new("nonexistent.jsonl")).is_none());
 }
 
@@ -42,7 +42,7 @@ fn session_id_from_path_is_canonical_bare_hex() {
         )),
         "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     );
-    // A root path with no file stem → empty (never panics).
+    // A root path with no file stem -> empty (never panics).
     assert_eq!(session_id_from_path(Path::new("/")), "");
 }
 
@@ -55,19 +55,19 @@ fn parent_session_id_and_is_subagent_from_path() {
         "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/workflows/wf_abc/agent-aaa.jsonl",
     );
     let top = Path::new("/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl");
-    // A subagent path → parent is the dir before `subagents`, and is_subagent is true.
+    // A subagent path -> parent is the dir before `subagents`, and is_subagent is true.
     assert_eq!(
         parent_session_id_from_path(sub).as_deref(),
         Some("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")
     );
     assert!(is_subagent_path(sub));
-    // A workflow subagent path → same parent (the segment before `subagents`).
+    // A workflow subagent path -> same parent (the segment before `subagents`).
     assert_eq!(
         parent_session_id_from_path(wf).as_deref(),
         Some("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")
     );
     assert!(is_subagent_path(wf));
-    // A top-level path → no parent (it IS its own session), is_subagent false.
+    // A top-level path -> no parent (it IS its own session), is_subagent false.
     assert_eq!(parent_session_id_from_path(top), None);
     assert!(!is_subagent_path(top));
 }
