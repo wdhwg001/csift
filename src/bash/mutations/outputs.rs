@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// `git <sub> …` - record a single coarse `git:<sub>` pseudo-path ONLY when `<sub>` is
+/// `git <sub> ...` - record a single coarse `git:<sub>` pseudo-path ONLY when `<sub>` is
 /// in the mutating allowlist. Git does not name a clean per-file list lexically, so we
 /// never try to enumerate files; the entry is flagged heuristic like everything here.
 pub(crate) fn emit_git(operands: &[&str], out: &mut Vec<BashMutation>) {
@@ -83,7 +83,7 @@ pub(crate) const FORMAT_SELECTORS: &[&str] = &[
 ];
 
 /// Resolve an output-flag VALUE to a written path, rejecting a bare FORMAT-SELECTOR
-/// (`json`/`yaml`/`summary`/…) that carries no `/` and no `.extension` - such a value is a
+/// (`json`/`yaml`/`summary`/...) that carries no `/` and no `.extension` - such a value is a
 /// render mode, not a file (the doc-comment claim on [`OUTPUT_FLAGS`] that a format name is
 /// "never misread" was only true once this guard existed). A path-shaped value
 /// (`report.json` has a `.`, `/tmp/out` has a `/`) is NOT a format selector and passes.
@@ -109,7 +109,7 @@ pub(crate) fn emit_download_output(
     // [`collect_flag_outputs`] scan (which runs on EVERY segment, `output` is in its
     // allowlist), so this arm handles ONLY the SHORT flags the generic `--name` scan
     // cannot see: curl `-o <path>`, and wget `-O <path>` / `--output-document <path>`.
-    // (curl's `-O` derives the name from the URL → no deterministic local path → skip.)
+    // (curl's `-O` derives the name from the URL -> no deterministic local path -> skip.)
     let mut i = 0usize;
     while i < operands.len() {
         let tok = operands[i];
@@ -132,7 +132,7 @@ pub(crate) fn emit_download_output(
     }
 }
 
-/// `dd … of=<path>` - the output file is named by the `of=` operand. `path_operand`
+/// `dd ... of=<path>` - the output file is named by the `of=` operand. `path_operand`
 /// rejects a `KEY=VALUE` token, so `of=` is parsed specially here (its value after the
 /// `=` is the path). `of=/dev/null`-class sinks are dropped.
 pub(crate) fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
@@ -153,13 +153,13 @@ pub(crate) fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// `zip [opts] <dest.zip> <input…>` - the FIRST non-flag operand is the archive being
+/// `zip [opts] <dest.zip> <input...>` - the FIRST non-flag operand is the archive being
 /// created/updated (the only path `zip` writes). Later operands are inputs (read), so
 /// only the destination is emitted.
 pub(crate) fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
     for op in operands {
         if op.starts_with('-') {
-            continue; // a zip option flag (`-r`, `-9`, …).
+            continue; // a zip option flag (`-r`, `-9`, ...).
         }
         if let Some(path) = path_operand(op) {
             out.push(BashMutation {
@@ -175,20 +175,20 @@ pub(crate) fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
 /// `tar` with a CREATE flag writes an archive; emit that archive path (the inputs that
 /// follow are READ, never mutated, so only the destination is reported - symmetric with
 /// `zip`). Three idioms are handled:
-/// - bundled short flags WITHOUT a dash: `tar czf <archive> …` - a create+file token like
-///   `czf`/`cJf`/`tzf`(no `c`→skip). The archive is the NEXT operand;
-/// - bundled short flags WITH a dash: `tar -czf <archive> …` - same, the archive is next;
+/// - bundled short flags WITHOUT a dash: `tar czf <archive> ...` - a create+file token like
+///   `czf`/`cJf`/`tzf`(no `c`->skip). The archive is the NEXT operand;
+/// - bundled short flags WITH a dash: `tar -czf <archive> ...` - same, the archive is next;
 /// - long flags: `tar --create --file=<archive>` (inline) or `--create --file <archive>`
 ///   (spaced).
 ///
 /// A `-f<archive>`/`f<archive>` form where the path is glued to the flag bundle is also
 /// supported (the path is the bundle tail after `f`). Only emits when a `c`/`--create` flag
-/// is present, so `tar -xzf …` (extract) and `tar -tzf …` (list) write nothing.
+/// is present, so `tar -xzf ...` (extract) and `tar -tzf ...` (list) write nothing.
 pub(crate) fn emit_tar(operands: &[&str], out: &mut Vec<BashMutation>) {
     // Pass 1: detect a create flag and find where the archive path is.
     let mut has_create = false;
     let mut file_long_inline: Option<&str> = None; // `--file=<archive>`
-    let mut want_file_next = false; // a `-…f` / `czf` / `--file` expects the NEXT operand
+    let mut want_file_next = false; // a `-...f` / `czf` / `--file` expects the NEXT operand
     let mut glued_file: Option<&str> = None; // `-czfARCHIVE` / `czfARCHIVE` tail after `f`
     let mut archive: Option<&str> = None;
 
@@ -211,7 +211,7 @@ pub(crate) fn emit_tar(operands: &[&str], out: &mut Vec<BashMutation>) {
             continue;
         }
         if op.starts_with("--") {
-            continue; // another long flag (`--gzip`, `--verbose`, …)
+            continue; // another long flag (`--gzip`, `--verbose`, ...)
         }
         // A bundled short-flag group: `-czf`, `czf`, `-cf`, `cJf`, possibly with a glued
         // archive tail after `f` (`-czfARCHIVE`). Strip an optional leading `-`.

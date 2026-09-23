@@ -129,7 +129,7 @@ fn mv_destination_and_sources() {
         paths("mv old new"),
         vec![("new".to_string(), "mv"), ("old".to_string(), "mv-from")]
     );
-    // Single operand (degenerate) → just a destination, no source.
+    // Single operand (degenerate) -> just a destination, no source.
     assert_eq!(paths("mv onlyone"), vec![("onlyone".to_string(), "mv")]);
 }
 
@@ -196,7 +196,7 @@ fn sed_multiple_expression_flags() {
 #[test]
 fn sed_in_place_equals_suffix() {
     // GNU `--in-place=SUFFIX` long backup form must be recognized as in-place (was a
-    // recall miss - the helper only matched `--in-place` / `-i…`).
+    // recall miss - the helper only matched `--in-place` / `-i...`).
     assert_eq!(
         paths("sed --in-place=.bak 's/a/b/' /real/s.txt"),
         vec![("/real/s.txt".to_string(), "sed-i")]
@@ -218,7 +218,7 @@ fn git_mutating_vs_readonly_subcommand() {
 
 #[test]
 fn git_skips_leading_dash_c_option() {
-    // `git -c key=val commit` → the subcommand is the first non-flag token.
+    // `git -c key=val commit` -> the subcommand is the first non-flag token.
     assert_eq!(
         paths("git -c user.name=x commit"),
         vec![("git:commit".to_string(), "git")]
@@ -233,39 +233,39 @@ fn git_skips_leading_dash_c_option() {
         paths("git -C /repo commit"),
         vec![("git:commit".to_string(), "git")]
     );
-    // git with ONLY options and no subcommand → git_subcommand returns None.
+    // git with ONLY options and no subcommand -> git_subcommand returns None.
     assert!(paths("git --version").is_empty());
     assert!(paths("git -c a=b").is_empty());
 }
 
 #[test]
 fn mv_with_only_flags_has_no_paths() {
-    // `mv -f` (only a flag, no operands) → emit_mv's split_last None arm.
+    // `mv -f` (only a flag, no operands) -> emit_mv's split_last None arm.
     assert!(paths("mv -f").is_empty());
 }
 
 #[test]
 fn cp_with_only_flags_emits_nothing() {
-    // `cp -r` (no operands) → emit_last_operand finds no paths.
+    // `cp -r` (no operands) -> emit_last_operand finds no paths.
     assert!(paths("cp -r").is_empty());
 }
 
 #[test]
 fn sudo_and_env_prefixes_are_stripped() {
-    // sudo rm → still detected.
+    // sudo rm -> still detected.
     assert_eq!(paths("sudo rm /etc/x"), vec![("/etc/x".to_string(), "rm")]);
-    // env VAR=1 touch → the real verb is `touch` after stripping the env assignment.
+    // env VAR=1 touch -> the real verb is `touch` after stripping the env assignment.
     assert_eq!(
         paths("env FOO=1 BAR=2 touch out.txt"),
         vec![("out.txt".to_string(), "touch")]
     );
 }
 
-// ── cp/mv/install `-t DIR` correctness (source-vs-dest inversion) ──
+// -- cp/mv/install `-t DIR` correctness (source-vs-dest inversion) --
 
 #[test]
 fn cp_target_directory_flag_dest_is_the_t_value_not_a_source() {
-    // `cp -t DIR src…`: the DEST is DIR; the sources are reads, never reported as cp.
+    // `cp -t DIR src...`: the DEST is DIR; the sources are reads, never reported as cp.
     assert_eq!(
         paths("cp -t /tmp/destdir /home/a.txt /home/b.txt"),
         vec![("/tmp/destdir".to_string(), "cp")]
@@ -306,7 +306,7 @@ fn mv_target_directory_flag_dest_and_sources() {
     );
 }
 
-// ── recall - ln / install / rsync / >| ──
+// -- recall - ln / install / rsync / >| --
 
 #[test]
 fn ln_install_rsync_destinations_caught() {
@@ -324,7 +324,7 @@ fn ln_install_rsync_destinations_caught() {
     );
 }
 
-// ── a trailing OUTPUT redirect must not poison a positional-dest verb ──
+// -- a trailing OUTPUT redirect must not poison a positional-dest verb --
 // collect_redirections REMOVES the redirect tokens (operator + its spaced path) from
 // the operand stream before verb dispatch - symmetric to strip_input_redirects for `<`.
 // Without this, the surviving `2>&1` / `2>/dev/null` / spaced `> file` token displaced the
@@ -365,7 +365,7 @@ fn mv_into_dir_not_leaked_as_source_by_trailing_redirect() {
     // `mv /a /b /tmp/DESTDIR/ 2>/dev/null`: the spaced/attached `2>/dev/null` is a dev-sink
     // (emits no row) AND is removed from operands, so DESTDIR stays the dest (verb `mv`) and
     // /a,/b stay sources (mv-from). Left in the operand stream, `2>/dev/null` takes the
-    // dest_tok slot (rejected as a sink → NO mv dest) and ALL of /a,/b,DESTDIR leak as
+    // dest_tok slot (rejected as a sink -> NO mv dest) and ALL of /a,/b,DESTDIR leak as
     // mv-from reads.
     assert_eq!(
         paths("mv /a /b /tmp/DESTDIR/ 2>/dev/null"),
@@ -416,7 +416,7 @@ fn target_directory_value_all_forms() {
         Some("/d")
     );
     assert_eq!(target_directory_value(&["a", "b"]), None);
-    // `-t` at the very end with no value → None (the `get(i+1)` None arm).
+    // `-t` at the very end with no value -> None (the `get(i+1)` None arm).
     assert_eq!(target_directory_value(&["a", "-t"]), None);
 }
 
@@ -428,7 +428,7 @@ fn cp_install_without_t_flag_uses_last_operand() {
         paths("install -m644 src /etc/conf"),
         vec![("/etc/conf".to_string(), "install")]
     );
-    // `-T`/`--no-target-directory` (forces 2-operand) → default last-operand path.
+    // `-T`/`--no-target-directory` (forces 2-operand) -> default last-operand path.
     assert_eq!(
         paths("cp -T src /dest/file"),
         vec![("/dest/file".to_string(), "cp")]
@@ -451,7 +451,7 @@ fn mv_target_dir_when_dir_token_repeats_in_sources() {
     );
 }
 
-// ── tar archive creation recall ──
+// -- tar archive creation recall --
 
 #[test]
 fn tar_create_emits_archive_dest() {
@@ -499,7 +499,7 @@ fn tar_extract_is_a_marker_and_list_writes_nothing() {
 
 #[test]
 fn tar_create_to_stdout_emits_nothing() {
-    // A create bundle with NO `f` (archive → stdout, e.g. piped) writes no named file.
+    // A create bundle with NO `f` (archive -> stdout, e.g. piped) writes no named file.
     assert!(just_paths("tar cz src/").is_empty());
     // `--create` long flag with no `--file` likewise has no destination to emit.
     assert!(just_paths("tar --create --gzip dir/").is_empty());
@@ -507,7 +507,7 @@ fn tar_create_to_stdout_emits_nothing() {
 
 #[test]
 fn tar_file_without_create_writes_nothing() {
-    // `-f <archive>` but NO create flag (`-rf` append is not a create) → no emit, since
+    // `-f <archive>` but NO create flag (`-rf` append is not a create) -> no emit, since
     // `has_create` is false.
     assert!(just_paths("tar -rf /tmp/x.tar extra").is_empty());
     // A spaced `--file <archive>` with no `--create` likewise emits nothing.
@@ -516,7 +516,7 @@ fn tar_file_without_create_writes_nothing() {
 
 #[test]
 fn perl_in_place_is_the_sed_twin() {
-    // `perl -pi -e '<script>' file…` edits each file operand in place.
+    // `perl -pi -e '<script>' file...` edits each file operand in place.
     assert_eq!(
         paths("perl -pi -e 's/a/b/' notes.md src/x.rs"),
         vec![

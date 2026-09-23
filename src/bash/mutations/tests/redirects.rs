@@ -14,7 +14,7 @@ fn redirect_combined_stream_amp_after_gt() {
         paths("make >&/real/b.log"),
         vec![("/real/b.log".to_string(), ">")]
     );
-    // `>&N` (N a bare fd number) is an fd-dup, NOT a file → no row. Attached + spaced.
+    // `>&N` (N a bare fd number) is an fd-dup, NOT a file -> no row. Attached + spaced.
     assert!(paths("cmd >&1").is_empty());
     assert!(paths("cmd >&2").is_empty());
     assert!(paths("cmd >& 2").is_empty());
@@ -67,7 +67,7 @@ fn redirection_both_spacings() {
 
 #[test]
 fn redirection_operator_with_no_following_token() {
-    // A trailing bare `>` with no filename after it → the `tokens.get(i+1)` None
+    // A trailing bare `>` with no filename after it -> the `tokens.get(i+1)` None
     // arm (no path emitted), and the bare `>` is not itself a path.
     assert!(paths("echo hi >").is_empty());
     assert!(paths("echo hi >>").is_empty());
@@ -85,15 +85,15 @@ fn input_redirect_file_is_not_a_target() {
     assert_eq!(paths("cp src dst <in.txt"), vec![("dst".to_string(), "cp")]);
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Regression oracle: a synthetic IDIOM MATRIX over the shell write shapes the
 // attribution layer answers for. Groups A-C are write idioms and every one of
 // them must be CAUGHT, including the ones a bare `>` scan misses; group D is
 // the precision set and every one of them must stay DROPPED, because a
 // fabricated path is worse than a missing one.
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
-// ── fd-qualified redirects (the dominant class a bare `>` scan misses) ──
+// -- fd-qualified redirects (the dominant class a bare `>` scan misses) --
 
 #[test]
 fn fd_stderr_redirect_attached_and_spaced() {
@@ -136,7 +136,7 @@ fn fd_ampersand_redirect_caught() {
 
 #[test]
 fn fd_both_streams_to_two_paths() {
-    // `x 1>/tmp/o.log 2>/tmp/e.err` → BOTH paths caught.
+    // `x 1>/tmp/o.log 2>/tmp/e.err` -> BOTH paths caught.
     let got = just_paths("x 1>/tmp/o.log 2>/tmp/e.err");
     assert!(got.contains(&"/tmp/o.log".to_string()), "got: {got:?}");
     assert!(got.contains(&"/tmp/e.err".to_string()), "got: {got:?}");
@@ -158,7 +158,7 @@ fn fd_append_redirects_caught() {
 
 #[test]
 fn fd_dup_2_to_1_emits_nothing() {
-    // `cmd 2>&1` is a fd-DUP (stderr→stdout), NOT a file write → nothing.
+    // `cmd 2>&1` is a fd-DUP (stderr->stdout), NOT a file write -> nothing.
     assert!(paths("pytest 2>&1").is_empty());
     // And combined with a real redirect, only the real path surfaces.
     assert_eq!(
@@ -186,7 +186,7 @@ fn plain_redirect_still_caught_after_fd_generalization() {
     );
 }
 
-// ── PRECISION: noisy pseudo-paths are DROPPED, never fabricated ──
+// -- PRECISION: noisy pseudo-paths are DROPPED, never fabricated --
 
 #[test]
 fn unresolved_var_redirect_is_dropped() {
@@ -196,11 +196,11 @@ fn unresolved_var_redirect_is_dropped() {
     assert!(paths("svc 2>/tmp/$run.err").is_empty());
 }
 
-// ── the DOMINANT garbage class - fd-redirect close-paren / process-sub leaks ──
+// -- the DOMINANT garbage class - fd-redirect close-paren / process-sub leaks --
 
 #[test]
 fn devnull_with_glued_close_paren_is_dropped() {
-    // `$(… 2>/dev/null)` glues a `)` onto the sink → `/dev/null)`. The single most
+    // `$(... 2>/dev/null)` glues a `)` onto the sink -> `/dev/null)`. The single most
     // common idiom in real sessions; it must NOT fabricate a `/dev/null)` row.
     assert!(paths(r#"RESOLVED="$(readlink -f x 2>/dev/null || true)""#).is_empty());
     assert!(paths("x=$(cmd 2>/dev/null)").is_empty());
@@ -227,7 +227,7 @@ fn redirect_metachar_and_fd_dup_tokens_are_not_paths() {
     // `2>&1` and a bare `>` never become file rows even when they reach path_operand.
     assert!(paths("pytest 2>&1").is_empty());
     assert_eq!(path_operand("2>&1"), None);
-    assert_eq!(path_operand("/tmp/a>b"), None); // embedded redirect → noise.
+    assert_eq!(path_operand("/tmp/a>b"), None); // embedded redirect -> noise.
 }
 
 #[test]

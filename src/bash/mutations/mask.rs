@@ -1,7 +1,7 @@
 //! Shell masking: quotes/substitutions to MASK_CHAR, segment split, token walk.
 
 /// A "shell mask" of a command: a byte-for-byte parallel string in which every character
-/// that lives INSIDE a single/double-quoted span, or inside a `>(…)` / `<(…)` process-
+/// that lives INSIDE a single/double-quoted span, or inside a `>(...)` / `<(...)` process-
 /// substitution BODY, is replaced by [`MASK_CHAR`] (a control byte that occurs in no real
 /// command and is whitespace to no tokenizer). The surrounding quotes / procsub head/tail
 /// punctuation are themselves left intact, so token boundaries are preserved.
@@ -37,7 +37,7 @@ pub(crate) const MASK_BYTE: u8 = 0x01;
 /// a span masks to N mask-bytes - the span boundaries are ASCII delimiters, which sit on
 /// char boundaries, so the result is still valid UTF-8). Outside spans, the ORIGINAL bytes
 /// are copied verbatim (the whole multi-byte char, never `byte as char` which would corrupt
-/// the length). A single-paren subshell / `$(…)` command substitution is intentionally NOT
+/// the length). A single-paren subshell / `$(...)` command substitution is intentionally NOT
 /// masked (its body may legitimately mutate files, e.g. `(touch f)`). Best-effort: it does
 /// not model `\`-escapes outside double quotes precisely, acceptable for a heuristic.
 pub(crate) fn shell_mask(command: &str) -> String {
@@ -81,7 +81,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
             continue;
         }
         if arith_depth > 0 {
-            // Inside a `(( … ))` arithmetic span: the `>`/`<` are COMPARISON operators, never
+            // Inside a `(( ... ))` arithmetic span: the `>`/`<` are COMPARISON operators, never
             // redirects, and the operands are numbers/identifiers, never files. Mask every
             // interior byte (incl. the balancing parens) so `(( a > b ))` neither fabricates a
             // file `b` nor reads `>` as a redirect. Depth tracks `(`/`)` so a nested
@@ -96,7 +96,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
             continue;
         }
         if test_depth > 0 {
-            // Inside a `[[ … ]]` test span: `>`/`<` are lexicographic comparisons, not
+            // Inside a `[[ ... ]]` test span: `>`/`<` are lexicographic comparisons, not
             // redirects; mask the interior (incl. the balancing brackets) so a `[[ a > b ]]`
             // never surfaces a redirect/fabricated file. Depth tracks `[`/`]`.
             match c {
@@ -109,7 +109,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
             continue;
         }
         // Outside any span. An unquoted `#` at a WORD BOUNDARY opens a shell comment that
-        // runs to end-of-line: mask the whole `# … \n` tail so the comment words never
+        // runs to end-of-line: mask the whole `# ... \n` tail so the comment words never
         // become tokens (an in-comment `>`/`>>` redirect, a `;`/`|` operator, and every
         // comment word are all masked, exactly like a heredoc body). `#` is a comment ONLY
         // at a word start - preceded by start-of-input, whitespace, or a command separator
@@ -228,7 +228,7 @@ pub(crate) struct MaskedTok<'a> {
 /// the mask - a non-whitespace byte - so a quoted `"a b"` / `'/dest dir/x'` stays ONE token,
 /// and the ORIGINAL (verbatim, with its real space) is sliced for the emitted path. Reading
 /// the boundary off the ORIGINAL bytes here was the bug that severed a quoted space-bearing
-/// path mid-filename (`"…/Application Support/…"` → fabricated `Support/…`); the mask is the
+/// path mid-filename (`".../Application Support/..."` -> fabricated `Support/...`); the mask is the
 /// only byte-stream where an in-quote space is non-whitespace. The mask is byte-length-
 /// identical to the segment, so `[start..i]` slices both safely.
 pub(crate) fn masked_tokens<'a>(segment: &'a str, mask: &'a str) -> Vec<MaskedTok<'a>> {

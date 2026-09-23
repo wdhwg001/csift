@@ -55,7 +55,7 @@ pub(crate) fn collect_redirections(
             }
             i += 1;
         } else if body.starts_with(">>") {
-            // An attached append `…>>file` (incl. `2>>file`). Slice the original token at
+            // An attached append `...>>file` (incl. `2>>file`). Slice the original token at
             // the offset the fd-qualifier+`>>` consumed in the MASK (the qualifier and the
             // operator are ASCII single-byte, so the mask offset is the original offset).
             let off = tok.masked.len() - body.len() + 2;
@@ -86,7 +86,7 @@ pub(crate) fn collect_redirections(
             consumed.insert(i);
             i += 1;
         } else if body.starts_with('>') {
-            // An attached truncate `…>file` (incl. `2>file`, `&>file`). A bare `2>&1` fd-dup
+            // An attached truncate `...>file` (incl. `2>file`, `&>file`). A bare `2>&1` fd-dup
             // leaves the rest = `&1`, which `push_redirect_target` rejects - but the WHOLE
             // attached token (`2>&1`, `2>/dev/null`) is still redirect syntax, so consume it.
             let off = tok.masked.len() - body.len() + 1;
@@ -101,8 +101,8 @@ pub(crate) fn collect_redirections(
 }
 
 /// Strip an optional leading fd qualifier (`&`, or a run of ASCII digits) from a token,
-/// exposing the bare redirect operator/body. `2>` → `>`, `1>>` → `>>`, `&>` → `>`,
-/// `12>file` → `>file`; a token with no such prefix (or `>`/`>>` itself) is returned
+/// exposing the bare redirect operator/body. `2>` -> `>`, `1>>` -> `>>`, `&>` -> `>`,
+/// `12>file` -> `>file`; a token with no such prefix (or `>`/`>>` itself) is returned
 /// unchanged. Only strips when a `>` actually follows the qualifier, so a plain numeric
 /// or `&`-leading token that is NOT a redirect is left intact.
 pub(crate) fn strip_fd_qualifier(tok: &str) -> &str {
@@ -158,7 +158,7 @@ pub(crate) fn is_dev_sink(tail: &str) -> bool {
 }
 
 /// Normalize a single operand to a reported path, or `None` when it is not a path:
-/// strip surrounding quotes; reject options (`-…`), `KEY=VALUE` operands, an empty
+/// strip surrounding quotes; reject options (`-...`), `KEY=VALUE` operands, an empty
 /// token, a bare `-` (stdin/stdout), and an UNRESOLVED-variable pseudo-path (any token
 /// bearing a `$`, e.g. `$OUT`, `${DIR}/x`, `/tmp/$run.log` - we cannot expand it, so a
 /// row would fabricate a path; precision rule, dropped). Two non-concrete shapes are
@@ -168,7 +168,7 @@ pub(crate) fn is_dev_sink(tail: &str) -> bool {
 pub(crate) fn path_operand(token: &str) -> Option<String> {
     let stripped = strip_quotes(token);
     // Peel trailing shell-structural punctuation glued on by a command/process
-    // substitution or sequencing (`…2>/dev/null)`, `…>file;`) BEFORE the path tests, so
+    // substitution or sequencing (`...2>/dev/null)`, `...>file;`) BEFORE the path tests, so
     // the sink/var/syntax filters see the bare path. A leading `'`/`"` that survived an
     // unbalanced split is also handled by [`has_syntax_noise`] below.
     let stripped = trim_structural_tail(stripped);
@@ -204,7 +204,7 @@ pub(crate) fn path_operand(token: &str) -> Option<String> {
 /// a path: the close-delimiters of a command/process substitution (`)`/`}`), a statement
 /// terminator (`;`/`,`), and a trailing unmatched quote. Applied repeatedly (a token can
 /// end in several, e.g. `/dev/null))`). A `)` is only trimmed when the token has NO
-/// matching `(` (an unbalanced close glued on by `$(… )`); a balanced `(…)` is left so a
+/// matching `(` (an unbalanced close glued on by `$(... )`); a balanced `(...)` is left so a
 /// genuinely parenthesized name is untouched. This is the single fix for the dominant
 /// `/dev/null)` / `>(tee` garbage class.
 pub(crate) fn trim_structural_tail(token: &str) -> &str {
@@ -261,7 +261,7 @@ pub(crate) fn has_syntax_noise(token: &str) -> bool {
     if token.contains('`') {
         return true;
     }
-    // An unbalanced bracket/paren/brace REMAINING after the tail trim → still structural.
+    // An unbalanced bracket/paren/brace REMAINING after the tail trim -> still structural.
     if token.matches('(').count() != token.matches(')').count()
         || token.matches('[').count() != token.matches(']').count()
         || token.matches('{').count() != token.matches('}').count()
@@ -301,7 +301,7 @@ pub(crate) fn concrete_path(token: &str) -> Option<String> {
 }
 
 /// True when a token carries an UNRESOLVED shell expansion we cannot perform - a variable
-/// reference (`$NAME`, `${NAME}`, `$1`, …). Such a token can never be turned into the
+/// reference (`$NAME`, `${NAME}`, `$1`, ...). Such a token can never be turned into the
 /// real on-disk path without the runtime environment, so emitting it verbatim would
 /// fabricate a path that does not exist as written (the module doc's precision
 /// contract). A leading-`~` home path is NOT rejected here: `~/notes.md` names one real

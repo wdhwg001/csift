@@ -22,18 +22,18 @@
 //! - **fd-qualified redirects** - `2>`/`1>`/`&>` (+ `>>` forms), attached (`2>/tmp/x`)
 //!   and spaced (`2> /tmp/x`), and the noclobber-override `>|`; a bare `2>&1` fd-dup and
 //!   `/dev/null|stderr|stdout` sinks are NOT paths and are skipped.
-//! - **`-t DIR` destination flag** - `cp`/`mv`/`install -t DIR src…` puts the written
+//! - **`-t DIR` destination flag** - `cp`/`mv`/`install -t DIR src...` puts the written
 //!   destination right after `-t` (sources LAST), so the `-t` value is the dest and every
 //!   positional is a read source (without `-t`, the last positional is the dest).
-//! - **`curl`/`wget` output flags** - `-o <path>` / `--output <path>` / `--output=…`
+//! - **`curl`/`wget` output flags** - `-o <path>` / `--output <path>` / `--output=...`
 //!   (and `wget -O <path>`). A `curl -O` that derives the name from the URL has no
 //!   deterministic local path and is skipped.
 //! - **flag-specified outputs** - `--<name>=<path>` / `--<name> <path>` for a small
-//!   allowlist (`junit-xml`, `junitxml`, `report-path`, `output`, `out-file`, …),
+//!   allowlist (`junit-xml`, `junitxml`, `report-path`, `output`, `out-file`, ...),
 //!   `dd of=<path>`, and a `zip <dest>` archive.
-//! - **`perl -i`** - the in-place twin of `sed -i` (`perl -pi -e 's/a/b/' file…`), verb
+//! - **`perl -i`** - the in-place twin of `sed -i` (`perl -pi -e 's/a/b/' file...`), verb
 //!   `perl-i` ([`emit_perl`]).
-//! - **interpreter write idioms** ([`interp`]) - a `python3 - <<'PY' … PY` / `node -e …`
+//! - **interpreter write idioms** ([`interp`]) - a `python3 - <<'PY' ... PY` / `node -e ...`
 //!   payload whose write target is provably literal (a direct literal argument, or a
 //!   ONE-HOP constant bound exactly once) emits a real `interp-write` row; a write whose
 //!   target the guards cannot extract emits an `interp:<lang>` class marker instead.
@@ -68,7 +68,7 @@
 //! names) stays out of scope: such writes surface as the class marker, never as a
 //! guessed path.
 //!
-//! A trailing `# …` SHELL COMMENT is likewise lexically masked ([`shell_mask`]) before any
+//! A trailing `# ...` SHELL COMMENT is likewise lexically masked ([`shell_mask`]) before any
 //! token/redirect scan: an unquoted `#` at a word boundary opens a comment to end-of-line,
 //! so neither the comment words, an in-comment `>` redirect target, nor an in-comment `;`/`|`
 //! operator can fabricate a row OR displace a real cp/mv/ln destination (`cp src dst # note`

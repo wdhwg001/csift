@@ -35,7 +35,7 @@ fn output_flag_format_selector_edge_forms() {
     );
 }
 
-// ── curl / wget output flags ──
+// -- curl / wget output flags --
 
 #[test]
 fn curl_dash_o_output_caught() {
@@ -63,9 +63,9 @@ fn curl_long_output_flag_both_forms() {
 
 #[test]
 fn curl_capital_o_no_path_is_skipped() {
-    // `curl -O URL` derives the local name from the URL → no deterministic path.
+    // `curl -O URL` derives the local name from the URL -> no deterministic path.
     assert!(paths("curl -O https://example.com/file.tar.gz").is_empty());
-    // `curl -sO https://… /tmp/x` - the bundled `-sO` is not our `-O`-takes-next
+    // `curl -sO https://... /tmp/x` - the bundled `-sO` is not our `-O`-takes-next
     // form (curl's -O takes no path), so no fabricated path either.
     assert!(paths("curl -sO https://example.com/x").is_empty());
 }
@@ -87,7 +87,7 @@ fn wget_output_document_caught() {
     );
 }
 
-// ── flag-specified outputs, dd, zip ──
+// -- flag-specified outputs, dd, zip --
 
 #[test]
 fn junit_xml_flag_both_dashes_caught() {

@@ -118,7 +118,7 @@ fn process_substitution_redirect_emits_no_fragment() {
 #[test]
 fn quoted_path_with_metachar_or_space_does_not_leak_fragment() {
     // The mask makes a quoted in-path `;` and space invisible to the tokenizer, so a
-    // quoted span stays ONE token and the WHOLE path is recovered (no `'…`/`"…` fragment,
+    // quoted span stays ONE token and the WHOLE path is recovered (no `'...`/`"...` fragment,
     // and no mid-filename split). Both forms below resolve to their full quoted content.
     let got = just_paths("echo x >> '/tmp/quoted; path.txt'");
     assert_eq!(got, vec!["/tmp/quoted; path.txt".to_string()]);
@@ -138,7 +138,7 @@ fn quoted_space_bearing_path_stays_one_token_not_a_partial() {
     // CRITICAL precision fix: a quoted redirect/operand path CONTAINING A SPACE (the most
     // common macOS path shape - Library/Application Support, Google Drive, My Documents)
     // must stay ONE token and be emitted WHOLE, never split mid-filename into a fabricated
-    // partial - splitting on raw whitespace cuts `"…/Application Support/x"` down to
+    // partial - splitting on raw whitespace cuts `".../Application Support/x"` down to
     // `Support/x`. Whitespace is read off the MASK, where an in-quote space is `0x01`
     // (non-whitespace).
     assert_eq!(
@@ -156,7 +156,7 @@ fn quoted_space_bearing_path_stays_one_token_not_a_partial() {
         paths("mkdir -p \"/Users/me/Google Drive/notes\""),
         vec![("/Users/me/Google Drive/notes".to_string(), "mkdir")]
     );
-    // Single-quoted redirect target with a space → full path via the `>` redirect verb.
+    // Single-quoted redirect target with a space -> full path via the `>` redirect verb.
     assert_eq!(
         paths("echo x > '/tmp/has space.txt'"),
         vec![("/tmp/has space.txt".to_string(), ">")]
@@ -183,7 +183,7 @@ fn backtick_command_substitution_target_is_not_a_path() {
     );
 }
 
-// ── quote-aware redirect detection (the dominant remaining fabrication class) ──
+// -- quote-aware redirect detection (the dominant remaining fabrication class) --
 
 #[test]
 fn quoted_inline_redirect_does_not_fabricate_a_file() {
@@ -205,7 +205,7 @@ fn quoted_inline_redirect_does_not_fabricate_a_file() {
         just_paths(r#"grep -rnE "...|> *dt|interval" file.txt"#).is_empty(),
         "in-quote regex `> *dt` must not fabricate `*dt`"
     );
-    // printf prose with a `>` (`café > cover`) - the non-ASCII-bearing class.
+    // printf prose with a `>` in accented Latin - the non-ASCII-bearing class.
     assert!(
         just_paths(r#"printf 'layout café > cover scaled déjà'"#).is_empty(),
         "in-quote prose `>` must not fabricate a file"
@@ -241,8 +241,8 @@ fn process_sub_body_operand_does_not_leak() {
 
 #[test]
 fn shell_mask_input_procsub_and_quote_arms() {
-    // An INPUT process-sub `<(…)` (the `<` open arm of the mask) is masked just like
-    // `>(…)`, so a `diff <(a) <(b)` leaks no inner word.
+    // An INPUT process-sub `<(...)` (the `<` open arm of the mask) is masked just like
+    // `>(...)`, so a `diff <(a) <(b)` leaks no inner word.
     let got = just_paths("diff <(sort x) <(sort y) > /tmp/diff.out");
     assert!(
         got.contains(&"/tmp/diff.out".to_string()),
@@ -267,7 +267,7 @@ fn shell_mask_input_procsub_and_quote_arms() {
 
 #[test]
 fn shell_mask_nested_procsub_and_fd_qualified_forms() {
-    // A NESTED process-sub `>( … >(…) …)` exercises the `procsub_depth += 1` arm; the
+    // A NESTED process-sub `>( ... >(...) ...)` exercises the `procsub_depth += 1` arm; the
     // whole nested body is masked, so no inner word leaks.
     let got = just_paths("tee >(grep a >(sort) b) /tmp/real.log");
     assert!(
@@ -367,7 +367,7 @@ fn shell_mask_and_helpers_direct_coverage() {
     assert!(!has_unresolved_var("/tmp/clean"));
 }
 
-// ── Backtick command-substitution: an inner redirect must not corrupt a path ──
+// -- Backtick command-substitution: an inner redirect must not corrupt a path --
 
 #[test]
 fn backtick_cmdsub_inner_redirect_not_fabricated() {
@@ -389,7 +389,7 @@ fn backtick_does_not_swallow_a_real_following_redirect() {
     );
 }
 
-// ── Arithmetic `(( ))` and test `[[ ]]` comparison operators are not redirects ──
+// -- Arithmetic `(( ))` and test `[[ ]]` comparison operators are not redirects --
 
 #[test]
 fn arithmetic_comparison_does_not_fabricate_identifier() {
@@ -400,7 +400,7 @@ fn arithmetic_comparison_does_not_fabricate_identifier() {
         just_paths("(( a > b ))").is_empty(),
         "arithmetic comparison must not fabricate a file"
     );
-    // The same inside an `if … then … fi` wrapper: still no fabricated `b`.
+    // The same inside an `if ... then ... fi` wrapper: still no fabricated `b`.
     assert!(!just_paths("if (( a > b )); then echo hi; fi").contains(&"b".to_string()));
     // A numeric RHS likewise fabricates nothing.
     assert!(!just_paths("(( count > 5 ))").contains(&"5".to_string()));

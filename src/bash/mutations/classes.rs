@@ -128,7 +128,7 @@ pub(crate) fn tar_extract_marker(operands: &[&str], out: &mut Vec<BashMutation>)
     }
 }
 
-/// `ruff format [files…]` / `ruff check --fix [files…]`: the subcommand word is not a
+/// `ruff format [files...]` / `ruff check --fix [files...]`: the subcommand word is not a
 /// file operand, so it is peeled before the operand scan.
 fn emit_ruff(operands: &[&str], out: &mut Vec<BashMutation>) {
     let (sub, rest) = match operands.split_first() {

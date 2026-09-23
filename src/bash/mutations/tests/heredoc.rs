@@ -2,9 +2,9 @@
 
 use super::*;
 
-// ── Mutation-kill pins (cargo-mutants survivors): heredoc scanning boundaries the
+// -- Mutation-kill pins (cargo-mutants survivors): heredoc scanning boundaries the
 //    ordinary fixtures never reached - wrong consumed-offset arithmetic corrupts the
-//    SECOND delimiter on a line, and a broken closer comparison leaks body lines. ──
+//    SECOND delimiter on a line, and a broken closer comparison leaks body lines. --
 
 #[test]
 fn heredoc_delims_forms_and_offsets() {
@@ -47,7 +47,7 @@ fn heredoc_bodies_dropped_until_exact_closer() {
 
 #[test]
 fn inline_python_literal_write_is_extracted() {
-    // An inline `python3 -c "open('/tmp/x','w')…"` script with a LITERAL first
+    // An inline `python3 -c "open('/tmp/x','w')..."` script with a LITERAL first
     // argument and a write mode is a provable write: the target is a real row now
     // (the former out-of-scope contract moved to the interp analyzer, which still
     // never fabricates - see the interp tests for the opaque cases).
@@ -57,7 +57,7 @@ fn inline_python_literal_write_is_extracted() {
     );
 }
 
-// ── heredoc body is SKIPPED, not mis-reported (the never-mis-reported contract) ──
+// -- heredoc body is SKIPPED, not mis-reported (the never-mis-reported contract) --
 
 #[test]
 fn heredoc_body_redirect_char_does_not_fabricate_a_row() {
@@ -116,14 +116,14 @@ fn heredoc_multiple_delims_and_unclosed_quote() {
         !got.iter().any(|p| p.contains("body")),
         "body leaked: {got:?}"
     );
-    // A simple heredoc whose body carries a stray `>` → no real path, no fabrication.
+    // A simple heredoc whose body carries a stray `>` -> no real path, no fabrication.
     let unterminated = "cat <<EOF\nx > y\nEOF";
     assert!(just_paths(unterminated).is_empty(), "no real path here");
 }
 
 #[test]
 fn heredoc_body_then_more_commands_after_closer() {
-    // A heredoc whose closer is followed by MORE commands exercises the active→None
+    // A heredoc whose closer is followed by MORE commands exercises the active->None
     // transition inside strip_heredoc_bodies (pop the body, resume scanning).
     let cmd = "cat <<EOF\nline one > fake\nline two\nEOF\nmkdir -p /tmp/after && touch /tmp/also";
     let got = just_paths(cmd);
@@ -163,7 +163,7 @@ fn heredoc_delims_direct_coverage() {
     // An unterminated quote has no closing `'`, so it falls through to the bare-word
     // scan, which keeps the leading `'` and runs to the end (no metachar).
     assert_eq!(read_heredoc_word("'unterminated").0, "'unterminated");
-    // A command with NO `<<` at all → the strip fast path (no change, no bodies).
+    // A command with NO `<<` at all -> the strip fast path (no change, no bodies).
     let (unchanged, none) = strip_heredoc_bodies_keeping("echo hi > /tmp/x");
     assert_eq!(unchanged, "echo hi > /tmp/x");
     assert!(none.is_empty());

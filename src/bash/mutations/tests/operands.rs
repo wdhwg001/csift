@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn segment_with_only_prefix_no_command_is_empty() {
-    // A segment that is ONLY a `sudo`/`env …` prefix with no command → after
+    // A segment that is ONLY a `sudo`/`env ...` prefix with no command -> after
     // strip_prefixes the cmd_tokens are empty (the split_first None arm).
     assert!(paths("sudo").is_empty());
     assert!(paths("env FOO=1").is_empty());
@@ -37,7 +37,7 @@ fn no_mutation_commands_return_empty() {
 
 #[test]
 fn flags_and_bare_dash_and_assignments_skipped_as_paths() {
-    // rm with only flags + a bare `-` → no path operands.
+    // rm with only flags + a bare `-` -> no path operands.
     assert!(paths("rm -rf -").is_empty());
     // A KEY=VALUE operand is not a path.
     assert!(paths("touch FOO=bar").is_empty());
@@ -53,7 +53,7 @@ fn glob_operand_kept_verbatim() {
 fn empty_command_is_empty() {
     assert!(paths("").is_empty());
     assert!(paths("   ").is_empty());
-    // A segment that is only an operator yields empty segments → nothing.
+    // A segment that is only an operator yields empty segments -> nothing.
     assert!(paths(" && || ; |").is_empty());
 }
 
@@ -84,7 +84,7 @@ fn unresolved_var_flag_and_dd_dropped() {
 
 #[test]
 fn flag_output_glob_is_dropped() {
-    // A glob as a single output destination is a parse artifact → concrete_path drops.
+    // A glob as a single output destination is a parse artifact -> concrete_path drops.
     assert!(paths("tool --output=/tmp/*.json").is_empty());
     assert!(paths("dd if=x of=/tmp/?.bin").is_empty());
 }
@@ -105,7 +105,7 @@ fn strip_fd_qualifier_rules() {
     assert_eq!(strip_fd_qualifier("1>>"), ">>");
     assert_eq!(strip_fd_qualifier("&>"), ">");
     assert_eq!(strip_fd_qualifier("12>file"), ">file");
-    // No redirect after the qualifier → unchanged.
+    // No redirect after the qualifier -> unchanged.
     assert_eq!(strip_fd_qualifier("&1"), "&1");
     assert_eq!(strip_fd_qualifier("2"), "2");
     assert_eq!(strip_fd_qualifier(">"), ">");
@@ -147,7 +147,7 @@ fn trim_structural_tail_and_syntax_noise_helpers() {
     assert!(has_syntax_noise("/tmp/{unbalanced")); // unbalanced brace
     assert!(has_syntax_noise("=value")); // `=`-led fragment
     assert!(has_syntax_noise("12345")); // pure number
-    assert!(has_syntax_noise("a,b")); // comma, no slash → code shard
+    assert!(has_syntax_noise("a,b")); // comma, no slash -> code shard
     assert!(has_syntax_noise("label:")); // trailing colon, no slash
     assert!(!has_syntax_noise("/tmp/clean.txt"));
     assert!(!has_syntax_noise("*.tmp")); // a plain glob is NOT noise
@@ -164,8 +164,8 @@ fn residual_noise_classes_rejected_real_relpaths_kept() {
     assert!(has_syntax_noise("="));
     assert!(has_syntax_noise("7000"));
     assert!(has_syntax_noise("0"));
-    assert!(has_syntax_noise("o.get('x',0):")); // comma + trailing colon, no slash → code shard
-    assert!(has_syntax_noise("turn,t.get")); // comma, no slash → code shard
+    assert!(has_syntax_noise("o.get('x',0):")); // comma + trailing colon, no slash -> code shard
+    assert!(has_syntax_noise("turn,t.get")); // comma, no slash -> code shard
     assert!(has_syntax_noise("label:")); // trailing colon, no slash
                                          // Genuine RELATIVE paths must survive (no `/`-free code-shard false positive).
     assert!(!has_syntax_noise("src/main.rs"));
@@ -192,7 +192,7 @@ fn version_compare_and_numeric_args_do_not_become_files() {
 fn path_operand_post_trim_rejections() {
     // After the trailing-tail trim, the re-checked sink + fd-dup-remnant + syntax-noise
     // rejections each fire (the `/dev/null)` family, a `&1` remnant, a noisy token).
-    assert_eq!(path_operand("2>/dev/null)"), None); // trims `)` → sink → None
+    assert_eq!(path_operand("2>/dev/null)"), None); // trims `)` -> sink -> None
     assert_eq!(path_operand("/dev/stderr)"), None);
     assert_eq!(path_operand("&1"), None); // fd-dup remnant
     assert_eq!(path_operand("'/tmp/x"), None); // unbalanced quote noise
@@ -207,7 +207,7 @@ fn path_operand_post_trim_rejections() {
 fn trim_structural_tail_brace_and_balanced_cases() {
     // The `}` unbalanced-brace arm (a `${VAR}`-substitution close glued on).
     assert_eq!(trim_structural_tail("/tmp/x}"), "/tmp/x");
-    // A balanced `{…}` is left intact (no over-trim).
+    // A balanced `{...}` is left intact (no over-trim).
     assert_eq!(trim_structural_tail("/tmp/{a}"), "/tmp/{a}");
     // Mixed trailing punctuation peeled in sequence.
     assert_eq!(trim_structural_tail("/tmp/x;}"), "/tmp/x");

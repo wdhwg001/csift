@@ -121,7 +121,7 @@ fn class_markers_survive_resolution_verbatim() {
     );
 }
 
-// ── Mutation-kill pins: marker verbs, positive formatter runs, and the audit gate ──
+// -- Mutation-kill pins: marker verbs, positive formatter runs, and the audit gate --
 
 #[test]
 fn marker_rows_carry_their_class_verbs() {

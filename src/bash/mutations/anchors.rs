@@ -13,7 +13,7 @@
 //! - A READ anchor demands a SINGLE simple segment: a compound command's stdout is a
 //!   concatenation nothing can attribute to one file.
 //! - A WRITE anchor is SEGMENT-scoped: the dominant real shape is "write the file,
-//!   then run it" (`cat > f <<'EOF' … EOF` followed by chained commands), so a write
+//!   then run it" (`cat > f <<'EOF' ... EOF` followed by chained commands), so a write
 //!   segment anchors inside a compound command - but the caller must then hold the
 //!   whole command to a CLEAN result (exit ok AND empty stderr: a failing
 //!   cat/tee/echo always writes stderr, so a clean echo proves the write landed even

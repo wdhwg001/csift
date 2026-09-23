@@ -26,15 +26,15 @@ pub(crate) const GIT_MUTATING: &[&str] = &[
 /// Parse a Bash command string into the file mutations it heuristically performs.
 ///
 /// Splits into segments on `;`, `&&`, `||`, `|`, and newlines, then for each segment:
-/// strips leading `env VAR=…` / `sudo` prefixes, inspects the first token against the
+/// strips leading `env VAR=...` / `sudo` prefixes, inspects the first token against the
 /// mutating-verb allowlist, and additionally scans every segment for `>`/`>>`
 /// redirection targets. Non-mutating commands (`ls`, `cat`, `grep`, `sed` without an
-/// in-place flag, `git status`, …) contribute nothing.
+/// in-place flag, `git status`, ...) contribute nothing.
 #[must_use]
 pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
     // Strip heredoc BODY lines first: a `<<DELIM` body is opaque TEXT to the SHELL
     // lexer (often containing a `>` or quote that would be mis-read as a redirect,
-    // fabricating a path). The opener LINE is kept (a `… <<DELIM > file` carries a real
+    // fabricating a path). The opener LINE is kept (a `... <<DELIM > file` carries a real
     // redirect on the opener itself), and the stripped bodies are kept ASIDE so an
     // interpreter segment can hand its payload to the write-idiom analyzer.
     let (command, bodies) = strip_heredoc_bodies_keeping(command);

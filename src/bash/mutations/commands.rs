@@ -28,7 +28,7 @@ pub(crate) fn parse_segment(
     // (real dest dropped / source mislabeled) or double-emit the redirect path.
     let redirect_consumed = collect_redirections(&toks, out);
 
-    // Output-path FLAGS (`--junit-xml=…`, `--report-path …`) can likewise appear under
+    // Output-path FLAGS (`--junit-xml=...`, `--report-path ...`) can likewise appear under
     // any command, so scan every segment for the allowlisted output flags.
     collect_flag_outputs(&toks, out);
 
@@ -80,9 +80,9 @@ pub(crate) fn parse_segment(
     }
 }
 
-/// `perl -i` is the in-place twin of `sed -i`: `perl -pi -e 's/a/b/' file…` edits each
+/// `perl -i` is the in-place twin of `sed -i`: `perl -pi -e 's/a/b/' file...` edits each
 /// file operand in place. Two gates keep precision: an in-place cluster must be present
-/// (`-i`, `-pi`, `-i.bak`, …), AND the script must ride an explicit `-e`/`-E` flag.
+/// (`-i`, `-pi`, `-i.bak`, ...), AND the script must ride an explicit `-e`/`-E` flag.
 /// Without `-e` the first positional is a script FILE (`perl -pi prog.pl data`) and the
 /// operand layout is ambiguous, so nothing is emitted. With `-e`, the flag values are
 /// stripped ([`strip_value_flags`]) and EVERY remaining positional is an edited file.
@@ -175,7 +175,7 @@ pub(crate) fn emit_operands(operands: &[&str], verb: &'static str, out: &mut Vec
     }
 }
 
-/// `touch [opts] file…` - like [`emit_operands`] but with `touch`'s VALUE-taking flags
+/// `touch [opts] file...` - like [`emit_operands`] but with `touch`'s VALUE-taking flags
 /// stripped first. `touch -d DATE`, `--date=DATE`, `-r REFFILE`, `--reference=REFFILE`,
 /// and `-t STAMP` each consume a FOLLOWING token that is NOT a created path: `-r`'s value
 /// is a READ-ONLY reference file, `-d`/`-t`'s value is a timestamp string. Without this,
@@ -197,7 +197,7 @@ pub(crate) fn emit_touch(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// `tee [opts] file…` - every non-flag operand is a WRITTEN sink. The append form
+/// `tee [opts] file...` - every non-flag operand is a WRITTEN sink. The append form
 /// (`tee -a` / `tee --append`) does NOT truncate (the file may pre-exist), mirroring
 /// `>>` vs `>`; emit it under the `tee-a` verb so [`bash_verb_is_create`] maps it to
 /// `is_create=false` (the truncating `tee` stays a create). tee has no value-taking
@@ -218,8 +218,8 @@ pub(crate) fn emit_tee(operands: &[&str], out: &mut Vec<BashMutation>) {
 }
 
 /// Drop each VALUE-taking flag token AND the token that follows it. A flag is matched in
-/// two shapes: the spaced form (`-r ref` → drop both `-r` and `ref`) and the inline
-/// `--flag=value` form (`--reference=ref` → drop the single token). Used so a flag's
+/// two shapes: the spaced form (`-r ref` -> drop both `-r` and `ref`) and the inline
+/// `--flag=value` form (`--reference=ref` -> drop the single token). Used so a flag's
 /// argument is never mistaken for a positional path operand.
 pub(crate) fn strip_value_flags<'a>(operands: Vec<&'a str>, value_flags: &[&str]) -> Vec<&'a str> {
     let mut out = Vec::new();
@@ -276,7 +276,7 @@ pub(crate) fn non_flag_operands<'a>(operands: &[&'a str]) -> Vec<&'a str> {
 
 /// Emit only the destination of a last-operand-dest verb (`ln`, `rsync`) - the LAST
 /// positional operand. Validating that specific token (not "the last token that happens
-/// to be a valid path") means a `… $DEST/x` whose real destination is an unexpandable
+/// to be a valid path") means a `... $DEST/x` whose real destination is an unexpandable
 /// `$VAR` emits NOTHING, rather than wrongly reporting an earlier source.
 pub(crate) fn emit_last_operand(
     operands: &[&str],
@@ -311,8 +311,8 @@ pub(crate) fn is_remote_spec(path: &str) -> bool {
 }
 
 /// `ln` destination resolution, GNU `-t DIR` / `--target-directory` aware (the same
-/// inversion `cp`/`mv` have). The default form (`ln [-s] target… linkname`) writes the
-/// LAST positional (the link). But `ln -t DIR target…` / `--target-directory DIR` puts
+/// inversion `cp`/`mv` have). The default form (`ln [-s] target... linkname`) writes the
+/// LAST positional (the link). But `ln -t DIR target...` / `--target-directory DIR` puts
 /// the destination DIRECTORY after `-t` with the link TARGETS last - so blindly taking
 /// the last positional would wrongly report a read-only source target as the created link
 /// AND miss the real destination dir. When `-t` is present we emit ITS value as the
@@ -333,7 +333,7 @@ pub(crate) fn emit_ln(operands: &[&str], out: &mut Vec<BashMutation>) {
 }
 
 /// `cp` / `install` destination resolution, GNU `-t DIR` aware. The default form
-/// (`cp src… dest`) writes the LAST positional. But `cp -t DIR src…` / `--target-directory
+/// (`cp src... dest`) writes the LAST positional. But `cp -t DIR src...` / `--target-directory
 /// DIR` puts the destination right after `-t` with the SOURCES last - so blindly taking
 /// the last positional would wrongly report a read-only SOURCE as written. When `-t`/
 /// `--target-directory` is present we emit ITS value as the destination and treat every
@@ -376,7 +376,7 @@ pub(crate) fn target_directory_value<'a>(operands: &[&'a str]) -> Option<&'a str
 /// validated, so a dropped `$VAR` destination suppresses only the `mv` dest row (the
 /// real source moves are still reported as `mv-from`).
 pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
-    // GNU `mv -t DIR src…`: the destination is the `-t` value, every positional is a
+    // GNU `mv -t DIR src...`: the destination is the `-t` value, every positional is a
     // source - the same inversion `cp -t` has. Without `-t` the last positional is the
     // destination and earlier positionals are sources.
     if let Some(dir) = target_directory_value(operands) {
@@ -425,10 +425,10 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
 }
 
 /// `sed` mutates a file ONLY with an in-place flag (`-i`, `-i.bak`, `--in-place`,
-/// `--in-place=.bak`); a `sed` without it streams to stdout and changes no file → record
+/// `--in-place=.bak`); a `sed` without it streams to stdout and changes no file -> record
 /// nothing.
 ///
-/// `sed [opts] '<script>' <file>…` - the FIRST non-option operand is the script (e.g.
+/// `sed [opts] '<script>' <file>...` - the FIRST non-option operand is the script (e.g.
 /// `s/a/b/`), NOT a file, so it is skipped; every later non-option operand is a file.
 ///
 /// Three operand-split subtleties a naive "first bare operand is the script" loop gets
@@ -441,7 +441,7 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
 ///   files.
 /// - **BSD `-i ''` empty suffix**: macOS/BSD sed spells in-place as `-i ''` where the
 ///   following `''` token is the (here empty) backup suffix, NOT the script. An
-///   empty-after-quote-strip operand is therefore never the script nor a file → skipped,
+///   empty-after-quote-strip operand is therefore never the script nor a file -> skipped,
 ///   which is what keeps the REAL script in the script slot: counting the empty suffix as
 ///   the script slides the script itself one operand along and emits it as a file.
 pub(crate) fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
@@ -479,14 +479,14 @@ pub(crate) fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// True for a sed inline `--expression=…` / `--file=…` script flag (the spaced `-e`/`-f`
+/// True for a sed inline `--expression=...` / `--file=...` script flag (the spaced `-e`/`-f`
 /// and exact `--expression`/`--file` tokens are matched directly by [`emit_sed`]).
 pub(crate) fn script_flag_inline(tok: &str) -> bool {
     matches!(tok.split_once('='), Some((name, _)) if name == "--expression" || name == "--file")
 }
 
 /// True for a `sed` in-place flag: `--in-place`, the GNU `--in-place=SUFFIX` backup form,
-/// or any `-i…` short flag (`-i`, `-i.bak`, …). `-i<suffix>` / `--in-place=<suffix>` are
+/// or any `-i...` short flag (`-i`, `-i.bak`, ...). `-i<suffix>` / `--in-place=<suffix>` are
 /// sed's in-place-with-backup forms.
 pub(crate) fn is_sed_in_place_flag(tok: &str) -> bool {
     tok == "--in-place" || tok.starts_with("--in-place=") || tok.starts_with("-i")
