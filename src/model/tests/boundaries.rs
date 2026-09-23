@@ -375,7 +375,7 @@ fn plan_approval_is_not_a_boundary() {
 #[test]
 fn plan_rejection_surfaces_plan_pointer_via_index() {
     // The ExitPlanMode tool_use carries planFilePath; the rejection resolves it via
-    // the PlanIndex -> the reconstructed user text carries a `[plan: ...]` pointer.
+    // the PlanIndex -> the reconstructed user text carries a `[plan: …]` pointer.
     let tool_use = parse(
         r##"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN","name":"ExitPlanMode","input":{"plan":"# the plan body","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"##,
     );
