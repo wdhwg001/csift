@@ -435,7 +435,7 @@ pub(crate) fn extract_with_turns(
         // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and
         // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a
         // `"File created successfully..."` string), so those ids are absent here and the
-        // input-side fallback below supplies their content (section subagent recover).
+        // input-side fallback below supplies their content.
         let mut ids_with_result: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         // tool_use_ids whose RESULT was an error (`is_error:true`) - e.g. a failed Edit
