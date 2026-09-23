@@ -202,7 +202,7 @@ fn ingest_result(
     if let Some(task) = tasks.get_mut(tuid) {
         // The shell result: the task id + output path live in the text (and the id also
         // in `toolUseResult.backgroundTaskId`); a Monitor arm reads `Monitor started
-        // (task <id>, …)` with `toolUseResult.taskId`.
+        // (task <id>, ...)` with `toolUseResult.taskId`.
         if task.id.is_none() {
             task.id = after_marker(&text, "with ID: ")
                 .or_else(|| after_marker(&text, "(task "))

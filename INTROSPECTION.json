@@ -680,12 +680,12 @@
         {
           "path": "src/commands/live/background.rs",
           "lines": "16-23",
-          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
+          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, ...)` with `toolUseResult.taskId`. It shares the `b...` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: ...`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         },
         {
           "path": "src/commands/live/background_scan.rs",
           "lines": "199-209",
-          "snippet": "    let text = content\n        .map(crate::model::tool_result_content_text)\n        .unwrap_or_default();\n    if let Some(task) = tasks.get_mut(tuid) {\n        // The shell result: the task id + output path live in the text (and the id also\n        // in `toolUseResult.backgroundTaskId`); a Monitor arm reads `Monitor started\n        // (task <id>, \u2026)` with `toolUseResult.taskId`.\n        if task.id.is_none() {\n            task.id = after_marker(&text, \"with ID: \")\n                .or_else(|| after_marker(&text, \"(task \"))\n                .or_else(|| after_marker(&text, \"(ID: \"))"
+          "snippet": "    let text = content\n        .map(crate::model::tool_result_content_text)\n        .unwrap_or_default();\n    if let Some(task) = tasks.get_mut(tuid) {\n        // The shell result: the task id + output path live in the text (and the id also\n        // in `toolUseResult.backgroundTaskId`); a Monitor arm reads `Monitor started\n        // (task <id>, ...)` with `toolUseResult.taskId`.\n        if task.id.is_none() {\n            task.id = after_marker(&text, \"with ID: \")\n                .or_else(|| after_marker(&text, \"(task \"))\n                .or_else(|| after_marker(&text, \"(ID: \"))"
         }
       ],
       "states": [
@@ -779,7 +779,7 @@
         {
           "path": "src/commands/live/background.rs",
           "lines": "16-23",
-          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
+          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, ...)` with `toolUseResult.taskId`. It shares the `b...` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: ...`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         },
         {
           "path": "src/commands/live/background_scan.rs",
@@ -882,7 +882,7 @@
         {
           "path": "src/commands/live/background.rs",
           "lines": "16-23",
-          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
+          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, ...)` with `toolUseResult.taskId`. It shares the `b...` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: ...`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         }
       ],
       "states": [
@@ -2355,7 +2355,7 @@
         {
           "path": "src/commands/live/background.rs",
           "lines": "16-23",
-          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
+          "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, ...)` with `toolUseResult.taskId`. It shares the `b...` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: ...`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         }
       ],
       "states": [
@@ -18118,7 +18118,7 @@
         {
           "path": "src/commands/live/wait.rs",
           "lines": "106-119",
-          "snippet": "        // \u2500\u2500 Sidecar discovery: the sidecar DIR is typically born mid-wait (the first\n        //    pending ask creates it), and its path resolves only once the dir exists -\n        //    so re-attempt each poll. A file born after start is wholly post-start, so\n        //    baseline 0 is exact. \u2500\u2500\n        if !is_subagent_target {\n            if let Some(sc) = crate::commands::elicitation::sidecar_path(&main) {\n                if !cursors.iter().any(|c| c.path == sc) {\n                    let lane = crate::subagent::session_id_from_path(&main);\n                    cursors.push(Cursor {\n                        path: sc,\n                        offset: 0,\n                        lane,\n                    });\n                }"
+          "snippet": "        // -- Sidecar discovery: the sidecar DIR is typically born mid-wait (the first\n        //    pending ask creates it), and its path resolves only once the dir exists -\n        //    so re-attempt each poll. A file born after start is wholly post-start, so\n        //    baseline 0 is exact. --\n        if !is_subagent_target {\n            if let Some(sc) = crate::commands::elicitation::sidecar_path(&main) {\n                if !cursors.iter().any(|c| c.path == sc) {\n                    let lane = crate::subagent::session_id_from_path(&main);\n                    cursors.push(Cursor {\n                        path: sc,\n                        offset: 0,\n                        lane,\n                    });\n                }"
         }
       ],
       "states": [
@@ -31854,7 +31854,7 @@
         {
           "path": "src/commands/live/wait.rs",
           "lines": "92-103",
-          "snippet": "        // \u2500\u2500 New-child discovery: a lane spawned after start joins the watch set with\n        //    baseline 0 (its whole content is post-start). \u2500\u2500\n        if args.want_subagents() && !is_subagent_target {\n            for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {\n                if !cursors.iter().any(|c| c.path == sub) {\n                    let lane = crate::subagent::session_id_from_path(&sub);\n                    cursors.push(Cursor {\n                        path: sub,\n                        offset: 0,\n                        lane,\n                    });\n                }"
+          "snippet": "        // -- New-child discovery: a lane spawned after start joins the watch set with\n        //    baseline 0 (its whole content is post-start). --\n        if args.want_subagents() && !is_subagent_target {\n            for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {\n                if !cursors.iter().any(|c| c.path == sub) {\n                    let lane = crate::subagent::session_id_from_path(&sub);\n                    cursors.push(Cursor {\n                        path: sub,\n                        offset: 0,\n                        lane,\n                    });\n                }"
         }
       ],
       "states": [
@@ -31926,7 +31926,7 @@
         {
           "path": "src/commands/live/wait.rs",
           "lines": "106-119",
-          "snippet": "        // \u2500\u2500 Sidecar discovery: the sidecar DIR is typically born mid-wait (the first\n        //    pending ask creates it), and its path resolves only once the dir exists -\n        //    so re-attempt each poll. A file born after start is wholly post-start, so\n        //    baseline 0 is exact. \u2500\u2500\n        if !is_subagent_target {\n            if let Some(sc) = crate::commands::elicitation::sidecar_path(&main) {\n                if !cursors.iter().any(|c| c.path == sc) {\n                    let lane = crate::subagent::session_id_from_path(&main);\n                    cursors.push(Cursor {\n                        path: sc,\n                        offset: 0,\n                        lane,\n                    });\n                }"
+          "snippet": "        // -- Sidecar discovery: the sidecar DIR is typically born mid-wait (the first\n        //    pending ask creates it), and its path resolves only once the dir exists -\n        //    so re-attempt each poll. A file born after start is wholly post-start, so\n        //    baseline 0 is exact. --\n        if !is_subagent_target {\n            if let Some(sc) = crate::commands::elicitation::sidecar_path(&main) {\n                if !cursors.iter().any(|c| c.path == sc) {\n                    let lane = crate::subagent::session_id_from_path(&main);\n                    cursors.push(Cursor {\n                        path: sc,\n                        offset: 0,\n                        lane,\n                    });\n                }"
         }
       ],
       "states": [
@@ -34337,7 +34337,7 @@
         {
           "path": "src/commands/live/wait.rs",
           "lines": "47-55",
-          "snippet": "    // \u2500\u2500 Baselines: snapshot every currently-watched file's length. Only bytes appended\n    //    AFTER these offsets are events; history is `search`'s job. \u2500\u2500\n    let mut cursors: Vec<Cursor> = Vec::new();\n    let seed = |path: PathBuf, cursors: &mut Vec<Cursor>| {\n        if cursors.iter().any(|c| c.path == path) {\n            return;\n        }\n        let offset = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);\n        let lane = crate::subagent::session_id_from_path(&path);"
+          "snippet": "    // -- Baselines: snapshot every currently-watched file's length. Only bytes appended\n    //    AFTER these offsets are events; history is `search`'s job. --\n    let mut cursors: Vec<Cursor> = Vec::new();\n    let seed = |path: PathBuf, cursors: &mut Vec<Cursor>| {\n        if cursors.iter().any(|c| c.path == path) {\n            return;\n        }\n        let offset = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);\n        let lane = crate::subagent::session_id_from_path(&path);"
         },
         {
           "path": "src/commands/live/wait.rs",
@@ -34482,7 +34482,7 @@
         {
           "path": "src/commands/live/wait.rs",
           "lines": "92-103",
-          "snippet": "        // \u2500\u2500 New-child discovery: a lane spawned after start joins the watch set with\n        //    baseline 0 (its whole content is post-start). \u2500\u2500\n        if args.want_subagents() && !is_subagent_target {\n            for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {\n                if !cursors.iter().any(|c| c.path == sub) {\n                    let lane = crate::subagent::session_id_from_path(&sub);\n                    cursors.push(Cursor {\n                        path: sub,\n                        offset: 0,\n                        lane,\n                    });\n                }"
+          "snippet": "        // -- New-child discovery: a lane spawned after start joins the watch set with\n        //    baseline 0 (its whole content is post-start). --\n        if args.want_subagents() && !is_subagent_target {\n            for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {\n                if !cursors.iter().any(|c| c.path == sub) {\n                    let lane = crate::subagent::session_id_from_path(&sub);\n                    cursors.push(Cursor {\n                        path: sub,\n                        offset: 0,\n                        lane,\n                    });\n                }"
         }
       ],
       "states": [
@@ -43169,7 +43169,7 @@
         {
           "path": "src/commands/live/background.rs",
           "lines": "109-127",
-          "snippet": "pub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out \u2026]` event).\n    TimedOut,\n    /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;\n    /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk\n    /// in a local-only corpus; a producer-only claim in the ledger (BG-011).\n    Blocked,\n    /// A status literal csift does not know. Rendered as its own bucket so a new harness\n    /// value is disclosed instead of being booked as completed.\n    Other,\n}"
+          "snippet": "pub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out ...]` event).\n    TimedOut,\n    /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;\n    /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk\n    /// in a local-only corpus; a producer-only claim in the ledger (BG-011).\n    Blocked,\n    /// A status literal csift does not know. Rendered as its own bucket so a new harness\n    /// value is disclosed instead of being booked as completed.\n    Other,\n}"
         }
       ],
       "states": [

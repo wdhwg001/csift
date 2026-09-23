@@ -38,7 +38,7 @@ fn registry_rendering(t: jiff::Timestamp) -> String {
     }
 }
 
-// ── The pid probe against real processes (own pid = deterministically alive) ──
+// -- The pid probe against real processes (own pid = deterministically alive) --
 
 #[test]
 fn probe_pid_own_process_guard_states() {

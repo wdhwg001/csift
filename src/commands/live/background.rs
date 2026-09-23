@@ -15,9 +15,9 @@
 //!   status:"async_launched", agentId, description, outputFile}`;
 //! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a
 //!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor
-//!   started (task <id>, …)` with `toolUseResult.taskId`. It shares the `b…` id namespace
+//!   started (task <id>, ...)` with `toolUseResult.taskId`. It shares the `b...` id namespace
 //!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the
-//!   tool name tells them apart. Event pulses (`Monitor event: …`, no `<status>`) never
+//!   tool name tells them apart. Event pulses (`Monitor event: ...`, no `<status>`) never
 //!   close it; a termination notice (`<status>completed</status>`, summary opening
 //!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design
 //!   (measured: 30% of armed monitors produced no notification at all).
@@ -115,7 +115,7 @@ pub(crate) enum BgState {
     /// Claude Code's own orphan reconciliation at the next session start, or an
     /// explicit `stopped` status.
     Stopped,
-    /// A Monitor whose timeout fired (the `[Monitor timed out …]` event).
+    /// A Monitor whose timeout fired (the `[Monitor timed out ...]` event).
     TimedOut,
     /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;
     /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk

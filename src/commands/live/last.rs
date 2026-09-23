@@ -6,7 +6,7 @@
 use super::*;
 
 /// The excerpt cap: the context-excerpt budget `search` uses, with the explicit
-/// `… (+N chars)` marker when clipped.
+/// `... (+N chars)` marker when clipped.
 const LAST_EXCERPT_CHARS: usize = 400;
 
 #[derive(Debug, Clone)]

@@ -44,8 +44,8 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
     };
     let is_subagent_target = crate::subagent::is_subagent_path(&main);
 
-    // ── Baselines: snapshot every currently-watched file's length. Only bytes appended
-    //    AFTER these offsets are events; history is `search`'s job. ──
+    // -- Baselines: snapshot every currently-watched file's length. Only bytes appended
+    //    AFTER these offsets are events; history is `search`'s job. --
     let mut cursors: Vec<Cursor> = Vec::new();
     let seed = |path: PathBuf, cursors: &mut Vec<Cursor>| {
         if cursors.iter().any(|c| c.path == path) {
@@ -67,8 +67,8 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
         }
     }
 
-    // ── Readiness line (stderr): the caller can order its own actions AFTER this - the
-    //    line is what makes a scripted wait race-free against its own trigger. ──
+    // -- Readiness line (stderr): the caller can order its own actions AFTER this - the
+    //    line is what makes a scripted wait race-free against its own trigger. --
     let start = std::time::Instant::now();
     let deadline = std::time::Duration::from_secs(timeout_secs);
     eprintln!(
@@ -89,8 +89,8 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
     let mut activity = Activity::default();
     let mut interval = args.interval.unwrap_or(POLL_FLOOR_MS);
     loop {
-        // ── New-child discovery: a lane spawned after start joins the watch set with
-        //    baseline 0 (its whole content is post-start). ──
+        // -- New-child discovery: a lane spawned after start joins the watch set with
+        //    baseline 0 (its whole content is post-start). --
         if args.want_subagents() && !is_subagent_target {
             for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {
                 if !cursors.iter().any(|c| c.path == sub) {
@@ -103,10 +103,10 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                 }
             }
         }
-        // ── Sidecar discovery: the sidecar DIR is typically born mid-wait (the first
+        // -- Sidecar discovery: the sidecar DIR is typically born mid-wait (the first
         //    pending ask creates it), and its path resolves only once the dir exists -
         //    so re-attempt each poll. A file born after start is wholly post-start, so
-        //    baseline 0 is exact. ──
+        //    baseline 0 is exact. --
         if !is_subagent_target {
             if let Some(sc) = crate::commands::elicitation::sidecar_path(&main) {
                 if !cursors.iter().any(|c| c.path == sc) {
@@ -120,9 +120,9 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
             }
         }
 
-        // ── Incremental reads: appended COMPLETE lines only (a torn tail is held at its
+        // -- Incremental reads: appended COMPLETE lines only (a torn tail is held at its
         //    offset and re-read next poll - the atomic-append measurements make this the
-        //    only guard needed). ──
+        //    only guard needed). --
         let mut anything_grew = false;
         for cur in &mut cursors {
             let len = std::fs::metadata(&cur.path).map(|m| m.len()).unwrap_or(0);
@@ -165,7 +165,7 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
             cur.offset = base + pos as u64;
         }
 
-        // ── Verdict-class conditions: re-join the surfaces (bounded tail work). ──
+        // -- Verdict-class conditions: re-join the surfaces (bounded tail work). --
         if needs_verdict {
             let assessment = assess_path(&main, args.want_subagents(), &lens)?;
             for (raw, cond) in &conds {

@@ -9,7 +9,7 @@ mod conditions;
 mod surfaces;
 mod verdict;
 
-// ── The assess() join matrix (pure - every arm reachable without fs) ──
+// -- The assess() join matrix (pure - every arm reachable without fs) --
 
 fn shape(unreturned: Option<(&str, &str)>, stop: Option<&str>, seen: usize) -> TailShape {
     TailShape {
@@ -35,7 +35,7 @@ fn note_text(a: &Assessment) -> String {
     a.notes.join(" | ")
 }
 
-// ── tail_shape against real files ──
+// -- tail_shape against real files --
 
 struct TempJsonl {
     path: std::path::PathBuf,
@@ -52,7 +52,7 @@ impl TempJsonl {
     }
 }
 
-// ── Background-task fixtures (shared by background + background_scan) ──
+// -- Background-task fixtures (shared by background + background_scan) --
 
 /// A temp session tree: `<root>/<uuid>.jsonl` + `<root>/<uuid>/subagents/agent-x.jsonl`.
 pub(super) struct TempSession {

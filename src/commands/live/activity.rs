@@ -65,8 +65,8 @@ impl Activity {
         }
     }
 
-    /// `12 record(s) in 2 lane(s): tools Bash x7 Read x3 · thinking 4 · messages 2 ·
-    /// prompts 0 · notifications 1`; `nothing landed` when the baseline never moved.
+    /// `12 record(s) in 2 lane(s): tools Bash x7 Read x3 · thinking 4 · messages 2 · prompts 0 · notifications 1`;
+    /// `nothing landed` when the baseline never moved.
     pub(crate) fn summary_line(&self) -> String {
         let shrank = if self.shrinks.is_empty() {
             String::new()
