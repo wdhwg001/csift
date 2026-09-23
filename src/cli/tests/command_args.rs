@@ -288,7 +288,7 @@ fn files_explicit_summary_value_is_summary() {
 #[test]
 fn files_by_rejects_unknown_value() {
     // The clap `ValueEnum` for `--by` rejects a spelling outside the four allowed values
-    // (in particular the OLD `--by-dir`-style value name is NOT accepted).
+    // (in particular a `--by-dir`-style value name is NOT accepted).
     let err = parse(&["csift", "files", ".", "--by", "by-dir"]);
     assert!(err.is_err(), "an unknown --by value must be a parse error");
     let err2 = parse(&["csift", "files", ".", "--by", "files"]);

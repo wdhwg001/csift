@@ -33,7 +33,8 @@ fn list_format_json_after_encoded_positional_now_works() {
 
 #[test]
 fn list_format_json_before_positional_still_works() {
-    // The old workaround ordering must keep working (backward-compatible).
+    // A declared flag BEFORE the leading-`-` positional needs no reordering at all; the
+    // normalization pass must leave the order that already parses alone.
     let cli = parse(&[
         "csift",
         "list",

@@ -60,7 +60,7 @@ fn category_selector_prefix_and_validity() {
     }
     assert!(selector_is_valid("user"));
     assert!(selector_is_valid("agent.communication.inbox"));
-    assert!(!selector_is_valid("thinking")); // old flat value
+    assert!(!selector_is_valid("thinking")); // a flat spelling, not a selector
     assert!(!selector_is_valid("bogus.path"));
     // label_selected: empty ⇒ all; otherwise prefix-gated.
     assert!(label_selected(&[], "harness.interrupt.user", None));

@@ -153,10 +153,10 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
          aborted_mid_stream}",
     ),
     // The two OBJECT-VALUED keys of this family sit together, ahead of the scalar joins,
-    // so a reader meets the shapes first and the ids after. Position is a choice now and
-    // nothing more: a row whose form ends in `}` once could not sit LAST, because the
-    // rendered list was re-parsed by trimming every brace off both ends
-    // (`cli::tests::docs::an_object_valued_key_parses_last` is the pin).
+    // so a reader meets the shapes first and the ids after. Position is a choice and
+    // nothing more, and the pin is what keeps it one: a reader that re-parses the rendered
+    // list by trimming every brace off both ends cannot read a row whose form ends in `}`
+    // when it sits LAST (`cli::tests::docs::an_object_valued_key_parses_last` is the pin).
     k(Family::Keys, "pdf_pages:{first last count path}"),
     k(Family::Keys, "interrupted_message_id"),
     k(Family::Keys, "hook_run_id"),
