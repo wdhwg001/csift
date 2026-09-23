@@ -82859,7 +82859,7 @@
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn cleared_line(s: &SessionSummary) -> String {",
-          "lines": "144"
+          "lines": "146"
         },
         {
           "path": "src/commands/session/rows.rs",
@@ -84779,7 +84779,7 @@
         {
           "path": "src/commands/session/render.rs",
           "snippet": "pub(crate) fn lane_line(s: &SessionSummary) -> String {",
-          "lines": "213"
+          "lines": "215"
         }
       ],
       "states": [

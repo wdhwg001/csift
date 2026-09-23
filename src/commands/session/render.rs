@@ -23,9 +23,11 @@ pub(crate) fn render_text(
         if i > 0 {
             println!();
         }
-        // Brand a SUBAGENT row distinctly (mirroring `search`'s header + `turns`'
-        // `(subagent transcript)` annotation): a subagent hex is NOT a re-feedable `@<uuid>`
+        // Brand a SUBAGENT row distinctly: a subagent hex is NOT a re-feedable `@<uuid>`
         // target, so label it as such and surface the re-feedable parent uuid inline.
+        // `list` prints `SUBAGENT  <hex>  ·  parent SESSION <uuid>` with TWO spaces after
+        // the word, where `files`, `recover`, `stats` and `verbatim` print one and `show`
+        // one on each side of the separator; a quotation elsewhere follows its own surface.
         if s.is_subagent {
             println!(
                 "SUBAGENT  {}  ·  parent SESSION {}",

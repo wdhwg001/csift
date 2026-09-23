@@ -3,7 +3,7 @@
 use super::*;
 
 /// Max characters of a message excerpt shown inline before truncation. Truncation
-/// is ALWAYS explicit (`... (+N chars)`) - never silent (SPEC section 0, section 8.1).
+/// is ALWAYS explicit (`… (+N chars)`) - never silent (SPEC section 0, section 8.1).
 ///
 /// Deliberately SHORTER than `search`'s 400-char cap (`search::EXCERPT_MAX`): `list`
 /// is a scannable identity index (many one-line previews at a glance), whereas
