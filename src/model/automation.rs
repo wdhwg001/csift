@@ -36,12 +36,12 @@ impl AutomationKind {
     /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`
     /// LEADING prefixes route a Monitor-tool pulse or termination notice
     /// (`Monitor event: …` / `Monitor "…" …`) to [`AutomationKind::Monitor`]. A `Background
-    /// command "…"` pulse is ALWAYS `background-command`, whatever its quoted name says
-    /// (v0.10.0: the former quoted-name heuristic - `monitor`/`re-arm`/`liveness` in the name
-    /// routed to `Monitor` - predates the real Monitor tool and double-booked; measured on one
-    /// project it produced 40 `monitor` records against zero genuine Monitor pulses). This
-    /// does NOT cover `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach
-    /// this classifier).
+    /// command "…"` pulse is ALWAYS `background-command`, whatever its quoted name says: routing
+    /// on the quoted NAME (`monitor`/`re-arm`/`liveness` in it) double-books a background command
+    /// as a Monitor pulse, because the Monitor tool has its own leading prefix and a shell command
+    /// may be named anything - measured on one project, 40 such `monitor` records against zero
+    /// genuine Monitor pulses. This does NOT cover `ScheduleWakeup` wakeup-tick prompts (isMeta
+    /// records that never reach this classifier).
     #[must_use]
     pub fn from_summary(summary: Option<&str>) -> Self {
         let s = summary.unwrap_or("").trim_start();

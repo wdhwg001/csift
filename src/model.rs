@@ -1,10 +1,10 @@
 //! JSON-line record + content-block data model.
 //!
-//! One JSON object per line. The shape below was verified + extended against real
-//! `~/.claude/projects/**/*.jsonl` data (2026-06-07). Parsing discipline:
+//! One JSON object per line. The shape below is verified against real
+//! `~/.claude/projects/**/*.jsonl` data. Parsing discipline:
 //!
-//! - **Tolerate unknown fields.** Real records carry far more than the brief
-//!   listed (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`,
+//! - **Tolerate unknown fields.** Real records carry far more fields than the
+//!   ones modelled here (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`,
 //!   `isSidechain`, `userType`, `toolUseResult`, `slug`, `entrypoint`, …). We
 //!   deserialize only what we use and ignore the rest - never crash on a new field.
 //! - **Tolerate missing `timestamp`.** Metadata-only records (`last-prompt`,

@@ -87,8 +87,7 @@ pub(crate) enum Human {
     /// Never reaches a person at all.
     Never,
     /// The map csift's taxonomy is built from states no answer for this shape. An honest
-    /// hole, not a guess: the family lane that owns the shape fills it with a measured
-    /// value.
+    /// hole, not a guess: it takes a measured value, from whoever models the shape.
     Unstated,
 }
 

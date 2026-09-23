@@ -48,9 +48,10 @@ fn each_template_reaches_its_own_leaf() {
 
 /// EVERY text arm anchors at content start, after the same `trim_start` the section
 /// discipline uses - so leading whitespace still reaches the leaf, and a template deeper
-/// in a body belongs to the record QUOTING it. The two arms that used to test the
-/// untrimmed string (feedback, caveat) and the one that used to test `contains`
-/// (edit-retry) are pinned here beside a family they must no longer steal.
+/// in a body belongs to the record QUOTING it. The three arms most exposed to the rule are
+/// pinned here: feedback and caveat, which must read the TRIMMED string, and edit-retry,
+/// which must anchor rather than match anywhere in the body - each beside a family whose
+/// records it would otherwise steal.
 #[test]
 fn every_template_arm_anchors_at_content_start() {
     let anchored: &[(&str, Class)] = &[

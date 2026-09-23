@@ -1,6 +1,6 @@
 //! Narration-tagged thinking blocks: the signature decoder.
 //!
-//! Since at least CC 2.1.170 (2026-06-10) the API can return a SECOND `thinking` block
+//! Since at least CC 2.1.170 the API can return a SECOND `thinking` block
 //! in an assistant message: a one-sentence, user-language summary of the reasoning
 //! beside it (clients >= 2.1.241 render it dim under the hint word `summarized`).
 //! Nothing distinguishes it on the wire except a tag encoded inside the base64

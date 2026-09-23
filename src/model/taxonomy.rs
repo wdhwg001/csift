@@ -252,7 +252,8 @@ pub enum Class {
     /// `harness.enforce.structured-output` - the redo nudge that tells the model it
     /// must call the StructuredOutput tool.
     EnforceStructuredOutput,
-    /// `harness.enforce.brief` - the brief-enforce redo nudge.
+    /// `harness.enforce.brief` - a redo nudge telling the model it ended its turn
+    /// without calling SendUserMessage.
     EnforceBrief,
     /// `harness.enforce.handback` - the subagent hand-back redo nudge.
     EnforceHandback,

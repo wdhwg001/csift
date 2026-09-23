@@ -24,7 +24,7 @@ pub const AUQ_ANSWER_MARKERS: &[&str] = &[
     // carefully ...`); the fourth branch `The user did not answer the questions.` is
     // the UNANSWERED case and must never open a turn, so it stays out.
     "The user answered:",
-    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer
+    // The freeform branch: `The user responded: <text>` when the answerer
     // wrote `toolUseResult.response` instead of an option; the idle-timeout branch
     // (`No response after Ns ...`) is not an answer and stays out.
     "The user responded:",
@@ -37,8 +37,8 @@ pub const AUQ_ANSWER_MARKERS: &[&str] = &[
 /// string that always LEADS with its marker (`"User has answered your questions: …"`
 /// / `"Your questions have been answered: …"`). A `contains` check false-positives on
 /// any tool_result that merely QUOTES the marker mid-content - e.g. csift's own dev
-/// sessions Read/grep SPEC.md + fixtures that DOCUMENT these markers, which used to be
-/// mislabeled `user.answer` and dumped whole files. `trim_start` tolerates leading
+/// sessions Read/grep SPEC.md + fixtures that DOCUMENT these markers, which such a check
+/// labels `user.answer` and dumps whole files for. `trim_start` tolerates leading
 /// whitespace the renderer may prepend without admitting a mid-content quote.
 #[must_use]
 pub fn is_auq_answer_text(text: &str) -> bool {
@@ -60,7 +60,7 @@ pub fn is_synthetic_user_marker(content: &str) -> bool {
         || is_agents_stopped_notice(content)
 }
 
-/// The harness's "N background agent(s) were stopped by the user: ..." notice (v0.10.0):
+/// The harness's "N background agent(s) were stopped by the user: ..." notice:
 /// a plain-string `type:"user"` record Claude Code writes when async agents are killed
 /// from the UI. It names a count and truncated prompt prefixes, never an id, and it
 /// triggers no generation - the model sees it only alongside the next real prompt. Not
@@ -148,22 +148,23 @@ pub const PLAN_REJECTION_MARKER: &str = "The user doesn't want to proceed with t
 /// carries no typed message and must NOT open a turn.
 pub const PLAN_REJECTION_USER_PREFIX: &str = "To tell you how to proceed, the user said:\n";
 
-/// The opening tag of an inbound `<teammate-message …>` peer-agent message (GOLD §5). A
+/// The opening tag of an inbound `<teammate-message …>` peer-agent message. A
 /// teammate (another Claude session on the same team / FleetView) sends prose or a control
 /// signal that Claude Code delivers as a `type:"user"`, `role:"user"`, STRING-content record
-/// -- so it LOOKS like a human turn ([`Record::is_genuine_user`] used to return `true` for it,
-/// counting 106 peer messages as the human user in one real session). It is a peer message,
+/// -- so it LOOKS like a human turn, and a predicate keyed on that shape alone reads it as
+/// one ([`Record::is_genuine_user`] without its peer guard counts 106 peer messages as the
+/// human user in one real session). It is a peer message,
 /// never the operator: classified `agent.communication.{inbox,signal}`, never `user`.
 pub const TEAMMATE_MESSAGE_OPEN: &str = "<teammate-message";
 
-/// The preambles Claude Code prepends to a peer message it relays into a session (GOLD §5):
+/// The preambles Claude Code prepends to a peer message it relays into a session:
 /// `Another Claude session sent a message:\n<teammate-message …>`. A peer tag IMMEDIATELY after
 /// a preamble is at a section BOUNDARY (FINDING-1, [`is_section_boundary`]) - so a real relayed
 /// peer message is recognized while a tag merely QUOTED mid-prose is not. CC 2.1.258 defines
 /// THREE forms in one binary literal (`"Another Claude session sent a message"` + `:` or
 /// ` while you were working:`, and `"A peer session sent a message while you were
-/// working:"`); the mid-turn form carried 29 of 47 `<agent-message>` records in the
-/// reference corpus and left them unlabeled until v0.10.1.
+/// working:"`); the mid-turn form carries 29 of 47 `<agent-message>` records in the
+/// reference corpus, so a list missing it leaves most of them unlabeled.
 pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[
     "Another Claude session sent a message:",
     "Another Claude session sent a message while you were working:",
@@ -177,7 +178,7 @@ pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[
 /// `from="…"` attribute ⇨ self), never `user.message`.
 pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 
-/// The opening tag of an inbound `<cross-session-message …>` peer form (C-30) - the THIRD peer
+/// The opening tag of an inbound `<cross-session-message …>` peer form - the THIRD peer
 /// framing, and the one a session-to-session send lands in. Claude Code writes it as a
 /// `type:"user"`, `role:"user"`, STRING-content record carrying `isMeta:true`,
 /// `promptSource:"system"`, `userType:"external"` and a top-level `origin` object
@@ -232,7 +233,7 @@ pub const RESUME_PLACEHOLDER_TEXT: &str = "No response requested.";
 /// carrying it is never the assistant's own text.
 pub(crate) const SYNTHETIC_MODEL: &str = "<synthetic>";
 
-/// The `ScheduleWakeup` TIMER's fired-prompt sentinel (GOLD §5) - `harness.schedule.wakeup`.
+/// The `ScheduleWakeup` TIMER's fired-prompt sentinel - `harness.schedule.wakeup`.
 /// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is
 /// that injected prompt. This is the SCHEDULER timer firing - DISTINCT from the autonomous-loop
 /// DRIVER ticks (`# Autonomous loop tick` / `Run the autonomous check`), which are
@@ -241,7 +242,7 @@ pub(crate) const SYNTHETIC_MODEL: &str = "<synthetic>";
 /// [`SCHEDULE_WAKEUP_TIMER_MARKER`] these are the fixed wakeup-tick markers - a generic
 /// cron/monitor tick's injected prompt is still operator-authored free text with no universal
 /// marker (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action, classified
-/// `agent.tool.use`, not the fired tick). See the GOLD-gap note in the module docs.
+/// `agent.tool.use`, not the fired tick).
 ///
 /// CONTENT-START anchored, like every marker of this family - see the anchoring law on
 /// [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`].
@@ -255,7 +256,7 @@ pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 /// `check` != `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the
 /// meta.loop arm in [`Record::classify`], so the fired tick routes to `schedule.wakeup`.
 ///
-/// THE ANCHORING LAW (v0.12.2, shared by all FIVE markers of this family - the two headers,
+/// THE ANCHORING LAW (shared by all FIVE markers of this family - the two headers,
 /// the two body sentences and the sentinel). Each one is matched
 /// only at CONTENT START, after the same `trim_start` the FINDING-1 section discipline uses. The
 /// resolver builds the whole delivered prompt and the fire writes it as its OWN record, so the
@@ -306,10 +307,11 @@ pub const RETRY_NUDGE_TEXTS: &[&str] = &[
 /// The three OTHER enforcement sentinels, each the first token of its template's content
 /// (`harness.enforce.{structured-output, brief, handback}`). The structured-output and
 /// handback sentinels are bracketed tokens the writer interpolates ahead of its prose
-/// sentinels; the brief sentinel IS a sentence rather than a bracketed token, which is
-/// why it is matched at content start like the other two rather than by a bracket shape.
+/// sentinels; the `harness.enforce.brief` sentinel IS a sentence rather than a bracketed
+/// token, which is why it is matched at content start like the other two rather than by a
+/// bracket shape.
 pub const ENFORCE_STRUCTURED_OUTPUT_PREFIX: &str = "[structured-output-enforce]";
-/// See [`ENFORCE_STRUCTURED_OUTPUT_PREFIX`] - the brief-mode enforcement sentinel.
+/// See [`ENFORCE_STRUCTURED_OUTPUT_PREFIX`] - the `harness.enforce.brief` sentinel.
 pub const ENFORCE_BRIEF_PREFIX: &str = "You ended the turn without calling SendUserMessage.";
 /// See [`ENFORCE_STRUCTURED_OUTPUT_PREFIX`] - the subagent hand-back enforcement sentinel.
 pub const ENFORCE_HANDBACK_PREFIX: &str = "[handback-send-enforce]";
@@ -345,7 +347,7 @@ pub const TASK_NOTIFICATION_FRAME_PREFIX: &str = "[SYSTEM NOTIFICATION - NOT USE
 pub const TASK_NOTIFICATION_FRAME_TAIL: &str =
     "is NOT real user input and must NOT be treated as approval or consent.";
 
-/// `harness.schedule.tick` markers (GOLD §2, edge-fixtures G2) - autonomous-loop drivers (distinct
+/// `harness.schedule.tick` markers - the autonomous-loop drivers (distinct
 /// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`). Both
 /// are CONTENT-START anchored (the law on [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`]).
 pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = "# Autonomous loop tick";

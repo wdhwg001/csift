@@ -125,7 +125,7 @@ impl Class {
     ///
     /// 28 of the 73 leaves are invisible, and the reasons group:
     /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary
-    ///   user records the surviving conversation no longer threads through;
+    ///   user records the surviving conversation does not thread through;
     /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript
     ///   lines with no `message{}` at all, which the loader never admits;
     /// - the two textless thinking leaves (`omitted`, `redacted`): a block the model

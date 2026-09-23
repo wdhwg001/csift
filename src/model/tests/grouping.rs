@@ -74,13 +74,12 @@ fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
 }
 
 // ── §6.4.1 under the SURVIVAL AXIS ──
-// v0.12.0: the three opener heuristics are gone; `group_turn_indices_deduped` now asks
-// Claude Code's own conversation chain which records the surviving conversation still
-// reaches, and drops the rest. These cases keep their old shapes and their old ANSWERS -
-// the chain reduces to the same result on a same-parent resend - and the per-record
-// verdicts they used to assert through `superseded_draft_indices` / `collapse_openers`
-// now live in `chain.rs`, which pins the whole DAG matrix. None of these patterns are
-// reachable through bool fixtures: they need the real uuid/parentUuid tree.
+// `group_turn_indices_deduped` asks Claude Code's own conversation chain which records
+// the surviving conversation still reaches, and drops the rest; on a same-parent resend
+// the chain reduces to the answer a draft heuristic gives. The per-record verdicts are
+// pinned over the whole DAG matrix in `chain.rs`; these cases pin the GROUPING. None of
+// the patterns are reachable through bool fixtures: they need the real uuid/parentUuid
+// tree.
 
 #[test]
 fn superseded_drafts_collapse_same_parent_edit_resend() {
@@ -205,8 +204,9 @@ fn a_replayed_same_uuid_opener_is_not_a_draft() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    // v0.12.0 flips the DIRECTION and keeps the effect: the loader's map holds the LAST
-    // line carrying a uuid, so index 3 is the survivor and index 1 is the earlier copy.
+    // The loader's map holds the LAST line carrying a uuid, so index 3 is the survivor
+    // and index 1 is the earlier copy: a reader who assumes the first occurrence wins
+    // addresses the wrong record.
     let c = Chain::build(&records, None, CrossingBudget::NONE);
     assert_eq!(c.drafts, 0, "a replayed copy supersedes nothing");
     assert_eq!(c.replay_of(1), Some(3), "index 1 is the earlier copy");

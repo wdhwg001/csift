@@ -8,8 +8,8 @@
 //!
 //! WIDTH IS THE DESIGN CONSTRAINT, and the shape below is what satisfies it and the
 //! one-pass rule at once. Every parsed line of every scan carries a whole `Record`, so
-//! eighteen `Option`s in that struct are eighteen fields on every row - the C-41 lesson,
-//! which narrowed a spine row to 72 bytes for exactly that reason. They live in ONE
+//! eighteen `Option`s in that struct are eighteen fields on every row - the same width
+//! discipline that keeps a spine row at 72 bytes. They live in ONE
 //! [`Exposed`] behind ONE `Box` instead, so the row grows by a pointer and the allocation
 //! is paid only by a record that actually names a key; `#[serde(flatten)]` is what keeps
 //! it to the SAME pass serde already makes, reading the keys where they sit at the top

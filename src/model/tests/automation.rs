@@ -251,7 +251,7 @@ fn automation_kind_from_summary_direct() {
         Monitor
     );
     assert_eq!(AutomationKind::from_summary(Some("cron run")), Monitor);
-    // v0.10.0: a `Background command "…"` pulse is ALWAYS background-command, whatever its
+    // A `Background command "…"` pulse is ALWAYS background-command, whatever its
     // quoted name says. The former quoted-name heuristic (monitor / re-arm / liveness in the
     // name routed to Monitor) predates the real Monitor tool and double-booked: measured 40
     // false `monitor` records on one project against zero genuine Monitor pulses.
@@ -316,9 +316,9 @@ fn plural_word_pick_pinned() {
 
 #[test]
 fn background_command_pulses_never_route_to_monitor() {
-    // v0.10.0 regression pin for the retired quoted-name heuristic: every cadence-flavored
-    // quoted name that used to route to Monitor stays a background-command, and the
-    // genuine Monitor-tool shapes are the only Monitor route.
+    // A `Background command "…"` pulse is a background-command whatever its quoted name
+    // says: every cadence-flavored name below stays one, and the genuine Monitor-tool
+    // shapes are the only Monitor route.
     use AutomationKind::{BackgroundCommand, Monitor};
     for name in [
         "monitor loop",

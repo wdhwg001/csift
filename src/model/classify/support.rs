@@ -3,7 +3,7 @@
 use super::*;
 
 /// Map a parsed `<task-notification>` [`AutomationKind`] to its `harness.notification.*`
-/// [`Class`] (GOLD §2 - `Agent` becomes `subagent` to avoid the `agent` role collision).
+/// [`Class`] (`Agent` becomes `subagent` to avoid the `agent` role collision).
 pub(crate) fn notification_class(kind: AutomationKind) -> Class {
     match kind {
         AutomationKind::BackgroundCommand => Class::NotificationBackgroundCommand,
@@ -207,9 +207,9 @@ pub(crate) fn classify_batched_sections(raw: &str, framed: bool, out: &mut Vec<C
     matched
 }
 
-/// One renderable record-level text SECTION of a (possibly batched) `type:"user"` record (GOLD
-/// §3 G4/G5 per-section render): its leaf [`Class`], the display text to excerpt, and the comm
-/// `from ⇨ to` direction for a communication leaf. Built by [`Record::record_text_sections`] so a
+/// One renderable record-level text SECTION of a (possibly batched) `type:"user"` record: its
+/// leaf [`Class`], the display text to excerpt, and the comm `from ⇨ to` direction for a
+/// communication leaf. Built by [`Record::record_text_sections`] so a
 /// record batching several `<task-notification>` / inbound-peer sections of MIXED kind renders ONE
 /// hit PER section (each with its own label + direction) rather than collapsing to one.
 #[derive(Debug, Clone)]
@@ -219,7 +219,7 @@ pub struct RecordTextSection {
     /// The display text to match + excerpt (a per-section automation label, the `<result>` report
     /// body, or the raw peer-message section slice).
     pub text: String,
-    /// `from ⇨ to` for a communication leaf (GOLD §4); `None` for a `harness.notification.*`.
+    /// `from ⇨ to` for a communication leaf; `None` for a `harness.notification.*`.
     pub direction: Option<(String, String)>,
     /// THIS section's `<task-id>` tags, split into the real task ids and the orphan-
     /// reconciliation kind ([`section_task_ids`]). Carried per SECTION because a batched
@@ -229,10 +229,11 @@ pub struct RecordTextSection {
 }
 
 /// A CLEAN inbound-communication preview of a peer/teammate turn-opener, for the `turns` / `list`
-/// render surfaces (the GOLD §1 inbound-comm presentation). RENDER-ONLY: it does NOT affect
+/// render surfaces. RENDER-ONLY: it does NOT affect
 /// [`Record::classify`] / [`Record::opens_turn`] - a peer opener still opens a turn and classifies
 /// `agent.communication.{inbox,signal}` through the engine; this is only the human-facing render of
-/// that opener so the previews no longer dump the raw `<teammate-message …>` XML blob.
+/// that opener, so a preview shows what the peer SAID rather than the raw
+/// `<teammate-message …>` XML blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InboundComm {
     /// [`Class::CommInbox`] (a prose message) or [`Class::CommSignal`] (a control payload).
@@ -244,7 +245,7 @@ pub struct InboundComm {
     pub body: String,
 }
 
-/// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) - preserves
+/// Push `c` into `out` only if not already present (multi-label dedup) - preserves
 /// first-seen order so the richest/most-salient label leads.
 pub(crate) fn push_unique(out: &mut Vec<Class>, c: Class) {
     if !out.contains(&c) {
@@ -252,8 +253,8 @@ pub(crate) fn push_unique(out: &mut Vec<Class>, c: Class) {
     }
 }
 
-/// A read-only lookup for spawn pairing (GOLD §4/§7), supplied via [`ClassifyCtx`]. Backed in
-/// P2 by the global spawn index (`subagent::ParentSpawnIndex` / `build_global_spawn_index`),
+/// A read-only lookup for spawn pairing, supplied via [`ClassifyCtx`]. Backed by the global
+/// spawn index (`subagent::ParentSpawnIndex` / `build_global_spawn_index`),
 /// behind a trait so `model.rs` does not depend on `subagent.rs`. Both queries key on the
 /// SAME join as the topology builder, so they resolve the spawn `self ⇨ child` direction AND
 /// detect a `child ⇨ self` subagent return (the Task tool_result whose id was a spawn).
@@ -293,8 +294,8 @@ pub trait LineOfUuid {
 }
 
 /// Cross-record context [`Record::classify`] / [`Record::direction`] need that a single record
-/// cannot supply (GOLD §6). Construct with [`ClassifyCtx::top_level`] and set the relevant
-/// fields. **What P2 must populate per record:**
+/// cannot supply. Construct with [`ClassifyCtx::top_level`] and set the relevant
+/// fields. **What the caller must populate per record:**
 /// - `owner_id`: the transcript owner's re-feedable id - the session uuid for a top-level
 ///   transcript, or the bare agent id for a subagent (the `self` of every comm direction).
 /// - `owner_name`: the owner's teammate/agent NAME when known (display only; optional).
@@ -413,7 +414,7 @@ impl std::fmt::Debug for ClassifyCtx<'_> {
 
 #[allow(dead_code)]
 impl Record {
-    /// The parsed inbound teammate/peer message (GOLD §5) carried by this `type:"user"`
+    /// The parsed inbound teammate/peer message carried by this `type:"user"`
     /// record, or `None`. Reads the raw (un-normalized) message text so the peer preamble's
     /// `\n` survives. Gated to `type:"user"` (the only place a teammate message arrives).
     #[must_use]
@@ -425,7 +426,7 @@ impl Record {
         parse_teammate_message(&text)
     }
 
-    /// True when this record is an inbound TEAMMATE message specifically (GOLD §1) - a
+    /// True when this record is an inbound TEAMMATE message specifically - a
     /// `<teammate-message>` at a section boundary. Used by the `list`/`turns` clean-preview gate.
     #[must_use]
     pub fn is_teammate_message_record(&self) -> bool {

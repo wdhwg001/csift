@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── is_teammate_message + parse_teammate_message (GOLD §5) ──
+// ── is_teammate_message + parse_teammate_message ──
 
 #[test]
 fn is_teammate_message_bare_and_peer_forms() {
@@ -97,11 +97,12 @@ fn parse_teammate_message_none_for_non_teammate() {
     assert!(parse_teammate_message("just a normal message").is_none());
 }
 
-// ── GOLD §1 BUG FIX: a teammate message is NOT genuine-user but STILL opens a turn ──
+// ── a teammate message is NOT genuine-user but STILL opens a turn ──
 
 #[test]
 fn teammate_message_not_genuine_user_but_opens_turn_bare() {
-    // The bug: this used to return is_genuine_user()==true (mislabeled as the human).
+    // The trap: string content on a `role:user` record, so a predicate reading the shape
+    // alone answers is_genuine_user()==true and labels the peer as the human.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\">repro the speed slider</teammate-message>"}}"#,
     );
@@ -253,7 +254,7 @@ fn agent_message_non_meta_excluded_opens_turn_inbox() {
     );
 }
 
-// ── C-30: the `<cross-session-message>` peer framing ──
+// ── the `<cross-session-message>` peer framing ──
 
 /// The full on-disk shape of one inbound cross-session message: the relay preamble, the tag with
 /// its attributes, the body, the close tag and the security footer, plus the `origin` object and
@@ -266,9 +267,9 @@ fn cross_session_record() -> Record {
 
 #[test]
 fn cross_session_message_is_the_third_peer_framing() {
-    // C-30: the framing a session-to-session send lands in. It is `type:user`/`role:user`/string
-    // and matches no synthetic marker, so before it was folded into `is_peer_message` the isMeta
-    // gate dropped it and the record carried NO label at all - invisible to every search.
+    // The framing a session-to-session send lands in. It is `type:user`/`role:user`/string
+    // and matches no synthetic marker, so without its arm in `is_peer_message` the isMeta
+    // gate drops it and the record carries NO label at all - invisible to every search.
     let r = cross_session_record();
     assert!(is_cross_session_message(
         "Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\">hi</cross-session-message>"

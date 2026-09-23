@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── classify(): communication (GOLD §3 + §4) ──
+// ── classify(): communication (the leaf and its direction) ──
 
 #[test]
 fn classify_sendmessage_message_is_tool_use_plus_sent() {

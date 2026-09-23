@@ -39,7 +39,7 @@ pub enum Block {
     },
     /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible
     /// `thinking` block (no readable text, only an opaque `data` payload). Classified
-    /// `agent.thinking` exactly like a normal thinking block (GOLD §2 / oracle B3); the opaque
+    /// `agent.thinking` exactly like a normal thinking block; the opaque
     /// `data` is captured for shape-completeness but never rendered.
     RedactedThinking {
         #[serde(default)]

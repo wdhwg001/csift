@@ -19,7 +19,7 @@ fn auq_answer_carrier_detected() {
 
 #[test]
 fn auq_answer_alternate_phrasing_detected() {
-    // The DOMINANT real-data phrasing the single hardcoded marker used to miss:
+    // The DOMINANT real-data phrasing, and the one a single hardcoded marker misses:
     // "Your questions have been answered: …" (verified across real sessions -
     // 16 sessions use this form vs 13 the other, 4 contain BOTH). Must be
     // recognised under the `user` category exactly like the other phrasing.
@@ -197,8 +197,8 @@ fn auq_answer_multibyte_is_codepoint_safe_boundary() {
 #[test]
 fn auq_exchange_surfaces_each_option_description() {
     // Real-captured shape: every option carries a `description` (supplementary note)
-    // alongside its `label`. BOTH must survive into the reconstructed unit - the
-    // description was previously dropped (only labels rendered).
+    // alongside its `label`. BOTH must survive into the reconstructed unit: rendering
+    // the labels alone drops the note the user weighed the option on.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"header":"EXIF tool","multiSelect":false,"options":[{"description":"standard route, ~10MB download, one-liner","label":"brew install exiftool (Recommended)"},{"description":"pure python, pip install piexif","label":"pip install piexif"}],"question":"which tool re-attaches EXIF?"}],"answers":{"which tool re-attaches EXIF?":"brew install exiftool (Recommended)"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which tool re-attaches EXIF?\"=\"brew install exiftool (Recommended)\". You can now continue."}]}}"#,
     );
@@ -220,8 +220,8 @@ fn auq_exchange_surfaces_each_option_description() {
 fn auq_exchange_surfaces_notes_when_answer_is_notes_only() {
     // Real-captured shape: the user answered by typing prose into the
     // notes field; the answer value is the literal "(notes only)" placeholder and the
-    // ACTUAL message lives in `annotations[question].notes`. It must be surfaced -
-    // previously the whole user message was silently dropped.
+    // ACTUAL message lives in `annotations[question].notes`. It must be surfaced:
+    // reading the answer value alone drops the whole user message silently.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"header":"Routing","multiSelect":false,"options":[{"description":"the inbound path","label":"Route A"},{"description":"the outbound path","label":"Route B"}],"question":"which route for the queue?"}],"answers":{"which route for the queue?":"(notes only)"},"annotations":{"which route for the queue?":{"notes":"never conflate the two — Route A is inbound only, Route B is outbound only"}}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which route for the queue?\"=\"(notes only)\". You can now continue."}]}}"#,
     );
@@ -439,7 +439,7 @@ fn plan_index_skips_pointer_without_path() {
 
 #[test]
 fn a_freeform_response_carrier_is_an_answer_boundary_and_renders_the_response() {
-    // The `The user responded:` branch (v0.10.3): `answers` is empty and the whole
+    // The `The user responded:` branch: `answers` is empty and the whole
     // message is `toolUseResult.response`. The carrier opens a turn like any other
     // answer, and the exchange renders the questions asked plus the response.
     let raw = r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ask1","content":"The user responded: skip the harbor, go by land"}]},"toolUseResult":{"questions":[{"question":"Which harbor?","header":"Harbor","options":[{"label":"north","description":"a"},{"label":"south","description":"b"}],"multiSelect":false}],"answers":{},"response":"skip the harbor, go by land"}}"#;

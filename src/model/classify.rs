@@ -24,8 +24,8 @@ use super::*;
 
 #[allow(dead_code)]
 impl Record {
-    /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2 + C-30) - a
-    /// `<teammate-message>`, `<agent-message>` OR `<cross-session-message>` at a section boundary. The predicate
+    /// True when this record is ANY inbound PEER message - a `<teammate-message>`,
+    /// `<agent-message>` OR `<cross-session-message>` at a section boundary. The predicate
     /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is
     /// not the operator, but it still delimits a turn). Reads the raw (un-normalized) message text so
     /// the relay preamble's `\n` survives; gated to `type:"user"` (the only place a peer message
@@ -118,7 +118,7 @@ impl Record {
         self.is_teammate_spawn_ack() || self.is_async_launch_ack()
     }
 
-    /// True when this record is a SUBAGENT RETURN (GOLD §3) - a tool_result whose
+    /// True when this record is a SUBAGENT RETURN - a tool_result whose
     /// `tool_use_id` the spawn lookup resolves to a spawned child (the Task tool_result of a
     /// ONE-SHOT spawn = the child's return, child ⇨ self). `false` without a [`SpawnLookup`]
     /// in `ctx`, AND `false` for a spawn LAUNCH ACK ([`Record::is_spawn_launch_ack`] - teammate
@@ -279,8 +279,8 @@ impl Record {
         }
         // The `fallback` block - what the API writes in place of the text when it served
         // the turn from a fallback model - is the assistant's TURN, so the record takes
-        // the plain message leaf with an empty body; naming the fallback in the render is
-        // a family lane's work, not the engine's.
+        // the plain message leaf with an empty body; naming the fallback in the render
+        // belongs to the system family (`record_text/system/fallback.rs`), not the engine.
         //
         // The test is the BLOCK, never "nothing else matched". A blanket arm answers for
         // every OTHER leafless shape an assistant record can carry - a `document` block,
@@ -291,11 +291,11 @@ impl Record {
         }
     }
 
-    /// Classify a `user` record (GOLD §2/§3): compaction summary (by the `isCompactSummary`
-    /// FLAG, not text - G9); BATCHED mixed-family sections - `<task-notification>` pulse(s) and/or
-    /// inbound peer message(s) `<teammate-message>` / `<agent-message>` (the §1 fix, the G4/G5
-    /// union, and P1c M1/M3 cross-family/precedence, via [`classify_batched_sections`]); then the
-    /// string-content vs block-content sub-cases.
+    /// Classify a `user` record: compaction summary (by the `isCompactSummary` FLAG, never by
+    /// text); BATCHED mixed-family sections - `<task-notification>` pulse(s) and/or inbound peer
+    /// message(s) `<teammate-message>` / `<agent-message>`, whose leaves UNION under the
+    /// cross-family precedence, via [`classify_batched_sections`]; then the string-content vs
+    /// block-content sub-cases.
     pub(crate) fn classify_user(&self, ctx: &ClassifyCtx, out: &mut Vec<Class>) {
         if self.is_compact_summary.unwrap_or(false) {
             push_unique(out, Class::CompactionSummary);
@@ -356,13 +356,13 @@ impl Record {
             push_unique(out, c);
             return;
         }
-        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.
+        // The harness's agents-stopped notice: a kill notice, not the human.
         if is_agents_stopped_notice(s) {
             push_unique(out, Class::NotificationSubagent);
             return;
         }
         // The spawn-prompt seed of a subagent transcript is an inbound comm (parent ⇨ self),
-        // not the operator (GOLD §3) - unchanged, regardless of isMeta.
+        // not the operator - and that holds regardless of isMeta.
         if ctx.is_subagent && ctx.is_transcript_opener {
             push_unique(out, Class::CommInbox);
             return;
@@ -386,7 +386,7 @@ impl Record {
         }
     }
 
-    /// Classify a block-content `user` record (GOLD §3). A tool_result carrier →
+    /// Classify a block-content `user` record. A tool_result carrier →
     /// `agent.tool.result`, plus the dual labels (`user.answer` for an AUQ answer,
     /// `user.rejection` for a typed rejection, `agent.communication.inbox` for a subagent
     /// return). A no-tool_result block record is routed through the string classifier on its
@@ -399,7 +399,7 @@ impl Record {
     ) {
         let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));
         if has_tool_result {
-            // Order follows the GOLD §3 table (label A then label B): the user-facing dual
+            // Order is richest view first (label A then label B): the user-facing dual
             // label (`user.answer`/`user.rejection`) leads its carrier; a subagent return
             // leads with its `agent.tool.result` base then the `…inbox` comm view. These
             // dual-label shapes are mutually exclusive, so an if/else chain is deterministic.
@@ -454,12 +454,12 @@ impl Record {
     }
 
     /// The per-section record-level text emissions of a BATCHED `type:"user"` record (≥1
-    /// `<task-notification>` and/or inbound peer `<teammate-message>` / `<agent-message>` section)
-    /// -- GOLD §3 G4/G5 per-section render. One [`RecordTextSection`] per section's label, MIRRORING
-    /// [`classify_batched_sections`] EXACTLY (same notification-span precedence/masking) so the text
+    /// `<task-notification>` and/or inbound peer `<teammate-message>` / `<agent-message>` section).
+    /// One [`RecordTextSection`] per section's label, MIRRORING [`classify_batched_sections`]
+    /// EXACTLY (same notification-span precedence/masking) so the text
     /// render never drifts from the classification: each `<task-notification>` yields its
     /// `harness.notification.<kind>` (text = the per-section automation label) PLUS, when it carries
-    /// a `<result>` (G1), an `agent.communication.inbox` section (child ⇨ self via the embedded
+    /// a `<result>`, an `agent.communication.inbox` section (child ⇨ self via the embedded
     /// `<tool-use-id>`, degrading to `?` without a [`SpawnLookup`]); each inbound peer section
     /// outside every notification span yields `agent.communication.{inbox,signal}` (sender ⇨ self).
     /// EMPTY when the record carries no such section - the caller then falls back to the single
@@ -471,7 +471,7 @@ impl Record {
             return out;
         };
         let owner = || ctx.owner_id.unwrap_or("self").to_string();
-        // (a) <task-notification> sections (+ the G1 inbox view of a <result>-bearing pulse),
+        // (a) <task-notification> sections (+ the inbox view of a <result>-bearing pulse),
         //     recording each span to mask a peer tag quoted inside it.
         let mut notif_spans: Vec<(usize, usize)> = Vec::new();
         scan_tag_sections(

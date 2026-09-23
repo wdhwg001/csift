@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── classify(): harness records (GOLD §2/§5) ──
+// ── classify(): harness records ──
 
 #[test]
 fn classify_task_notification_each_kind() {
@@ -61,7 +61,7 @@ fn classify_command_invocation_with_and_without_args() {
     let with_args = parse(
         r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>just shipped, summarize</command-args>"}}"#,
     );
-    // v0.5: the prose is the RICHER view (richest-view law) - pushed FIRST so the
+    // The prose is the RICHER view (richest-view law) - pushed FIRST so the
     // unfiltered record-text emission renders `/name args`, not the wrapper XML.
     assert_eq!(
         with_args.classify(&ClassifyCtx::top_level()),

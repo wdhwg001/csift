@@ -356,7 +356,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "203-208",
+          "lines": "204-209",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
@@ -490,7 +490,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "203-208",
+          "lines": "204-209",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -2865,8 +2865,8 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "359-363",
-          "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
+          "lines": "360-363",
+          "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
       "states": [
@@ -2991,8 +2991,8 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "359-363",
-          "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
+          "lines": "360-363",
+          "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
       "states": [
@@ -3074,13 +3074,13 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "63-84",
-          "snippet": "/// The harness's \"N background agent(s) were stopped by the user: ...\" notice (v0.10.0):\n/// a plain-string `type:\"user\"` record Claude Code writes when async agents are killed\n/// from the UI. It names a count and truncated prompt prefixes, never an id, and it\n/// triggers no generation - the model sees it only alongside the next real prompt. Not\n/// the operator, never a turn opener; classifies `harness.notification.subagent`.\n#[must_use]\npub fn is_agents_stopped_notice(content: &str) -> bool {\n    let s = content.trim_start();\n    // The singular template names the agent: `Background agent \"<desc>\" was stopped by\n    // the user.` (no count).\n    if s.starts_with(\"Background agent \\\"\") && s.contains(\" was stopped by the user\") {\n        return true;\n    }\n    let digits = s.bytes().take_while(u8::is_ascii_digit).count();\n    if digits == 0 {\n        return false;\n    }\n    let rest = &s[digits..];\n    (rest.starts_with(\" background agent was stopped by the user\")\n        || rest.starts_with(\" background agents were stopped by the user\"))\n        && rest.contains(AGENTS_STOPPED_MARKER)\n}"
+          "lines": "64-84",
+          "snippet": "/// a plain-string `type:\"user\"` record Claude Code writes when async agents are killed\n/// from the UI. It names a count and truncated prompt prefixes, never an id, and it\n/// triggers no generation - the model sees it only alongside the next real prompt. Not\n/// the operator, never a turn opener; classifies `harness.notification.subagent`.\n#[must_use]\npub fn is_agents_stopped_notice(content: &str) -> bool {\n    let s = content.trim_start();\n    // The singular template names the agent: `Background agent \"<desc>\" was stopped by\n    // the user.` (no count).\n    if s.starts_with(\"Background agent \\\"\") && s.contains(\" was stopped by the user\") {\n        return true;\n    }\n    let digits = s.bytes().take_while(u8::is_ascii_digit).count();\n    if digits == 0 {\n        return false;\n    }\n    let rest = &s[digits..];\n    (rest.starts_with(\" background agent was stopped by the user\")\n        || rest.starts_with(\" background agents were stopped by the user\"))\n        && rest.contains(AGENTS_STOPPED_MARKER)\n}"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "359-363",
-          "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
+          "lines": "360-363",
+          "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
           "path": "src/commands/live/background_scan.rs",
@@ -5400,7 +5400,7 @@
         {
           "path": "src/model/automation.rs",
           "lines": "35-46",
-          "snippet": "    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything\n    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`\n    /// LEADING prefixes route a Monitor-tool pulse or termination notice\n    /// (`Monitor event: \u2026` / `Monitor \"\u2026\" \u2026`) to [`AutomationKind::Monitor`]. A `Background\n    /// command \"\u2026\"` pulse is ALWAYS `background-command`, whatever its quoted name says\n    /// (v0.10.0: the former quoted-name heuristic - `monitor`/`re-arm`/`liveness` in the name\n    /// routed to `Monitor` - predates the real Monitor tool and double-booked; measured on one\n    /// project it produced 40 `monitor` records against zero genuine Monitor pulses). This\n    /// does NOT cover `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach\n    /// this classifier).\n    #[must_use]\n    pub fn from_summary(summary: Option<&str>) -> Self {"
+          "snippet": "    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything\n    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`\n    /// LEADING prefixes route a Monitor-tool pulse or termination notice\n    /// (`Monitor event: \u2026` / `Monitor \"\u2026\" \u2026`) to [`AutomationKind::Monitor`]. A `Background\n    /// command \"\u2026\"` pulse is ALWAYS `background-command`, whatever its quoted name says: routing\n    /// on the quoted NAME (`monitor`/`re-arm`/`liveness` in it) double-books a background command\n    /// as a Monitor pulse, because the Monitor tool has its own leading prefix and a shell command\n    /// may be named anything - measured on one project, 40 such `monitor` records against zero\n    /// genuine Monitor pulses. This does NOT cover `ScheduleWakeup` wakeup-tick prompts (isMeta\n    /// records that never reach this classifier).\n    #[must_use]\n    pub fn from_summary(summary: Option<&str>) -> Self {"
         }
       ],
       "states": [
@@ -7721,13 +7721,13 @@
       "code": [
         {
           "path": "src/bash/danger.rs",
-          "lines": "12-17",
-          "snippet": "//! TWO CHECKERS, ONE GATE (offsets into the 2.1.258 build). The Bash tool's\n//! permission path parses the command with tree-sitter and DECOMPOSES it. Only a\n//! `too-complex` parse reaches the LEXICAL classifier (`Hno` @162867544 calls\n//! `$no` @162861871, which calls `hnt` @162773520); a cleanly parsed removal is\n//! decided by the STRUCTURED checker `_9` @162770807, reached through `EPe`\n//! @162794175 and `Jon` @162790629."
+          "lines": "12-16",
+          "snippet": "//! TWO CHECKERS, ONE GATE (offsets into the 2.1.258 build). The Bash tool's\n//! permission path parses the command with tree-sitter and DECOMPOSES it. Only a\n//! `too-complex` parse reaches the LEXICAL classifier (`Hno` @162867544 calls\n//! `$no` @162861871, which calls `hnt` @162773520); a cleanly parsed removal is\n//! decided by the STRUCTURED checker `_9` @162770807, reached through `EPe`"
         },
         {
           "path": "src/bash/danger/lexical.rs",
-          "lines": "78-82",
-          "snippet": "/// `hnt(command)` - the first dangerous `rm`/`rmdir` removal, or `None`.\n///\n/// csift's one standing deviation: the harness splits statements with tree-sitter\n/// (`ep` @162265300); csift processes the whole string as ONE statement, which is\n/// `ep`'s own documented fallback for unparseable or over-long input."
+          "lines": "78-81",
+          "snippet": "/// `hnt(command)` - the first dangerous `rm`/`rmdir` removal, or `None`.\n///\n/// csift's one standing deviation: the harness splits statements with tree-sitter\n/// (`ep` @162265300); csift processes the whole string as ONE statement, which is"
         }
       ],
       "states": [
@@ -9815,7 +9815,7 @@
         {
           "path": "src/model/taxonomy/facets.rs",
           "lines": "126-130",
-          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation no longer threads through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
+          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation does not thread through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
         }
       ],
       "states": [
@@ -10028,8 +10028,8 @@
       "code": [
         {
           "path": "src/model/automation.rs",
-          "lines": "35-42",
-          "snippet": "    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything\n    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`\n    /// LEADING prefixes route a Monitor-tool pulse or termination notice\n    /// (`Monitor event: \u2026` / `Monitor \"\u2026\" \u2026`) to [`AutomationKind::Monitor`]. A `Background\n    /// command \"\u2026\"` pulse is ALWAYS `background-command`, whatever its quoted name says\n    /// (v0.10.0: the former quoted-name heuristic - `monitor`/`re-arm`/`liveness` in the name\n    /// routed to `Monitor` - predates the real Monitor tool and double-booked; measured on one\n    /// project it produced 40 `monitor` records against zero genuine Monitor pulses). This"
+          "lines": "35-38",
+          "snippet": "    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything\n    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`\n    /// LEADING prefixes route a Monitor-tool pulse or termination notice\n    /// (`Monitor event: \u2026` / `Monitor \"\u2026\" \u2026`) to [`AutomationKind::Monitor`]. A `Background"
         },
         {
           "path": "src/model/automation.rs",
@@ -10509,8 +10509,8 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "359-363",
-          "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
+          "lines": "360-363",
+          "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
       "states": [
@@ -10818,7 +10818,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "203-208",
+          "lines": "204-209",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
@@ -11262,7 +11262,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "210-212",
+          "lines": "211-213",
           "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
@@ -11364,17 +11364,17 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "266",
+          "lines": "267",
           "snippet": "pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = \"# Autonomous loop check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "351-354",
+          "lines": "353-356",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "248",
+          "lines": "249",
           "snippet": "pub const SCHEDULE_WAKEUP_MARKER: &str = \"<<autonomous-loop-dynamic>>\";"
         },
         {
@@ -11546,12 +11546,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "284-286",
+          "lines": "285-287",
           "snippet": "pub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` executor wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "292",
+          "lines": "293",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         },
         {
@@ -11705,7 +11705,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "356-360",
+          "lines": "358-362",
           "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
@@ -15616,7 +15616,7 @@
         {
           "path": "src/model/predicates.rs",
           "lines": "368-378",
-          "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes\n        // the text there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
+          "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (the `The user responded:` branch writes the text\n        // there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
         }
       ],
       "states": [
@@ -15728,7 +15728,7 @@
         {
           "path": "src/model/markers.rs",
           "lines": "20-31",
-          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
+          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch: `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
@@ -18504,7 +18504,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "275-288",
+          "lines": "276-289",
           "snippet": "    // \u2500\u2500 harness.system (5) \u2500\u2500\n    /// `harness.system.refusal` - a `type:\"system\"` record with subtype\n    /// `model_refusal_fallback` / `model_refusal_no_fallback`.\n    SystemRefusal,\n    /// `harness.system.api-error` - a `type:\"system\"` record with subtype `api_error`.\n    SystemApiError,\n    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,\n    /// `harness.system.kill` - a `type:\"system\"` record with subtype `agents_killed`.\n    SystemKill,\n    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         }
       ],
@@ -20047,7 +20047,7 @@
         {
           "path": "src/model/record.rs",
           "lines": "324-332",
-          "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
+          "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so csift never fabricates content from it; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
       "states": [
@@ -20144,7 +20144,7 @@
         {
           "path": "src/model/record.rs",
           "lines": "327-330",
-          "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
+          "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so csift never fabricates content from it; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
       "states": [
@@ -20223,8 +20223,8 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "334-342",
-          "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
+          "lines": "335-342",
+          "snippet": "    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
           "path": "src/model/classify/bookkeeping.rs",
@@ -30713,8 +30713,8 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "4-7",
-          "snippet": "//! meta), and workflow RESULT files are terminal-only - but `journal.jsonl` inside each\n//! `wf_*` dir is written INCREMENTALLY (`{type:\"started\",agentId}` at spawn,\n//! `{type:\"result\",agentId}` at return), so `started - result` = workflow agents in\n//! flight right now."
+          "lines": "4-6",
+          "snippet": "//! meta), and workflow RESULT files are terminal-only - but `journal.jsonl` inside each\n//! `wf_*` dir is written INCREMENTALLY (`{type:\"started\",agentId}` at spawn,\n//! `{type:\"result\",agentId}` at return), so `started - result` = workflow agents in"
         },
         {
           "path": "src/commands/live/children.rs",
@@ -32360,7 +32360,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "220",
+          "lines": "221",
           "snippet": "pub const RESUME_PROMPT_MARKER: &str = \"Continue from where you left off.\";"
         }
       ],
@@ -32432,8 +32432,8 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "235-236",
-          "snippet": "/// The `ScheduleWakeup` TIMER's fired-prompt sentinel (GOLD \u00a75) - `harness.schedule.wakeup`.\n/// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is"
+          "lines": "237",
+          "snippet": "/// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is"
         }
       ],
       "states": [
@@ -32623,8 +32623,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-13",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append\n//! artifact wearing a fork's shape."
+          "lines": "8-12",
+          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         }
       ],
       "states": [
@@ -33553,7 +33553,7 @@
         {
           "path": "src/model/record.rs",
           "lines": "327-330",
-          "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
+          "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so csift never fabricates content from it; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
       "states": [
@@ -36057,8 +36057,8 @@
       "code": [
         {
           "path": "src/model/narration.rs",
-          "lines": "3-8",
-          "snippet": "//! Since at least CC 2.1.170 (2026-06-10) the API can return a SECOND `thinking` block\n//! in an assistant message: a one-sentence, user-language summary of the reasoning\n//! beside it (clients >= 2.1.241 render it dim under the hint word `summarized`).\n//! Nothing distinguishes it on the wire except a tag encoded inside the base64\n//! `signature`: protobuf field path 2 -> 1 -> 8, taking the LAST length-delimited field\n//! at each level, yielding a UTF-8 string reading `narration` vs `thinking`."
+          "lines": "4-8",
+          "snippet": "//! in an assistant message: a one-sentence, user-language summary of the reasoning\n//! beside it (clients >= 2.1.241 render it dim under the hint word `summarized`).\n//! Nothing distinguishes it on the wire except a tag encoded inside the base64\n//! `signature`: protobuf field path 2 -> 1 -> 8, taking the LAST length-delimited field\n//! at each level, yielding a UTF-8 string reading `narration` vs `thinking`."
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -40800,7 +40800,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "273-283",
+          "lines": "272-282",
           "snippet": "    /// - an answered AskUserQuestion \u2192 the full Q+options+answer unit\n    ///   ([`Record::auq_exchange`]);\n    /// - a tool-use rejection-with-message \u2192 the user's typed instruction, optionally\n    ///   suffixed with a `[plan: <path>]` pointer when `plan_index` resolves the rejected\n    ///   `tool_use_id` to an ExitPlanMode plan (\u00a74.2.4). `plan_index` may be `None` (no\n    ///   plan resolution attempted), in which case the rejection text is returned alone.\n    ///\n    /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout\n    /// (delegates to the codepoint-safe accessors).\n    #[must_use]\n    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {"
         },
         {
@@ -40810,7 +40810,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "329-334",
+          "lines": "327-332",
           "snippet": "    /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as\n    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`PlanIndex`] is built\n    /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields\n    /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty\n    /// for any record carrying no ExitPlanMode tool_use.\n    #[must_use]"
         }
       ],
@@ -41929,8 +41929,8 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "344-348",
-          "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
+          "lines": "345-348",
+          "snippet": "    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
       "states": [
@@ -44079,7 +44079,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "271-273",
+          "lines": "272-274",
           "snippet": "    /// `harness.turn.recap` - the `type:\"system\"` / `subtype:\"away_summary\"` recap the\n    /// harness generates when the operator returns after time away. No `message{}`.\n    TurnRecap,"
         }
       ],
@@ -44518,7 +44518,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "268-270",
+          "lines": "269-271",
           "snippet": "    /// `harness.turn.stop-hooks` - the `type:\"system\"` / `subtype:\"stop_hook_summary\"`\n    /// ledger of the Stop hooks that ran at turn end. No `message{}`.\n    TurnStopHooks,"
         },
         {
@@ -44631,7 +44631,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "261-267",
+          "lines": "260-266",
           "snippet": "    #[must_use]\n    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         },
         {
@@ -45299,7 +45299,7 @@
         {
           "path": "src/model/taxonomy/facets.rs",
           "lines": "126-130",
-          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation no longer threads through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
+          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation does not thread through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
         }
       ],
       "states": [
@@ -45504,7 +45504,7 @@
         {
           "path": "src/model/taxonomy/facets.rs",
           "lines": "126-130",
-          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation no longer threads through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
+          "snippet": "    /// 28 of the 73 leaves are invisible, and the reasons group:\n    /// - the two SCAN-LAYER user leaves (`user.unsent`, `user.rewound`): ordinary\n    ///   user records the surviving conversation does not thread through;\n    /// - `user.queued` and the whole `harness.bookkeeping` category: non-transcript\n    ///   lines with no `message{}` at all, which the loader never admits;"
         },
         {
           "path": "src/model/taxonomy/facets.rs",
@@ -48427,7 +48427,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "405-408",
+          "lines": "403-406",
           "snippet": "        let Content::Blocks(blocks) = content else {\n            // Assistant content is always a block array in CC 2.1.x; a bare string\n            // would be a genuine surprise - surface it rather than silently drop.\n            if let Content::Text(s) = content {"
         }
       ],
@@ -48697,8 +48697,8 @@
       "code": [
         {
           "path": "src/model/record/blocks.rs",
-          "lines": "40-42",
-          "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
+          "lines": "40-41",
+          "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified"
         },
         {
           "path": "src/commands/search/record_text/thinking.rs",
@@ -48873,8 +48873,8 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "235-239",
-          "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
+          "lines": "235-238",
+          "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost"
         }
       ],
       "states": [
@@ -48959,7 +48959,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "361-368",
+          "lines": "359-366",
           "snippet": "    /// The persisted-output file path for this carrier (\u00a74.6), preferring the\n    /// structured `toolUseResult.persistedOutputPath` (exact - no regex) and falling\n    /// back to scraping the inline `Full output saved to: <path>` marker from a\n    /// `tool_result` block. Returns `None` when there is no persisted pointer.\n    #[must_use]\n    pub fn persisted_output_path(&self) -> Option<String> {\n        // Structured field first (SPEC \u00a74.6 resolution rule).\n        if let Some(probe) = self.tur_probe() {"
         },
         {
@@ -49065,8 +49065,8 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "246-249",
-          "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
+          "lines": "246-248",
+          "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as"
         },
         {
           "path": "src/model/predicates.rs",
@@ -50597,7 +50597,7 @@
         {
           "path": "src/model/classify.rs",
           "lines": "364-369",
-          "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
+          "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator - and that holds regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
           "path": "src/commands/search/turns_match.rs",
@@ -50782,8 +50782,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-13",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append\n//! artifact wearing a fork's shape."
+          "lines": "8-12",
+          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         }
       ],
       "states": [
@@ -60957,13 +60957,13 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "96-100",
-          "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in\n        // any real corpus."
+          "lines": "96-99",
+          "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in"
         },
         {
           "path": "src/model/classify.rs",
           "lines": "364-369",
-          "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
+          "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator - and that holds regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
       "states": [
@@ -62276,7 +62276,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "208",
+          "lines": "209",
           "snippet": "pub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -62371,8 +62371,8 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "426-429",
-          "snippet": "/// True when a `SendMessage` `input` is a control SIGNAL rather than a prose message (GOLD\n/// \u00a73): the top-level `type` (or a nested `message.type`) is present and is NOT `message`/\n/// `direct` (e.g. `shutdown_request`/`shutdown_response`/\u2026). Absent type \u21d2 a plain message.\npub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {"
+          "lines": "428-429",
+          "snippet": "/// `direct` (e.g. `shutdown_request`/`shutdown_response`/\u2026). Absent type \u21d2 a plain message.\npub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {"
         }
       ],
       "states": [
@@ -62589,8 +62589,8 @@
       "code": [
         {
           "path": "src/subagent/spawn.rs",
-          "lines": "254-256",
-          "snippet": "/// The synthesized prefix Claude Code writes into a tool_result when a subagent is\n/// launched ASYNCHRONOUSLY (run_in_background) - the real returned message is then NOT in\n/// the parent tool_result but in the child transcript tail."
+          "lines": "254-255",
+          "snippet": "/// The synthesized prefix Claude Code writes into a tool_result when a subagent is\n/// launched ASYNCHRONOUSLY (run_in_background) - the real returned message is then NOT in"
         },
         {
           "path": "src/cli/agents_args.rs",
@@ -64887,7 +64887,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "283-298",
+          "lines": "282-297",
           "snippet": "    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {\n        if let Some(text) = self.genuine_user_text() {\n            return Some(text);\n        }\n        if let Some(unit) = self.auq_exchange() {\n            return Some(normalize_line(&unit));\n        }\n        if let Some((rejected_id, msg)) = self.plan_rejection_message() {\n            let mut out = normalize_line(&msg);\n            if let (Some(idx), Some(id)) = (plan_index, rejected_id.as_deref()) {\n                if let Some(path) = idx.plan_path(id) {\n                    out.push_str(&format!(\" [plan: {path}]\"));\n                }\n            }\n            return Some(out);\n        }"
         },
         {
@@ -64989,7 +64989,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "262-267",
+          "lines": "261-266",
           "snippet": "    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         }
       ],
@@ -65179,7 +65179,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "210-212",
+          "lines": "211-213",
           "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
@@ -65857,7 +65857,7 @@
         {
           "path": "src/model/markers.rs",
           "lines": "20-31",
-          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
+          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch: `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/model/markers.rs",
@@ -66641,7 +66641,7 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "262-267",
+          "lines": "261-266",
           "snippet": "    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         }
       ],
@@ -66747,23 +66747,23 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "45-52",
-          "snippet": "/// True when `content` is an inbound teammate/peer message (GOLD \u00a75) - it carries a\n/// [`TEAMMATE_MESSAGE_OPEN`] tag at a section BOUNDARY (FINDING-1). Real data (edge-fixtures scout):\n/// the real shape is ALWAYS the relayed wrapper `Another Claude session sent a message:\\n\n/// <teammate-message \u2026>\\n<BODY>\\n</teammate-message>\\n\\n<security footer>` (126 of 126), so the\n/// boundary is the content start, just after the relay preamble, or right after a prior section's\n/// close tag. A tag merely QUOTED mid-prose (a genuine user message that mentions the literal tag -\n/// common in csift's OWN dev sessions) is NOT a boundary, so the record stays `user.message` rather\n/// than being mislabeled `agent.communication.inbox` (the FINDING-1 fix)."
+          "lines": "47-50",
+          "snippet": "/// relayed wrapper `Another Claude session sent a message:\\n\n/// <teammate-message \u2026>\\n<BODY>\\n</teammate-message>\\n\\n<security footer>` (126 of 126), so the\n/// boundary is the content start, just after the relay preamble, or right after a prior section's\n/// close tag. A tag merely QUOTED mid-prose (a genuine user message that mentions the literal tag -"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "157",
+          "lines": "158",
           "snippet": "pub const TEAMMATE_MESSAGE_OPEN: &str = \"<teammate-message\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "160",
+          "lines": "161",
           "snippet": "/// `Another Claude session sent a message:\\n<teammate-message \u2026>`. A peer tag IMMEDIATELY after"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "27-34",
-          "snippet": "    /// True when this record is ANY inbound PEER message (GOLD \u00a71 + FINDING-2 + C-30) - a\n    /// `<teammate-message>`, `<agent-message>` OR `<cross-session-message>` at a section boundary. The predicate\n    /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is\n    /// not the operator, but it still delimits a turn). Reads the raw (un-normalized) message text so\n    /// the relay preamble's `\\n` survives; gated to `type:\"user\"` (the only place a peer message\n    /// arrives). The body render for a peer-opened turn comes from\n    /// [`Record::inbound_comm_preview`] (`turns`/`list`) / `record_text_sections` (`search`).\n    #[must_use]"
+          "lines": "29-34",
+          "snippet": "    /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is\n    /// not the operator, but it still delimits a turn). Reads the raw (un-normalized) message text so\n    /// the relay preamble's `\\n` survives; gated to `type:\"user\"` (the only place a peer message\n    /// arrives). The body render for a peer-opened turn comes from\n    /// [`Record::inbound_comm_preview`] (`turns`/`list`) / `record_text_sections` (`search`).\n    #[must_use]"
         }
       ],
       "states": [
@@ -66934,8 +66934,8 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "59-62",
-          "snippet": "/// True when `content` is an inbound `<agent-message from=\"\u2026\">` peer message (P1c M1 / FINDING-2) at\n/// a section BOUNDARY - the DISTINCT peer form from [`is_teammate_message`]. Like a teammate message\n/// it classifies `agent.communication.inbox`, is excluded from [`Record::is_genuine_user`], yet\n/// still opens a turn. Boundary-anchored (FINDING-1) for the same reason - a quoted tag is not it."
+          "lines": "60-61",
+          "snippet": "/// a section BOUNDARY - the DISTINCT peer form from [`is_teammate_message`]. Like a teammate message\n/// it classifies `agent.communication.inbox`, is excluded from [`Record::is_genuine_user`], yet"
         },
         {
           "path": "src/model/peer.rs",
@@ -66944,12 +66944,12 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "178",
+          "lines": "179",
           "snippet": "pub const AGENT_MESSAGE_OPEN: &str = \"<agent-message\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "167-171",
+          "lines": "168-172",
           "snippet": "pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[\n    \"Another Claude session sent a message:\",\n    \"Another Claude session sent a message while you were working:\",\n    \"A peer session sent a message while you were working:\",\n];"
         },
         {
@@ -67167,7 +67167,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "193-200",
+          "lines": "194-201",
           "snippet": "/// Section CLOSE tags (FINDING-1). A peer / `<task-notification>` open tag that sits right after\n/// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a\n/// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine\n/// user message that merely mentions the literal tag, common in csift's OWN dev sessions) is NOT a\n/// boundary and never starts a section. Kept beside their open-tag constants so the pair never drift.\npub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
@@ -67394,8 +67394,8 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "63-67",
-          "snippet": "/// The harness's \"N background agent(s) were stopped by the user: ...\" notice (v0.10.0):\n/// a plain-string `type:\"user\"` record Claude Code writes when async agents are killed\n/// from the UI. It names a count and truncated prompt prefixes, never an id, and it\n/// triggers no generation - the model sees it only alongside the next real prompt. Not\n/// the operator, never a turn opener; classifies `harness.notification.subagent`."
+          "lines": "64-67",
+          "snippet": "/// a plain-string `type:\"user\"` record Claude Code writes when async agents are killed\n/// from the UI. It names a count and truncated prompt prefixes, never an id, and it\n/// triggers no generation - the model sees it only alongside the next real prompt. Not\n/// the operator, never a turn opener; classifies `harness.notification.subagent`."
         },
         {
           "path": "src/model/markers.rs",
@@ -70883,7 +70883,7 @@
         {
           "path": "src/model/markers.rs",
           "lines": "20-31",
-          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
+          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch: `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/model/markers.rs",
@@ -70897,8 +70897,8 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "128-151",
-          "snippet": "        // The freeform branch (v0.10.3): `answers` is empty and the user's whole message\n        // is `toolUseResult.response` - render the questions asked, then the response.\n        let response = tur\n            .as_ref()\n            .and_then(|t| t.get(\"response\"))\n            .and_then(serde_json::Value::as_str)\n            .filter(|s| !s.trim().is_empty());\n        if let Some(resp) = response {\n            let questions = tur\n                .as_ref()\n                .and_then(|t| t.get(\"questions\"))\n                .and_then(serde_json::Value::as_array);\n            let n = questions.map_or(0, Vec::len);\n            let mut out = format!(\"[AskUserQuestion \u00b7 {n} question{}]\", plural(n));\n            for (i, q) in questions.into_iter().flatten().enumerate() {\n                let question = q\n                    .get(\"question\")\n                    .and_then(serde_json::Value::as_str)\n                    .unwrap_or_default();\n                out.push_str(&format!(\"\\nQ{} {}\", i + 1, normalize_line(question)));\n            }\n            out.push_str(&format!(\"\\nresponse: {}\", normalize_line(resp)));\n            return Some(out);\n        }"
+          "lines": "129-151",
+          "snippet": "        // is `toolUseResult.response` - render the questions asked, then the response.\n        let response = tur\n            .as_ref()\n            .and_then(|t| t.get(\"response\"))\n            .and_then(serde_json::Value::as_str)\n            .filter(|s| !s.trim().is_empty());\n        if let Some(resp) = response {\n            let questions = tur\n                .as_ref()\n                .and_then(|t| t.get(\"questions\"))\n                .and_then(serde_json::Value::as_array);\n            let n = questions.map_or(0, Vec::len);\n            let mut out = format!(\"[AskUserQuestion \u00b7 {n} question{}]\", plural(n));\n            for (i, q) in questions.into_iter().flatten().enumerate() {\n                let question = q\n                    .get(\"question\")\n                    .and_then(serde_json::Value::as_str)\n                    .unwrap_or_default();\n                out.push_str(&format!(\"\\nQ{} {}\", i + 1, normalize_line(question)));\n            }\n            out.push_str(&format!(\"\\nresponse: {}\", normalize_line(resp)));\n            return Some(out);\n        }"
         }
       ],
       "states": [
@@ -78997,7 +78997,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "198-200",
+          "lines": "199-201",
           "snippet": "pub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
@@ -79142,7 +79142,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "167-171",
+          "lines": "168-172",
           "snippet": "pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[\n    \"Another Claude session sent a message:\",\n    \"Another Claude session sent a message while you were working:\",\n    \"A peer session sent a message while you were working:\",\n];"
         }
       ],
@@ -79453,7 +79453,7 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "232-241",
+          "lines": "233-242",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
@@ -80062,7 +80062,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "285-288",
+          "lines": "286-289",
           "snippet": "    /// `harness.system.command` - a `type:\"system\"` record with subtype\n    /// `local_command`: the ONE system subtype the request assembler re-mints as a user\n    /// message, so it is DELIVERED although it carries no `message{}`.\n    SystemCommand,"
         },
         {
@@ -80337,7 +80337,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "281-282",
+          "lines": "282-283",
           "snippet": "    /// `harness.system.notice` - a `type:\"system\"` record with subtype `informational`.\n    SystemNotice,"
         }
       ],
@@ -80476,7 +80476,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "191",
+          "lines": "192",
           "snippet": "pub const CROSS_SESSION_MESSAGE_OPEN: &str = \"<cross-session-message\";"
         },
         {
@@ -80602,7 +80602,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "227",
+          "lines": "228",
           "snippet": "pub const RESUME_PLACEHOLDER_TEXT: &str = \"No response requested.\";"
         }
       ],
@@ -80715,8 +80715,8 @@
       "code": [
         {
           "path": "src/model/delivery.rs",
-          "lines": "42-45",
-          "snippet": "    /// The RESUME PLACEHOLDER (`harness.resume.placeholder`) shares that sentinel model and\n    /// is deliberately NOT covered by this arm: the loader mints it WITHOUT\n    /// `isApiErrorMessage`, so the drop predicate's own conjunction is false and the record\n    /// reaches the model like any other."
+          "lines": "42-44",
+          "snippet": "    /// The RESUME PLACEHOLDER (`harness.resume.placeholder`) shares that sentinel model and\n    /// is deliberately NOT covered by this arm: the loader mints it WITHOUT\n    /// `isApiErrorMessage`, so the drop predicate's own conjunction is false and the record"
         },
         {
           "path": "src/model/taxonomy/facets.rs",
@@ -80799,12 +80799,12 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "201-212",
+          "lines": "202-213",
           "snippet": "pub(crate) fn chain_admits(r: ChainNode<'_>) -> bool {\n    if r.is_elicitation_marker() {\n        return false;\n    }\n    if r.uuid().is_none_or(str::is_empty) {\n        return false;\n    }\n    matches!(\n        r.kind(),\n        Some(\"user\" | \"assistant\" | \"attachment\" | \"system\")\n    )\n}"
         },
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "232-241",
+          "lines": "233-242",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
@@ -81736,8 +81736,8 @@
         },
         {
           "path": "src/model/compaction.rs",
-          "lines": "3-9",
-          "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`\n//! for \"Summarize up to here\" and `\"from\"` for \"Summarize from here\"."
+          "lines": "3-8",
+          "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`"
         },
         {
           "path": "src/commands/turns/build.rs",
@@ -81828,8 +81828,8 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "326-329",
-          "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
+          "lines": "326-328",
+          "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]"
         }
       ],
       "states": [
@@ -81923,8 +81923,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-13",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append\n//! artifact wearing a fork's shape."
+          "lines": "8-12",
+          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         }
       ],
       "states": [
@@ -81985,8 +81985,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-13",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append\n//! artifact wearing a fork's shape."
+          "lines": "8-12",
+          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         },
         {
           "path": "src/commands/recover/scan.rs",
@@ -82238,8 +82238,8 @@
       "code": [
         {
           "path": "src/model/compaction.rs",
-          "lines": "3-9",
-          "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`\n//! for \"Summarize up to here\" and `\"from\"` for \"Summarize from here\"."
+          "lines": "3-8",
+          "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`"
         }
       ],
       "states": [
@@ -85178,7 +85178,7 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "318-330",
+          "lines": "317-329",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
         }
       ],
@@ -85332,7 +85332,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "299-304",
+          "lines": "300-305",
           "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
         }
       ],
@@ -85530,7 +85530,7 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "318-330",
+          "lines": "317-329",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
         },
         {
@@ -86236,7 +86236,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "281-284",
+          "lines": "282-285",
           "snippet": "/// The hook-feedback template is `<hook name> hook feedback:\\n<body>` over a closed set\n/// of hook names; csift matches all four through `injections::HOOK_FEEDBACK_PREFIXES`,\n/// the `Stop` form being the only one with a corpus specimen.\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";"
         },
         {
@@ -87546,7 +87546,7 @@
         },
         {
           "path": "src/model/classify/tests/injections.rs",
-          "lines": "108",
+          "lines": "109",
           "snippet": "fn the_feedback_prefixes_stop_at_the_colon() {"
         }
       ],
@@ -87936,7 +87936,7 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "318-318",
+          "lines": "317",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &["
         },
         {

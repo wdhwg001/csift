@@ -125,7 +125,7 @@ impl Record {
             }
             return Some(out);
         }
-        // The freeform branch (v0.10.3): `answers` is empty and the user's whole message
+        // The freeform branch: `answers` is empty and the user's whole message
         // is `toolUseResult.response` - render the questions asked, then the response.
         let response = tur
             .as_ref()
@@ -252,12 +252,11 @@ impl Record {
     /// teammate/peer message. Every surface (turns / search / recover / files) keys turn
     /// delimiting on THIS predicate so they never drift.
     ///
-    /// GOLD §1 + FINDING-2: an inbound PEER message (`<teammate-message>` OR `<agent-message>`) is
-    /// no longer [`Record::is_genuine_user`] (it is a peer, not the operator), but it MUST still
-    /// delimit a turn - so the dedicated [`Record::is_peer_message_record`] clause keeps `opens_turn`
-    /// firing for peer records (true before and after the fix for the non-isMeta teammate/agent
-    /// forms), leaving turn grouping byte-identical where peers already opened turns while the `user`
-    /// mislabel is removed.
+    /// An inbound PEER message (`<teammate-message>` OR `<agent-message>`) is NOT
+    /// [`Record::is_genuine_user`] - it is a peer, not the operator - yet it MUST still delimit a
+    /// turn, which is why [`Record::is_peer_message_record`] has its own clause here. Leaning on
+    /// the genuine-user arm for both jobs forces a choice between two wrong answers: counting the
+    /// peer as the human, or folding a real delivered message into the turn above it.
     #[must_use]
     pub fn opens_turn(&self) -> bool {
         self.is_genuine_user()
@@ -309,11 +308,10 @@ impl Record {
                 None => args,
             });
         }
-        // GOLD §1: an inbound TEAMMATE message opens a turn but is NOT genuine-user, so the
-        // genuine-user arm above no longer yields its body. Render the message text here so a
-        // teammate-opened turn is not BLANK - preserving the exact text `turns`/`search`/`list`
-        // produced before the `is_genuine_user` fix. This stays TEAMMATE-specific on purpose: the
-        // `<agent-message>` peer form (FINDING-2) opens a turn too, but every surface that renders an
+        // An inbound TEAMMATE message opens a turn but is NOT genuine-user, so the genuine-user
+        // arm above does not yield its body. Render the message text here so a teammate-opened
+        // turn is not BLANK. This stays TEAMMATE-specific on purpose: the
+        // `<agent-message>` peer form opens a turn too, but every surface that renders an
         // opener body catches it FIRST via [`Record::inbound_comm_preview`] (`turns`/`list`) or
         // `record_text_sections` (`search`), and `list` deliberately keeps an `<agent-message>`
         // INELIGIBLE to front a preview (session.rs `preview_text`) - so widening this arm would only

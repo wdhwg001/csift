@@ -82,7 +82,7 @@ fn classify_assistant_bare_string_message() {
     );
 }
 
-// ── classify(): dual-label user carriers (GOLD §3) ──
+// ── classify(): dual-label user carriers ──
 
 #[test]
 fn classify_auq_answer_is_user_answer_plus_tool_result() {

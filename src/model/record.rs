@@ -161,8 +161,8 @@ pub struct Record {
     #[serde(default, rename = "promptSource")]
     pub prompt_source: Option<String>,
 
-    /// Provenance of a message Claude Code did not receive from the operator's own prompt box
-    /// (C-30). An inbound cross-session PEER message carries `{kind:"peer", from,
+    /// Provenance of a message Claude Code did not receive from the operator's own prompt
+    /// box. An inbound cross-session PEER message carries `{kind:"peer", from,
     /// verifiedPeerPid, msg_id?, name?, fromMode?, body?, …}`; other kinds (`human`,
     /// `task-notification`, …) ride the same field. Kept as a raw `Value` (a tiny flat object)
     /// and read tolerantly through [`Record::peer_origin`], so an added key or an odd shape can
@@ -177,7 +177,7 @@ pub struct Record {
     pub subtype: Option<String>,
 
     /// `system` record severity (`"warning"` on the Remote Control disconnect notice,
-    /// `"info"` elsewhere); rides the `harness.system.*` excerpt head (v0.10.1).
+    /// `"info"` elsewhere); rides the `harness.system.*` excerpt head.
     #[serde(default)]
     pub level: Option<String>,
 
@@ -298,8 +298,8 @@ pub struct Record {
     ///
     /// BOXED, and `Record`'s width is why. Every parsed line of every scan pays
     /// `size_of::<Record>()`, so a memo that stores its payload INLINE widens the record
-    /// for a field almost no record uses - the C-41 lesson, which narrowed a spine row to
-    /// 72 bytes for exactly this reason. Behind a pointer the field costs 16 bytes
+    /// for a field almost no record uses - the same width discipline that keeps a spine
+    /// row at 72 bytes. Behind a pointer the field costs 16 bytes
     /// whatever the payload grows to, and the box is allocated only for a record that
     /// actually carries a conversion. `None` means it carries neither key, which is why
     /// [`Record::converted_text`] answers `Option`: the common case allocates nothing.
@@ -313,7 +313,7 @@ pub struct Record {
     /// prompt, which hook run closed the turn.
     ///
     /// ONE field, BOXED, because a `Record`'s width is paid on every parsed line of every
-    /// scan (the C-41 law): eighteen `Option`s here cost 216 bytes on every row, where a
+    /// scan: eighteen `Option`s here cost 216 bytes on every row, where a
     /// pointer costs 8 and the allocation is paid only by a record that names at least one
     /// of the keys. `#[serde(flatten)]` is what keeps that to the SAME pass - serde reads
     /// the keys where they sit, at the record's own top level, rather than csift walking
@@ -326,12 +326,12 @@ pub struct Record {
     /// Read only by `recover` to know a disk backup EXISTED for a path at a time
     /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%
     /// across real corpora), but the store it names is PRUNED and its content has no
-    /// transcript anchor, so it is never used to fabricate content; `recover
+    /// transcript anchor, so csift never fabricates content from it; `recover
     /// --list-backups` lists the store itself. Additive + tolerant.
     #[serde(default)]
     pub snapshot: Option<serde_json::Value>,
 
-    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the
+    /// `file-history-delta`: the ONE path this delta line tracks, beside the
     /// `backup` object below. Absent everywhere else. Additive + tolerant.
     #[serde(default, rename = "trackingPath")]
     pub tracking_path: Option<String>,
@@ -341,7 +341,7 @@ pub struct Record {
     #[serde(default)]
     pub backup: Option<serde_json::Value>,
 
-    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |
+    /// `queue-operation`: the queue event - `enqueue` | `dequeue` | `remove` |
     /// `popAll` (open set; measured those four). The human-typed (or automation) text
     /// rides top-level `content` on every operation except `dequeue`.
     #[serde(default)]
@@ -353,7 +353,7 @@ pub struct Record {
     #[serde(default)]
     pub reason: Option<String>,
 
-    /// `system`/`turn_duration` (v0.10.0): wall-clock ms of the turn. Kept as a raw
+    /// `system`/`turn_duration`: wall-clock ms of the turn. Kept as a raw
     /// `Value` so an odd shape can never fail the record (tolerance discipline, the
     /// `Message.model` precedent); read via [`Record::u64_field`].
     #[serde(default, rename = "durationMs")]
@@ -372,7 +372,7 @@ pub struct Record {
     #[serde(default, rename = "pendingWorkflowCount")]
     pub pending_workflow_count: Option<serde_json::Value>,
 
-    /// `system`/`stop_hook_summary` (v0.10.0): how many Stop hooks ran.
+    /// `system`/`stop_hook_summary`: how many Stop hooks ran.
     #[serde(default, rename = "hookCount")]
     pub hook_count: Option<serde_json::Value>,
 

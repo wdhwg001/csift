@@ -200,8 +200,8 @@ impl EdgeKind {
 /// that closes it.
 ///
 /// It is filled by the SAME walk the tool-pairing sets already run over a file, so the file
-/// pays nothing it was not already paying: what changed is that one walk now produces what
-/// two used to.
+/// pays nothing it was not already paying: one walk produces both maps, where a second walk
+/// would pay the file's whole length again for a join the first one passes over anyway.
 #[derive(Debug, Default)]
 pub struct ProvIndex {
     /// `tool_use` block id -> the 1-based jsonl LINE carrying it. The LINE and not the
@@ -295,9 +295,9 @@ impl RootLink {
     /// The line is a REAL line, and the caller is what makes that true: the only record
     /// csift holds with no physical line is a merged elicitation-sidecar record, and none
     /// of the shapes the sidecar carries opens a turn, so no turn's opener is one
-    /// (`no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line`). A guard that
-    /// collapsed a zero to `None` used to sit here for a caller that does not exist, and
-    /// what it would have produced is worse than the case it guarded: an object with a
+    /// (`no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line`). A guard collapsing
+    /// a zero to `None` would stand for a caller that does not exist, and
+    /// what it would produce is worse than the case it guards: an object with a
     /// uuid, a hop count and no line and no note - a FIFTH wire shape beside the four
     /// documented answers, rendering nothing at all in the label zone. The
     /// `debug_assert` says the invariant out loud instead of quietly papering over its

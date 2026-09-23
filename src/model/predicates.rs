@@ -10,8 +10,8 @@ use super::*;
 /// is absent or its conversion produced no text - the same answer, because a conversion
 /// that produced nothing is nothing.
 // The ordinary "no reader yet" allow (AGENTS section 4): the attachment family reads
-// both fields, and the amendment lands the accessor so it does not have to widen
-// `Record` itself. The allow goes with the family.
+// both fields through an accessor here, so `Record` itself never has to widen. The
+// allow goes with the family.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct ConversionText {
@@ -105,14 +105,14 @@ impl Record {
         if msg.role.as_deref() != Some("user") {
             return false;
         }
-        // GOLD §1 BUG FIX + FINDING-2: an inbound PEER message - `<teammate-message>` OR
-        // `<agent-message from="…">` - is `type:user`/`role:user`/string content and matches no
-        // synthetic marker, so it used to slip through as a GENUINE HUMAN turn (106 peer messages
-        // mislabeled as the user in one real session). Both are PEER-AGENT messages - never the
+        // An inbound PEER message - `<teammate-message>` OR `<agent-message from="…">` - is
+        // `type:user`/`role:user`/string content and matches no synthetic marker, so without
+        // the guard below it slips through as a GENUINE HUMAN turn (106 peer messages counted
+        // as the user in one real session). Both are PEER-AGENT messages - never the
         // operator. Excluded here via [`is_peer_message`] (each still OPENS a turn via
         // [`Record::opens_turn`], but classifies `agent.communication.inbox`, not `user`). The check
-        // is on the borrowed content (no allocation on the common path) and is BOUNDARY-anchored
-        // (FINDING-1), so a genuine message merely QUOTING the tag stays `user.message`.
+        // is on the borrowed content (no allocation on the common path) and is BOUNDARY-anchored,
+        // so a genuine message merely QUOTING the tag stays `user.message`.
         match &msg.content {
             Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),
             Some(Content::Blocks(blocks)) => {
@@ -269,7 +269,7 @@ impl Record {
     /// `elicitations.jsonl` and anything under a `csift-channel/` directory. Both halves
     /// move the answer: the top-level transcripts ALONE miss the sidecars, and the
     /// string-only reading gives 3,805 rows against 4,017 and moves the FRAME count 95 to
-    /// 56, a 41% difference on the one population the family used to own.
+    /// 56, a 41% difference on the one population this family answers for.
     ///
     /// On that rule: 4,017 records, of which 95 are the frame - a relation read in the
     /// family that owns the frame reached 2% of the pulses on disk. Since this reader takes
@@ -369,8 +369,8 @@ impl Record {
             return false;
         }
         // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform
-        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes
-        // the text there and leaves `answers` empty).
+        // `toolUseResult.response` (the `The user responded:` branch writes the text
+        // there and leaves `answers` empty).
         if self.has_auq_answers() || self.has_auq_response() {
             return true;
         }
@@ -378,7 +378,7 @@ impl Record {
         self.is_auq_answer()
     }
 
-    /// The freeform `toolUseResult.response` test (v0.10.3): present AND non-blank. The
+    /// The freeform `toolUseResult.response` test: present AND non-blank. The
     /// harness writes it only when set, beside an empty `answers` map.
     pub(crate) fn has_auq_response(&self) -> bool {
         self.tur_probe()

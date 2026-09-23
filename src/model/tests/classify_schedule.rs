@@ -64,7 +64,7 @@ fn classify_schedule_wakeup_fired_timer_markers() {
     );
 }
 
-// -- v0.12.2: the loop markers anchor at CONTENT START, never mid-body --
+// -- the loop markers anchor at CONTENT START, never mid-body --
 
 #[test]
 fn loop_markers_anchor_at_content_start() {
@@ -99,7 +99,7 @@ fn loop_markers_anchor_at_content_start() {
     );
 }
 
-// -- v0.12.2: harness.schedule.fire, the prompt a scheduled task fires --
+// -- harness.schedule.fire, the prompt a scheduled task fires --
 
 #[test]
 fn classify_scheduled_fire_prompt() {

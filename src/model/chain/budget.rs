@@ -259,9 +259,9 @@ impl CrossingReport {
     /// The budget is a property of the invocation, never of a file, so every report a
     /// surface builds for itself - an empty transcript, a file the whole-file gate pruned,
     /// a scan that found no target, the accumulator a fold starts from - is built here
-    /// rather than by `default()`. A `default()` report carries `Limited(0)`, and folding
-    /// one in used to make the SCOPE read as "crossing off": the keys and both footer
-    /// lines vanished for every transcript because one file in the set had nothing to say.
+    /// rather than by `default()`. A `default()` report carries `Limited(0)`, and folding one
+    /// in makes the whole SCOPE read as "crossing off": the keys and both footer lines vanish
+    /// for every transcript because one file in the set had nothing to say.
     #[must_use]
     pub fn new(budget: CrossingBudget) -> CrossingReport {
         CrossingReport {
@@ -304,7 +304,7 @@ impl CrossingReport {
         !self.budget.is_off()
     }
 
-    /// The budget at which the BUDGET is no longer the obstacle - every boundary in the
+    /// The budget at which the BUDGET stops being the obstacle - every boundary in the
     /// file gets tried. Whether the walk then reaches them is a different question, and it
     /// is the one [`CrossingReport::remedy`] answers off the floor's cause.
     #[must_use]

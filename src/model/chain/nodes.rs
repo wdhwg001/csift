@@ -17,9 +17,9 @@ use crate::parse::SpineRow;
 ///
 /// Every accessor answers what a [`Record`] would have answered. A spine row carries no
 /// `message`, so the three message-derived answers ([`ChainNode::opens_turn`],
-/// [`ChainNode::message_id`], [`ChainNode::has_tool_result`]) are the same `false`/`None`
-/// a message-less record gave - which is what the pre-0.12.1 shape produced, since a spine
-/// row WAS a message-less record.
+/// [`ChainNode::message_id`], [`ChainNode::has_tool_result`]) are the `false`/`None` a
+/// message-less record answers: the narrow row is a record's structural fields and nothing
+/// else, so it must never answer a message question differently from one.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ChainNode<'a> {
     Full(&'a Record),
@@ -140,10 +140,11 @@ impl<'a> ChainNode<'a> {
         }
     }
 
-    /// The compaction-MODE pair (C-33), which `search` builds over the same merged row
+    /// The compaction-MODE pair (a boundary paired with the summary that follows it, which
+    /// is where the boundary learns its mode), built by `search` over the same merged row
     /// list: a boundary names itself here, a summary yields its mode. A spine row is
     /// never a summary (a summary is a `role:user` record, so every prefilter admits it
-    /// whole), so the second answer is exactly the `false` a message-less record gave.
+    /// whole), so the second answer is exactly the `false` a message-less record answers.
     pub(crate) fn is_compact_boundary(self) -> bool {
         self.kind() == Some("system") && self.subtype() == Some("compact_boundary")
     }

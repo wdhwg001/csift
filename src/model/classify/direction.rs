@@ -7,7 +7,7 @@
 use super::*;
 
 impl Record {
-    /// The comm direction `(from, to)` for a communication record (GOLD §4), or `None` for a
+    /// The comm direction `(from, to)` for a communication record, or `None` for a
     /// non-comm record. The `self` side is `ctx.owner_id` (falls back to the literal `"self"`
     /// so direction is testable without a real id); record-supplied ids (teammate_id, the
     /// SendMessage recipient) are used verbatim; a spawn child / subagent-return FROM is

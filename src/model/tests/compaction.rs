@@ -1,4 +1,4 @@
-//! C-33: the compaction MODE - the summary's `summarizeMetadata.direction` and the
+//! The compaction MODE - the summary's `summarizeMetadata.direction` and the
 //! boundary <-> summary pairing that lets a boundary name the gesture that minted it.
 
 use super::*;

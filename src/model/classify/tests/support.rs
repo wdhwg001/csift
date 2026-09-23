@@ -5,7 +5,7 @@
 
 use super::*;
 
-// ── direction() (GOLD §4) ──
+// ── direction() ──
 
 #[test]
 fn direction_teammate_inbox_from_peer_to_self() {

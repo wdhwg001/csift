@@ -171,7 +171,7 @@ fn command_name_wrapper_with_args_recovers_prose() {
         r.slash_command_args().as_deref(),
         Some("Just shipped spec-batch-14, summarize")
     );
-    // v0.5: rendered as `/name args` - the prose keeps its command context, and the
+    // Rendered as `/name args` - the prose keeps its command context, and the
     // wrapper XML never masquerades as the body.
     assert_eq!(
         r.reconstructed_user_text(None).as_deref(),
@@ -182,8 +182,8 @@ fn command_name_wrapper_with_args_recovers_prose() {
 #[test]
 fn command_message_first_wrapper_detected_and_recovered() {
     // The NEWER CC tag order (`<command-message>` FIRST - both orders coexist in real
-    // corpora). Detection anchored on `<command-name>` alone used to misclassify this
-    // as GENUINE user prose (raw XML as `user.message`, and it opened a turn).
+    // corpora). Detection anchored on `<command-name>` alone misclassifies this
+    // as GENUINE user prose: the raw XML renders as `user.message` and opens a turn.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<command-message>csift</command-message>\n<command-name>/csift</command-name>\n<command-args>what changed in v5?</command-args>"}}"#,
     );

@@ -171,10 +171,10 @@ fn the_root_has_four_answers_and_says_which_it_is() {
 /// A root ALWAYS has a line, and this is why: the only record csift holds with no physical
 /// line is a merged elicitation-sidecar record, and neither shape the sidecar carries opens
 /// a turn - an unresolved AskUserQuestion or ExitPlanMode rides an `assistant` record, and
-/// an MCP elicitation rides a `system` one. So no turn's opener can be one, and the guard
-/// that used to collapse a zero line stood for a caller that does not exist.
+/// an MCP elicitation rides a `system` one. So no turn's opener can be one, and a guard
+/// collapsing a zero line would stand for a caller that does not exist.
 ///
-/// Pinned on the SHAPES rather than on the guard, because the guard was never the fact: if
+/// Pinned on the SHAPES rather than on the guard, because the guard is not the fact: if
 /// one of these ever did open a turn, a `None` line would hide it behind a fifth wire shape
 /// no manual names, and this test would name it instead.
 #[test]

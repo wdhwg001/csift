@@ -6,9 +6,9 @@
 //! the head. Only the records that walk reaches are the conversation; everything else
 //! on disk was written, then left behind - a prompt recalled and re-typed, a turn the
 //! operator rewound past, the whole history above a compaction boundary. That single
-//! rule replaces the three special cases csift used to carry (the same-parent draft
-//! heuristic, the replay-copy collapse, and the boundary's implicit cut) and answers a
-//! question none of them could: which of a branch point's children is the conversation.
+//! rule subsumes the three special cases it would otherwise take (a same-parent draft
+//! heuristic, a replay-copy collapse, and an implicit cut at the boundary) and answers a
+//! question none of them can: which of a branch point's children is the conversation.
 //!
 //! Three states per record ([`Survival`]):
 //! - `Live` - on the chain (or rescued onto it by the two membership rules below).
@@ -374,8 +374,8 @@ impl Chain {
         self.kinds.get(&i).map(|k| k.class())
     }
 
-    /// The surviving opener that replaced an abandoned one - the address the C-27 diff
-    /// line is computed against.
+    /// The surviving opener that replaced an abandoned one - the address the draft-distance
+    /// line (`differs from the sent message in N chars`) is computed against.
     #[must_use]
     pub fn superseding(&self, i: usize) -> Option<usize> {
         self.kinds.get(&i).and_then(|k| k.survivor())

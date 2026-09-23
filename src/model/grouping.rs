@@ -66,14 +66,14 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// so callers can test the grouping over lightweight bool fixtures; in production it is
 /// always [`Record::opens_turn`] - which opens on a genuine human message, an answered
 /// AskUserQuestion (the answer is the user's message, §4.4), OR a tool-use
-/// rejection-with-message (§4.2.4). An AUQ answer / plan rejection becoming a turn
-/// boundary is the sanctioned correct behavior change (a previously-MISSED genuine user
-/// message); interrupts / `<local-command-stdout>` / `<command-name>` wrappers, formerly
-/// spurious boundaries, are excluded by `is_genuine_user` (regression fixes).
+/// rejection-with-message (§4.2.4). An AUQ answer and a plan rejection ARE boundaries even
+/// though they ride a machine-looking carrier - each is the user's own message; interrupts,
+/// `<local-command-stdout>` and `<command-name>` wrappers are NOT, even though each looks
+/// like human prose - `is_genuine_user` excludes them because the harness wrote them.
 ///
 /// NOTE: this raw grouper trusts file order and knows nothing of the SURVIVAL AXIS. The
 /// production surfaces use [`group_turn_indices_chained`], which drops every record
-/// Claude Code's own conversation chain no longer reaches (§6.4.1). This bare form stays
+/// Claude Code's own conversation chain does not reach (§6.4.1). This bare form stays
 /// for the lightweight bool-fixture tests and any caller that has no `Record`.
 // Production now routes through `group_turn_indices_chained`, so in the bin build this bare
 // generic is reached only from `#[cfg(test)]` - kept as the documented base primitive +
@@ -101,8 +101,8 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 /// CAUTION - this entry point builds the chain from whatever records the caller hands it,
 /// and a caller whose prefilter dropped the `attachment` and `system` lines hands it a
 /// DAG with holes. A chain that cannot see those lines cannot be trusted to say a whole
-/// BRANCH is abandoned, so this form drops only what the pre-0.12.0 rule dropped: the
-/// superseded OPENER itself. Every other record stays a member of the turn above it, and
+/// BRANCH is abandoned, so this form drops the superseded OPENER and nothing
+/// else. Every other record stays a member of the turn above it, and
 /// a turn-keyed consumer (`files --by timeline`) keeps its row.
 ///
 /// Every production surface now hands the grouper a WHOLE DAG - `search`/`show`/`stats`

@@ -171,12 +171,13 @@ fn two_rewinds_from_one_parent_are_two_branches() {
     assert_eq!(c.abandoned_root(5), Some(4));
 }
 
-// ── C-29 flipped: the LAST copy of a replayed uuid is the survivor ──
+// ── Replay copies: the LAST copy of a replayed uuid is the survivor ──
 
 #[test]
 fn a_replayed_block_keeps_the_last_copy_and_flags_the_earlier_line() {
     // A compaction re-anchor re-appends the same records with their uuids preserved. The
-    // v0.11.1 rule kept the FIRST copy; the loader's map keeps the LAST, and so does this.
+    // map keeps the LAST copy, matching the loader; keeping the FIRST would make the
+    // survivor the line the conversation left behind.
     // The re-anchor re-appends the whole block, so BOTH records land twice.
     let r = recs(&[
         &u("u0", "", "first", "2026-06-07T05:00:00.000Z"),
