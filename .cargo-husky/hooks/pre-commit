@@ -3,7 +3,14 @@
 # csift pre-commit gate - installed by cargo-husky (user-hooks feature) into
 # .git/hooks/pre-commit on the first `cargo test` / `cargo build` after checkout.
 # Mirrors the CI gate exactly. DO NOT edit the copy in .git/hooks; edit this
-# source file (.cargo-husky/hooks/pre-commit) and re-run `cargo test` to reinstall.
+# source file (.cargo-husky/hooks/pre-commit). Installing that edit takes one
+# more step than re-running `cargo test`: cargo-husky stamps its own version
+# into line 3 of the installed copy and skips the install whenever that marker
+# is already there, so a hook written by the same cargo-husky version is never
+# refreshed. Remove the installed copy first:
+#   rm -f .git/hooks/pre-commit && cargo test
+# That copy is shared by every worktree of this repository, so the refresh puts
+# the new rules in front of every branch checked out against it at once.
 #
 # Bypass for a genuine WIP commit only: `git commit --no-verify`.
 set -euo pipefail
@@ -23,7 +30,7 @@ set -euo pipefail
 # 5. No `mod.rs` anywhere: module roots are path-named (`src/<m>.rs` beside
 #    `src/<m>/`). Clippy's `mod_module_files` enforces the same rule in-build.
 # 6. A non-ASCII character in a .rs comment only as a QUOTATION of csift's own
-#    rendering: an allowlisted glyph inside a backtick span (`child ⇨ self`,
+#    rendering: an allowlisted glyph inside a backtick span (`parent ⇨ self`,
 #    `SUBAGENT <hex>  ·  parent SESSION <uuid>`, a lone role glyph `▹`). Used
 #    for the comment's own typography or its logic instead, one character carries
 #    a quotation in one line and an arrow in the next, and nothing in the
@@ -44,13 +51,13 @@ fail=0
 while read -r n f; do
     [ "$f" = "total" ] && continue
     if [ "$n" -gt 600 ]; then
-        echo "  OVER 600 LINES: $f ($n) — split it (200-400 is the sweet spot)"
+        echo "  OVER 600 LINES: $f ($n) - split it (200-400 is the sweet spot)"
         fail=1
     fi
 done < <(find src tests -name '*.rs' -print0 | xargs -0 wc -l)
 while read -r n d; do
     if [ "$n" -gt 20 ]; then
-        echo "  OVER 20 .rs FILES in $d ($n) — group into subfolders"
+        echo "  OVER 20 .rs FILES in $d ($n) - group into subfolders"
         fail=1
     fi
 done < <(find src tests -name '*.rs' | while IFS= read -r f; do
@@ -68,9 +75,23 @@ done < <(find src tests -name mod.rs)
 # after_help text clap prints), plus every non-ASCII character in a `///` doc
 # block on a clap #[arg( / #[command( item, which clap renders verbatim as that
 # item's help. To re-derive after a render gains or drops one: lex src/**/*.rs,
-# keep the literals of the files outside tests/ and outside an inline
-# #[cfg(test)] region (those are test INPUTS and reach no terminal), add the clap
-# doc blocks, and collect their non-ASCII characters.
+# keep the literals of the files outside tests/, outside a file NAMED tests.rs,
+# and outside an inline #[cfg(test)] region (all three are test INPUTS and reach
+# no terminal), DECODE each literal, add the clap doc blocks, and collect their
+# non-ASCII characters.
+# The decode is load-bearing rather than tidy: a character can reach the
+# terminal through an ESCAPE and sit nowhere in the source bytes - "\u{b7}" is
+# one separator, "\u{2014}" one em dash, "\u{2192}" one arrow - so a reading
+# over the raw bytes proves a negative about bytes nobody prints. Decoding also
+# admits code points that reach NO terminal, and each of those is excluded WITH
+# ITS REASON: the Unicode whitespace class the bash shape parser matches a
+# command against, and the private-use stand-ins the bash masks substitute for a
+# shielded separator and strip again before anything is printed.
+# What this gate DECIDES is the CHARACTER (allowlisted) and the SPAN (balanced
+# backticks). Whether a span quotes a rendering is the reader's check: an
+# allowlisted glyph inside backticks passes even where nothing csift prints
+# reads that way, because no mechanical test separates a quotation of a help
+# page from a fabricated one.
 ASCII_ALLOW='·|—|…|→|×|≤|≥|≈|◂|⚠|§|↳|⇒|⇨|─|△|▸|•|–|▹|⚙|↑|↔|⏳|═|▽'
 while IFS= read -r hit; do
     echo "  NON-ASCII in a comment: $hit"
@@ -92,9 +113,14 @@ END { flushdoc(0) }
 # A doc block is read only once its item is known, because the item decides
 # whether the block is commentary or the help page itself.
 # What this does NOT read: a /* ... */ block comment, a #[doc = "..."] attribute,
-# and a `///` block whose clap attribute is not the first line after it (an
+# a `///` block whose clap attribute is not the first line after it (an
 # #[allow(...)] between the two ends the block, so the help doc of that field is
-# CHECKED rather than exempted - conservative in the safe direction).
+# CHECKED rather than exempted - conservative in the safe direction), and the
+# trailing comment of a CODE line that carries a double-quote char literal
+# before it: trailing() tracks double quotes only, so that single quote opens a
+# string the line never closes and the comment reads as string interior.
+# Teaching the scanner the char literal costs more than it buys, because a
+# lifetime is an unclosed quote a toggle cannot tell from a literal.
 function flushdoc(exempt,   i, p) {
     if (!exempt)
         for (i = 1; i <= nd; i++) {
