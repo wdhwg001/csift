@@ -94,7 +94,7 @@ pub fn attachment_leaves() -> Vec<Class> {
 /// `agent.message.structured` is the model's own answer, so a bare `-t user` or `-t agent`
 /// reaches one. That is exactly why they cannot ride the coarse keep.
 ///
-/// BOTH take the v0.11.0 channel keep's GATE - a scan that does not EXCLUDE the leaf
+/// BOTH take the channel keep's GATE - a scan that does not EXCLUDE the leaf
 /// admits the needle, so a flagless scan reaches it while `-t user` / `-t harness` still
 /// short-circuit before the memmem. That is the selector law rather than a budget: a
 /// flagless scan is a SUPERSET of `-t user` and of `-t agent`, so a leaf the narrower
@@ -126,7 +126,7 @@ impl SearchArgs {
         self.attachments || matches!(self.count_by, Some(CountAxis::Attachment))
     }
 
-    /// The v0.10.0 gated-leaf rule: a promoted non-record leaf is scanned ONLY when an
+    /// The gated-leaf rule: a promoted non-record leaf is scanned ONLY when an
     /// EXPLICIT `-t` selector reaches it (the full path, a glob, or the CATEGORY
     /// prefix). A bare scan with no `-t` admits every label elsewhere but never parses
     /// these lines: most queued content is a duplicate automation pulse and every

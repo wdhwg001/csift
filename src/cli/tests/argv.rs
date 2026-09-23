@@ -7,9 +7,9 @@ use super::*;
 
 #[test]
 fn list_format_json_after_encoded_positional_now_works() {
-    // The exact repro: `--format json` AFTER a leading-`-` encoded positional
-    // used to be swallowed as two extra PATH values. It must now parse as the
-    // format flag, with the positional intact.
+    // The exact repro: `--format json` AFTER a leading-`-` encoded positional. Without
+    // the normalization pass the hyphen-tolerant PATH positional swallows both tokens;
+    // here they must parse as the format flag, with the positional intact.
     let cli = parse(&[
         "csift",
         "list",

@@ -3,7 +3,7 @@
 use super::*;
 
 /// True iff `selector` (a dotted `role.class.sub` path) is a dot-SEGMENT prefix of `path` -
-/// the `-t` match rule (GOLD §6). `agent` matches `agent.tool.use`; `agent.tool` matches
+/// the `-t` match rule (SPEC section 5). `agent` matches `agent.tool.use`; `agent.tool` matches
 /// `agent.tool.use`/`agent.tool.result` but NOT a hypothetical `agent.toolbar` (segment-wise,
 /// so a partial trailing segment never leaks). Shared by the `-t` gate and the `--siblings` caps.
 #[must_use]
@@ -199,10 +199,10 @@ impl<'a> LabelFilter<'a> {
     }
 
     /// The same filter, applied to ONE record whose SURVIVAL verdict is `live` (false only
-    /// for a record Claude Code's conversation chain no longer reaches). A bare ROLE or
+    /// for a record Claude Code's conversation chain does not reach). A bare ROLE or
     /// CATEGORY selector then skips it: `-t user` means "what the human said in this conversation",
     /// and a prompt that was recalled or rewound past is not in it. Every other selector
-    /// form - an intermediate prefix, a full leaf, a glob - reaches it exactly as before,
+    /// form - an intermediate prefix, a full leaf, a glob - reaches it unchanged,
     /// which is what makes `-t user.rewound` and `-t 'user.*'` the deliberate drill-downs.
     /// Applied ONCE per record, at the hit-emission and census seams.
     #[must_use]
@@ -269,8 +269,9 @@ impl<'a> LabelFilter<'a> {
 
 /// clap value_parser for one `-t`/`--label` selector: accept a dotted `role.class.sub` path
 /// that is a segment-prefix of some [`Class`] path; reject anything else with a HARD error that
-/// LISTS the valid selectors (0 back-compat - the old flat `thinking`/`tool`/`tool-response`
-/// therefore error; bare `user`/`agent`/`harness` are now valid ROLE selectors - GOLD §6).
+/// LISTS the valid selectors (no back-compat - the flat `thinking`/`tool`/`tool-response`
+/// spellings therefore error; a bare `user`/`agent`/`harness` is a valid ROLE selector -
+/// SPEC section 5).
 pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
     let s = s.trim();
     if selector_is_valid(s) {
@@ -314,9 +315,9 @@ pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
         "pre-v0.5 flat spelling",
         "agent.tool.result",
     ),
-    // v0.12.0 renamed the resume repair prompt out of the schedule family: the record
-    // comes from the resume loader, never from the scheduler. Same predicate, same
-    // records, new path.
+    // The resume repair prompt belongs outside the schedule family: the record comes from
+    // the resume loader, never from the scheduler. Same predicate, same records, a
+    // different path.
     (
         "harness.schedule.continuation",
         "pre-v0.12.0 name",

@@ -3,10 +3,10 @@
 //! from a cancelled stream, and the `[Thinking removed]` text the client can push in place
 //! of one - beside `agent.message.plain`, the assistant's ordinary say.
 //!
-//! The family's sentences land here, in the SAME commit series as the surface they
-//! document, without any lane touching a string another lane is editing. Information
-//! parity with SKILL is the contract (AGENTS section 1): every marker word, JSON key
-//! and render form the family ships is named here too.
+//! The family's sentences land here and in no other string on the page, so extending them
+//! disturbs no other family's text. Information parity with SKILL is the contract (AGENTS
+//! section 1): every marker word, JSON key and render form the family ships is named here
+//! too.
 //!
 //! The concatenation is byte-joined, so a section brings its OWN separator and needs
 //! no trailing one. The SHAPE, which every family writes alike: `"\n\n"`, the head line

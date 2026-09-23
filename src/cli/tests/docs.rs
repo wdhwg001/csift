@@ -4,8 +4,8 @@
 use super::*;
 
 // ── Drift guards: the help text and the repo docs must never resurrect a removed
-//    surface (the v0.2→v0.3 cleanup found `--help` teaching flags that hard-error;
-//    these pins make that class of drift a compile-time-adjacent failure). ──
+//    surface - a help page teaching a flag that hard-errors sends its reader down a
+//    dead path, and these pins make that class of drift a test failure. ──
 
 /// Every `--long-flag` token any rendered help page mentions must be a DECLARED long
 /// flag of some command (clap introspection - zero-drift), or sit on the tiny
@@ -47,8 +47,9 @@ fn help_mentions_only_declared_flags() {
 }
 
 /// Every `csift <sub> …` EXAMPLE line in any help page must use only flags that
-/// SUB actually declares (+ the global --claude-home) - the exact drift that left
-/// dead `search --line` examples in the v0.1 help.
+/// SUB actually declares (+ the global --claude-home) - the exact drift a flag moving
+/// to another subcommand leaves behind (record fetching moved to `show`, so a
+/// `search --line` example is a dead one).
 #[test]
 fn help_examples_use_the_named_subcommands_own_flags() {
     use clap::CommandFactory;
@@ -211,12 +212,12 @@ use crate::cli::show_keys::{k, record_row_keys, Family, FAMILY_ORDER, RECORD_KEY
 /// `search --help`'s body is its section files joined in the fixed order, with nothing of
 /// the assembler's own between them.
 ///
-/// The point of the split is that a family lane edits ONE file and cannot disturb the
-/// shared body, so what has to hold is the FRAME: the intro leads, its closing notes end
-/// the JSON schema block, and the six family REGIONS follow as the tail, in family order.
+/// The point of the split is that a family edits ONE file and cannot disturb the shared
+/// body, so what has to hold is the FRAME: the intro leads, its closing notes end the
+/// JSON schema block, and the six family REGIONS follow as the tail, in family order.
 /// A family filling its section changes the tail and nothing else, which is why the tail
 /// is compared as a join rather than pinned to a literal that would go stale the first
-/// time a lane wrote a sentence.
+/// time a family wrote a sentence.
 #[test]
 fn the_search_help_body_is_its_sections_joined_in_order() {
     let body = SEARCH_AFTER_HELP.as_str();
@@ -233,10 +234,10 @@ fn the_search_help_body_is_its_sections_joined_in_order() {
         crate::cli::search_help::FAMILY_SECTIONS.concat(),
         "the family regions are the tail, in family order, and nothing else"
     );
-    // The seam the split had to get right. A line continuation strips the NEXT line's
+    // The seam the split has to get right. A line continuation strips the NEXT line's
     // leading whitespace inside ONE literal and cannot strip across two, so the eight
-    // spaces the continuation used to eat are dropped at the split instead; getting that
-    // wrong inserts them into the rendered help and nothing else complains. The ONE
+    // spaces a continuation would eat are dropped by hand at the split instead; getting
+    // that wrong inserts them into the rendered help and nothing else complains. The ONE
     // separating space belongs to the OUTRO rather than to the intro's tail: a space left
     // at the intro's end would trail the JSON paragraph on every run.
     assert!(

@@ -2,12 +2,12 @@
 //! `harness.bookkeeping` leaves - their key=value heads, the provenance edges a
 //! bookkeeping line names, and how a key the head elides stays matchable.
 //!
-//! It opens with the RENDER LAW because that is the breaking change the family shipped;
-//! the family lane EXTENDS this section with its heads, markers and `for` edges, in the
-//! same commit series as the surface they document, without any lane touching a string
-//! another lane is editing. Information parity with SKILL is the contract (AGENTS
-//! section 1): every marker word, JSON key and render form the family ships is named
-//! here too.
+//! It opens with the RENDER LAW, because no head below it reads correctly until a reader
+//! knows the unit renders a key=value head PLUS the line's own verbatim JSON; the heads,
+//! markers and `for` edges follow it. Information parity with SKILL is the contract
+//! (AGENTS section 1): every marker word, JSON key and render form the family ships is
+//! named here too, and this file is the family's ONLY string on the page, so extending it
+//! disturbs no other family's sentences.
 //!
 //! The concatenation is byte-joined, so a section brings its OWN separator and closes
 //! without one: `"\n\n"`, the head line at column zero, `"\n  "`, the body. That is the

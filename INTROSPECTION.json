@@ -3186,7 +3186,7 @@
         },
         {
           "path": "src/cli/live_args.rs",
-          "lines": "70-74",
+          "lines": "71-75",
           "snippet": "        PERSISTENT monitor never returns by design - name it with --ignore-background. NOT RETURNED IS NOT PROOF OF \\\n        RUNNING: Claude Code's own orphan summary says a UI stop, a Monitor timeout or \\\n        agent teardown leaves no transcript marker, and it reconciles only at the next \\\n        session start. A long session commonly carries several to dozens of dangling \\\n        or days-old tasks.\\n\\n\\"
         }
       ],
@@ -32190,8 +32190,8 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "394-400",
-          "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
+          "lines": "396-401",
+          "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
       "states": [
@@ -45518,7 +45518,7 @@
         },
         {
           "path": "src/cli/search_help/intro.rs",
-          "lines": "211-213",
+          "lines": "209-211",
           "snippet": "        28 of the 73 leaves are outside a bare role or category - the two scan-layer user\\n  \\\n        leaves, `user.queued` and all 13 bookkeeping leaves (non-transcript lines with no\\n  \\\n        message field), the two textless thinking leaves, the message-less system records\\n  \\"
         }
       ],
@@ -49254,8 +49254,8 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "394-400",
-          "snippet": "    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser\n    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
+          "lines": "396-401",
+          "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
       "states": [
@@ -49671,7 +49671,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "251-253",
+          "lines": "252-254",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -80411,8 +80411,8 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "126-130",
-          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE\n    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation no\n    /// longer reaches, `harness.compaction.boundary`, which carries no message at all, and"
+          "lines": "126-128",
+          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE"
         }
       ],
       "states": [

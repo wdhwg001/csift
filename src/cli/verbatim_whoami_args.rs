@@ -540,7 +540,7 @@ impl VerbatimArgs {
 pub struct WhoamiArgs {
     /// Optional SELF target: `@trap:<marker>`, `@main`, or a LANE id (`@<agent-id>` /
     /// `@<Name>@<Team>`). With NO target, identify
-    /// the calling session from `$CLAUDE_CODE_SESSION_ID` (the historical behavior; `@main` is its
+    /// the calling session from `$CLAUDE_CODE_SESSION_ID` (the default; `@main` is its
     /// explicit spelling). `@trap:<marker>` answers "which SUBAGENT am I?": a running subagent
     /// (whose own id CC withholds from the env) embeds a unique, literal, one-shot marker in THIS
     /// very csift command and csift maps it to the subagent's bare hex and walks the UPSTREAM

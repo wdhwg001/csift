@@ -126,8 +126,8 @@ pub struct SearchArgs {
     /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
     /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE
     /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE
-    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation no
-    /// longer reaches, `harness.compaction.boundary`, which carries no message at all, and
+    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation does
+    /// not reach, `harness.compaction.boundary`, which carries no message at all, and
     /// the six gated leaves); a GLOB (`-t 'user.*'`) selects every
     /// leaf under the prefix, visibility ignored; an intermediate prefix or exact leaf
     /// (`-t agent.tool`, `-t user.unsent`) selects its full set. Axis 1 is that leaf default;
@@ -136,11 +136,12 @@ pub struct SearchArgs {
     /// message, so `-t harness` shows it although its leaf is invisible, and it drops an
     /// `isVirtual` record and the `<synthetic>` API-error placeholder, so `-t agent` hides
     /// those although `agent.message` is visible. SURVIVAL: a record Claude Code's own
-    /// conversation chain no longer reaches - a recalled draft, a turn the operator rewound
+    /// conversation chain does not reach - a recalled draft, a turn the operator rewound
     /// past, anything under one - is not in the conversation either, so a bare role skips it
     /// while a glob or an exact leaf reaches it, marked `[abandoned]`/`[rewound]`. An invalid
     /// selector is a HARD error listing the valid set; with none given, every label is
-    /// eligible. (0 back-compat: the old flat `thinking`/`tool`/`tool-response` now error.)
+    /// eligible. (No back-compat: the retired flat `thinking`/`tool`/`tool-response`
+    /// spellings hard-error and name their successors.)
     #[arg(
         short = 't',
         long = "label",
@@ -391,7 +392,7 @@ pub struct SearchArgs {
     #[arg(long)]
     pub resolve_persisted: bool,
 
-    /// RETIRED in v0.13.0. A TOMBSTONE: hidden from `--help`, accepted by the parser
+    /// RETIRED. A TOMBSTONE: hidden from `--help`, accepted by the parser
     /// and then a hard error naming the successor, so a stale invocation fails loudly
     /// instead of silently scanning less than it asked for (the `turns` tombstone
     /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it

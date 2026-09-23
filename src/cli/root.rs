@@ -283,8 +283,8 @@ pub struct Cli {
 pub enum Command {
     // Per-command about/long_about/after_help live on each *Args struct's #[command(...)]
     // block. A variant doc comment here SHADOWS the struct's about + long_about (clap
-    // derive precedence) - that shadowing kept every subcommand's long_about invisible
-    // until v0.6.2. Keep the variants bare.
+    // derive precedence), and that shadowing makes every subcommand's long_about
+    // invisible. Keep the variants bare.
     List(ListArgs),
     Search(SearchArgs),
     Show(ShowArgs),
@@ -305,8 +305,8 @@ pub enum Command {
     Send(SendArgs),
     Msg(MsgArgs),
     Ack(AckArgs),
-    // HIDDEN catch-all for the REMOVED `turns` name (→ `verbatim`, v0.5). Exists only so
-    // the rename gets the pointed successor error the `-t thinking` legacy values get,
+    // HIDDEN catch-all for the REMOVED `turns` name (the command is `verbatim`). Exists
+    // only so it gets the pointed successor error the retired `-t` spellings get,
     // instead of clap's teach-nothing "unrecognized subcommand". Never works, always bails
     // (main.rs). Kept bare like every variant (the shadowing rule above); a plain comment,
     // not a doc comment, so nothing ever renders for it.

@@ -316,7 +316,7 @@ fn files_no_subagents_excludes() {
 
 #[test]
 fn files_subagents_only_flag_is_gone() {
-    // `--subagents-only` was removed from `files`; it is now an unknown argument.
+    // `files` declares no `--subagents-only`, so clap rejects it as an unknown argument.
     let err = parse(&["csift", "files", ".", "--subagents-only"]);
     assert!(err.is_err(), "--subagents-only must be gone from files");
 }

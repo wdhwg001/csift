@@ -10,7 +10,8 @@ pub struct BackgroundLensArgs {
     /// Only background tasks launched at or after WHEN count; earlier ones are listed
     /// as ignored. WHEN is the shared time grammar (`2026-09-02`, `2h`, `1d`, `2mo`,
     /// `-30m`) or `now` (this command's own start instant: ignore everything already
-    /// dangling when the wait began - the orchestrator's usual lens).
+    /// dangling when the wait began - what a session supervising another one usually
+    /// wants).
     #[arg(long = "background-since", value_name = "WHEN")]
     pub background_since: Option<String>,
 

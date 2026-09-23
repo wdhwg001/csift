@@ -5,8 +5,8 @@
 //! provenance facts every one of them carries.
 //!
 //! Information parity with SKILL is the contract (AGENTS section 1): every marker word,
-//! JSON key and render form the family ships is named here too, in the same commit series
-//! as the surface it documents, without any lane touching a string another lane is editing.
+//! JSON key and render form the family ships is named here too. This file is the family's
+//! ONLY string on the page, so extending it disturbs no other family's sentences.
 //!
 //! The concatenation is byte-joined, so a section brings its OWN separator and closes
 //! without one: `"\n\n"`, the head line at column zero, `"\n  "`, the body. That is the

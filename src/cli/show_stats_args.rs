@@ -107,7 +107,7 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
 
 /// The assembled `show --help` body. A `LazyLock<String>` because the key list is
 /// BUILT from [`show_keys::RECORD_KEYS`]: a family that adds a key to a record row adds
-/// a table row, and the help follows with no lane editing another lane's sentence.
+/// a table row, and the help follows it with no prose to keep in step by hand.
 pub(crate) static SHOW_AFTER_HELP: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     format!(
         "{SHOW_AFTER_HELP_HEAD}{}{SHOW_AFTER_HELP_TAIL}",

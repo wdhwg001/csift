@@ -2,12 +2,10 @@
 //! geometry, the selector law, the leaf list and the JSON schema. Its closing notes live
 //! in [`super::outro`] and follow it directly, so the schema block reads as one piece.
 //!
-//! The SPLIT that produced this file moved no rendered byte - both helps were rendered
-//! before and after and compared - and the page has grown since, by one column-0 region
-//! per family that has written something. No test pins this text as a literal: a literal
-//! would go stale the first time a lane wrote a sentence, so the frame test checks the
-//! ORDER, the two seams and the region shape instead. A family lane edits its OWN section
-//! file, never this one.
+//! No test pins this text as a literal. The page grows by one column-0 region per family
+//! that has written something, so a literal would go stale the first time a family wrote a
+//! sentence; the frame test checks the ORDER, the two seams and the region shape instead.
+//! A family edits its OWN section file, never this one.
 
 /// See the module doc.
 pub(crate) const INTRO: &str = "EXAMPLES\n  \

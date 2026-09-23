@@ -10,7 +10,8 @@ use super::*;
 
 #[test]
 fn parse_search_rejects_old_flat_category() {
-    // 0 back-compat (GOLD §6): the old flat `thinking`/`tool`/`tool-response` HARD-error.
+    // No back-compat (SPEC section 5): the flat `thinking`/`tool`/`tool-response` spellings
+    // HARD-error.
     assert!(parse(&["csift", "search", "x", "-t", "thinking"]).is_err());
     assert!(parse(&["csift", "search", "x", "-t", "tool-response"]).is_err());
     // …while a dotted selector + a bare role are accepted.
@@ -22,7 +23,7 @@ fn parse_search_rejects_old_flat_category() {
 
 #[test]
 fn category_selector_prefix_and_validity() {
-    // The segment-prefix rule (GOLD §6): a partial trailing segment never leaks.
+    // The segment-prefix rule (SPEC section 5): a partial trailing segment never leaks.
     assert!(selector_is_segment_prefix("agent", "agent.tool.use"));
     assert!(selector_is_segment_prefix(
         "agent.tool",

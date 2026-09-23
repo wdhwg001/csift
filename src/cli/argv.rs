@@ -9,8 +9,8 @@ use super::*;
 /// tolerate a leading `-` (every encoded projects-dir token starts with `-`), which
 /// requires clap's `allow_hyphen_values`; but that setting makes a multi-value
 /// positional GREEDILY absorb every following token - including declared long flags
-/// like `--format json` - so `csift list <ENCODED> --format json` used to fail with
-/// `no project dir named "--format"`. We reorder declared flags ahead of the
+/// like `--format json`, so an unnormalized `csift list <ENCODED> --format json` dies
+/// with `no project dir named "--format"`. We reorder declared flags ahead of the
 /// leading-dash positionals BEFORE clap parses, so `--format` works in any position.
 #[must_use]
 pub fn parse_argv() -> Cli {
@@ -66,9 +66,10 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// The subcommand token is LOCATED BY SCANNING, not assumed at `argv[1]`: declared root
 /// flags (e.g. the global `--claude-home <DIR>`, documented as position-free) and their
 /// values are stepped over first. Everything before the subcommand passes through
-/// verbatim; only the segment AFTER the subcommand is reordered. Regression context:
-/// `csift --claude-home DIR list @x --max-count 3` used to skip normalization entirely
-/// (`argv[1]` matched no subcommand), letting the PATH positional swallow `--max-count`.
+/// verbatim; only the segment AFTER the subcommand is reordered. Reading `argv[1]` as the
+/// subcommand instead disables normalization for the WHOLE line: in `csift --claude-home
+/// DIR list @x --max-count 3` argv[1] matches no subcommand, and the PATH positional then
+/// swallows `--max-count`.
 ///
 /// ## Algorithm (per subcommand args, after the subcommand name)
 ///
