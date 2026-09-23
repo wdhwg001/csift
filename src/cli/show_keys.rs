@@ -2,9 +2,9 @@
 //! column rather than as one sentence in the help text.
 //!
 //! The enumeration inside `show --help` is a contract: a consumer reads it to know which
-//! keys exist. Six taxonomy families add keys to that row, and while the list was a
-//! string every one of them had to edit the same line - so the list is a TABLE now, each
-//! family appends its own rows, and the help renders what the table says.
+//! keys exist. Six taxonomy families add keys to that row, so the list is a TABLE rather
+//! than a string: each family appends its own rows and the help renders what the table
+//! says, where one string would put all six families on one line.
 //!
 //! The family column is what ORDERS the rendering: the shared keys print first, in the
 //! order they always have, then each family's own block in the taxonomy's family order.

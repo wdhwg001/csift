@@ -297,8 +297,8 @@ fn files_by_rejects_unknown_value() {
 
 #[test]
 fn files_old_detail_flags_are_gone() {
-    // The 4 old boolean detail flags were replaced by `--by <value>`; passing one now
-    // errors as an unknown argument.
+    // `files` takes its detail level as `--by <value>`; the four boolean spellings are
+    // no arguments of it, so passing one errors as an unknown argument.
     for flag in ["--summary", "--by-dir", "--by-file", "--timeline"] {
         let err = parse(&["csift", "files", ".", flag]);
         assert!(err.is_err(), "{flag} must be an unknown argument now");

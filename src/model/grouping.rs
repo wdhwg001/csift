@@ -75,7 +75,7 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// production surfaces use [`group_turn_indices_chained`], which drops every record
 /// Claude Code's own conversation chain does not reach (§6.4.1). This bare form stays
 /// for the lightweight bool-fixture tests and any caller that has no `Record`.
-// Production now routes through `group_turn_indices_chained`, so in the bin build this bare
+// Production routes through `group_turn_indices_chained`, so in the bin build this bare
 // generic is reached only from `#[cfg(test)]` - kept as the documented base primitive +
 // bool-fixture test entry (same retained-shape rationale as the `#[allow(dead_code)]` on
 // `Record`).
@@ -105,11 +105,11 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 /// else. Every other record stays a member of the turn above it, and
 /// a turn-keyed consumer (`files --by timeline`) keeps its row.
 ///
-/// Every production surface now hands the grouper a WHOLE DAG - `search`/`show`/`stats`
+/// Every production surface hands the grouper a WHOLE DAG - `search`/`show`/`stats`
 /// splice [`crate::parse::spine_record`] rows into their own record list and call
 /// [`group_turn_indices_chained`]; `verbatim`/`files`/`recover`/`image` go through
 /// [`crate::model::ChainView`], which does the same splice in their own index space. So
-/// this conservative form has NO caller left outside the unit tests; it is kept as the
+/// this conservative form has NO caller outside the unit tests; it is kept as the
 /// documented middle rung (a chain built from a hole-punched DAG must not be trusted to
 /// call a whole branch abandoned) and as the entry those tests exercise.
 #[allow(dead_code)]

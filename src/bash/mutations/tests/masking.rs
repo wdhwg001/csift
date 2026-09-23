@@ -117,7 +117,7 @@ fn process_substitution_redirect_emits_no_fragment() {
 
 #[test]
 fn quoted_path_with_metachar_or_space_does_not_leak_fragment() {
-    // The mask now makes a quoted in-path `;` and space invisible to the tokenizer, so a
+    // The mask makes a quoted in-path `;` and space invisible to the tokenizer, so a
     // quoted span stays ONE token and the WHOLE path is recovered (no `'…`/`"…` fragment,
     // and no mid-filename split). Both forms below resolve to their full quoted content.
     let got = just_paths("echo x >> '/tmp/quoted; path.txt'");

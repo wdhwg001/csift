@@ -21,7 +21,7 @@ pub(crate) fn make_subagent(
         .unwrap_or_default();
     let agent_id = bare_agent_id(stem).to_string();
     // Read the companion `agent-<hex>.meta.json` ONCE here (its located path is used only for this
-    // read - `lifecycle` now takes agent_type/description off the struct, so the path isn't stored).
+    // read - `lifecycle` takes agent_type/description off the struct, so the path isn't stored).
     let meta_path = path.with_extension("meta.json");
     let meta_path = meta_path.is_file().then_some(meta_path);
     let meta = read_meta(meta_path.as_deref());

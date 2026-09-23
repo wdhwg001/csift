@@ -27,7 +27,7 @@ fn bare_agent_id_strips_prefix_only_when_present() {
 #[test]
 fn session_id_from_path_is_canonical_bare_hex() {
     // The SINGLE per-file id derivation every surface (list/search/files/recover/
-    // turns) now routes through, so the same transcript reports an IDENTICAL id
+    // verbatim) routes through, so the same transcript reports an IDENTICAL id
     // whichever subcommand prints it. A subagent stem loses its `agent-` prefix; a
     // top-level uuid passes through; a stem-less path yields an empty string.
     assert_eq!(

@@ -86,10 +86,11 @@ fn input_redirect_file_is_not_a_target() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Regression oracle: the synthetic IDIOM MATRIX from the files-attribution
-// verdict (csift-files-attribution-verdict.md). Every idiom the verdict marked
-// CAUGHT must stay caught; every idiom it marked MISSED (Fixes A–C) must now be
-// caught; the precision cases (Fix D) must stay DROPPED.
+// Regression oracle: a synthetic IDIOM MATRIX over the shell write shapes the
+// attribution layer answers for. Groups A-C are write idioms and every one of
+// them must be CAUGHT, including the ones a bare `>` scan misses; group D is
+// the precision set and every one of them must stay DROPPED, because a
+// fabricated path is worse than a missing one.
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── Fix A - fd-qualified redirects (the dominant class a bare `>` scan misses) ──

@@ -179,9 +179,9 @@ fn normalize_value_flag_followed_by_another_flag_does_not_consume_it() {
 
 #[test]
 fn normalize_hoists_short_value_flag_after_positional() {
-    // The reported critical bug: `search PATTERN <path> -t user` let the
+    // Without the hoist, `search PATTERN <path> -t user` lets the
     // `allow_hyphen_values` positional swallow `-t` ("no project dir named -t").
-    // The pre-pass must now hoist the declared short flag `-t` AND pair its value.
+    // So the pre-pass hoists the declared SHORT flag `-t` AND pairs its value.
     let out = normalize_argv(
         ["csift", "search", "spec", ".", "-t", "user"]
             .map(String::from)

@@ -4,13 +4,13 @@
 //! the newest one held here; they are NOT byte-checkable against the 2.1.258 build
 //! the ledger anchors read.
 //!
-//! What changed, all of it visible in what the classifier can now reach:
+//! Where it differs from `hnt`, all of it visible in what it can reach:
 //! - the `rm` guard is case-insensitive;
 //! - private-use sentinels are stripped from the input up front;
 //! - the clause-head regex is GONE, replaced by a token walk that skips shell
 //!   keywords, assignments, `$`-led tokens, redirections and a seventeen-name
-//!   prefix-command set - so `do rm`, `then rm`, `sudo rm` and `xargs rm` all now
-//!   reach the target test, which is exactly the gap the old port hand-patched;
+//!   prefix-command set - so `do rm`, `then rm`, `sudo rm` and `xargs rm` all
+//!   reach the target test, where `hnt`'s clause head stops at the keyword;
 //! - `find -exec` / `-ok` / `-execdir` / `-okdir` are scanned, at most eight per
 //!   clause, terminated by the find-predicate set;
 //! - the target regex is widened (the post-slash set gains `?` `[` `{`, a
