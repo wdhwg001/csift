@@ -13,7 +13,7 @@ fn line_is_turn_candidate_superset_of_assistant_text() {
     let summary =
         br#"{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"s"}}"#;
     assert!(line_is_turn_candidate(summary));
-    // A system metrics record with none of the markers → skipped.
+    // A system metrics record with none of the markers -> skipped.
     let sys = br#"{"type":"system","subtype":"turn_duration","durationMs":5}"#;
     assert!(!line_is_turn_candidate(sys));
 }
@@ -62,18 +62,18 @@ fn parse_turn_range_parses_and_rejects() {
     assert!(parse_turn_range("a..b").is_err());
 }
 
-// ── Prefilter arm-by-arm + build None arms ──
+// -- Prefilter arm-by-arm + build None arms --
 
 #[test]
 fn line_is_turn_candidate_each_arm_in_isolation() {
     // Each arm matched by a line that triggers ONLY that probe (so the OR short-circuits
-    // at a different position each time → every arm's true side is exercised).
+    // at a different position each time -> every arm's true side is exercised).
     assert!(line_is_turn_candidate(br#"x "role":"user" x"#)); // arm 1
     assert!(line_is_turn_candidate(br#"x "role":"assistant" x"#)); // arm 2
     assert!(line_is_turn_candidate(br#"x "type":"assistant" x"#)); // arm 3
     assert!(line_is_turn_candidate(b"x isCompactSummary x")); // arm 4
     assert!(line_is_turn_candidate(b"x tool_use x")); // arm 5
-                                                      // A line matching NONE → all arms false.
+                                                      // A line matching NONE -> all arms false.
     assert!(!line_is_turn_candidate(
         b"{\"type\":\"system\",\"subtype\":\"x\"}"
     ));
@@ -82,7 +82,7 @@ fn line_is_turn_candidate_each_arm_in_isolation() {
 
 #[test]
 fn parse_turn_range_valid_range_hi_ge_lo() {
-    // hi >= lo → the `hi < lo` FALSE arm (the success path, distinct from the reject).
+    // hi >= lo -> the `hi < lo` FALSE arm (the success path, distinct from the reject).
     assert_eq!(
         parse_turn_range("0..0").unwrap().resolve(100, false),
         (0, 0)
@@ -93,7 +93,7 @@ fn parse_turn_range_valid_range_hi_ge_lo() {
     );
 }
 
-// ── Fan-out scope summary + top-level/subagent id classification ──
+// -- Fan-out scope summary + top-level/subagent id classification --
 
 #[test]
 fn shared_uuid_validator_distinguishes_uuid_from_bare_hex() {
@@ -105,7 +105,7 @@ fn shared_uuid_validator_distinguishes_uuid_from_bare_hex() {
         "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     ));
     assert!(!crate::path::is_session_uuid("a00ea52f023afd9ce"));
-    // Wrong group shape / non-hex → not a uuid.
+    // Wrong group shape / non-hex -> not a uuid.
     assert!(!crate::path::is_session_uuid("0a1b2c3d-4e5f-4a6b-8c7d"));
     assert!(!crate::path::is_session_uuid(
         "zzzzzzzz-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
@@ -175,7 +175,7 @@ fn scope_summary_reports_true_scope_not_rendered() {
     assert_eq!(sc.rendered, 1, "only the subagent fit the budget");
 }
 
-// ── --slice chunked output (slice_into_windows) ──
+// -- --slice chunked output (slice_into_windows) --
 
 #[test]
 fn slice_windows_concatenate_back_to_the_source() {
@@ -190,7 +190,7 @@ fn slice_windows_concatenate_back_to_the_source() {
 
 #[test]
 fn slice_windows_count_chars_not_bytes() {
-    // Each `🛠` is 4 BYTES but 1 CHARACTER. A 6-char window fits 5 wrenches + newline
+    // Each wrench emoji is 4 BYTES but 1 CHARACTER. A 6-char window fits 5 wrenches + newline
     // (21 bytes), proving the window counts Unicode scalars - the unit Claude Code's
     // additionalContext cap uses - not bytes (a byte budget would split after the first).
     let line = "🛠🛠🛠🛠🛠\n"; // 6 chars, 21 bytes
@@ -206,7 +206,7 @@ fn slice_windows_count_chars_not_bytes() {
 #[test]
 fn slice_windows_hard_split_an_oversized_line_on_char_boundaries() {
     // A single line longer than the window is hard-split so NO chunk exceeds it - and never
-    // mid-`🛠` (char boundary). Window 2, line of 5 wrenches (no trailing newline).
+    // mid-emoji (char boundary). Window 2, line of 5 wrenches (no trailing newline).
     let line = "🛠🛠🛠🛠🛠";
     let chunks = slice_into_windows(line, 2);
     assert_eq!(chunks.concat(), line, "lossless even when hard-splitting");

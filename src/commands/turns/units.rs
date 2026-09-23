@@ -54,12 +54,12 @@ pub(crate) struct TurnUnit {
     pub(crate) ts_utc: Option<String>,
     /// True once dedup flags this unit as already present in the newest summary.
     pub(crate) also_in_summary: bool,
-    /// True when this unit was merged from the elicitation SIDECAR (§3.10) - an
+    /// True when this unit was merged from the elicitation SIDECAR (section 3.10) - an
     /// unresolved-pending AskUserQuestion/ExitPlanMode/MCP missing from the native transcript.
     /// Such a unit has no physical line (`line_no` 0); its header renders `(elicitation
     /// sidecar)` instead of `Lnnnn` and the JSON carries `source:"elicitation-sidecar"`.
     pub(crate) from_sidecar: bool,
-    /// Set when this opener is an inbound peer/teammate communication (§3.3): the comm class +
+    /// Set when this opener is an inbound peer/teammate communication (section 3.3): the comm class +
     /// sender, so the header renders `<label>  <from> ⇨ self` IN PLACE OF the bare role word and the
     /// JSON carries `is_inbound_comm` + `comm_*` fields. `unit.text` holds the tag/footer-stripped
     /// body. `None` for an ordinary user/assistant unit. RENDER-ONLY - the turn count is unchanged
@@ -74,7 +74,7 @@ pub(crate) struct TurnUnit {
 }
 
 /// Position of an agent message within its turn's ordered agent-message run. A
-/// 1-message turn's sole agent message is BOTH first and last → classified `Last` (the
+/// 1-message turn's sole agent message is BOTH first and last -> classified `Last` (the
 /// always-keep anchor / EOT). Drives the `--keep-first` privilege and the always-keep
 /// rule for the outcome message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,10 +109,10 @@ pub(crate) struct TurnSlice {
     /// 0-based genuine-user turn index (from `group_turn_indices`).
     pub(crate) turn_index: usize,
     pub(crate) user: Option<TurnUnit>,
-    /// `tool_use` block count across the turn → the `[N tool calls]` marker.
+    /// `tool_use` block count across the turn -> the `[N tool calls]` marker.
     pub(crate) tool_calls: usize,
     /// Stable `L<line>i<n>` ids of the images this turn carries (a pasted image, a tool
-    /// screenshot) → the `[N image(s): …]` marker under the user line. Feed an id straight
+    /// screenshot) -> the `[N image(s): ...]` marker under the user line. Feed an id straight
     /// to `csift image <session> --id <ID> --out <dir>` to get the bytes back. Empty for a
     /// turn with no images.
     pub(crate) image_ids: Vec<String>,
@@ -131,7 +131,7 @@ pub(crate) struct TurnSlice {
     /// The parsed automation trigger (kind / task-id / status / summary) when
     /// `is_automation` - `None` for a human turn. Carried so the JSON user-segment object
     /// can surface the trigger CLASS as STRUCTURED fields (`is_automation` / `trigger_kind`
-    /// / `task_id` / `status`), not only as the inline `[<kind> …]` text prefix a consumer
+    /// / `task_id` / `status`), not only as the inline `[<kind> ...]` text prefix a consumer
     /// would otherwise have to regex out of the prose.
     pub(crate) automation: Option<crate::model::AutomationTrigger>,
 }
@@ -149,7 +149,7 @@ impl TurnSlice {
 
     /// A round-trip whose opener is a GENUINE HUMAN message (not an automation pulse). This
     /// is what the `--round-trip-fraction` HARD FLOOR reserves its budget for - the help /
-    /// SKILL define that lane as "COMPLETE round-trips (user → … → assistant EOT)", i.e.
+    /// SKILL define that lane as "COMPLETE round-trips (user -> ... -> assistant EOT)", i.e.
     /// human exchanges. An automation `<task-notification>` paired with an agent ack is a
     /// structural round-trip but NOT a human one, so it is excluded from the floor (it can
     /// still be picked in Phase-2 fill). Keeps the floor accounting and the header's
@@ -173,7 +173,7 @@ impl TurnSlice {
 }
 
 /// The data a summary record contributes: its jsonl line + the dedup fingerprints of
-/// the verbatim turns it already holds (§6 user bullets + §9 assistant quote).
+/// the verbatim turns it already holds (section 6 user bullets + section 9 assistant quote).
 #[derive(Debug, Clone)]
 pub(crate) struct SummaryInfo {
     pub(crate) line_no: usize,
@@ -199,7 +199,7 @@ pub(crate) struct ScanResult {
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,
     pub(crate) turns: Vec<TurnSlice>,
-    /// Summary records in file order (oldest → newest), each with its line + dedup set.
+    /// Summary records in file order (oldest -> newest), each with its line + dedup set.
     pub(crate) summaries: Vec<SummaryInfo>,
     /// The jsonl lines of the turn openers the surviving conversation does not reach - a
     /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER
@@ -214,6 +214,6 @@ pub(crate) struct ScanResult {
     pub(crate) crossing: crate::model::CrossingReport,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Entry point
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

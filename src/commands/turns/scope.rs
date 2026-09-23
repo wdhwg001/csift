@@ -23,7 +23,7 @@ pub(crate) fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usiz
     (u, a)
 }
 
-/// True when this plan SELECTED ≥1 elicitation-sidecar unit (§3.10) - drives the per-session
+/// True when this plan SELECTED >=1 elicitation-sidecar unit (section 3.10) - drives the per-session
 /// `with elicitation sidecar` note (text) / the JSON header flag, so a consumer knows the
 /// output includes hook-backfilled records.
 pub(crate) fn plan_has_sidecar(plan: &SessionPlan) -> bool {
@@ -35,7 +35,7 @@ pub(crate) fn plan_has_sidecar(plan: &SessionPlan) -> bool {
 }
 
 /// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a
-/// `--subagents` query that spans S subagents realizes up to `budget × (1 + S)`
+/// `--subagents` query that spans S subagents realizes up to `budget x (1 + S)`
 /// chars. The banner must report the TRUE scope (every discovered session) - NOT only what
 /// fit in the budget - so a rendering knob (`--budget`) can never silently rewrite "scope"
 /// and a targeted top-level uuid can never read as `0 top-level`. Returns the full
@@ -58,7 +58,7 @@ pub(crate) fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> S
     // subagent::is_subagent_path at scan time) - NOT a re-derived id-shape heuristic. This
     // is the same signal turns' own JSON, and every other surface, already brands on. The
     // counts are DISTINCT session ids through the shared rule, so a duplicate pair whose
-    // copies diverge (both stay in scope, §2.5) reads as the ONE session it is - and
+    // copies diverge (both stay in scope, section 2.5) reads as the ONE session it is - and
     // `rendered` counts the same way, or a two-copy session could render more sessions
     // than the scope says it holds.
     let (in_scope_top, in_scope_sub) = crate::subagent::scope_span(

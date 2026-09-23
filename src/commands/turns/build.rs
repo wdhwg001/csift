@@ -19,7 +19,7 @@ pub(crate) fn build(
 ) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
     let turns = view.turns();
     // ExitPlanMode plan pointers for this session, so a rejection-with-message turn
-    // opener can surface `[plan: <path>]` (§4.2.4). Cheap; empty in a no-plan session.
+    // opener can surface `[plan: <path>]` (section 4.2.4). Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|(_, r)| r));
 
     // Summary line numbers in file order (for compactions_before + boundary banners).
@@ -83,7 +83,7 @@ pub(crate) fn build(
                 }
             }
 
-            // Images this turn carries (pasted image / tool screenshot) → the `[N image(s)]`
+            // Images this turn carries (pasted image / tool screenshot) -> the `[N image(s)]`
             // marker. Cheap (only image-bearing lines pass turns' prefilter anyway).
             image_ids.extend(crate::commands::image::image_ids_for_record(rec, line_no));
 
@@ -91,10 +91,10 @@ pub(crate) fn build(
             // rejection-with-message). `group_turn_indices` opens a turn on `opens_turn`,
             // so the FIRST such record is the opener; keep the earliest. The rendered
             // body is the unified reconstruction (Q+options+answer for an AUQ; the typed
-            // instruction + a `[plan: …]` pointer for a rejection).
+            // instruction + a `[plan: ...]` pointer for a rejection).
             if user.is_none() && rec.opens_turn() {
                 // An automation trigger (`<task-notification>`) opens a turn like a human
-                // message, but its body must render as the parsed `[workflow <id> …]
+                // message, but its body must render as the parsed `[workflow <id> ...]
                 // <summary>` ATTRIBUTION label - never the raw `<task-id>`/`<output-file>`
                 // XML wrapper. `automation_label` wins; otherwise the normal user-text
                 // reconstruction applies.
@@ -103,7 +103,7 @@ pub(crate) fn build(
                     automation = rec.automation_trigger();
                     user = Some(make_unit(line_no, Role::User, &label, rec, survival));
                 } else if let Some(ic) = rec.inbound_comm_preview() {
-                    // An inbound PEER opener - `<teammate-message>` (§3.3) OR `<agent-message>`
+                    // An inbound PEER opener - `<teammate-message>` (section 3.3) OR `<agent-message>`
                     // (a peer form, an `opens_turn` boundary too): render the CLEAN body with an
                     // `agent.communication.{inbox,signal}  <from> ⇨ self` header, never the raw
                     // XML in the `▽ USER` lane. `inbound_comm_preview` covers BOTH peer forms
@@ -132,8 +132,8 @@ pub(crate) fn build(
             }
         }
 
-        // Assign positions: index 0 → First, last index → Last, the rest → Middle. A
-        // single-element vec → that element is Last (the always-keep anchor: a 1-message
+        // Assign positions: index 0 -> First, last index -> Last, the rest -> Middle. A
+        // single-element vec -> that element is Last (the always-keep anchor: a 1-message
         // turn's sole reply is BOTH first and last, never dropped).
         let last = agents.len().saturating_sub(1);
         for (i, a) in agents.iter_mut().enumerate() {
@@ -171,7 +171,7 @@ pub(crate) fn build(
         });
     }
 
-    // ── Elicitation-sidecar pending units (§3.10) ──
+    // -- Elicitation-sidecar pending units (section 3.10) --
     // Each unresolved-pending elicitation becomes its OWN turn unit, appended AFTER the native
     // turns (a pending elicitation is the LATEST activity - it is what the session is currently
     // blocked on). It is rendered as the USER side (the question/plan/elicitation put TO the
@@ -281,8 +281,8 @@ pub(crate) fn compact_summary_body(rec: &Record) -> Option<String> {
     }
 }
 
-/// Extract dedup fingerprints from a summary body: the §6 "All user messages" bullets
-/// and the §9 verbatim last-assistant quote (the only verbatim turns a summary holds).
+/// Extract dedup fingerprints from a summary body: the section 6 "All user messages" bullets
+/// and the section 9 verbatim last-assistant quote (the only verbatim turns a summary holds).
 /// Each fingerprint is `normalize_line(text).to_lowercase()` truncated to the first
 /// [`DEDUP_PREFIX`] chars. Conservative: when the structured sections are not found,
 /// every `- ` bullet line in the body is fingerprinted (a superset - still strict per
@@ -291,7 +291,7 @@ pub(crate) fn summary_fingerprints(body: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for line in body.lines() {
         let trimmed = line.trim_start();
-        // §6 bullets render as `- "<text>" …` (quoted) or `- <text>` (bare); §9 quote is
+        // section 6 bullets render as `- "<text>" ...` (quoted) or `- <text>` (bare); section 9 quote is
         // prose carrying a quoted run. Prefer the QUOTED inner (the verbatim turn text);
         // for an UNQUOTED bullet fall back to the whole bullet body. A bullet WITH quotes
         // but an empty inner contributes nothing (it would only fingerprint the quotes).
@@ -313,8 +313,8 @@ pub(crate) fn summary_fingerprints(body: &str) -> Vec<String> {
     out
 }
 
-/// The text inside the FIRST pair of double-quotes on a line (the §9 quote / a quoted
-/// §6 bullet body), or `None` if the line has no quoted run.
+/// The text inside the FIRST pair of double-quotes on a line (the section 9 quote / a quoted
+/// section 6 bullet body), or `None` if the line has no quoted run.
 pub(crate) fn quoted_inner(s: &str) -> Option<String> {
     let start = s.find('"')?;
     let rest = &s[start + 1..];
@@ -323,12 +323,12 @@ pub(crate) fn quoted_inner(s: &str) -> Option<String> {
 }
 
 /// Normalized-prefix fingerprint of a candidate text (lowercased, whitespace-collapsed,
-/// first [`DEDUP_PREFIX`] chars). Empty input → empty (never matches).
+/// first [`DEDUP_PREFIX`] chars). Empty input -> empty (never matches).
 pub(crate) fn fingerprint(s: &str) -> String {
     let normalized = normalize_line(s).to_lowercase();
     normalized.chars().take(DEDUP_PREFIX).collect()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Render cost model + ellipsis
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

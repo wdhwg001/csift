@@ -2,9 +2,9 @@
 
 use super::*;
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 // Multi-agent-message model - richness function, selection, placeholder
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 
 #[test]
 fn agent_msg_is_rich_each_signal_arm_flips_a_short_body() {
@@ -15,7 +15,7 @@ fn agent_msg_is_rich_each_signal_arm_flips_a_short_body() {
     // ARM 2a - an N / M ratio (no noun needed).
     assert!(agent_msg_is_rich("now at 12/40 done", &c));
     assert!(agent_msg_is_rich("3 of 5 complete", &c));
-    // ARM 2b - commit-hash-like hex (must carry an a–f letter).
+    // ARM 2b - commit-hash-like hex (must carry an a-f letter).
     assert!(agent_msg_is_rich("fix landed in a1b2c3d", &c));
     assert!(agent_msg_is_rich("see deadbeef now", &c));
     // ARM 2c - file:line ref and a src/ path.
@@ -38,18 +38,18 @@ fn agent_msg_is_rich_rejects_a_short_signalless_declaration() {
     // A short, signal-less intent-verb opener is NOT rich.
     assert!(!agent_msg_is_rich("let me read the file", &c));
     assert!(!agent_msg_is_rich("now i will look into this", &c));
-    // A plain decimal (no a–f) is NOT a commit hash, and "1" alone has no substance noun.
+    // A plain decimal (no a-f) is NOT a commit hash, and "1" alone has no substance noun.
     assert!(!agent_msg_is_rich("step 1 next", &c));
 }
 
 #[test]
 fn agent_msg_is_rich_is_codepoint_safe_for_multibyte_with_a_digit() {
-    // The ±16-byte number-of-substance window must snap its bounds to a char boundary: a
+    // The +/-16-byte number-of-substance window must snap its bounds to a char boundary: a
     // digit adjacent to multi-byte text slices mid-codepoint otherwise, and that panics.
     // This must NOT panic, for a 2-digit number AND a single digit.
     let c = rich_cfg();
     // A multi-byte line with a time/number right next to 4-byte chars (no substance noun
-    // → not rich, but the point is it must not panic).
+    // -> not rich, but the point is it must not panic).
     let _ = agent_msg_is_rich("🤖 07:40 watching 🚀, 9 left to go", &c);
     let _ = agent_msg_is_rich("🤖 confirmed 42 times, root cause at src/x.rs:9", &c);
     let _ = agent_msg_is_rich("🤖 step 7 done", &c);
@@ -71,7 +71,7 @@ fn agent_msg_is_droppable_and_keep_on_doubt() {
         &c
     ));
     // KEEP-ON-DOUBT: a sub-280 signal-less body WITHOUT an intent-verb opener is KEPT
-    // (neither rich nor droppable → falls through → kept).
+    // (neither rich nor droppable -> falls through -> kept).
     assert!(!agent_msg_is_rich(
         "the boundary handling here is subtle",
         &c
@@ -85,13 +85,13 @@ fn agent_msg_is_droppable_and_keep_on_doubt() {
     assert!(!agent_msg_is_droppable(&long_decl, &c));
 }
 
-// ── Default `Longest` mode (the user-specified new default) ──
+// -- Default `Longest` mode (the user-specified new default) --
 
 #[test]
 fn longest_default_keeps_the_longest_not_the_last() {
     // THE HEADLINE CASE. A turn = [a long substantive Rich Response, a ~50-char throwaway
-    // wrap-up]. A last-only pick takes `agents.last()` → the wrap-up, silently dropping the
-    // substance. The default keeps the LONGEST → the Rich Response; the short non-rich
+    // wrap-up]. A last-only pick takes `agents.last()` -> the wrap-up, silently dropping the
+    // substance. The default keeps the LONGEST -> the Rich Response; the short non-rich
     // wrap-up collapses into a placeholder. The Rich Response is the FIRST message here, so
     // this proves the default is "longest", NOT "last" and NOT merely "first".
     let rich_response = body_chars("RICHRESP", 600); // longest, > rich_min_chars
@@ -125,8 +125,8 @@ fn longest_default_longest_is_a_middle_message() {
     // Rich Response in the middle, a short wrap-up). Default keeps the middle longest;
     // the short non-rich opener + wrap-up both collapse.
     let opener = "Let me look into this."; // short, not substantive, not rich
-    let middle = body_chars("MIDRESP", 700); // the longest → kept
-    let wrap_up = "All set."; // tiny → collapse
+    let middle = body_chars("MIDRESP", 700); // the longest -> kept
+    let wrap_up = "All set."; // tiny -> collapse
     let t = mk_turn_agents(0, Some("ask"), &[opener, &middle, wrap_up], 0);
     let lane = select_agent_messages(&t, &longest_cfg());
     let kept: Vec<&str> = lane
@@ -147,7 +147,7 @@ fn longest_default_also_keeps_a_substantive_first() {
     // middle, a short wrap-up. Kept = {first, longest middle}; the wrap-up collapses.
     let first = body_chars("PLANFIRST", 400); // substantive (>= 280) but < the longest
     let middle = body_chars("BIGMID", 900); // the longest
-    let wrap_up = "ok done"; // tiny → collapse
+    let wrap_up = "ok done"; // tiny -> collapse
     let t = mk_turn_agents(0, Some("ask"), &[&first, &middle, wrap_up], 0);
     let lane = select_agent_messages(&t, &longest_cfg());
     let kept: Vec<&str> = lane
@@ -172,7 +172,7 @@ fn longest_default_also_keeps_a_substantive_first() {
 fn longest_default_drops_a_non_substantive_first() {
     // A SHORT first (below rich_min_chars, not rich) is NOT kept by position - only the
     // longest survives. Distinguishes `Longest` from `Rich`'s unconditional keep-first.
-    let first = "let me start"; // short + not rich → not kept
+    let first = "let me start"; // short + not rich -> not kept
     let middle = body_chars("ONLYLONG", 600); // the longest
     let wrap_up = "fin"; // tiny
     let t = mk_turn_agents(0, Some("ask"), &[first, &middle, wrap_up], 0);
@@ -193,9 +193,9 @@ fn longest_default_keeps_a_rich_middle_with_a_major_finding() {
     // A MIDDLE that is RICH by SIGNAL (not length) - a file:line + ratio finding - is kept
     // even though it is not the longest, because major findings can live mid-run. Here the
     // longest is the final answer; the rich middle ALSO survives.
-    let opener = "starting now"; // short → collapse
+    let opener = "starting now"; // short -> collapse
     let finding = "12 passed 3 failed in src/x.rs:9"; // rich by signal, not longest
-    let longest = body_chars("FINALANS", 500); // the longest → kept (last)
+    let longest = body_chars("FINALANS", 500); // the longest -> kept (last)
     let t = mk_turn_agents(0, Some("ask"), &[opener, finding, &longest], 0);
     let lane = select_agent_messages(&t, &longest_cfg());
     let kept: Vec<&str> = lane
@@ -226,7 +226,7 @@ fn longest_default_single_message_turn_keeps_it() {
 
 #[test]
 fn longest_default_tie_breaks_to_the_last_maximum() {
-    // All messages equal length → `max_by_key` returns the LAST maximum, so the default
+    // All messages equal length -> `max_by_key` returns the LAST maximum, so the default
     // coincides with a last-only pick on an all-equal run (documented tie rule).
     // None are rich/substantive, so ONLY the tie-winning last survives.
     let a = "alpha beta gamma"; // 16 chars
@@ -249,7 +249,7 @@ fn longest_default_tie_breaks_to_the_last_maximum() {
 #[test]
 fn longest_default_collapses_contiguous_runs_into_separate_placeholders() {
     // The placeholder fusing is shared with Rich: two contiguous dropped runs split by a
-    // surviving rich middle → TWO placeholders. Longest = a long final answer; a rich
+    // surviving rich middle -> TWO placeholders. Longest = a long final answer; a rich
     // middle survives between two declaration runs.
     let t = mk_turn_agents(
         0,
@@ -257,10 +257,10 @@ fn longest_default_collapses_contiguous_runs_into_separate_placeholders() {
         &[
             "let me a",                     // drop
             "let me b",                     // drop
-            "found 12 cases in src/z.rs:3", // rich middle → kept
+            "found 12 cases in src/z.rs:3", // rich middle -> kept
             "let me c",                     // drop
             "let me d",                     // drop
-            &body_chars("THEANSWER", 400),  // longest (last) → kept
+            &body_chars("THEANSWER", 400),  // longest (last) -> kept
         ],
         0,
     );
@@ -288,7 +288,7 @@ fn longest_default_collapses_contiguous_runs_into_separate_placeholders() {
 fn longest_default_keep_flag_tunes_the_substantive_first_gate() {
     // `--agent-rich-min-chars` (rich_min_chars) is the tuning knob: a first of 300 chars is
     // substantive at the default 280 (kept) but NOT at a raised 500 (dropped). Same turn,
-    // two configs → the flag changes the survivor set.
+    // two configs -> the flag changes the survivor set.
     let first = body_chars("TUNEFIRST", 300);
     let longest = body_chars("TUNELONG", 800);
     let wrap_up = "bye";

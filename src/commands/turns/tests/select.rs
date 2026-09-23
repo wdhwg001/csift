@@ -22,7 +22,7 @@ fn select_eot_only_keeps_only_the_last_agent_message() {
 
 #[test]
 fn select_one_message_turn_keeps_it_as_last() {
-    // A 1-agent-message turn's sole message is BOTH first and last → always kept, no
+    // A 1-agent-message turn's sole message is BOTH first and last -> always kept, no
     // richness eval, even a declaration-shaped one.
     let t = mk_turn_agents(0, Some("ask"), &["let me look into this"], 0);
     let lane = select_agent_messages(&t, &rich_cfg());
@@ -49,19 +49,19 @@ fn select_rich_first_kept_and_sudden_rich_middle_survives() {
         0,
         Some("ask"),
         &[
-            "found the root cause already",     // first - rich → kept
-            "let me try the next thing",        // middle decl → collapse
-            "now i will check another",         // middle decl → collapse
-            "12 passed 3 failed in src/x.rs:9", // sudden rich middle → kept
-            "let me write it up",               // middle decl → collapse
-            "next i continue here",             // middle decl → collapse
-            "now let me finalize",              // middle decl → collapse
-            "the final committed answer",       // last → always kept
+            "found the root cause already",     // first - rich -> kept
+            "let me try the next thing",        // middle decl -> collapse
+            "now i will check another",         // middle decl -> collapse
+            "12 passed 3 failed in src/x.rs:9", // sudden rich middle -> kept
+            "let me write it up",               // middle decl -> collapse
+            "next i continue here",             // middle decl -> collapse
+            "now let me finalize",              // middle decl -> collapse
+            "the final committed answer",       // last -> always kept
         ],
         0,
     );
     let lane = select_agent_messages(&t, &rich_cfg());
-    // Kept: first, the sudden-rich middle, the last → 3 kept; the two declaration runs →
+    // Kept: first, the sudden-rich middle, the last -> 3 kept; the two declaration runs ->
     // 2 placeholders (split by the survivor).
     let kept: Vec<&str> = lane
         .iter()
@@ -90,20 +90,20 @@ fn select_rich_first_kept_and_sudden_rich_middle_survives() {
 
 #[test]
 fn select_all_middles_droppable_makes_one_placeholder() {
-    // Every middle is a signal-less short declaration → ONE placeholder spanning them all,
+    // Every middle is a signal-less short declaration -> ONE placeholder spanning them all,
     // between the kept first(or its collapse) and the kept last.
     let t = mk_turn_agents(
         0,
         Some("ask"),
         &[
-            "the opening plan is to refactor", // first: not droppable (no intent verb) → kept
+            "the opening plan is to refactor", // first: not droppable (no intent verb) -> kept
             "let me a",
             "let me b",
             "let me c",
             "let me d",
             "let me e",
             "let me f",
-            "the final answer here", // last → kept
+            "the final answer here", // last -> kept
         ],
         0,
     );
@@ -125,20 +125,20 @@ fn select_all_middles_droppable_makes_one_placeholder() {
 
 #[test]
 fn select_no_keep_first_collapses_a_declaration_first() {
-    // With --no-keep-first a declaration first is decided as a middle → collapsed.
+    // With --no-keep-first a declaration first is decided as a middle -> collapsed.
     let mut c = rich_cfg();
     c.keep_first = false;
     let t = mk_turn_agents(
         0,
         Some("ask"),
         &[
-            "let me look into this", // first decl → collapsed under no-keep-first
+            "let me look into this", // first decl -> collapsed under no-keep-first
             "let me b",
             "let me c",
             "let me d",
             "let me e",
             "let me f",
-            "the final answer", // last → kept
+            "the final answer", // last -> kept
         ],
         0,
     );
@@ -167,7 +167,7 @@ fn select_all_mode_keeps_every_message_no_placeholder() {
 
 #[test]
 fn select_fusion_message_kept_whole_and_char_capped_later() {
-    // A fused finding+declaration body trips Arm 2 (the finding) → kept WHOLE at Stage 1;
+    // A fused finding+declaration body trips Arm 2 (the finding) -> kept WHOLE at Stage 1;
     // the trailing declaration is shed only by the existing ASST_CAP char-ellipsis later.
     let fused = "root cause confirmed in src/x.rs:42 — now let me write the fix";
     let t = mk_turn_agents(
@@ -260,7 +260,7 @@ fn eot_only_selection_is_byte_identical_to_single_eot_render() {
     );
 }
 
-// ── Same-prefix re-send ──
+// -- Same-prefix re-send --
 
 /// Two agent messages where the LATER carries the earlier's whole body plus an addendum -
 /// both over `DEDUP_PREFIX` chars, so the containment rule fires.

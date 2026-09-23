@@ -28,7 +28,7 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
             bail!("--slices N sets the fleet size; pass --slice i to pick which chunk to emit");
         }
     }
-    // ── Validate --slice / --window (chunked-output mode) ──
+    // -- Validate --slice / --window (chunked-output mode) --
     if let Some(slice) = args.slice {
         if slice == 0 {
             bail!("--slice is 1-based: the first chunk is --slice 1");
@@ -57,8 +57,8 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
         n.saturating_mul(args.window)
     } else {
         // `--budget` is CHARS, always (the former `--budget-unit tokens` mode - which
-        // silently reinterpreted the unchanged default as 4× the output - is gone;
-        // ≈4 chars/token is the documented rule of thumb for sizing a token budget).
+        // silently reinterpreted the unchanged default as 4x the output - is gone;
+        // ~4 chars/token is the documented rule of thumb for sizing a token budget).
         args.budget
     };
 
@@ -70,7 +70,7 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
     // `verbatim` is single-conversation recovery and `--budget` applies PER session, so a bare
-    // `csift verbatim` (0 targets ⇒ ALL projects everywhere else) would realize budget × every
+    // `csift verbatim` (0 targets => ALL projects everywhere else) would realize budget x every
     // session of every project - an output flood that is never what the caller wants. A
     // target is REQUIRED here (the `show` precedent: name what you mean).
     if args.paths.is_empty() && args.sessions_from.is_none() {
@@ -206,11 +206,11 @@ pub(crate) fn window_admits(
     time_window.contains(ts)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Per-file scan
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
-/// Scan one session file: mmap → forward line-numbered scan → build the per-turn
+/// Scan one session file: mmap -> forward line-numbered scan -> build the per-turn
 /// `TurnSlice`s + the per-summary dedup sets. The forward `scan_lines_bytes` path is
 /// mandatory (NOT head/tail): it visits every line including blanks, so the local
 /// counter == the true jsonl line (the recover discipline, reused verbatim).
@@ -256,7 +256,7 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<ScanRe
         crate::parse::parse_candidates_with_spine(bytes, line_is_turn_candidate);
     let view = ChainView::build(&records, &spine, cross);
 
-    // ── Transparent elicitation-sidecar merge (§3.10) ──
+    // -- Transparent elicitation-sidecar merge (section 3.10) --
     // A TOP-LEVEL session's unresolved-pending elicitations (AskUserQuestion/ExitPlanMode/MCP)
     // are MISSING from the native transcript (whole-turn buffered / in-memory). Append them as
     // native-shaped records with line_no 0 (no physical line - `from_sidecar`); `build` turns
@@ -303,6 +303,6 @@ pub(crate) fn line_is_turn_candidate(line: &[u8]) -> bool {
         || TOOL_USE.find(line).is_some() // for the [N tool calls] count
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Build: (line_no, Record) → TurnSlice + SummaryInfo
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Build: (line_no, Record) -> TurnSlice + SummaryInfo
+// -----------------------------------------------------------------------------

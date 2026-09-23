@@ -12,7 +12,7 @@
 //! ## Reuse, never re-parse
 //!
 //! This module sits squarely on the `recover` extraction layer: the same
-//! mmap → forward line-numbered [`crate::parse::scan_lines_bytes`] scan (so the local
+//! mmap -> forward line-numbered [`crate::parse::scan_lines_bytes`] scan (so the local
 //! `line_no` counter is a 1:1 map to the jsonl), the same
 //! [`crate::model::group_turn_indices`] turn delimiter, the same `Record` helpers
 //! ([`Record::is_genuine_user`] / [`Record::genuine_user_text`] /
@@ -32,7 +32,7 @@
 //!
 //! A single genuine-user turn can own a LONG RUN of agent messages - a debugging/build
 //! chain the model narrates step by step - that a compaction summary clips to its single
-//! §9 EOT quote. Each [`TurnSlice`] therefore carries `agents: Vec<AgentMsg>` (EVERY
+//! section 9 EOT quote. Each [`TurnSlice`] therefore carries `agents: Vec<AgentMsg>` (EVERY
 //! agent-text record of the turn, in file order), and a derived `assistant_eot()`
 //! accessor returns the LAST element - the EOT anchor the dedup, round-trip and render
 //! paths key on.
@@ -48,17 +48,17 @@
 //!   - `rich` - on a LONG run (`agents.len() > run_threshold`, default 6): the LAST is
 //!     always kept; the FIRST is kept by position privilege under `--keep-first`; each
 //!     MIDDLE is kept UNLESS it is a PROVEN pure declaration. Collapsed contiguous runs
-//!     fuse into one `△ L…  [X agent messages, Y tool calls, Z failed]` placeholder
+//!     fuse into one `△ L...  [X agent messages, Y tool calls, Z failed]` placeholder
 //!     carrying the fetchable jsonl line range + the per-message tool/failed attribution.
 //!   - `all` - keep every agent message (maximal fidelity, no placeholder).
 //!
 //! "Rich" ([`agent_msg_is_rich`]) is a cheap single-pass OR of a LENGTH gate (kept on
-//! length alone ≥ `rich_min_chars`) and a SIGNAL test (a number-of-substance, a commit
+//! length alone >= `rich_min_chars`) and a SIGNAL test (a number-of-substance, a commit
 //! hash, a `file.rs:NNN` ref, a backtick code path, or a finding/decision lexeme).
 //! KEEP-ON-DOUBT is the spine: [`agent_msg_is_droppable`] collapses ONLY a short,
 //! signal-less, intent-verb opener - everything uncertain is kept (a wrongly-kept
-//! declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A
-//! FUSED finding+declaration body trips a signal → kept WHOLE; its trailing declaration
+//! declaration costs <= one capped body; a wrongly-dropped finding is unrecoverable). A
+//! FUSED finding+declaration body trips a signal -> kept WHOLE; its trailing declaration
 //! is shed only by the existing within-message `ASST_CAP` char-ellipsis, never by
 //! whole-message drop. `--profile heavy|light` bundles the thresholds the selected mode
 //! reads; under the `longest` default the selection runs on every multi-message turn.
@@ -66,7 +66,7 @@
 //! ## Never fabricate, never silently drop
 //!
 //! An over-cap unit is MIDDLE-truncated (head+tail kept) with an explicit
-//! `… [+K chars, L lines elided] …` marker that carries the exact elided counts; its
+//! `... [+K chars, L lines elided] ...` marker that carries the exact elided counts; its
 //! `Lnnnnn` points at the full record. Dedup against the live summary is
 //! DEMOTE-AND-FLAG, never delete. A collapsed agent-message run is NEVER silently
 //! dropped either - its placeholder carries the exact counts + the line range to fetch.

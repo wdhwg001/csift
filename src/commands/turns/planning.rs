@@ -10,9 +10,9 @@ pub(crate) enum SelSides {
     AssistantOnly,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Budget allocation (2-phase)
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// A selection decision for one turn (which sides were chosen).
 #[derive(Debug, Clone)]
@@ -76,24 +76,24 @@ pub(crate) fn plan_session(
     max_compactions: usize,
     cfg: &RichnessCfg,
 ) -> SessionPlan {
-    // ── Dedup-flag (mutate a working copy of the turns) ──
+    // -- Dedup-flag (mutate a working copy of the turns) --
     let newest = sr.summaries.iter().max_by_key(|s| s.line_no);
     let newest_summary_line = newest.map(|s| s.line_no);
     let mut turns: Vec<TurnSlice> = sr.turns.clone();
     let dedup_demoted = newest.map_or(0, |summary| flag_summary_dups(&mut turns, summary));
 
-    // ── Apply --max-compactions: drop turns beyond the cap (0 = unlimited) ──
+    // -- Apply --max-compactions: drop turns beyond the cap (0 = unlimited) --
     if max_compactions > 0 {
         turns.retain(|t| t.compactions_before <= max_compactions);
     }
 
-    // ── Reserve the document HEADER BLOCK up front (a fixed framing the render always
+    // -- Reserve the document HEADER BLOCK up front (a fixed framing the render always
     // emits to stdout) so the chars left for the reconstruction body - boundary banners +
     // selected units - fit `available`. The header block is bounded by a provable
-    // worst-case (§ doc_header_block_max_chars); the BANNERS are NOT pre-reserved in bulk
-    // (that wasted ~½ a small budget on summary-heavy sessions) but charged INCREMENTALLY
+    // worst-case (section doc_header_block_max_chars); the BANNERS are NOT pre-reserved in bulk
+    // (that wasted ~1/2 a small budget on summary-heavy sessions) but charged INCREMENTALLY
     // as selection deepens the spanned count, so the banner budget is exact. Invariant
-    // held below: `doc_header(real ≤ reservation) + banners(spanned) + units ≤ budget`. ──
+    // held below: `doc_header(real <= reservation) + banners(spanned) + units <= budget`. --
     let doc_header_reservation = doc_header_block_max_chars(sr, budget);
     let available = budget.saturating_sub(doc_header_reservation);
 
@@ -116,8 +116,8 @@ pub(crate) fn plan_session(
     let mut spanned_depth = 0usize;
     let mut chosen: Vec<Option<SelSides>> = vec![None; turns.len()];
 
-    // ── Phase 1: ROUND-TRIP GUARANTEE - spend rt_budget (unit chars) on complete pairs,
-    // while the banner charge for the deepened span still keeps the WHOLE doc ≤ budget. ──
+    // -- Phase 1: ROUND-TRIP GUARANTEE - spend rt_budget (unit chars) on complete pairs,
+    // while the banner charge for the deepened span still keeps the WHOLE doc <= budget. --
     // Non-dup complete turns first, then dup complete turns (demote, don't drop).
     for dedup_pass in [false, true] {
         for &ti in &order {
@@ -127,8 +127,8 @@ pub(crate) fn plan_session(
             let t = &turns[ti];
             // The HARD FLOOR reserves its lane for HUMAN round-trips only - a machine
             // automation pulse is left for Phase-2 fill, so the protected budget the help
-            // documents for "user → … → assistant EOT" is never silently spent on a
-            // pulse→ack pair (which the header already reports as an automation trigger).
+            // documents for "user -> ... -> assistant EOT" is never silently spent on a
+            // pulse->ack pair (which the header already reports as an automation trigger).
             if !t.is_human_round_trip() {
                 continue;
             }
@@ -151,7 +151,7 @@ pub(crate) fn plan_session(
                 // is load-bearing and already ellipsis-capped by the role caps. Stop
                 // Phase 1; Phase 2 fills the remainder. A round-trip that does NOT satisfy
                 // `doc_fits` is left for Phase 2 to take a cheaper single side, so the
-                // ≤-budget guarantee is never broken.
+                // <=-budget guarantee is never broken.
                 chosen[ti] = Some(SelSides::Both);
                 spent_units += c;
                 spanned_depth = new_depth;
@@ -161,7 +161,7 @@ pub(crate) fn plan_session(
         }
     }
 
-    // ── Phase 2: FILL - spend the rest of `available` (incl. unused rt reservation). ──
+    // -- Phase 2: FILL - spend the rest of `available` (incl. unused rt reservation). --
     for dedup_pass in [false, true] {
         for &ti in &order {
             if chosen[ti].is_some() {
@@ -196,7 +196,7 @@ pub(crate) fn plan_session(
         }
     }
 
-    // ── Assemble selected set, ascending for render ──
+    // -- Assemble selected set, ascending for render --
     let mut selected: Vec<Selected> = Vec::new();
     for (ti, sel) in chosen.iter().enumerate() {
         if let Some(sides) = sel {
@@ -214,10 +214,10 @@ pub(crate) fn plan_session(
     let spanned = spanned_boundary_count(&turns, &selected);
 
     // Report the conservative upper bound the selection enforced:
-    //   doc_header_reservation (≥ the real header block) + banners(spanned) + unit chars.
+    //   doc_header_reservation (>= the real header block) + banners(spanned) + unit chars.
     // Because selection guaranteed `spent_units + banners(spanned) <= available =
-    // budget - doc_header_reservation`, this figure is ≤ budget by construction, and it is
-    // ≥ the true emitted length (the real header block ≤ its reservation), so the header
+    // budget - doc_header_reservation`, this figure is <= budget by construction, and it is
+    // >= the true emitted length (the real header block <= its reservation), so the header
     // line never UNDER-states the cost. `spanned == spanned_depth` here. An EMPTY selection
     // emits NO document at all (the renderer skips empty sessions), so it reports 0 - the
     // header-block reservation is only "spent" when a document is actually written.
@@ -241,7 +241,7 @@ pub(crate) fn plan_session(
 /// opener line and its LATEST agent message line (the EOT anchor == `agents.last()`,
 /// which is the highest agent line by construction), 0 if neither.
 pub(crate) fn turn_latest_line(t: &TurnSlice) -> usize {
-    // A pending elicitation-sidecar unit (§3.10) has no physical line (line_no 0) yet IS the
+    // A pending elicitation-sidecar unit (section 3.10) has no physical line (line_no 0) yet IS the
     // latest activity - what the session is currently blocked on - so it ranks as most-recent
     // (usize::MAX) for recency-first selection rather than sorting as the oldest.
     if t.user.as_ref().is_some_and(|u| u.from_sidecar) {
@@ -260,7 +260,7 @@ pub(crate) fn turn_is_dup(t: &TurnSlice) -> bool {
 }
 
 /// True when a unit's fingerprint is a prefix-or-equal match of any summary fingerprint
-/// (§6.2). The match is symmetric-prefix: a unit clipped to 80 chars matches a summary
+/// (section 6.2). The match is symmetric-prefix: a unit clipped to 80 chars matches a summary
 /// bullet that begins with the same 80 chars, and vice-versa.
 pub(crate) fn unit_matches_summary(unit: &TurnUnit, summary_fps: &[String]) -> bool {
     let unit_fp = fingerprint(&unit.text);
@@ -285,9 +285,9 @@ pub(crate) fn spanned_boundary_count(turns: &[TurnSlice], selected: &[Selected])
         .unwrap_or(0)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Window-range parsing (shared parser in `crate::text`)
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// Parse a `--turn` token into a [`RangeSpec`] (the shared grammar), resolved per-session
 /// against that transcript's own turn count (0-based).
@@ -295,6 +295,6 @@ pub(crate) fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
     crate::text::parse_range_spec(s, "--turn", false)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Rendering
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

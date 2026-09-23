@@ -34,7 +34,7 @@ fn is_human_round_trip_excludes_automation_notifications() {
     );
 }
 
-// ── Budget allocation (the load-bearing 50% floor) ──
+// -- Budget allocation (the load-bearing 50% floor) --
 
 #[test]
 fn rt_floor_recovers_a_user_turn_despite_assistant_heavy_tail() {
@@ -151,7 +151,7 @@ fn determinism_identical_plan_for_identical_input() {
     assert_eq!(p1.rendered_chars, p2.rendered_chars);
 }
 
-// ── Branch-completeness: selection edge paths + renderers ──
+// -- Branch-completeness: selection edge paths + renderers --
 
 #[test]
 fn phase1_giant_first_round_trip_is_clamped_in() {
@@ -223,7 +223,7 @@ fn phase2_fills_user_only_when_round_trip_does_not_fit() {
 
 #[test]
 fn partial_user_only_turn_is_selected_as_user_only() {
-    // A turn with NO assistant EOT (pure tool-call) is partial → Phase 2 takes its user
+    // A turn with NO assistant EOT (pure tool-call) is partial -> Phase 2 takes its user
     // side only (the `else if t.user.is_some()` arm).
     let turns = vec![
         mk_turn(0, Some("complete ask"), Some("complete reply"), 0, 0),
@@ -241,7 +241,7 @@ fn partial_user_only_turn_is_selected_as_user_only() {
 
 #[test]
 fn partial_assistant_only_turn_is_selected_as_assistant_only() {
-    // A turn with NO user opener (a synthetic/orphan lead with only assistant text) →
+    // A turn with NO user opener (a synthetic/orphan lead with only assistant text) ->
     // the `else if t.assistant_eot().is_some()` arm.
     let turns = vec![
         mk_turn(
@@ -266,8 +266,8 @@ fn partial_assistant_only_turn_is_selected_as_assistant_only() {
 #[test]
 fn count_sides_counts_each_selection_kind() {
     // Each selected turn must exist in `plan.turns` (the count walks the real agent lane -
-    // a single-agent turn contributes one assistant unit). Both → +1 user +1 asst;
-    // UserOnly → +1 user; AssistantOnly → +1 asst.
+    // a single-agent turn contributes one assistant unit). Both -> +1 user +1 asst;
+    // UserOnly -> +1 user; AssistantOnly -> +1 asst.
     let plan = SessionPlan {
         selected: vec![
             Selected {
@@ -305,14 +305,14 @@ fn empty_session_plans_to_nothing() {
     assert_eq!(plan.rendered_chars, 0);
 }
 
-// ── More branch-completeness: clamp arms, empty fingerprints, dedup edge ──
+// -- More branch-completeness: clamp arms, empty fingerprints, dedup edge --
 
 #[test]
 fn giant_round_trip_bigger_than_unit_budget_is_not_force_included_both() {
     // A single complete turn whose CAPPED cost exceeds even the whole UNIT budget must
     // NOT be force-included as a both-sides pair - doing so would overshoot the budget,
     // which is the exact bug this fix removes. Phase 2 instead takes the cheaper single
-    // (user-first) side that DOES fit, preserving the ≤-budget guarantee.
+    // (user-first) side that DOES fit, preserving the <=-budget guarantee.
     let huge_u = "u".repeat(5000);
     let huge_a = "a".repeat(5000);
     let pair = mk_turn(0, Some(&huge_u), Some(&huge_a), 9, 0);
@@ -346,7 +346,7 @@ fn giant_round_trip_bigger_than_unit_budget_is_not_force_included_both() {
 #[test]
 fn giant_round_trip_fits_full_budget_not_rt_half_is_force_included() {
     // A complete turn whose cost is > the 50% round-trip reservation but <= the whole
-    // (post-header-block) unit budget → the `spent_units == 0` force-include arm: it is
+    // (post-header-block) unit budget -> the `spent_units == 0` force-include arm: it is
     // taken as a both-sides pair even though it blows past rt_budget, because the FULL
     // document still fits the budget. Sized off the real `turn_cost`, not a magic number.
     let huge_u = "u".repeat(2000);
@@ -375,7 +375,7 @@ fn giant_round_trip_fits_full_budget_not_rt_half_is_force_included() {
 #[test]
 fn phase2_empty_turn_no_user_no_assistant_selects_nothing() {
     // A degenerate turn with NEITHER user NOR assistant (the `&[]` candidates arm at
-    // L782's else) → it is never selected; a real turn beside it is.
+    // L782's else) -> it is never selected; a real turn beside it is.
     let turns = vec![
         mk_turn(0, None, None, 0, 0),
         mk_turn(1, Some("real ask"), Some("real reply"), 0, 0),
@@ -396,16 +396,16 @@ fn shown_user_and_assistant_cover_all_combinations() {
     // AND the turn has agent messages; empty otherwise. It answers for the whole RUN,
     // which a single-message accessor cannot.
     let lane = |t: &TurnSlice, s: SelSides| !shown_agent_lane(t, s, &cfg()).is_empty();
-    // Both → both sides shown.
+    // Both -> both sides shown.
     assert!(shown_user(&complete, SelSides::Both).is_some());
     assert!(lane(&complete, SelSides::Both));
-    // UserOnly → user shown, assistant hidden (shows_assistant false).
+    // UserOnly -> user shown, assistant hidden (shows_assistant false).
     assert!(shown_user(&complete, SelSides::UserOnly).is_some());
     assert!(!lane(&complete, SelSides::UserOnly));
-    // AssistantOnly → assistant shown, user hidden.
+    // AssistantOnly -> assistant shown, user hidden.
     assert!(shown_user(&complete, SelSides::AssistantOnly).is_none());
     assert!(lane(&complete, SelSides::AssistantOnly));
-    // A turn missing a side → empty lane even when the selection would show it.
+    // A turn missing a side -> empty lane even when the selection would show it.
     let no_asst = mk_turn(0, Some("u"), None, 0, 0);
     assert!(!lane(&no_asst, SelSides::Both));
     let no_user = mk_turn(0, None, Some("a"), 0, 0);

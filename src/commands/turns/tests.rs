@@ -1,7 +1,7 @@
 //! Unit tests for the `turns` engine over small, locale-neutral fixtures.
 //!
-//! Charset discipline (CLAUDE.md / design §0): fixture strings use accented-Latin +
-//! emoji multi-byte tokens only (`café🛠`), the house fixture style. The
+//! Charset discipline (CLAUDE.md / design section 0): fixture strings use accented-Latin +
+//! emoji multi-byte tokens only (accented Latin, a 4-byte emoji), the house fixture style. The
 //! end-to-end feature exercise on a real-shaped, multi-summary transcript lives in
 //! `tests/cli_integration.rs`.
 
@@ -26,7 +26,7 @@ fn unit_at(role: Role, line_no: usize, text: &str, newlines_at: &[u32]) -> TurnU
 }
 
 /// A unit whose `n` original newlines are spread EVENLY across the body, so a test can say
-/// "this message has n newlines" without hand-placing each. `n == 0` ⇒ a single-line body.
+/// "this message has n newlines" without hand-placing each. `n == 0` => a single-line body.
 fn unit(role: Role, line_no: usize, text: &str, orig_newlines: usize) -> TurnUnit {
     let total = text.chars().count();
     let at: Vec<u32> = (0..orig_newlines)

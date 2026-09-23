@@ -20,13 +20,13 @@ pub(crate) enum AgentRender<'a> {
     },
 }
 
-/// A contiguous span of collapsed agent messages → one placeholder line. Carries the
+/// A contiguous span of collapsed agent messages -> one placeholder line. Carries the
 /// X/Y/Z counts + the first/last elided jsonl line numbers so a consumer can `Read` the
 /// raw range, plus WHAT was folded: the summed char count and one preview per substantive
 /// member.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlaceholderSpan {
-    /// X - collapsed agent messages in this span (≥1).
+    /// X - collapsed agent messages in this span (>=1).
     pub(crate) messages: usize,
     /// Y - `tool_use` blocks owned by the collapsed span's preceding spans.
     pub(crate) tool_calls: usize,
@@ -54,17 +54,18 @@ pub(crate) struct CollapsedPreview {
 
 /// Decide a turn's SURVIVING agent messages + the collapsed placeholder spans, per mode +
 /// cfg (STAGE 1 - operates on WHOLE messages, never touches `ASST_CAP`):
-///   • `Longest` (DEFAULT) - keep the LONGEST agent message (by `full_chars`) + the FIRST
+///   - `Longest` (DEFAULT) - keep the LONGEST agent message (by `full_chars`) + the FIRST
 ///     when substantive (`full_chars >= rich_min_chars`) + each RICH middle; collapse
 ///     everything else into placeholders. Applies to every multi-message turn; on a
-///     single-message turn the sole message is kept. Tie on length → the LAST maximum.
-///   • `EotOnly` - only the last agent message (force last-only; never a placeholder).
-///   • `All` - every agent message, no filtering, no placeholder.
-///   • `Rich` - on a LONG run (`agents.len() > run_threshold`): the LAST is always kept;
+///     single-message turn the sole message is kept. Tie on length -> the LAST maximum.
+///   - `EotOnly` - only the last agent message (force last-only; never a placeholder).
+///   - `All` - every agent message, no filtering, no placeholder.
+///   - `Rich` - on a LONG run (`agents.len() > run_threshold`): the LAST is always kept;
 ///     the FIRST is kept by position privilege under `keep_first` (else decided as a
 ///     middle); each MIDDLE is kept UNLESS it is a proven pure declaration (keep-on-
 ///     doubt - drop requires proof). Contiguous dropped runs fuse into one placeholder.
 ///     A short run (`<= run_threshold`) keeps every agent message verbatim.
+///
 /// Then STAGE 2, [`mark_resends`], turns a kept message whose whole body a LATER kept message
 /// carries into a one-line `Superseded` marker. Produces an ordered list of
 /// `{ Kept | Placeholder | Superseded }` in ascending agent order. EMPTY for a pure tool-call
@@ -102,15 +103,15 @@ fn select_kept<'a>(turn: &'a TurnSlice, cfg: &RichnessCfg) -> Vec<AgentRender<'a
                 .expect("non-empty");
             let last = agents.len() - 1;
             // Per-message keep decision. Additive over the longest pick:
-            //   • the LONGEST index - ALWAYS (the substantive response; may also be first/
+            //   - the LONGEST index - ALWAYS (the substantive response; may also be first/
             //     middle/last, the position privileges below merely add MORE survivors).
-            //   • the FIRST - kept when SUBSTANTIVE (`full_chars >= rich_min_chars`); an
+            //   - the FIRST - kept when SUBSTANTIVE (`full_chars >= rich_min_chars`); an
             //     opening plan / early finding worth preserving. A short "let me look"
-            //     opener is below the gate → collapses.
-            //   • the LAST - kept when SUBSTANTIVE or RICH (so a real closing answer
+            //     opener is below the gate -> collapses.
+            //   - the LAST - kept when SUBSTANTIVE or RICH (so a real closing answer
             //     survives, but a ~50-char throwaway wrap-up collapses - the headline
             //     case). When the last IS the longest it is already kept above.
-            //   • each MIDDLE - kept when RICH (`agent_msg_is_rich`); a major finding can
+            //   - each MIDDLE - kept when RICH (`agent_msg_is_rich`); a major finding can
             //     live mid-run.
             let keep = |i: usize, a: &AgentMsg| -> bool {
                 if i == longest {
@@ -132,21 +133,21 @@ fn select_kept<'a>(turn: &'a TurnSlice, cfg: &RichnessCfg) -> Vec<AgentRender<'a
         }
         AgentMsgMode::All => agents.iter().map(AgentRender::Kept).collect(),
         AgentMsgMode::Rich => {
-            // Short run (or exactly at the threshold) → keep everything verbatim.
+            // Short run (or exactly at the threshold) -> keep everything verbatim.
             if agents.len() <= cfg.run_threshold {
                 return agents.iter().map(AgentRender::Kept).collect();
             }
             let last = agents.len() - 1;
             // Per-message keep decision (KEEP-ON-DOUBT is the spine: collapse only PROVEN
             // pure declarations; keep everything uncertain):
-            //   • LAST  - ALWAYS kept (the outcome / EOT anchor; position overrides drop).
-            //   • FIRST - the first-matters / immediate-reply case. With `keep_first`
+            //   - LAST  - ALWAYS kept (the outcome / EOT anchor; position overrides drop).
+            //   - FIRST - the first-matters / immediate-reply case. With `keep_first`
             //     (DEFAULT) the position privilege keeps it unconditionally (the opening
             //     message often states the plan / an early finding worth preserving). With
             //     `--no-keep-first` the privilege is dropped and the first is decided
             //     exactly as a MIDDLE (kept unless droppable - so a rich first still
             //     survives, a "let me look into this" declaration first collapses).
-            //   • MIDDLE - kept unless droppable; a sudden rich middle survives whole.
+            //   - MIDDLE - kept unless droppable; a sudden rich middle survives whole.
             let keep = |i: usize, a: &AgentMsg| -> bool {
                 if i == last {
                     return true; // LAST anchor - always (overrides the drop predicate).
@@ -335,7 +336,7 @@ pub(crate) fn collapsed_preview(unit: &TurnUnit) -> Option<CollapsedPreview> {
 }
 
 /// The EXACT placeholder line a collapsed span renders to (no trailing newline):
-///   `△ L{first}–L{last}  [X agent message(s) collapsed, N chars, Y tool call(s)[, Z failed]]`
+///   `△ L{first}-L{last}  [X agent message(s) collapsed, N chars, Y tool call(s)[, Z failed]]`
 /// X/Y are always shown (Y even at 0 - a zero-tool reasoning span is informative); the Z
 /// clause is OMITTED when Z == 0. N is the summed `full_chars` of the collapsed bodies, so the
 /// marker says HOW MUCH prose it stands for and not only how many messages. Pluralization is
@@ -361,7 +362,7 @@ pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
 }
 
 /// The EXACT line for one collapsed message's preview (no trailing newline), indented under
-/// the fold marker: `    L{line}  {first 60 chars}… (+N chars)`.
+/// the fold marker: `    L{line}  {first 60 chars}... (+N chars)`.
 pub(crate) fn collapsed_preview_line(p: &CollapsedPreview) -> String {
     format!("    L{}  {}", p.line, p.excerpt)
 }

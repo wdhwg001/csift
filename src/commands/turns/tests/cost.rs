@@ -139,7 +139,7 @@ fn cumulative_banner_cost_is_monotone_and_zero_at_depth_zero() {
     assert_eq!(cumulative_banner_cost(&summaries, 99), d3);
 }
 
-// ── Turn cost + selection sides ──
+// -- Turn cost + selection sides --
 
 #[test]
 fn turn_cost_both_charges_marker_single_side_does_not() {
@@ -176,7 +176,7 @@ fn turn_cost_user_only_costs_only_user_side() {
 
 #[test]
 fn turn_cost_partial_turns_skip_absent_sides() {
-    // turn_cost over a turn MISSING a side → the `if let Some` None arms in turn_cost
+    // turn_cost over a turn MISSING a side -> the `if let Some` None arms in turn_cost
     // (L616/L626): a user-only turn costs only the user; an assistant-only only the asst.
     let user_only = mk_turn(0, Some("just a user ask"), None, 3, 0);
     // Both selection on a user-only turn: marker is charged (tool_calls>0) but no asst.

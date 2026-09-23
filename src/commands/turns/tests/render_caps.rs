@@ -25,7 +25,7 @@ fn sub_cap_unit_renders_verbatim_no_marker() {
 
 #[test]
 fn user_ellipsis_head_360_tail_240_with_counts() {
-    // A user body > 600 chars → head 360 / tail 240, marker carries +K chars.
+    // A user body > 600 chars -> head 360 / tail 240, marker carries +K chars.
     let body: String = "a".repeat(1000);
     let u = unit(Role::User, 10, &body, 3);
     let r = render_unit_body(&u, None);
@@ -45,7 +45,7 @@ fn user_ellipsis_head_360_tail_240_with_counts() {
 
 #[test]
 fn assistant_ellipsis_head_larger_than_user_head() {
-    // Assistant 900 cap, 0.66 head frac → head 594 / tail 306. Strictly larger head
+    // Assistant 900 cap, 0.66 head frac -> head 594 / tail 306. Strictly larger head
     // than the user side (the measured asymmetry).
     let body: String = "b".repeat(2000);
     let a = unit(Role::Assistant, 20, &body, 7);
@@ -55,7 +55,7 @@ fn assistant_ellipsis_head_larger_than_user_head() {
     // head 594.
     assert!(r.body.starts_with(&"b".repeat(594)));
     assert!(r.body.ends_with(&"b".repeat(306)));
-    // Seven newlines evenly spread → 250, 500, …, 1750; the cut removes [594, 1694), so the
+    // Seven newlines evenly spread -> 250, 500, ..., 1750; the cut removes [594, 1694), so the
     // four at 750/1000/1250/1500 are elided (250 and 500 sit in the head, 1750 in the tail).
     assert!(r.body.contains("[+1100 chars, 4 lines elided]"));
     assert_eq!(r.rendered_chars, 900);
@@ -98,7 +98,7 @@ fn lines_elided_counts_only_the_newlines_the_cut_removed() {
     assert!(!uncut.body.contains("lines elided"), "{}", uncut.body);
 
     // And a WIDER cut of the same message reports MORE lines - the figure follows the cut,
-    // which is exactly what the whole-message count could not do. Cap 300 → head 180, tail
+    // which is exactly what the whole-message count could not do. Cap 300 -> head 180, tail
     // 120, removed [180, 880): four newlines (200, 400, 700, 800).
     let wider = render_unit_body(&u, Some(300));
     assert_eq!(wider.elided_chars, 700);
@@ -139,7 +139,7 @@ fn single_line_user_omits_lines_elided_note() {
 fn ellipsis_cut_is_codepoint_safe_for_multibyte_token() {
     // A multi-byte token straddling the cut must be wholly kept or wholly dropped - the
     // rendered string must remain valid UTF-8 with no replacement char.
-    // Build a body of 700 single-char 'a' then a 🛠 (4 bytes) at the boundary region.
+    // Build a body of 700 single-char 'a' then a 4-byte emoji at the boundary region.
     let mut body = String::new();
     body.push_str(&"a".repeat(360)); // exactly the head region
     body.push('🛠'); // lands right after the head cut
@@ -161,7 +161,7 @@ fn emoji_in_tail_is_wholly_kept() {
     let mut body = String::new();
     body.push_str(&"a".repeat(700));
     body.push('🛠');
-    body.push_str(&"b".repeat(239)); // tail = last 240 chars = 🛠 + 239 b's
+    body.push_str(&"b".repeat(239)); // tail = last 240 chars = the emoji + 239 b's
     let u = unit(Role::User, 1, &body, 0);
     let r = render_unit_body(&u, None);
     assert!(r.truncated);
@@ -172,7 +172,7 @@ fn emoji_in_tail_is_wholly_kept() {
 #[test]
 fn render_turn_text_emits_user_marker_assistant_for_both() {
     // Exercise the text renderer arms directly: a both-sides turn with tool calls emits
-    // ▽ user, the [N tool calls] marker, then △ assistant.
+    // `▽` user, the [N tool calls] marker, then `△` assistant.
     let t = mk_turn(0, Some("the ask"), Some("the reply"), 3, 0);
     let mut lines: Vec<String> = Vec::new();
     render_turn_text(&t, SelSides::Both, &cfg(), None, &mut |s| lines.push(s));
@@ -222,7 +222,7 @@ fn emit_unit_text_flags_dedup_unit() {
         lines.iter().any(|l| l.contains("(also in summary)")),
         "dedup flag rendered: {lines:?}"
     );
-    // The glyph is derived from the role (user → ▽) inside emit_unit_text.
+    // The glyph is derived from the role (user -> `▽`) inside emit_unit_text.
     assert!(lines[0].starts_with("▽ L7"), "user glyph: {lines:?}");
 }
 
@@ -248,7 +248,7 @@ fn render_turn_text_assistant_only_with_no_assistant_emits_nothing() {
 
 #[test]
 fn render_turn_text_both_with_zero_tools_no_marker_line() {
-    // Both selection, 0 tools → the marker `if turn.tool_calls > 0` false arm: no
+    // Both selection, 0 tools -> the marker `if turn.tool_calls > 0` false arm: no
     // `[N tool calls]` line, but user + assistant still render.
     let t = mk_turn(0, Some("ask"), Some("reply"), 0, 0);
     let mut lines: Vec<String> = Vec::new();
@@ -292,20 +292,20 @@ fn span(
 
 #[test]
 fn agent_placeholder_line_pluralizes_each_noun_independently() {
-    // X==1 → "1 agent message" + single L{n} (no dash); Y==0 shown; Z==0 omitted; N is the
+    // X==1 -> "1 agent message" + single L{n} (no dash); Y==0 shown; Z==0 omitted; N is the
     // summed chars of the collapsed bodies.
     let one = span(1, 0, 0, 42, 42, 137);
     assert_eq!(
         agent_placeholder_line(&one),
         "△ L42  [1 agent message collapsed, 137 chars, 0 tool calls]"
     );
-    // X>1 → range with a dash; Y>1 plural; Z>0 included, "failed" not pluralized.
+    // X>1 -> range with a dash; Y>1 plural; Z>0 included, "failed" not pluralized.
     let many = span(3, 4, 2, 10, 20, 512);
     assert_eq!(
         agent_placeholder_line(&many),
         "△ L10–L20  [3 agent messages collapsed, 512 chars, 4 tool calls, 2 failed]"
     );
-    // Z==1 → "1 failed" (adjective, not "1 faileds").
+    // Z==1 -> "1 failed" (adjective, not "1 faileds").
     let one_fail = span(2, 1, 1, 5, 9, 64);
     assert_eq!(
         agent_placeholder_line(&one_fail),
@@ -370,14 +370,14 @@ fn a_fold_marker_and_its_preview_lines_are_what_the_cost_charges() {
 fn placeholder_attribution_sums_per_message_tool_and_failed() {
     // The collapsed span's Y/Z sum the per-message preceding_tool_calls / preceding_failed.
     let mut agents = vec![
-        agent_msg(10, "found the cause", 0, 0), // first (rich) → kept
-        agent_msg(20, "let me a", 2, 1),        // middle decl → collapse (2 tools, 1 failed)
-        agent_msg(30, "let me b", 3, 0),        // middle decl → collapse (3 tools)
-        agent_msg(40, "let me c", 1, 2),        // middle decl → collapse (1 tool, 2 failed)
-        agent_msg(50, "let me d", 0, 0),        // middle decl → collapse
-        agent_msg(60, "let me e", 0, 0),        // middle decl → collapse
-        agent_msg(70, "let me f", 0, 0),        // middle decl → collapse
-        agent_msg(80, "done", 0, 0),            // last → kept
+        agent_msg(10, "found the cause", 0, 0), // first (rich) -> kept
+        agent_msg(20, "let me a", 2, 1),        // middle decl -> collapse (2 tools, 1 failed)
+        agent_msg(30, "let me b", 3, 0),        // middle decl -> collapse (3 tools)
+        agent_msg(40, "let me c", 1, 2),        // middle decl -> collapse (1 tool, 2 failed)
+        agent_msg(50, "let me d", 0, 0),        // middle decl -> collapse
+        agent_msg(60, "let me e", 0, 0),        // middle decl -> collapse
+        agent_msg(70, "let me f", 0, 0),        // middle decl -> collapse
+        agent_msg(80, "done", 0, 0),            // last -> kept
     ];
     assign_positions(&mut agents);
     let t = TurnSlice {

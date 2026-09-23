@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── Fingerprint / dedup ──
+// -- Fingerprint / dedup --
 
 #[test]
 fn fingerprint_normalizes_lowercases_and_caps_at_80() {
@@ -108,7 +108,7 @@ fn dedup_demoted_turn_is_selected_after_non_dups_not_dropped() {
 
 #[test]
 fn summary_fingerprints_handles_bare_unquoted_bullet() {
-    // A §6 bullet with NO quotes → the fingerprint falls back to the whole bullet body
+    // A section 6 bullet with NO quotes -> the fingerprint falls back to the whole bullet body
     // (the `unwrap_or_else(|| fingerprint(rest))` arm).
     let body = "6. All user messages:\n   - a bare unquoted bullet about the carry";
     let fps = summary_fingerprints(body);
@@ -120,7 +120,7 @@ fn summary_fingerprints_handles_bare_unquoted_bullet() {
 
 #[test]
 fn dedup_no_op_when_no_summary() {
-    // No summary at all → dedup is a no-op, nothing flagged.
+    // No summary at all -> dedup is a no-op, nothing flagged.
     let turns = vec![mk_turn(0, Some("ask"), Some("reply"), 0, 0)];
     let sr = scan_with_turns(turns, Vec::new());
     let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
@@ -131,7 +131,7 @@ fn dedup_no_op_when_no_summary() {
 #[test]
 fn end_to_end_live_dedup_through_build_and_plan() {
     // A LIVE-region (compactions_before==0) turn whose user text matches the newest
-    // summary's §6 bullet must be flagged + demoted through the full build → plan path.
+    // summary's section 6 bullet must be flagged + demoted through the full build -> plan path.
     // The pre-boundary turn (cb=1) carrying nearby text is NOT deduped (older context).
     let records: Vec<(usize, Record)> = vec![
         (1, rec(r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pre-boundary ask"}}"#)),
@@ -160,7 +160,7 @@ fn end_to_end_live_dedup_through_build_and_plan() {
 
 #[test]
 fn dedup_skips_empty_text_unit() {
-    // A live unit whose text is whitespace-only → its fingerprint is empty → never a
+    // A live unit whose text is whitespace-only -> its fingerprint is empty -> never a
     // dedup match (the `unit_fp.is_empty()` true arm), so it is not flagged.
     let summary_fps = vec![fingerprint("a real summary bullet about the carry")];
     let blank = unit(Role::User, 1, "   ", 0);
@@ -170,7 +170,7 @@ fn dedup_skips_empty_text_unit() {
 #[test]
 fn summary_fingerprints_skips_empty_quote() {
     // A bullet whose quoted run is empty (`- ""`) and a bare bullet that normalizes to
-    // empty → the `!fp.is_empty()` false arms (nothing pushed).
+    // empty -> the `!fp.is_empty()` false arms (nothing pushed).
     let body = "6. All user messages:\n   - \"\"\n   -   ";
     let fps = summary_fingerprints(body);
     assert!(
@@ -196,7 +196,7 @@ fn dedup_demoted_turn_sorts_after_non_dup_in_phase1() {
     let sums = vec![summary(900, vec![dup_text], 9000)];
     let sr = scan_with_turns(vec![dup_turn, uniq_turn], sums);
     // Selection runs against `available = budget - header_block`. The window that fits
-    // EXACTLY one pair is `available ∈ [one_pair, one_pair + dup_pair)`. Pick `available`
+    // EXACTLY one pair is `available` is in `[one_pair, one_pair + dup_pair)`. Pick `available`
     // at the midpoint of that window, then add back the (budget-dependent) header block.
     // Iterate once to settle the header-block reservation (it depends on the budget's
     // digit width); converges immediately for these magnitudes.
@@ -223,7 +223,7 @@ fn dedup_demoted_turn_sorts_after_non_dup_in_phase1() {
 
 #[test]
 fn unit_matches_summary_no_match_returns_false() {
-    // A non-empty unit fingerprint that matches NO summary fingerprint → the `.any()`
+    // A non-empty unit fingerprint that matches NO summary fingerprint -> the `.any()`
     // false result (L845/L849 false sides).
     let summary_fps = vec![fingerprint(
         "a summary bullet entirely unrelated to the unit",
@@ -243,7 +243,7 @@ fn unit_matches_summary_no_match_returns_false() {
 
 #[test]
 fn summary_fingerprints_skips_empty_prose_quote() {
-    // A §9-style prose line whose quoted run is empty (`said ""`) → the L509 `!fp
+    // A section 9-style prose line whose quoted run is empty (`said ""`) -> the L509 `!fp
     // .is_empty()` false arm (nothing pushed for that line).
     let body = "9. Optional Next Step:\n   The assistant said \"\".";
     let fps = summary_fingerprints(body);
@@ -256,7 +256,7 @@ fn summary_fingerprints_skips_empty_prose_quote() {
 #[test]
 fn dedup_flagged_middle_still_richness_gated() {
     // A dedup-flagged (also_in_summary) middle is subject to the SAME richness rule:
-    // rich+flagged → kept (carrying the flag); not-rich+flagged → collapsed. The LAST
+    // rich+flagged -> kept (carrying the flag); not-rich+flagged -> collapsed. The LAST
     // unit is never collapsed by richness (demote-not-drop still protects it).
     let mut agents = vec![
         agent_msg(10, "the opening plan", 0, 0),

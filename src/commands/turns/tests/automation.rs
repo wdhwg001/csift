@@ -118,8 +118,8 @@ fn automation_in_scope_empty_when_no_automation() {
 #[test]
 fn automation_by_kind_skips_non_user_and_missing_turns() {
     // Exercise the two guard arms in `automation_by_kind`: an AssistantOnly selection (does not
-    // SHOW the user side → skipped) and a selection pointing at a turn_index that is not present
-    // in `plan.turns` (find_turn None → skipped). Neither contributes to the breakdown.
+    // SHOW the user side -> skipped) and a selection pointing at a turn_index that is not present
+    // in `plan.turns` (find_turn None -> skipped). Neither contributes to the breakdown.
     let mut auto = mk_turn(0, Some("pulse"), Some("ack"), 0, 0);
     auto.is_automation = true;
     auto.automation = Some(crate::model::AutomationTrigger {
@@ -131,12 +131,12 @@ fn automation_by_kind_skips_non_user_and_missing_turns() {
     });
     let plan = SessionPlan {
         selected: vec![
-            // AssistantOnly over the automation turn → the !shows_user guard skips it.
+            // AssistantOnly over the automation turn -> the !shows_user guard skips it.
             Selected {
                 turn_index: 0,
                 sides: SelSides::AssistantOnly,
             },
-            // A Both selection at a turn_index NOT in `turns` → the find_turn None guard skips it.
+            // A Both selection at a turn_index NOT in `turns` -> the find_turn None guard skips it.
             Selected {
                 turn_index: 99,
                 sides: SelSides::Both,

@@ -24,7 +24,7 @@ pub(crate) struct RenderCtx {
     /// The richness configuration - the renderer walks the same `select_agent_messages`
     /// survivor set the plan budgeted, so emitted == costed.
     pub(crate) cfg: RichnessCfg,
-    /// Session ids the resolver found under more than one project directory (§2 `dedup`):
+    /// Session ids the resolver found under more than one project directory (section 2 `dedup`):
     /// the merged copies are named beside the scope banner and counted in the JSON header.
     /// `--slice` skips the banner, as it skips every other piece of operational chrome.
     pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
@@ -84,20 +84,20 @@ pub(crate) fn render_text(
     window: usize,
     slices: Option<usize>,
 ) -> Result<()> {
-    // ── Chunked-output mode (--slice): emit ONLY one ≤window-char chunk of the verbatim DOCUMENT
+    // -- Chunked-output mode (--slice): emit ONLY one <=window-char chunk of the verbatim DOCUMENT
     // (the SAME body `--out` writes), with NO operational chrome - so a SessionStart hook can
     // inject it under the 10,000-char additionalContext cap. Two sub-modes:
     //
-    //   • LEGACY (`--slice` alone): budget-driven. The document is whatever `--budget` selected,
+    //   - LEGACY (`--slice` alone): budget-driven. The document is whatever `--budget` selected,
     //     paginated into a VARIABLE number of chunks; `--slice i` emits the i-th. Concatenating
     //     1..K reproduces the document byte-for-byte. The per-role 600/900 body caps apply.
-    //   • FIXED-FLEET (`--slices N`): the slice COUNT is the hard constraint (a fixed set of hooks
+    //   - FIXED-FLEET (`--slices N`): the slice COUNT is the hard constraint (a fixed set of hooks
     //     can't grow). Bodies render whole up to one window - a turn is ellipsized ONLY if it
     //     ALONE exceeds a window - and only the NEWEST N chunks are kept; the oldest overflow is
-    //     DISCARDED. So the emitted count is ALWAYS ≤N regardless of turn size. slice 1 = oldest
+    //     DISCARDED. So the emitted count is ALWAYS <=N regardless of turn size. slice 1 = oldest
     //     KEPT, slice N = newest.
     //
-    // An out-of-range index prints nothing (exit 0), so surplus hooks simply inject nothing. ──
+    // An out-of-range index prints nothing (exit 0), so surplus hooks simply inject nothing. --
     if let Some(n) = slice {
         // Fixed-fleet drops the per-role caps for a window cap (whole turns; ellipsize only a turn
         // bigger than a window). Legacy keeps the role caps (cap_override = None).
@@ -107,7 +107,7 @@ pub(crate) fn render_text(
         let idx = match slices {
             Some(n_slices) => {
                 if n > n_slices {
-                    return Ok(()); // index outside the fixed fleet → inject nothing
+                    return Ok(()); // index outside the fixed fleet -> inject nothing
                 }
                 // Keep the newest n_slices chunks; drop the oldest (len - n_slices) overflow so
                 // the count never exceeds the fleet. slice 1 maps to the oldest KEPT chunk.
@@ -159,8 +159,8 @@ pub(crate) fn render_text(
     // must be reported explicitly - never silently absent while unrelated subagents fill
     // stdout. Emit a per-session skip note (top-level sessions only; a skipped subagent is
     // fan-out noise the user did not ask for) carrying the budget it would need. A GENUINELY
-    // EMPTY session (no restorable turns at all → `min_render_chars` is None) is left to the
-    // terminal "no turns selected (empty session set …)" fallback - that case is already
+    // EMPTY session (no restorable turns at all -> `min_render_chars` is None) is left to the
+    // terminal "no turns selected (empty session set ...)" fallback - that case is already
     // honest and not a budget problem. `skipped_any` tracks only the budget-too-small notes,
     // separate from `any`, so the fallback still keys on whether a real block rendered.
     let mut skipped_any = false;
@@ -224,7 +224,7 @@ pub(crate) fn render_text(
         )?;
         // Header automation note carries a PER-CLASS breakdown, not just the lumped scalar,
         // so a reader sees the composition (`2 background-command, 1 agent`) without scanning
-        // every `[kind …]` label line in the body.
+        // every `[kind ...]` label line in the body.
         let automation_note = if n_automation > 0 {
             let breakdown =
                 automation_breakdown_text(&automation_by_kind(std::slice::from_ref(plan)));
@@ -267,7 +267,7 @@ pub(crate) fn render_text(
                 plan.dedup_demoted, sline
             )?;
         }
-        // Announce that ≥1 selected unit is a hook-backfilled elicitation-sidecar record (§3.10)
+        // Announce that >=1 selected unit is a hook-backfilled elicitation-sidecar record (section 3.10)
         // - the consumer is reading merged records, not raw native jsonl.
         if plan_has_sidecar(plan) {
             writeln!(out, "  with elicitation sidecar")?;
@@ -379,7 +379,7 @@ pub(crate) fn build_document_body(
 
 /// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode
 /// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy
-/// document is NOT 3× over-counted the way a byte budget would). A line longer than the
+/// document is NOT 3x over-counted the way a byte budget would). A line longer than the
 /// window on its own is hard-split on a char boundary so NO emitted chunk ever exceeds
 /// `window`. Concatenating the chunks in order reproduces `text` exactly (`split_inclusive`
 /// keeps the newlines), so the slices reassemble losslessly across hook invocations.
@@ -427,7 +427,7 @@ pub(crate) fn slice_into_windows(text: &str, window: usize) -> Vec<String> {
     chunks
 }
 
-/// Emit a `══ compaction boundary ══` banner for every summary the ascending walk
+/// Emit a `== compaction boundary ==` banner for every summary the ascending walk
 /// crosses on the way to a turn with `compactions_before == current`. Crossings are
 /// keyed on the summary RANK from newest (newest = rank 1): moving from a turn at
 /// cb=`prev` to one at cb=`current` (`current < prev`) crosses every summary ranked
@@ -459,7 +459,7 @@ pub(crate) fn crossed_summaries(
     from: Option<usize>,
     to: usize,
 ) -> Vec<&SummaryInfo> {
-    // The first turn seeds the cursor at its own depth → no crossing on arrival.
+    // The first turn seeds the cursor at its own depth -> no crossing on arrival.
     let Some(from) = from else {
         return Vec::new();
     };

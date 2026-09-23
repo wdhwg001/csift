@@ -23,14 +23,14 @@ pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
     } else {
         ""
     };
-    // A merged elicitation-sidecar unit (§3.10) has no physical jsonl line - render the
+    // A merged elicitation-sidecar unit (section 3.10) has no physical jsonl line - render the
     // provenance locator instead of a fabricated `Lnnnn`.
     let locator = if unit.from_sidecar {
         "(elicitation sidecar)".to_string()
     } else {
         format!("L{}", unit.line_no)
     };
-    // An inbound peer/teammate communication opener (§3.3) renders its comm LABEL + the
+    // An inbound peer/teammate communication opener (section 3.3) renders its comm LABEL + the
     // `<from> ⇨ self` direction in place of the bare role word, so a reader sees a peer message -
     // not a human turn - at a glance (parity with `search`'s inbox render). The dotted class path
     // stays lowercase (the canonical selector form); an ordinary unit keeps the UPPERCASE role.
@@ -46,7 +46,7 @@ pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
 }
 
 /// The budget cost of one unit: its REAL header line + the rendered body, each as a
-/// physical line (`chars + NEWLINE_COST`). The body ALREADY includes the `… [+K …] …`
+/// physical line (`chars + NEWLINE_COST`). The body ALREADY includes the `... [+K ...] ...`
 /// elision scaffolding when truncated, so this is measured against the SAME render used
 /// for output - summed cost == summed emitted chars (the budget test relies on it). No
 /// separate marker term (that would double-count). The header length is the true
@@ -57,7 +57,7 @@ pub(crate) fn unit_cost(unit: &TurnUnit) -> usize {
     header_chars + body_chars
 }
 
-/// The `[N tool calls]` marker line render cost INCLUDING its trailing newline (0 ⇒
+/// The `[N tool calls]` marker line render cost INCLUDING its trailing newline (0 =>
 /// omitted, no cost). Matches the exact `  [N tool calls]` line the text renderer emits.
 pub(crate) fn marker_cost(tool_calls: usize) -> usize {
     if tool_calls == 0 {
@@ -68,7 +68,7 @@ pub(crate) fn marker_cost(tool_calls: usize) -> usize {
     }
 }
 
-/// The `[N image(s): …]` marker line - shown under the user line when a turn carries images
+/// The `[N image(s): ...]` marker line - shown under the user line when a turn carries images
 /// (a pasted image / tool screenshot), listing their stable `csift image` ids so a consumer
 /// can `csift image <session> --id <ID> --out <dir>` to get the bytes back.
 pub(crate) fn image_marker_line(ids: &[String]) -> String {
@@ -76,7 +76,7 @@ pub(crate) fn image_marker_line(ids: &[String]) -> String {
     format!("  [{} {}: {}]", ids.len(), noun, ids.join(", "))
 }
 
-/// The image-marker line render cost INCLUDING its trailing newline (0 ⇒ omitted, no cost).
+/// The image-marker line render cost INCLUDING its trailing newline (0 => omitted, no cost).
 /// Matches the exact line `render_turn_text` emits, so summed cost == summed emitted chars.
 pub(crate) fn image_marker_cost(ids: &[String]) -> usize {
     if ids.is_empty() {
@@ -114,7 +114,7 @@ pub(crate) fn banner_cost(line_no: usize, mode: Option<SummarizeMode>) -> usize 
 /// The EXACT total banner chars the render emits when the selected set spans `depth`
 /// compaction boundaries: the render banners every summary ranked 1..=`depth` (rank from
 /// newest = 1), each exactly once (`crossed_summaries` covers ranks `(0, depth]` across a
-/// full ascending walk). `depth == 0` ⇒ no banners. This is charged INCREMENTALLY as
+/// full ascending walk). `depth == 0` => no banners. This is charged INCREMENTALLY as
 /// selection deepens the spanned count, so the banner budget is exact (never the
 /// over-reservation of "all summaries"), keeping more room for real turns at small
 /// budgets / summary-heavy sessions.
@@ -137,7 +137,7 @@ pub(crate) fn cumulative_banner_cost(summaries: &[SummaryInfo], depth: usize) ->
 /// A worst-case (provable upper-bound) char count of the document header block emitted by
 /// [`render_text`] (the `SESSION` line, the budget line, the selected line, the optional
 /// dedup line, and the 60-wide rule). Every numeric placeholder is widened to its
-/// session maximum so the real block is always ≤ this. The 60-wide rule glyph `─` and the
+/// session maximum so the real block is always <= this. The 60-wide rule glyph `-` and the
 /// banner/units glyphs are multi-byte but counted by `chars()`, matching the render.
 pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usize {
     let turns = sr.turns.len();
@@ -145,7 +145,7 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
     // The assistant-units count printed in the selected line can EXCEED `turns` under the
     // richness model (a turn can keep >1 agent message - `All` mode keeps every one), so
     // its worst case is the total agent messages across all turns. The user-units count is
-    // still ≤ turns (one opener per turn).
+    // still <= turns (one opener per turn).
     let max_agent_units = sr.turns.iter().map(|t| t.agents.len()).sum::<usize>();
     let max_line = sr
         .summaries
@@ -154,9 +154,9 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
         .chain(sr.turns.iter().map(turn_latest_line))
         .max()
         .unwrap_or(0);
-    // Upper bounds: user units ≤ turns; assistant units ≤ total agent messages; char
-    // figures ≤ budget; the summary line ≤ max_line; dedup count ≤ both anchors of every
-    // turn (2·turns). Render each worst-case line with the SAME format strings the
+    // Upper bounds: user units <= turns; assistant units <= total agent messages; char
+    // figures <= budget; the summary line <= max_line; dedup count <= both anchors of every
+    // turn (2*turns). Render each worst-case line with the SAME format strings the
     // renderer uses, then sum their char lengths (+ newline).
     let line_session = format!("SESSION {}", sr.session_id);
     let line_budget = format!(
@@ -164,7 +164,7 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
         budget, 0.0_f64, summaries, summaries
     );
     // The `selected` line carries the automation note ` (N automation triggers)` ONLY when
-    // the session actually HAS automation-trigger turns (N ≤ turns). Reserve that space
+    // the session actually HAS automation-trigger turns (N <= turns). Reserve that space
     // only then, so a session with no automation pulses is charged for the header it
     // actually renders (the note is a no-op string otherwise).
     let has_automation = sr.turns.iter().any(|t| t.is_automation);

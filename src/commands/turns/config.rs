@@ -6,20 +6,20 @@
 pub(crate) const USER_CAP: usize = 600;
 
 /// Pre-ellipsis full-keep ceiling for an ASSISTANT end-of-turn unit (chars). Larger
-/// than [`USER_CAP`] because assistant EOT prose is 1.45–2.16× longer with more
+/// than [`USER_CAP`] because assistant EOT prose is 1.45-2.16x longer with more
 /// newlines (measured) - so its head fraction is larger too (see [`ASST_HEAD_FRAC`]).
 pub(crate) const ASST_CAP: usize = 900;
 
 /// Headroom subtracted from `--window` to size the per-body cap in `--slices` (fixed-fleet) mode.
 /// There the per-role 600/900 caps are REPLACED by a window cap: a body renders whole up to
-/// `window - SLICE_BODY_HEADROOM`, so its rendered body LINE (incl. the `… [+K chars, L lines
-/// elided] …` wrapper) AND the unit's separate header line each stay under one window - no single
+/// `window - SLICE_BODY_HEADROOM`, so its rendered body LINE (incl. the `... [+K chars, L lines
+/// elided] ...` wrapper) AND the unit's separate header line each stay under one window - no single
 /// line can force [`slice_into_windows`] to hard-split mid-content. Only a turn that ALONE exceeds
 /// a window is ellipsized; everything else is kept verbatim (the user-directive recovery target).
 pub(crate) const SLICE_BODY_HEADROOM: usize = 200;
 
 /// Head fraction for an ASSISTANT unit's middle-truncation: EOT prose front-loads
-/// context and back-loads the decision, so keep ≈⅔ head / ⅓ tail.
+/// context and back-loads the decision, so keep ~2/3 head / 1/3 tail.
 pub(crate) const ASST_HEAD_FRAC: f64 = 0.66;
 
 /// Head fraction for a USER unit: the ask is front-loaded, slightly less tail needed.
@@ -45,20 +45,20 @@ pub(crate) const NEWLINE_COST: usize = 1;
 pub(crate) const COLLAPSED_PREVIEW_MIN_CHARS: usize = 210;
 
 /// How many chars of a collapsed message the preview line shows (via
-/// `text::truncate_excerpt`, so the line discloses its own elision as `… (+N chars)`).
+/// `text::truncate_excerpt`, so the line discloses its own elision as `... (+N chars)`).
 pub(crate) const COLLAPSED_PREVIEW_CHARS: usize = 60;
 
-/// Normalized-prefix length used for the summary-dedup fingerprint (§6.2): a unit whose
+/// Normalized-prefix length used for the summary-dedup fingerprint (section 6.2): a unit whose
 /// first `DEDUP_PREFIX` normalized chars match a summary bullet/quote is flagged
-/// `also_in_summary` and demoted. Strict (long) prefix ⇒ a false positive is unlikely.
+/// `also_in_summary` and demoted. Strict (long) prefix => a false positive is unlikely.
 pub(crate) const DEDUP_PREFIX: usize = 80;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Multi-agent-message model + richness filtering (the model-expansion)
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 //
 // A genuine-user turn can own a LONG run of agent messages (a debugging/build chain the
-// model narrates step by step) that a compaction summary clips to its single §9 EOT
+// model narrates step by step) that a compaction summary clips to its single section 9 EOT
 // quote. The reconstruction's job is to restore the LOAD-BEARING members of that run
 // without flooding the budget with pure "let me look into this" declarations. The model
 // keeps EVERY agent message on the slice (`TurnSlice.agents`) but SELECTS a survivor set.
@@ -73,28 +73,28 @@ pub(crate) const DEDUP_PREFIX: usize = 80;
 // last-only pick.
 //
 // But "more than one message matters" is common, so `Longest` ALSO keeps:
-//   • the LONGEST agent message - ALWAYS (the substantive Rich Response).
-//   • the FIRST - when SUBSTANTIVE (`full_chars >= rich_min_chars`); the opening message
+//   - the LONGEST agent message - ALWAYS (the substantive Rich Response).
+//   - the FIRST - when SUBSTANTIVE (`full_chars >= rich_min_chars`); the opening message
 //     often states the plan / an early finding worth preserving.
-//   • each MIDDLE that is RICH (`agent_msg_is_rich`); a major finding can live mid-run.
-//   • everything else collapses into a placeholder.
+//   - each MIDDLE that is RICH (`agent_msg_is_rich`); a major finding can live mid-run.
+//   - everything else collapses into a placeholder.
 // `--agent-rich-min-chars` tunes BOTH the first-substantive gate and the rich length arm.
 //
 // `Rich` is the LAST-ANCHORED keep-set, an explicit mode (a long run only; short runs
 // keep all): LAST always + FIRST by position privilege (under `--keep-first`) + each
 // non-droppable MIDDLE.
 //
-//   • LAST agent message  - ALWAYS kept by `Rich` (the outcome / EOT anchor).
-//   • FIRST agent message - kept UNCONDITIONALLY under `--keep-first` (position
+//   - LAST agent message  - ALWAYS kept by `Rich` (the outcome / EOT anchor).
+//   - FIRST agent message - kept UNCONDITIONALLY under `--keep-first` (position
 //     privilege - kept merely for being first, even when not rich); with
 //     `--no-keep-first` it is decided exactly as a MIDDLE.
-//   • MIDDLE agent messages - kept UNLESS a PROVEN pure declaration; else collapsed
+//   - MIDDLE agent messages - kept UNLESS a PROVEN pure declaration; else collapsed
 //     into a placeholder.
 //
 // "Rich" (the predicate) = a CHEAP single-pass heuristic combining LENGTH (a clearly-
 // above-typical body is kept on length alone) with a SIGNAL test (a number-of-substance /
 // commit hash / file:line ref / backtick code path / finding-or-decision lexeme). Keep-on-
-// doubt is the spine: a wrongly-kept declaration costs one header + ≤cap body chars then
+// doubt is the spine: a wrongly-kept declaration costs one header + <=cap body chars then
 // clamps; a wrongly-DROPPED finding is unrecoverable, so DROP requires proof (a signal-
 // less intent-verb opener under the declaration length), KEEP is the default fall-through.
 //
@@ -158,7 +158,7 @@ pub struct RichnessCfg {
     /// Consulted by `Rich` ONLY - `Longest` has no short-run escape.
     pub run_threshold: usize,
     /// Arm-1 length gate: an agent message with `chars >= rich_min_chars` is RICH on
-    /// length alone (default 280 ≈ 1.5× the measured 184-char median middle). In
+    /// length alone (default 280 ~ 1.5x the measured 184-char median middle). In
     /// `Longest` mode this ALSO gates the "keep the first if substantive" decision.
     pub rich_min_chars: usize,
     /// Drop-predicate upper bound: a signal-less intent-verb-opening message shorter than
@@ -186,6 +186,6 @@ impl Default for RichnessCfg {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Role + intermediate model
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

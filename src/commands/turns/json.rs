@@ -98,7 +98,7 @@ pub(crate) fn render_json(
         "automation_triggers": total_automation,
         "automation_by_kind": by_kind,
         "automation_in_scope_by_kind": in_scope_by_kind,
-        // True when ≥1 selected unit was merged from the elicitation sidecar (§3.10) - the
+        // True when >=1 selected unit was merged from the elicitation sidecar (section 3.10) - the
         // machine echo of the per-session `with elicitation sidecar` text note.
         "with_elicitation_sidecar": plans.iter().any(plan_has_sidecar),
     });
@@ -221,7 +221,7 @@ pub(crate) fn emit_unit_json<W: std::io::Write>(
         "is_subagent": sr.is_subagent,
         "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,
-        // A merged elicitation-sidecar unit (§3.10) has NO physical line - `line` is null
+        // A merged elicitation-sidecar unit (section 3.10) has NO physical line - `line` is null
         // and `source:"elicitation-sidecar"` marks the provenance; a native unit omits `source`.
         "line": if unit.from_sidecar { serde_json::Value::Null } else { json!(unit.line_no) },
         "source": if unit.from_sidecar { json!("elicitation-sidecar") } else { serde_json::Value::Null },
@@ -248,7 +248,7 @@ pub(crate) fn emit_unit_json<W: std::io::Write>(
     // STRUCTURED automation attribution on a USER segment: a machine pulse opener carries
     // `is_automation:true` + the parsed trigger CLASS / id / status as fields, so a JSON
     // consumer distinguishes a human turn from an automation pulse WITHOUT regexing the
-    // `[<kind> …]` text prefix out of the prose. A human user turn carries
+    // `[<kind> ...]` text prefix out of the prose. A human user turn carries
     // `is_automation:false` and omits the trigger fields. (An assistant unit is never an
     // automation opener, so it always renders `is_automation:false`.)
     if let Some(map) = obj.as_object_mut() {
@@ -265,10 +265,10 @@ pub(crate) fn emit_unit_json<W: std::io::Write>(
                 map.insert("event".into(), json!(t.event));
             }
         }
-        // STRUCTURED inbound-comm attribution (§3.3): a `<teammate-message>` opener carries
+        // STRUCTURED inbound-comm attribution (section 3.3): a `<teammate-message>` opener carries
         // `is_inbound_comm:true` + the comm `label` / `from` / `to` (== `self`) so a JSON consumer
         // distinguishes a peer message from a human turn WITHOUT regexing the header. An ordinary
-        // unit omits these fields (absence ⇒ not an inbound comm).
+        // unit omits these fields (absence => not an inbound comm).
         if let Some(ic) = unit.inbound.as_ref() {
             map.insert("is_inbound_comm".into(), json!(true));
             map.insert("comm_label".into(), json!(ic.class.path()));
@@ -284,7 +284,7 @@ pub(crate) fn emit_unit_json<W: std::io::Write>(
 }
 
 /// Emit a collapsed-agent-span placeholder as a JSON record (the machine twin of the
-/// text `△ L… [X agent messages, Y tool calls, Z failed]` line). Carries the exact X/Y/Z
+/// text `△ L... [X agent messages, Y tool calls, Z failed]` line). Carries the exact X/Y/Z
 /// counts + the fetchable first/last jsonl line so a consumer can `Read` the raw range.
 pub(crate) fn emit_placeholder_json<W: std::io::Write>(
     w: &mut W,

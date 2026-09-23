@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── Multi-compaction spanning + dedup demotion ──
+// -- Multi-compaction spanning + dedup demotion --
 
 #[test]
 fn spanned_boundary_count_is_max_compactions_before() {
@@ -27,13 +27,13 @@ fn spanned_boundary_count_is_max_compactions_before() {
     ];
     // The oldest selected turn (cb=2) means the ascending render crosses 2 boundaries.
     assert_eq!(spanned_boundary_count(&turns, &selected), 2);
-    // Only the live turn selected → 0 boundaries spanned.
+    // Only the live turn selected -> 0 boundaries spanned.
     let live_only = vec![Selected {
         turn_index: 2,
         sides: SelSides::Both,
     }];
     assert_eq!(spanned_boundary_count(&turns, &live_only), 0);
-    // Empty selection → 0.
+    // Empty selection -> 0.
     assert_eq!(spanned_boundary_count(&turns, &[]), 0);
 }
 
@@ -54,17 +54,17 @@ fn max_compactions_caps_reach() {
     assert!(capped.spanned_boundaries <= 1);
 }
 
-// ── boundary banner crossing logic ──
+// -- boundary banner crossing logic --
 
 #[test]
 fn crossed_summaries_first_turn_crosses_nothing() {
-    // 3 summaries at lines 100<200<300 → ranks (newest=1): 300=r1, 200=r2, 100=r3.
+    // 3 summaries at lines 100<200<300 -> ranks (newest=1): 300=r1, 200=r2, 100=r3.
     let sums = vec![
         summary(100, vec![], 10),
         summary(200, vec![], 20),
         summary(300, vec![], 30),
     ];
-    // FIRST turn (from=None): the cursor seeds at its own depth → crosses NOTHING (a
+    // FIRST turn (from=None): the cursor seeds at its own depth -> crosses NOTHING (a
     // summary older than every selected turn has no restored turn below it).
     assert!(crossed_summaries(&sums, None, 2).is_empty());
     assert!(crossed_summaries(&sums, None, 0).is_empty());
@@ -78,7 +78,7 @@ fn crossed_summaries_step_emits_each_boundary_once() {
         summary(300, vec![], 30),
     ];
     // Moving from a turn at cb=2 to a turn at cb=0: crosses ranks (0, 2] = r1 (300) and
-    // r2 (200), ascending → [200, 300].
+    // r2 (200), ascending -> [200, 300].
     let crossed = crossed_summaries(&sums, Some(2), 0);
     assert_eq!(
         crossed.iter().map(|s| s.line_no).collect::<Vec<_>>(),
@@ -87,7 +87,7 @@ fn crossed_summaries_step_emits_each_boundary_once() {
     // Moving from cb=2 to cb=1: crosses only rank 2 (line 200).
     let one = crossed_summaries(&sums, Some(2), 1);
     assert_eq!(one.iter().map(|s| s.line_no).collect::<Vec<_>>(), vec![200]);
-    // No movement (same cb) → nothing; moving DEEPER (to >= from) → nothing.
+    // No movement (same cb) -> nothing; moving DEEPER (to >= from) -> nothing.
     assert!(crossed_summaries(&sums, Some(1), 1).is_empty());
     assert!(crossed_summaries(&sums, Some(1), 2).is_empty());
 }
@@ -110,7 +110,7 @@ fn boundary_banners_total_equals_max_cb_across_walk() {
         prev = Some(cb);
     }
     // The two summaries WITHIN the selected span (ranks 1,2 = lines 300,200), each once.
-    // The oldest summary (line 100, rank 3) is OLDER than every selected turn → never
+    // The oldest summary (line 100, rank 3) is OLDER than every selected turn -> never
     // bannered.
     assert_eq!(emitted.len(), 2, "banners == max cb (2): {emitted:?}");
     let mut sorted = emitted.clone();

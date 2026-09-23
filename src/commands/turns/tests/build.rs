@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── compact_summary_body / body_newline_positions via real Record parse ──
+// -- compact_summary_body / body_newline_positions via real Record parse --
 
 #[test]
 fn compact_summary_body_reads_string_content_only() {
@@ -13,12 +13,12 @@ fn compact_summary_body_reads_string_content_only() {
         compact_summary_body(&s).as_deref(),
         Some("the summary body text")
     );
-    // A block-bodied (surprise) summary → None, not a guess.
+    // A block-bodied (surprise) summary -> None, not a guess.
     let blocks = rec(
         r#"{"type":"user","isCompactSummary":true,"message":{"role":"user","content":[{"type":"text","text":"x"}]}}"#,
     );
     assert!(compact_summary_body(&blocks).is_none());
-    // No message → None.
+    // No message -> None.
     let bare = rec(r#"{"type":"user","isCompactSummary":true}"#);
     assert!(compact_summary_body(&bare).is_none());
 }
@@ -41,13 +41,13 @@ fn body_newline_positions_locates_original_newlines_in_the_rendered_body() {
     let atext = a.agent_text().expect("agent body");
     assert_eq!(atext, "first second");
     assert_eq!(body_newline_positions(&a, &atext), vec![5]);
-    // No message → no positions.
+    // No message -> no positions.
     let bare = rec(r#"{"type":"system","subtype":"x"}"#);
     assert!(body_newline_positions(&bare, "anything").is_empty());
-    // message but no content → no positions.
+    // message but no content -> no positions.
     let nocontent = rec(r#"{"type":"user","message":{"role":"user"}}"#);
     assert!(body_newline_positions(&nocontent, "anything").is_empty());
-    // A single-line body → no positions (so no `lines elided` note can ever print).
+    // A single-line body -> no positions (so no `lines elided` note can ever print).
     let oneline = rec(r#"{"type":"user","message":{"role":"user","content":"one line only"}}"#);
     assert!(body_newline_positions(&oneline, "one line only").is_empty());
 }
@@ -68,7 +68,7 @@ fn body_newline_positions_refuses_a_fabricated_body() {
     assert!(raw_body(&r).expect("a body").contains('\n'));
 }
 
-// ── build(): turn slices + tool-call counts from line-numbered records ──
+// -- build(): turn slices + tool-call counts from line-numbered records --
 
 #[test]
 fn build_produces_round_trip_with_tool_count_and_compaction() {
@@ -113,7 +113,7 @@ fn build_produces_round_trip_with_tool_count_and_compaction() {
     ];
     let (turns, summaries) = build(&records, &view_of(&records), &[]);
     assert_eq!(turns.len(), 2);
-    // turn 0: round-trip, 2 tool calls, before the (one) summary → compactions_before 1.
+    // turn 0: round-trip, 2 tool calls, before the (one) summary -> compactions_before 1.
     assert!(turns[0].is_round_trip());
     assert_eq!(turns[0].tool_calls, 2);
     assert_eq!(turns[0].compactions_before, 1);
@@ -122,7 +122,7 @@ fn build_produces_round_trip_with_tool_count_and_compaction() {
     // turn 1: live region, 0 tool calls, after the summary.
     assert_eq!(turns[1].compactions_before, 0);
     assert_eq!(turns[1].tool_calls, 0);
-    // one summary captured with a fingerprint of the §6 bullet.
+    // one summary captured with a fingerprint of the section 6 bullet.
     assert_eq!(summaries.len(), 1);
     assert_eq!(summaries[0].line_no, 4);
     assert!(summaries[0]
@@ -158,7 +158,7 @@ fn build_pure_tool_call_turn_has_no_assistant_eot() {
 
 #[test]
 fn build_orphan_assistant_lead_has_no_user() {
-    // Records that lead with an assistant before any genuine user → a synthetic turn 0
+    // Records that lead with an assistant before any genuine user -> a synthetic turn 0
     // with assistant_eot but no user (group_turn_indices seeds turn 0 with the lead).
     let records: Vec<(usize, Record)> = vec![
         (
@@ -188,8 +188,8 @@ fn build_orphan_assistant_lead_has_no_user() {
 
 #[test]
 fn build_summary_with_block_body_is_not_captured() {
-    // A summary record with a BLOCK body (not a string) → compact_summary_body returns
-    // None → the summary is NOT captured (the `if let Some(body)` false arm in build).
+    // A summary record with a BLOCK body (not a string) -> compact_summary_body returns
+    // None -> the summary is NOT captured (the `if let Some(body)` false arm in build).
     let records: Vec<(usize, Record)> = vec![
         (
             1,
@@ -201,7 +201,7 @@ fn build_summary_with_block_body_is_not_captured() {
                 r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"reply"}]}}"#,
             ),
         ),
-        // a block-bodied "summary" (a genuine surprise) → skipped as a summary source.
+        // a block-bodied "summary" (a genuine surprise) -> skipped as a summary source.
         (
             3,
             rec(
@@ -215,18 +215,18 @@ fn build_summary_with_block_body_is_not_captured() {
     assert_eq!(turns[0].compactions_before, 0);
 }
 
-// ── Render-helper + raw-body branch completeness ──
+// -- Render-helper + raw-body branch completeness --
 
 #[test]
 fn body_newline_positions_block_with_empty_text_blocks() {
-    // A block body where one text block is blank → it is skipped (the `!text.trim()`
+    // A block body where one text block is blank -> it is skipped (the `!text.trim()`
     // false arm); only the non-blank block contributes, so its own newline is the only one.
     let r = rec(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"   "},{"type":"text","text":"real\nline"}]}}"#,
     );
     let t = r.agent_text().expect("agent body");
     assert_eq!(body_newline_positions(&r, &t), vec![4]);
-    // A block body with a non-text block (tool_use) interleaved → only text counts.
+    // A block body with a non-text block (tool_use) interleaved -> only text counts.
     let r2 = rec(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}},{"type":"text","text":"a\nb\nc"}]}}"#,
     );
@@ -265,10 +265,10 @@ fn build_skips_non_genuine_user_opener() {
 
 #[test]
 fn raw_body_none_when_no_message_and_no_content() {
-    // No message at all → None (the `rec.message.as_ref()?` arm).
+    // No message at all -> None (the `rec.message.as_ref()?` arm).
     let no_msg = rec(r#"{"type":"system","subtype":"x"}"#);
     assert!(raw_body(&no_msg).is_none());
-    // message present, no content → None (the `content.as_ref()?` arm).
+    // message present, no content -> None (the `content.as_ref()?` arm).
     let no_content = rec(r#"{"type":"user","message":{"role":"user"}}"#);
     assert!(raw_body(&no_content).is_none());
 }
