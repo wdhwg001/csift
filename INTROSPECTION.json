@@ -33862,7 +33862,7 @@
         {
           "path": "src/parse/lines.rs",
           "lines": "85-90",
-          "snippet": "/// Serialization-tolerant role-marker test - THE stage-1 candidate needle for\n/// message records (the needle law). CC's own wire format is compact JSON, but a hand-authored\n/// or reserialized line may carry whitespace around the colon (`\"role\": \"user\"`) -\n/// valid JSON, the same record. The old exact-byte needles (`\"role\":\"user\"`)\n/// silently DROPPED such lines one layer BEFORE any malformed counter could see\n/// them: not skipped, not counted, simply invisible on every surface. One `memmem`"
+          "snippet": "/// Serialization-tolerant role-marker test - THE stage-1 candidate needle for\n/// message records (the needle law). CC's own wire format is compact JSON, but a hand-authored\n/// or reserialized line may carry whitespace around the colon (`\"role\": \"user\"`) -\n/// valid JSON, the same record. An exact-byte needle (`\"role\":\"user\"`) silently\n/// DROPS such a line one layer BEFORE any malformed counter could see it: not\n/// skipped, not counted, simply invisible on every surface. One `memmem` pass for"
         },
         {
           "path": "src/parse/lines.rs",
@@ -51326,7 +51326,7 @@
         {
           "path": "src/parse/lines.rs",
           "lines": "85-99",
-          "snippet": "/// Serialization-tolerant role-marker test - THE stage-1 candidate needle for\n/// message records (the needle law). CC's own wire format is compact JSON, but a hand-authored\n/// or reserialized line may carry whitespace around the colon (`\"role\": \"user\"`) -\n/// valid JSON, the same record. The old exact-byte needles (`\"role\":\"user\"`)\n/// silently DROPPED such lines one layer BEFORE any malformed counter could see\n/// them: not skipped, not counted, simply invisible on every surface. One `memmem`\n/// pass for the quoted key + an O(1) verify per hit; a keyless line costs ONE scan\n/// where the old disjunct cost two, so \u00a77 holds (benchmarked on the real corpus).\n/// The quoted-key needle cannot match content text: inside a JSON string the quotes\n/// are escaped (`\\\"role\\\"`), which breaks the needle bytes.\npub(crate) fn line_role_value_matches(\n    line: &[u8],\n    accept_user: bool,\n    accept_assistant: bool,\n) -> bool {"
+          "snippet": "/// Serialization-tolerant role-marker test - THE stage-1 candidate needle for\n/// message records (the needle law). CC's own wire format is compact JSON, but a hand-authored\n/// or reserialized line may carry whitespace around the colon (`\"role\": \"user\"`) -\n/// valid JSON, the same record. An exact-byte needle (`\"role\":\"user\"`) silently\n/// DROPS such a line one layer BEFORE any malformed counter could see it: not\n/// skipped, not counted, simply invisible on every surface. One `memmem` pass for\n/// the quoted key + an O(1) verify per hit; a keyless line costs ONE scan where a\n/// two-spelling disjunct costs two, so \u00a77 holds (benchmarked on the real corpus).\n/// The quoted-key needle cannot match content text: inside a JSON string the quotes\n/// are escaped (`\\\"role\\\"`), which breaks the needle bytes.\npub(crate) fn line_role_value_matches(\n    line: &[u8],\n    accept_user: bool,\n    accept_assistant: bool,\n) -> bool {"
         },
         {
           "path": "src/parse/lines.rs",

@@ -350,7 +350,8 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
     );
     // (1) FROZEN at a dangerous-rm Bash (unreturned), PRECEDED by assistant TEXT - the exact
-    // L629→L630 shape that made the old walk-back mis-report `completed`. → escalation-blocked.
+    // L629→L630 shape a tail walk-back for an end-of-turn text mis-reads as `completed`.
+    // → escalation-blocked.
     // The command parses cleanly, so the STRUCTURED checker `_9` (@162770807) decides it: the
     // decomposer leaves a tracked-variable sentinel, the trailing glob is stripped, and the
     // unresolvable-target arm (@162771609) asks with the bypass-immune breaker.
@@ -362,11 +363,11 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
                 "{\"type\":\"assistant\",\"version\":\"2.1.258\",\"timestamp\":\"2026-06-07T05:02:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_rm\",\"name\":\"Bash\",\"input\":{\"command\":\"rm -rf \\\"$SCRATCH\\\"/*\"}}]}}\n"
             ),
         );
-    // (1b) The FALSE POSITIVE the old port produced and this one does not. A for-loop body is a
+    // (1b) The FALSE POSITIVE a hand-stripped clause head produces. A for-loop body is a
     // too-complex parse, so the LEXICAL classifier `hnt` (@162773520) decides - and its clause
-    // head `_to` (@162773345) skips no shell keyword, so it cannot match `do rm` at all. The old
-    // port hand-stripped `do`/`then` and called this escalation-blocked; the harness of this
-    // generation answers null and falls to the generic too-complex ask, which is NOT immune.
+    // head `_to` (@162773345) skips no shell keyword, so it cannot match `do rm` at all. A head
+    // that strips `do`/`then` calls this escalation-blocked; the harness of this generation
+    // answers null and falls to the generic too-complex ask, which is NOT immune.
     fx.write(
             &format!("{enc}/{SESS}/subagents/agent-akwd444.jsonl"),
             concat!(

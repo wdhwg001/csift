@@ -153,7 +153,7 @@ impl JournalCache {
                 continue;
             }
             let Ok(bytes) = std::fs::read(&journal) else {
-                continue; // unreadable/absent → no entry (matches the old per-read failure arm)
+                continue; // unreadable/absent → no entry, never a failed build
             };
             let mut data = JournalData::default();
             for line in bytes.split(|&b| b == b'\n') {

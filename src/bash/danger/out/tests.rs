@@ -270,8 +270,8 @@ fn the_token_walk_skips_the_shapes_that_lead_a_clause() {
 
 #[test]
 fn the_prefix_run_consumes_its_own_flags_redirections_and_settings() {
-    // This is where `sudo rm` and `xargs rm` enter, the gap the old port patched
-    // by hand.
+    // This is where `sudo rm` and `xargs rm` enter: the walk consumes the prefix run
+    // instead of testing a clause head, so no keyword strip is needed to reach the verb.
     assert_eq!(walk_verb("sudo rm x"), Some("rm"));
     assert_eq!(walk_verb("xargs rm x"), Some("rm"));
     assert_eq!(walk_verb("sudo doas rm x"), Some("rm"), "two in a row");

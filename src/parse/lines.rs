@@ -85,11 +85,11 @@ pub(crate) fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
 /// Serialization-tolerant role-marker test - THE stage-1 candidate needle for
 /// message records (the needle law). CC's own wire format is compact JSON, but a hand-authored
 /// or reserialized line may carry whitespace around the colon (`"role": "user"`) -
-/// valid JSON, the same record. The old exact-byte needles (`"role":"user"`)
-/// silently DROPPED such lines one layer BEFORE any malformed counter could see
-/// them: not skipped, not counted, simply invisible on every surface. One `memmem`
-/// pass for the quoted key + an O(1) verify per hit; a keyless line costs ONE scan
-/// where the old disjunct cost two, so §7 holds (benchmarked on the real corpus).
+/// valid JSON, the same record. An exact-byte needle (`"role":"user"`) silently
+/// DROPS such a line one layer BEFORE any malformed counter could see it: not
+/// skipped, not counted, simply invisible on every surface. One `memmem` pass for
+/// the quoted key + an O(1) verify per hit; a keyless line costs ONE scan where a
+/// two-spelling disjunct costs two, so §7 holds (benchmarked on the real corpus).
 /// The quoted-key needle cannot match content text: inside a JSON string the quotes
 /// are escaped (`\"role\"`), which breaks the needle bytes.
 pub(crate) fn line_role_value_matches(

@@ -38,8 +38,8 @@ pub fn truncate_excerpt(s: &str, max: usize) -> String {
 /// Collapse internal whitespace runs to single spaces, then [`truncate_excerpt`] to `max`.
 /// CODEPOINT-SAFE (collapses + truncates on char boundaries). Used by the `agents`
 /// one-line returned-message preview, which both flattens multi-line content AND must mark
-/// its elision with the same `… (+N chars)` count as every other excerpt path (the old
-/// `agents::one_line` dropped the count - a silent-truncation contract violation).
+/// its elision with the same `… (+N chars)` count as every other excerpt path: a preview
+/// that flattens without the count is a silent truncation, which the output contract forbids.
 #[must_use]
 pub fn collapse_and_truncate(s: &str, max: usize) -> String {
     let collapsed = s.split_whitespace().collect::<Vec<_>>().join(" ");

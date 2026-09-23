@@ -299,7 +299,7 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
     let journals = JournalCache::build(&subs);
     // Build each node IN PARALLEL: `node_for` is pure (reads only its own transcript + the shared
     // `&index`), so this is a drop-in `par_iter`. `rayon`'s ordered collect preserves the `subs`
-    // order, so the resulting `nodes` vec is byte-identical to the old serial `.iter().map()`.
+    // order, so the `nodes` vec does not depend on completion order at all.
     // Like the spawn-index parallelism, this is what rescues the single-session target where the
     // caller's outer across-sessions `par_iter` runs on one thread.
     let mut nodes: Vec<SubagentNode> = subs

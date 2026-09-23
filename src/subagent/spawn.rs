@@ -172,8 +172,8 @@ pub(crate) fn scan_spawns_into(
     // line carrying a `tool_use` (a spawn) or a paired `tool_result` (the sync returned-message
     // source) can contribute to the index; every other line (thinking/text/genuine-user/summary/
     // system) is skipped BEFORE the full serde parse. This also within-file-parallelizes the big
-    // 398 MB main scan. Malformed candidate lines are silently dropped (as the old scan did - the
-    // spawn index is best-effort), so the returned skip count is intentionally ignored.
+    // 398 MB main scan. Malformed candidate lines are silently dropped - the spawn index is
+    // best-effort - so the returned skip count is intentionally ignored.
     let (records, _skipped) = parse_candidates_parallel(bytes, spawn_line_candidate);
     for (_line_no, rec) in &records {
         accumulate_spawns(rec, issuer, idx);
@@ -193,7 +193,7 @@ pub(crate) fn spawn_line_candidate(line: &[u8]) -> bool {
 /// Fold one candidate record's spawn tool_uses + paired tool_results into `idx`. `issuer` tags
 /// every spawn id with the agent that issued it (`None` = the main session). Split out of
 /// [`scan_spawns_into`] so the (prefiltered, parallel) parse and this serial accumulation are
-/// separate concerns; the body is identical to the old inline closure.
+/// separate concerns.
 pub(crate) fn accumulate_spawns(rec: &Record, issuer: Option<&str>, idx: &mut ParentSpawnIndex) {
     let Some(blocks) = rec.blocks() else {
         return;

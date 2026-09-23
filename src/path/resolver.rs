@@ -341,8 +341,8 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
             continue;
         }
         // A BARE session/agent id (no `@`) can never be a project path in practice, and
-        // the old fall-through error ("no project dir named …") described the WRONG
-        // mental model back to the caller. Catch the id SHAPE (unless a real path of
+        // the path branch's fall-through error ("no project dir named …") describes the
+        // WRONG mental model back to the caller. Catch the id SHAPE (unless a real path of
         // that name exists) and say the exact fix.
         if let Some(tok) = p.to_str() {
             if (is_uuid(tok)

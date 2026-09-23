@@ -70,7 +70,7 @@ const EXAMPLES: &[Example] = &[
         gen2: Decision::Unresolved,
         gen3: Decision::Unresolved,
     },
-    // 6. A trailing SLASH is not a glob run. The old lexical-only port called this
+    // 6. A trailing SLASH is not a glob run. A lexical-only reading calls this
     //    dangerous; the checker that actually runs does not.
     Example {
         command: "rm $D/",
@@ -96,7 +96,7 @@ const EXAMPLES: &[Example] = &[
         gen3: Decision::Ask,
     },
     // 9. A for-loop body. The generation 1 and 2 clause head cannot match `do rm`,
-    //    which is exactly the false positive the old port's keyword strip created.
+    //    which is exactly the false positive a keyword strip on that head creates.
     //    The generation 3 token walk skips the keyword and reaches the target.
     Example {
         command: "for f in a b; do rm -rf $TMP/$f; done",
@@ -191,7 +191,7 @@ const EXAMPLES: &[Example] = &[
         gen2: Decision::Passthrough,
         gen3: Decision::Passthrough,
     },
-    // 22. A braced expansion with no glob: the old port called it dangerous, the
+    // 22. A braced expansion with no glob: a lexical reading calls it dangerous, the
     //     structured checker does not decide it either way.
     Example {
         command: "rm ${DIR}/$x",
@@ -388,9 +388,8 @@ fn the_generation_three_token_walk_reaches_a_prefixed_removal() {
 
 #[test]
 fn a_keyword_attached_removal_is_reachable_only_from_generation_three() {
-    // The two assertions the old port had backwards, kept here in their original
-    // form. Its clause head was hand-patched to strip a leading `do`/`then`; the
-    // real head `_to` @162773345 strips nothing, so neither of these is a removal
+    // A clause head patched to strip a leading `do`/`then` reads both of these as
+    // removals. The real head `_to` @162773345 strips nothing, so neither is a removal
     // the harness sees until the token walk arrives at 2.1.261.
     for cmd in [
         "for f in a; do rm -rf $TMP/$f; done",
