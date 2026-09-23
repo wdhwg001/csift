@@ -34,13 +34,17 @@
 //! chain the model narrates step by step - that a compaction summary clips to its single
 //! §9 EOT quote. Each [`TurnSlice`] therefore carries `agents: Vec<AgentMsg>` (EVERY
 //! agent-text record of the turn, in file order), and a derived `assistant_eot()`
-//! accessor returns the LAST element - the EOT anchor - preserving the whole existing
-//! dedup / round-trip / render call-graph with zero churn.
+//! accessor returns the LAST element - the EOT anchor the dedup, round-trip and render
+//! paths key on.
 //!
 //! Selection ([`select_agent_messages`]) reduces the run to a survivor set, gated by the
 //! master `--agent-msgs` mode:
-//!   - `eot-only` (DEFAULT, non-breaking) - keep only the last agent message; the output
-//!     is byte-identical to the pre-expansion single-EOT document.
+//!   - `longest` (DEFAULT) - keep the LONGEST agent message, the FIRST when substantive
+//!     and each RICH middle; everything else collapses into a placeholder. The longest is
+//!     the best one-message proxy for where the substance is, while the run's LAST message
+//!     is frequently a throwaway wrap-up.
+//!   - `eot-only` - keep only the last agent message, which is that wrap-up whenever the
+//!     substance of the run sits earlier: the force-last-only escape.
 //!   - `rich` - on a LONG run (`agents.len() > run_threshold`, default 6): the LAST is
 //!     always kept; the FIRST is kept by position privilege under `--keep-first`; each
 //!     MIDDLE is kept UNLESS it is a PROVEN pure declaration. Collapsed contiguous runs

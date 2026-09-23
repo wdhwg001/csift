@@ -55,8 +55,8 @@ impl Activity {
                 // leaves one by one is what let the split drop two of them silently.
                 c if c.category() == "agent.thinking" => self.thinking += 1,
                 // By CATEGORY, for the reason the line above takes: `agent.message`
-                // is two leaves now, and naming one by hand is how the thinking count
-                // lost two of its four.
+                // is two leaves, and naming one by hand is how the thinking count lost
+                // two of its four.
                 c if c.category() == "agent.message" => self.agent_messages += 1,
                 crate::model::Class::UserMessage => self.user_prompts += 1,
                 c if c.path().starts_with("harness.notification") => self.notifications += 1,

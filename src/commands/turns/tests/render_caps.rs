@@ -222,7 +222,7 @@ fn emit_unit_text_flags_dedup_unit() {
         lines.iter().any(|l| l.contains("(also in summary)")),
         "dedup flag rendered: {lines:?}"
     );
-    // The glyph is derived from the role (user → ▽) inside emit_unit_text now.
+    // The glyph is derived from the role (user → ▽) inside emit_unit_text.
     assert!(lines[0].starts_with("▽ L7"), "user glyph: {lines:?}");
 }
 

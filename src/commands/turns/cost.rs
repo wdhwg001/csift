@@ -165,8 +165,8 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
     );
     // The `selected` line carries the automation note ` (N automation triggers)` ONLY when
     // the session actually HAS automation-trigger turns (N ≤ turns). Reserve that space
-    // only then, so a session with no automation pulses keeps the exact pre-feature header
-    // budget (the note is a no-op string otherwise).
+    // only then, so a session with no automation pulses is charged for the header it
+    // actually renders (the note is a no-op string otherwise).
     let has_automation = sr.turns.iter().any(|t| t.is_automation);
     let line_selected = if has_automation {
         format!(

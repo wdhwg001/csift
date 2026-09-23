@@ -102,9 +102,8 @@ pub(crate) struct AgentMsg {
 }
 
 /// One reconstructable turn: the user opener, the turn-wide tool-call count, and the
-/// ORDERED run of every agent-text message in the turn (the model-expansion - replaces
-/// the single `assistant_eot`). The derived `assistant_eot()` accessor keeps the old
-/// "last == EOT" anchor for dedup / round-trip / render compatibility.
+/// ORDERED run of every agent-text message in the turn. The derived `assistant_eot()`
+/// accessor answers the "last == EOT" anchor the dedup, round-trip and render paths key on.
 #[derive(Debug, Clone)]
 pub(crate) struct TurnSlice {
     /// 0-based genuine-user turn index (from `group_turn_indices`).
@@ -160,9 +159,9 @@ impl TurnSlice {
     }
 
     /// The EOT anchor: the LAST agent message's unit (the turn's outcome/decision, the
-    /// dedup + round-trip key). `None` for a pure tool-call turn. This derived accessor
-    /// preserves the whole existing call-graph that keyed on the old `assistant_eot`
-    /// field with zero behavioural churn.
+    /// dedup + round-trip key). `None` for a pure tool-call turn. It is DERIVED rather than
+    /// stored, so the run is the single source and no second field can disagree with its
+    /// last element.
     pub(crate) fn assistant_eot(&self) -> Option<&TurnUnit> {
         self.agents.last().map(|a| &a.unit)
     }

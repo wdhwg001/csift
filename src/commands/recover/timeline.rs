@@ -329,7 +329,8 @@ pub(crate) fn render_json(
         }
     }
 
-    // envelope v2 summary (flat - the old nested {"summary":{…}} wrapper is gone).
+    // envelope v2 summary: FLAT, so a consumer reads one object per line rather than
+    // reaching through a {"summary":{…}} wrapper.
     let mut summary_fields = json!({
         "sessions": session_count,
         "file": ctx.file,

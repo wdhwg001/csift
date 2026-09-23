@@ -121,7 +121,7 @@ pub(crate) enum EventKind {
     /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a
     /// verified content to detect and REBASE across harness-side writes that left
     /// no tool record (e.g. Claude Code rewriting settings.json on /model); an
-    /// unverified marker stays the old coverage annotation.
+    /// unverified marker carries the coverage annotation alone, with nothing to rebase on.
     HistorySnapshotMarker {
         version: Option<u64>,
         backup_file: Option<String>,

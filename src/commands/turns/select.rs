@@ -93,7 +93,7 @@ fn select_kept<'a>(turn: &'a TurnSlice, cfg: &RichnessCfg) -> Vec<AgentRender<'a
             }
             // The LONGEST agent message is ALWAYS kept (the substantive Rich Response).
             // `max_by_key` returns the LAST maximum on ties, so an all-equal run picks the
-            // same index the old `agents.last()` default did - the documented tie rule.
+            // same index a last-only pick would - the documented tie rule.
             let longest = agents
                 .iter()
                 .enumerate()
@@ -127,7 +127,7 @@ fn select_kept<'a>(turn: &'a TurnSlice, cfg: &RichnessCfg) -> Vec<AgentRender<'a
             collapse_unkept(agents, keep)
         }
         AgentMsgMode::EotOnly => {
-            // Only the last (the EOT anchor) - reproduces the pre-expansion output.
+            // Only the last (the EOT anchor) - the force-last-only escape.
             vec![AgentRender::Kept(agents.last().expect("non-empty"))]
         }
         AgentMsgMode::All => agents.iter().map(AgentRender::Kept).collect(),

@@ -22016,7 +22016,7 @@
         {
           "path": "src/commands/recover/types.rs",
           "lines": "113-124",
-          "snippet": "    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.\n    /// The marker carries its INSTRUMENT payload: the per-path\n    /// `version` (monotone within a GENERATION; the counter resets mid-session on\n    /// process restart - 148 real occurrences - so a DECREASE means a new\n    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,\n    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when\n    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name\n    /// COLLIDES across a generation reset, so an unverified read can return the\n    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a\n    /// verified content to detect and REBASE across harness-side writes that left\n    /// no tool record (e.g. Claude Code rewriting settings.json on /model); an\n    /// unverified marker stays the old coverage annotation."
+          "snippet": "    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.\n    /// The marker carries its INSTRUMENT payload: the per-path\n    /// `version` (monotone within a GENERATION; the counter resets mid-session on\n    /// process restart - 148 real occurrences - so a DECREASE means a new\n    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,\n    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when\n    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name\n    /// COLLIDES across a generation reset, so an unverified read can return the\n    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a\n    /// verified content to detect and REBASE across harness-side writes that left\n    /// no tool record (e.g. Claude Code rewriting settings.json on /model); an\n    /// unverified marker carries the coverage annotation alone, with nothing to rebase on."
         }
       ],
       "states": [
@@ -30030,7 +30030,7 @@
         {
           "path": "src/commands/live/children.rs",
           "lines": "14-20",
-          "snippet": "/// Tail-record age (seconds) under which a settled-looking child is treated as still\n/// GENERATING when its last assistant record is not an end_turn. Measured: intra-lane\n/// record gaps reach p99.9 = 295s during genuine work (a long generation writes\n/// nothing for minutes), while dead lanes sit >= 31h out - four orders of magnitude of\n/// separation, so 300s misses almost no real work and resurrects no dead lane. The\n/// old 15s window read a lane mid-generation as settled 1 time in 17.\npub(crate) const CHILD_RECENT_SECS: i64 = 300;"
+          "snippet": "/// Tail-record age (seconds) under which a settled-looking child is treated as still\n/// GENERATING when its last assistant record is not an end_turn. Measured: intra-lane\n/// record gaps reach p99.9 = 295s during genuine work (a long generation writes\n/// nothing for minutes), while dead lanes sit >= 31h out - four orders of magnitude of\n/// separation, so 300s misses almost no real work and resurrects no dead lane. A 15s\n/// window reads a lane mid-generation as settled 1 time in 17.\npub(crate) const CHILD_RECENT_SECS: i64 = 300;"
         },
         {
           "path": "src/commands/live/children.rs",
@@ -81746,7 +81746,7 @@
         },
         {
           "path": "src/commands/turns/units.rs",
-          "lines": "206-210",
+          "lines": "205-209",
           "snippet": "    /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER\n    /// replayed: the compaction summariser's input is the in-memory message array, so it\n    /// never saw them either (claim CMP-020), and replaying them would put text into the\n    /// reconstruction that no model ever read. They are counted and pointed at instead.\n    pub(crate) abandoned_openers: Vec<usize>,"
         }
       ],

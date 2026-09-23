@@ -66,8 +66,9 @@ pub(crate) fn render_unit_body(unit: &TurnUnit, cap_override: Option<usize>) -> 
 /// (offset `>= cut_to`). Several newlines collapsed into one whitespace run share an offset and
 /// are each counted, which is right - they were all removed together. An UNCUT body passes an
 /// empty span and reads 0, and so does a body whose newlines all sit outside the cut, which is
-/// the whole point: `[+1907 chars, 2 lines elided]` and `[+9807 chars, 274 lines elided]` now
-/// describe two different cuts of one message instead of repeating its whole newline count.
+/// the whole point: `[+1907 chars, 2 lines elided]` and `[+9807 chars, 274 lines elided]`
+/// describe two different cuts of one message, where a whole-body newline count prints the
+/// same number on both.
 pub(crate) fn elided_newlines(positions: &[u32], cut_from: usize, cut_to: usize) -> usize {
     if cut_to <= cut_from {
         return 0;

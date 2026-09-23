@@ -15,8 +15,8 @@ use super::*;
 /// GENERATING when its last assistant record is not an end_turn. Measured: intra-lane
 /// record gaps reach p99.9 = 295s during genuine work (a long generation writes
 /// nothing for minutes), while dead lanes sit >= 31h out - four orders of magnitude of
-/// separation, so 300s misses almost no real work and resurrects no dead lane. The
-/// old 15s window read a lane mid-generation as settled 1 time in 17.
+/// separation, so 300s misses almost no real work and resurrects no dead lane. A 15s
+/// window reads a lane mid-generation as settled 1 time in 17.
 pub(crate) const CHILD_RECENT_SECS: i64 = 300;
 
 #[derive(Debug, Clone)]

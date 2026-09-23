@@ -22,7 +22,7 @@ pub(crate) fn render_json(
     // member `kind:"agent"` rows (tree PRE-ORDER) → the built-in agents (pre-order) →
     // summary. The tree nests in TEXT mode only; JSON consumers reconstruct it from
     // `parent_agent_id`/`depth` - so `jq 'select(.kind=="agent")'` addresses every node,
-    // the uniform envelope idiom the old one-giant-session-row shape defeated.
+    // which one session row carrying the whole tree as a nested field would not.
     writeln!(
         out,
         "{}",
@@ -106,7 +106,7 @@ pub(crate) fn render_json(
 /// ONCE, so the count a session row prints is the number of rows that follow it and the
 /// text tree prints the same set in the same order. A node unreachable from any root (a
 /// forged parent cycle) is APPENDED at the end rather than dropped - a projection must
-/// never lose a node (the old nested shape silently omitted such nodes).
+/// never lose a node, and a nested shape reached only through its roots omits one in silence.
 ///
 /// The visited set keys on each node's POSITION in the set, not on its `agent_id`. Two
 /// copies of one session under two project directories whose contents DIVERGE stay in scope

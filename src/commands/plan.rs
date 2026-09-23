@@ -236,7 +236,7 @@ fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
     )?;
     // Resolve every in-scope transcript's plan binding IN PARALLEL, then keep the ones bound to
     // `want`. UNSCOPED `--reverse` scans every session in every project (many 300MB+ transcripts),
-    // so the old serial `for` loop read them one at a time on a single core (measured 12.7s on a
+    // so reading them one at a time leaves every core but one idle (measured 12.7s on a
     // multi-GB corpus). par_iter overlaps the reads+parses across cores; the explicit sort below is
     // a total order, so output is BYTE-IDENTICAL regardless of completion order. Mirrors the forward
     // path + recover/search/files. (`want` is borrowed read-only - Sync across the pool.)
@@ -349,8 +349,8 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
 
     // Resolve each transcript's plan binding IN PARALLEL (rayon pool = CPU count) - mirrors
     // recover/search/files. A big session's plan lives in its 300MB+ top-level transcript, and a
-    // `.`/multi-session target adds many more; scanning them serially (the old `for` loop) left one
-    // core idle on the dominant file. The explicit sort below makes the output order deterministic
+    // `.`/multi-session target adds many more; scanning them serially leaves every core but one
+    // idle while the dominant file is read. The explicit sort below makes the output order deterministic
     // regardless of completion order, so this is byte-identical - pure execution strategy.
     let mut refs: Vec<PlanRef> = session_files
         .par_iter()
