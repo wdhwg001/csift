@@ -15,7 +15,7 @@ const TIMEOUT_EXIT: u8 = 124;
 struct Cursor {
     path: PathBuf,
     offset: u64,
-    /// The transcript's own id (activity is censused per lane).
+    /// The transcript's own id - the key the activity census is grouped by.
     lane: String,
 }
 
@@ -32,7 +32,7 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
         args.lens.background_since.as_deref(),
         &args.lens.ignore_background,
     )?;
-    // The timeout is REQUIRED (v0.10.0): a background task may never return by design
+    // The timeout is REQUIRED: a background task may never return by design
     // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.
     let Some(timeout_secs) = args.timeout else {
         bail!(
@@ -130,7 +130,7 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                 // The file SHRANK: Claude Code rewrote it in place (a rewind tombstone
                 // truncates and rewrites the tail; an armed local GC rewrites on
                 // compaction). Bytes before the new end were already read; the
-                // baseline moves to the new end and the report says so (v0.10.4).
+                // baseline moves to the new end and the report says so.
                 activity.note_shrink(&cur.lane, cur.offset - len);
                 cur.offset = len;
                 continue;
@@ -142,7 +142,7 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
             // A plain positional read of the appended bytes, never a memory map: a map
             // of a file another process truncates faults with SIGBUS on the first page
             // touched past the new end, and a poll loop over a live transcript is
-            // exactly where that race lives (v0.10.4).
+            // exactly where that race lives.
             let bytes = read_range(&cur.path, cur.offset, len)?;
             let base = cur.offset;
             let mut pos = 0usize;

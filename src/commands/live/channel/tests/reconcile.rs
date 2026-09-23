@@ -208,7 +208,7 @@ fn the_verdict_ladder_puts_the_terminal_states_first() {
     assert_eq!(verdict(held, Some(inbox_line(None))), MsgVerdict::Held);
 
     // Expiry outranks a hold: both say "not delivered", and the deadline is the one that
-    // says it can no longer be.
+    // says the schedule has run out.
     let held_and_expired = MessageState {
         held_reasons: vec!["block-cap".to_string()],
         expired: true,

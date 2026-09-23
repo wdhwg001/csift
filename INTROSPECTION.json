@@ -1992,7 +1992,7 @@
         {
           "path": "src/commands/live/conditions.rs",
           "lines": "16-20",
-          "snippet": "    /// A task-notification is delivered (normally to the MAIN transcript; a child lane\n    /// receives one when the harness routes it to the owning agent - 2 of 2906\n    /// delivered records in the reference corpus at Claude Code 2.1.258, v0.10.3),\n    /// optionally payload-matched.\n    Notification(Option<regex::Regex>),"
+          "snippet": "    /// A task-notification is delivered (normally to the MAIN transcript; a child lane\n    /// receives one when the harness routes it to the owning agent - 2 of 2906\n    /// delivered records in the reference corpus at Claude Code 2.1.258),\n    /// optionally payload-matched.\n    Notification(Option<regex::Regex>),"
         },
         {
           "path": "src/commands/live/conditions.rs",
@@ -2012,7 +2012,7 @@
         {
           "path": "src/commands/live/conditions.rs",
           "lines": "114-127",
-          "snippet": "        Cond::Notification(re) => {\n            // Any watched lane: the harness normally delivers to the main transcript, but\n            // a pulse addressed to the owning agent lands in that agent's lane (v0.10.3).\n            // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY\n            // on a queue-operation enqueue line and a queued_command attachment\n            // (v0.10.2: the three carriers `background_scan` joins, not the user\n            // record alone - the agents-stopped notice stays a user-record label).\n            let mut labels = crate::commands::live::delivered_pulse_labels(rec);\n            if labels.is_empty() {\n                let Some(label) = rec.automation_label() else {\n                    return false;\n                };\n                labels.push(label);\n            }"
+          "snippet": "        Cond::Notification(re) => {\n            // Any watched lane: the harness normally delivers to the main transcript, but\n            // a pulse addressed to the owning agent lands in that agent's lane.\n            // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY\n            // on a queue-operation enqueue line and a queued_command attachment\n            // (the three carriers `background_scan` joins, not the user record\n            // alone - the agents-stopped notice stays a user-record label).\n            let mut labels = crate::commands::live::delivered_pulse_labels(rec);\n            if labels.is_empty() {\n                let Some(label) = rec.automation_label() else {\n                    return false;\n                };\n                labels.push(label);\n            }"
         }
       ],
       "states": [
@@ -4853,8 +4853,8 @@
       "code": [
         {
           "path": "src/commands/live/wait.rs",
-          "lines": "35-41",
-          "snippet": "    // The timeout is REQUIRED (v0.10.0): a background task may never return by design\n    // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.\n    let Some(timeout_secs) = args.timeout else {\n        bail!(\n            \"wait needs --timeout <SECS>: a background task can be designed never to return \\\n             (a dev server, a watcher), so a wait without a bound never ends. Pick a bound, \\\n             branch on exit 124, and read the at-exit report; narrow what counts with \\"
+          "lines": "36-41",
+          "snippet": "    // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.\n    let Some(timeout_secs) = args.timeout else {\n        bail!(\n            \"wait needs --timeout <SECS>: a background task can be designed never to return \\\n             (a dev server, a watcher), so a wait without a bound never ends. Pick a bound, \\\n             branch on exit 124, and read the at-exit report; narrow what counts with \\"
         },
         {
           "path": "src/commands/live/wait.rs",
@@ -6984,7 +6984,7 @@
         {
           "path": "src/commands/recover/bash_anchors.rs",
           "lines": "9-15",
-          "snippet": "//! - a READ anchor additionally needs the top-level `toolUseResult` echo with EMPTY\n//!   stderr, `interrupted` false, and NO persisted-output pointer (an externalized\n//!   stdout is not the inline text). The echo is a per-LANE fact, not a per-level one\n//!   (re-measured at CC 2.1.258, v0.10.1): WORKFLOW lanes never carry it (0 of 3867\n//!   Bash results), built-in Task/Agent and teammate lanes carry it 97-99% of the\n//!   time, the main lane always - so read anchors reach every lane that carries the\n//!   echo, by construction, while WRITE anchors (input-side) work in every lane;"
+          "snippet": "//! - a READ anchor additionally needs the top-level `toolUseResult` echo with EMPTY\n//!   stderr, `interrupted` false, and NO persisted-output pointer (an externalized\n//!   stdout is not the inline text). The echo is a per-LANE fact, not a per-level one\n//!   (measured at CC 2.1.258): WORKFLOW lanes never carry it (0 of 3867\n//!   Bash results), built-in Task/Agent and teammate lanes carry it 97-99% of the\n//!   time, the main lane always - so read anchors reach every lane that carries the\n//!   echo, by construction, while WRITE anchors (input-side) work in every lane;"
         },
         {
           "path": "src/commands/recover/bash_anchors.rs",
@@ -8941,8 +8941,8 @@
       "code": [
         {
           "path": "src/commands/recover/bash_anchors.rs",
-          "lines": "12-15",
-          "snippet": "//!   (re-measured at CC 2.1.258, v0.10.1): WORKFLOW lanes never carry it (0 of 3867\n//!   Bash results), built-in Task/Agent and teammate lanes carry it 97-99% of the\n//!   time, the main lane always - so read anchors reach every lane that carries the\n//!   echo, by construction, while WRITE anchors (input-side) work in every lane;"
+          "lines": "13-15",
+          "snippet": "//!   Bash results), built-in Task/Agent and teammate lanes carry it 97-99% of the\n//!   time, the main lane always - so read anchors reach every lane that carries the\n//!   echo, by construction, while WRITE anchors (input-side) work in every lane;"
         }
       ],
       "states": [
@@ -14330,7 +14330,7 @@
         {
           "path": "src/commands/turns/build.rs",
           "lines": "5-14",
-          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
+          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by that point does not hold those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
           "path": "src/commands/turns/cost.rs",
@@ -14441,8 +14441,8 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "311-318",
-          "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
+          "lines": "312-318",
+          "snippet": "/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file).\npub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {"
         },
         {
           "path": "src/commands/session/summarize.rs",
@@ -14904,8 +14904,8 @@
       "code": [
         {
           "path": "src/commands/session/summarize.rs",
-          "lines": "311-317",
-          "snippet": "/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a\n/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
+          "lines": "312-317",
+          "snippet": "/// system/`compact_boundary` was minted by copying another session at a compaction\n/// point. Measured on a real 61-file project dir: exactly the one known fork\n/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem\n/// copies and migrations move birthtimes days past the records). Walks head lines\n/// until the first record carrying a timestamp and early-exits - near-free on a\n/// normal transcript (a handful of bookkeeping lines lead the file)."
         }
       ],
       "states": [
@@ -15274,7 +15274,7 @@
         {
           "path": "src/commands/turns/build.rs",
           "lines": "5-14",
-          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
+          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by that point does not hold those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
           "path": "src/commands/turns/cost.rs",
@@ -21654,7 +21654,7 @@
         {
           "path": "src/commands/recover/replay.rs",
           "lines": "421-426",
-          "snippet": "                out.counts.history_snapshot += 1;\n                // The file-history INSTRUMENT (v0.9.4): Claude Code backs the tracked\n                // file up per prompt and bumps `version` only when the bytes changed.\n                // A version CHANGE therefore captures the disk truth at that instant -\n                // including harness-side writes that leave NO tool record (measured:\n                // half of all settings.json mutations corpus-wide). Three cases:"
+          "snippet": "                out.counts.history_snapshot += 1;\n                // The file-history INSTRUMENT: Claude Code backs the tracked\n                // file up per prompt and bumps `version` only when the bytes changed.\n                // A version CHANGE therefore captures the disk truth at that instant -\n                // including harness-side writes that leave NO tool record (measured:\n                // half of all settings.json mutations corpus-wide). Three cases:"
         }
       ],
       "states": [
@@ -21741,7 +21741,7 @@
         {
           "path": "src/commands/recover/types.rs",
           "lines": "113-121",
-          "snippet": "    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.\n    /// Since v0.9.4 the marker carries its INSTRUMENT payload: the per-path\n    /// `version` (monotone within a GENERATION; the counter resets mid-session on\n    /// process restart - 148 real occurrences - so a DECREASE means a new\n    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,\n    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when\n    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name\n    /// COLLIDES across a generation reset, so an unverified read can return the\n    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a"
+          "snippet": "    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.\n    /// The marker carries its INSTRUMENT payload: the per-path\n    /// `version` (monotone within a GENERATION; the counter resets mid-session on\n    /// process restart - 148 real occurrences - so a DECREASE means a new\n    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,\n    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when\n    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name\n    /// COLLIDES across a generation reset, so an unverified read can return the\n    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a"
         },
         {
           "path": "src/commands/recover/snapshots.rs",
@@ -22016,7 +22016,7 @@
         {
           "path": "src/commands/recover/types.rs",
           "lines": "113-124",
-          "snippet": "    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.\n    /// Since v0.9.4 the marker carries its INSTRUMENT payload: the per-path\n    /// `version` (monotone within a GENERATION; the counter resets mid-session on\n    /// process restart - 148 real occurrences - so a DECREASE means a new\n    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,\n    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when\n    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name\n    /// COLLIDES across a generation reset, so an unverified read can return the\n    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a\n    /// verified content to detect and REBASE across harness-side writes that left\n    /// no tool record (e.g. Claude Code rewriting settings.json on /model); an\n    /// unverified marker stays the old coverage annotation."
+          "snippet": "    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.\n    /// The marker carries its INSTRUMENT payload: the per-path\n    /// `version` (monotone within a GENERATION; the counter resets mid-session on\n    /// process restart - 148 real occurrences - so a DECREASE means a new\n    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,\n    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when\n    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name\n    /// COLLIDES across a generation reset, so an unverified read can return the\n    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a\n    /// verified content to detect and REBASE across harness-side writes that left\n    /// no tool record (e.g. Claude Code rewriting settings.json on /model); an\n    /// unverified marker stays the old coverage annotation."
         }
       ],
       "states": [
@@ -25243,7 +25243,7 @@
         {
           "path": "src/commands/image.rs",
           "lines": "3-6",
-          "snippet": "//! A user-pasted/attached image (and a tool-result screenshot) rides INLINE on a record as\n//! an `{type:\"image\", source:{type:\"base64\", media_type:\"image/png\", data:\"<base64>\"}}`\n//! block - verified against real `~/.claude/projects` data (2026-06-16). The bytes live in\n//! the jsonl, so `image` decodes them straight back to files; nothing is externalised."
+          "snippet": "//! A user-pasted/attached image (and a tool-result screenshot) rides INLINE on a record as\n//! an `{type:\"image\", source:{type:\"base64\", media_type:\"image/png\", data:\"<base64>\"}}`\n//! block - verified against real `~/.claude/projects` data. The bytes live in\n//! the jsonl, so `image` decodes them straight back to files; nothing is externalised."
         },
         {
           "path": "src/commands/image.rs",
@@ -26161,7 +26161,7 @@
         {
           "path": "src/commands/image/refs.rs",
           "lines": "410-418",
-          "snippet": "    // Assign `#N` by NUMBER. The record's `imagePasteIds` lists the ids in the order of\n    // its image blocks (the submit path builds both arrays in one ascending-id pass),\n    // while the `[Image #N]` markers keep the operator's TEXT order - the two orders\n    // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a\n    // silently wrong `#N` there (v0.10.5, ledger IMG-005). Without the array (older\n    // records) the positional zip stays, and only when the marker count matches the\n    // image count (a mismatch means a back-reference to a compressed-out image, so\n    // `seq` stays `None` rather than misassign).\n    assign_image_seq(&mut out, rec.image_paste_ids.as_deref(), &markers);"
+          "snippet": "    // Assign `#N` by NUMBER. The record's `imagePasteIds` lists the ids in the order of\n    // its image blocks (the submit path builds both arrays in one ascending-id pass),\n    // while the `[Image #N]` markers keep the operator's TEXT order - the two orders\n    // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a\n    // silently wrong `#N` there (ledger IMG-005). Without the array (older\n    // records) the positional zip stays, and only when the marker count matches the\n    // image count (a mismatch means a back-reference to a compressed-out image, so\n    // `seq` stays `None` rather than misassign).\n    assign_image_seq(&mut out, rec.image_paste_ids.as_deref(), &markers);"
         }
       ],
       "states": [
@@ -28975,7 +28975,7 @@
         {
           "path": "src/commands/live/registry.rs",
           "lines": "209-220",
-          "snippet": "/// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success\n/// yields the start instant when the rendering parses, else `Alive(None)` - the caller\n/// then skips the reuse guard AND says so. The call PINS `LC_ALL=C` and `TZ=UTC`,\n/// exactly as the harness pins its own `procStart` acquisition: `lstart` is the\n/// platform utility's `%c` under the caller's `LC_TIME`, so an inherited locale\n/// renders a different field order and non-English names (de_DE gives `Fr  4 Sep`,\n/// fr_FR `Ven  4 sep`), and the guard was silently skipped on every such host\n/// (v0.10.5, ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in\n/// UTC, the same clock the registry's `procStart` is written in; the second field\n/// order is kept as a belt for a `C` locale that still renders day-first.\n#[cfg(unix)]\npub(crate) fn ps_probe(pid: u32) -> PsProbe {"
+          "snippet": "/// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success\n/// yields the start instant when the rendering parses, else `Alive(None)` - the caller\n/// then skips the reuse guard AND says so. The call PINS `LC_ALL=C` and `TZ=UTC`,\n/// exactly as the harness pins its own `procStart` acquisition: `lstart` is the\n/// platform utility's `%c` under the caller's `LC_TIME`, so an inherited locale\n/// renders a different field order and non-English names (de_DE gives `Fr  4 Sep`,\n/// fr_FR `Ven  4 sep`), and the guard was silently skipped on every such host\n/// (ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in\n/// UTC, the same clock the registry's `procStart` is written in; the second field\n/// order is kept as a belt for a `C` locale that still renders day-first.\n#[cfg(unix)]\npub(crate) fn ps_probe(pid: u32) -> PsProbe {"
         },
         {
           "path": "src/commands/live/registry.rs",
@@ -29514,8 +29514,8 @@
         },
         {
           "path": "src/commands/live/background.rs",
-          "lines": "1-2",
-          "snippet": "//! Background tasks: the off-turn work a session launched and whether it ever came\n//! back. Three kinds, measured on the corpus (v0.10.0):"
+          "lines": "1",
+          "snippet": "//! Background tasks: the off-turn work a session launched and whether it ever came"
         }
       ],
       "states": [
@@ -30211,8 +30211,8 @@
         },
         {
           "path": "src/commands/live/activity.rs",
-          "lines": "31-35",
-          "snippet": "    pub(crate) fn fold(&mut self, rec: &Record, lane: &str) {\n        self.records += 1;\n        self.lanes.insert(lane.to_string());\n        // A pulse absorbed mid-turn is a queue enqueue line / a queued_command\n        // attachment, never a labeled record (v0.10.2): count those deliveries too, so"
+          "lines": "31-34",
+          "snippet": "    pub(crate) fn fold(&mut self, rec: &Record, lane: &str) {\n        self.records += 1;\n        self.lanes.insert(lane.to_string());\n        // A pulse absorbed mid-turn is a queue enqueue line / a queued_command"
         }
       ],
       "states": [
@@ -32623,8 +32623,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-12",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
+          "lines": "10-12",
+          "snippet": "//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         }
       ],
       "states": [
@@ -33352,8 +33352,8 @@
       "code": [
         {
           "path": "src/commands/whoami.rs",
-          "lines": "3-7",
-          "snippet": "//! ## Detection (verified empirically inside a live Claude Code Bash tool, 2026-06-07)\n//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.\n//! It was confirmed to equal exactly the session's own jsonl filename:\n//!"
+          "lines": "4-7",
+          "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.\n//! It was confirmed to equal exactly the session's own jsonl filename:\n//!"
         },
         {
           "path": "src/commands/whoami.rs",
@@ -34264,8 +34264,8 @@
         },
         {
           "path": "src/commands/live/wait.rs",
-          "lines": "35-41",
-          "snippet": "    // The timeout is REQUIRED (v0.10.0): a background task may never return by design\n    // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.\n    let Some(timeout_secs) = args.timeout else {\n        bail!(\n            \"wait needs --timeout <SECS>: a background task can be designed never to return \\\n             (a dev server, a watcher), so a wait without a bound never ends. Pick a bound, \\\n             branch on exit 124, and read the at-exit report; narrow what counts with \\"
+          "lines": "36-41",
+          "snippet": "    // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.\n    let Some(timeout_secs) = args.timeout else {\n        bail!(\n            \"wait needs --timeout <SECS>: a background task can be designed never to return \\\n             (a dev server, a watcher), so a wait without a bound never ends. Pick a bound, \\\n             branch on exit 124, and read the at-exit report; narrow what counts with \\"
         }
       ],
       "states": [
@@ -40179,8 +40179,8 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "154-160",
-          "snippet": "    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11; v0.10.2)."
+          "lines": "154-159",
+          "snippet": "    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may"
         },
         {
           "path": "src/commands/plan/slug.rs",
@@ -40530,22 +40530,22 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "92-97",
+          "lines": "91-96",
           "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "98-105",
+          "lines": "97-104",
           "snippet": "    let joined = crate::path::lexical_normalize(&root.join(d));\n    let root_n = crate::path::lexical_normalize(root);\n    if joined.starts_with(&root_n) {\n        joined\n    } else {\n        default\n    }\n}"
         },
         {
           "path": "src/commands/plan.rs",
           "lines": "155-162",
-          "snippet": "        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11; v0.10.2).\n                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());\n                let root = root_owned.as_deref().map(Path::new);"
+          "snippet": "        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11).\n                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());\n                let root = root_owned.as_deref().map(Path::new);"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "55-70",
+          "lines": "54-69",
           "snippet": "pub(crate) fn first_cwd(bytes: &[u8]) -> Option<String> {\n    let mut pos = 0usize;\n    let mut seen = 0usize;\n    while pos < bytes.len() && seen < 256 {\n        let end = memchr::memchr(b'\\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);\n        let line = &bytes[pos..end];\n        pos = end + 1;\n        seen += 1;\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if let Some(c) = rec.cwd.as_deref().filter(|c| !c.is_empty()) {\n                return Some(c.to_string());\n            }\n        }\n    }\n    None\n}"
         }
       ],
@@ -41639,12 +41639,12 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "39-49",
-          "snippet": "/// The plans directory, by Claude Code's own rule (binary 2.1.258, re-verified for\n/// v0.10.1): `plansDirectory` is read from the MERGED settings (`<project>/.claude/\n/// settings.local.json` over `<project>/.claude/settings.json` over\n/// `<claude-home>/settings.json`), resolved AGAINST THE PROJECT ROOT (the session's\n/// cwd), and must stay CONTAINED in that root - a value that escapes it (`../x`, an\n/// absolute path elsewhere) is refused and Claude Code falls back to\n/// `<claude-home>/plans`. csift mirrors the lexical containment check (the harness\n/// additionally walks symlinks of the nearest existing ancestor - unmodeled, a\n/// symlinked plans dir that escapes only after resolution is the one divergence).\n/// The transcript's FIRST recorded `cwd`: the harness's project root for the session -\n/// the value the head records are stamped with before any Bash `cd` moves the"
+          "lines": "42-48",
+          "snippet": "/// AGAINST THE PROJECT ROOT (the session's cwd), and must stay CONTAINED in that root -\n/// a value that escapes it (`../x`, an absolute path elsewhere) is refused and Claude\n/// Code falls back to `<claude-home>/plans`. csift mirrors the lexical containment check\n/// (the harness additionally walks symlinks of the nearest existing ancestor - unmodeled,\n/// a symlinked plans dir that escapes only after resolution is the one divergence).\n/// The transcript's FIRST recorded `cwd`: the harness's project root for the session -\n/// the value the head records are stamped with before any Bash `cd` moves the"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "98-104",
+          "lines": "97-103",
           "snippet": "    let joined = crate::path::lexical_normalize(&root.join(d));\n    let root_n = crate::path::lexical_normalize(root);\n    if joined.starts_with(&root_n) {\n        joined\n    } else {\n        default\n    }"
         }
       ],
@@ -41738,12 +41738,12 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "76-80",
+          "lines": "75-79",
           "snippet": "const PLAN_SCOPES: &[&str] = &[\n    crate::path::settings::SCOPE_USER,\n    crate::path::settings::SCOPE_PROJECT,\n    crate::path::settings::SCOPE_LOCAL,\n];"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "92-97",
+          "lines": "91-96",
           "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         }
       ],
@@ -41837,12 +41837,12 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "72-80",
+          "lines": "71-79",
           "snippet": "/// The three FILE scopes csift reads for the plan binding, in Claude Code's own order\n/// (later wins). The flag scope and the policy tier both outrank them in the harness, but\n/// the flag scope is per-invocation and unobservable, so binding on the policy tier alone\n/// would make the answer depend on half of a cascade csift cannot see.\nconst PLAN_SCOPES: &[&str] = &[\n    crate::path::settings::SCOPE_USER,\n    crate::path::settings::SCOPE_PROJECT,\n    crate::path::settings::SCOPE_LOCAL,\n];"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "92-97",
+          "lines": "91-96",
           "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         }
       ],
@@ -43169,7 +43169,7 @@
         {
           "path": "src/commands/live/background.rs",
           "lines": "109-127",
-          "snippet": "pub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out \u2026]` event).\n    TimedOut,\n    /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;\n    /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk\n    /// in a local-only corpus; a producer-only claim in the ledger (BG-011).\n    Blocked,\n    /// A status literal csift does not know. Rendered as its own bucket so a new harness\n    /// value is disclosed instead of being booked as completed (v0.10.3).\n    Other,\n}"
+          "snippet": "pub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out \u2026]` event).\n    TimedOut,\n    /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;\n    /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk\n    /// in a local-only corpus; a producer-only claim in the ledger (BG-011).\n    Blocked,\n    /// A status literal csift does not know. Rendered as its own bucket so a new harness\n    /// value is disclosed instead of being booked as completed.\n    Other,\n}"
         }
       ],
       "states": [
@@ -50782,8 +50782,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-12",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
+          "lines": "10-12",
+          "snippet": "//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         }
       ],
       "states": [
@@ -62840,8 +62840,8 @@
       "code": [
         {
           "path": "src/commands/whoami.rs",
-          "lines": "3-7",
-          "snippet": "//! ## Detection (verified empirically inside a live Claude Code Bash tool, 2026-06-07)\n//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.\n//! It was confirmed to equal exactly the session's own jsonl filename:\n//!"
+          "lines": "4-7",
+          "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.\n//! It was confirmed to equal exactly the session's own jsonl filename:\n//!"
         },
         {
           "path": "src/commands/whoami.rs",
@@ -62850,8 +62850,8 @@
         },
         {
           "path": "src/commands/whoami.rs",
-          "lines": "132-134",
-          "snippet": "    // C-16 lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC\n    // hands a subagent its parent's id), so env-only resolution cannot know whether the\n    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null."
+          "lines": "133-134",
+          "snippet": "    // hands a subagent its parent's id), so env-only resolution cannot know whether the\n    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null."
         }
       ],
       "states": [
@@ -81742,12 +81742,12 @@
         {
           "path": "src/commands/turns/build.rs",
           "lines": "5-14",
-          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
+          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by that point does not hold those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
           "path": "src/commands/turns/units.rs",
-          "lines": "205-210",
-          "snippet": "    /// The jsonl lines of the turn openers the surviving conversation no longer reaches - a\n    /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER\n    /// replayed: the compaction summariser's input is the in-memory message array, so it\n    /// never saw them either (claim CMP-020), and replaying them would put text into the\n    /// reconstruction that no model ever read. They are counted and pointed at instead.\n    pub(crate) abandoned_openers: Vec<usize>,"
+          "lines": "206-210",
+          "snippet": "    /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER\n    /// replayed: the compaction summariser's input is the in-memory message array, so it\n    /// never saw them either (claim CMP-020), and replaying them would put text into the\n    /// reconstruction that no model ever read. They are counted and pointed at instead.\n    pub(crate) abandoned_openers: Vec<usize>,"
         }
       ],
       "states": [
@@ -81923,8 +81923,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-12",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
+          "lines": "10-12",
+          "snippet": "//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         }
       ],
       "states": [
@@ -81985,8 +81985,8 @@
       "code": [
         {
           "path": "src/commands/show/branch.rs",
-          "lines": "8-12",
-          "snippet": "//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather\n//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])\n//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
+          "lines": "10-12",
+          "snippet": "//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED\n//! against real corpora, and the family that refutes it is not parallel tool fan-out -\n//! whose carriers never reach the child predicate - but the repeated-uuid run, an append"
         },
         {
           "path": "src/commands/recover/scan.rs",
@@ -82304,7 +82304,7 @@
         {
           "path": "src/commands/live/wait.rs",
           "lines": "129-137",
-          "snippet": "            if len < cur.offset {\n                // The file SHRANK: Claude Code rewrote it in place (a rewind tombstone\n                // truncates and rewrites the tail; an armed local GC rewrites on\n                // compaction). Bytes before the new end were already read; the\n                // baseline moves to the new end and the report says so (v0.10.4).\n                activity.note_shrink(&cur.lane, cur.offset - len);\n                cur.offset = len;\n                continue;\n            }"
+          "snippet": "            if len < cur.offset {\n                // The file SHRANK: Claude Code rewrote it in place (a rewind tombstone\n                // truncates and rewrites the tail; an armed local GC rewrites on\n                // compaction). Bytes before the new end were already read; the\n                // baseline moves to the new end and the report says so.\n                activity.note_shrink(&cur.lane, cur.offset - len);\n                cur.offset = len;\n                continue;\n            }"
         }
       ],
       "states": [

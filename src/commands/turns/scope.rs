@@ -82,11 +82,11 @@ pub(crate) fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> S
 }
 
 /// The minimum char cost to render a targeted session's FIRST (most-recent) complete
-/// round-trip, used to tell a user how much to raise `--budget` when their targeted session
-/// was skipped (its plan came back empty). Returns `None` when the session has no turn at
-/// all (an empty session - a different, honest "nothing to restore" case). The estimate is
-/// the doc-header reservation + the cheapest single side of the most-recent turn, a true
-/// lower bound on what any non-empty plan for this session would cost.
+/// round-trip - the figure that tells a user how much to raise `--budget` when their
+/// targeted session was skipped (its plan came back empty). Returns `None` when it has no
+/// turn at all (an empty session - a different, honest "nothing to restore" case). The
+/// estimate is the doc-header reservation + the cheapest single side of the most-recent
+/// turn, a true lower bound on what any non-empty plan for this session would cost.
 pub(crate) fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg) -> Option<usize> {
     let header = doc_header_block_max_chars(sr, budget);
     let cheapest = sr

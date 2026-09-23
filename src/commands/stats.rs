@@ -66,13 +66,13 @@ struct SessionStats {
     unknown_thinking_tags: usize,
     /// SURVIVAL-AXIS facts of the WHOLE file (like `lines` and `line_types`, never
     /// windowed - an abandoned opener carries no turn index to window on): turn openers
-    /// Claude Code's conversation chain no longer reaches, how many of those were
-    /// ANSWERED before the rewind, and lines a compaction re-anchor re-appended.
+    /// Claude Code's conversation chain does not reach, how many of those were ANSWERED
+    /// before the rewind, and lines a compaction re-anchor re-appended.
     abandoned_turns: usize,
     rewound_turns: usize,
     replay_copies: usize,
-    /// What the walk did with this file's compaction boundaries (C-42). A whole-file fact
-    /// like the three above; silent under `--cross-compactions 0`.
+    /// What the walk did with this file's compaction boundaries under the crossing budget.
+    /// A whole-file fact like the three above; silent under `--cross-compactions 0`.
     crossing: crate::model::CrossingReport,
 }
 

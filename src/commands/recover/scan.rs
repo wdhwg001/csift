@@ -274,7 +274,7 @@ pub(crate) fn scan_one_file(
 
     // Parse all recover-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool),
     // preserving each record's exact 1-based line number (counts EVERY visited line, 1:1 with
-    // jsonl) - a single giant transcript is no longer scanned on one core.
+    // jsonl) - one giant transcript is spread across cores rather than scanned on one.
     // The SURVIVAL AXIS needs the whole DAG; recover's prefilter keeps tool traffic and
     // genuine-user lines, so the `attachment`/`system` records the chain threads through
     // are lifted to structural SPINE rows in the same pass. Turn numbers then agree with
@@ -284,7 +284,7 @@ pub(crate) fn scan_one_file(
         crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
     let view = ChainView::build(&records, &spine, cross);
     let (mut events, stamps) = extract_with_turns(&records, &view, target_file);
-    // v0.9.4: attach mtime-verified file-history content to version-change markers
+    // Attach mtime-verified file-history content to version-change markers
     // so the replay can detect and rebase across tool-record-less writes.
     attach_snapshot_content(&mut events, path);
     let opaque = collect_opaque_commands(&session_id, &records, &view);
@@ -502,7 +502,7 @@ pub(crate) fn extract_with_turns(
                 &mut turn_events,
             );
         }
-        // v0.9.4 Bash content anchors: gated command shapes become first-class content
+        // Bash content anchors: gated command shapes become first-class content
         // events, and an admitted WRITE/APPEND anchor supersedes the heuristic
         // BashTouch row the same command produced (one command never yields both a
         // content event and a self-inflicted boundary).

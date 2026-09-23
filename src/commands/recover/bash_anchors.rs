@@ -9,7 +9,7 @@
 //! - a READ anchor additionally needs the top-level `toolUseResult` echo with EMPTY
 //!   stderr, `interrupted` false, and NO persisted-output pointer (an externalized
 //!   stdout is not the inline text). The echo is a per-LANE fact, not a per-level one
-//!   (re-measured at CC 2.1.258, v0.10.1): WORKFLOW lanes never carry it (0 of 3867
+//!   (measured at CC 2.1.258): WORKFLOW lanes never carry it (0 of 3867
 //!   Bash results), built-in Task/Agent and teammate lanes carry it 97-99% of the
 //!   time, the main lane always - so read anchors reach every lane that carries the
 //!   echo, by construction, while WRITE anchors (input-side) work in every lane;

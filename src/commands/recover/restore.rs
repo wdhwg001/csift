@@ -318,7 +318,7 @@ pub(crate) fn restore_partial_message(
     );
 
     // External-change boundaries: the file changed OUTSIDE the tool stream and a fresh Read was
-    // forced. Across these, pre-change content is no longer part of "latest".
+    // forced. Across these, pre-change content is not part of "latest".
     let ext: Vec<&Boundary> = boundaries
         .iter()
         .filter(|b| {

@@ -59,7 +59,7 @@ pub(crate) struct TurnUnit {
     /// Such a unit has no physical line (`line_no` 0); its header renders `(elicitation
     /// sidecar)` instead of `Lnnnn` and the JSON carries `source:"elicitation-sidecar"`.
     pub(crate) from_sidecar: bool,
-    /// Set when this opener is an inbound peer/teammate communication (GOLD §1): the comm class +
+    /// Set when this opener is an inbound peer/teammate communication (§3.3): the comm class +
     /// sender, so the header renders `<label>  <from> ⇨ self` IN PLACE OF the bare role word and the
     /// JSON carries `is_inbound_comm` + `comm_*` fields. `unit.text` holds the tag/footer-stripped
     /// body. `None` for an ordinary user/assistant unit. RENDER-ONLY - the turn count is unchanged
@@ -182,7 +182,7 @@ pub(crate) struct SummaryInfo {
     pub(crate) fingerprints: Vec<String>,
     /// Char length of the summary body (for the JSON boundary record).
     pub(crate) body_chars: usize,
-    /// C-33: the compaction gesture this summary belongs to. A `/rewind` summarize IS a
+    /// The compaction gesture this summary belongs to. A `/rewind` summarize IS a
     /// compaction - it clips turns exactly like an auto-compact, so reconstruction is
     /// unchanged and the mode only labels the banner. `None` when the direction is a value
     /// csift does not model.
@@ -202,15 +202,16 @@ pub(crate) struct ScanResult {
     pub(crate) turns: Vec<TurnSlice>,
     /// Summary records in file order (oldest → newest), each with its line + dedup set.
     pub(crate) summaries: Vec<SummaryInfo>,
-    /// The jsonl lines of the turn openers the surviving conversation no longer reaches - a
+    /// The jsonl lines of the turn openers the surviving conversation does not reach - a
     /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER
     /// replayed: the compaction summariser's input is the in-memory message array, so it
     /// never saw them either (claim CMP-020), and replaying them would put text into the
     /// reconstruction that no model ever read. They are counted and pointed at instead.
     pub(crate) abandoned_openers: Vec<usize>,
     pub(crate) skipped_lines: usize,
-    /// What the walk did with this transcript's compaction boundaries (C-42). Verbatim
-    /// replays LIVE turns, so how far the chain climbed decides which turns exist at all.
+    /// What the walk did with this transcript's compaction boundaries under the crossing
+    /// budget. Verbatim replays LIVE turns, so how far the chain climbed decides which
+    /// turns exist at all.
     pub(crate) crossing: crate::model::CrossingReport,
 }
 

@@ -13,7 +13,7 @@
 //!
 //! Target resolution (positional PATH(s) / `@<uuid>` / `*.jsonl`, with subagent spanning)
 //! goes through the SHARED [`crate::path::resolve_session_files`] resolver - the SAME one
-//! `search`/`agents`/`files`/`recover`/`turns` use - so `list` is no longer a separate
+//! `search`/`agents`/`files`/`recover`/`turns` use - so `list` speaks no separate
 //! scope dialect: a `csift list @<uuid>` identifies that one session, exactly like its
 //! siblings. The dominant work - the per-session head+tail parse -
 //! then runs `rayon` `par_iter()` across the resolved files on the default pool (= CPU

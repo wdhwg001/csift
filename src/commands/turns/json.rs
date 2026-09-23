@@ -24,9 +24,9 @@ pub(crate) fn render_json(
 
     // A machine-readable HEADER object so a JSON consumer can recover the human/automation
     // split + the budget fan-out WITHOUT the text-only `selected N user (M automation
-    // triggers)` line (which was previously absent from the JSON stream entirely). It is the
-    // FIRST line; its `kind` discriminator (`session_header`) matches the existing
-    // `compaction_boundary` / `collapsed_agents` boundary-object convention.
+    // triggers)` line, which the JSON stream does not carry. It is the FIRST line; its
+    // `kind` discriminator (`session_header`) matches the existing `compaction_boundary` /
+    // `collapsed_agents` boundary-object convention.
     let sc = scope_summary(sessions, plans);
     let total_user: usize = plans
         .iter()
@@ -133,7 +133,7 @@ pub(crate) fn render_json(
                         "kind": "compaction_boundary",
                         "line": line_no,
                         "summary_chars": summary_chars,
-                        // C-33: the gesture that minted this compaction; null when the
+                        // The gesture that minted this compaction; null when the
                         // summary names a direction csift does not model.
                         "mode": mode.map(SummarizeMode::slug),
                     });
@@ -171,11 +171,11 @@ pub(crate) fn render_json(
 
     // Trailing terminator object, emitted UNCONDITIONALLY (even when 0) so a JSONL consumer
     // can reliably detect end-of-stream for turns - matching search/files/recover, which
-    // always close with a trailing summary. The key is `skipped_lines` (was a one-off `count`
-    // alias, emitted only when > 0; both divergences are now removed for cross-subcommand
-    // consistency).
+    // always close with a trailing summary. The key is `skipped_lines`, the spelling every
+    // other subcommand's terminator uses: a private alias, or one emitted only when > 0,
+    // would make this stream the odd one out.
     // `abandoned_turns` is the machine twin of the per-session text note: turn openers the
-    // surviving conversation no longer reaches, summed over every session in scope. They are
+    // surviving conversation does not reach, summed over every session in scope. They are
     // NOT part of the reconstruction (the summariser never saw them either), so the count is
     // the disclosure - fetch one with `csift show @<id> --line <n>`.
     let abandoned_turns: usize = sessions.iter().map(|sr| sr.abandoned_openers.len()).sum();
@@ -265,7 +265,7 @@ pub(crate) fn emit_unit_json<W: std::io::Write>(
                 map.insert("event".into(), json!(t.event));
             }
         }
-        // STRUCTURED inbound-comm attribution (GOLD §1): a `<teammate-message>` opener carries
+        // STRUCTURED inbound-comm attribution (§3.3): a `<teammate-message>` opener carries
         // `is_inbound_comm:true` + the comm `label` / `from` / `to` (== `self`) so a JSON consumer
         // distinguishes a peer message from a human turn WITHOUT regexing the header. An ordinary
         // unit omits these fields (absence ⇒ not an inbound comm).

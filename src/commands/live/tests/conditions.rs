@@ -81,7 +81,7 @@ fn notification_condition_matches_in_every_lane_and_matches_payload() {
     )
     .unwrap();
     let any = parse_condition("notification").unwrap();
-    // v0.10.3: the carrier is matched in every watched lane - the harness normally
+    // The carrier is matched in every watched lane - the harness normally
     // delivers to the main transcript, but a pulse addressed to the owning agent lands
     // in that agent's lane (2 of 2906 delivered records in the reference corpus).
     assert!(record_matches(&any, &pulse));

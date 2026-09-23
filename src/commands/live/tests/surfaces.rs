@@ -409,7 +409,7 @@ fn children_report_settles_a_lane_whose_completion_pulse_landed() {
 
 #[test]
 fn tail_shape_window_without_a_newline_yields_no_records() {
-    // The 512 KB tail window is a plain positional read (v0.10.4). When the cut lands
+    // The 512 KB tail window is a plain positional read. When the cut lands
     // inside one giant final line and no newline follows, the aligned window is empty
     // and the shape carries no records; nothing is parsed from a torn slice.
     let mut giant = String::from(

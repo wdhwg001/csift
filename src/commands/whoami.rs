@@ -1,6 +1,6 @@
 //! `whoami` subcommand - identify the CALLING Claude Code session, false-positive-safe.
 //!
-//! ## Detection (verified empirically inside a live Claude Code Bash tool, 2026-06-07)
+//! ## Detection (verified empirically inside a live Claude Code Bash tool)
 //!
 //! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.
 //! It was confirmed to equal exactly the session's own jsonl filename:
@@ -21,7 +21,7 @@
 //! trap. We error with actionable guidance instead. It is acceptable for whoami to
 //! often say "ambiguous, pass `@<uuid>`".
 
-//! ## Reach (v0.11.0)
+//! ## Reach
 //!
 //! Identity is half the question a lane actually has: the other half is who is above it, what
 //! is live around it, and whether a message would arrive. Those sections are built by
@@ -37,7 +37,7 @@ use crate::cli::{OutputFormat, WhoamiArgs};
 use crate::commands::live::channel;
 use crate::path;
 
-/// Primary env var Claude Code sets per session (verified 2026-06-07): its value
+/// Primary env var Claude Code sets per session (verified empirically): its value
 /// equals the calling session's own jsonl basename, exactly.
 const SESSION_ID_ENV: &str = "CLAUDE_CODE_SESSION_ID";
 
@@ -129,7 +129,7 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
 
     let path = locate_transcript(&session_id);
 
-    // C-16 lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC
+    // Lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC
     // hands a subagent its parent's id), so env-only resolution cannot know whether the
     // CALLER is that session. Say so on stderr; the unknowable JSON fields are null.
     eprintln!(

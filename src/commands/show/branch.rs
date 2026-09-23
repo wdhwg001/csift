@@ -5,8 +5,8 @@
 //! those facts and RANKS them by the widest inter-child time gap: a rewind usually shows
 //! a wide gap, a parallel lane a near-zero one.
 //!
-//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather
-//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])
+//! Which child is LIVE is a fact too, and it comes from Claude Code rather than from the
+//! shape: the loader's own conversation chain ([`crate::model::Chain`])
 //! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED
 //! against real corpora, and the family that refutes it is not parallel tool fan-out -
 //! whose carriers never reach the child predicate - but the repeated-uuid run, an append

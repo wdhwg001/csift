@@ -32,8 +32,8 @@ pub struct SessionSummary {
     /// opening value. Asymmetric with version/git_branch below on purpose.
     pub cwd: Option<String>,
     /// LAST-seen Claude Code version (from the tail window) - the version the session
-    /// is actually on now. A session that upgraded mid-flight used to report the
-    /// opening sample here, which contradicted the field's documented meaning.
+    /// is actually on now. The opening sample would contradict that meaning for a
+    /// session that upgraded mid-flight; it lives in `version_first` instead.
     pub version: Option<String>,
     /// FIRST-seen Claude Code version (from the head window); equals `version` unless
     /// the session upgraded mid-flight.
@@ -53,7 +53,7 @@ pub struct SessionSummary {
     /// with no sidecar / no pending, and ALWAYS empty for a subagent row (the sidecar is keyed
     /// by the top-level session). Drives the `with elicitation sidecar` annotation.
     pub pending_elicitations: Vec<String>,
-    /// C-19 clone lineage: Some when this transcript is a CLONE - its FIRST
+    /// Clone lineage: Some when this transcript is a CLONE - its FIRST
     /// TIMESTAMPED record is a `compact_boundary`, the signature of a session file
     /// minted by COPYING another session at a compaction point (background-job forks
     /// do this: record uuids preserved, timestamps predating the file, the slug
@@ -71,7 +71,7 @@ pub struct SessionSummary {
     /// an elicitation") / absent (hook unknown - CANNOT conclude anything). Always false
     /// for a subagent row (the sidecar is keyed by the top-level session).
     pub sidecar_present: bool,
-    /// C-44 `/clear` lineage: true when this transcript's FIRST non-`isMeta` user record
+    /// `/clear` lineage: true when this transcript's FIRST non-`isMeta` user record
     /// is the `/clear` slash wrapper. Claude Code drops the old transcript's file handle
     /// at a clear and opens a NEW uuid in the same project dir, so the wrapper that
     /// triggered it lands in the new file. Always false for a subagent row.

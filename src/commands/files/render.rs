@@ -83,7 +83,7 @@ pub(crate) fn render_boundaries_section<W: std::io::Write>(
 }
 
 /// The label-zone survival marker a row carries: ` [abandoned]` when the surviving
-/// conversation no longer reaches the record, ` [pre-cut]` when it sits above a compaction
+/// conversation does not reach the record, ` [pre-cut]` when it sits above a compaction
 /// cut csift still reads, and nothing at all for a live record (the common case pays no
 /// output). The write itself is real either way - the marker says which conversation it
 /// belongs to, never whether it happened.

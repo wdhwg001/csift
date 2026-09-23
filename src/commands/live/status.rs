@@ -114,7 +114,7 @@ pub(crate) fn assess_path(
         &background,
     );
     assessment.last = last_messages(main)?;
-    // C-44: a checkpoint at the very end is EVIDENCE the harness stopped appending
+    // A cost checkpoint at the very end is EVIDENCE the harness stopped appending
     // after writing it - never a verdict, and the verdict set stays closed.
     assessment.attach_checkpoint(last_checkpoint(main)?);
     // The task list is keyed by the top-level session (like the sidecar); a subagent

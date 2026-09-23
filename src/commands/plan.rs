@@ -157,7 +157,7 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
                 // The project root the harness resolves plansDirectory against is the
                 // session's ORIGINAL cwd - the transcript's first recorded cwd - not the
                 // slug record's own cwd, which follows the tracked shell cwd and may
-                // already sit in a subdirectory (section 3.11; v0.10.2).
+                // already sit in a subdirectory (section 3.11).
                 let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());
                 let root = root_owned.as_deref().map(Path::new);
                 let plan_file = plans_dir(root).join(format!("{slug}.md"));

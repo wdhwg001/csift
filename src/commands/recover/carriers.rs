@@ -204,7 +204,7 @@ pub(crate) fn push_read_file_object(
 /// lines are whole and `numLines < totalLines`; on the CHARACTER-truncation branch (a
 /// file whose lines are too long to paginate) `numLines` is recomputed from the cut
 /// slice and can EQUAL `totalLines`, so a capped read looked like a whole-file read
-/// (v0.10.3, ledger REC-047). A truncated read is never a full snapshot, and when its
+/// (ledger REC-047). A truncated read is never a full snapshot, and when its
 /// line count reaches the total the last line is the cut one and is dropped; nothing
 /// is pushed when no whole line remains.
 #[allow(clippy::too_many_arguments)]

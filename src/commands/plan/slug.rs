@@ -36,20 +36,19 @@ pub(crate) fn slug_is_valid(s: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
-/// The plans directory, by Claude Code's own rule (binary 2.1.258, re-verified for
-/// v0.10.1): `plansDirectory` is read from the MERGED settings (`<project>/.claude/
-/// settings.local.json` over `<project>/.claude/settings.json` over
-/// `<claude-home>/settings.json`), resolved AGAINST THE PROJECT ROOT (the session's
-/// cwd), and must stay CONTAINED in that root - a value that escapes it (`../x`, an
-/// absolute path elsewhere) is refused and Claude Code falls back to
-/// `<claude-home>/plans`. csift mirrors the lexical containment check (the harness
-/// additionally walks symlinks of the nearest existing ancestor - unmodeled, a
-/// symlinked plans dir that escapes only after resolution is the one divergence).
+/// The plans directory, by Claude Code's own rule (binary 2.1.258): `plansDirectory` is
+/// read from the MERGED settings (`<project>/.claude/settings.local.json` over
+/// `<project>/.claude/settings.json` over `<claude-home>/settings.json`), resolved
+/// AGAINST THE PROJECT ROOT (the session's cwd), and must stay CONTAINED in that root -
+/// a value that escapes it (`../x`, an absolute path elsewhere) is refused and Claude
+/// Code falls back to `<claude-home>/plans`. csift mirrors the lexical containment check
+/// (the harness additionally walks symlinks of the nearest existing ancestor - unmodeled,
+/// a symlinked plans dir that escapes only after resolution is the one divergence).
 /// The transcript's FIRST recorded `cwd`: the harness's project root for the session -
 /// the value the head records are stamped with before any Bash `cd` moves the
 /// tracked shell cwd (section 3.11). The slug-carrying record's own cwd can already
 /// have drifted into a subdirectory, and plansDirectory resolves against the root,
-/// not the shell's position (v0.10.2). A bounded head walk; `None` when no head
+/// not the shell's position. A bounded head walk; `None` when no head
 /// record carries a cwd. A session resumed from another directory re-resolves against
 /// that directory in the harness, which this instrument cannot see.
 pub(crate) fn first_cwd(bytes: &[u8]) -> Option<String> {

@@ -44,9 +44,9 @@ fn agent_msg_is_rich_rejects_a_short_signalless_declaration() {
 
 #[test]
 fn agent_msg_is_rich_is_codepoint_safe_for_multibyte_with_a_digit() {
-    // REGRESSION: a digit adjacent to multi-byte text used to panic - the ±16-byte
-    // number-of-substance window sliced mid-codepoint. The window bounds must snap to a
-    // char boundary; this must NOT panic, for a 2-digit number AND a single digit.
+    // The ±16-byte number-of-substance window must snap its bounds to a char boundary: a
+    // digit adjacent to multi-byte text slices mid-codepoint otherwise, and that panics.
+    // This must NOT panic, for a 2-digit number AND a single digit.
     let c = rich_cfg();
     // A multi-byte line with a time/number right next to 4-byte chars (no substance noun
     // → not rich, but the point is it must not panic).

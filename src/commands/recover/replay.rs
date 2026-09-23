@@ -13,7 +13,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
     let mut pre_state_known = true;
     let mut had_full_anchor = false;
     let mut anchor_source: Option<SnapSource> = None;
-    // Snapshot-instrument state (v0.9.4): the last seen file-history version (a
+    // Snapshot-instrument state: the last seen file-history version (a
     // DECREASE = a generation reset, never an anomaly) and whether any mutation
     // event landed since the previous marker (the content-less silent-write test).
     let mut last_snap_version: Option<u64> = None;
@@ -419,7 +419,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 version, content, ..
             } => {
                 out.counts.history_snapshot += 1;
-                // The file-history INSTRUMENT (v0.9.4): Claude Code backs the tracked
+                // The file-history INSTRUMENT: Claude Code backs the tracked
                 // file up per prompt and bumps `version` only when the bytes changed.
                 // A version CHANGE therefore captures the disk truth at that instant -
                 // including harness-side writes that leave NO tool record (measured:
@@ -500,9 +500,9 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                             pre_state_known,
                             anchor_source,
                         );
-                        // The C-24 instrument, scoped to the RECOVER TARGET (never a global
-                        // timeline row - the corpus carries tens of thousands of these
-                        // across every tracked path, which is why `files` reports only the
+                        // The file-history instrument, scoped to the RECOVER TARGET (never a
+                        // global timeline row - the corpus carries tens of thousands of
+                        // these across every tracked path, which is why `files` reports only the
                         // settings family). The row names the exact interval it bounds so a
                         // reader can go look: the version pair, and the line the silence
                         // started at. The motivating producer is /rewind "Restore code",

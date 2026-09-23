@@ -49,8 +49,8 @@ impl Fixture {
 }
 
 /// A minimal lane transcript: an opener and one assistant record that has not ended the turn.
-/// It carries no `sessionId` - the topology reads a lane's owning session from the directory
-/// it sits in, so the field would be decoration.
+/// It carries no `sessionId` - the topology reads the session that owns a lane from the
+/// directory it sits in, so the field would be decoration.
 const LANE_TRANSCRIPT: &str = concat!(
     r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:00.000Z","version":"2.1.258","message":{"role":"user","content":"go"}}"#,
     "\n",

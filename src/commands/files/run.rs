@@ -156,7 +156,7 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<FileRe
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
     let mut mutations = extract_mutations(&session_id, &records, &line_nos, &view);
-    // v0.9.4: settings-family external writes from the file-history instrument.
+    // Settings-family external writes from the file-history instrument.
     let externals = extract_external_writes(&session_id, &records, &line_nos, &mutations, &view);
     mutations.extend(externals);
     let mut boundaries = extract_boundaries(&session_id, &records, &line_nos, &view);

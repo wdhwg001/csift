@@ -30,7 +30,7 @@ pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
     } else {
         format!("L{}", unit.line_no)
     };
-    // An inbound peer/teammate communication opener (GOLD §1) renders its comm LABEL + the
+    // An inbound peer/teammate communication opener (§3.3) renders its comm LABEL + the
     // `<from> ⇨ self` direction in place of the bare role word, so a reader sees a peer message -
     // not a human turn - at a glance (parity with `search`'s inbox render). The dotted class path
     // stays lowercase (the canonical selector form); an ordinary unit keeps the UPPERCASE role.
@@ -90,9 +90,9 @@ pub(crate) fn image_marker_cost(ids: &[String]) -> usize {
 /// newline). The renderer and the budget reservation both call this so the reserved
 /// banner length is byte-for-byte what is emitted.
 pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {
-    // C-33: a `/rewind` summarize is a compaction like any other for reconstruction, so the
-    // mode only ANNOTATES the banner - and only when it is one of the two summarize gestures,
-    // which keeps an ordinary compaction's banner byte-for-byte what it always was.
+    // A `/rewind` summarize is a compaction like any other for reconstruction, so the mode
+    // only ANNOTATES the banner - and only when it is one of the two summarize gestures, so
+    // an ordinary compaction's banner carries no tag at all.
     let tag = match mode {
         Some(SummarizeMode::FromHere | SummarizeMode::UpToHere) => mode
             .and_then(SummarizeMode::direction)

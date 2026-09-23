@@ -47,7 +47,7 @@ fn merged_counts<'a>(
     total
 }
 
-/// The SURVIVAL-AXIS line: openers the conversation chain no longer reaches, and lines a
+/// The SURVIVAL-AXIS line: openers the conversation chain does not reach, and lines a
 /// compaction re-anchor re-appended. Printed only when there is something to say, so an
 /// ordinary transcript's block is unchanged.
 fn chain_line(abandoned: usize, rewound: usize, replays: usize, crossing: &CrossingReport) {

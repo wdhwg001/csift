@@ -52,9 +52,9 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // so the same run is discovered once per session COPY. One run is one row, and a run's
     // identity is the PAIR (session, run): a run id is unique within the session that minted
     // it and nothing makes it unique across sessions, so keying on the id alone would drop
-    // another session's run as though it were a copy - and would then hide that under the
-    // renderers, which used to attach a run to every session whose agents named that
-    // workflow id. The first occurrence stays, which keeps the tree's run order exactly as
+    // another session's run as though it were a copy. The renderers join a run to a session
+    // by that same pair, so such a drop shows up as a session missing its run, never as a
+    // duplicate. The first occurrence stays, which keeps the tree's run order exactly as
     // the scan produced it.
     let mut seen_runs: std::collections::BTreeSet<(String, String)> =
         std::collections::BTreeSet::new();

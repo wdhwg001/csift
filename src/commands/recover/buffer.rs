@@ -38,8 +38,8 @@ impl SparseBuffer {
                 },
             );
         }
-        // A full-content anchor is the authority on trailing-newline status (used to
-        // normalise later windowed reads' separator-counted totals).
+        // A full-content anchor is the authority on trailing-newline status (it normalises
+        // later windowed reads' separator-counted totals).
         self.content_ends_with_newline = content.ends_with('\n');
         // CC's Read / file-attachment `totalLines` is a SEPARATOR count: a newline-terminated
         // file reports `split_lines + 1` (a phantom empty last line - e.g. a 96-line file ending
@@ -264,10 +264,10 @@ pub(crate) fn apply_structured_patch(
         }
     }
     let max_known = buf.known.keys().copied().max().unwrap_or(0);
-    // A structured patch is AUTHORITATIVE about the file's new length: adjust the
-    // previously-seen total by this edit's net line delta (`offset` = added − removed
-    // accumulated over the hunks) rather than monotonically maxing it. Maxing left a
-    // phantom trailing gap after a net deletion (e.g. an insert that grew the file to N+1
+    // A structured patch is AUTHORITATIVE about the file's new length: adjust the total
+    // seen so far by this edit's net line delta (`offset` = added − removed accumulated
+    // over the hunks) rather than monotonically maxing it. Maxing leaves a phantom
+    // trailing gap after a net deletion (e.g. an insert that grew the file to N+1
     // followed by a delete back to N would still report N+1, emitting a spurious
     // `??? line N+1 unknown`). Clamp to ≥ the max known line and ≥ 0.
     let prev_total = buf.seen_total_lines.unwrap_or(0) as isize;

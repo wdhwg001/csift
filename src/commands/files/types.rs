@@ -16,7 +16,7 @@ pub(crate) struct TaggedMutation {
     /// `session_id` for a top-level mutation. Defaults to `session_id`; set in `scan_one_file`.
     pub(crate) parent_session_id: String,
     /// The live turn this mutation physically sits in. For a mutation on a record the
-    /// surviving conversation no longer reaches it is the nearest PRECEDING live turn - an
+    /// surviving conversation does not reach it is the nearest PRECEDING live turn - an
     /// ordering key for the `--turn` window only, never printed (see `stamp`).
     pub(crate) turn_index: usize,
     /// Where the mutating record sits in live turn numbering: `Live(n)`, or `Abandoned`
@@ -58,8 +58,9 @@ pub(crate) struct FileResult {
     /// This transcript's genuine-user turn count - so a `--turn` spec resolves its
     /// open/from-end forms (`N..`, `-3..`) against THIS file's turns, not a global count.
     pub(crate) turn_count: usize,
-    /// What the walk did with this transcript's compaction boundaries (C-42) - the rows'
-    /// survival markers are read off that chain, so how far it climbed is disclosed.
+    /// What the walk did with this transcript's compaction boundaries under the crossing
+    /// budget - the rows' survival markers are read off that chain, so how far it climbed
+    /// is disclosed.
     pub(crate) crossing: crate::model::CrossingReport,
 }
 

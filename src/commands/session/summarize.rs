@@ -37,8 +37,8 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     let mut git_branch: Option<String> = None;
     let mut data_session_id: Option<String> = None;
 
-    // C-44: the `/clear` mint probe rides the SAME head scan (no second read) - the
-    // wrapper is a role-bearing user record, so the list prefilter already keeps it.
+    // The `/clear` mint probe rides the SAME head scan (no second read) - the wrapper
+    // is a role-bearing user record, so the list prefilter already keeps it.
     let mut minted_by_clear = false;
     let mut clear_wrapper_ts: Option<String> = None;
     let mut saw_first_user_record = false;
@@ -76,7 +76,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
             // single-record head scan, so a rejection surfaces its typed instruction without
             // the `[plan: …]` pointer (the pointer is a turns/search affordance). A
             // `<task-notification>` / inbound `<teammate-message>` renders its clean label /
-            // inbound-comm form via `preview_text` rather than the raw XML it used to show.
+            // inbound-comm form via `preview_text`, never the raw XML.
             if let Some(text) = preview_text(rec) {
                 // Capture identity off the first user record (it carries cwd / version /
                 // gitBranch / sessionId in real data).
@@ -93,8 +93,8 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     // ── TAIL read: last genuine-user + last agent message (newest-first) ──
     let mut last_user: Option<MessagePreview> = None;
     let mut last_agent: Option<MessagePreview> = None;
-    // LAST-seen identity: the tail walks newest-first, so the first version/branch-
-    // bearing record it visits IS the newest one. Costs nothing - the same records
+    // LAST-seen identity: the tail walks newest-first, so the first record it visits
+    // carrying a version or a branch IS the newest one. Costs nothing - the same records
     // are already being read for last_user/last_agent.
     let mut version_last: Option<String> = None;
     let mut git_branch_last: Option<String> = None;
@@ -103,8 +103,8 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     // that stop the walk. First seen wins here: newest-first order makes it the newest.
     let mut continued_in_tail: Option<String> = None;
     // `head_consumed` as the floor keeps the two windows DISJOINT: a malformed line is
-    // counted exactly once (R12 killed the head+tail double-book on files where both
-    // scans used to walk the same region).
+    // counted exactly once (R12 - without the floor, a file where both scans reach the
+    // same region books every malformed line twice).
     let tail_skipped =
         tail_records_prefiltered(path, line_is_list_candidate, head_consumed, |rec| {
             if continued_in_tail.is_none() {
@@ -177,7 +177,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     let sidecar_present = !is_subagent
         && crate::commands::elicitation::sidecar_path(path).is_some_and(|p| p.is_file());
 
-    // ── C-19 clone lineage (top-level rows only; forks copy whole session files) ──
+    // ── Clone lineage (top-level rows only; forks copy whole session files) ──
     let clone_boundary_uuid = if is_subagent {
         None
     } else {
@@ -187,7 +187,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
         .as_deref()
         .and_then(|u| clone_origin(path, u));
 
-    // ── C-44 `/clear` lineage (top-level rows only; a subagent is never cleared) ──
+    // ── `/clear` lineage (top-level rows only; a subagent is never cleared) ──
     let minted_by_clear = minted_by_clear && !is_subagent;
     let clear_join = match clear_wrapper_ts.as_deref() {
         Some(ts) if minted_by_clear => cleared_from_origin(path, ts),
@@ -308,7 +308,7 @@ pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {
     Ok(out)
 }
 
-/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a
+/// The clone law: a transcript whose FIRST TIMESTAMPED record is a
 /// system/`compact_boundary` was minted by copying another session at a compaction
 /// point. Measured on a real 61-file project dir: exactly the one known fork
 /// detected, zero false positives; file-birthtime rules were REFUTED (filesystem

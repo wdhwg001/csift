@@ -36,7 +36,7 @@ fn excerpt(ts: Option<String>, text: &str) -> LastMsg {
 pub(crate) fn last_messages(path: &Path) -> Result<LastMessages> {
     let mut out = LastMessages::default();
     crate::parse::tail_records_prefiltered(path, crate::parse::line_has_role_marker, 0, |rec| {
-        // C-34: a session resumed onto a dangling prompt ends with the LOADER's repair pair,
+        // A session resumed onto a dangling prompt ends with the LOADER's repair pair,
         // and neither half is this session's last exchange. The placeholder needs an explicit
         // skip - it is an assistant record with real text, so `agent_text` would hand back
         // "No response requested." as the newest reply. Its partner needs none: the prompt is

@@ -339,14 +339,14 @@ fn classify_integrity_error_distinguishes_kinds_and_ignores_other_errors() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Branch-completeness round 2: error / second-operand / short-circuit arms that
-// the first test pass left uncovered. Each drives a SPECIFIC missed branch with a
+// Branch completeness: the error / second-operand / short-circuit arms the
+// happy-path cases above do not reach. Each drives a SPECIFIC branch with a
 // real assertion on the documented behavior (never a coverage-only touch).
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[test]
 fn classify_integrity_error_accepts_alternate_phrasings() {
-    // The classifier ORs two phrasings per kind. The first test only hit the canonical
+    // The classifier ORs two phrasings per kind. The cases above hit the canonical
     // "has been modified since read" / "has not been read yet" wordings; these drive the
     // SECOND operand of each `||` (the harness has emitted both forms in real transcripts).
     let modified_alt =
@@ -482,8 +482,9 @@ fn path_matches_basename_suffix_accepts_windows_separator() {
 fn extract_token_capped_read_is_never_a_full_snapshot() {
     // `truncatedByTokenCap` (Claude Code 2.1.145+): the Read tool cut the content at its
     // token budget. On the CHARACTER branch (lines too long to paginate) `numLines` is
-    // recomputed from the cut slice and can equal `totalLines`, so a capped read used to
-    // replay as a whole-file snapshot (v0.10.3, ledger REC-047).
+    // recomputed from the cut slice and can equal `totalLines`, so that equality does not
+    // prove a whole-file read - a capped read must never replay as a whole-file snapshot
+    // (ledger REC-047).
     let long = "x".repeat(200);
     let recs = numbered(&[
         r#"{"type":"user","message":{"role":"user","content":"go"}}"#,

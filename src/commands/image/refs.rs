@@ -277,7 +277,7 @@ pub(crate) fn basename(path: &str) -> &str {
 /// Read the PDF page provenance off ONE record, or `None` when the record does not carry
 /// it - a screenshot, a pre-`firstPage` build, a carrier that re-emits page images of its
 /// own (the REPL tool flattens inner-`Read` pages into its own result with no `firstPage`,
-/// so position no longer maps to a page there and this must not fire).
+/// so position does not map to a page there and this must not fire).
 ///
 /// The gate is the record's OWN result object: `toolUseResult.type == "parts"` with a
 /// `firstPage`, which is the shape only the Read `pages` branch mints. Plus ONE structural
@@ -411,7 +411,7 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     // its image blocks (the submit path builds both arrays in one ascending-id pass),
     // while the `[Image #N]` markers keep the operator's TEXT order - the two orders
     // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a
-    // silently wrong `#N` there (v0.10.5, ledger IMG-005). Without the array (older
+    // silently wrong `#N` there (ledger IMG-005). Without the array (older
     // records) the positional zip stays, and only when the marker count matches the
     // image count (a mismatch means a back-reference to a compressed-out image, so
     // `seq` stays `None` rather than misassign).
@@ -435,7 +435,7 @@ fn assign_image_seq(out: &mut [ImageRef], ids: Option<&[u64]>, markers: &[usize]
     }
 }
 
-/// The third carrier (v0.10.3, ledger IMG-002): a `queued_command` attachment record
+/// The third carrier (ledger IMG-002): a `queued_command` attachment record
 /// keeps the queued prompt's blocks under `attachment.prompt[]`, image blocks included.
 /// A prompt edited or recalled before dispatch never becomes a user record, so its
 /// pasted image exists ONLY here (45 of 52 such blocks in the reference corpus had no

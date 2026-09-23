@@ -97,10 +97,10 @@ fn parse_turn_range_valid_range_hi_ge_lo() {
 
 #[test]
 fn shared_uuid_validator_distinguishes_uuid_from_bare_hex() {
-    // turns no longer rolls its own `is_top_level_session_id`; it now discriminates via the
+    // turns rolls no `is_top_level_session_id` of its own: it discriminates via the
     // authoritative path-derived `is_subagent` field, and any id-SHAPE check reuses the ONE
-    // canonical validator `path::is_session_uuid` (the DRY fix). Spot-check that validator's
-    // contract holds for the id forms turns' tests construct.
+    // canonical validator `path::is_session_uuid`. Spot-check that validator's contract
+    // holds for the id forms turns' tests construct.
     assert!(crate::path::is_session_uuid(
         "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     ));

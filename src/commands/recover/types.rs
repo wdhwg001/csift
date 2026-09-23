@@ -6,7 +6,7 @@ pub(crate) struct FileEvent {
     /// 1-based jsonl line (the new capability).
     pub(crate) line_no: usize,
     /// The LIVE turn this event sits in, or - for an event on a record the surviving
-    /// conversation no longer reaches - the nearest PRECEDING live turn. It is the ordering
+    /// conversation does not reach - the nearest PRECEDING live turn. It is the ordering
     /// key the `--turn` window and `--at @turn:` resolve against, never a printed number:
     /// what a reader sees comes from [`ScanResult::stamps`], which says `abandoned (root
     /// L<n>)` for such an event. Keeping an ordering key for every event is deliberate - a
@@ -55,11 +55,11 @@ pub(crate) enum EventKind {
     },
     /// A Read echo that carries NO content: the harness blanks the text of a tool result
     /// older than its retention window before persisting it (`content` is the empty
-    /// string while `numLines`/`totalLines` still count the lines it once had - 320
-    /// such echoes in the reference corpus), and four result arms (`file_unchanged`,
-    /// `pdf`, `parts`, `notebook`) never carry a text at all (ledger FH-048). Replaying
-    /// such an echo as a read of N empty lines, or as a one-line file, fabricates
-    /// content; it is COUNTED and disclosed, never spliced.
+    /// string while `numLines`/`totalLines` still count the lines of the text the harness
+    /// removed - 320 such echoes in the reference corpus), and four result arms
+    /// (`file_unchanged`, `pdf`, `parts`, `notebook`) never carry a text at all (ledger
+    /// FH-048). Replaying such an echo as a read of N empty lines, or as a one-line file,
+    /// fabricates content; it is COUNTED and disclosed, never spliced.
     BlankedRead { total_lines: Option<usize> },
     /// An Edit/MultiEdit applied old→new. `structured_patch` (when present) gives exact
     /// line positions; `original_file` (when present) is used ONLY to cross-check for a
@@ -111,7 +111,7 @@ pub(crate) enum EventKind {
     /// disclosed heuristic boundary (content known, position not).
     BashAppend { content: String },
     /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.
-    /// Since v0.9.4 the marker carries its INSTRUMENT payload: the per-path
+    /// The marker carries its INSTRUMENT payload: the per-path
     /// `version` (monotone within a GENERATION; the counter resets mid-session on
     /// process restart - 148 real occurrences - so a DECREASE means a new
     /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,
@@ -132,7 +132,7 @@ pub(crate) enum EventKind {
 }
 
 /// The provenance of a [`EventKind::FullSnapshot`]. The `Bash*` variants are the
-/// v0.9.4 content anchors: deterministic bash reads/writes admitted by
+/// content anchors: deterministic bash reads/writes admitted by
 /// `bash::mutations::bash_anchor` plus the recover-side completeness gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SnapSource {
@@ -248,9 +248,9 @@ pub(crate) struct ScanResult {
     /// displayed location stays a real, inspectable transcript line.
     pub(crate) merged_line_origin: std::collections::BTreeMap<usize, (String, usize)>,
     pub(crate) skipped_lines: usize,
-    /// What the walk did with this transcript's compaction boundaries (C-42). An event's
-    /// turn stamp is read off that chain, so how far it climbed belongs beside the
-    /// abandoned-branch note.
+    /// What the walk did with this transcript's compaction boundaries under the crossing
+    /// budget. An event's turn stamp is read off that chain, so how far it climbed belongs
+    /// beside the abandoned-branch note.
     pub(crate) crossing: crate::model::CrossingReport,
 }
 

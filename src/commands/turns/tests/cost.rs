@@ -78,7 +78,7 @@ fn banner_cost_equals_real_emitted_banner_chars() {
     );
     assert!(line.contains("compaction boundary"));
     assert!(line.contains("L34097"));
-    // C-33: the same equality must hold for a summarize-mode banner, whose extra segment
+    // The same equality must hold for a summarize-mode banner, whose extra segment
     // widens the line - a reservation computed without the mode would under-charge and the
     // budget would overrun by exactly that segment.
     for mode in [

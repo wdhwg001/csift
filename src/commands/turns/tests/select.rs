@@ -260,7 +260,7 @@ fn eot_only_selection_is_byte_identical_to_single_eot_render() {
     );
 }
 
-// ── Same-prefix re-send (v0.12.3) ──
+// ── Same-prefix re-send ──
 
 /// Two agent messages where the LATER carries the earlier's whole body plus an addendum -
 /// both over `DEDUP_PREFIX` chars, so the containment rule fires.

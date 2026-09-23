@@ -36,7 +36,7 @@ pub(crate) fn tail_shape(path: &Path) -> Result<TailShape> {
     // A plain positional read, never a memory map: this window is re-read on every
     // `wait` poll of a LIVE transcript, and Claude Code rewrites a transcript in place
     // (a rewind tombstone truncates and rewrites the tail), which would fault a map
-    // with SIGBUS (v0.10.4).
+    // with SIGBUS.
     let (buf, start) = read_tail(path, TAIL_WINDOW_BYTES as u64)?;
     if buf.is_empty() {
         return Ok(shape);
@@ -177,7 +177,7 @@ pub(crate) fn last_checkpoint(path: &Path) -> Result<Option<CheckpointTail>> {
 }
 
 /// Newlines in `path[..offset)`, read positionally in chunks - never a map, because
-/// `wait` re-reads a live transcript (v0.10.4). Paid only when the tail IS a
+/// `wait` re-reads a live transcript. Paid only when the tail IS a
 /// checkpoint, which is the rare shape.
 fn count_newlines_before(path: &Path, offset: u64) -> Result<usize> {
     const CHUNK: u64 = 4 * 1024 * 1024;

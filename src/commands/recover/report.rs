@@ -127,7 +127,7 @@ pub(crate) fn print_boundary_lines(s: &ScanResult, boundaries: &[Boundary]) {
 }
 
 /// The one-line abandoned-branch disclosure, printed whenever at least one replayed event
-/// came from a record the surviving conversation no longer reaches. It is NOT a warning
+/// came from a record the surviving conversation does not reach. It is NOT a warning
 /// that the reconstruction is wrong - the opposite: those writes reached the disk, so they
 /// are replayed, and this line says how many and where to look.
 pub(crate) fn print_abandoned_note(s: &ScanResult) {

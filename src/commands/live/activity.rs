@@ -17,7 +17,7 @@ pub(crate) struct Activity {
     pub(crate) user_prompts: usize,
     pub(crate) notifications: usize,
     /// One entry per SHRINK seen while waiting (`<lane>: -<bytes>`): the harness rewrote
-    /// the transcript in place, so the baseline moved to the new end (v0.10.4).
+    /// the transcript in place, so the baseline moved to the new end.
     pub(crate) shrinks: Vec<String>,
 }
 
@@ -32,7 +32,7 @@ impl Activity {
         self.records += 1;
         self.lanes.insert(lane.to_string());
         // A pulse absorbed mid-turn is a queue enqueue line / a queued_command
-        // attachment, never a labeled record (v0.10.2): count those deliveries too, so
+        // attachment, never a labeled record: count those deliveries too, so
         // the census agrees with what `--until notification` can fire on.
         if rec.is_type("queue-operation") || rec.attachment_type().is_some() {
             self.notifications += crate::commands::live::delivered_pulse_labels(rec).len();

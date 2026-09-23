@@ -244,9 +244,9 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<ScanRe
     // Parse all turn-candidate lines IN PARALLEL (newline-aligned chunks on the rayon
     // pool). `scan_lines_parallel` visits every line - blanks included - with its exact
     // 1-based number, so the `(line_no, Record)` stream and the malformed count are
-    // byte-for-byte identical to the serial `scan_lines_bytes` pass this replaces; the
-    // win is that a single giant transcript (the default `turns @main` case is ONE file)
-    // is no longer bottlenecked on one core.
+    // byte-for-byte what a serial `scan_lines_bytes` pass yields; the win is that one
+    // giant transcript (the default `turns @main` case is ONE file) is spread across
+    // cores rather than scanned on one.
     // The SURVIVAL AXIS decides which turns the summariser ever saw, and it needs the whole
     // DAG - so the lines this prefilter drops are lifted to structural SPINE rows in the
     // same pass. Turn numbers then agree with `search`'s (`--slice` indexes them), and a

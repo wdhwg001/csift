@@ -302,8 +302,9 @@ pub(crate) fn run_rendered(
     };
 
     // Context-flood guard (law 4's last hole): an open range (`--line ..` / `--turn ..`)
-    // used to dump the WHOLE transcript uncapped. Keep the FIRST `cap` record units and
-    // report the drop with the exact continuation command; `--max-count 0` lifts the cap.
+    // addresses the WHOLE transcript, so uncapped it would dump the lot. Keep the FIRST
+    // `cap` record units and report the drop with the exact continuation command;
+    // `--max-count 0` lifts the cap.
     let cap = effective_cap(max_count);
     let total_units: usize = exchanges.iter().map(|e| e.hits.len()).sum();
     let mut dropped = 0usize;

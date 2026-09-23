@@ -39,16 +39,16 @@ pub(crate) fn render_text(
     for ex in exchanges {
         writeln!(out)?;
         if ex.superseded_draft {
-            // C-18 + C-31: an abandoned record sits OUTSIDE turn numbering - name what it
-            // is, never fabricate a t<N>.
+            // An abandoned record sits OUTSIDE turn numbering - name what it is, never
+            // fabricate a t<N>.
             writeln!(
                 out,
                 "{}  {}",
                 crate::commands::search::abandoned_tag(ex),
                 format_local_compact(ex.started_utc.as_deref())
             )?;
-            // C-27: the distance from the message that replaced it, so a fetched
-            // draft is never read as the message the model received.
+            // The distance from the message that replaced it, so a fetched draft is
+            // never read as the message the model received.
             if let Some(d) = &ex.draft_diff {
                 writeln!(out, "  {}", d.text_line_for(ex.abandoned_kind))?;
             }
@@ -143,7 +143,7 @@ pub(crate) fn render_json(
                 Some((f, t)) => (json!(f), json!(t)),
                 None => (serde_json::Value::Null, serde_json::Value::Null),
             };
-            // C-27: on a draft row, the superseding message's address and the distance
+            // On a draft row, the superseding message's address and the distance
             // between the two texts; null on every other row.
             let (sup_line, sup_uuid, diff_chars, diff_pct, diff_exact) = match &ex.draft_diff {
                 Some(d) => (
@@ -166,11 +166,11 @@ pub(crate) fn render_json(
                 "session_id": session_id,
                 "is_subagent": is_subagent,
                 "parent_session_id": parent_session_id,
-                // C-18: a superseded draft has NO turn index (outside numbering) - null,
+                // A superseded draft has NO turn index (outside numbering) - null,
                 // never a fabricated number; the flag names why.
                 "turn_index": ex.turn_index,
                 "superseded_draft": ex.superseded_draft,
-                // C-31 SURVIVAL AXIS, per record.
+                // The SURVIVAL AXIS verdict, per record.
                 "survival": h.survival.as_str(),
                 "abandoned_root_line": ex.abandoned_root_line,
                 "replay_copy_of": h.replay_copy_of,
@@ -206,7 +206,7 @@ pub(crate) fn render_json(
                 // capped fragment and the body would be a fragment too.
                 "body": h.body,
                 "image_ids": h.image_ids,
-                // C-33: the compaction facts of a boundary/summary record; null elsewhere.
+                // The compaction facts of a boundary/summary record; null elsewhere.
                 "mode": crate::commands::search::compaction_mode_json(h),
                 "compact_metadata": crate::commands::search::compact_metadata_json(h),
                 // The provenance ROOT, the same shape a `search` hit carries: which

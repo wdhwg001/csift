@@ -213,7 +213,7 @@ pub(crate) fn filetime_to_timestamp(ticks: u64) -> Option<jiff::Timestamp> {
 /// platform utility's `%c` under the caller's `LC_TIME`, so an inherited locale
 /// renders a different field order and non-English names (de_DE gives `Fr  4 Sep`,
 /// fr_FR `Ven  4 sep`), and the guard was silently skipped on every such host
-/// (v0.10.5, ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in
+/// (ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in
 /// UTC, the same clock the registry's `procStart` is written in; the second field
 /// order is kept as a belt for a `C` locale that still renders day-first.
 #[cfg(unix)]

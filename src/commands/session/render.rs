@@ -71,8 +71,8 @@ pub(crate) fn render_text(
                 ),
             }
         }
-        // C-44: the clear left no lineage on disk, so this row is labelled an inference
-        // and names the instrument (the checkpoint the old session's ledger wrote).
+        // A clear leaves no lineage on disk, so this row is labelled an inference and
+        // names the instrument (the checkpoint the cleared session's ledger wrote).
         if s.minted_by_clear {
             println!("  cleared  {}", cleared_line(s));
         }
@@ -296,14 +296,14 @@ pub(crate) fn render_json(
             // Empty / false for a session with no pending and for every subagent row.
             "pending_elicitations": s.pending_elicitations,
             "with_elicitation_sidecar": !s.pending_elicitations.is_empty(),
-            // C-19 clone lineage: a transcript whose first timestamped record is a
+            // Clone lineage: a transcript whose first timestamped record is a
             // compaction boundary was minted by copying another session there. Note
             // the corollary for every spanning surface: a clone DOUBLE-COUNTS its
             // inherited records until scoped away.
             "is_clone": s.clone_boundary_uuid.is_some(),
             "clone_of": s.clone_of,
             "clone_boundary_uuid": s.clone_boundary_uuid,
-            // C-44 `/clear` lineage. `minted_by` is "clear" when this transcript opens
+            // `/clear` lineage. `minted_by` is "clear" when this transcript opens
             // with the `/clear` wrapper, null otherwise; `cleared_from` is the INFERRED
             // predecessor (the checkpoint join, never a file mtime) and stays null on a
             // tie, whose members ride `cleared_from_candidates`.

@@ -1,5 +1,5 @@
 //! Background tasks: the off-turn work a session launched and whether it ever came
-//! back. Three kinds, measured on the corpus (v0.10.0):
+//! back. Three kinds, measured on the corpus:
 //!
 //! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its
 //!   tool_result arrives within milliseconds ("Command running in background with ID:
@@ -122,7 +122,7 @@ pub(crate) enum BgState {
     /// in a local-only corpus; a producer-only claim in the ledger (BG-011).
     Blocked,
     /// A status literal csift does not know. Rendered as its own bucket so a new harness
-    /// value is disclosed instead of being booked as completed (v0.10.3).
+    /// value is disclosed instead of being booked as completed.
     Other,
 }
 

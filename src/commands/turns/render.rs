@@ -37,7 +37,7 @@ pub(crate) struct RenderCtx {
 /// How many abandoned openers a session's note lists by line before it elides the rest.
 const ABANDONED_LINE_CAP: usize = 8;
 
-/// The per-session note for turns the surviving conversation no longer reaches: how many,
+/// The per-session note for turns the surviving conversation does not reach: how many,
 /// where they are, and the exact `show` command that fetches the first one. `None` when the
 /// transcript has none (the overwhelmingly common case prints nothing).
 ///

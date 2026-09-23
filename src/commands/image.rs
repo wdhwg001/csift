@@ -2,7 +2,7 @@
 //!
 //! A user-pasted/attached image (and a tool-result screenshot) rides INLINE on a record as
 //! an `{type:"image", source:{type:"base64", media_type:"image/png", data:"<base64>"}}`
-//! block - verified against real `~/.claude/projects` data (2026-06-16). The bytes live in
+//! block - verified against real `~/.claude/projects` data. The bytes live in
 //! the jsonl, so `image` decodes them straight back to files; nothing is externalised.
 //!
 //! Stable image id = `L<line>i<n>`: the 1-based JSONL line of the carrying record plus the

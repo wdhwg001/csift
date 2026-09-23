@@ -339,8 +339,8 @@ pub(crate) fn reconcile(
     }))
 }
 
-/// True when the message can no longer be delivered on its own schedule: either csift
-/// wrote an `expired` line, or the inbox line's deadline has passed.
+/// True when the message's own delivery schedule has run out: either csift wrote an
+/// `expired` line, or the inbox line's deadline has passed.
 ///
 /// Both sources count because the ledger line is only written by a delivery that ran: a
 /// lane whose hooks never fire accumulates messages whose ttl elapsed with nothing on the

@@ -51,8 +51,8 @@ pub(crate) struct OpCounts {
     pub(crate) bash: usize,
     /// Snapshot-inferred external writes (settings family; no tool record).
     pub(crate) external_write: usize,
-    /// How many of the above came from a record the surviving conversation no longer
-    /// reaches (a rewound branch, a recalled draft). Counted SEPARATELY, never subtracted:
+    /// How many of the above came from a record the surviving conversation does not reach
+    /// (a rewound branch, a recalled draft). Counted SEPARATELY, never subtracted:
     /// the write hit the disk, and a reader deciding "what does this file look like" needs
     /// both the total and the share that a rewind left behind.
     pub(crate) abandoned: usize,

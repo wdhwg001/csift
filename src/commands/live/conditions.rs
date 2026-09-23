@@ -15,7 +15,7 @@ pub(crate) enum Cond {
     Auq,
     /// A task-notification is delivered (normally to the MAIN transcript; a child lane
     /// receives one when the harness routes it to the owning agent - 2 of 2906
-    /// delivered records in the reference corpus at Claude Code 2.1.258, v0.10.3),
+    /// delivered records in the reference corpus at Claude Code 2.1.258),
     /// optionally payload-matched.
     Notification(Option<regex::Regex>),
     /// A `tool_use` of NAME appears whose serialized input matches (any watched lane).
@@ -108,16 +108,16 @@ pub(crate) fn parse_condition(s: &str) -> Result<Cond> {
 }
 
 /// Match a freshly appended RECORD line against the record-event conditions (every
-/// watched lane; v0.10.3 dropped the main-only scope on the notification carrier).
+/// watched lane, the notification carrier included - it is not main-only).
 pub(crate) fn record_matches(cond: &Cond, rec: &crate::model::Record) -> bool {
     match cond {
         Cond::Notification(re) => {
             // Any watched lane: the harness normally delivers to the main transcript, but
-            // a pulse addressed to the owning agent lands in that agent's lane (v0.10.3).
+            // a pulse addressed to the owning agent lands in that agent's lane.
             // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY
             // on a queue-operation enqueue line and a queued_command attachment
-            // (v0.10.2: the three carriers `background_scan` joins, not the user
-            // record alone - the agents-stopped notice stays a user-record label).
+            // (the three carriers `background_scan` joins, not the user record
+            // alone - the agents-stopped notice stays a user-record label).
             let mut labels = crate::commands::live::delivered_pulse_labels(rec);
             if labels.is_empty() {
                 let Some(label) = rec.automation_label() else {

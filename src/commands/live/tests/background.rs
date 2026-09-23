@@ -205,7 +205,7 @@ fn activity_census_and_tail_state_words() {
     // counter but the record total.
     act.fold(&parse(LAUNCH_RESULT), "main");
     // A pulse absorbed mid-turn lands on a queue ENQUEUE line (counted) and again on
-    // the queue REMOVE line (the same pulse, not counted) - v0.10.2.
+    // the queue REMOVE line (the same pulse, not counted).
     act.fold(
         &parse(
             r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"<task-notification>\n<task-id>b2</task-id>\n<status>completed</status>\n<summary>Background command finished</summary>\n</task-notification>"}"#,

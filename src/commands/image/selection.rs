@@ -85,8 +85,8 @@ pub(crate) fn count_distinct_transcripts(images: &[ImageRef]) -> usize {
     ids.len()
 }
 
-/// The transcript file backing a single-transcript image set (by matching session id) - used to
-/// re-parse it for turn indices / excerpts on the `--turn` and ambiguity paths.
+/// The transcript file backing a single-transcript image set (by matching session id) - the
+/// `--turn` and ambiguity paths re-parse it for turn indices / excerpts.
 pub(crate) fn pinned_path<'a>(
     session_files: &'a [PathBuf],
     images: &[ImageRef],
@@ -196,7 +196,7 @@ pub(crate) fn resolve_selection<'a>(
 }
 
 /// Per-line turn index + concatenated text for one transcript - a full parse (the `--id`/
-/// `--turn` paths already pin a single transcript, so this is one file) used to attach
+/// `--turn` paths already pin a single transcript, so this is one file). It attaches
 /// `t<turn>` + an excerpt to each occurrence in an ambiguity error.
 pub(crate) struct LineInfo {
     pub(crate) turn_of: HashMap<usize, usize>,
@@ -231,8 +231,8 @@ pub(crate) fn transcript_line_info(path: &Path, cross: CrossingBudget) -> Result
     }
     // Turn index per line via the SURVIVAL AXIS, so `--turn` and the ambiguity list print the
     // same numbering `search`/`show` print. The prefilter above admits every line, so the view
-    // already holds the whole DAG and needs no spliced spine rows. A record the chain no longer
-    // reaches belongs to no numbered turn, so it gets NO entry here - which is exactly how a
+    // already holds the whole DAG and needs no spliced spine rows. A record the chain does not
+    // reach belongs to no numbered turn, so it gets NO entry here - which is exactly how a
     // `--turn` window leaves an abandoned image out while the flat listing still carries it.
     let view = ChainView::build(&records, &[], cross);
     for (ti, group) in view.turns().iter().enumerate() {

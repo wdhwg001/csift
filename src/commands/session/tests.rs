@@ -28,9 +28,9 @@ fn truncate_counts_chars_not_bytes() {
 #[test]
 fn format_timestamp_uses_system_local_canonical_marker() {
     // tz-agnostic: the local portion must equal what the system tz itself yields
-    // for this instant (derived in-test, not a hardcoded zone). v0.5: the marker
-    // is `<TZAB>(UTC±offset)` and the raw-UTC copy is GONE (it invited LLM
-    // conversion arithmetic; machine consumers read JSON ts_utc).
+    // for this instant (derived in-test, not a hardcoded zone). The marker is
+    // `<TZAB>(UTC±offset)` with NO raw-UTC copy: a second copy invites LLM
+    // conversion arithmetic, and machine consumers read JSON ts_utc.
     let raw = "2026-06-07T05:48:22.880Z";
     let out = format_timestamp(Some(raw));
     let ts: jiff::Timestamp = raw.parse().expect("parseable instant");
@@ -385,7 +385,7 @@ fn clone_origin_decoys_stay_outside_the_join() {
     std::fs::remove_file(&refr).unwrap();
 }
 
-// -- C-44: the /clear checkpoint join --
+// -- The /clear checkpoint join --
 
 #[test]
 fn checkpoint_close_reads_the_sum_and_refuses_other_types() {

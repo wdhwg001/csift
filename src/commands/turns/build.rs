@@ -8,7 +8,7 @@ use super::*;
 /// surviving conversation still reaches are built - a recalled draft, a rewound turn, and
 /// a compaction re-anchor's replay copies never surface as phantom turns. That is not a
 /// display choice: the compaction summariser reads the IN-MEMORY message array (claim
-/// CMP-020), which by then no longer holds those turns, so replaying one would put text
+/// CMP-020), which by that point does not hold those turns, so replaying one would put text
 /// into a "what the compaction clipped" reconstruction that no model ever saw. A compaction
 /// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent
 /// to it.
@@ -103,11 +103,11 @@ pub(crate) fn build(
                     automation = rec.automation_trigger();
                     user = Some(make_unit(line_no, Role::User, &label, rec, survival));
                 } else if let Some(ic) = rec.inbound_comm_preview() {
-                    // An inbound PEER opener - `<teammate-message>` (GOLD §1) OR `<agent-message>`
-                    // (FINDING-2, now an `opens_turn` boundary too): render the CLEAN body with an
-                    // `agent.communication.{inbox,signal}  <from> ⇨ self` header in place of the raw
-                    // XML it used to dump into the `▽ USER` lane. `inbound_comm_preview` covers BOTH
-                    // peer forms (boundary-anchored, FINDING-1), so neither shows raw XML.
+                    // An inbound PEER opener - `<teammate-message>` (§3.3) OR `<agent-message>`
+                    // (FINDING-2, an `opens_turn` boundary too): render the CLEAN body with an
+                    // `agent.communication.{inbox,signal}  <from> ⇨ self` header, never the raw
+                    // XML in the `▽ USER` lane. `inbound_comm_preview` covers BOTH peer forms
+                    // (boundary-anchored, FINDING-1), so neither shows raw XML.
                     let mut u = make_unit(line_no, Role::User, &ic.body, rec, survival);
                     u.inbound = Some(ic);
                     user = Some(u);
@@ -252,7 +252,7 @@ pub(crate) fn raw_body(rec: &Record) -> Option<String> {
 /// body is not: an AskUserQuestion scaffold, an automation attribution label and a peer-message
 /// preview are strings csift composes, and the raw record's newlines do not sit anywhere in
 /// them. For those the answer is an empty list - the note is omitted rather than reporting a
-/// count from a different string, which is what the whole-message figure used to do.
+/// count from a different string, which is what a whole-message figure would give.
 pub(crate) fn body_newline_positions(rec: &Record, text: &str) -> Vec<u32> {
     let Some(raw) = raw_body(rec) else {
         return Vec::new();
