@@ -188,7 +188,7 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<FileRe
 /// no mutation in it). Broad-by-design (substring, not structural) so no mutation is
 /// lost. Like `search`'s prefilter, this only gates the parse.
 pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {
-    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant
+    // The needle law: the genuine-user hook is serialization-tolerant (user-only - assistant
     // coverage rides the tool-name needles below, so admitting every assistant
     // text record here would repeal this prefilter). Finders built ONCE (per-line
     // hot path - the stateless form rebuilt its searcher every call).

@@ -24,7 +24,7 @@
 //! missing from the native transcript, so it is emitted. A malformed line is skipped +
 //! COUNTED (the never-silent invariant, AGENTS.md §4), and so is a SENTINEL-BEARING marker
 //! whose `csiftPhase` the current schema cannot read (schema skew, e.g. a pre-release
-//! fossil - R12: provably ours yet uninterpretable is a failure signature, never silent);
+//! fossil: provably ours yet uninterpretable is a failure signature, never silent);
 //! only a non-marker line (no `csift:"elicitation-marker-v1"`) is skipped silently. A
 //! missing sidecar dir / file ⇒ no merge (never an error).
 //!
@@ -207,7 +207,7 @@ struct PendingRec {
 /// `resolved` record is unresolved → its pending record is emitted (the one CC has not yet
 /// written natively). A non-marker line is skipped silently; a malformed (unparseable,
 /// non-blank) line is skipped + counted, and so is a sentinel-bearing marker whose
-/// `csiftPhase` is absent/unknown (schema skew - counted, never invisible; R12).
+/// `csiftPhase` is absent/unknown (schema skew - counted, never invisible).
 fn pair_unresolved(contents: &str) -> (Vec<Record>, usize) {
     // First pass: collect every pending record (keyed) and the set of resolved keys.
     let mut pending: HashMap<String, PendingRec> = HashMap::new();
@@ -254,7 +254,7 @@ fn pair_unresolved(contents: &str) -> (Vec<Record>, usize) {
                 // (e.g. a pre-release fossil written under older field names - `phase` instead
                 // of `csiftPhase`). Neither an open nor a close, but never invisible either:
                 // an uninterpretable marker is a failure signature and must move a counter
-                // (R12 - the malformed law's spirit; valid-JSON-ness does not buy silence).
+                // (the malformed-line rule's spirit: valid-JSON-ness does not buy silence).
                 skipped += 1;
             }
         }
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn schema_skewed_marker_is_counted_not_invisible() {
-        // R12: a pre-release fossil carries the sentinel but an OLD field naming
+        // A pre-release fossil carries the sentinel but an OLD field naming
         // (`phase`/`kind`/`key`, not `csiftPhase`/…) - provably ours, uninterpretable
         // by the current schema. It must move the skip counter, never merge, never
         // vanish (valid-JSON-ness does not buy silence).

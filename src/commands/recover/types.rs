@@ -228,7 +228,7 @@ pub(crate) struct OpaqueCommand {
 pub(crate) struct ScanResult {
     pub(crate) session_id: String,
     /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
-    /// re-feedable `@<uuid>` target) - the r5 id-domain discriminator, now also on recover.
+    /// re-feedable `@<uuid>` target) - the id trio's id-domain discriminator.
     pub(crate) is_subagent: bool,
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,

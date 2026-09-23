@@ -128,7 +128,7 @@ pub fn run_stats(args: &StatsArgs, cross: CrossingBudget) -> Result<()> {
 /// message line or an `isCompactSummary` carrier (itself role:user, so the role probes
 /// cover it too - kept explicit for clarity, not reach).
 fn line_is_stats_candidate(line: &[u8]) -> bool {
-    // R13: serialization-tolerant (whitespace around the colon is the same record).
+    // The needle law: serialization-tolerant (whitespace around the colon is the same record).
     crate::parse::line_has_role_marker(line)
 }
 
@@ -168,9 +168,10 @@ fn stats_one_file(
     let (records, others, skipped): (Vec<(usize, Record)>, Vec<OtherLine>, usize) =
         crate::parse::scan_lines_parallel_split(bytes, |line, line_no| {
             if !line_is_stats_candidate(line) {
-                // Census every non-candidate line by its top-level `type` AND lift its
-                // chain spine from the same parse (full syntax validation, subsuming the
-                // R10 shape check - [`crate::parse::line_type_and_spine`]), own stream.
+                // Census every non-candidate line by its top-level `type` AND lift its chain
+                // spine from the same parse (full syntax validation, subsuming the
+                // malformed-line rule's shape check - [`crate::parse::line_type_and_spine`]),
+                // own stream.
                 return match line_type_and_spine(line_no, line) {
                     Ok(Some((census, spine))) => {
                         crate::parse::SplitVerdict::Second(OtherLine { census, spine })

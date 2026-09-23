@@ -84,8 +84,8 @@ pub(crate) enum AgentPos {
     Last,
 }
 
-/// One agent-text record in a turn (model-expansion: a turn now carries EVERY agent
-/// message, not just the last EOT). Reuses [`TurnUnit`] verbatim for render+cost, and
+/// One agent-text record in a turn: a turn carries EVERY agent message, not just the last
+/// EOT one. Reuses [`TurnUnit`] verbatim for render+cost, and
 /// carries the per-message tool/failed attribution the collapse placeholder needs.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentMsg {
@@ -194,8 +194,8 @@ pub(crate) struct SummaryInfo {
 pub(crate) struct ScanResult {
     pub(crate) session_id: String,
     /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
-    /// re-feedable `@<uuid>` target) - the r5 id-domain discriminator, now also on turns
-    /// JSON (the text path already brands a subagent block `(subagent transcript)`).
+    /// re-feedable `@<uuid>` target) - the id trio's id-domain discriminator, carried on
+    /// the JSON path (the text path brands a subagent block `(subagent transcript)`).
     pub(crate) is_subagent: bool,
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,

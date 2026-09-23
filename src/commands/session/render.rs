@@ -14,10 +14,10 @@ pub(crate) fn render_text(
     }
     // SCOPE banner: `list` spans subagents by DEFAULT, so a bare `csift list <uuid>` can
     // return 1 top-level + N subagent rows - surface that split up front (mirroring
-    // `turns --subagents` + now `files`/`search`/`recover`) so the default-span
+    // `verbatim --subagents`, `files`, `search` and `recover`) so the default-span
     // surprise is announced, not buried. Printed only when the resolved set actually spans
     // ≥1 subagent. ONE shared emitter / wording across every spanning surface. The counts
-    // are the PRE-CAP scope (the row flood-guard never shrinks them - R7 §2.4).
+    // are the PRE-CAP scope: the row flood-guard never shrinks them.
     crate::text::emit_scope_banner(scope_top, scope_sub);
     for (i, s) in summaries.iter().enumerate() {
         if i > 0 {
@@ -121,7 +121,7 @@ pub(crate) fn render_text(
         }
 
         if s.skipped_lines > 0 {
-            // R12: scope-qualify - `list` reads head/tail windows only, so its count is a
+            // The window-census rule: `list` reads head/tail windows only, so its count is a
             // window census, not a whole-file verdict (that is `stats`, a full scan).
             println!(
                 "  note     {} (among the head/tail lines read — full census: csift stats)",
@@ -248,11 +248,11 @@ pub(crate) fn render_json(
     duplicates: &[path::DuplicateGroup],
 ) -> Result<()> {
     use serde_json::json;
-    // envelope v2: header (always) → kind-tagged session rows → summary (always).
-    // Header scope = the PRE-CAP resolved range (the flood-guard caps ROWS, never the
-    // scope numbers - R7 §2.4); the summary's `sessions` stays the emitted-row count.
-    // `sessions_in_scope` counts DISTINCT sessions because the resolver merged the copies
-    // of one id, so the two duplicate keys ride beside it saying what that cost.
+    // envelope v2: header (always) → kind-tagged session rows → summary (always). Header scope
+    // = the PRE-CAP resolved range (the flood-guard caps ROWS, never the scope numbers); the
+    // summary's `sessions` stays the emitted-row count. `sessions_in_scope` counts DISTINCT
+    // sessions because the resolver merged the copies of one id, so the two duplicate keys
+    // ride beside it saying what that cost.
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
@@ -268,9 +268,9 @@ pub(crate) fn render_json(
         let obj = json!({
             "kind": "session",
             "session_id": s.session_id,
-            // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex
-            // subagent row; `parent_session_id` is the always-re-feedable owning uuid
-            // (= session_id for a top-level row). Never re-feed a subagent `session_id`.
+            // Id-domain discriminator (the id trio): `is_subagent` flags a bare-hex subagent
+            // row; `parent_session_id` is the always-re-feedable owning uuid (= session_id for
+            // a top-level row). Never re-feed a subagent `session_id`.
             "is_subagent": s.is_subagent,
             "parent_session_id": s.parent_session_id,
             "path": s.path.to_string_lossy(),

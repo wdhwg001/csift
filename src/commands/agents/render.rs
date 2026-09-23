@@ -230,9 +230,11 @@ pub(crate) fn print_node_block<W: std::io::Write>(
         writeln!(w, "{ind2}forked-at  {fp}{ctx}")?;
     }
 
-    // A FROZEN lane: the status above says `running`, but it is blocked at an unreturned tool_use.
-    // Surface WHY prominently - the disambiguation a flat `running` (or, before the fix, `completed`)
-    // hid. escalation-blocked = waiting for a human Yes; awaiting-execution = slow-or-wedged.
+    // A FROZEN lane: the status above says `running`, but it is blocked at an unreturned
+    // tool_use. Surface WHY prominently - a flat `running` hides the disambiguation, and a
+    // tail walk-back for an end-of-turn text finds the assistant message PRECEDING the
+    // frozen call and reads it as a clean finish. escalation-blocked = waiting for a human
+    // Yes; awaiting-execution = slow-or-wedged.
     if let Some(class) = n.pending_classification {
         let tool = n.pending_tool_name.as_deref().unwrap_or("?");
         let id = n.pending_tool_use_id.as_deref().unwrap_or("?");
@@ -303,7 +305,7 @@ pub(crate) fn print_node_block<W: std::io::Write>(
         if let (Some(msg), Some(src)) = (&n.returned_message, n.returned_message_source) {
             // On a non-completed lane the newest returned/observed message PREDATES the
             // still-open work - a "work is complete, confirming shutdown" tail reads like
-            // an outcome and has misled a real reader (R8). Brand it inline next to the
+            // an outcome, and a reader takes it for one. Brand it inline next to the
             // source tag; don't rely on the reader remembering the schema note.
             // `completed_utc` is status-gated, so absence == the lane is not completed.
             if n.completed_utc.is_none() {
@@ -330,7 +332,7 @@ pub(crate) fn print_node_block<W: std::io::Write>(
         }
     }
     if n.skipped_lines > 0 {
-        // R12: same window census as `list` - lifecycle reads the transcript head/tail only.
+        // The window-census rule: lifecycle reads the transcript head/tail only, like `list`.
         writeln!(
             w,
             "{ind2}note     {} (among the head/tail lines read — full census: csift stats)",

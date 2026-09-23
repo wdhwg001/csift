@@ -210,9 +210,9 @@ pub(crate) fn render_text(
         // `spanned K of N`: K = boundaries the budget-selected window crossed (a QUERY
         // property - a small budget can read 0 on a compaction-heavy session), N = the
         // session's true total in scope (the TRANSCRIPT property). Naming both kills the
-        // R10 misread where `spanned 0` on a 4-boundary session looked like a bug until the
-        // reader varied the budget (same disambiguation pattern as the automation
-        // `in scope (not all selected)` note below).
+        // misread where `spanned 0` on a 4-boundary session reads as a bug until the reader
+        // varies the budget (same disambiguation pattern as the automation `in scope (not
+        // all selected)` note below).
         writeln!(
             out,
             "  budget {} chars · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",

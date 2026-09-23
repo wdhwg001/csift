@@ -60,7 +60,7 @@ pub(crate) fn render_json(
     // `sessions_in_scope` is the TRUE scope (every discovered session); `sessions_rendered` is
     // how many fit the budget. Keeping them distinct stops a `--budget` knob from silently
     // rewriting "scope" and keeps a targeted top-level uuid from reading as `0 top-level`.
-    // Budget-accounting aggregates (R10): the text header's per-session numbers, summed -
+    // Budget-accounting aggregates: the text header's per-session numbers, summed -
     // so "did this reconstruction consume its budget / cross the compactions" is machine-
     // answerable without regex-parsing the text header (the machine format must never be
     // thinner than the human one). `boundaries_total` is the sessions' TRUE boundary count
@@ -215,7 +215,7 @@ pub(crate) fn emit_unit_json<W: std::io::Write>(
     let mut obj = json!({
         "kind": "turn",
         "session_id": sr.session_id,
-        // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex subagent
+        // Id-domain discriminator (the id trio): `is_subagent` flags a bare-hex subagent
         // unit; `parent_session_id` is the always-re-feedable owning uuid (= session_id for
         // a top-level unit). A subagent `session_id` is NOT a re-feedable `@<uuid>` target.
         "is_subagent": sr.is_subagent,

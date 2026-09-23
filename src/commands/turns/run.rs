@@ -220,9 +220,9 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<ScanRe
     // `files`/`search`/`recover`/`agents` (id-form unification; a top-level uuid is
     // unaffected). See [`crate::subagent::session_id_from_path`].
     let session_id = crate::subagent::session_id_from_path(path);
-    // Id-domain discriminator (the r5 shape, now on turns JSON): a subagent transcript's
-    // `session_id` is a non-re-feedable bare hex; carry `is_subagent` + the re-feedable
-    // parent uuid (the dir before `subagents/`). A top-level file is its own parent.
+    // Id-domain discriminator (the id trio): a subagent transcript's `session_id` is a
+    // non-re-feedable bare hex; carry `is_subagent` + the re-feedable parent uuid (the dir
+    // before `subagents/`). A top-level file is its own parent.
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
@@ -287,7 +287,7 @@ pub(crate) fn scan_one_file(path: &Path, cross: CrossingBudget) -> Result<ScanRe
 /// broadened so a pure-text assistant turn (no Edit/Write/Read/Bash) is never missed.
 /// Coarse by design; the structural parse decides what each line really is.
 pub(crate) fn line_is_turn_candidate(line: &[u8]) -> bool {
-    // R13: role markers matched serialization-tolerantly (whitespace around the
+    // The needle law: role markers matched serialization-tolerantly (whitespace around the
     // colon is the same record); the remaining needles are key-only / value
     // substrings, which survive reserialization by construction. Finders built ONCE
     // (per-line hot path - the stateless form rebuilt its searcher every call).

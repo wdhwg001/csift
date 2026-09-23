@@ -430,8 +430,8 @@ pub(crate) fn json_grouped<W: std::io::Write, F: Fn(&FileMutation) -> String>(
     for (sid, ms) in by_session {
         // All mutations in this group share the id-domain (same transcript); the discriminator
         // (`is_subagent` + the re-feedable `parent_session_id`) brands every grouped row, the
-        // SAME r5 shape the --timeline arm carries - so a grouped subagent row is now
-        // distinguishable + re-feedable, not a bare hex on `session_id` alone.
+        // SAME id trio the --timeline arm carries, so a grouped subagent row is
+        // distinguishable and re-feedable rather than a bare hex on `session_id` alone.
         let (is_subagent, parent_session_id) = ms
             .first()
             .map(|m| (m.is_subagent, m.parent_session_id.clone()))

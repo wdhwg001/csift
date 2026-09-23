@@ -31,7 +31,7 @@ pub(crate) struct Carrier {
     pub(crate) orphan_summary: bool,
 }
 
-/// The raw-byte needles (R13 law: bare value substrings, serialization-safe). The last
+/// The raw-byte needles (needle law: bare value substrings, serialization-safe). The last
 /// two reach the receipts of the three harness-side entrances; the second of them covers
 /// both the timeout and the deliver-message sentence.
 pub(crate) fn line_is_bg_candidate(line: &[u8]) -> bool {
@@ -294,7 +294,7 @@ fn ingest_result(
 /// The SECOND pass, run once per file that minted a row from a receipt. The launching
 /// `tool_use` line carries no background needle, so it is unreachable from the first
 /// pass; this one is keyed on the minted tool_use ids themselves - bare value
-/// substrings, so a reserialized line still matches (the R13 needle law). A row whose
+/// substrings, so a reserialized line still matches (the needle law). A row whose
 /// launch line is not here (torn, or externalised) keeps its `launch_note` and its
 /// receipt instant: an unknown launch time is disclosed, never fabricated.
 pub(crate) fn fill_receipt_launches(

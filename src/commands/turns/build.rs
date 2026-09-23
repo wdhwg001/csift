@@ -104,10 +104,10 @@ pub(crate) fn build(
                     user = Some(make_unit(line_no, Role::User, &label, rec, survival));
                 } else if let Some(ic) = rec.inbound_comm_preview() {
                     // An inbound PEER opener - `<teammate-message>` (§3.3) OR `<agent-message>`
-                    // (FINDING-2, an `opens_turn` boundary too): render the CLEAN body with an
+                    // (a peer form, an `opens_turn` boundary too): render the CLEAN body with an
                     // `agent.communication.{inbox,signal}  <from> ⇨ self` header, never the raw
                     // XML in the `▽ USER` lane. `inbound_comm_preview` covers BOTH peer forms
-                    // (boundary-anchored, FINDING-1), so neither shows raw XML.
+                    // (boundary-anchored by the section-boundary rule), so neither shows raw XML.
                     let mut u = make_unit(line_no, Role::User, &ic.body, rec, survival);
                     u.inbound = Some(ic);
                     user = Some(u);

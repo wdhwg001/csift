@@ -15,8 +15,8 @@ pub(crate) fn unit_glyph(role: Role) -> &'static str {
 /// The EXACT header line a unit renders to in the text format (no trailing newline):
 /// `▽ L{line}  {ROLE}  ({timestamp})[   (also in summary)]`. The renderer and the cost
 /// model both call this, so the charged header length is byte-for-byte what is emitted -
-/// the timestamp expansion (≈47 chars beyond the old flat-24 guess) is now counted, not
-/// hidden. This is the core fix for the per-unit undercharge.
+/// the timestamp expansion is CHARGED rather than hidden. A flat 24-char guess for the
+/// header undercharges every unit by about 47 characters.
 pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
     let dup = if unit.also_in_summary {
         "   (also in summary)"

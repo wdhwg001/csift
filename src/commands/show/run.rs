@@ -9,7 +9,7 @@ use super::*;
 /// Entry point for `csift show`.
 pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
     // Reject the (hidden, no-op) span pair with the pointed rule instead of letting
-    // `allow_hyphen_values` feed it to the TARGET parser as a mistyped-flag guess (R7 §2.3).
+    // `allow_hyphen_values` feed it to the TARGET parser as a mistyped-flag guess.
     if let Some(msg) = args.span_flag_error() {
         bail!(msg);
     }

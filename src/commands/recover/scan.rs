@@ -224,9 +224,9 @@ pub(crate) fn scan_one_file(
     // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
     // - id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
     let session_id = crate::subagent::session_id_from_path(path);
-    // Id-domain discriminator (the r5 shape, now on recover): a subagent transcript's
-    // `session_id` is a non-re-feedable bare hex; carry `is_subagent` + the re-feedable
-    // parent uuid (the dir before `subagents/`) onto every emitted recover record.
+    // Id-domain discriminator (the id trio): a subagent transcript's `session_id` is a
+    // non-re-feedable bare hex; carry `is_subagent` + the re-feedable parent uuid (the dir
+    // before `subagents/`) onto every emitted recover record.
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
@@ -305,7 +305,7 @@ pub(crate) fn scan_one_file(
 /// integrity errors, attachments, history snapshots - not just mutations).
 /// Coarse by design; the structural parse decides what each line really is.
 pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
-    // R13: the genuine-user hook is serialization-tolerant (user-only, like files').
+    // The needle law: the genuine-user hook is serialization-tolerant (user-only, like files').
     // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher
     // every call).
     static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> =

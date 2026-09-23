@@ -103,8 +103,8 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     // that stop the walk. First seen wins here: newest-first order makes it the newest.
     let mut continued_in_tail: Option<String> = None;
     // `head_consumed` as the floor keeps the two windows DISJOINT: a malformed line is
-    // counted exactly once (R12 - without the floor, a file where both scans reach the
-    // same region books every malformed line twice).
+    // counted exactly once by the window-census rule: without the floor, a file where both
+    // scans reach the same region books every malformed line twice.
     let tail_skipped =
         tail_records_prefiltered(path, line_is_list_candidate, head_consumed, |rec| {
             if continued_in_tail.is_none() {
@@ -151,7 +151,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     // Id-domain discriminator: a subagent transcript's `session_id` is a non-re-feedable
     // bare hex; carry `is_subagent` + the re-feedable parent uuid (the dir before
     // `subagents/`) so a `list` consumer can distinguish + re-feed. A top-level file is its
-    // own parent (the same r5 shape `search`/`files`/`turns`/`recover` carry).
+    // own parent (the same id trio `search`/`files`/`verbatim`/`recover` carry).
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
@@ -268,7 +268,7 @@ pub(crate) struct LineageScan {
 /// record pays the newline scan and three memmem passes and nothing else. The walk cannot fail the way a parse can -
 /// a torn line carries no top-level key - which is exactly why this pass contributes no
 /// malformed count: `list`'s `skipped_lines` keeps meaning the head/tail lines it read
-/// (R12), and `stats` stays the whole-file census authority.
+/// (the window-census rule), and `stats` stays the whole-file census authority.
 pub(crate) fn lineage_scan(path: &Path) -> Result<LineageScan> {
     let mut out = LineageScan {
         scanned: true,

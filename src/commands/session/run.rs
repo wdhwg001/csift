@@ -63,7 +63,7 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     // scope banner / JSON header answer "how big is the range this query covered", exactly
     // like every other spanning command, where `--max-count`-class ROW caps never shrink
     // the scope numbers. Without this, an unscoped all-projects `list` reported the capped
-    // 50 as the scope - off from the real corpus by orders of magnitude (R7 §2.4).
+    // 50 as the scope - off from the real corpus by orders of magnitude.
     // They count DISTINCT session ids, through the shared rule: a divergent duplicate pair
     // is ONE session the disk holds twice, and it gets a ROW per copy, so counting rows
     // would report a session count no session census agrees with.
@@ -153,11 +153,12 @@ pub(crate) fn last_activity(s: &SessionSummary) -> Option<&str> {
 ///   the raw `<teammate-message …>` XML blob;
 /// - otherwise the normal genuine-user / AUQ / rejection reconstruction.
 ///
-/// Eligibility is UNCHANGED from the prior `reconstructed_user_text(None)` gate: a task-notification
-/// and a teammate-message were already captured as first/last (the former via genuine-user, the
-/// latter via the teammate fallback arm), so the head/tail scan stops on the SAME record and captures
-/// the SAME identity fields - only the rendered text is now clean. (An isMeta `<agent-message>` stays
-/// INELIGIBLE: it is gated behind `is_teammate_message_record`, so it never newly fronts a preview.)
+/// Eligibility MATCHES the plain `reconstructed_user_text(None)` gate: a task-notification and a
+/// teammate-message were already captured as first/last (the former via genuine-user, the latter
+/// via the teammate fallback arm), so the head/tail scan stops on the SAME record and captures the
+/// SAME identity fields; what differs is the rendered text, which is the clean body rather than the
+/// raw XML. (An isMeta `<agent-message>` stays INELIGIBLE: it is gated behind
+/// `is_teammate_message_record`, so it never newly fronts a preview.)
 pub(crate) fn preview_text(rec: &Record) -> Option<String> {
     if let Some(label) = rec.automation_label() {
         return Some(label);
@@ -184,13 +185,13 @@ pub(crate) fn preview_text(rec: &Record) -> Option<String> {
 /// are routinely the LARGEST lines in a transcript, so this is the difference
 /// between a head/tail read and paying `serde_json` for megabyte noise lines.
 pub(crate) fn line_is_list_candidate(line: &[u8]) -> bool {
-    // R13: serialization-tolerant (whitespace around the colon is the same record).
+    // The needle law: serialization-tolerant (whitespace around the colon is the same record).
     crate::parse::line_has_role_marker(line) || line_has_continued_in_key(line)
 }
 
 /// The parent-side background-handoff line (`type:"continued-in"`) carries no
 /// `message{}` and no `role`, so the role keep alone drops it unparsed. Its own field
-/// name is the needle, in the KEY-ONLY form the R13 needle law prescribes: a quoted key
+/// name is the needle, in the KEY-ONLY form the needle law prescribes: a quoted key
 /// survives a reserialize, and it is rarer than the `continued-in` type VALUE, which an
 /// ordinary payload can carry in prose. A prose mention cannot become a false positive
 /// either way, because serde only reads TOP-LEVEL keys - the extra cost of such a line
