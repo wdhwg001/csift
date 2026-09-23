@@ -92,7 +92,7 @@ pub(crate) fn collect_turn_hits(
         );
         // The REFETCH LAW (`show --line`/`--uuid`): an explicit address renders the record it
         // names. `classify` models no leaf for a few real message shapes - an `isMeta`
-        // pseudo-turn matching no harness marker (the M2b rule: emit nothing rather than
+        // pseudo-turn matching no harness marker (the isMeta exclusion: emit nothing rather than
         // mislabel it `user.message`), a block record whose text is empty - and such a record
         // produced no unit at all, so the address became a "no such record(s)" bail on a line
         // that is plainly there. Emit ONE unlabeled unit instead. Only an ADDRESS reaches

@@ -96,8 +96,8 @@ pub(crate) fn search_one_file(
     const HUGE_FILE_BYTES: usize = 64 * 1024 * 1024;
     let inner_parallel = inner_parallel || bytes.len() >= HUGE_FILE_BYTES;
 
-    // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector -
-    // computed up front because BOTH the whole-file gate below and the candidate scan key on it.
+    // The `compact_boundary` boundary keep is GATED on the active `-t` selector - computed up
+    // front because BOTH the whole-file gate below and the candidate scan key on it.
     let needs_compact_boundary = args
         .label_filter()
         .selected(Class::CompactionBoundary.path());
@@ -117,13 +117,13 @@ pub(crate) fn search_one_file(
     // predicate the zero-match diagnosis shares, so the note can never claim a line
     // shape was unscanned when this gate parsed it.
     let reach = |c: Class| args.scans_gated(c) || address.is_some();
-    // The csift channel: a delivery is a real MESSAGE addressed at this lane, not
-    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not
-    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any
-    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`
-    // short-circuit before the memmem and pay nothing (and never surface a delivery under
-    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by
-    // the two attachment gates above.
+    // The csift channel: a delivery is a real MESSAGE addressed at this lane, not machinery,
+    // so it is admitted by a DEFAULT scan - the one attachment keep that is not flag-gated.
+    // The gate is the LABEL selector alone: no `-t`, or any selector reaching
+    // `agent.communication.channel`, keeps it; `-t user` / `-t harness` short-circuit before
+    // the memmem and pay nothing (and never surface a delivery under the hook leaf, which
+    // keeps its own flag). An addressed fetch is already admitted by the two attachment gates
+    // above.
     let needs_channel = args.label_filter().selected(Class::CommChannel.path());
     // `harness.schedule.fire`: the fired PROMPT is an ordinary role-bearing line the
     // scan already keeps, but the instant it fired lives on the `system`/`scheduled_task_fire`
@@ -194,7 +194,7 @@ pub(crate) fn search_one_file(
                     return crate::parse::LineVerdict::Ignore; // verdict already "full scan"
                 }
                 if !line_is_transcript_candidate(line, &gates) {
-                    // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+                    // The malformed-line rule: obviously-corrupt non-candidates are COUNTED.
                     return crate::parse::non_candidate_verdict(line);
                 }
                 if matcher.line_prefilter_hits(line) || matcher.synth_conservative_hits(line) {
@@ -272,7 +272,7 @@ pub(crate) fn search_one_file(
     // Parse all transcript-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool)
     // so a single giant transcript is not scanned on one core. The stage-2 keyword prefilter
     // (`can_hit`) is computed per line inside the parallel scan, where the raw bytes are in hand.
-    // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector: only look
+    // The `compact_boundary` boundary keep is GATED on the active `-t` selector: only look
     // for the rare `type:"system"` boundary line when a selector can actually reach
     // `harness.compaction.boundary` (or no `-t` = match-all). A `-t user` / `-t agent.*` search can
     // never match a boundary, so it pays ZERO for the extra check - the hard `-t` filter PRUNES the
@@ -297,7 +297,7 @@ pub(crate) fn search_one_file(
                 if let Some(row) = crate::parse::spine_record(line_no, line) {
                     return crate::parse::SplitVerdict::Second(row);
                 }
-                // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+                // The malformed-line rule: obviously-corrupt non-candidates are COUNTED.
                 return crate::parse::non_candidate_split(line);
             }
             let can_hit = matcher.line_may_match(line);
@@ -325,7 +325,7 @@ pub(crate) fn search_one_file(
 
     // A DEFAULT-ON needle admits attachment lines this scan cannot search. The channel
     // needle keeps any line carrying the envelope literal, so a hook context that quotes
-    // the header or a file-edit payload whose snippet does arrives here too - and the D7
+    // the header or a file-edit payload whose snippet does arrives here too - and the
     // `compact_boundary` needle is a bare value substring, so on a flagless
     // scan it admits any payload that merely mentions the word. Both attachment leaves keep
     // their own flag (the gated-leaves law): such a record surfaces on a default scan only as
@@ -420,7 +420,7 @@ pub(crate) fn search_one_file(
 
     // A `/fork` child's line 1 is a `fork-context-ref` record: the transcript is a CLONE
     // of its parent's, so its first turn-opener is the parent's human message, not a
-    // spawn-prompt seed. The value substring is the R13-safe needle.
+    // spawn-prompt seed. The value substring is the needle the needle law admits.
     let head_end = memchr::memchr(b'\n', bytes)
         .unwrap_or(bytes.len())
         .min(4096);

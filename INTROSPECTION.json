@@ -12093,7 +12093,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "238",
+          "lines": "239",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -12211,8 +12211,8 @@
       "code": [
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "178-181",
-          "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
+          "lines": "178-180",
+          "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value"
         }
       ],
       "states": [
@@ -12281,7 +12281,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "245",
+          "lines": "246",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         }
       ],
@@ -13407,7 +13407,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "229-231",
+          "lines": "230-232",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -44313,7 +44313,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "245",
+          "lines": "246",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         }
       ],
@@ -44636,7 +44636,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "245",
+          "lines": "246",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         },
         {
@@ -46540,7 +46540,7 @@
         {
           "path": "src/commands/search/scan/gates.rs",
           "lines": "54-60",
-          "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `-t harness.hook.context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
+          "snippet": "pub(crate) struct CandidateGates {\n    /// The boundary keep: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `-t harness.hook.context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
@@ -51336,7 +51336,7 @@
         {
           "path": "src/commands/search/scan/gates.rs",
           "lines": "199-204",
-          "snippet": "    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
+          "snippet": "    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the boundary-keep conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
       "states": [
@@ -73188,7 +73188,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "240-243",
+          "lines": "241-244",
           "snippet": "        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -73350,8 +73350,8 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "121-127",
-          "snippet": "    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
+          "lines": "125-127",
+          "snippet": "    // keeps its own flag). An addressed fetch is already admitted by the two attachment gates\n    // above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
       "states": [
@@ -80146,7 +80146,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "274-279",
+          "lines": "273-278",
           "snippet": "pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {\n    eprintln!(\n        \"csift: 0 matches \u2014 a DEFINITIVE absence (exit 0), NOT an error. \\\n         Scope: {} session(s). Active filters: {}.\",\n        diag.sessions_in_scope, diag.active_filters\n    );"
         },
         {
@@ -80332,7 +80332,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "210-213",
+          "lines": "209-212",
           "snippet": "/// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare \"no matching\n/// exchanges\" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;\n/// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the\n/// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)"
         },
         {

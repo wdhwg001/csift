@@ -160,7 +160,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // ── Resolve targets → session files via the shared (optionally subagent-spanning)
     //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.)
     //    Resolution runs BEFORE the advisory notes below: an unreachable target must fail
-    //    first, not after a scope warning about a run that was never going to happen (R9). ──
+    //    first, not after a scope warning about a run that was never going to happen. ──
     let resolved = path::resolve_targets_with_session_list_reported(
         &args.targets(),
         args.sessions_from.as_deref(),

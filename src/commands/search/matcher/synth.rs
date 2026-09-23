@@ -127,7 +127,7 @@ impl Matcher {
 /// carrier record ALWAYS contains:
 /// - `<task-notification>` - `automation_label` fabricates the kind slug
 ///   (`subagent`/`background-command`/…), a `completed` status fallback, and `[…]`
-///   scaffolding; the G1 inbox view normalizes the `<result>` body.
+///   scaffolding; the inbox view normalizes the `<result>` body.
 /// - `"answers"` + the three synthesized answer markers - the ANSWER carrier's
 ///   `auq_exchange` render fabricates the `[AskUserQuestion · N question(s)]` scaffold,
 ///   `Q1/A1` labels and option lists that appear verbatim nowhere in the raw line.

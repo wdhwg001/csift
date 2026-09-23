@@ -1,4 +1,4 @@
-//! The D7 boundary keep: what `line_is_transcript_candidate` admits under it.
+//! The boundary keep: what `line_is_transcript_candidate` admits under it.
 //!
 //! The keep is a conjunction of two needles, and the pins below hold both halves in
 //! place: the rare literal alone would admit any payload that merely mentions the word,
@@ -6,7 +6,7 @@
 
 use super::*;
 
-/// The gates a FLAGLESS scan derives: the D7 boundary keep and the always-on channel
+/// The gates a FLAGLESS scan derives: the boundary keep and the always-on channel
 /// keep are the only two on, which is exactly the query the false admits cost.
 fn flagless_gates() -> CandidateGates {
     CandidateGates {
@@ -22,8 +22,8 @@ fn flagless_gates() -> CandidateGates {
 /// A true boundary: `type:"system"` with the modeled subtype, no role marker anywhere.
 const BOUNDARY: &str = r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"timestamp":"2026-06-07T05:10:00.000Z","compactMetadata":{"trigger":"auto","preTokens":900}}"#;
 
-/// The same record reserialized with whitespace around every colon - the R13 shape. The
-/// key needle is quoted, so it survives intact.
+/// The same record reserialized with whitespace around every colon, the shape the needle law
+/// exists for. The key needle is quoted, so it survives intact.
 const BOUNDARY_RESERIALIZED: &str = r#"{"type" : "system", "subtype" : "compact_boundary", "uuid" : "b1", "compactMetadata" : {"trigger" : "auto"}}"#;
 
 /// An attachment whose payload MENTIONS the literal in prose. No role marker, no channel

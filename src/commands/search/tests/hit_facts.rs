@@ -150,8 +150,8 @@ fn scanned(line: &str) -> Vec<Hit> {
     hits
 }
 
-/// A SCANNED unit carries what its family said. This is the site the six family lanes
-/// each cut for themselves; one cut, read back through the probe.
+/// A SCANNED unit carries what its family said. This is the ONE stamping site every
+/// taxonomy family's facts come through; one site, read back through the probe.
 #[test]
 fn the_scan_site_stamps_every_unit_a_record_produced() {
     let hits = scanned(

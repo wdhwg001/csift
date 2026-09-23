@@ -12,7 +12,7 @@ fn promoted_text_is_verbatim_for_queued_and_recap() {
         r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"check the widget build"}"#,
     );
     // Both the promoted path and the shared raw-text entry return the verbatim content
-    // (the promoted arm is pinned directly: the D7 system fallback would also read
+    // (the promoted arm is pinned directly: the message-less system fallback would also read
     // `content`, so only a direct call proves the arm is live).
     assert_eq!(
         promoted_record_text(&q).as_deref(),

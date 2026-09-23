@@ -3,8 +3,8 @@
 //!
 //! Every keep past the two role markers is `&&`-gated on a bool derived from the active
 //! `-t` selector, so a query that cannot want a line kind never reaches that kind's
-//! memmem. The needles obey the R13 law - a bare VALUE substring or a quoted KEY, never a
-//! compact `"key":"value"` pair, which a reserialized line would silently drop.
+//! memmem. The needles obey the NEEDLE LAW - a bare VALUE substring or a quoted KEY, never
+//! a compact `"key":"value"` pair, which a reserialized line would silently drop.
 
 use super::*;
 
@@ -12,11 +12,11 @@ use super::*;
 /// with the leaf whose selector gates it. `file-history-*` and `queue-operation` keep
 /// their older dedicated gates, so they are not repeated here.
 ///
-/// R13 needle law: each is a QUOTED VALUE (`"cost-state"`), which survives a
-/// reserialize and which prose cannot carry - an in-content quote is escaped to `\"` in
-/// raw bytes. The exception is `mode`, whose quoted value is also a common KEY, so its
-/// needle is deliberately broad and the PARSE decides: the gate is only ever on when a
-/// selector reached `harness.bookkeeping.mode`.
+/// Needle law: each is a QUOTED VALUE (`"cost-state"`), which survives a reserialize and which
+/// prose cannot carry - an in-content quote is escaped to `\"` in raw bytes. The exception is
+/// `mode`, whose quoted value is also a common KEY, so its needle is deliberately broad and
+/// the PARSE decides: the gate is only ever on when a selector reached
+/// `harness.bookkeeping.mode`.
 pub(crate) const BOOKKEEPING_NEEDLES: [(&str, Class); 15] = [
     ("\"last-prompt\"", Class::BookkeepingLastPrompt),
     ("\"mode\"", Class::BookkeepingMode),
@@ -52,7 +52,7 @@ pub(crate) fn bookkeeping_mask(args: &SearchArgs, addressed: bool) -> u32 {
 /// runs only when its gate is on, so a default scan pays ZERO for all of them).
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct CandidateGates {
-    /// D7: the `compact_boundary` metrics record (selected label).
+    /// The boundary keep: the `compact_boundary` metrics record (selected label).
     pub(crate) compact_boundary: bool,
     /// `-t harness.hook.context` (or an address): hook-injected context attachments.
     pub(crate) hook_context: bool,
@@ -165,29 +165,29 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     let needs_compact_boundary = gates.compact_boundary;
     let needs_hook_context = gates.hook_context;
     let needs_attachments = gates.attachments;
-    // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
-    // marker (genuine-user string content, tool carriers, assistant blocks all do).
-    // R13: matched serialization-tolerantly - `"role": "user"` (reserialized JSON,
-    // whitespace around the colon) is the same record and must not vanish silently.
+    // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"` marker
+    // (genuine-user string content, tool carriers, assistant blocks all do). Matched
+    // serialization-tolerantly - `"role": "user"` (reserialized JSON, whitespace around the
+    // colon) is the same record and must not vanish silently.
     static COMPACT_BOUNDARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"compact_boundary"));
-    // R13 needle law: a bare VALUE substring (the attachment payload's `type` value), never a
+    // Needle law: a bare VALUE substring (the attachment payload's `type` value), never a
     // compact `"key":"value"` byte pair - a reserialized line keeps the value intact.
     static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"hook_additional_context"));
     // Quoted needle: `"attachment"` appears verbatim as the record's `"type"` VALUE (and as
     // its payload KEY); an in-content quote is escaped to `\"` in raw bytes, so prose that
     // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value
-    // survives a reserialize; R13).
+    // survives a reserialize, which is what the needle law asks).
     static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
     // The csift channel: the envelope needle is a bare VALUE substring of the injected
-    // content - ASCII, no JSON-escaped character - so it survives a reserialize (R13) and a
+    // content - ASCII, no JSON-escaped character - so it survives a reserialize and a
     // decoded match implies a raw match. Shared with the classifier via one constant so the
     // byte scan and the leaf can never drift.
     static CHANNEL_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(Record::CSIFT_CHANNEL_NEEDLE.as_bytes()));
-    // The promoted lines. Quoted-value needles per the R13 law: the `type` values
+    // The promoted lines. Quoted-value needles per the needle law: the `type` values
     // `"queue-operation"` and `"file-history-` (a prefix covering both `-snapshot` and
     // `-delta`). The system SUBTYPES need no value needle of their own - the key-only
     // `"subtype"` keep below admits every one of them under the same flag.
@@ -198,11 +198,11 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     // The catch-all system subtypes: the key-only needle `"subtype"` (every system
     // record carries it; a quoted KEY survives a reserialize, and the classify arm
     // decides which subtype it is - the already-modeled ones simply reclassify). Also the
-    // second half of the D7 boundary conjunction below, which narrows the same property to
+    // second half of the boundary-keep conjunction below, which narrows the same property to
     // the one subtype it models.
     static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"subtype\""));
-    // The fired-prompt sibling. Bare VALUE substring (R13-safe) shared with the
+    // The fired-prompt sibling. A bare VALUE substring, which the needle law admits, shared with the
     // classifier through one constant, and the RARE half of the conjunction below, so it is
     // tested first and the key needle runs on the handful of lines that carry it.
     static SCHEDULE_FIRE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
@@ -210,7 +210,7 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
             memmem::Finder::new(crate::model::SCHEDULED_TASK_FIRE_SUBTYPE.as_bytes())
         });
     crate::parse::line_has_role_marker(line)
-        // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
+        // THE BOUNDARY KEEP: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
         // inspect their `compactMetadata` - but ONLY when an active `-t` selector can reach that label
         // (`needs_compact_boundary`, derived once via `label_selected`). For every other query the
@@ -218,14 +218,15 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // the `||` chain still reaches this memmem only on lines that already failed both role checks,
         // and boundary records are rare - so the §7 perf contract holds either way.
         // The keep is a CONJUNCTION because the rare literal alone is not the discriminator:
-        // over every top-level transcript on one corpus (76 files, 2661636749 bytes, lines split
-        // on `\n` only) 252 of 252 true boundaries - a JSON object with top-level
+        // over every top-level transcript on one corpus (76 files, 2661636749 bytes, lines
+        // split on `\n` only) 252 of 252 true boundaries - a JSON object with top-level
         // `type=="system"` and `subtype=="compact_boundary"` - carry the key-only bytes
         // `"subtype"`, while 226 of 226 lines that carry the literal in a payload and would
-        // otherwise be admitted by D7 alone (attachments and `queue-operation` lines, which no
-        // other flagless keep reaches) carry it in none. The key needle is R13-safe by form (a
-        // quoted KEY survives a reserialize) and the boundary finder stays FIRST, so the second
-        // memmem runs only on the handful of lines carrying the rare literal.
+        // otherwise be admitted by the literal alone (attachments and `queue-operation` lines,
+        // which no other flagless keep reaches) carry it in none. The key needle is what the
+        // needle law admits by form (a quoted KEY survives a reserialize) and the boundary
+        // finder stays FIRST, so the second memmem runs only on the handful of lines carrying
+        // the rare literal.
         || (needs_compact_boundary
             && COMPACT_BOUNDARY_FINDER.find(line).is_some()
             && SUBTYPE_FINDER.find(line).is_some())

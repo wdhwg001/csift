@@ -103,12 +103,11 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
     // Tool pairing: the `▹` join state of an agent.tool.use/result hit, else null.
     let pairing = pairing_json(h.pair);
     let mut obj = serde_json::json!({
-        // The id TRIO rides EVERY hit row too (R9): bare `.hits[]` flattening is the single
-        // most natural jq idiom against the most-piped command, and with the trio only on
-        // the exchange row it yielded silent nulls - two independent audits tripped on it.
-        // jq cannot fail loud on a missing key, so the data matches the natural access
-        // pattern instead. (The exchange row keeps its copy; `refetch` stays the preferred
-        // single-hit path.)
+        // The id trio rides EVERY hit row too: bare `.hits[]` flattening is the single most
+        // natural jq idiom against the most-piped command, and with the trio only on the
+        // exchange row that idiom yields silent nulls. jq cannot fail loud on a missing key,
+        // so the data matches the natural access pattern instead. (The exchange row keeps its
+        // copy; `refetch` stays the preferred single-hit path.)
         "session_id": ex.session_id,
         "is_subagent": ex.is_subagent,
         "parent_session_id": ex.parent_session_id,

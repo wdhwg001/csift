@@ -10,7 +10,7 @@
 
 use super::*;
 
-/// D7: the searchable + renderable text of a MESSAGE-LESS system record - in practice the
+/// The searchable + renderable text of a MESSAGE-LESS system record - in practice the
 /// `compact_boundary` metrics record (the only message-less system record `classify` labels).
 /// Combines the top-level `content` string (`"Conversation compacted …"`) with a readable
 /// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE

@@ -19,7 +19,7 @@
 //! is NOT a byte substring of the line that stores it - every measured conversion opens
 //! `<system-reminder>` and runs on past a newline, which the raw bytes carry as `\n`. What
 //! IS guaranteed is what the prefilter actually extracts: `matcher::required_needles`
-//! derives a needle only from a run the R13 safety predicate admits - no whitespace, no
+//! derives a needle only from a run the needle law's safety predicate admits - no whitespace, no
 //! `"`, no control character, no DEL - and such a run occurs VERBATIM inside the raw line's
 //! JSON string, so a needle present in the converted text is present in the raw bytes and
 //! the 7d line prefilter and the 7f whole-file gate keep their meaning with no

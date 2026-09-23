@@ -227,9 +227,10 @@ fn auq_answer_surfaces_under_user_category_end_to_end() {
 
 #[test]
 fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
-    // DEFECT 1: the dominant real-data phrasing ("Your questions have been
-    // answered: …") must surface under `user`, exactly like the other phrasing.
-    // (Previously the single hardcoded marker missed it entirely.)
+    // The dominant real-data phrasing ("Your questions have been answered: …") must
+    // surface under `user`, exactly like the other two: Claude Code has shipped THREE
+    // phrasings for one synthesized answer, so a single hardcoded marker reaches one
+    // population and misses this one entirely.
     let lines = vec![
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
         r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,

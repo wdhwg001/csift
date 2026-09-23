@@ -38,16 +38,15 @@ pub(crate) fn record_groups(hits: &[Hit]) -> Vec<&[Hit]> {
     out
 }
 
-/// Per-leaf record census of a matched exchange set over the label taxonomy (SPEC section
-/// 5): each matched RECORD (a multi-section record is grouped by [`record_groups`], never
+/// Per-leaf record census of a matched exchange set over the label taxonomy (SPEC section 5):
+/// each matched RECORD (a multi-section record is grouped by [`record_groups`], never
 /// multi-counted) contributes to every leaf in its label set that SURVIVES the active
-/// `-t`/`-T` filter, so a leaf's tally is exactly how many records `-t <leaf>` (composed
-/// with your other filters) would surface. With no filter that is the record's FULL label
-/// set - but under `-t`/`-T` a dual-labeled record must not leak its filtered-out twin
-/// into the census (R7 §2.3: a `-t user -T user.message` census showing
-/// `agent.tool.result`, or a `-t harness` census dominated by `agent.communication.inbox`
-/// keys, reads as the filter not working). The filter decides membership per-VIEW already;
-/// the census keys follow the same predicate.
+/// `-t`/`-T` filter, so a leaf's tally is exactly how many records `-t <leaf>` (composed with
+/// your other filters) would surface. With no filter that is the record's FULL label set - but
+/// under `-t`/`-T` a dual-labeled record must not leak its filtered-out twin into the census
+/// (a `-t user -T user.message` census showing `agent.tool.result`, or a `-t harness` census
+/// dominated by `agent.communication.inbox` keys, reads as the filter not working). The filter
+/// decides membership per-VIEW already; the census keys follow the same predicate.
 /// Returns the per-leaf counts and the distinct matched-record total. Shared by
 /// `--count-by label` and the zero-hit label probe (the probe passes
 /// [`LabelFilter::all`] - it deliberately reports what the DROPPED filter excluded).
@@ -107,7 +106,7 @@ pub(crate) fn axis_census(
             match axis {
                 A::Label => {
                     // Keys pass the SAME `-t`/`-T` predicate that admitted the record's
-                    // views (see [`label_census`] - R7 §2.3), delivery override included.
+                    // views (see [`label_census`]), delivery override included.
                     let filter = filter
                         .with_delivery(group[0].delivery)
                         .with_survival(group[0].survival.selectable());

@@ -210,7 +210,7 @@ pub(crate) fn record_text_emission(
 
 /// The raw textual body of a record for harness-marker matching: the bare string, or the text
 /// blocks joined with `\n` (mirrors the engine's `raw_message_text`). For a MESSAGE-LESS record (a
-/// `type:"system"` record - e.g. the `compact_boundary` metrics record) it falls back (D7) to the
+/// `type:"system"` record - e.g. the `compact_boundary` metrics record) it falls back to the
 /// top-level `content` plus a readable `compactMetadata` excerpt, so the boundary is BOTH matchable
 /// and rendered. `None` when there is no text anywhere.
 /// `class` is the leaf the CALLER is emitting under, when it holds one; it only stands in
@@ -250,7 +250,7 @@ pub(crate) fn record_raw_text(
         return Some(text);
     }
     let Some(msg) = rec.message.as_ref() else {
-        // No `message` blocks → a system record. D7: the boundary's content + compactMetadata.
+        // No `message` blocks → a system record: the boundary's content + compactMetadata.
         return system_record_text(rec);
     };
     match msg.content.as_ref()? {
