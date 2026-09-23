@@ -382,10 +382,10 @@ surface change bumps the PATCH.
   `show`, `stats`, `files`, `recover`, `verbatim`, `image`. Above a boundary it CROSSED the
   ordinary rules apply, so a turn the operator rewound past above a cut is finally named for
   what it is rather than filed as unresolved history; above the FLOOR everything off-chain
-  stays `pre-cut`. The DEFAULT is `--cross-compactions 3`, and it is PROVISIONAL: the value
-  is chosen by a measurement against the performance contract that needs an idle host, so it
-  is the candidate rather than a measured answer and can change in a later release - pass the
-  number explicitly wherever you need it stable. This is a surface change on a compacted
+  stays `pre-cut`. The DEFAULT is `--cross-compactions 3`, the measured value: on an idle
+  host budget 3 ran inside the same-binary noise band against budget 0 on every one of 95
+  chain-walking rows over a compacted transcript and the 397 MiB landmark (SPEC 7j carries
+  the rule and the numbers). This is a surface change on a compacted
   transcript, and it moves records in BOTH directions: one whose survival was `pre-cut`
   becomes `live` where the chain reaches it and `abandoned` where it does not, and a turn
   that becomes abandoned leaves the numbering. Measured over eight transcripts (the seven

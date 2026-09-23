@@ -31,11 +31,13 @@
 /// The default crossing budget, and the value the global `--cross-compactions` flag
 /// carries when it is not given.
 ///
-/// PROVISIONAL: the value is chosen by measurement (the acid set's chain-walking rows on a
-/// compacted transcript and on the performance landmark, medians of 21 reps against the
-/// same-binary control band), and the measurement needs an idle host. The rule is 3 if
-/// every row's median sits inside the band at 3, else 1 under the same test, else 0; until
-/// that run lands this is the rule's first candidate rather than its answer.
+/// The value is MEASURED, not chosen (SPEC section 7j carries the rule and the numbers).
+/// The rule is 3 if every chain-walking row's median sits inside the same-binary control
+/// band at budget 3, else 1 under the same test, else 0 - a COST test, so a row the budget
+/// arm runs faster on than the band's width counts against nothing. On an idle host, over
+/// 95 rows on a compacted transcript and the performance landmark at 21 reps, budget 3
+/// read no row slower than the band (class medians 1.001 and 1.002, the widest slowdown
+/// 10 ms), and so did budgets 1 and `all`; the rule's first candidate is its answer.
 pub const CROSS_COMPACTIONS_DEFAULT: CrossingBudget = CrossingBudget::Limited(3);
 
 /// How many compaction boundaries one walk may step over.

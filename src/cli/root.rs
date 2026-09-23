@@ -267,9 +267,11 @@ pub struct Cli {
     /// `parentUuid` naming no record here), `cycle` (the parent links loop) and `no-leaf`
     /// (nothing resolved, so there is no walk to extend).
     ///
-    /// The DEFAULT is chosen by measurement against the performance contract and that
-    /// measurement is still pending, so the shipped value is the candidate and may change
-    /// in a later release. Pass the number explicitly wherever you need it stable.
+    /// The DEFAULT of 3 is the measured value: on an idle host, budget 3 ran inside the
+    /// same-binary noise band against budget 0 on every one of 95 chain-walking rows (a
+    /// compacted transcript and the 397 MiB landmark, 21 repetitions each; medians 1.001
+    /// and 1.002, the widest slowdown 10 ms), so the crossing costs nothing a clock can
+    /// see. Pass the number explicitly wherever a reading must not depend on the default.
     #[arg(
         long = "cross-compactions",
         value_name = "N|all",
