@@ -146,7 +146,7 @@ use super::*;
         the select BEFORE projecting fields; a field template applied to the mixed stream\n  \
         stamps the header/summary rows as all-null rows. Rows\n  \
         carry the id trio (`session_id` / `is_subagent` / `parent_session_id`), INCLUDING\n  \
-        every search hit inside `.hits[]` (v0.6.5), so bare `.hits[]` flattening carries\n  \
+        every search hit inside `.hits[]`, so bare `.hits[]` flattening carries\n  \
         real ids; each hit also carries `refetch`: a ready-to-run `csift show` command for\n  \
         that exact record (still the preferred single-record path). Full\n  \
         row schemas live in each subcommand's --help.\n\n\

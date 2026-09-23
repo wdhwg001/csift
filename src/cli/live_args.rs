@@ -41,7 +41,7 @@ pub struct BackgroundLensArgs {
         FOLD to a count so live work stays visible. The session's harness task list \
         (`<claude-home>/tasks/`) renders open tasks (in_progress first, then pending, \
         with blockers) and folds completed ones to a count.\n\n\
-        BACKGROUND TASKS (v0.10.0): a `Bash` launched with run_in_background returns its \
+        BACKGROUND TASKS: a `Bash` launched with run_in_background returns its \
         tool_result within milliseconds, so the tail machine pairs it at once - and that \
         flag is only ONE of four ways in. Claude Code also moves a command the model ran \
         in the FOREGROUND into the background when you press ctrl+b on it, when it hits \
@@ -223,7 +223,7 @@ impl StatusArgs {
         Regexes are the same RE2-class engine as search (no backrefs/lookaround). \
         Polling is adaptive (200ms floor backing off toward 2s when quiet; `--interval` \
         pins it); reads are incremental (only appended bytes, torn-tail guarded).\n\n\
-        --timeout IS REQUIRED (v0.10.0): a background task can be designed never to \
+        --timeout IS REQUIRED: a background task can be designed never to \
         return (a dev server, a watcher, a tail -f), so an unbounded wait on `stop` is a \
         bug, not a wait. A call without --timeout is rejected with that reason.\n\n\
         A SHELL THE MODEL RAN IN THE FOREGROUND CAN HOLD `stop` OPEN: ctrl+b, a timeout \
@@ -231,7 +231,7 @@ impl StatusArgs {
         other open task (its row and JSON carry `entered_by`). If that is the task you \
         are willing to leave running, name it with --ignore-background or narrow \
         --background-since; do not read the 124 as a stall.\n\n\
-        HOW TO WAIT ON A SESSION (the orchestrator's steps): 1. `csift status @<id>` \
+        HOW TO WAIT ON A SESSION, IN ORDER: 1. `csift status @<id>` \
         first and read the background rows - which tasks dangle, how old, which are \
         days-old zombies; 2. pick the lens: `--background-since now` counts only what \
         launches after you start waiting (the usual form), `--ignore-background RE` \

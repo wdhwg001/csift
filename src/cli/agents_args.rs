@@ -84,7 +84,7 @@ pub enum AgentKindFilter {
           csift agents @<uuid> --returned-message                          # add the 3-way-resolved returned message to every row\n  \
           csift agents . --format json                                     # machine-readable flat rows (kind: session|run|agent)\n\n\
         JSON SCHEMA (per --format json)\n  \
-          FLAT kind-tagged rows (envelope v2, v0.5): a leading {kind:\"header\", …} line; \
+          FLAT kind-tagged rows (envelope v2): a leading {kind:\"header\", …} line; \
         per session one light {kind:\"session\", session_id, runs, agents} row (counts \
         only - `agents` is EXACTLY the number of {kind:\"agent\"} rows that follow it, and \
         the text tree prints that same set in that same order, so the two projections can \
