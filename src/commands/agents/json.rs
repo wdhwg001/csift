@@ -292,9 +292,9 @@ pub(crate) fn workflow_run_json(run: &WorkflowRun, session_id: &str) -> serde_js
 pub(crate) const ONE_LINE_MAX: usize = 200;
 
 /// Collapse a (possibly multi-line) returned message to a single line for the text view, via
-/// the SHARED excerpt helper - so the elision is marked with the same explicit `... (+N
-/// chars)` count every other content-excerpt path emits (the never-silent-truncation
-/// contract, SPEC section 0/section 8.1). A bare `...` with no count is a silent truncation, which that
+/// the SHARED excerpt helper - so the elision is marked with the same explicit `… (+N chars)` count
+/// every other content-excerpt path emits (the never-silent-truncation
+/// contract, SPEC section 0/section 8.1). A bare `…` with no count is a silent truncation, which that
 /// contract forbids - hence the shared helper rather than a local cut.
 pub(crate) fn one_line(s: &str) -> String {
     crate::text::collapse_and_truncate(s, ONE_LINE_MAX)

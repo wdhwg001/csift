@@ -156,7 +156,7 @@ impl MessagePreview {
     }
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `... (+N chars)` marker.
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 pub(crate) fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
