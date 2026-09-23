@@ -33637,7 +33637,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "380-382",
+          "lines": "381-383",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy\n/// document is NOT 3x over-counted the way a byte budget would). A line longer than the"
         }
       ],

@@ -137,7 +137,7 @@ pub(crate) fn cumulative_banner_cost(summaries: &[SummaryInfo], depth: usize) ->
 /// A worst-case (provable upper-bound) char count of the document header block emitted by
 /// [`render_text`] (the `SESSION` line, the budget line, the selected line, the optional
 /// dedup line, and the 60-wide rule). Every numeric placeholder is widened to its
-/// session maximum so the real block is always <= this. The 60-wide rule glyph `-` and the
+/// session maximum so the real block is always <= this. The 60-wide rule glyph `─` and the
 /// banner/units glyphs are multi-byte but counted by `chars()`, matching the render.
 pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usize {
     let turns = sr.turns.len();
