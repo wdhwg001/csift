@@ -14,13 +14,14 @@ pub(crate) fn notification_class(kind: AutomationKind) -> Class {
     }
 }
 
-/// The token a `<task-notification>` carrying the background agent's REAL report embeds
-/// (edge-fixtures G1): a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
+/// The token a `<task-notification>` carrying the background agent's REAL report embeds:
+/// a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
 pub(crate) const NOTIFICATION_RESULT_TAG: &str = "<result>";
 
 /// The `type:"system"` subtype Claude Code writes at the instant a scheduled task fires -
 /// the sibling record a [`Class::ScheduleFire`] prompt is parented to. Also the candidate
-/// needle the `search` prefilter uses for the same lines (a bare VALUE substring, R13-safe).
+/// needle the `search` prefilter uses for the same lines (a bare VALUE substring, which is
+/// what the needle law admits).
 pub const SCHEDULED_TASK_FIRE_SUBTYPE: &str = "scheduled_task_fire";
 
 impl Record {
@@ -151,16 +152,16 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
     }
 }
 
-/// Classify ALL batched sections of a `type:"user"` record's raw text (edge-fixtures G4/G5 +
-/// P1c M1/M3): scan for BOTH `<task-notification>` automation pulse(s) AND inbound peer
+/// Classify ALL batched sections of a `type:"user"` record's raw text: scan for BOTH
+/// `<task-notification>` automation pulse(s) AND inbound peer
 /// message(s) (`<teammate-message>` / `<agent-message>`), unioning every section's labels
 /// (deduped, first-seen order). Each notification contributes its `harness.notification.<kind>`,
-/// plus `agent.communication.inbox` when it carries a `<result>` (the G1 child ⇨ parent
+/// plus `agent.communication.inbox` when it carries a `<result>` (the child ⇨ parent
 /// dual-label); each peer section contributes `agent.communication.{inbox,signal}`.
 ///
-/// PRECEDENCE (M3a): notification spans are matched FIRST and a peer tag whose open falls INSIDE
+/// PRECEDENCE: notification spans are matched FIRST and a peer tag whose open falls INSIDE
 /// any notification span (e.g. a `<result>` body that merely QUOTES "<teammate-message") is
-/// IGNORED - so a notification never leaks a spurious comm label. CROSS-FAMILY (M3b): a record
+/// IGNORED - so a notification never leaks a spurious comm label. CROSS-FAMILY: a record
 /// carrying a real notification section AND a real peer section (outside any notification span)
 /// unions both families' labels.
 ///
@@ -305,7 +306,8 @@ pub trait LineOfUuid {
 ///   `subagent::parent_session_id_from_path` / the topology `parent_agent_id`.
 /// - `is_transcript_opener`: `true` ONLY for the positional FIRST turn-opener of a subagent
 ///   transcript (the spawn-prompt seed) - flips that genuine-user-shaped record from
-///   `user.message` to `agent.communication.inbox` (parent ⇨ self). P2 sets it positionally.
+///   `user.message` to `agent.communication.inbox` (parent ⇨ self). The caller sets it by
+///   position, since no field of the record says it is the seed.
 /// - `spawn`: the [`SpawnLookup`] (the global spawn index) for comm direction + subagent-return
 ///   detection. `None` ⇒ direction degrades gracefully (spawn TO / return falls back to the
 ///   raw name or `?`), so the engine is fully testable without a real index.
@@ -357,7 +359,8 @@ pub struct ClassifyCtx<'a> {
 #[allow(dead_code)]
 impl<'a> ClassifyCtx<'a> {
     /// A bare top-level context: no owner identity, not a subagent, no spawn lookup. The
-    /// neutral base for tests and for classifying a top-level transcript before P2 enriches it.
+    /// neutral base for tests and for classifying a top-level transcript before a caller
+    /// enriches it.
     #[must_use]
     pub fn top_level() -> Self {
         ClassifyCtx {

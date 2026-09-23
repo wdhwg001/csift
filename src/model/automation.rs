@@ -5,8 +5,8 @@ use super::TASK_NOTIFICATION_CLOSE;
 /// The TRUE class of a `<task-notification>` automation trigger, parsed from the leading
 /// classifier of its `<summary>` (verified against real sessions: the summary opens with
 /// `Background command "…"`, `Dynamic workflow "…"`, or `Agent …`). This is the attribution
-/// the P2 turn-segmentation lens demands - the old code hardcoded the literal `workflow` for
-/// EVERY trigger, mislabeling background-command + agent pulses (81% on a captured session).
+/// turn segmentation demands: hardcoding the literal `workflow` for EVERY trigger mislabels the
+/// background-command and agent pulses, 81% of the triggers on a captured session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutomationKind {
     /// A `Background command "…"` completion pulse (a `&`-detached shell command CC ran).

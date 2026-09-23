@@ -17,9 +17,9 @@ impl Record {
     pub fn direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {
         let owner = || ctx.owner_id.unwrap_or("self").to_string();
 
-        // M3 precedence: a <task-notification> record is resolved FIRST - BEFORE the peer scan -
+        // NOTIFICATION PRECEDENCE: a <task-notification> record is resolved FIRST - BEFORE the peer scan -
         // so a notification whose <result> merely QUOTES a "<teammate-message" tag never takes
-        // the peer direction. A G1 <result>-bearing pulse is the bg-agent's report (child ⇨
+        // the peer direction. A <result>-bearing pulse is the bg-agent's report (child ⇨
         // self), the child resolved via the embedded <tool-use-id> spawn id (degrading to "?"
         // without a lookup); a bare launch-ack pulse (no <result>) carries no comm direction.
         if let Some(Content::Text(s)) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
@@ -35,8 +35,8 @@ impl Record {
         }
 
         // Inbound peer message (teammate-message / agent-message): from ⇨ self. The FIRST
-        // section's sender (most-salient), per the multi-section rule (P1c M1 folds the
-        // <agent-message> peer form in alongside <teammate-message>).
+        // section's sender (most-salient), per the multi-section rule; the <agent-message> peer
+        // form is an inbound peer message alongside <teammate-message>.
         if let Some(from) = self.first_peer_from() {
             return Some((from, owner()));
         }

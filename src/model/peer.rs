@@ -25,7 +25,7 @@ impl TeammateMessage {
     }
 }
 
-/// True when `content` carries a `open` section tag at a valid section BOUNDARY (FINDING-1) - the
+/// True when `content` carries a `open` section tag at a valid section BOUNDARY - the
 /// non-allocating predicate behind [`is_teammate_message`] / [`is_agent_message`]. Returns on the
 /// FIRST [`is_section_boundary`] occurrence; a tag that only ever appears MID-PROSE yields `false`.
 /// The common no-tag case costs exactly one `memmem` (the `find` returns `None` immediately), so
@@ -94,12 +94,12 @@ pub fn is_peer_message(content: &str) -> bool {
 #[allow(dead_code)]
 #[must_use]
 pub fn parse_teammate_message(content: &str) -> Option<TeammateMessage> {
-    // The FIRST boundary-anchored `<teammate-message>` section (FINDING-1): reuses the
+    // The FIRST boundary-anchored `<teammate-message>` section: reuses the
     // boundary-aware scan so a tag quoted mid-prose is never parsed as a teammate message.
     parse_all_teammate_messages(content).into_iter().next()
 }
 
-/// Parse ALL `<teammate-message …>` sections in `content` (edge-fixtures G4/G5 batching): one
+/// Parse ALL `<teammate-message …>` sections in `content`, the BATCHED shape: one
 /// `type:"user"` record can carry SEVERAL sections of MIXED kind (prose + idle_notification +
 /// teammate_terminated + …). Returns one [`TeammateMessage`] per section, in file order - the
 /// caller unions their labels. Each section's body/signal is scoped to its own close tag (so a
@@ -125,12 +125,14 @@ pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
 }
 
 /// True when an open tag whose PREFIX (the text before it) is `prefix` sits at a valid SECTION
-/// BOUNDARY (FINDING-1): the content start (only whitespace precedes), immediately after the
-/// relayed peer preamble (one of [`PEER_MESSAGE_PREAMBLES`]), or right after a prior section's CLOSE tag
-/// (`</task-notification>` / `</teammate-message>` / `</agent-message>`, modulo trailing
-/// whitespace). A tag that appears MID-PROSE - a genuine user message merely QUOTING the literal
-/// tag, common in csift's own dev sessions - is NOT a boundary, so it does not start a section and
-/// the record stays `user.message`. Codepoint-safe: pure suffix tests on `trim_end`, no slicing.
+/// BOUNDARY. This is the SECTION-BOUNDARY RULE every peer / notification tag test goes through,
+/// and a boundary is one of three places: the content start (only whitespace precedes),
+/// immediately after the relayed peer preamble (one of [`PEER_MESSAGE_PREAMBLES`]), or right after
+/// a prior section's CLOSE tag (`</task-notification>` / `</teammate-message>` /
+/// `</agent-message>`, modulo trailing whitespace). A tag that appears MID-PROSE - a genuine user
+/// message merely QUOTING the literal tag, common in csift's own dev sessions - is NOT a boundary,
+/// so it does not start a section and the record stays `user.message`. Codepoint-safe: pure suffix
+/// tests on `trim_end`, no slicing.
 pub(crate) fn is_section_boundary(prefix: &str) -> bool {
     let t = prefix.trim_end();
     t.is_empty()
@@ -159,8 +161,8 @@ pub(crate) fn is_frame_boundary(prefix: &str) -> bool {
 /// Invoke `emit(offset, section)` for each BOUNDARY-anchored `<open …>…</close>` section in
 /// `content`, in file order. `offset` is the byte offset of the section's open tag; `section` is the
 /// slice from the open tag through (inclusive) its close tag - or to end-of-string if the close tag
-/// is absent (malformed). Only an open tag at an [`is_section_boundary`] starts a section
-/// (FINDING-1); a tag quoted mid-prose is skipped (advance past it and keep scanning for a later
+/// is absent (malformed). Only an open tag at an [`is_section_boundary`] starts a section;
+/// a tag quoted mid-prose is skipped (advance past it and keep scanning for a later
 /// boundary-anchored one). The scan advances past each section's close tag (or, if absent, to end so
 /// it always terminates). Shared by the teammate / agent-message / task-notification section scans so
 /// they never drift. CODEPOINT-SAFE: ASCII-offset slicing only (`str::find` on the tags).

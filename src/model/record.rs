@@ -182,11 +182,11 @@ pub struct Record {
     pub level: Option<String>,
 
     /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`
-    /// `"Conversation compacted …"` line). Read by `search` as the message-less fallback text (D7).
+    /// `"Conversation compacted …"` line). Read by `search` as the message-less fallback text.
     #[serde(default)]
     pub content: Option<serde_json::Value>,
 
-    /// `compact_boundary` metrics (§3.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a
+    /// `compact_boundary` metrics (§3.5): `{trigger, preTokens, postTokens, durationMs}` on a
     /// `type:"system"`/`subtype:"compact_boundary"` record. Kept RAW; `search` renders it as a
     /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate
     /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.

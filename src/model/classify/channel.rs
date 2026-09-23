@@ -11,7 +11,7 @@ impl Record {
     /// The RAW-BYTES candidate needle for the same envelope (the prefilter form, without
     /// the opening bracket). Kept beside the prefix so the byte scan and the classifier
     /// can never drift apart; a unit test pins that the needle is a run of the prefix.
-    /// Safe as a candidate needle by the SPEC 7d/R13 laws: it is a bare VALUE substring
+    /// Safe as a candidate needle by the SPEC 7d prefilter and the needle law: a bare VALUE substring
     /// of the injected content, carries no JSON-escaped character, and survives any
     /// reserialization of the surrounding object.
     pub(crate) const CSIFT_CHANNEL_NEEDLE: &'static str = "csift-channel v1";

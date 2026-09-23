@@ -515,7 +515,7 @@ fn with_no_tip_at_all_the_leaf_is_the_newest_by_timestamp_not_the_file_tail() {
 
 #[test]
 fn a_reserialized_transcript_yields_the_same_chain_as_the_compact_one() {
-    // The R13 needle law in the chain's own terms: JSON whitespace is not a record
+    // The needle law in the chain's own terms: JSON whitespace is not a record
     // difference. Same records, re-serialized with spaces around every separator (what a
     // python json.dumps default produces), must give the same survival states - the spine
     // and the chain read STRUCTURE, never bytes at fixed offsets.

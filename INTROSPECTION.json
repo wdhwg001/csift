@@ -356,8 +356,8 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "204-209",
-          "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
+          "lines": "204-210",
+          "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse, and a\n/// pulse carrying a `<result>` is that inbound report (`agent.communication.inbox`).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
           "path": "src/subagent/spawn.rs",
@@ -480,8 +480,8 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "83-94",
-          "snippet": "    /// True when this carrier is an ASYNC-LAUNCH ACK, not a child return (smoke-found bug): an\n    /// ASYNC/background `Agent` spawn's tool_result is the immediate launch confirmation\n    /// (`\"Async agent launched successfully.\\nagentId: \u2026\"`), shaped on disk as\n    /// `toolUseResult.{isAsync:true, status:\"async_launched\"}`. It shares the spawn\n    /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it - but it is the LAUNCH ack, not\n    /// the work product. The async child's real report arrives LATER via the\n    /// `<task-notification>` `<result>` pulse (G1 \u2192 `agent.communication.inbox`), never via this\n    /// tool_result. So a launch ack is `agent.tool.result` ONLY (unlike a SYNC one-shot Task\n    /// return, which IS the child's reply \u2192 `\u2026inbox`). Robust dual detection: the structured\n    /// `toolUseResult` shape first, then the content prefix ([`ASYNC_LAUNCH_ACK_PREFIX`]) for a\n    /// record lacking the structured field.\n    pub(crate) fn is_async_launch_ack(&self) -> bool {"
+          "lines": "84-94",
+          "snippet": "    /// ASYNC/background `Agent` spawn's tool_result is the immediate launch confirmation\n    /// (`\"Async agent launched successfully.\\nagentId: \u2026\"`), shaped on disk as\n    /// `toolUseResult.{isAsync:true, status:\"async_launched\"}`. It shares the spawn\n    /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it - but it is the LAUNCH ack, not\n    /// the work product. The async child's real report arrives LATER via the\n    /// `<task-notification>` `<result>` pulse, which carries `agent.communication.inbox`, never via this\n    /// tool_result. So a launch ack is `agent.tool.result` ONLY (unlike a SYNC one-shot Task\n    /// return, which IS the child's reply \u2192 `\u2026inbox`). Robust dual detection: the structured\n    /// `toolUseResult` shape first, then the content prefix ([`ASYNC_LAUNCH_ACK_PREFIX`]) for a\n    /// record lacking the structured field.\n    pub(crate) fn is_async_launch_ack(&self) -> bool {"
         },
         {
           "path": "src/model/classify.rs",
@@ -490,8 +490,8 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "204-209",
-          "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
+          "lines": "204-210",
+          "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse, and a\n/// pulse carrying a `<result>` is that inbound report (`agent.communication.inbox`).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
       "states": [
@@ -2578,7 +2578,7 @@
         },
         {
           "path": "src/model/classify/support.rs",
-          "lines": "144-147",
+          "lines": "145-148",
           "snippet": "    let mut head = format!(\"[{} {id} {status}]\", kind.slug());\n    if let Some(k) = orphan_kind {\n        head.push_str(&format!(\" (orphan reconciliation: {k})\"));\n    }"
         }
       ],
@@ -10404,13 +10404,13 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "134",
+          "lines": "136",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {"
         },
         {
           "path": "src/model/classify.rs",
           "lines": "304-307",
-          "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span (P1c M3). When \u22651 section matches, that fully classifies the record."
+          "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span. When \u22651 section matches, that fully classifies the record."
         }
       ],
       "states": [
@@ -10818,8 +10818,8 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "204-209",
-          "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
+          "lines": "204-210",
+          "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse, and a\n/// pulse carrying a `<result>` is that inbound report (`agent.communication.inbox`).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
           "path": "src/model/classify.rs",
@@ -11027,7 +11027,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "429-432",
+          "lines": "431-434",
           "snippet": "pub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {\n    let Some(input) = input else {\n        return false;\n    };"
         }
       ],
@@ -11115,12 +11115,12 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "422-424",
+          "lines": "424-426",
           "snippet": "pub(crate) fn is_spawn_tool_name(name: &str) -> bool {\n    matches!(name, \"Task\" | \"Agent\" | \"Workflow\")\n}"
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "464-466",
+          "lines": "466-468",
           "snippet": "pub(crate) fn spawn_target_name(input: Option<&serde_json::Value>) -> Option<String> {\n    let input = input?;\n    for key in [\"name\", \"subagent_type\"] {"
         }
       ],
@@ -11262,7 +11262,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "211-213",
+          "lines": "212-214",
           "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
@@ -11364,17 +11364,17 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "267",
+          "lines": "268",
           "snippet": "pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = \"# Autonomous loop check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "353-356",
+          "lines": "354-357",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "249",
+          "lines": "250",
           "snippet": "pub const SCHEDULE_WAKEUP_MARKER: &str = \"<<autonomous-loop-dynamic>>\";"
         },
         {
@@ -11546,12 +11546,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "285-287",
+          "lines": "286-288",
           "snippet": "pub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` executor wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "293",
+          "lines": "294",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         },
         {
@@ -11705,7 +11705,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "358-362",
+          "lines": "359-363",
           "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
@@ -13393,7 +13393,7 @@
         {
           "path": "src/model/record.rs",
           "lines": "189-194",
-          "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
+          "snippet": "    /// `compact_boundary` metrics (\u00a73.5): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,"
         },
         {
           "path": "src/model/classify/system.rs",
@@ -32360,7 +32360,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "221",
+          "lines": "222",
           "snippet": "pub const RESUME_PROMPT_MARKER: &str = \"Continue from where you left off.\";"
         }
       ],
@@ -32432,7 +32432,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "237",
+          "lines": "238",
           "snippet": "/// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is"
         }
       ],
@@ -47971,7 +47971,7 @@
         {
           "path": "src/model/record.rs",
           "lines": "184-191",
-          "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
+          "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text.\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
       "states": [
@@ -61809,7 +61809,7 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "422-424",
+          "lines": "424-426",
           "snippet": "pub(crate) fn is_spawn_tool_name(name: &str) -> bool {\n    matches!(name, \"Task\" | \"Agent\" | \"Workflow\")\n}"
         },
         {
@@ -62276,7 +62276,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "209",
+          "lines": "210",
           "snippet": "pub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -62371,7 +62371,7 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "428-429",
+          "lines": "430-431",
           "snippet": "/// `direct` (e.g. `shutdown_request`/`shutdown_response`/\u2026). Absent type \u21d2 a plain message.\npub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {"
         }
       ],
@@ -65179,7 +65179,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "211-213",
+          "lines": "212-214",
           "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
@@ -65619,7 +65619,7 @@
         {
           "path": "src/model/markers.rs",
           "lines": "114-121",
-          "snippet": "/// The SAME slash-command wrapper in the NEWER tag order: current CC emits\n/// `<command-message>\u2026</command-message>\\n<command-name>/x</command-name>\\n<command-args>\u2026`\n/// -- the message tag FIRST (verified live 2026-07: 14 sessions new-order vs 35 old-order\n/// in one real corpus; both orders coexist). Detection must accept EITHER leading tag:\n/// anchoring on `<command-name>` alone silently reclassified every new-order record as\n/// GENUINE user prose - raw wrapper XML surfaced as `user.message`, and a no-args\n/// wrapper opened a turn.\npub const COMMAND_MESSAGE_PREFIX: &str = \"<command-message>\";"
+          "snippet": "/// The SAME slash-command wrapper in the NEWER tag order: current CC emits\n/// `<command-message>\u2026</command-message>\\n<command-name>/x</command-name>\\n<command-args>\u2026`\n/// -- the message tag FIRST. BOTH orders coexist on disk (counting one session per order,\n/// one real corpus carries 14 new-order against 35 old-order), so detection must accept\n/// EITHER leading tag: anchoring on `<command-name>` alone reads every new-order record as\n/// GENUINE user prose - raw wrapper XML surfacing as `user.message`, and a no-args\n/// wrapper opening a turn.\npub const COMMAND_MESSAGE_PREFIX: &str = \"<command-message>\";"
         },
         {
           "path": "src/model/markers.rs",
@@ -66954,7 +66954,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "134-142",
+          "lines": "136-144",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {\n    let t = prefix.trim_end();\n    t.is_empty()\n        || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))\n        || t.ends_with(TASK_NOTIFICATION_CLOSE)\n        || t.ends_with(TEAMMATE_MESSAGE_CLOSE)\n        || t.ends_with(AGENT_MESSAGE_CLOSE)\n        || t.ends_with(CROSS_SESSION_MESSAGE_CLOSE)\n}"
         }
       ],
@@ -67162,13 +67162,13 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "134",
+          "lines": "136",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "194-201",
-          "snippet": "/// Section CLOSE tags (FINDING-1). A peer / `<task-notification>` open tag that sits right after\n/// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a\n/// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine\n/// user message that merely mentions the literal tag, common in csift's OWN dev sessions) is NOT a\n/// boundary and never starts a section. Kept beside their open-tag constants so the pair never drift.\npub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
+          "lines": "195-201",
+          "snippet": "/// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a\n/// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine\n/// user message that merely mentions the literal tag, common in csift's OWN dev sessions) is NOT a\n/// boundary and never starts a section. Kept beside their open-tag constants so the pair never drift.\npub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
       "states": [
@@ -73423,7 +73423,7 @@
         {
           "path": "src/model/classify/channel.rs",
           "lines": "11-17",
-          "snippet": "    /// The RAW-BYTES candidate needle for the same envelope (the prefilter form, without\n    /// the opening bracket). Kept beside the prefix so the byte scan and the classifier\n    /// can never drift apart; a unit test pins that the needle is a run of the prefix.\n    /// Safe as a candidate needle by the SPEC 7d/R13 laws: it is a bare VALUE substring\n    /// of the injected content, carries no JSON-escaped character, and survives any\n    /// reserialization of the surrounding object.\n    pub(crate) const CSIFT_CHANNEL_NEEDLE: &'static str = \"csift-channel v1\";"
+          "snippet": "    /// The RAW-BYTES candidate needle for the same envelope (the prefilter form, without\n    /// the opening bracket). Kept beside the prefix so the byte scan and the classifier\n    /// can never drift apart; a unit test pins that the needle is a run of the prefix.\n    /// Safe as a candidate needle by the SPEC 7d prefilter and the needle law: a bare VALUE substring\n    /// of the injected content, carries no JSON-escaped character, and survives any\n    /// reserialization of the surrounding object.\n    pub(crate) const CSIFT_CHANNEL_NEEDLE: &'static str = \"csift-channel v1\";"
         },
         {
           "path": "src/commands/search/record_text.rs",
@@ -80486,12 +80486,12 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "199-201",
+          "lines": "201-203",
           "snippet": "pub(crate) fn cross_session_sender(section: &str) -> Option<String> {\n    extract_xml_attr(section, \"from-name\").or_else(|| extract_xml_attr(section, \"from\"))\n}"
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "302-306",
+          "lines": "304-308",
           "snippet": "    pub(crate) fn peer_origin(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {\n        let obj = self.origin.as_ref()?.as_object()?;\n        let peer = obj.get(\"kind\").and_then(serde_json::Value::as_str) == Some(\"peer\");\n        peer.then_some(obj)\n    }"
         },
         {
@@ -80602,7 +80602,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "228",
+          "lines": "229",
           "snippet": "pub const RESUME_PLACEHOLDER_TEXT: &str = \"No response requested.\";"
         }
       ],
@@ -82538,7 +82538,7 @@
         },
         {
           "path": "src/model/classify/support.rs",
-          "lines": "43-49",
+          "lines": "44-50",
           "snippet": "    pub fn scheduled_fire_instant(&self) -> Option<&str> {\n        let content = self.content_str()?.trim_end();\n        let inner = content.strip_suffix(')')?;\n        let open = inner.rfind('(')?;\n        let when = inner[open + 1..].trim();\n        (!when.is_empty()).then_some(when)\n    }"
         },
         {
@@ -85332,7 +85332,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "300-305",
+          "lines": "301-306",
           "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
         }
       ],
@@ -85989,7 +85989,7 @@
         },
         {
           "path": "src/model/tests/classify_comm.rs",
-          "lines": "368",
+          "lines": "369",
           "snippet": "fn a_coordinator_relay_renders_its_arrow() {"
         }
       ],
@@ -86195,7 +86195,7 @@
         },
         {
           "path": "src/model/tests/classify_harness.rs",
-          "lines": "461-463",
+          "lines": "462-464",
           "snippet": "let mine = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{}}]}}\"#,\n    );"
         }
       ],
@@ -86236,7 +86236,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "282-285",
+          "lines": "283-286",
           "snippet": "/// The hook-feedback template is `<hook name> hook feedback:\\n<body>` over a closed set\n/// of hook names; csift matches all four through `injections::HOOK_FEEDBACK_PREFIXES`,\n/// the `Stop` form being the only one with a corpus specimen.\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";"
         },
         {

@@ -175,7 +175,8 @@ fn teammate_message_as_text_block_is_not_genuine_user() {
 
 #[test]
 fn is_teammate_message_detects_only_at_section_boundary() {
-    // FINDING-1: a teammate tag is detected ONLY at a section boundary - the content start,
+    // The section-boundary rule: a teammate tag is detected ONLY at a section boundary - the
+    // content start,
     // just after the relay preamble, or right after a prior section's close tag.
     assert!(is_teammate_message(
         r#"<teammate-message teammate_id="x">hi</teammate-message>"#
@@ -187,7 +188,7 @@ fn is_teammate_message_detects_only_at_section_boundary() {
     assert!(is_teammate_message(
             "<teammate-message teammate_id=\"a\">one</teammate-message>\n<teammate-message teammate_id=\"b\">two</teammate-message>"
         ));
-    // A tag QUOTED mid-prose is NOT a teammate message (the FINDING-1 fix - was TRUE before).
+    // A tag QUOTED mid-prose is NOT a teammate message: no boundary, no section.
     assert!(!is_teammate_message(
         "noise before <teammate-message teammate_id=\"x\">hi</teammate-message> noise after"
     ));
@@ -196,9 +197,9 @@ fn is_teammate_message_detects_only_at_section_boundary() {
 
 #[test]
 fn embedded_teammate_tag_mid_prose_stays_user_message() {
-    // FINDING-1 (FLIPPED from the former accepted-tradeoff): a genuine user message that merely
-    // QUOTES the tag mid-prose is NOT a peer message - it stays `user.message` (this bites
-    // csift's OWN dev sessions, which quote the tag constantly).
+    // A genuine user message that merely QUOTES the tag mid-prose is NOT a peer message - it
+    // stays `user.message`. Without the boundary test this bites csift's OWN dev sessions,
+    // which quote the tag constantly.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"why does a <teammate-message ...> show up in my logs?"}}"#,
     );
@@ -216,7 +217,7 @@ fn embedded_teammate_tag_mid_prose_stays_user_message() {
 
 #[test]
 fn embedded_both_tags_mid_prose_stays_user_message() {
-    // FINDING-1 acceptance: a user.message quoting BOTH `<task-notification>` AND
+    // The boundary rule over BOTH families: a user.message quoting `<task-notification>` AND
     // `<teammate-message>` mid-text classifies `user.message` ONLY - not harness.notification,
     // not agent.communication.inbox.
     let r = parse(
@@ -233,7 +234,7 @@ fn embedded_both_tags_mid_prose_stays_user_message() {
 
 #[test]
 fn agent_message_non_meta_excluded_opens_turn_inbox() {
-    // FINDING-2: an `<agent-message from="…">` peer form (even non-isMeta) is NOT genuine-user,
+    // An `<agent-message from="…">` peer form (even non-isMeta) is NOT genuine-user,
     // STILL opens a turn, and classifies `agent.communication.inbox` (symmetry with teammate).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<agent-message from=\"oh-my-claudecode:architect\">use the shared resolver.</agent-message>"}}"#,
@@ -288,7 +289,7 @@ fn cross_session_message_is_the_third_peer_framing() {
 
 #[test]
 fn cross_session_tag_quoted_mid_prose_stays_user_message() {
-    // FINDING-1 for the third framing: this repo's own docs quote the literal tag, so a
+    // The boundary rule for the third framing: this repo's own docs quote the literal tag, so a
     // `contains` check would reclassify the operator's prose as an inbound peer message.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"csift now classifies the <cross-session-message from=\"...\"> framing alongside the other two."}}"#,

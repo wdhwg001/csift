@@ -113,11 +113,11 @@ pub const COMMAND_NAME_PREFIX: &str = "<command-name>";
 
 /// The SAME slash-command wrapper in the NEWER tag order: current CC emits
 /// `<command-message>…</command-message>\n<command-name>/x</command-name>\n<command-args>…`
-/// -- the message tag FIRST (verified live 2026-07: 14 sessions new-order vs 35 old-order
-/// in one real corpus; both orders coexist). Detection must accept EITHER leading tag:
-/// anchoring on `<command-name>` alone silently reclassified every new-order record as
-/// GENUINE user prose - raw wrapper XML surfaced as `user.message`, and a no-args
-/// wrapper opened a turn.
+/// -- the message tag FIRST. BOTH orders coexist on disk (counting one session per order,
+/// one real corpus carries 14 new-order against 35 old-order), so detection must accept
+/// EITHER leading tag: anchoring on `<command-name>` alone reads every new-order record as
+/// GENUINE user prose - raw wrapper XML surfacing as `user.message`, and a no-args
+/// wrapper opening a turn.
 pub const COMMAND_MESSAGE_PREFIX: &str = "<command-message>";
 
 /// True when `content` is a slash-command wrapper (§4.2.3) in EITHER tag order.
@@ -159,7 +159,7 @@ pub const TEAMMATE_MESSAGE_OPEN: &str = "<teammate-message";
 
 /// The preambles Claude Code prepends to a peer message it relays into a session:
 /// `Another Claude session sent a message:\n<teammate-message …>`. A peer tag IMMEDIATELY after
-/// a preamble is at a section BOUNDARY (FINDING-1, [`is_section_boundary`]) - so a real relayed
+/// a preamble is at a section BOUNDARY (the section-boundary rule, [`is_section_boundary`]) - so a real relayed
 /// peer message is recognized while a tag merely QUOTED mid-prose is not. CC 2.1.258 defines
 /// THREE forms in one binary literal (`"Another Claude session sent a message"` + `:` or
 /// ` while you were working:`, and `"A peer session sent a message while you were
@@ -171,7 +171,7 @@ pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[
     "A peer session sent a message while you were working:",
 ];
 
-/// The opening tag of an inbound `<agent-message from="…">` peer form (P1c M1) - a DISTINCT
+/// The opening tag of an inbound `<agent-message from="…">` peer form - a DISTINCT
 /// inbound peer message from [`TEAMMATE_MESSAGE_OPEN`], seen `isMeta` in real data (e.g. an OMC
 /// agent replying to a peer, relayed into this session: `<agent-message
 /// from="oh-my-claudecode:architect">…`). Classifies `agent.communication.inbox` (the
@@ -191,7 +191,7 @@ pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 /// `agent.communication.inbox` (`from-name`, else `from`, ⇨ self), never `user.message`.
 pub const CROSS_SESSION_MESSAGE_OPEN: &str = "<cross-session-message";
 
-/// Section CLOSE tags (FINDING-1). A peer / `<task-notification>` open tag that sits right after
+/// Section CLOSE tags of the section-boundary rule. A peer / `<task-notification>` open tag right after
 /// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a
 /// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine
 /// user message that merely mentions the literal tag, common in csift's OWN dev sessions) is NOT a
@@ -203,7 +203,8 @@ pub(crate) const CROSS_SESSION_MESSAGE_CLOSE: &str = "</cross-session-message>";
 
 /// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result
 /// (`"Async agent launched successfully.\nagentId: …"`). This is a launch ACK, NOT the child's
-/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 → inbox).
+/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse, and a
+/// pulse carrying a `<result>` is that inbound report (`agent.communication.inbox`).
 /// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:"async_launched"}`
 /// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).
 pub const ASYNC_LAUNCH_ACK_PREFIX: &str = "Async agent launched successfully";
@@ -248,8 +249,8 @@ pub(crate) const SYNTHETIC_MODEL: &str = "<synthetic>";
 /// [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`].
 pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 
-/// The header of the harness-injected FIRED autonomous-loop / `ScheduleWakeup` timer tick (P1c
-/// M2a / oracle D12) - `harness.schedule.wakeup`. When the timer FIRES, the harness injects an
+/// The header of the harness-injected FIRED autonomous-loop / `ScheduleWakeup` timer tick -
+/// `harness.schedule.wakeup`. When the timer FIRES, the harness injects an
 /// `isMeta` `type:"user"` record whose content opens `# Autonomous loop check\n\nYou're being
 /// invoked on a timer …`. DISTINCT from the `meta.loop` DRIVER ticks
 /// ([`AUTONOMOUS_LOOP_TICK_PREFIX`] = `# Autonomous loop tick` / [`AUTONOMOUS_CHECK_MARKER`]):
@@ -258,7 +259,7 @@ pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 ///
 /// THE ANCHORING LAW (shared by all FIVE markers of this family - the two headers,
 /// the two body sentences and the sentinel). Each one is matched
-/// only at CONTENT START, after the same `trim_start` the FINDING-1 section discipline uses. The
+/// only at CONTENT START, after the same `trim_start` the section-boundary rule uses. The
 /// resolver builds the whole delivered prompt and the fire writes it as its OWN record, so the
 /// marker sits at offset 0 of a real tick; an occurrence deeper in a body is therefore a record
 /// QUOTING the prompt - a skill's instruction text that embeds the loop preamble, a peer message
@@ -341,7 +342,7 @@ pub const TASK_NOTIFICATION_FRAME_PREFIX: &str = "[SYSTEM NOTIFICATION - NOT USE
 
 /// The LAST sentence of that frame's body, which is what stands between the
 /// frame and the pulse it wraps. A `<task-notification>` opens a SECTION only at a
-/// boundary - the FINDING-1 rule that keeps a record merely quoting the tag as the
+/// boundary - the section-boundary rule that keeps a record merely quoting the tag as the
 /// operator's own message - so the frame has to be a recognised preamble or the pulse
 /// inside it classifies as nothing at all.
 pub const TASK_NOTIFICATION_FRAME_TAIL: &str =

@@ -41,12 +41,13 @@ fn classify_meta_loop_variants() {
     );
 }
 
-// -- P1c M2a: fired autonomous-loop / ScheduleWakeup timer tick -> harness.schedule.wakeup --
+// -- the fired autonomous-loop / ScheduleWakeup timer tick -> harness.schedule.wakeup --
 
 #[test]
 fn classify_schedule_wakeup_fired_timer_markers() {
-    // The real oracle-D12 record: isMeta, header "# Autonomous loop check", body "You're
-    // being invoked on a timer ...". Used to fall through to user.message (the M2 mislabel).
+    // The real record: isMeta, header "# Autonomous loop check", body "You're being invoked
+    // on a timer ...". It is shaped exactly like the operator's own prose, so without the
+    // marker arm it classifies user.message.
     let loop_check = parse(
         r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop check\n\nYou're being invoked on a timer while the user is away."}}"##,
     );
@@ -253,7 +254,7 @@ fn schedule_fire_index_joins_by_parent_uuid() {
 
 #[test]
 fn loop_markers_tolerate_leading_whitespace() {
-    // Content start is read after the shared `trim_start` (the FINDING-1 discipline), so a
+    // Content start is read after the shared `trim_start` of the section-boundary rule, so a
     // leading newline in the delivered prompt still opens a tick.
     let wake = parse(
         r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"\n  # Autonomous loop check\n\nYou're being invoked on a timer."}}"##,

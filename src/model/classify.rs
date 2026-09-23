@@ -80,13 +80,13 @@ impl Record {
             == Some("teammate_spawned")
     }
 
-    /// True when this carrier is an ASYNC-LAUNCH ACK, not a child return (smoke-found bug): an
+    /// True when this carrier is an ASYNC-LAUNCH ACK rather than a child return: an
     /// ASYNC/background `Agent` spawn's tool_result is the immediate launch confirmation
     /// (`"Async agent launched successfully.\nagentId: …"`), shaped on disk as
     /// `toolUseResult.{isAsync:true, status:"async_launched"}`. It shares the spawn
     /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it - but it is the LAUNCH ack, not
     /// the work product. The async child's real report arrives LATER via the
-    /// `<task-notification>` `<result>` pulse (G1 → `agent.communication.inbox`), never via this
+    /// `<task-notification>` `<result>` pulse, which carries `agent.communication.inbox`, never via this
     /// tool_result. So a launch ack is `agent.tool.result` ONLY (unlike a SYNC one-shot Task
     /// return, which IS the child's reply → `…inbox`). Robust dual detection: the structured
     /// `toolUseResult` shape first, then the content prefix ([`ASYNC_LAUNCH_ACK_PREFIX`]) for a
@@ -304,7 +304,7 @@ impl Record {
         // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an
         // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION
         // their labels, with notification precedence over a peer tag quoted inside a
-        // notification span (P1c M3). When ≥1 section matches, that fully classifies the record.
+        // notification span. When ≥1 section matches, that fully classifies the record.
         if let Some(raw) = self.raw_message_text() {
             if classify_batched_sections(&raw, self.is_meta.unwrap_or(false), out) {
                 return;
@@ -376,7 +376,7 @@ impl Record {
             push_unique(out, Class::ScheduleFire);
             return;
         }
-        // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched
+        // A genuine `user.message` is NEVER isMeta. An isMeta record that matched
         // no marker above is a harness-injected pseudo-turn (a novel hook wrapper), NOT the
         // operator - emit NOTHING rather than mislabel it `user.message` (the role-level isMeta
         // gate `is_genuine_user` already applies). Only genuine, non-isMeta unmarked prose is
