@@ -56,15 +56,17 @@ fn automation_trigger_none_for_human_and_partial_graceful() {
     let partial = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}}"#,
     );
-    // No summary → kind falls back to `task` (NOT the old hardcoded `workflow`).
+    // No summary → kind falls back to `task`; a blanket `workflow` fallback would name
+    // the wrong producer on every pulse that carries no summary.
     let label = partial.automation_label().unwrap();
     assert_eq!(label, "[task abc completed]");
 }
 
 #[test]
 fn automation_kind_classifies_background_command_and_agent() {
-    // The mislabel fix: a `Background command "…"` summary renders `background-command`,
-    // an `Agent …` summary renders `agent` - NOT the old blanket `workflow`.
+    // The kind is read from the SUMMARY: a `Background command "…"` summary renders
+    // `background-command` and an `Agent …` summary renders `agent`. A blanket `workflow`
+    // would name the wrong producer on both.
     let bg = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b497m4ncp</task-id>\n<status>completed</status>\n<summary>Background command \"build venvs\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
     );

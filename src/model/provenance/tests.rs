@@ -199,7 +199,7 @@ fn no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line() {
 /// closed vocabulary, the relations that ride a FIELD on some other surface instead, and the
 /// ones nothing on disk names. Only the first block is derivable, and that is precisely the
 /// block that rots silently - a relation added here renders on every hit at once while the
-/// table a reader was handed still lists the old set.
+/// table a reader was handed does not list it.
 ///
 /// BOTH DIRECTIONS, which is two different failures. A MISSING row is a word csift prints
 /// and neither manual explains. An EXTRA `for[]` row is a word the manual promises and no
