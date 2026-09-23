@@ -40,9 +40,11 @@ pub(crate) fn missing_ranges_str(known: &[(usize, String)], total: usize) -> Str
 }
 
 /// Print the per-transcript header. A SUBAGENT transcript is branded
-/// `SUBAGENT <hex>  ·  parent SESSION <uuid>` (mirroring list/files/search/turns text) - its
-/// `session_id` is a bare hex, NOT a re-feedable `@<uuid>` target, so it must never be
-/// tokened a bare `SESSION`. A top-level transcript prints `SESSION <uuid>`.
+/// `SUBAGENT <hex>  ·  parent SESSION <uuid>` - one space after the word and two around
+/// the separator, as `files`, `stats` and `verbatim` print it, against `list`'s two after
+/// the word and `show`'s one on each side. Its `session_id` is a bare hex, NOT a
+/// re-feedable `@<uuid>` target, so it must never be tokened a bare `SESSION`; a top-level
+/// transcript prints `SESSION <uuid>`.
 pub(crate) fn session_header(first: &mut bool, s: &ScanResult) {
     if !*first {
         println!();
