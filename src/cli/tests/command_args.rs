@@ -89,7 +89,7 @@ fn span_switch_pair_is_uniform_across_commands() {
     ] {
         assert!(
             parse(&argv).is_err(),
-            "{argv:?}: --include-subagents must be an unknown argument now"
+            "{argv:?}: --include-subagents must be an unknown argument"
         );
     }
     // verbatim opts in with --subagents.
@@ -206,9 +206,9 @@ fn agents_old_by_and_tree_flags_are_gone() {
     // `--by` is spelled `--order-by`, and there is no `--tree` (the tree is always on);
     // both spellings error as unknown arguments, with no alias and no forwarding arm.
     let by = parse(&["csift", "agents", ".", "--by", "trigger"]);
-    assert!(by.is_err(), "--by must be an unknown argument now");
+    assert!(by.is_err(), "--by must be an unknown argument");
     let tree = parse(&["csift", "agents", ".", "--tree"]);
-    assert!(tree.is_err(), "--tree must be an unknown argument now");
+    assert!(tree.is_err(), "--tree must be an unknown argument");
 }
 
 #[test]
@@ -301,7 +301,7 @@ fn files_old_detail_flags_are_gone() {
     // no arguments of it, so passing one errors as an unknown argument.
     for flag in ["--summary", "--by-dir", "--by-file", "--timeline"] {
         let err = parse(&["csift", "files", ".", flag]);
-        assert!(err.is_err(), "{flag} must be an unknown argument now");
+        assert!(err.is_err(), "{flag} must be an unknown argument");
     }
 }
 

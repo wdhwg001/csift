@@ -125,7 +125,7 @@ fn a_row_with_no_leaf_is_reachable_only_by_an_address() {
         let row = rows()
             .find(|r| r.value() == *value)
             .unwrap_or_else(|| panic!("{value} names no inventory row"));
-        assert!(row.leaf.is_none(), "{value} has a leaf of its own now");
+        assert!(row.leaf.is_none(), "{value} carries a leaf of its own");
     }
 }
 

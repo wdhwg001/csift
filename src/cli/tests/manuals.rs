@@ -98,7 +98,7 @@ fn skill_section_10_names_every_retired_selector_and_its_successors() {
         })
     };
 
-    for (selector, _era, successors) in crate::cli::selectors::RETIRED_SELECTORS {
+    for (selector, _reason, successors) in crate::cli::selectors::RETIRED_SELECTORS {
         let row = row_for(selector)
             .unwrap_or_else(|| panic!("SKILL section 10 has no row for retired `{selector}`"));
         // A successor entry is `path` or `path (a gloss)`; the PATH is what a reader

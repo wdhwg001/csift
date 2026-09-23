@@ -306,7 +306,7 @@ fn turns_agent_msg_surface_is_two_flags() {
             help.stdout
         );
         let run = h.run(&["verbatim", at(SESS).as_str(), gone]);
-        assert!(!run.success, "{gone} must be an unknown argument now");
+        assert!(!run.success, "{gone} must be an unknown argument");
     }
     // Invalid enum values exit nonzero with a clap error.
     let bad_mode = h.run(&["verbatim", at(SESS).as_str(), "--agent-msgs", "bogus"]);

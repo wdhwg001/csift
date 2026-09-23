@@ -70,7 +70,7 @@ fn subagents_only_is_an_unknown_argument_everywhere() {
     ]);
     assert!(
         !gone.success,
-        "files --subagents-only must now be rejected: {}",
+        "files --subagents-only must be rejected: {}",
         gone.stdout
     );
     assert!(
