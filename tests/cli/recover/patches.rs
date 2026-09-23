@@ -27,7 +27,7 @@ fn recover_patches_segments_split_at_boundary_with_line_numbers() {
         "line numbers present: {}",
         out.stdout
     );
-    // The first segment's diff shows the open().read() → with-block refactor.
+    // The first segment's diff shows the open().read() -> with-block refactor.
     assert!(
         out.stdout.contains("-raw = open(src).read()"),
         "diff removed line: {}",
@@ -42,8 +42,8 @@ fn recover_patches_segments_split_at_boundary_with_line_numbers() {
 
 #[test]
 fn recover_modified_since_read_invalidates_stale_lines() {
-    // A full Read (5 lines) → an edit blocked by "modified since read" (the file changed
-    // underneath, e.g. prettier) → a re-read of only lines 1-2. The pre-boundary lines 3-5 are
+    // A full Read (5 lines) -> an edit blocked by "modified since read" (the file changed
+    // underneath, e.g. prettier) -> a re-read of only lines 1-2. The pre-boundary lines 3-5 are
     // now STALE and must be INVALIDATED: salvage shows 1-2 + explicit gaps (never the stale
     // CCC/DDD/EEE), and restore must FAIL rather than confidently hand back stale content.
     let h = Home::new();
@@ -95,13 +95,13 @@ fn recover_modified_since_read_invalidates_stale_lines() {
         "honest partial count: {}",
         rest.stderr
     );
-    // Smart failure: it lists the external-change boundary…
+    // Smart failure: it lists the external-change boundary...
     assert!(
         rest.stderr.contains("changed OUTSIDE") && rest.stderr.contains("modified_since_read"),
         "lists the external-change boundary: {}",
         rest.stderr
     );
-    // …and recognizes the pre-change state was COMPLETELY recoverable (scenario 1), recommending
+    // ...and recognizes the pre-change state was COMPLETELY recoverable (scenario 1), recommending
     // the pre-change dump + patches-since recipe.
     assert!(
         rest.stderr.contains("COMPLETELY recoverable"),
@@ -169,7 +169,7 @@ fn recover_patches_json_segments_and_boundary_objects() {
 
 #[test]
 fn recover_patches_heuristic_bash_boundary_is_flagged() {
-    // A full Read then a Bash `sed -i` on the same file → a HEURISTIC (soft) boundary,
+    // A full Read then a Bash `sed -i` on the same file -> a HEURISTIC (soft) boundary,
     // flagged with HEURISTIC confidence (not AUTHORITATIVE).
     let h = Home::new();
     h.write(
@@ -204,7 +204,7 @@ fn recover_real_multi_patch_segmentation_at_modified_since_read() {
         return;
     };
     // engine.py shows a real `File has been modified since read` error at jsonl L22980.
-    // A --patches run over it must emit ≥2 segments split by an AUTHORITATIVE boundary
+    // A --patches run over it must emit >=2 segments split by an AUTHORITATIVE boundary
     // carrying that line number, and no single diff may span the boundary.
     let engine = "/Users/testuser/Projects/Acme/widget_factory-worktrees/feature-session-7/app/src/app/engine/engine.py";
     let out = run_real(&[
@@ -230,7 +230,7 @@ fn recover_real_multi_patch_segmentation_at_modified_since_read() {
 #[test]
 fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
     // A session whose ONLY event for the target is a file-history-snapshot marker. The
-    // marker is counted but opens no segment and creates no boundary → the
+    // marker is counted but opens no segment and creates no boundary -> the
     // `segments.is_empty() && boundaries.is_empty()` skip fires (both text + JSON patches).
     let h = Home::new();
     h.write(
@@ -240,7 +240,7 @@ fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
             r#"{"type":"file-history-snapshot","snapshot":{"timestamp":"2026-06-07T05:00:00.500Z","trackedFileBackups":{"/p/snap.rs":{"backupFileName":null,"version":1,"backupTime":"2026-06-07T05:00:00.500Z"}}}}"#, "\n",
         ),
     );
-    // Text patches: the snapshot-only session is skipped → honest empty.
+    // Text patches: the snapshot-only session is skipped -> honest empty.
     let text = h.run(&[
         "recover",
         at(SESS).as_str(),
@@ -287,7 +287,7 @@ fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
 #[test]
 fn recover_patches_boundary_only_session_still_renders() {
     // A session whose ONLY event is a Bash mutation on the target (no prior read) produces a
-    // boundary but NO segment → `segments.is_empty() && boundaries.is_empty()` is
+    // boundary but NO segment -> `segments.is_empty() && boundaries.is_empty()` is
     // `true && false` (the second operand FALSE side), so the session is NOT skipped and the
     // lone boundary is rendered.
     let h = Home::new();
@@ -370,7 +370,7 @@ fn recover_patches_via_project_path_target() {
 
 #[test]
 fn recover_patches_no_history_says_so() {
-    // `--patches` against a file with no recoverable events → the `!any` honest-empty arm
+    // `--patches` against a file with no recoverable events -> the `!any` honest-empty arm
     // of the patches text renderer (distinct from the coverage-mode `!any` already tested).
     let h = recover_scenario_home();
     let out = h.run(&[
@@ -414,7 +414,7 @@ fn recover_patches_json_out_writes_concatenated_diffs() {
 
 #[test]
 fn recover_json_patches_skips_empty_event_session() {
-    // JSON patches mode skip: a target with no events in the (only) session → no segment or
+    // JSON patches mode skip: a target with no events in the (only) session -> no segment or
     // boundary objects, summary.sessions == 0 (the `s.events.is_empty()` JSON-patches arm).
     let h = recover_scenario_home();
     let out = h.run(&[

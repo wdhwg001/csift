@@ -93,7 +93,7 @@ fn search_body_keeps_newlines_and_excerpt_keeps_its_flat_bytes() {
         "the fixture must overrun the default cap: {total_chars} chars"
     );
 
-    // ── default cap: `body` is null, `excerpt` is the flat match-centered fragment ──
+    // -- default cap: `body` is null, `excerpt` is the flat match-centered fragment --
     let def = h.run(&["search", "BODYSEAM", &target, "--format", "json"]);
     assert!(def.success, "stderr: {}", def.stderr);
     let hit = agent_hit(&def.stdout);
@@ -104,7 +104,7 @@ fn search_body_keeps_newlines_and_excerpt_keeps_its_flat_bytes() {
          second full copy of every matched record"
     );
     // The needle leads the text, so `win_start` saturates to 0: the window is the first
-    // EXCERPT_MAX chars, collapsed, plus the explicit remainder marker. No leading `…`.
+    // EXCERPT_MAX chars, collapsed, plus the explicit remainder marker. No leading `...`.
     let window: String = body.chars().take(EXCERPT_MAX).collect();
     let expected_default = format!(
         "{}… (+{} chars)",
@@ -123,7 +123,7 @@ fn search_body_keeps_newlines_and_excerpt_keeps_its_flat_bytes() {
         "an excerpt is one line by contract"
     );
 
-    // ── --no-truncate: `body` is the rendered section text VERBATIM, newlines intact ──
+    // -- --no-truncate: `body` is the rendered section text VERBATIM, newlines intact --
     let full = h.run(&[
         "search",
         "BODYSEAM",

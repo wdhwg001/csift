@@ -179,7 +179,7 @@ fn stats_aggregates_are_exact() {
 #[test]
 fn stats_line_type_census_counts_every_physical_line() {
     // Every physical line lands in the `types` census by its top-level `type`; a
-    // {…}-framed line with an INVALID interior is counted malformed (the probe upgrades
+    // {...}-framed line with an INVALID interior is counted malformed (the probe upgrades
     // the O(1) shape check to an exact whole-file census on stats).
     let h = Home::new();
     h.write(

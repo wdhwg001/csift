@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn dashed_teammate_name_id_round_trips_as_target() {
-    // A teammate NAME may carry dashes (real data: teammate "P1-engine" → agent id
+    // A teammate NAME may carry dashes (real data: teammate "P1-engine" -> agent id
     // `aP1-engine-9cf2f06d6235ca64`). The id `csift agents` prints must round-trip as an
     // `@<agent-id>` target: an entry gate keyed on bare hex alone drops it into the
     // project-dir branch, where it fails.
@@ -48,7 +48,7 @@ fn dashed_teammate_name_id_round_trips_as_target() {
 
 #[test]
 fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
-    // The rule: locating an AGENT → itself (--no-subagents), else itself + ALL topological
+    // The rule: locating an AGENT -> itself (--no-subagents), else itself + ALL topological
     // descendants. Build a nested pair (PARENT spawns CHILD) flat on disk, linked via the
     // child's meta toolUseId pointing at the Agent tool_use recorded in PARENT's transcript.
     let enc = "-Users-testuser-Projects-agtree";
@@ -87,7 +87,7 @@ fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
         r#"{"agentType":"Explore","toolUseId":"call_child"}"#,
     );
 
-    // Default `@<parent>` → parent + descendant child both searchable.
+    // Default `@<parent>` -> parent + descendant child both searchable.
     let full = h.run(&["search", "WORK", &format!("@{parent}")]);
     assert!(full.success, "stderr: {}", full.stderr);
     assert!(
@@ -101,7 +101,7 @@ fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
         full.stdout
     );
 
-    // `--no-subagents` → the parent agent ALONE (child excluded).
+    // `--no-subagents` -> the parent agent ALONE (child excluded).
     let alone = h.run(&["search", "WORK", &format!("@{parent}"), "--no-subagents"]);
     assert!(alone.success, "stderr: {}", alone.stderr);
     assert!(
@@ -200,7 +200,7 @@ fn at_agent_hex_scopes_to_the_subtree() {
         s.stdout
     );
 
-    // A NON-EXISTENT agent hex → honest "no subagent found" (not a session error).
+    // A NON-EXISTENT agent hex -> honest "no subagent found" (not a session error).
     let miss = h.run(&["search", "x", "@deadbeefdeadbeef0"]);
     assert!(!miss.success);
     assert!(
@@ -255,7 +255,7 @@ fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
 #[test]
 fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {
     let h = populated_home();
-    // 1-3 dashless hex chars: below the 4-char uuid-prefix minimum → the dedicated message.
+    // 1-3 dashless hex chars: below the 4-char uuid-prefix minimum -> the dedicated message.
     for tok in ["@a", "@22", "@224"] {
         let out = h.run(&["list", tok]);
         assert!(!out.success, "{tok} must hard-error: {}", out.stdout);
@@ -270,7 +270,7 @@ fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {
             out.stderr
         );
     }
-    // Non-hex / dashed / empty tokens → the general @-grammar error.
+    // Non-hex / dashed / empty tokens -> the general @-grammar error.
     for tok in ["@notanid", "@1234-ab", "@"] {
         let out = h.run(&["list", tok]);
         assert!(!out.success, "{tok} must hard-error: {}", out.stdout);
@@ -280,7 +280,7 @@ fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {
             out.stderr
         );
     }
-    // The `@-Users-…` encoded-dir spelling STILL resolves (encoded cwds lead with `-`).
+    // The `@-Users-...` encoded-dir spelling STILL resolves (encoded cwds lead with `-`).
     let enc = h.run(&["list", &format!("@{ENC}")]);
     assert!(enc.success, "stderr: {}", enc.stderr);
     assert!(
@@ -408,7 +408,7 @@ fn target_at_uuid_prefix_resolves_unique_and_errors_on_ambiguity() {
             ),
         );
     }
-    // A unique prefix → that one session (list shows its id).
+    // A unique prefix -> that one session (list shows its id).
     let uniq = h.run(&["list", "@deadbeef"]);
     assert!(uniq.success, "stderr: {}", uniq.stderr);
     assert!(
@@ -422,7 +422,7 @@ fn target_at_uuid_prefix_resolves_unique_and_errors_on_ambiguity() {
         uniq.stdout
     );
 
-    // An ambiguous prefix → error listing BOTH candidates, never a silent pick.
+    // An ambiguous prefix -> error listing BOTH candidates, never a silent pick.
     let amb = h.run(&["list", "@0a1b2c3d"]);
     assert!(!amb.success, "ambiguous prefix must error: {}", amb.stdout);
     assert!(
@@ -436,7 +436,7 @@ fn target_at_uuid_prefix_resolves_unique_and_errors_on_ambiguity() {
         amb.stderr
     );
 
-    // A prefix nobody starts with → honest no-match.
+    // A prefix nobody starts with -> honest no-match.
     let none = h.run(&["list", "@99999999"]);
     assert!(!none.success);
     assert!(
@@ -518,8 +518,8 @@ fn bare_basename_jsonl_target_resolves_from_its_own_dir() {
         ),
     );
 
-    // Top-level transcript, four spellings of the same file: absolute · ./relative ·
-    // subdir-relative (from the encoded dir's parent) · bare basename (cwd = its dir).
+    // Top-level transcript, four spellings of the same file: absolute, ./relative,
+    // subdir-relative (from the encoded dir's parent), bare basename (cwd = its dir).
     let abs = h.run(&["list", top.to_str().unwrap()]);
     assert!(abs.success, "absolute: {}", abs.stderr);
     let dir = top.parent().unwrap();

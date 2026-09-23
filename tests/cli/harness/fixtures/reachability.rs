@@ -61,12 +61,12 @@ const SUBAGENT: &str = concat!(
 /// null on disk and the walk ends there: putting it first makes the whole file resolvable
 /// and leaves nothing in the pre-cut region.
 const TOP_LEVEL: &str = concat!(
-    // ── harness.compaction (the chain head, then the summary it wrote) ──
+    // -- harness.compaction (the chain head, then the summary it wrote) --
     r#"{"type":"system","subtype":"compact_boundary","uuid":"sy1","timestamp":"2026-06-07T05:00:00.000Z","content":"zzreach conversation compacted","compactMetadata":{"trigger":"auto","preTokens":1000,"postTokens":200,"durationMs":50}}"#,
     "\n",
     r#"{"type":"user","uuid":"ud","parentUuid":"sy1","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"zzreach this session is being continued from a prior context"}}"#,
     "\n",
-    // ── user.message ──
+    // -- user.message --
     r#"{"type":"user","uuid":"u1","parentUuid":"ud","sessionId":"3a1b2c3d-4e5f-4061-8273-849506a7b8c9","cwd":"/Users/dev/reach-project","version":"2.1.258","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"zzreach the person's own message"}}"#,
     "\n",
     // agent.tool.use - the question half of the AUQ pair below.
@@ -101,13 +101,13 @@ const TOP_LEVEL: &str = concat!(
     "\n",
     r#"{"type":"user","uuid":"u5b","parentUuid":"u4b","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"user","content":"zzreach the turn the conversation continued from"}}"#,
     "\n",
-    // ── agent.message ──
+    // -- agent.message --
     r#"{"type":"assistant","uuid":"a6","parentUuid":"u5b","timestamp":"2026-06-07T05:00:14.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzreach the assistant's visible reply"}]}}"#,
     "\n",
     // agent.message.structured - the model's own structured answer, on an attachment.
     r#"{"type":"attachment","uuid":"at1","parentUuid":"a6","timestamp":"2026-06-07T05:00:15.000Z","attachment":{"type":"structured_output","output":{"verdict":"zzreach the schema-bound answer"}}}"#,
     "\n",
-    // ── agent.thinking (four shapes, two of which render no body at all) ──
+    // -- agent.thinking (four shapes, two of which render no body at all) --
     r#"{"type":"assistant","uuid":"a7","parentUuid":"at1","timestamp":"2026-06-07T05:00:16.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"zzreach weighing the options","signature":"CAISDAoKQgh0aGlua2luZw=="}]}}"#,
     "\n",
     r#"{"type":"assistant","uuid":"a8","parentUuid":"a7","timestamp":"2026-06-07T05:00:17.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"zzreach a one-line progress note","signature":"CAISDQoLQgluYXJyYXRpb24="}]}}"#,
@@ -116,7 +116,7 @@ const TOP_LEVEL: &str = concat!(
     "\n",
     r#"{"type":"assistant","uuid":"aa","parentUuid":"a9","timestamp":"2026-06-07T05:00:19.000Z","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"zzreachAAAA"}]}}"#,
     "\n",
-    // ── agent.communication ──
+    // -- agent.communication --
     r#"{"type":"user","uuid":"u7","parentUuid":"aa","timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\" color=\"blue\">\nzzreach please check the rate limit\n</teammate-message>"}}"#,
     "\n",
     r#"{"type":"assistant","uuid":"ac","parentUuid":"u7","timestamp":"2026-06-07T05:00:21.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_sm1","name":"SendMessage","input":{"to":"Reachy","type":"message","message":"zzreach ship the fix"}}]}}"#,
@@ -127,7 +127,7 @@ const TOP_LEVEL: &str = concat!(
     // content string of a hook_additional_context payload.
     r#"{"type":"attachment","uuid":"at2","parentUuid":"ad","timestamp":"2026-06-07T05:00:23.000Z","attachment":{"type":"hook_additional_context","hookName":"csift-deliver","hookEvent":"UserPromptSubmit","content":["[csift-channel v1 id=00112233445566aa part=1/1 mode=steer from=3a1b2c3d-4e5f-4061-8273-849506a7b8c9]\nzzreach the delivered message"]}}"#,
     "\n",
-    // ── harness.notification (five kinds, one pulse each) ──
+    // -- harness.notification (five kinds, one pulse each) --
     r#"{"type":"user","uuid":"u8","parentUuid":"at2","timestamp":"2026-06-07T05:00:24.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf_zz1</task-id>\n<status>completed</status>\n<summary>Workflow \"zzreach pipeline\" completed</summary>\n</task-notification>"}}"#,
     "\n",
     r#"{"type":"user","uuid":"u9","parentUuid":"u8","timestamp":"2026-06-07T05:00:25.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>mon_zz1</task-id>\n<event>tick</event>\n<summary>Monitor \"zzreach liveness\" fired</summary>\n</task-notification>"}}"#,
@@ -138,7 +138,7 @@ const TOP_LEVEL: &str = concat!(
     "\n",
     r#"{"type":"user","uuid":"uc","parentUuid":"ub","timestamp":"2026-06-07T05:00:28.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>task_zz1</task-id>\n<status>completed</status>\n<summary>zzreach something else finished</summary>\n</task-notification>"}}"#,
     "\n",
-    // ── harness.command ──
+    // -- harness.command --
     r#"{"type":"user","uuid":"ue","parentUuid":"uc","timestamp":"2026-06-07T05:00:29.000Z","message":{"role":"user","content":"<command-name>/deploy</command-name>\n<command-message>deploy</command-message>\n<command-args>zzreach to staging</command-args>"}}"#,
     "\n",
     r#"{"type":"user","uuid":"uf","parentUuid":"ue","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":"<local-command-stdout>zzreach deploy succeeded</local-command-stdout>"}}"#,
@@ -148,12 +148,12 @@ const TOP_LEVEL: &str = concat!(
     "\n",
     r#"{"type":"user","uuid":"ug","parentUuid":"sya","isMeta":true,"timestamp":"2026-06-07T05:00:32.000Z","message":{"role":"user","content":"<local-command-caveat>The messages below were generated by the user while running local commands. zzreach</local-command-caveat>"}}"#,
     "\n",
-    // ── harness.interrupt ──
+    // -- harness.interrupt --
     r#"{"type":"user","uuid":"uh","parentUuid":"ug","timestamp":"2026-06-07T05:00:33.000Z","message":{"role":"user","content":"[Request interrupted by user]"}}"#,
     "\n",
     r#"{"type":"user","uuid":"ui","parentUuid":"uh","timestamp":"2026-06-07T05:00:34.000Z","message":{"role":"user","content":"[Request interrupted by user for tool use]"}}"#,
     "\n",
-    // ── harness.schedule ──
+    // -- harness.schedule --
     // wakeup: the fired timer tick.
     r##"{"type":"user","uuid":"uj","parentUuid":"ui","isMeta":true,"timestamp":"2026-06-07T05:00:35.000Z","message":{"role":"user","content":"# Autonomous loop check\n\nzzreach the armed check body"}}"##,
     "\n",
@@ -167,19 +167,19 @@ const TOP_LEVEL: &str = concat!(
     // the whole gate - the armed text is whatever the operator stored.
     r#"{"type":"user","uuid":"ul","parentUuid":"sy2","isMeta":true,"timestamp":"2026-06-07T05:00:38.000Z","message":{"role":"user","content":"zzreach whatever the operator armed"}}"#,
     "\n",
-    // ── harness.resume ──
+    // -- harness.resume --
     r#"{"type":"user","uuid":"um","parentUuid":"ul","isMeta":true,"timestamp":"2026-06-07T05:00:39.000Z","message":{"role":"user","content":"Continue from where you left off."}}"#,
     "\n",
     r#"{"type":"assistant","uuid":"ae","parentUuid":"um","timestamp":"2026-06-07T05:00:40.000Z","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"No response requested."}]}}"#,
     "\n",
-    // ── harness.hook ──
+    // -- harness.hook --
     r#"{"type":"attachment","uuid":"at3","parentUuid":"ae","timestamp":"2026-06-07T05:00:41.000Z","attachment":{"type":"hook_additional_context","hookName":"SessionStart","hookEvent":"SessionStart","content":["zzreach the context a hook injected"]}}"#,
     "\n",
     r#"{"type":"attachment","uuid":"at4","parentUuid":"at3","timestamp":"2026-06-07T05:00:42.000Z","attachment":{"type":"hook_success","hookName":"SessionStart","command":"zzreach-hook.sh","exitCode":0,"durationMs":12,"stdout":"zzreach the hook run's own output"}}"#,
     "\n",
     r#"{"type":"user","uuid":"un","parentUuid":"at4","isMeta":true,"timestamp":"2026-06-07T05:00:43.000Z","message":{"role":"user","content":"Stop hook feedback:\nzzreach keep going"}}"#,
     "\n",
-    // ── harness.context (nine leaves) ──
+    // -- harness.context (nine leaves) --
     r#"{"type":"attachment","uuid":"at5","parentUuid":"un","timestamp":"2026-06-07T05:00:44.000Z","attachment":{"type":"total_tokens_reminder","content":"zzreach the token budget nudge"}}"#,
     "\n",
     r#"{"type":"attachment","uuid":"at6","parentUuid":"at5","timestamp":"2026-06-07T05:00:45.000Z","attachment":{"type":"skill_listing","skills":["zzreach-demo"]}}"#,
@@ -200,7 +200,7 @@ const TOP_LEVEL: &str = concat!(
     // harness.context.skill - a skill body preloaded into a lane's opening array.
     r#"{"type":"user","uuid":"up","parentUuid":"uo","isMeta":true,"timestamp":"2026-06-07T05:00:52.000Z","message":{"role":"user","content":"Base directory for this skill: /Users/dev/skills/zzreach"}}"#,
     "\n",
-    // ── harness.enforce ──
+    // -- harness.enforce --
     r#"{"type":"user","uuid":"uq","parentUuid":"up","isMeta":true,"timestamp":"2026-06-07T05:00:53.000Z","message":{"role":"user","content":"[structured-output-enforce] zzreach you must call the tool to complete this turn."}}"#,
     "\n",
     r#"{"type":"user","uuid":"ur","parentUuid":"uq","isMeta":true,"timestamp":"2026-06-07T05:00:54.000Z","message":{"role":"user","content":"You ended the turn without calling SendUserMessage. zzreach call it now."}}"#,
@@ -209,14 +209,14 @@ const TOP_LEVEL: &str = concat!(
     "\n",
     r#"{"type":"user","uuid":"ut","parentUuid":"us","isMeta":true,"timestamp":"2026-06-07T05:00:56.000Z","message":{"role":"user","content":"The last Edit failed because the target file was modified. zzreach retry."}}"#,
     "\n",
-    // ── harness.turn ──
+    // -- harness.turn --
     r#"{"type":"system","subtype":"turn_duration","uuid":"sy3","parentUuid":"ut","timestamp":"2026-06-07T05:00:57.000Z","durationMs":4200}"#,
     "\n",
     r#"{"type":"system","subtype":"stop_hook_summary","uuid":"sy4","parentUuid":"sy3","timestamp":"2026-06-07T05:00:58.000Z","toolUseID":"hook-zzreach0000","content":"zzreach stop hooks ran"}"#,
     "\n",
     r#"{"type":"system","subtype":"away_summary","uuid":"sy5","parentUuid":"sy4","timestamp":"2026-06-07T05:00:59.000Z","content":"zzreach while you were away"}"#,
     "\n",
-    // ── harness.system (the four undelivered event kinds) ──
+    // -- harness.system (the four undelivered event kinds) --
     r#"{"type":"system","subtype":"model_refusal_fallback","uuid":"sy6","parentUuid":"sy5","timestamp":"2026-06-07T05:01:00.000Z","originalModel":"zzreach-opus","fallbackModel":"zzreach-sonnet","apiRefusalCategory":"overloaded","refusedUserMessageUuid":"u1"}"#,
     "\n",
     r#"{"type":"system","subtype":"api_error","uuid":"sy7","parentUuid":"sy6","timestamp":"2026-06-07T05:01:01.000Z","slug":"zzreach","error":{"type":"overloaded_error","message":"zzreach the upstream was overloaded"},"apiErrorStatus":529,"retryAttempt":1,"maxRetries":5,"retryInMs":800}"#,
@@ -225,11 +225,11 @@ const TOP_LEVEL: &str = concat!(
     "\n",
     r#"{"type":"system","subtype":"agents_killed","uuid":"sy9","parentUuid":"sy8","timestamp":"2026-06-07T05:01:03.000Z","content":"zzreach agents stopped"}"#,
     "\n",
-    // ── user.queued: a queue line whose content is the person's own text ──
+    // -- user.queued: a queue line whose content is the person's own text --
     r#"{"type":"queue-operation","timestamp":"2026-06-07T05:01:04.000Z","operation":"enqueue","content":"zzreach the operator typed this while the turn ran"}"#,
     "\n",
-    // ── harness.bookkeeping (thirteen leaves; none of these lines carries a uuid, so
-    //    none is a chain node and `show --line` is the only address) ──
+    // -- harness.bookkeeping (thirteen leaves; none of these lines carries a uuid, so
+    //    none is a chain node and `show --line` is the only address) --
     r#"{"type":"last-prompt","timestamp":"2026-06-07T05:01:05.000Z","leafUuid":"sy9","explicit":false,"lastPrompt":"zzreach the person's own message"}"#,
     "\n",
     r#"{"type":"mode","mode":"zzreach-default"}"#,

@@ -157,7 +157,7 @@ fn search_match_banner_at_head_mirrors_footer_and_json() {
     let _ = header_collision_scenario(&h);
     let out = h.run(&["search", "SEEDWORD"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // No subagents in scope → the scope banner is suppressed, so the banner is line 1.
+    // No subagents in scope -> the scope banner is suppressed, so the banner is line 1.
     assert_eq!(
         out.stdout.lines().next(),
         Some("matches  3 exchanges · 3 sessions · oldest first"),

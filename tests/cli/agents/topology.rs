@@ -78,7 +78,7 @@ fn agents_classifies_teammate_and_id_round_trips() {
         "no teammate control hint: {}",
         kind.stdout
     );
-    // A scope with NO teammate (filter to builtin-task; the fixture has none) → no hint noise.
+    // A scope with NO teammate (filter to builtin-task; the fixture has none) -> no hint noise.
     let bt = h.run(&["agents", &format!("@{sess}"), "--shape", "builtin-task"]);
     assert!(
         !bt.stdout.contains("shutdown_request"),
@@ -103,7 +103,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     // A NESTED subagent (agent spawned BY another agent). On-disk the layout is FLAT - both
     // agents sit directly under <session>/subagents/ - because CC writes every subagent's
     // transcript under getSessionId()=<main> regardless of depth (verified against the binary).
-    // The agent→agent link is LOGICAL: the child's spawning Task tool_use is recorded in the
+    // The agent->agent link is LOGICAL: the child's spawning Task tool_use is recorded in the
     // PARENT's transcript (not main), and the child's meta.json toolUseId points at it.
     let enc = "-Users-testuser-Projects-nested";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";

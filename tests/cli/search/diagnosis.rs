@@ -47,7 +47,7 @@ fn search_empty_diagnosis_names_the_excluding_label() {
 #[test]
 fn search_empty_diagnosis_reports_genuine_absence() {
     let h = populated_home();
-    // A token absent even WITHOUT the label filter → say so plainly (not a label mistake).
+    // A token absent even WITHOUT the label filter -> say so plainly (not a label mistake).
     let out = h.run(&[
         "search",
         "zzz-absent-zzz",

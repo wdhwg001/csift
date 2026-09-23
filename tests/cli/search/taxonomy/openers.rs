@@ -95,7 +95,7 @@ fn slash_command_wrapper_extracted_in_both_tag_orders() {
 
 #[test]
 fn acceptance_user_role_message_shapes() {
-    // §A1 string · §A2 text-block array · §A3 recovered <command-args> prose - all `user.message`.
+    // section A1 string, A2 text-block array, A3 recovered <command-args> prose - all `user.message`.
     let h = acceptance_home();
     for (oracle, token) in [
         ("A1 string", "zzgenuine"),
@@ -126,7 +126,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
             r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ack"}]}}"#, "\n",
         ),
     );
-    // Found under user.message …
+    // Found under user.message ...
     let um = h.run(&[
         "search",
         "zzquoted",
@@ -141,7 +141,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
         "the section-boundary rule: quoted tags stay user.message:\n{}",
         um.stdout
     );
-    // … and NOT under harness.notification …
+    // ... and NOT under harness.notification ...
     let notif = h.run(&[
         "search",
         "zzquoted",
@@ -156,7 +156,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
         "the section-boundary rule: a quoted <task-notification> is not a notification:\n{}",
         notif.stdout
     );
-    // … and NOT under agent.communication.inbox.
+    // ... and NOT under agent.communication.inbox.
     let inbox = h.run(&[
         "search",
         "zzquoted",

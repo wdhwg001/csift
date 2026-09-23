@@ -243,7 +243,7 @@ fn search_session_filter_and_turn_range() {
 
 #[test]
 fn search_turn_range_intersects_with_time_window() {
-    // --turn ∧ --since/--until INTERSECT (both filters AND), never an either/or. An
+    // --turn and --since/--until INTERSECT (both filters AND), never an either/or. An
     // impossible intersection (turns exist, but none inside the window) is an honest
     // empty result, exit 0.
     let h = populated_home();

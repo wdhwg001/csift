@@ -5,8 +5,8 @@ use crate::harness::*;
 
 #[test]
 fn acceptance_communication_sent_spawn_and_subagent_opener() {
-    // §C8 a Task/Agent spawn tool_use → `agent.communication.sent` (self ⇨ child); §C6 SendMessage
-    // message → sent; §C9 the subagent transcript opener → `agent.communication.inbox` (parent ⇨ self).
+    // section C8 a Task/Agent spawn tool_use -> `agent.communication.sent` (`self ⇨ child`); section C6 SendMessage
+    // message -> sent; section C9 the subagent transcript opener -> `agent.communication.inbox` (`parent ⇨ self`).
     let h = acceptance_home();
 
     let spawn = acc(&h, "zzspawn", "agent.communication.sent");
@@ -44,8 +44,8 @@ fn acceptance_communication_sent_spawn_and_subagent_opener() {
 
 #[test]
 fn acceptance_communication_signals_render_direction() {
-    // §C2 bare-lead inbox · §C3 idle_notification · §C4 teammate_terminated · §C5 shutdown_approved
-    // · §C7 SendMessage shutdown_request - each renders `from ⇨ to` (the owner side is `self`).
+    // section C2 bare-lead inbox, C3 idle_notification, C4 teammate_terminated, C5 shutdown_approved
+    // and C7 SendMessage shutdown_request - each renders `from ⇨ to` (the owner side is `self`).
     let h = acceptance_home();
     let cases = [
         (
@@ -99,7 +99,7 @@ fn acceptance_communication_signals_render_direction() {
 fn search_teammate_message_is_inbox_not_user_regression() {
     // An inbound `<teammate-message>` is `type:user/role:user/string` and matches NO synthetic
     // marker, so an `is_genuine_user` that does not exclude it counts it as the human. It
-    // classifies `agent.communication.inbox` (from ⇨ self) and is DROPPED from `user`.
+    // classifies `agent.communication.inbox` (`<from> ⇨ self`) and is DROPPED from `user`.
     let h = Home::new();
     let sess = "11111111-2222-3333-4444-555555555555";
     let lines = [
@@ -133,7 +133,7 @@ fn search_teammate_message_is_inbox_not_user_regression() {
         inbox.stdout
     );
 
-    // Under `-t user` it must NOT appear (the §1 bug fix) - the human turn does, the peer does not.
+    // Under `-t user` it must NOT appear (the section 1 bug fix) - the human turn does, the peer does not.
     let user = h.run(&[
         "search",
         "rate limit",
@@ -155,7 +155,7 @@ fn search_teammate_message_is_inbox_not_user_regression() {
 /// `record_text_emission` gives `agent.communication.signal` its own arm - the opener
 /// renderer, which flattens the record and strips the relay framing, with the raw text
 /// only as a fallback. Without that arm the class falls to the engine's generic arm and
-/// the body becomes the `<teammate-message …>` XML, tag and attributes and all: the same
+/// the body becomes the `<teammate-message ...>` XML, tag and attributes and all: the same
 /// loss the peer-render law names for every other inbound shape. The direction is
 /// asserted elsewhere; this is about the BODY.
 #[test]

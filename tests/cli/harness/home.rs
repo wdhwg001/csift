@@ -7,7 +7,7 @@
 //! exit-code mapping + `cli::parse_argv` (which reads `std::env::args`).
 //!
 //! Isolation: every invocation points `$HOME` at a per-test temp dir via
-//! `Command::env("HOME", …)` (child-process scope only - no shared-state race with
+//! `Command::env("HOME", ...)` (child-process scope only - no shared-state race with
 //! the in-crate threaded unit tests). The binary path comes from cargo's
 //! `CARGO_BIN_EXE_csift`, so the build under test is exactly the one cargo produced.
 
@@ -192,7 +192,7 @@ pub(crate) fn json_rows(stdout: &str, kind: &str) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// envelope v2: the closing `{"kind":"summary",…}` line (always the last line).
+/// envelope v2: the closing `{"kind":"summary",...}` line (always the last line).
 pub(crate) fn json_summary(stdout: &str) -> serde_json::Value {
     let v: serde_json::Value = serde_json::from_str(
         stdout
@@ -408,7 +408,7 @@ pub(crate) fn topology_home() -> Home {
 }
 
 /// A session whose transcript performs the acid-test scenario: two `/tmp/*.md` Writes
-/// (creates), three `…/gaps/*.md` Edits (updates), and a Bash `rm`, across two turns,
+/// (creates), three `.../gaps/*.md` Edits (updates), and a Bash `rm`, across two turns,
 /// each structured tool_use paired with its create/update carrier. Returns the home.
 pub(crate) fn files_scenario_home() -> Home {
     let h = Home::new();
@@ -429,7 +429,7 @@ pub(crate) fn files_scenario_home() -> Home {
             r#"{"type":"user","uuid":"c3","toolUseResult":{"type":"update","filePath":"/p/spec/gaps/two.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e2","content":"ok"}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a4","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e3","name":"Edit","input":{"file_path":"/p/spec/gaps/three.md","old_string":"a","new_string":"b"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c4","toolUseResult":{"type":"update","filePath":"/p/spec/gaps/three.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e3","content":"ok"}]}}"#, "\n",
-            // ── turn 1: a Bash rm ──
+            // -- turn 1: a Bash rm --
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"clean up tmp"}}"#, "\n",
             r#"{"type":"assistant","uuid":"a5","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"rm /tmp/beacon-a.md"}}]}}"#, "\n",
             // A malformed line that survives the prefilter (carries "role":"user").
@@ -507,9 +507,9 @@ pub(crate) const RFILE: &str = "/Users/testuser/Projects/foo/app.py";
 
 /// A session that builds `app.py` across a realistic life-cycle, mirroring the shapes
 /// verified against real `~/.claude/projects` data:
-///   turn 0  full Read of app.py (4 lines) → an Edit (line 2 rewritten, structuredPatch)
+///   turn 0  full Read of app.py (4 lines) -> an Edit (line 2 rewritten, structuredPatch)
 ///   turn 1  a `modified since read` integrity error (a HARD boundary), then a fresh full
-///           Read (the post-drift state) → another Edit
+///           Read (the post-drift state) -> another Edit
 ///   turn 2  an ExitPlanMode plan + a plan-file Write (for --plan)
 /// Plus a malformed line (skipped-line accounting) and a history-snapshot marker.
 pub(crate) fn recover_scenario_home() -> Home {
@@ -517,7 +517,7 @@ pub(crate) fn recover_scenario_home() -> Home {
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
         concat!(
-            // ── turn 0 ──
+            // -- turn 0 --
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"refactor app.py"}}"#, "\n",
             // file-history-snapshot marker for app.py (backupFileName null, as in real data).
             r#"{"type":"file-history-snapshot","snapshot":{"timestamp":"2026-06-07T05:00:00.500Z","trackedFileBackups":{"/Users/testuser/Projects/foo/app.py":{"backupFileName":null,"version":1,"backupTime":"2026-06-07T05:00:00.500Z"}}}}"#, "\n",
@@ -526,17 +526,17 @@ pub(crate) fn recover_scenario_home() -> Home {
             // Edit line 2 (structuredPatch replaces the open().read() line with a with-block).
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed0","name":"Edit","input":{"file_path":"/Users/testuser/Projects/foo/app.py","old_string":"raw = open(src).read()","new_string":"with open(src) as fh:\n    raw = fh.read()","replace_all":false}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.500Z","toolUseResult":{"filePath":"/Users/testuser/Projects/foo/app.py","oldString":"raw = open(src).read()","newString":"with open(src) as fh:\n    raw = fh.read()","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":2,"lines":["-raw = open(src).read()","+with open(src) as fh:","+    raw = fh.read()"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
-            // ── turn 1: a modified-since-read integrity error (HARD boundary) ──
+            // -- turn 1: a modified-since-read integrity error (HARD boundary) --
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"continue"}}"#, "\n",
             // The error carrier (no inline path) - attributed to app.py via the tool_use_id join.
             r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:01.500Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/Users/testuser/Projects/foo/app.py","old_string":"use(raw)","new_string":"USE(raw)"}}]}}"#, "\n",
             // A fresh full Read of the post-drift file (6 lines now).
             r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T06:00:02.000Z","toolUseResult":{"file":{"filePath":"/Users/testuser/Projects/foo/app.py","content":"import os\nwith open(src) as fh:\n    raw = fh.read()\nuse(raw)\nprint(café🛠)\nEOF","startLine":1,"numLines":6,"totalLines":6}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
-            // ── turn 2: a plan (ExitPlanMode) + a plan-file Write ──
+            // -- turn 2: a plan (ExitPlanMode) + a plan-file Write --
             r#"{"type":"user","uuid":"u2","timestamp":"2026-06-07T07:00:00.000Z","message":{"role":"user","content":"plan the next step"}}"#, "\n",
             r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T07:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pl0","name":"ExitPlanMode","input":{"plan":"PLAN café🛠\n- step one\n- step two","planFilePath":"/Users/testuser/.claude/plans/foo.md"}}]}}"#, "\n",
-            // A malformed line that survives the prefilter (carries "Edit") → counted.
+            // A malformed line that survives the prefilter (carries "Edit") -> counted.
             r#"{"type":"user","role":"user" broken Edit json after marker}"#, "\n",
         ),
     );
@@ -577,7 +577,7 @@ pub(crate) fn run_real(args: &[&str]) -> Output {
 }
 
 /// A session that reads a file then makes an UN-ANCHORABLE edit (a structured patch deep
-/// in an unknown gap) → `--coverage` reports a coverage hole + a windowed read.
+/// in an unknown gap) -> `--coverage` reports a coverage hole + a windowed read.
 pub(crate) fn recover_hole_home() -> Home {
     let h = Home::new();
     h.write(
@@ -586,7 +586,7 @@ pub(crate) fn recover_hole_home() -> Home {
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"peek"}}"#, "\n",
             // A windowed read of lines 1-2 of a 100-line file (lines 3-100 stay gaps).
             r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/big.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":100}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
-            // An edit at line 60 - deep in the gap, no adjacent known line → un-anchorable.
+            // An edit at line 60 - deep in the gap, no adjacent known line -> un-anchorable.
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"filePath":"/p/big.rs","oldString":"zzz","newString":"Z","structuredPatch":[{"oldStart":60,"oldLines":1,"newStart":60,"newLines":1,"lines":["-zzz","+Z"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
         ),
     );

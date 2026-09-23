@@ -105,7 +105,7 @@ fn turns_json_out_file_is_verbatim() {
 
 #[test]
 fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
-    // A project-dir target → both sessions in the project are rendered, separated by a
+    // A project-dir target -> both sessions in the project are rendered, separated by a
     // blank line (the `if !first { println!() }` arm). Sessions are sorted by id.
     let h = turns_two_sessions_home();
     let out = h.run(&["verbatim", ENC, "--no-subagents", "--budget", "40000"]);
@@ -126,7 +126,7 @@ fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
 
 #[test]
 fn turns_multi_session_json_runs_both() {
-    // JSON over two sessions (a project-dir target) → both sessions' units emitted.
+    // JSON over two sessions (a project-dir target) -> both sessions' units emitted.
     let h = turns_two_sessions_home();
     let out = h.run(&[
         "verbatim",

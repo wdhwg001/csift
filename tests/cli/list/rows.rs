@@ -30,8 +30,8 @@ fn list_json_is_one_object_per_session() {
     let h = populated_home();
     let out = h.run(&["list", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // A leading {kind:"header", …} scope record precedes the per-session objects
-    // whenever the set spans ≥1 subagent (uniform JSON scope disclosure, same as turns).
+    // A leading {kind:"header", ...} scope record precedes the per-session objects
+    // whenever the set spans >=1 subagent (uniform JSON scope disclosure, same as turns).
     // Every OTHER non-empty line must be a JSON object with a session_id.
     let mut count = 0;
     let mut saw_header = false;
@@ -89,7 +89,7 @@ fn list_empty_projects_says_no_sessions() {
 #[test]
 #[cfg(unix)]
 fn list_follows_symlinked_project_dir() {
-    // A project dir that is a SYMLINK to a real dir holding a session → exercises
+    // A project dir that is a SYMLINK to a real dir holding a session -> exercises
     // all_project_dirs' `ft.is_symlink()` arm (it must `is_dir()`-resolve the link
     // and still list its sessions).
     use std::os::unix::fs::symlink;
@@ -179,7 +179,7 @@ fn list_bare_uuid_positional_routes_to_session() {
 #[test]
 fn list_session_without_branch_or_version_prints_cwd_only() {
     // A session whose first user record carries cwd but NEITHER gitBranch NOR version
-    // → the meta string stays empty, so the render takes the `meta.is_empty()` TRUE
+    // -> the meta string stays empty, so the render takes the `meta.is_empty()` TRUE
     // path (a plain `cwd` line with no `(...)` suffix). Exercises session.rs L283/L278.
     let h = Home::new();
     h.write(
@@ -204,8 +204,8 @@ fn list_session_without_branch_or_version_prints_cwd_only() {
 
 #[test]
 fn list_session_with_only_version_no_branch() {
-    // version present, gitBranch absent → meta starts EMPTY at the branch check
-    // (skips it), then becomes non-empty at the version check → the `(CC x)` suffix
+    // version present, gitBranch absent -> meta starts EMPTY at the branch check
+    // (skips it), then becomes non-empty at the version check -> the `(CC x)` suffix
     // without a leading branch. Exercises the version-with-empty-meta join arm.
     let h = Home::new();
     h.write(
@@ -265,10 +265,10 @@ fn list_renders_clean_automation_and_inbound_previews() {
     let sess = "cccccccc-dddd-eeee-ffff-000000000000";
     let lines = [
         // first user record = an inbound teammate message (this session is a teammate; the lead
-        // addresses it) → clean inbound-comm preview.
+        // addresses it) -> clean inbound-comm preview.
         r#"{"type":"user","uuid":"tm0","sessionId":"cccccccc-dddd-eeee-ffff-000000000000","cwd":"/Users/x/list","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\">repro the zzslider bug\n</teammate-message>\n\nThis came from another Claude session — not typed by your user."}}"#,
         r#"{"type":"assistant","uuid":"a0","parentUuid":"tm0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"on it"}]}}"#,
-        // last user record = a task-notification automation pulse → clean attribution label.
+        // last user record = a task-notification automation pulse -> clean attribution label.
         r#"{"type":"user","uuid":"n0","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf99zzz</task-id>\n<output-file>/tmp/wf99zzz.output</output-file>\n<status>completed</status>\n<summary>Background command \"zzbuild step\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
     ];
     h.write(
@@ -391,8 +391,8 @@ fn list_scope_banner_reports_pre_cap_scope() {
 #[test]
 fn list_skipped_lines_is_a_window_census_stats_is_the_authority() {
     // The window-census rule, pinned as a disclosure: a malformed line OUTSIDE list's
-    // head/tail windows is invisible to `list` BY DESIGN (§7: list never scans the middle -
-    // full coverage measured ~4× its unscoped runtime), while `stats` (a full scan) is the
+    // head/tail windows is invisible to `list` BY DESIGN (section 7: list never scans the middle -
+    // full coverage measured ~4x its unscoped runtime), while `stats` (a full scan) is the
     // corruption-census authority over the same bytes. Pinning BOTH numbers keeps the
     // divergence a documented contract instead of silent drift.
     let h = Home::new();
@@ -438,7 +438,7 @@ fn list_skipped_lines_is_a_window_census_stats_is_the_authority() {
 fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     // `list` spans subagents by default: a bare `csift list <uuid>` returns the top-level row
     // + each subagent row. JSON carries is_subagent + the re-feedable parent_session_id; text
-    // leads with a scope banner and brands subagent rows SUBAGENT … · parent SESSION ….
+    // leads with a scope banner and brands subagent rows `SUBAGENT <hex> · parent SESSION <uuid>`.
     let h = Home::new();
     subagents_only_scenario(&h);
 

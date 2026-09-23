@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn recover_file_plan_resolves_subagent_only_plan() {
-    // The top-level session never planned, but a SUBAGENT did → @plan falls back to the
+    // The top-level session never planned, but a SUBAGENT did -> @plan falls back to the
     // subagent's bound plan and reconstructs its Write+Edit history.
     const PSESS: &str = "99998888-7777-6666-5555-444433332222";
     let h = Home::new();
@@ -224,7 +224,7 @@ fn recover_file_plan_magic_reconstructs_the_bound_plan() {
 
 #[test]
 fn recover_file_plan_errors_when_no_plan_is_bound() {
-    // A session that never entered Plan Mode has no bound plan → @plan must error clearly
+    // A session that never entered Plan Mode has no bound plan -> @plan must error clearly
     // (never fall back to guessing a plans/ path).
     let h = Home::new();
     h.write(
@@ -251,7 +251,7 @@ fn recover_file_plan_errors_when_no_plan_is_bound() {
 
 #[test]
 fn recover_file_plan_errors_when_ambiguous_across_sessions() {
-    // Two top-level sessions under one project, each bound to a DIFFERENT plan → @plan over
+    // Two top-level sessions under one project, each bound to a DIFFERENT plan -> @plan over
     // the whole project is ambiguous and must ask for --session, never silently pick one.
     const SESS2: &str = "abcdef01-2345-6789-abcd-ef0123456789";
     let h = Home::new();

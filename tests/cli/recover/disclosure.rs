@@ -31,7 +31,7 @@ fn join_scenario_home() -> Home {
 fn coverage_joins_relative_bash_to_the_absolute_file() {
     // THE join: `--file` is absolute, the bash operand was typed relative. The RESOLVED
     // spellings match, so the event and its soft boundary appear; joining on the operand
-    // as typed prints `events: …` with no bash and `boundaries: (none)`.
+    // as typed prints `events: ...` with no bash and `boundaries: (none)`.
     let h = join_scenario_home();
     let out = h.run(&[
         "recover",
@@ -369,7 +369,7 @@ fn window_excluding_integrity_events_is_noted() {
     );
 }
 
-// ── Mutation-kill pins: disclosure counts, note shapes, and candidate selection ──
+// -- Mutation-kill pins: disclosure counts, note shapes, and candidate selection --
 
 #[test]
 fn powershell_only_window_prints_the_exact_note_and_counts() {

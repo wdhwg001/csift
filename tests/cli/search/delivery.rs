@@ -11,9 +11,9 @@ const SESS: &str = "5c4b3a20-1d0e-4f9a-8b7c-6d5e4f3a2b1c";
 
 /// Chained head to tail, as the harness writes them - a record nothing points at is
 /// off the conversation chain and a bare ROLE selector skips it (the SURVIVAL AXIS).
-/// L1 human · L2 assistant reply · L3 a delivered slash-command echo
-/// (`system`/`local_command`) · L4 an UNdelivered notice (`system`/`informational`) ·
-/// L5 the `<synthetic>` API-error placeholder · L6 an `isVirtual` user record.
+/// L1 human, L2 assistant reply, L3 a delivered slash-command echo
+/// (`system`/`local_command`), L4 an UNdelivered notice (`system`/`informational`),
+/// L5 the `<synthetic>` API-error placeholder, L6 an `isVirtual` user record.
 fn delivery_home() -> Home {
     let h = Home::new();
     h.write(
@@ -148,7 +148,7 @@ fn an_is_virtual_record_leaves_the_bare_user_role() {
     );
 }
 
-/// The §7f whole-file gate must not prune a file whose only hit sits in a FABRICATED
+/// The section 7f whole-file gate must not prune a file whose only hit sits in a FABRICATED
 /// head: the leaf's own word is not a raw byte substring of the line (the line spells
 /// the SUBTYPE, `local_command`), so the synthesized-marker set has to be as wide as the
 /// candidate gate that admitted it.

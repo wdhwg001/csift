@@ -110,7 +110,7 @@ fn search_truncated_excerpt_emits_reader_caution() {
         out.stdout
     );
 
-    // --no-truncate lifts the cap → no truncation → NO caution, and the whole text is shown.
+    // --no-truncate lifts the cap -> no truncation -> NO caution, and the whole text is shown.
     let full = h.run(&["search", "NEEDLEXYZ", &at, "--no-truncate"]);
     assert!(full.success, "stderr: {}", full.stderr);
     assert!(
@@ -159,7 +159,7 @@ fn search_truncated_excerpt_emits_reader_caution() {
 
 #[test]
 fn search_short_match_has_no_truncation_caution() {
-    // Every "carry" match in the canonical fixture fits the cap → nothing clipped → no caution.
+    // Every "carry" match in the canonical fixture fits the cap -> nothing clipped -> no caution.
     let h = populated_home();
     let out = h.run(&["search", "carry"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -203,7 +203,7 @@ fn search_siblings_surface_the_rest_of_the_turn() {
         "the agent reply text surfaces as a sibling: {}",
         out.stdout
     );
-    // The matched user record opens the exchange (◂) and is never repeated as a sibling.
+    // The matched user record opens the exchange (`◂`) and is never repeated as a sibling.
     assert_eq!(
         out.stdout.matches("carry needed").count(),
         1,
@@ -278,7 +278,7 @@ fn search_siblings_fixed_policy_renders_turn_and_json_carries_array() {
 #[test]
 fn search_no_truncate_emits_the_untruncated_record() {
     // A message far longer than the ~400-char excerpt cap, with a token at the very TAIL.
-    // The default excerpt truncates (explicit `… (+N chars)` marker) and hides the tail;
+    // The default excerpt truncates (explicit `... (+N chars)` marker) and hides the tail;
     // `--no-truncate` emits the whole record so the tail is readable - the gap that otherwise
     // forces a drop to the raw jsonl.
     let h = Home::new();
@@ -355,7 +355,7 @@ fn search_hit_carries_line_and_uuid_address() {
 #[test]
 fn search_raw_emits_verbatim_lines_on_a_pure_stdout() {
     // `--raw` = show's escape hatch on search's filter surface: the matched records'
-    // VERBATIM jsonl lines, byte-identical to the file, stdout pure (notes → stderr).
+    // VERBATIM jsonl lines, byte-identical to the file, stdout pure (notes -> stderr).
     let (h, sess, _hex) = show_subagent_home();
     let out = h.run(&[
         "search",
@@ -431,7 +431,7 @@ fn search_resolve_persisted_reads_pointed_file() {
     );
     h.write(&format!("{ENC}/{SESS}.jsonl"), &session_line);
 
-    // Without resolution: the token is only in the file, not inline → no match.
+    // Without resolution: the token is only in the file, not inline -> no match.
     let without = h.run(&["search", "quuxmarker", "--no-subagents"]);
     assert!(without.success, "stderr: {}", without.stderr);
     assert!(
@@ -440,7 +440,7 @@ fn search_resolve_persisted_reads_pointed_file() {
         without.stdout
     );
 
-    // With resolution: the file is read, the token is found → a match.
+    // With resolution: the file is read, the token is found -> a match.
     let with = h.run(&[
         "search",
         "quuxmarker",
@@ -550,7 +550,7 @@ fn search_subagent_hit_json_marks_refeedable_parent() {
 fn search_surfaces_extractable_image_ids_on_a_hit() {
     // A `search` hit on a message that carries images must expose the SAME extractable ids as
     // `turns`/`image` - so a search result feeds straight into `csift image --id` with no
-    // manual L+i assembly. r2 ("two more") carries a jpeg + a png at line 3 → L3i1, L3i2.
+    // manual L+i assembly. r2 ("two more") carries a jpeg + a png at line 3 -> L3i1, L3i2.
     let h = image_home();
     let out = h.run(&["search", "two more", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);

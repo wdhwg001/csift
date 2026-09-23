@@ -7,7 +7,7 @@ fn files_bare_uuid_positional_routes_to_session() {
     // The documented `csift files <uuid>` form (a bare uuid in the positional slot)
     // resolves as a session filter across all projects. Read as a project target it names
     // a directory that does not exist, and the run dies with "no Claude Code project dir
-    // for …/<uuid>".
+    // for .../<uuid>".
     let h = populated_home();
     let out = h.run(&[
         "files",
@@ -17,7 +17,7 @@ fn files_bare_uuid_positional_routes_to_session() {
         "--no-subagents",
     ]);
     // Routing success = the command resolved the session and ran (exit 0), never the path
-    // branch's "no Claude Code project dir for …/<uuid>" hard error.
+    // branch's "no Claude Code project dir for .../<uuid>" hard error.
     assert!(
         out.success,
         "bare-uuid positional must resolve as a session; stderr: {}",
@@ -246,7 +246,7 @@ fn files_glob_filters_full_path() {
         "glob must drop non-.md paths: {}",
         out.stdout
     );
-    // The boundary is on the .rs file, which the glob filters out → no boundary section.
+    // The boundary is on the .rs file, which the glob filters out -> no boundary section.
     assert!(
         !out.stdout.contains("Edit-before-Read boundaries"),
         "a filtered-out boundary must not show: {}",
@@ -258,7 +258,7 @@ fn files_glob_filters_full_path() {
 fn files_regex_and_glob_combine_as_and() {
     let h = Home::new();
     path_filter_scenario(&h);
-    // Both filters AND: under a src/ dir AND ending in .rs → only lib.rs.
+    // Both filters AND: under a src/ dir AND ending in .rs -> only lib.rs.
     let both = h.run(&[
         "files",
         at(SESS).as_str(),
@@ -277,7 +277,7 @@ fn files_regex_and_glob_combine_as_and() {
         "AND of glob+regex: {}",
         both.stdout
     );
-    // A glob that matches src/ but a regex that excludes .rs → empty (the normal empty output).
+    // A glob that matches src/ but a regex that excludes .rs -> empty (the normal empty output).
     let empty = h.run(&[
         "files",
         at(SESS).as_str(),
@@ -301,7 +301,7 @@ fn files_regex_and_glob_combine_as_and() {
 fn files_invalid_regex_and_glob_are_hard_errors() {
     let h = Home::new();
     path_filter_scenario(&h);
-    // Invalid regex → hard error (unbalanced paren).
+    // Invalid regex -> hard error (unbalanced paren).
     let bad_re = h.run(&["files", at(SESS).as_str(), "--regex", "("]);
     assert!(
         !bad_re.success,
@@ -313,7 +313,7 @@ fn files_invalid_regex_and_glob_are_hard_errors() {
         "regex error names the flag: {}",
         bad_re.stderr
     );
-    // Invalid glob → hard error (unterminated `[` class).
+    // Invalid glob -> hard error (unterminated `[` class).
     let bad_glob = h.run(&["files", at(SESS).as_str(), "--glob", "[abc"]);
     assert!(
         !bad_glob.success,

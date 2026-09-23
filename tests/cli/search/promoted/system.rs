@@ -5,9 +5,9 @@
 use super::*;
 
 /// The `harness.system` family, one leaf per subtype. L1 user . L2 an `informational`
-/// warning (the Remote Control disconnect notice shape) · L3 an `agents_killed`
-/// record with a non-string content · L4 a `compact_boundary` (its own leaf, never
-/// the catch-all) · L5 assistant.
+/// warning (the Remote Control disconnect notice shape), L3 an `agents_killed`
+/// record with a non-string content, L4 a `compact_boundary` (its own leaf, never
+/// the catch-all), L5 assistant.
 fn system_home() -> Home {
     let h = Home::new();
     h.write(

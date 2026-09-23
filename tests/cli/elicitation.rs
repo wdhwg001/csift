@@ -77,7 +77,7 @@ fn auq_answer_opens_a_turn_and_surfaces_clean_answer() {
         .find(|l| l.contains("option A is fine"))
         .unwrap_or_else(|| panic!("AUQ answer not surfaced under user:\n{}", out.stdout));
     let v: serde_json::Value = serde_json::from_str(hit_line).unwrap();
-    // It is a genuine-user turn boundary now → turn_index 1 (after the "start" opener).
+    // It is a genuine-user turn boundary now -> turn_index 1 (after the "start" opener).
     assert_eq!(
         v.get("turn_index").and_then(serde_json::Value::as_u64),
         Some(1),
@@ -376,7 +376,7 @@ fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
         out.stderr
     );
 
-    // Tri-state ①: no sidecar file → present:false (hook unknown - cannot conclude).
+    // Tri-state (1): no sidecar file -> present:false (hook unknown - cannot conclude).
     let out = h.run(&["list", &at, "--format", "json"]);
     let rows = json_rows(&out.stdout, "session");
     assert!(
@@ -384,7 +384,7 @@ fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
         "{rows:?}"
     );
 
-    // Tri-state ②: a sidecar with only a RESOLVED pair (nothing pending) → present:true,
+    // Tri-state (2): a sidecar with only a RESOLVED pair (nothing pending) -> present:true,
     // with_elicitation_sidecar:false - which is what makes "hook installed AND not
     // blocked" assertable.
     h.write(
@@ -496,8 +496,8 @@ fn malformed_sidecar_line_is_skipped_and_counted_in_search() {
 
 #[test]
 fn acceptance_mcp_elicitation_searchable_under_tool_use() {
-    // §G8 - an MCP elicitation (UNATTESTED in the corpus → synthetic sidecar). The pending marker is a
-    // `type:"system"` record with no tool_use block; the guarded §3.10 arm classifies it
+    // section G8 - an MCP elicitation (UNATTESTED in the corpus -> synthetic sidecar). The pending marker is a
+    // `type:"system"` record with no tool_use block; the guarded section 3.10 arm classifies it
     // `agent.tool.use` and matches its content, so `-t agent.tool.use` finds it, rendered
     // `(elicitation sidecar)` (no fabricated L) with the `with elicitation sidecar` note.
     let h = Home::new();

@@ -39,8 +39,8 @@ fn trap_resolves_a_powershell_shell_command() {
 #[test]
 fn target_at_trap_resolves_caller_via_bash_marker() {
     // `@trap:<marker>` finds the transcript whose Bash `csift` command carries a unique, literal
-    // marker the caller embedded. A subagent match → that subagent (+ its subtree); a main-thread
-    // match → the session. A SUBAGENT transcript flushes per content block, so the very command
+    // marker the caller embedded. A subagent match -> that subagent (+ its subtree); a main-thread
+    // match -> the session. A SUBAGENT transcript flushes per content block, so the very command
     // that launched csift is already greppable at dispatch; the fixtures stand in for both lanes.
     let enc = "-Users-testuser-Projects-trap";
     let hex = "aaa111bbb222ccc33"; // 17 hex, like a real agent id
@@ -63,7 +63,7 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
         ),
     );
 
-    // SUBAGENT match → scopes to that subagent (branded as a subagent, its hex shown).
+    // SUBAGENT match -> scopes to that subagent (branded as a subagent, its hex shown).
     let sub = h.run_with_env(
         &["search", "TRAPSUBWORK", "@trap:GildedHeronVale7391"],
         &[("CLAUDE_CODE_SESSION_ID", SESS)],
@@ -80,7 +80,7 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
         sub.stdout
     );
 
-    // MAIN-thread match → resolves the SESSION itself.
+    // MAIN-thread match -> resolves the SESSION itself.
     let main = h.run_with_env(
         &["list", "@trap:MossyLanternCove6024"],
         &[("CLAUDE_CODE_SESSION_ID", SESS)],
@@ -101,7 +101,7 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
         main.stderr
     );
 
-    // A VALID marker nobody embedded → honest "not found" (never a silent empty result).
+    // A VALID marker nobody embedded -> honest "not found" (never a silent empty result).
     let miss = h.run_with_env(
         &["search", "x", "@trap:WistfulAmberGlen8135"],
         &[("CLAUDE_CODE_SESSION_ID", SESS)],
@@ -131,7 +131,7 @@ fn target_at_trap_rejects_lazy_markers_and_noncsift_commands() {
         ("@trap:foo", "malformed"),                // too short / not the shape
         ("@trap:CrimsonOwlPond", "4 digits"),      // no trailing 4 digits
         ("@trap:HTTPSPROXYGATE4827", "CamelCase"), // ALLCAPS "word" loophole
-        ("@trap:GoFooBars4827", "CamelCase"),      // 2-letter "Go" — words need >=3 chars
+        ("@trap:GoFooBars4827", "CamelCase"),      // 2-letter "Go" - words need >=3 chars
         ("@trap:DeepRiverStone1234", "trivial"),   // 1234 = trivial digit run
     ];
     for (tok, needle) in bad {
@@ -169,7 +169,7 @@ fn target_at_trap_rejects_lazy_markers_and_noncsift_commands() {
         noncsift.stderr
     );
 
-    // 3) Ambiguous: two subagents carrying the SAME marker in csift commands → hard error.
+    // 3) Ambiguous: two subagents carrying the SAME marker in csift commands -> hard error.
     let denc = "-Users-testuser-Projects-trapdup";
     let d = Home::new();
     d.write(

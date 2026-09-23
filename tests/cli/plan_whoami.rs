@@ -2,8 +2,8 @@ use crate::harness::*;
 
 #[test]
 fn whoami_both_env_vars_blank_errors() {
-    // Both the canonical and the alias env vars are present but BLANK → both
-    // `!v.trim().is_empty()` checks are false → detect returns None → the ambiguous
+    // Both the canonical and the alias env vars are present but BLANK -> both
+    // `!v.trim().is_empty()` checks are false -> detect returns None -> the ambiguous
     // guidance error fires.
     let h = populated_home();
     let out = h.run_with_env(
@@ -71,7 +71,7 @@ fn whoami_fast_path_via_cwd_encoding() {
     let h = Home::new();
     let cwd = h.root.join("work").join("proj");
     std::fs::create_dir_all(&cwd).unwrap();
-    // The child resolves symlinks in its cwd (on macOS `/var` → `/private/var`), so
+    // The child resolves symlinks in its cwd (on macOS `/var` -> `/private/var`), so
     // encode the CANONICAL path - that's what `current_dir()` reports inside the
     // binary, and what its fast-path `encode_cwd` will produce.
     let canon = std::fs::canonicalize(&cwd).unwrap();
@@ -116,7 +116,7 @@ fn whoami_fast_path_dir_present_but_file_absent_falls_to_scan() {
         .collect();
     // Create the cwd-encoded project dir but WITHOUT the session file.
     h.write(&format!("{enc_cwd}/unrelated.jsonl"), "{}\n");
-    // Put the actual session in a DIFFERENT project dir → only the scan finds it.
+    // Put the actual session in a DIFFERENT project dir -> only the scan finds it.
     let sid = "dddddddd-0000-0000-0000-000000000004";
     h.write(
         &format!("-Other-Project/{sid}.jsonl"),
@@ -157,7 +157,7 @@ fn whoami_scan_skips_dirs_without_the_file() {
 
 #[test]
 fn whoami_blank_env_value_is_ignored_then_falls_to_alias() {
-    // A blank canonical var (trim → empty) is ignored, and the non-blank alias is
+    // A blank canonical var (trim -> empty) is ignored, and the non-blank alias is
     // used instead (the `!v.trim().is_empty()` false arm on the canonical, true on
     // the alias).
     let h = populated_home();
@@ -199,7 +199,7 @@ fn plan_reverse_finds_the_session_bound_to_a_plan_file() {
         .into_owned();
     write_planning_session(&h, SESS, &bound_abs, &other_abs);
 
-    // Reverse → the bound session, scanning all projects (no target given).
+    // Reverse -> the bound session, scanning all projects (no target given).
     let out = h.run(&["plan", "--reverse", &bound_abs, "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let v = json_rows(&out.stdout, "plan").remove(0);
@@ -212,7 +212,7 @@ fn plan_reverse_finds_the_session_bound_to_a_plan_file() {
     assert_eq!(v["plan_file"].as_str(), Some(bound_abs.as_str()));
     assert_eq!(v["is_subagent"].as_bool(), Some(false));
 
-    // A plan file nobody is bound to → honest empty (stdout empty, stderr note), not an error.
+    // A plan file nobody is bound to -> honest empty (stdout empty, stderr note), not an error.
     let none = h.run(&["plan", "--reverse", &other_abs]);
     assert!(
         none.success,
@@ -376,14 +376,14 @@ fn plan_surfaces_subagent_bound_plan() {
 
 #[test]
 fn plan_text_lists_top_level_then_subagent_plans() {
-    // A session AND a subagent both planned → text output lists both, TOP-LEVEL FIRST, with
+    // A session AND a subagent both planned -> text output lists both, TOP-LEVEL FIRST, with
     // the subagent flagged and carrying its parent uuid.
     const PSESS: &str = "11112222-3333-4444-5555-666677778888";
     let h = Home::new();
     let plans_dir = h.root.join(".claude").join("plans");
     std::fs::create_dir_all(&plans_dir).unwrap();
     let top_path = plans_dir.join("top-level-plan.md");
-    // The top-level plan EXISTS on disk; the subagent's does not → the [exists]/[missing]
+    // The top-level plan EXISTS on disk; the subagent's does not -> the [exists]/[missing]
     // flag must reflect disk reality, per-row.
     std::fs::write(&top_path, "the top plan\n").unwrap();
     let top = top_path.to_string_lossy().into_owned();
@@ -446,7 +446,7 @@ fn whoami_with_session_env_resolves_path() {
 
 #[test]
 fn whoami_prints_not_found_note_when_unresolved() {
-    let h = Home::new(); // empty projects → the session id won't resolve to a file
+    let h = Home::new(); // empty projects -> the session id won't resolve to a file
     let out = h.run_with_env(
         &["whoami"],
         &[(

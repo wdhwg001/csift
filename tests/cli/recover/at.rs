@@ -6,7 +6,7 @@ use crate::harness::*;
 fn recover_at_snapshot_has_line_numbers_and_no_fabrication() {
     let h = recover_scenario_home();
     // As of @turn:0 (before the post-drift re-read), the file is the 4-line original with
-    // the line-2 edit applied → 5 lines, all known, line-numbered.
+    // the line-2 edit applied -> 5 lines, all known, line-numbered.
     let out = h.run(&[
         "recover",
         at(SESS).as_str(),
@@ -23,7 +23,7 @@ fn recover_at_snapshot_has_line_numbers_and_no_fabrication() {
         "edit applied: {}",
         out.stdout
     );
-    // The café🛠 line round-trips UTF-8 verbatim (locale-neutral multi-byte).
+    // The accented-Latin-plus-emoji line round-trips UTF-8 verbatim (locale-neutral multi-byte).
     assert!(
         out.stdout.contains("café🛠"),
         "utf-8 verbatim: {}",
@@ -33,7 +33,7 @@ fn recover_at_snapshot_has_line_numbers_and_no_fabrication() {
 
 #[test]
 fn recover_at_partial_read_marks_explicit_gaps() {
-    // A separate session that ONLY windowed-reads a slice of a file → explicit gaps.
+    // A separate session that ONLY windowed-reads a slice of a file -> explicit gaps.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -71,7 +71,7 @@ fn recover_at_partial_read_marks_explicit_gaps() {
 
 #[test]
 fn recover_at_out_writes_partial_snapshot_with_gaps() {
-    // A windowed-read-only file → the --out artifact carries explicit gap markers.
+    // A windowed-read-only file -> the --out artifact carries explicit gap markers.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -111,7 +111,7 @@ fn recover_at_out_writes_partial_snapshot_with_gaps() {
 
 #[test]
 fn recover_at_no_history_says_so() {
-    // `--at` against a file with no events → the at-mode `!any` honest-empty arm.
+    // `--at` against a file with no events -> the at-mode `!any` honest-empty arm.
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
@@ -137,13 +137,13 @@ fn recover_at_no_history_says_so() {
 /// timestamp-ordered timeline and reconstruct EVERY line - including the subagents' own
 /// edits, which are un-anchorable in their isolated transcripts. NO external-edit
 /// attachments are present, so this isolates the merge (not Claude Code's edited_text_file
-/// reconciliation). The 8-line file ends in a newline → the trailing-newline normalisation
+/// reconciliation). The 8-line file ends in a newline -> the trailing-newline normalisation
 /// must keep seen_total at 8 (no phantom `line 9 unknown`).
 #[test]
 fn recover_at_merges_interleaved_cross_session_edits() {
     const MSESS: &str = "cccccccc-5555-5555-5555-555555555555";
     let h = Home::new();
-    // ── Top-level: Write the 8-line file, then (after subagent A) one structured-patch edit.
+    // -- Top-level: Write the 8-line file, then (after subagent A) one structured-patch edit.
     h.write(
         &format!("{ENC}/{MSESS}.jsonl"),
         concat!(
@@ -154,13 +154,13 @@ fn recover_at_merges_interleaved_cross_session_edits() {
             // A PARTIAL read of lines 1-4 (after subagent A's edits land on disk). totalLines
             // is the SEPARATOR count (9) of the newline-terminated 8-line file.
             r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:20.000Z","toolUseResult":{"file":{"filePath":"/p/doc.md","content":"A1\nA2\nA3-suba\nA4","startLine":1,"numLines":4,"totalLines":9}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
-            // Top-level structured-patch edit: A1 → A1-main.
+            // Top-level structured-patch edit: A1 -> A1-main.
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:21.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_main","name":"Edit","input":{"file_path":"/p/doc.md","old_string":"A1","new_string":"A1-main"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:21.500Z","toolUseResult":{"filePath":"/p/doc.md","oldString":"A1","newString":"A1-main","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-A1","+A1-main"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_main","content":"ok"}]}}"#, "\n",
         ),
     );
-    // ── Subagent A: partial-read lines 3-6, then two STRING edits (bare tool_result, NO
-    //    toolUseResult → the input-side fallback supplies content). In isolation its buffer
+    // -- Subagent A: partial-read lines 3-6, then two STRING edits (bare tool_result, NO
+    //    toolUseResult -> the input-side fallback supplies content). In isolation its buffer
     //    (lines 3-6) is too sparse to anchor a string edit; only the merge (with the parent's
     //    Write anchor in scope) makes these edits land.
     h.write(
@@ -178,7 +178,7 @@ fn recover_at_merges_interleaved_cross_session_edits() {
         &format!("{ENC}/{MSESS}/subagents/agent-aaaaaa.meta.json"),
         r#"{"agentType":"general-purpose","description":"edit A","toolUseId":"t_a"}"#,
     );
-    // ── Subagent B: partial-read lines 5-8, then one STRING edit A8 → A8-subb (latest).
+    // -- Subagent B: partial-read lines 5-8, then one STRING edit A8 -> A8-subb (latest).
     h.write(
         &format!("{ENC}/{MSESS}/subagents/agent-bbbbbb.jsonl"),
         concat!(
@@ -308,26 +308,26 @@ fn recover_at_datetime_time_travels_across_edits() {
         recon.into_values().collect()
     };
 
-    // 06:00 - after the Write, before any edit → the pristine original.
+    // 06:00 - after the Write, before any edit -> the pristine original.
     assert_eq!(
         recon_at("2026-06-07T06:00:00Z"),
         vec!["L1", "L2", "L3"],
         "as of 06:00 only the Write has happened"
     );
-    // 09:00 - between the two edits → L2 edited, L3 still original. THE headline time-travel.
+    // 09:00 - between the two edits -> L2 edited, L3 still original. THE headline time-travel.
     assert_eq!(
         recon_at("2026-06-07T09:00:00Z"),
         vec!["L1", "L2-edited", "L3"],
         "as of 09:00 the L2 edit is applied but the 11:00 L3 edit is not"
     );
-    // 12:00 (and a bare date covering the whole day) - after both edits → fully edited.
+    // 12:00 (and a bare date covering the whole day) - after both edits -> fully edited.
     assert_eq!(
         recon_at("2026-06-07T12:00:00Z"),
         vec!["L1", "L2-edited", "L3-edited"],
         "as of 12:00 both edits are applied"
     );
     // A bare date is accepted too (resolves to system-local midnight); pick one several days
-    // past the edits so no timezone shifts the bound before them → both edits applied.
+    // past the edits so no timezone shifts the bound before them -> both edits applied.
     assert_eq!(
         recon_at("2026-06-15"),
         vec!["L1", "L2-edited", "L3-edited"],
@@ -338,7 +338,7 @@ fn recover_at_datetime_time_travels_across_edits() {
 #[test]
 fn recover_at_skips_session_with_no_seen_total() {
     // Two sessions under one project: one reads /p/seen.rs, the other only reads a DIFFERENT
-    // file. For the target /p/seen.rs, the second session has empty known + no seen_total →
+    // file. For the target /p/seen.rs, the second session has empty known + no seen_total ->
     // the `known.is_empty() && seen_total_lines.is_none()` continue fires, so only ONE
     // session snapshot is emitted (the other is honestly skipped, not shown as empty).
     let h = Home::new();
@@ -376,8 +376,8 @@ fn recover_at_skips_session_with_no_seen_total() {
 #[test]
 fn recover_at_text_skips_session_with_events_but_no_known_content() {
     // Text at-mode: the session HAS an event (the edit, so it passes the events-empty
-    // guard) but reconstructs to nothing known + no seen_total → the
-    // `known.is_empty() && seen_total.is_none()` continue fires → honest "no history".
+    // guard) but reconstructs to nothing known + no seen_total -> the
+    // `known.is_empty() && seen_total.is_none()` continue fires -> honest "no history".
     let h = recover_empty_reconstruction_home();
     let out = h.run(&[
         "recover",
@@ -397,7 +397,7 @@ fn recover_at_text_skips_session_with_events_but_no_known_content() {
 
 #[test]
 fn recover_at_empty_when_spec_omits_cutoff_line() {
-    // `--at ""` (an explicit empty cutoff spec) → `resolve_cutoff` returns None → the
+    // `--at ""` (an explicit empty cutoff spec) -> `resolve_cutoff` returns None -> the
     // `if let Some(c) = cutoff` FALSE side: the snapshot renders WITHOUT an "as of:" line.
     let h = recover_scenario_home();
     let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE, "--at", ""]);
@@ -407,14 +407,14 @@ fn recover_at_empty_when_spec_omits_cutoff_line() {
         "an empty cutoff omits the 'as of' line: {}",
         out.stdout
     );
-    // It still renders the fully-replayed snapshot (no cutoff → everything).
+    // It still renders the fully-replayed snapshot (no cutoff -> everything).
     assert!(out.stdout.contains("import os"), "{}", out.stdout);
 }
 
 #[test]
 fn recover_at_line_range_outside_known_keeps_seen_total() {
     // A windowed read sets seen_total_lines, but a `--line-range` that selects NO known line
-    // leaves `known` empty while seen_total is still Some → the
+    // leaves `known` empty while seen_total is still Some -> the
     // `known.is_empty() && seen_total.is_none()` check has its SECOND operand FALSE (the
     // session is NOT skipped; it renders an all-gap snapshot up to the seen total).
     let h = Home::new();
@@ -426,7 +426,7 @@ fn recover_at_line_range_outside_known_keeps_seen_total() {
             r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/lr.rs","content":"l5\nl6","startLine":5,"numLines":2,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
         ),
     );
-    // Restrict to lines 1-2 - OUTSIDE the known 5-6 window → known empties, seen_total stays.
+    // Restrict to lines 1-2 - OUTSIDE the known 5-6 window -> known empties, seen_total stays.
     let out = h.run(&[
         "recover",
         at(SESS).as_str(),
@@ -438,7 +438,7 @@ fn recover_at_line_range_outside_known_keeps_seen_total() {
         "1..2",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The session is rendered (not skipped) because seen_total is Some → an explicit gap.
+    // The session is rendered (not skipped) because seen_total is Some -> an explicit gap.
     assert!(
         out.stdout.contains("SESSION") && out.stdout.contains("unknown"),
         "an out-of-range line filter still renders the session as explicit gaps: {}",

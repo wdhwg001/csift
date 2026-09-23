@@ -149,7 +149,7 @@ fn search_count_by_other_axes() {
         "non-tool records must be counted as excluded: {summary}"
     );
 
-    // `pairing`: the fixtures carry paired tool traffic → a `paired` key exists.
+    // `pairing`: the fixtures carry paired tool traffic -> a `paired` key exists.
     let out = h.run(&[
         "search",
         "",

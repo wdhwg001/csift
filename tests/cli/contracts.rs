@@ -42,7 +42,7 @@ fn range_open_and_negative_forms() {
 
 #[test]
 fn range_grammar_is_n_or_dotdot_everywhere() {
-    // ONE range-token grammar across every range flag: bare `N` (≡ N..N) or `START..END`;
+    // ONE range-token grammar across every range flag: bare `N` (== N..N) or `START..END`;
     // the removed dash spelling is a HARD error that hands back the correct form.
     let (h, sess, _hex) = show_subagent_home();
     // `show --line A..B` fetches the span.
@@ -61,7 +61,7 @@ fn range_grammar_is_n_or_dotdot_everywhere() {
         "the error teaches the ..-form: {}",
         dash.stderr
     );
-    // `--turn` accepts bare N (≡ N..N).
+    // `--turn` accepts bare N (== N..N).
     let bare = h.run(&["search", "go", &format!("@{sess}"), "--turn", "0"]);
     assert!(bare.success, "stderr: {}", bare.stderr);
     assert!(
@@ -102,7 +102,7 @@ fn turn_range_old_spelling_hard_errors() {
 
 #[test]
 fn timestamps_canonical_local_marker_everywhere() {
-    // Every TEXT timestamp is `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` - name AND
+    // Every TEXT timestamp is `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC+/-offset)` - name AND
     // offset together (zero conversion arithmetic left to the reader), with NO raw-UTC
     // parenthetical copy, and the marker is a FORMAT derived from the system zone per
     // instant, never a hardcoded value.
@@ -110,7 +110,7 @@ fn timestamps_canonical_local_marker_everywhere() {
     let at_s = at(SESS);
     let tz_syd = [("TZ", "Australia/Sydney")];
 
-    // populated_home's instants are June 2026 → Sydney winter = AEST(UTC+10).
+    // populated_home's instants are June 2026 -> Sydney winter = AEST(UTC+10).
     for cmd in [
         vec!["list", at_s.as_str(), "--no-subagents"],
         vec!["stats", at_s.as_str(), "--no-subagents"],
@@ -166,7 +166,7 @@ fn timestamps_canonical_local_marker_everywhere() {
 #[test]
 fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
     // jiff's civil-Date parser accepts a full datetime string and keeps only the date
-    // part, so a Date arm tried first collapses `--since "…T20:00:00"` (bare, no offset)
+    // part, so a Date arm tried first collapses `--since "...T20:00:00"` (bare, no offset)
     // to local MIDNIGHT - a bounded window that reads exactly like a quiet time period.
     // A bare datetime is system-LOCAL wall-clock time, the bare-date convention extended.
     let h = Home::new();
@@ -193,13 +193,13 @@ fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
         assert!(out.success, "since={since} stderr: {}", out.stderr);
         out.stdout.trim().to_string()
     };
-    // Bare date = local midnight → both turns.
+    // Bare date = local midnight -> both turns.
     assert_eq!(count("2026-06-07"), "2");
-    // Bare datetime 16:00 AEST sits between the two (15:00 / 19:00 AEST) → exactly 1.
+    // Bare datetime 16:00 AEST sits between the two (15:00 / 19:00 AEST) -> exactly 1.
     // A parser that collapses a bare datetime to midnight answers 2 here, identically to
     // the bare date - which is what makes these three counts the discriminator.
     assert_eq!(count("2026-06-07T16:00:00"), "1");
-    // And a bare datetime PAST both → 0 (three distinct answers ⇒ time-of-day honored).
+    // And a bare datetime PAST both -> 0 (three distinct answers => time-of-day honored).
     assert_eq!(count("2026-06-07T20:00:00"), "0");
     // A malformed offset must still fail loud, never be re-read as local wall-clock.
     let bad = h.run_with_env(
@@ -217,7 +217,7 @@ fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
 
 #[test]
 fn malformed_non_candidate_lines_are_counted_never_invisible() {
-    // A syntactically-invalid line carries no role marker, so a §7 byte prefilter that
+    // A syntactically-invalid line carries no role marker, so a section 7 byte prefilter that
     // drops a non-candidate silently reports `skipped_lines` 0 on a corrupted file,
     // indistinguishable from a clean one - the exact failure the malformed-line rule
     // exists to rule out. The O(1) shape check counts the two realistic corruption
@@ -351,7 +351,7 @@ fn clean_run_notes_are_absent_in_terminal_modes() {
 }
 
 /// CRITICAL data-safety: an empty reconstruction (no recoverable history / over-budget) must
-/// NOT clobber the `--out` destination and must NOT print a false `(wrote …)` line. Covers
+/// NOT clobber the `--out` destination and must NOT print a false `(wrote ...)` line. Covers
 /// recover --patches, recover --at, and turns over-budget.
 #[test]
 fn empty_out_never_clobbers_or_lies() {
@@ -359,7 +359,7 @@ fn empty_out_never_clobbers_or_lies() {
     let scratch = h.root.join("precious.md");
     let seed = "PRECIOUS USER CONTENT\n";
 
-    // recover --patches on a non-existent file → empty → must leave the file untouched.
+    // recover --patches on a non-existent file -> empty -> must leave the file untouched.
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
         "recover",
@@ -387,7 +387,7 @@ fn empty_out_never_clobbers_or_lies() {
         "recover --patches clobbered --out"
     );
 
-    // recover --at on a non-existent file → empty → untouched.
+    // recover --at on a non-existent file -> empty -> untouched.
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
         "recover",
@@ -411,7 +411,7 @@ fn empty_out_never_clobbers_or_lies() {
         "recover --at clobbered --out"
     );
 
-    // turns with an impossibly small budget → nothing rendered → untouched + no false write.
+    // turns with an impossibly small budget -> nothing rendered -> untouched + no false write.
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
         "verbatim",

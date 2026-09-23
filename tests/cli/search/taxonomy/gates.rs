@@ -15,7 +15,7 @@ fn shapes_home() -> Home {
     let mut lines: Vec<String> = vec![
         r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzshape open the survey"}}"#.to_string(),
     ];
-    // ── the 18 non-transcript line types ──
+    // -- the 18 non-transcript line types --
     for ty in [
         "last-prompt",
         "mode",
@@ -46,7 +46,7 @@ fn shapes_home() -> Home {
     lines.push(format!(
         r#"{{"type":"queue-operation","operation":"dequeue","sessionId":"{SESS}"}}"#
     ));
-    // ── the 11 system subtypes ──
+    // -- the 11 system subtypes --
     for (i, sub) in [
         "compact_boundary",
         "turn_duration",
@@ -68,7 +68,7 @@ fn shapes_home() -> Home {
             i % 10
         ));
     }
-    // ── one attachment payload per context leaf, plus the hook and structured ones ──
+    // -- one attachment payload per context leaf, plus the hook and structured ones --
     for (i, ty) in [
         "hook_additional_context",
         "hook_success",
@@ -89,7 +89,7 @@ fn shapes_home() -> Home {
             i % 10
         ));
     }
-    // ── the four thinking-block shapes, one assistant record each ──
+    // -- the four thinking-block shapes, one assistant record each --
     for (i, block) in [
         r#"{"type":"thinking","thinking":"zzshape weigh it","signature":"sig"}"#,
         r#"{"type":"thinking","thinking":"","signature":"sig"}"#,

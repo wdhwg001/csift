@@ -66,8 +66,8 @@ fn search_empty_pattern_warns_then_emits() {
 
 #[test]
 fn search_empty_pattern_with_session_target_only_does_not_warn() {
-    // Empty pattern + ONLY an `@<uuid>` session target (no category/time/turn filter) → the
-    // warning's `has_session_filter` operand (a `pins_single_session` target) is TRUE → warning
+    // Empty pattern + ONLY an `@<uuid>` session target (no category/time/turn filter) -> the
+    // warning's `has_session_filter` operand (a `pins_single_session` target) is TRUE -> warning
     // suppressed.
     let h = populated_home();
     let out = h.run(&["search", "", at(SESS).as_str(), "--no-subagents"]);
@@ -81,7 +81,7 @@ fn search_empty_pattern_with_session_target_only_does_not_warn() {
 
 #[test]
 fn search_empty_pattern_with_category_does_not_warn() {
-    // An empty pattern but WITH a `-t` category → the warning's
+    // An empty pattern but WITH a `-t` category -> the warning's
     // `args.categories.is_empty()` operand is FALSE, so the warning is suppressed.
     let h = populated_home();
     let out = h.run(&[
@@ -163,7 +163,7 @@ fn search_text_output_is_token_lean() {
         "no ordinal header: {}",
         out.stdout
     );
-    // The header carries no `═══` rule and no uppercase `SESSION `/`TURN `: a hit is one
+    // The header carries no `===` rule and no uppercase `SESSION `/`TURN `: a hit is one
     // scannable row, not a banner.
     assert!(
         !out.stdout.contains("═══"),

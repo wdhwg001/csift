@@ -51,7 +51,7 @@ fn one(out: &Output, kind: &str) -> serde_json::Value {
     r.into_iter().next().unwrap()
 }
 
-// ── (a) the slug's change points ──────────────────────────────────────────────
+// -- (a) the slug's change points ----------------------------------------------
 
 #[test]
 fn the_slug_mint_point_is_reported_as_a_change_from_none() {
@@ -200,7 +200,7 @@ fn a_slug_nested_in_a_payload_is_not_a_change_point() {
     assert_eq!(changes[0]["to"], "quiet-harbor-relay", "{b}");
 }
 
-// ── (b) whether the bound plan file is on disk ────────────────────────────────
+// -- (b) whether the bound plan file is on disk --------------------------------
 
 #[test]
 fn the_binding_row_says_whether_the_bound_file_exists() {
@@ -266,7 +266,7 @@ fn a_bound_file_that_was_never_written_reads_missing() {
     assert_eq!(b["plan_exists"], false, "{b}");
 }
 
-// ── (c) plan text held with no binding ────────────────────────────────────────
+// -- (c) plan text held with no binding ----------------------------------------
 
 #[test]
 fn a_plan_reference_with_no_slug_anywhere_is_flagged_as_unbound_text() {
@@ -372,7 +372,7 @@ fn a_prose_mention_of_the_attachment_type_is_not_a_plan_reference() {
     );
 }
 
-// ── (d) the slug against the plan file's birth instant ────────────────────────
+// -- (d) the slug against the plan file's birth instant ------------------------
 
 /// Whether this host records a file birth time. A musl target does not (`created()` errors
 /// there), so the comparison can read nothing but `unknown` with that reason - the answer the

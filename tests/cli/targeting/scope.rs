@@ -4,8 +4,8 @@ use crate::harness::*;
 
 #[test]
 fn pinned_id_matching_nothing_bails_never_silent_empty() {
-    // AGENTS §4 fail-closed wall (T0.3): a PINNED id that resolves to no file must BAIL loud -
-    // never a silent empty, never a widening to every project (the L56255 `--subagent` →
+    // AGENTS section 4 fail-closed wall (T0.3): a PINNED id that resolves to no file must BAIL loud -
+    // never a silent empty, never a widening to every project (the L56255 `--subagent` ->
     // whole-corpus class). Both the full-uuid and the prefix forms are locked here so a future
     // resolver change cannot quietly reintroduce scope-widening.
     let h = populated_home();
@@ -32,10 +32,10 @@ fn pinned_id_matching_nothing_bails_never_silent_empty() {
 
 #[test]
 fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
-    // Two DIFFERENT cwds that encode to the SAME projects dir (§2.1 lossy collision):
+    // Two DIFFERENT cwds that encode to the SAME projects dir (section 2.1 lossy collision):
     //   /Users/testuser/Projects/foo-bar   (a literal '-')
-    //   /Users/testuser/Projects/foo_bar   (a '_'→'-')
-    // both → -Users-testuser-Projects-foo-bar. CC stores both projects' sessions there;
+    //   /Users/testuser/Projects/foo_bar   (a '_'->'-')
+    // both -> -Users-testuser-Projects-foo-bar. CC stores both projects' sessions there;
     // csift must NOT leak the sibling's sessions (or its subagents) when you target one path.
     let h = Home::new();
     // The runtime encodes the REAL arg path, so the dir carries the drive head on
@@ -88,7 +88,7 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
             + "\n"),
     );
 
-    // Target the REAL path of A → must see ONLY A, never B or B's subagent.
+    // Target the REAL path of A -> must see ONLY A, never B or B's subagent.
     let out = h.run(&["list", "/Users/testuser/Projects/foo-bar"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -102,7 +102,7 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
         out.stdout
     );
 
-    // Targeting the sibling's real path → only B (and B's subagent surfaces in search).
+    // Targeting the sibling's real path -> only B (and B's subagent surfaces in search).
     // (Which sessions matched is read off the `--format json` records' `session_id`.)
     let out_b = h.run(&[
         "search",
@@ -121,7 +121,7 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
         out_b.stdout
     );
 
-    // The EXPLICIT encoded-dir token is the user's chosen scope → NOT cwd-filtered (both show).
+    // The EXPLICIT encoded-dir token is the user's chosen scope -> NOT cwd-filtered (both show).
     let both = h.run(&["list", enc]);
     assert!(both.success, "stderr: {}", both.stderr);
     assert!(
@@ -351,7 +351,7 @@ fn resolved_pair_is_not_merged() {
             resolved_line("toolu_AQ1", "2026-06-27T01:05:00.000Z"),
         ),
     );
-    // The question is gone from the sidecar's unresolved set → search does NOT find it via merge.
+    // The question is gone from the sidecar's unresolved set -> search does NOT find it via merge.
     let out = h.run(&["search", "Which branch should I target", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -393,7 +393,7 @@ fn targeting_a_sidecar_file_directly_errors() {
 #[test]
 fn targeting_a_renamed_sidecar_errors_via_content_sniff() {
     let h = sidecar_session_home();
-    // A sidecar moved / renamed to a non-`elicitations.jsonl` name → content sniff still rejects.
+    // A sidecar moved / renamed to a non-`elicitations.jsonl` name -> content sniff still rejects.
     let renamed = h.write(
         &format!("{ENC}/{SESS}/backup-markers.jsonl"),
         &format!(

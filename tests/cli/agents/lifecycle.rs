@@ -6,7 +6,7 @@ use crate::harness::*;
 fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     // A background built-in subagent whose teardown Bash (dangerous `rm` of `$VAR/$f`) CC HOISTED
     // to a human approval prompt EVEN under bypass - its transcript freezes at the unreturned
-    // tool_use, PRECEDED by assistant text (the L629→L630 shape a tail walk-back for an
+    // tool_use, PRECEDED by assistant text (the L629->L630 shape a tail walk-back for an
     // end-of-turn text mis-reads as `completed`). csift must report it running +
     // escalation-blocked, then NOT pending once the result lands (Yes clicked). Mirrors the
     // real fixture agent-ab8a4c5868015a8be.
@@ -88,7 +88,7 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
         txt.stdout
     );
 
-    // RESOLVED (Yes clicked → tool_result + closing text) → completed, no pending.
+    // RESOLVED (Yes clicked -> tool_result + closing text) -> completed, no pending.
     let resolved = format!(
         "{frozen}{}{}",
         "{\"type\":\"user\",\"timestamp\":\"2026-06-26T11:20:13.911Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_0137gHdLDnXKsa94qGmmnbqV\",\"content\":\"shredded\"}]}}\n",
@@ -144,7 +144,7 @@ fn agents_returned_message_on_open_lane_carries_history_caution() {
         out.stdout
     );
 
-    // RESOLVED (tool_result + closing text) → completed lane, no caution.
+    // RESOLVED (tool_result + closing text) -> completed lane, no caution.
     let resolved = format!(
         "{frozen}{}{}",
         "{\"type\":\"user\",\"timestamp\":\"2026-06-26T11:20:13.911Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_0137gHdLDnXKsa94qGmmnbqV\",\"content\":\"ok\"}]}}\n",
@@ -210,8 +210,8 @@ fn agents_running_not_frozen_prints_last_seen_not_completed() {
 
 #[test]
 fn agents_row_without_timestamps_omits_duration() {
-    // A subagent whose transcript records carry NO timestamps → started/completed are
-    // both absent → `duration_label` returns None (the `if let Some(dur)` FALSE arm),
+    // A subagent whose transcript records carry NO timestamps -> started/completed are
+    // both absent -> `duration_label` returns None (the `if let Some(dur)` FALSE arm),
     // so NO "duration" line is rendered for that row; status is `unknown`.
     let h = Home::new();
     h.write(
@@ -324,7 +324,7 @@ fn agents_returned_message_three_way_resolution() {
         .iter()
         .find(|v| v["agent_id"] == "topo11")
         .expect("topo11");
-    // SYNC built-in → parent tool_result text.
+    // SYNC built-in -> parent tool_result text.
     assert_eq!(
         builtin["returned_message"],
         "SYNC-RETURN: the built-in carry answer"
@@ -334,7 +334,7 @@ fn agents_returned_message_three_way_resolution() {
         .iter()
         .find(|v| v["agent_id"] == "topo22")
         .expect("topo22");
-    // WORKFLOW → journal result payload.
+    // WORKFLOW -> journal result payload.
     assert_eq!(wf["returned_message"], "WF-RETURN: journal payload");
     assert_eq!(wf["returned_message_source"], "workflow-journal");
     // The run row precedes its member agent row and carries the run metadata.

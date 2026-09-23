@@ -4,8 +4,8 @@ use crate::harness::*;
 
 #[test]
 fn turns_slice_reassembles_out_document_within_window() {
-    // --slice paginates the SAME verbatim document `--out` writes into ≤window-CHAR chunks with
-    // NO chrome. Assert: every chunk ≤ window, concatenating slices 1..K reproduces the `--out`
+    // --slice paginates the SAME verbatim document `--out` writes into <=window-CHAR chunks with
+    // NO chrome. Assert: every chunk <= window, concatenating slices 1..K reproduces the `--out`
     // document byte-for-byte (the zero-drift contract between build_document_body and out_blob),
     // and an out-of-range slice is empty (exit 0).
     let h = turns_home();
@@ -48,7 +48,7 @@ fn turns_slice_reassembles_out_document_within_window() {
         ]);
         assert!(s.success, "slice {n} stderr: {}", s.stderr);
         if s.stdout.is_empty() {
-            break; // out-of-range slice → empty → done
+            break; // out-of-range slice -> empty -> done
         }
         assert!(
             s.stdout.chars().count() <= window,
@@ -133,8 +133,8 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
 #[test]
 fn turns_slices_keeps_newest_discards_oldest() {
     // The fleet fills newest-first; the oldest turns that don't fit are DISCARDED (not truncated).
-    // A tight 2-slice fleet keeps the live tail and drops the oldest round-trip ("the very first
-    // ask … café").
+    // A tight 2-slice fleet keeps the live tail and drops the oldest round-trip (the first ask of
+    // the document).
     let h = turns_home();
     let mut doc = String::new();
     for i in 1..=2 {
@@ -170,7 +170,7 @@ fn turns_slices_keeps_newest_discards_oldest() {
 fn turns_slices_keeps_user_turns_whole_no_role_cap() {
     // The defect a peer session caught: budget mode middle-truncates a USER turn at the 600-char
     // role cap even with budget to spare. In `--slices` mode the only cap is the WINDOW, so a
-    // multi-hundred-char user directive survives VERBATIM. The fixture's huge_user (≈817 chars)
+    // multi-hundred-char user directive survives VERBATIM. The fixture's huge_user (~817 chars)
     // appears whole (no mid-cut) when the window comfortably exceeds it.
     let h = turns_home();
     let mut doc = String::new();
@@ -217,8 +217,8 @@ fn turns_slices_keeps_user_turns_whole_no_role_cap() {
 #[test]
 fn turns_slices_ellipsizes_only_a_turn_bigger_than_one_window() {
     // The ONLY content cut in --slices mode is a single turn that ALONE exceeds one window. With a
-    // small window the big assistant turn (≈3000 chars) is middle-elided, while the shorter user
-    // turn (≈817) in the same fleet is kept whole.
+    // small window the big assistant turn (~3000 chars) is middle-elided, while the shorter user
+    // turn (~817) in the same fleet is kept whole.
     let h = turns_home();
     let mut doc = String::new();
     for i in 1..=8 {

@@ -4,7 +4,7 @@ pub(crate) use reachability::*;
 
 use super::home::*;
 
-/// A session whose ONLY event for the target is an edit with no preceding read → the edit
+/// A session whose ONLY event for the target is an edit with no preceding read -> the edit
 /// is un-anchorable, leaving an empty buffer and no seen_total (events non-empty, but the
 /// reconstruction is empty). Used to drive the at-mode "nothing known" skip in both
 /// renderers.
@@ -14,7 +14,7 @@ pub(crate) fn recover_empty_reconstruction_home() -> Home {
         &format!("{ENC}/{SESS}.jsonl"),
         concat!(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            // An Edit result for /p/e.rs with NO prior read → un-anchorable, no known lines.
+            // An Edit result for /p/e.rs with NO prior read -> un-anchorable, no known lines.
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"filePath":"/p/e.rs","oldString":"x","newString":"y","structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-x","+y"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
         ),
     );
@@ -27,13 +27,14 @@ pub(crate) fn recover_empty_reconstruction_home() -> Home {
 ///
 /// Shape (all on the SINGLE top-level session jsonl so the spanning walk is exercised
 /// without subagent noise; tests pass `--no-subagents`):
-///   • 3 genuine round-trip turns, then a compaction SUMMARY #1 (its §6 quotes turn 0's
-///     user verbatim + §9 quotes the last assistant - drives the dedup test),
-///   • 3 more round-trips, then SUMMARY #2,
-///   • 3 more round-trips, then SUMMARY #3,
-///   • a final live block: one HUGE round-trip (user > 600 chars, assistant > 900 chars
-///     → drives the role-asymmetric ellipsis test) and an assistant-heavy tail (a turn
-///     whose assistant side is enormous + a pure tool-call turn) → drives the 50% floor.
+///   - 3 genuine round-trip turns, then a compaction SUMMARY #1 (its section 6 quotes turn 0's
+///     user verbatim + section 9 quotes the last assistant - drives the dedup test),
+///   - 3 more round-trips, then SUMMARY #2,
+///   - 3 more round-trips, then SUMMARY #3,
+///   - a final live block: one HUGE round-trip (user > 600 chars, assistant > 900 chars
+///     -> drives the role-asymmetric ellipsis test) and an assistant-heavy tail (a turn
+///     whose assistant side is enormous + a pure tool-call turn) -> drives the 50% floor.
+///
 /// Plus one malformed line for the skipped-line accounting.
 /// A tiny jsonl builder for the turns fixture: free methods on a struct so there is no
 /// closure-capture conflict (the earlier closure form double-borrowed the buffer).
@@ -122,7 +123,7 @@ impl TurnsBuilder {
 pub(crate) fn turns_fixture_jsonl() -> String {
     let mut b = TurnsBuilder::new();
 
-    // ── Block A: 3 round-trips, then SUMMARY #1 ──
+    // -- Block A: 3 round-trips, then SUMMARY #1 --
     b.round_trip(
         "the very first ask about the café budget walk logic",
         "first reply café🛠",
@@ -134,12 +135,12 @@ pub(crate) fn turns_fixture_jsonl() -> String {
         2,
     );
     b.round_trip("third ask about the carry boundary", "third reply", 0);
-    // SUMMARY #1: §6 quotes turn 0's user verbatim (dedup target), §9 quotes an assistant.
+    // SUMMARY #1: section 6 quotes turn 0's user verbatim (dedup target), section 9 quotes an assistant.
     b.line(
         r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation.\n6. All user messages:\n   - \"the very first ask about the café budget walk logic\"\n   - \"second ask explain ...\"\n9. Optional Next Step:\n   The assistant said \"third reply\" before compaction."}}"#,
     );
 
-    // ── Block B: 3 round-trips, then SUMMARY #2 ──
+    // -- Block B: 3 round-trips, then SUMMARY #2 --
     b.round_trip(
         "fourth ask after the first compaction boundary",
         "fourth reply",
@@ -151,7 +152,7 @@ pub(crate) fn turns_fixture_jsonl() -> String {
         r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued.\n6. All user messages:\n   - \"fourth ask after the first compaction boundary\"\n9. Optional Next Step:\n   The assistant said \"sixth reply\"."}}"#,
     );
 
-    // ── Block C: 3 round-trips, then SUMMARY #3 ──
+    // -- Block C: 3 round-trips, then SUMMARY #3 --
     b.round_trip("seventh ask post second boundary", "seventh reply", 2);
     b.round_trip("eighth ask almost there", "eighth reply", 1);
     b.round_trip("ninth ask wrap it up", "ninth reply", 0);
@@ -159,35 +160,35 @@ pub(crate) fn turns_fixture_jsonl() -> String {
         r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued.\n6. All user messages:\n   - \"seventh ask post second boundary\"\n9. Optional Next Step:\n   The assistant said \"ninth reply\"."}}"#,
     );
 
-    // ── Block D (live region, after the newest summary) ──
+    // -- Block D (live region, after the newest summary) --
     // A LONG agent-message run in ONE turn (8 agent messages > the default >6 threshold):
     // a rich first, pure-declaration middles, a sudden rich middle, a FUSED finding+decl
     // body, and the EOT - drives the richness selection + placeholder integration tests.
     b.long_agent_run(
         "kick off the long debugging chain",
         &[
-            "found the AGENTRICHFIRST root cause already", // first - rich (lexeme) → kept
-            "let me try the LETMEDECL one next",           // middle decl → collapse
-            "now i will check LETMEDECL another",          // middle decl → collapse
+            "found the AGENTRICHFIRST root cause already", // first - rich (lexeme) -> kept
+            "let me try the LETMEDECL one next",           // middle decl -> collapse
+            "now i will check LETMEDECL another",          // middle decl -> collapse
             // A declaration with a digit adjacent to multi-byte chars (the exact
-            // shape that once panicked the ±16-byte number-of-substance window): a
-            // signal-less intent-verb opener → collapses, and must NOT panic.
-            "let me LETMEDECL look at the 🤖 07:40 log", // middle decl → collapse
-            "AGENTRICHMID 12 passed 3 failed in src/x.rs:9", // sudden rich middle → kept
-            "let me write LETMEDECL it up",              // middle decl → collapse
-            "now let me LETMEDECL finalize",             // middle decl → collapse
-            "root cause confirmed in src/y.rs:42 — now let me FUSEDTAIL write the fix", // fused → kept
+            // shape that once panicked the +/-16-byte number-of-substance window): a
+            // signal-less intent-verb opener -> collapses, and must NOT panic.
+            "let me LETMEDECL look at the 🤖 07:40 log", // middle decl -> collapse
+            "AGENTRICHMID 12 passed 3 failed in src/x.rs:9", // sudden rich middle -> kept
+            "let me write LETMEDECL it up",              // middle decl -> collapse
+            "now let me LETMEDECL finalize",             // middle decl -> collapse
+            "root cause confirmed in src/y.rs:42 — now let me FUSEDTAIL write the fix", // fused -> kept
             "the AGENTEOT final committed answer", // last - always kept
         ],
     );
-    // A HUGE round-trip: user > 600 chars, assistant > 900 chars → role-asymmetric ellipsis.
+    // A HUGE round-trip: user > 600 chars, assistant > 900 chars -> role-asymmetric ellipsis.
     let huge_user = format!("HEADuser {} TAILuser", "u".repeat(800));
     let huge_asst = format!("HEADasst {} TAILasst", "a".repeat(1100));
     b.round_trip(&huge_user, &huge_asst, 5);
     // An assistant-heavy tail: a complete turn whose assistant side is enormous.
     let big_asst = format!("big {} end", "b".repeat(3000));
     b.round_trip("short live ask", &big_asst, 2);
-    // A pure tool-call turn (no assistant EOT text) → partial turn.
+    // A pure tool-call turn (no assistant EOT text) -> partial turn.
     let ts = b.next_ts();
     b.line(&format!(
         r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":"do the final thing"}}}}"#
@@ -196,7 +197,7 @@ pub(crate) fn turns_fixture_jsonl() -> String {
     b.line(&format!(
         r#"{{"type":"assistant","timestamp":"{ts}","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"z","name":"Bash","input":{{}}}}]}}}}"#
     ));
-    // A malformed line that survives the prefilter (carries "role":"user") → counted.
+    // A malformed line that survives the prefilter (carries "role":"user") -> counted.
     b.line(r#"{"type":"user","role":"user" broken json after marker}"#);
 
     b.out
@@ -218,9 +219,9 @@ pub(crate) fn json_lines(stdout: &str) -> Vec<serde_json::Value> {
 }
 
 /// Strip the OPERATIONAL trailer lines the text renderer prints to stdout but that are
-/// NOT part of the reconstruction DOCUMENT (per SPEC §6.8 the document
+/// NOT part of the reconstruction DOCUMENT (per SPEC section 6.8 the document
 /// is: doc-header-block + unit headers + bodies + ellipsis markers + boundary banners).
-/// The `(skipped N malformed …)` diagnostic and the `(wrote full reconstruction …)`
+/// The `(skipped N malformed ...)` diagnostic and the `(wrote full reconstruction ...)`
 /// notice are stdout-only chrome, never written to `--out`; everything else stays.
 pub(crate) fn turns_document_text(stdout: &str) -> String {
     let kept: Vec<&str> = stdout
@@ -235,7 +236,7 @@ pub(crate) fn turns_document_text(stdout: &str) -> String {
     kept.join("\n")
 }
 
-/// A fixture whose NEWEST summary quotes a LIVE-region turn verbatim → exercises the
+/// A fixture whose NEWEST summary quotes a LIVE-region turn verbatim -> exercises the
 /// live-region dedup demote-and-flag path (the main fixture's live turns are unique).
 pub(crate) fn turns_dedup_home() -> Home {
     let h = Home::new();
@@ -245,10 +246,10 @@ pub(crate) fn turns_dedup_home() -> Home {
     s.push('\n');
     s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"pre reply"}]}}"#);
     s.push('\n');
-    // SUMMARY whose §6 quotes a LIVE turn that comes AFTER it (the "live duplicate ask").
+    // SUMMARY whose section 6 quotes a LIVE turn that comes AFTER it (the "live duplicate ask").
     s.push_str(r#"{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"6. All user messages:\n   - \"the live duplicate ask that the summary already holds verbatim\"\n9. Optional Next Step:\n   The assistant said \"pre reply\"."}}"#);
     s.push('\n');
-    // turn 1 (LIVE region) whose user text matches the summary's §6 bullet → deduped.
+    // turn 1 (LIVE region) whose user text matches the summary's section 6 bullet -> deduped.
     s.push_str(r#"{"type":"user","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"the live duplicate ask that the summary already holds verbatim"}}"#);
     s.push('\n');
     s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"live reply"}]}}"#);
@@ -279,8 +280,8 @@ pub(crate) fn turns_two_sessions_home() -> Home {
     h
 }
 
-/// The captured LAST-ONLY baseline: the EXACT stdout for the §fixture with one agent
-/// message per turn - the turn's last - and no `△ L…–L…` collapsed-agents placeholder and
+/// The captured LAST-ONLY baseline: the EXACT stdout for the section fixture with one agent
+/// message per turn - the turn's last - and no `△ L...-L...` collapsed-agents placeholder and
 /// no intermediate rich member. The
 /// DEFAULT keeps the LONGEST agent message + the first-if-substantive + the rich
 /// middles, so this baseline is reproduced by the `--agent-msgs eot-only` ESCAPE, not by
@@ -309,7 +310,7 @@ pub(crate) fn holes_home() -> Home {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","toolUseResult":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)","description":"the conservative path that reuses existing state"},{"label":"option B","description":"the full path that rebuilds from scratch"}]}],"answers":{"which option for step two?":"option A is fine, the scope is broader than stated"},"annotations":{"which option for step two?":{"notes":"go with option A but budget for the edge cases, it is more involved than a quick tweak"}}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two?\"=\"option A is fine, the scope is broader than stated\"."}]}}"#, "\n",
             // assistant proposes a plan (member of turn 1).
             r#"{"type":"assistant","uuid":"a1","parentUuid":"ans","timestamp":"2026-06-07T05:11:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN1","name":"ExitPlanMode","input":{"plan":"the plan body here","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"#, "\n",
-            // turn 2: the user REJECTS the plan with a typed message → boundary + pointer.
+            // turn 2: the user REJECTS the plan with a typed message -> boundary + pointer.
             r#"{"type":"user","uuid":"rej","parentUuid":"a1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nplease run the smoke tests once before calling it done"}]}}"#, "\n",
             // an interrupt marker - a turn MEMBER of turn 2, NOT a new boundary.
             r#"{"type":"user","uuid":"int","parentUuid":"rej","timestamp":"2026-06-07T05:20:30.000Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#, "\n",
@@ -319,7 +320,7 @@ pub(crate) fn holes_home() -> Home {
     h
 }
 
-/// Extract the line texts (in order) from a `recover --at … --format json` snapshot.
+/// Extract the line texts (in order) from a `recover --at ... --format json` snapshot.
 pub(crate) fn recon_lines_from_at_json(stdout: &str) -> Vec<String> {
     let snap = stdout
         .lines()
@@ -343,7 +344,7 @@ pub(crate) fn recon_lines_from_at_json(stdout: &str) -> Vec<String> {
 pub(crate) fn write_planning_session(h: &Home, sess: &str, bound_abs: &str, other_abs: &str) {
     let jsonl = concat!(
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#, "\n",
-        // plan_mode attachment → the AUTHORITATIVE binding.
+        // plan_mode attachment -> the AUTHORITATIVE binding.
         r#"{"type":"attachment","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"__BOUND__","planExists":true},"uuid":"att0","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
         // An Edit of SOMEONE ELSE's plan file - a red herring for the resolver.
         r#"{"type":"assistant","uuid":"ax","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ex","name":"Edit","input":{"file_path":"__OTHER__","old_string":"x","new_string":"y"}}]}}"#, "\n",
@@ -359,12 +360,12 @@ pub(crate) fn write_planning_session(h: &Home, sess: &str, bound_abs: &str, othe
     h.write(&format!("{ENC}/{sess}.jsonl"), &jsonl);
 }
 
-/// A synthetic 1×1 transparent PNG (base64) - a REAL valid PNG (correct chunk CRCs, so the
+/// A synthetic 1x1 transparent PNG (base64) - a REAL valid PNG (correct chunk CRCs, so the
 /// strict `image` decoder accepts it for `--as` transcoding, not just the magic-byte checks).
 pub(crate) const PNG_1X1: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
 
-/// Three more DISTINCT valid 1×1 PNGs (red / green / blue) - distinct content fingerprints, so
+/// Three more DISTINCT valid 1x1 PNGs (red / green / blue) - distinct content fingerprints, so
 /// the listing's content-dedup treats them as separate screenshots (not one re-injected image).
 pub(crate) const PNG_RED: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
@@ -375,8 +376,8 @@ pub(crate) const PNG_GREEN: &str =
 pub(crate) const PNG_BLUE: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==";
 
-/// A real 3-frame (red/green/blue, 0.5s each = 1.5s) 4×4 animated GIF89a, for the
-/// "convert an animated GIF to a still format → first frame + warning" path.
+/// A real 3-frame (red/green/blue, 0.5s each = 1.5s) 4x4 animated GIF89a, for the
+/// "convert an animated GIF to a still format -> first frame + warning" path.
 pub(crate) const ANIM_GIF_3F: &str = "R0lGODlhBAAEAPAAAP8AAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAMgAAACwAAAAABAAEAAACBISPCQUAIfkEADIAAAAsAAAAAAQABACAAIAAAAAAAgSEjwkFACH5BAAyAAAALAAAAAAEAAQAgAAA/wAAAAIEhI8JBQA7";
 
 pub(crate) fn img_block(media: &str, data: &str) -> serde_json::Value {
@@ -474,9 +475,9 @@ pub(crate) const ACC_SESS: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 pub(crate) const ACC_SUB: &str = "c0ffeec0ffeec0ff";
 
-/// A `$HOME` whose single top-level transcript carries one record per §A–J disk-shape (each with a
+/// A `$HOME` whose single top-level transcript carries one record per section A-J disk-shape (each with a
 /// unique `zz<name>` token so a search targets it precisely), plus one subagent transcript whose
-/// opener seed exercises C9 (parent ⇨ self).
+/// opener seed exercises C9 (`parent ⇨ self`).
 pub(crate) fn acceptance_home() -> Home {
     let h = Home::new();
     h.write(
@@ -507,7 +508,7 @@ pub(crate) fn acceptance_home() -> Home {
             r#"{"type":"attachment","uuid":"att1","timestamp":"2026-06-07T05:00:22.000Z","attachment":{"type":"hook_success","note":"zzattach should not surface"}}"#, "\n",
         ),
     );
-    // C9: a subagent transcript whose opener seed is the delivered spawn prompt (parent ⇨ self).
+    // C9: a subagent transcript whose opener seed is the delivered spawn prompt (`parent ⇨ self`).
     h.write(
         &format!("{ACC_ENC}/{ACC_SESS}/subagents/agent-{ACC_SUB}.jsonl"),
         concat!(

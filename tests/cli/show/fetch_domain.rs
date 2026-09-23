@@ -429,7 +429,7 @@ fn the_shape_and_the_leaf_both_reach_json() {
     assert_eq!(fb["unmodeled"], serde_json::Value::Null, "{fb}");
 }
 
-// ── the headers law ──
+// -- the headers law --
 //
 // The key=value excerpt above is the ONE rendered path that walks a line's own values
 // without knowing what they are, so it is the one path an HTTP RESPONSE HEADER SET can

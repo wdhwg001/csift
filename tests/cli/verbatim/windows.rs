@@ -213,7 +213,7 @@ fn turns_turn_range_and_since_intersect() {
 #[test]
 fn turns_project_path_target_scans_the_project() {
     // A project-dir target (the encoded token) resolves every session under it. (A bare
-    // `csift turns` with NO target at all is a hard error - budget × everything; see
+    // `csift turns` with NO target at all is a hard error - budget x everything; see
     // `turns_requires_a_target`.)
     let h = turns_home();
     let out = h.run(&["verbatim", ENC, "--no-subagents", "--budget", "40000"]);
@@ -223,7 +223,7 @@ fn turns_project_path_target_scans_the_project() {
 
 #[test]
 fn turns_since_window_filters_turns() {
-    // A `--since` far in the future excludes every turn (timestamp-less or older) → no
+    // A `--since` far in the future excludes every turn (timestamp-less or older) -> no
     // selection. Exercises the time-window path in run_turns.
     let h = turns_home();
     let out = h.run(&[
@@ -303,7 +303,7 @@ fn turns_prints_its_scope_banner_for_a_lone_session_the_budget_skipped() {
 
 #[test]
 fn turns_clean_session_reports_no_skipped_lines() {
-    // A session with NO malformed lines → the skipped-lines footer is OMITTED (the
+    // A session with NO malformed lines -> the skipped-lines footer is OMITTED (the
     // `skipped_lines > 0` false arm).
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-000000000003";
@@ -363,7 +363,7 @@ fn turns_json_clean_session_emits_zero_skipped_terminator() {
 
 #[test]
 fn turns_main_fixture_text_reports_skipped_line() {
-    // The main fixture HAS a malformed line → the skipped-lines footer appears (the
+    // The main fixture HAS a malformed line -> the skipped-lines footer appears (the
     // `skipped_lines > 0` TRUE arm in both text + an explicit count).
     let h = turns_home();
     let out = h.run(&[
@@ -404,7 +404,7 @@ fn turns_json_main_fixture_has_skipped_record() {
 
 #[test]
 fn turns_empty_session_file_is_safe() {
-    // An empty jsonl (0 bytes) → mmap returns None → no turns, honest empty message.
+    // An empty jsonl (0 bytes) -> mmap returns None -> no turns, honest empty message.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-000000000006";
     h.write(&format!("{ENC}/{sess}.jsonl"), "");
@@ -466,7 +466,7 @@ fn turns_turn_range_excludes_out_of_window_turns() {
 #[test]
 fn turns_scan_skips_non_candidate_lines() {
     // A session containing NON-candidate records (a system metrics line, a
-    // file-history-snapshot) interleaved with real turns → the scan-time prefilter skips
+    // file-history-snapshot) interleaved with real turns -> the scan-time prefilter skips
     // them (the `!line_is_turn_candidate` true arm) without affecting the turns.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-000000000007";
@@ -492,7 +492,7 @@ fn turns_scan_skips_non_candidate_lines() {
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("ask before noise"), "{}", out.stdout);
     assert!(out.stdout.contains("reply after noise"), "{}", out.stdout);
-    // The non-candidate lines are silently skipped (not malformed → no skip count).
+    // The non-candidate lines are silently skipped (not malformed -> no skip count).
     assert!(
         !out.stdout.contains("malformed"),
         "non-candidate != malformed: {}",

@@ -20,7 +20,7 @@ fn search_unknown_session_errors() {
 
 #[test]
 fn search_empty_session_file_is_skipped() {
-    // A project whose session file is EMPTY → search_one_file's `mmap_bytes → None`
+    // A project whose session file is EMPTY -> search_one_file's `mmap_bytes -> None`
     // arm (empty file). The search succeeds with no matches.
     let h = Home::new();
     h.write(&format!("{ENC}/{SESS}.jsonl"), ""); // zero-byte session
@@ -36,7 +36,7 @@ fn search_empty_session_file_is_skipped() {
 #[test]
 fn search_skips_non_transcript_noise_lines() {
     // A session padded with attachment / file-history-snapshot / queue-operation lines (no
-    // role marker) → search's pre-JSON category prefilter drops them (the
+    // role marker) -> search's pre-JSON category prefilter drops them (the
     // `!line_is_transcript_candidate` TRUE arm) while still matching the real turn. (The
     // `compact_boundary` line IS kept by the prefilter (the boundary keep), but carries no
     // `carry` literal
@@ -62,7 +62,7 @@ fn search_timeline_interleaves_subagents_with_top_level_by_timestamp() {
     // The combined timeline is CHRONOLOGICAL, not file-grouped: a subagent exchange whose
     // turn began BETWEEN two parent turns must sort BETWEEN them - even though the subagent
     // file is scanned after the parent file. Parent turns at T=00 and T=10, subagent turn at
-    // T=05 → expected envelope order 00 (parent) · 05 (SUBAGENT) · 10 (parent).
+    // T=05 -> expected envelope order 00 (parent), 05 (SUBAGENT), 10 (parent).
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -94,7 +94,7 @@ fn search_timeline_interleaves_subagents_with_top_level_by_timestamp() {
         out.stdout
     );
 
-    // Chronological interleave: 00 (parent) · 05 (SUBAGENT, between) · 10 (parent).
+    // Chronological interleave: 00 (parent), 05 (SUBAGENT, between), 10 (parent).
     assert_eq!(
         envelopes[0]["ts_utc"],
         serde_json::json!("2026-06-07T05:00:00.000Z")

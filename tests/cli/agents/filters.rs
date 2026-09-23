@@ -34,7 +34,7 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
         "kind:agent rows present: {}",
         flat.stdout
     );
-    // Text render with BOTH subagents → both lifecycle blocks print.
+    // Text render with BOTH subagents -> both lifecycle blocks print.
     let text = h.run(&["agents", at(SESS).as_str()]);
     assert!(text.success && text.stdout.matches("triggered").count() >= 2);
 }

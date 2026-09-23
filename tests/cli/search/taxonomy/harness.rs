@@ -6,7 +6,7 @@ use crate::harness::*;
 
 #[test]
 fn acceptance_harness_notification_monitor() {
-    // §D4 / §G6 - a Monitor `<task-notification>` pulse (UNATTESTED in the corpus → synthetic) →
+    // sections D4 / G6 - a Monitor `<task-notification>` pulse (UNATTESTED in the corpus -> synthetic) ->
     // `harness.notification.monitor`, rendered as the `[monitor <id> <status>] <summary>` label.
     let h = acceptance_home();
     let out = acc(&h, "zzmonitor", "harness.notification.monitor");
@@ -25,7 +25,7 @@ fn acceptance_harness_notification_monitor() {
 
 #[test]
 fn acceptance_harness_command_and_interrupt() {
-    // §D8 <command-name> wrapper · §D9 <local-command-stdout> · §D10/§D11 the two interrupt markers.
+    // section D8 <command-name> wrapper, D9 <local-command-stdout>, D10 and D11 the two interrupt markers.
     let h = acceptance_home();
     for (oracle, token, selector) in [
         ("D8 invocation", "zzcmdargs", "harness.command.invocation"),
@@ -81,7 +81,7 @@ fn acceptance_harness_schedule_and_meta() {
 fn acceptance_compaction_summary_and_boundary_searchable() {
     // The isCompactSummary record is a `type:"user"` record, so it is searchable as
     // `harness.compaction.summary`. The `compact_boundary` is a `type:"system"` record and is
-    // search-surfaced too - the §7 prefilter keeps it (one memmem on `compact_boundary`) and
+    // search-surfaced too - the section 7 prefilter keeps it (one memmem on `compact_boundary`) and
     // `record_raw_text` renders its top-level content + compactMetadata as the
     // match/excerpt, so compaction points can be enumerated and inspected.
     let h = acceptance_home();
@@ -115,14 +115,14 @@ fn acceptance_compaction_summary_and_boundary_searchable() {
 
 #[test]
 fn acceptance_excluded_and_unmarked_meta_carry_no_label() {
-    // §E an `attachment` carries no label; §J an isMeta record matching no harness marker is EXCLUDED
+    // section E an `attachment` carries no label; section J an isMeta record matching no harness marker is EXCLUDED
     // (never `user.message`). Neither surfaces under ANY selector.
     let h = acceptance_home();
     for (oracle, token) in [
         ("E attachment", "zzattach"),
         ("J isMeta-unmarked", "zzunmarked"),
     ] {
-        // No `-t` → every label eligible; still nothing, because classify returns empty.
+        // No `-t` -> every label eligible; still nothing, because classify returns empty.
         let out = h.run(&["search", token, &at(ACC_SESS), "--no-subagents"]);
         assert!(out.success, "{oracle}: stderr {}", out.stderr);
         assert!(

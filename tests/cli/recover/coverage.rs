@@ -40,7 +40,7 @@ fn recover_coverage_counts_and_boundary() {
 
 #[test]
 fn recover_coverage_no_boundaries_says_none() {
-    // A clean file with only a full Read (no integrity issues) → no boundaries.
+    // A clean file with only a full Read (no integrity issues) -> no boundaries.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -161,8 +161,8 @@ fn recover_coverage_reports_unanchorable_holes() {
 
 #[test]
 fn recover_coverage_zero_seen_total_reports_zero_percent() {
-    // A coverage run where the reconstruction is empty (un-anchorable edit only) → known 0,
-    // seen_total 0 → the `if total > 0` percent guard takes its FALSE side (0%), and the
+    // A coverage run where the reconstruction is empty (un-anchorable edit only) -> known 0,
+    // seen_total 0 -> the `if total > 0` percent guard takes its FALSE side (0%), and the
     // covered-ranges line shows "(none)".
     let h = recover_empty_reconstruction_home();
     let out = h.run(&[
@@ -260,7 +260,7 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
             // first-class bash-write anchor (not a mere heuristic touch).
             r#"{"type":"assistant","uuid":"ab","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"printf 'B1\nB2\nB3\n' > /p/cfg.txt"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"cb","timestamp":"2026-06-07T05:00:01.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b0","content":""}]}}"#, "\n",
-            // Direct Edit with no prior Read → fails.
+            // Direct Edit with no prior Read -> fails.
             r#"{"type":"assistant","uuid":"ae","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_nr","name":"Edit","input":{"file_path":"/p/cfg.txt","old_string":"B2","new_string":"B2-edited"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"ce","timestamp":"2026-06-07T05:00:02.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_nr","content":"File has not been read yet. Read it first before writing to it.","is_error":true}]}}"#, "\n",
         ),
@@ -323,7 +323,7 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
 #[test]
 fn recover_coverage_groups_multiple_sessions_with_separator() {
     // Two sessions BOTH touching the same file via a positional project-path target (no
-    // --session) → the coverage renderer prints two SESSION headers separated by a blank
+    // --session) -> the coverage renderer prints two SESSION headers separated by a blank
     // line (the `if !*first` separator arm).
     let h = Home::new();
     let sess_a = "aaaaaaaa-1111-1111-1111-111111111111";

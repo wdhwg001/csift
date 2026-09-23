@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn verbatim_header_carries_budget_accounting_in_json_and_spanned_of_total_in_text() {
     // A bare `spanned N compaction boundaries` reads as a TRANSCRIPT property when it is a
-    // QUERY property (budget-window-relative), so the text prints `spanned K of N … in
+    // QUERY property (budget-window-relative), so the text prints `spanned K of N ... in
     // scope`, and the JSON header carries the full budget accounting the text header
     // shows (the machine format must never be thinner than the human one).
     let h = populated_home();
@@ -99,7 +99,7 @@ fn turns_budget_respected_real_emitted_chars() {
     // A check reading back the reported "chars used" number, or re-deriving the JSON sum
     // with a hardcoded `+ 24`, is circular: neither measures the real document.
     //
-    // The contract binds the default TEXT form (SPEC §6.8 - budget allocation + text output).
+    // The contract binds the default TEXT form (SPEC section 6.8 - budget allocation + text output).
     // We bound BOTH the stdout document (doc-header-block + banners + units, minus the
     // operational trailers) AND the `--out` file (the documented verbatim reconstruction,
     // which omits the stdout-only header block) - so every component the contract lists is
@@ -304,7 +304,7 @@ fn turns_json_single_side_units_present_under_tight_budget() {
 #[test]
 fn turns_budget_is_chars_only() {
     // `--budget` is CHARS, period (the token-unit mode and its silent-4x default trap
-    // are gone; ≈4 chars/token is a documented sizing rule of thumb, not a flag).
+    // are gone; ~4 chars/token is a documented sizing rule of thumb, not a flag).
     let h = turns_home();
     let out = h.run(&[
         "verbatim",

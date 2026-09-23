@@ -494,7 +494,7 @@ fn an_unrelated_system_record_between_the_two_does_not_break_the_pairing() {
     );
 }
 
-/// The §7f whole-file gate must not prune a file whose ONLY match is the FABRICATED boundary
+/// The section 7f whole-file gate must not prune a file whose ONLY match is the FABRICATED boundary
 /// text: `messagesSummarized=66` appears nowhere in the raw line (the record carries
 /// `"messagesSummarized":66`), so the literal prefilter cannot see it and only the
 /// `compact_boundary` synth marker keeps the file in the scan.

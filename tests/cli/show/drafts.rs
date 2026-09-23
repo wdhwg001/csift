@@ -1,7 +1,7 @@
 //! `user.unsent`: a draft stays outside turn numbering but is searchable under its own
 //! leaf; the collapse count is disclosed; addresses still fetch. Every one of those
 //! answers is derived from the SURVIVAL AXIS, so the header carries the axis's own
-//! wording, "draft (superseded …)".
+//! wording, "draft (superseded ...)".
 
 use crate::harness::*;
 
@@ -175,7 +175,7 @@ fn show_renders_a_metadata_line_under_its_own_leaf() {
     );
 }
 
-// ── the SURVIVAL AXIS through an address ──
+// -- the SURVIVAL AXIS through an address --
 
 const RSESS: &str = "2b1a0f9e-8d7c-4465-9231-0e9d8c7b6a5f";
 

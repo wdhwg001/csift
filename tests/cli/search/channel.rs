@@ -8,9 +8,9 @@ const ENC: &str = "-Users-dev-relay-harbor";
 const SESS: &str = "00000000-0000-4000-8000-000000000011";
 const RELAY: &str = "aRelay-0123456789abcdef";
 
-/// L1 user opener · L2 a delivery's first chunk (a full header, so it names its sender) ·
-/// L3 an ordinary hook context (the control) · L4 the delivery's continuation chunk (no
-/// sender in the header) · L5 a human quoting the envelope in prose · L6 assistant text.
+/// L1 user opener, L2 a delivery's first chunk (a full header, so it names its sender),
+/// L3 an ordinary hook context (the control), L4 the delivery's continuation chunk (no
+/// sender in the header), L5 a human quoting the envelope in prose, L6 assistant text.
 fn channel_home() -> Home {
     let h = Home::new();
     h.write(

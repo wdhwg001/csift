@@ -6,7 +6,7 @@ use crate::harness::*;
 fn turns_teammate_opener_renders_clean_inbound_comm() {
     // An inbound `<teammate-message>` opener (it OPENS a turn, so the turn count is
     // unchanged) must render as `agent.communication.inbox  <from> ⇨ self` with a CLEAN body
-    // (the relay preamble, the `<teammate-message …>` wrapper tags, and the trailing harness
+    // (the relay preamble, the `<teammate-message ...>` wrapper tags, and the trailing harness
     // security footer all stripped) - NOT the raw XML blob dumped into the `▽ USER` lane.
     let h = Home::new();
     let sess = "dddddddd-eeee-ffff-0000-111111111111";
@@ -94,7 +94,7 @@ fn turns_text_brands_subagent_uniformly() {
 
 #[test]
 fn turns_single_automation_trigger_uses_singular_header() {
-    // Exactly ONE automation trigger → the SINGULAR header arm ("1 automation trigger").
+    // Exactly ONE automation trigger -> the SINGULAR header arm ("1 automation trigger").
     let h = Home::new();
     let sess = "11111111-2222-3333-4444-555555555555";
     let lines = [
@@ -131,7 +131,7 @@ fn turns_single_automation_trigger_uses_singular_header() {
 
 #[test]
 fn turns_json_emits_session_header_and_structured_automation() {
-    // JSON consumers get (a) a leading {kind:"header",…} object carrying the
+    // JSON consumers get (a) a leading {kind:"header",...} object carrying the
     // human/automation split + budget fan-out, and (b) STRUCTURED automation attribution on
     // the user-segment object (is_automation + trigger_kind + task_id + status) - not just a
     // text prefix to regex. A monitor-tick pulse renders trigger_kind "monitor".
@@ -226,7 +226,7 @@ fn turns_surfaces_image_ids_under_the_user_turn() {
 #[test]
 fn turns_lines_elided_describes_the_cut_not_the_whole_message() {
     // A 12-line assistant body, each line 200 chars: normalized it is 12*200 + 11 = 2411
-    // chars with its newlines at 200, 401, 602, …, 2210. The 900-char assistant cap keeps
+    // chars with its newlines at 200, 401, 602, ..., 2210. The 900-char assistant cap keeps
     // head 594 + tail 306, so the cut removes [594, 2105) - the EIGHT newlines from 602 to
     // 2009. The whole body carries ELEVEN; the note must report the eight the cut removed.
     let h = Home::new();
@@ -298,7 +298,7 @@ fn turns_lines_elided_describes_the_cut_not_the_whole_message() {
 
 #[test]
 fn turns_ellipsis_role_asymmetry_and_counts() {
-    // The huge live round-trip: user > 600 → head 360 / tail 240; assistant > 900 →
+    // The huge live round-trip: user > 600 -> head 360 / tail 240; assistant > 900 ->
     // head 594 / tail 306. The assistant head is strictly larger. The text output shows
     // the head + the elision marker + the tail; JSON carries the exact elided counts.
     let h = turns_home();
@@ -464,7 +464,7 @@ fn turns_line_numbers_present_in_text_and_json() {
 #[test]
 fn turns_no_genuine_turns_emits_honest_empty_message() {
     // A session with NO genuine user turns (only a summary + an isMeta pseudo-turn +
-    // tool noise) → nothing selected, an honest "no turns selected" message (never a
+    // tool noise) -> nothing selected, an honest "no turns selected" message (never a
     // fabricated turn). This is the only empty-selection path: the most-recent complete
     // turn is always force-included when one exists (load-bearing).
     let h = Home::new();

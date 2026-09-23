@@ -28,8 +28,8 @@ fn search_tool_response_names_the_tool_it_answers() {
 #[test]
 fn turns_and_search_label_automation_triggers() {
     // A `<task-notification>` automation trigger opens a turn but must render as the
-    // parsed `[<kind> <id> …]` ATTRIBUTION label - with the TRUE kind parsed from the
-    // summary (a `Background command "…"` summary renders `background-command`, never a
+    // parsed `[<kind> <id> ...]` ATTRIBUTION label - with the TRUE kind parsed from the
+    // summary (a `Background command "..."` summary renders `background-command`, never a
     // blanket `workflow`) - never the raw XML blob - and `turns` reports the automation
     // count in its header.
     let h = Home::new();
@@ -39,7 +39,7 @@ fn turns_and_search_label_automation_triggers() {
         r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Starting the build now."}]}}"#,
         r#"{"type":"user","uuid":"n0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf12abc</task-id>\n<tool-use-id>toolu_z</tool-use-id>\n<output-file>/tmp/wf12abc.output</output-file>\n<status>completed</status>\n<summary>Background command \"Run the build\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
         r#"{"type":"assistant","uuid":"a1","parentUuid":"n0","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The build finished cleanly."}]}}"#,
-        // A SECOND automation trigger → exercises the PLURAL header arm (N == 2).
+        // A SECOND automation trigger -> exercises the PLURAL header arm (N == 2).
         r#"{"type":"user","uuid":"n1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf34def</task-id>\n<status>completed</status>\n<summary>Background command \"Run the tests\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
         r#"{"type":"assistant","uuid":"a2","parentUuid":"n1","timestamp":"2026-06-07T05:20:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"All tests passed."}]}}"#,
     ];

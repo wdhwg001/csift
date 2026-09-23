@@ -80,7 +80,7 @@ fn agents_via_project_path_target() {
 
 #[test]
 fn agents_all_projects_default_scan() {
-    // No PATH and no --session → scan every project (the all_project_dirs branch).
+    // No PATH and no --session -> scan every project (the all_project_dirs branch).
     let h = populated_home();
     let out = h.run(&["agents"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -89,7 +89,7 @@ fn agents_all_projects_default_scan() {
 
 #[test]
 fn agents_path_with_no_sessions_and_no_session_flag_is_empty_not_error() {
-    // A project dir that exists but has ZERO session files, with NO --session given →
+    // A project dir that exists but has ZERO session files, with NO --session given ->
     // `resolve_target_sessions` finds no files but does NOT bail (the `if let
     // Some(sid)` FALSE arm of the empty-files guard). Output: "no subagents found".
     let h = Home::new();

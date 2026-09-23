@@ -22,7 +22,7 @@ fn agents_text_returned_files_and_tree_render() {
         "returned line missing: {}",
         out.stdout
     );
-    // The with-files line renders (`files … changed` or `files (none)`).
+    // The with-files line renders (`files ... changed` or `files (none)`).
     assert!(
         out.stdout.contains("files"),
         "files line missing: {}",
@@ -78,7 +78,7 @@ fn agents_json_rows() {
 
 #[test]
 fn agents_reports_skipped_lines_note() {
-    // A subagent transcript with a malformed line → the per-row "malformed line(s)
+    // A subagent transcript with a malformed line -> the per-row "malformed line(s)
     // skipped" note (agents.rs render skipped_lines arm).
     let h = Home::new();
     h.write(
@@ -122,7 +122,7 @@ fn agents_text_lists_lifecycle_rows() {
 
 #[test]
 fn agents_with_files_renders_changed_list_and_summary_json() {
-    // A subagent that ACTUALLY changed a file → the `--with-files` text path renders the
+    // A subagent that ACTUALLY changed a file -> the `--with-files` text path renders the
     // `files N changed` + per-file create/op tag lines (vs the `(none)` arm), and
     // `--order-by start` exercises the start-axis label. Also covers files `--summary
     // --format json`.
@@ -186,7 +186,7 @@ fn agents_with_files_renders_changed_list_and_summary_json() {
 
 #[test]
 fn agents_groups_multiple_sessions_with_separator() {
-    // Two sessions each with a subagent → the render groups rows under per-session
+    // Two sessions each with a subagent -> the render groups rows under per-session
     // headers separated by a blank line (the `last_session.is_some()` separator arm).
     let h = Home::new();
     let sess_a = "aaaaaaaa-0000-0000-0000-000000000001";

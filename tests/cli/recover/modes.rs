@@ -116,7 +116,7 @@ fn recover_two_modes_conflict() {
 
 #[test]
 fn recover_turn_range_intersects_with_time_window() {
-    // --turn ∧ --since/--until intersect (both filters AND); a window that
+    // --turn and --since/--until intersect (both filters AND); a window that
     // excludes everything still succeeds with an honest empty reconstruction.
     let h = recover_scenario_home();
     let out = h.run(&[
@@ -141,7 +141,7 @@ fn recover_turn_range_intersects_with_time_window() {
 #[test]
 fn recover_file_required_for_all_modes() {
     let h = recover_scenario_home();
-    // Every mode (patches / at / coverage) requires --file → each bails without it.
+    // Every mode (patches / at / coverage) requires --file -> each bails without it.
     let at_sess = at(SESS);
     for mode in [
         vec!["recover", at_sess.as_str(), "--patches"],
@@ -285,7 +285,7 @@ fn recover_restore_partial_file_errors_pointing_to_salvage() {
         "no boundary list when there was no external change: {}",
         out.stderr
     );
-    // …but the hidden-change caveat fires even without a boundary.
+    // ...but the hidden-change caveat fires even without a boundary.
     assert!(
         out.stderr.contains("does not hunt for hidden changes"),
         "caveat present even with no boundary: {}",
@@ -425,7 +425,7 @@ fn recover_turn_range_alone_is_accepted() {
         "a bare --turn is not a conflict: {}",
         out.stderr
     );
-    // Turn 0 only → the first segment's reads/edits are in scope; the turn-1 boundary is not.
+    // Turn 0 only -> the first segment's reads/edits are in scope; the turn-1 boundary is not.
     assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
 }
 

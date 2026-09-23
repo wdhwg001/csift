@@ -163,7 +163,7 @@ fn scope_banner_uniform_across_spanning_subcommands() {
     );
 }
 
-/// The leading `{kind:"header", …}` JSON scope record is emitted by every spanning
+/// The leading `{kind:"header", ...}` JSON scope record is emitted by every spanning
 /// subcommand's JSON, reusing turns' three span field names.
 #[test]
 fn scope_json_header_uniform_across_spanning_subcommands() {

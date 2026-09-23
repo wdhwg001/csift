@@ -82,7 +82,7 @@ fn recover_at_json_out_writes_partial_snapshot_artifact() {
 
 #[test]
 fn recover_at_json_skips_session_with_events_but_no_known_content() {
-    // JSON at-mode: same shape → no snapshot object, only the summary with sessions == 0.
+    // JSON at-mode: same shape -> no snapshot object, only the summary with sessions == 0.
     let h = recover_empty_reconstruction_home();
     let out = h.run(&[
         "recover",
@@ -162,7 +162,7 @@ fn recover_json_at_skips_session_with_no_seen_total() {
 #[test]
 fn recover_at_json_line_range_outside_known_keeps_seen_total() {
     // The JSON at-mode twin of the text test: a windowed read sets seen_total, but a
-    // `--line-range` selecting no known line empties `known` while seen_total stays Some →
+    // `--line-range` selecting no known line empties `known` while seen_total stays Some ->
     // the JSON renderer's `known.is_empty() && seen_total.is_none()` second operand is FALSE
     // (the snapshot is emitted, carrying the gap up to the seen total).
     let h = Home::new();

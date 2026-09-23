@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn files_spans_subagent_mutations() {
-    // A subagent that Writes a file → its mutation is attributed under the session by
+    // A subagent that Writes a file -> its mutation is attributed under the session by
     // default (OMC fan-out edits happen in subagents). --no-subagents drops it.
     let h = Home::new();
     h.write(

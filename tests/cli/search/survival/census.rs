@@ -77,7 +77,7 @@ fn count_by_turn_gives_the_abandoned_records_their_own_bucket_never_t0() {
 #[test]
 fn a_file_the_whole_file_gate_proves_cannot_match_builds_no_chain() {
     let h = one_turn_six_abandoned();
-    // A pattern the file cannot carry: §7f proves it pre-JSON and skips record building
+    // A pattern the file cannot carry: section 7f proves it pre-JSON and skips record building
     // entirely, so no spine row is lifted and no survival fact is claimed.
     let gated = h.run(&[
         "search",

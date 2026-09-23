@@ -170,7 +170,7 @@ fn plan_audit_all_clear_and_multi_owner_attribution() {
     );
 }
 
-// ── slug-only binding (Claude Code's first-slug law; the forked-session shape) ──
+// -- slug-only binding (Claude Code's first-slug law; the forked-session shape) --
 
 const SLUG_ENC: &str = "-Users-dev-example-project";
 

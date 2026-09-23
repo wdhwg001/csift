@@ -24,7 +24,7 @@ fn image_extracts_real_bytes_to_dir() {
         &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
         "not a PNG"
     );
-    // media_type drives the extension: image/jpeg → .jpg.
+    // media_type drives the extension: image/jpeg -> .jpg.
     assert!(out_dir.join("0a1b2c3d-L3i1.jpg").exists());
     assert!(out_dir.join("0a1b2c3d-L3i2.png").exists());
 }
@@ -51,7 +51,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
         by_turn.stdout
     );
 
-    // Time window: r2 is at 06:00, r0 at 05:00 → --since 05:30 isolates the line-3 one.
+    // Time window: r2 is at 06:00, r0 at 05:00 -> --since 05:30 isolates the line-3 one.
     let by_time = h.run(&[
         "image",
         at(SESS).as_str(),
@@ -64,7 +64,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
     assert!(by_time.success, "stderr: {}", by_time.stderr);
     assert!(by_time.stdout.contains("L3i1"), "{}", by_time.stdout);
 
-    // uuid prefix → the line-3 record.
+    // uuid prefix -> the line-3 record.
     let by_uuid = h.run(&[
         "image",
         at(SESS).as_str(),
@@ -101,7 +101,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
 fn image_converts_by_out_path_extension() {
     // The --out path's EXTENSION drives the format (the `convert in out.jpg` idiom): a single
     // image written to a file with a recognized image extension is CONVERTED to it; a png source
-    // → a .png path is a raw passthrough. There is no separate `--as` flag.
+    // -> a .png path is a raw passthrough. There is no separate `--as` flag.
     let h = image_home(); // r0 L1i1 is a real PNG.
     let png_magic = &[0x89u8, b'P', b'N', b'G'][..];
     for (ext, magic, len) in [
@@ -177,7 +177,7 @@ fn image_animated_gif_to_still_takes_first_frame() {
     });
     h.write(&format!("{ENC}/{SESS}.jsonl"), &format!("{r0}\n"));
 
-    // A .png out path flattens the animated GIF to a still → FIRST frame + a warning (frames + s).
+    // A .png out path flattens the animated GIF to a still -> FIRST frame + a warning (frames + s).
     let f = h.root.join("frame.png");
     let out = h.run(&[
         "image",
@@ -395,7 +395,7 @@ fn image_lists_images_with_stable_ids() {
 fn image_ambiguous_hash_n_errors_with_occurrence_list() {
     let h = ambiguous_hash_home();
 
-    // Listing surfaces the `#N` handle and shows BOTH #1 images (distinct content → not deduped).
+    // Listing surfaces the `#N` handle and shows BOTH #1 images (distinct content -> not deduped).
     let list = h.run(&["image", at(SESS).as_str(), "--no-subagents"]);
     assert!(list.success, "stderr: {}", list.stderr);
     assert!(list.stdout.contains("#1") && list.stdout.contains("#2"));
@@ -405,7 +405,7 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
         list.stdout
     );
 
-    // `--id 1` is AMBIGUOUS → it must ERROR (not silently pick one) and list every occurrence
+    // `--id 1` is AMBIGUOUS -> it must ERROR (not silently pick one) and list every occurrence
     // with its turn / locator / uuid / time / excerpt so the consumer can disambiguate.
     let err = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "1"]);
     assert!(!err.success, "ambiguous 1 must fail, got:\n{}", err.stdout);
@@ -427,7 +427,7 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
         err.stderr
     );
 
-    // `--id 2` is UNIQUE (only the line-1 red) → resolves fine.
+    // `--id 2` is UNIQUE (only the line-1 red) -> resolves fine.
     let two = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "2"]);
     assert!(two.success, "stderr: {}", two.stderr);
     assert!(two.stdout.contains("L1i2"), "{}", two.stdout);

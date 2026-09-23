@@ -51,8 +51,8 @@ fn search_sendmessage_dedups_to_comm_sent_with_direction() {
 fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
     // A `<task-notification>` carrying a `<result>` is the background agent's report, so it
     // classifies BOTH `harness.notification.*` (the pulse) AND `agent.communication.inbox`
-    // (child ⇨ self, via the embedded `<tool-use-id>`). The render emits ONE hit PER label
-    // (per-section), the inbox hit carrying the RESOLVED child ⇨ self direction - and the
+    // (`child ⇨ self`, via the embedded `<tool-use-id>`). The render emits ONE hit PER label
+    // (per-section), the inbox hit carrying the RESOLVED `child ⇨ self` direction - and the
     // owner's own uuid renders as `self`.
     let enc = "-Users-x-bg";
     let sess = "12121212-3434-5656-7878-9a9a9a9a9a9a";
@@ -78,7 +78,7 @@ fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
         r#"{"agentType":"executor","toolUseId":"toolu_bg"}"#,
     );
 
-    // Default -t (all): the ONE notification record → TWO per-section hits.
+    // Default -t (all): the ONE notification record -> TWO per-section hits.
     let j = h.run(&[
         "search",
         "zzboth",
@@ -130,7 +130,7 @@ fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
 #[test]
 fn search_batched_cross_family_sections_render_per_section() {
     // ONE `type:user` record batching a `<task-notification>` AND an inbound
-    // `<teammate-message>` of MIXED family → the render emits ONE hit PER section, each with its
+    // `<teammate-message>` of MIXED family -> the render emits ONE hit PER section, each with its
     // OWN label + direction (not one collapsed richest-label hit). A shared token in both sections
     // surfaces both; `labels` lists the full union on each hit.
     let enc = "-Users-x-mix";
@@ -267,7 +267,7 @@ fn search_subagent_scope_spawn_lookup_resolves_in_subagent_spawn_and_return() {
         r#"{"agentType":"executor","toolUseId":"toolu_outerA"}"#,
     );
     // Grandchild B: discovered under the SAME parent dir; its spawn `toolUseId` is the IN-SUBAGENT
-    // Task tool_use id, so the lookup (built from the parent) joins toolu_inner → B.
+    // Task tool_use id, so the lookup (built from the parent) joins toolu_inner -> B.
     h.write(
         &format!("{enc}/{sess}/subagents/agent-{agent_b}.jsonl"),
         concat!(

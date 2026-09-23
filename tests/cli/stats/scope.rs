@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn stats_spans_subagents_by_default_and_restricts() {
-    // Mutation pin on the span contract (§ subcommand spanning default): `stats` spans the
+    // Mutation pin on the span contract (section subcommand spanning default): `stats` spans the
     // session's subagent transcripts by default; `--no-subagents` restricts to the top level.
     let h = Home::new();
     subagents_only_scenario(&h);

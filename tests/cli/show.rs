@@ -127,7 +127,7 @@ fn show_by_turn_fetches_the_whole_turn() {
         "turn 1 must not bleed into turn 0: {}",
         out1.stdout
     );
-    // `-1..` = the last turn (the tail-peek / monitoring intent → `show`, not a special mode).
+    // `-1..` = the last turn (the tail-peek / monitoring intent -> `show`, not a special mode).
     let last = h.run(&["show", t.as_str(), "--turn", "-1.."]);
     assert!(
         last.stdout.contains("now explain the panic path"),
@@ -182,7 +182,7 @@ fn show_line_fetches_the_record_in_full() {
 #[test]
 fn show_line_renders_uncapped() {
     let h = populated_home();
-    // L2 = the assistant thinking + agent-text record. Fetched → full (no excerpt cap).
+    // L2 = the assistant thinking + agent-text record. Fetched -> full (no excerpt cap).
     let out = h.run(&["show", at(SESS).as_str(), "--line", "2"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -279,7 +279,7 @@ fn show_range_clamps_but_errors_when_empty() {
 #[test]
 fn show_requires_an_address() {
     let h = populated_home();
-    // No --line/--uuid → a pointed error naming the file (never a whole-transcript dump).
+    // No --line/--uuid -> a pointed error naming the file (never a whole-transcript dump).
     let out = h.run(&["show", at(SESS).as_str()]);
     assert!(!out.success);
     assert!(
@@ -441,7 +441,7 @@ fn show_turn_oob_and_flood_guard() {
 fn show_multi_transcript_target_errors() {
     // A project dir holding SEVERAL sessions is ambiguous - show needs exactly one.
     // (A dir that unambiguously holds ONE top-level session is accepted, like the resolver
-    // everywhere else: unambiguous ⇒ resolved.)
+    // everywhere else: unambiguous => resolved.)
     let (h, _sess, _hex) = show_subagent_home();
     h.write(
         "-Users-testuser-Projects-linehex/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.jsonl",

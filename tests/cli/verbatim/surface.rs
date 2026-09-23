@@ -95,7 +95,7 @@ fn turns_old_subcommand_name_gets_the_rename_error() {
         out.stderr
     );
     // Hidden: no COMMAND ROW for it in the root help (a clap row is `  turns` alone or
-    // `turns` + 2+ spaces + about; wrapped PROSE lines like "turns a compaction summary…"
+    // `turns` + 2+ spaces + about; wrapped PROSE lines like "turns a compaction summary..."
     // are not rows and must not trip this).
     let help = h.run(&["--help"]);
     assert!(

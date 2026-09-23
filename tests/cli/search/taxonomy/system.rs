@@ -17,11 +17,11 @@ const SESS: &str = "3b3b3b3b-4c4c-4d4d-8e8e-5f5f5f5f5f5f";
 
 /// One transcript carrying a specimen of every leaf this file covers.
 ///
-/// L1 the human · L2 refusal-with-fallback · L3 refusal-without · L4 the api_error HTTP
-/// shape, the one that carries response headers · L5 informational · L6 agents_killed ·
-/// L7 the slash wrapper the stdout record wraps · L8 local_command · L9 the CronCreate
-/// result that armed the task · L10 the cron fire record · L11 the wakeup fire record ·
-/// L12 the fallback-served turn · L13 the api_error CONNECTION shape.
+/// L1 the human, L2 refusal-with-fallback, L3 refusal-without, L4 the api_error HTTP
+/// shape, the one that carries response headers, L5 informational, L6 agents_killed,
+/// L7 the slash wrapper the stdout record wraps, L8 local_command, L9 the CronCreate
+/// result that armed the task, L10 the cron fire record, L11 the wakeup fire record,
+/// L12 the fallback-served turn, L13 the api_error CONNECTION shape.
 ///
 /// BOTH api_error lines carry a MEASURED key set (claim CLS-062): `{error, headers,
 /// requestID, status, type}` on L4, which is the shape of all 5 header-bearing records on

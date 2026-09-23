@@ -6,7 +6,7 @@ use crate::harness::*;
 fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     // `--agent-msgs rich` over the long-run turn: the rich first / sudden-rich middle /
     // fused body survive verbatim; the pure-declaration middles collapse into a
-    // placeholder carrying a fetchable L{a}–L{b} range. `eot-only` shows ONLY the EOT, so
+    // placeholder carrying a fetchable L{a}-L{b} range. `eot-only` shows ONLY the EOT, so
     // the two modes render different documents from one turn.
     let h = turns_home();
     let rich = h.run(&[
@@ -67,16 +67,16 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
 #[test]
 fn turns_default_longest_restores_substance_and_drops_declarations() {
     // The NEW DEFAULT (`longest`, no flag) over the long-run fixture turn. The agent run's
-    // char lengths are: AGENTRICHFIRST=43, decls 26–34, AGENTRICHMID=45, FUSEDTAIL=72
+    // char lengths are: AGENTRICHFIRST=43, decls 26-34, AGENTRICHMID=45, FUSEDTAIL=72
     // (the LONGEST), AGENTEOT=35. So the default keeps:
-    //   • FUSEDTAIL - the LONGEST (72 chars) → the substantive Rich Response.
-    //   • AGENTRICHMID - a RICH middle (file:line + ratio) → a mid-run major finding.
+    //   - FUSEDTAIL - the LONGEST (72 chars) -> the substantive Rich Response.
+    //   - AGENTRICHMID - a RICH middle (file:line + ratio) -> a mid-run major finding.
     // and COLLAPSES everything else into placeholders, INCLUDING:
-    //   • AGENTRICHFIRST - a SHORT first (43 < 280 rich-min) and not the longest → dropped
+    //   - AGENTRICHFIRST - a SHORT first (43 < 280 rich-min) and not the longest -> dropped
     //     (proves the first is kept only when SUBSTANTIVE, not merely rich/present).
-    //   • AGENTEOT - a SHORT, non-rich LAST (the ~35-char throwaway wrap-up) → dropped
+    //   - AGENTEOT - a SHORT, non-rich LAST (the ~35-char throwaway wrap-up) -> dropped
     //     (THE headline: the last is NOT kept unconditionally; the substance is).
-    //   • the pure LETMEDECL declarations.
+    //   - the pure LETMEDECL declarations.
     // This is exactly the substance a last-only pick silently drops, plus the deliberate
     // dropping of the throwaway last.
     let h = turns_home();
@@ -126,7 +126,7 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
 
 #[test]
 fn turns_dedup_demotes_summary_match_never_drops() {
-    // Turn 0's user ("the very first ask...") is quoted verbatim by SUMMARY #1's §6.
+    // Turn 0's user ("the very first ask...") is quoted verbatim by SUMMARY #1's section 6.
     // BUT turn 0 sits BEFORE older boundaries (compactions_before > 0), so it is NOT
     // deduped (older summary content is gone from context). To exercise live-region
     // dedup we check the NEWEST summary's quotes against live turns; the fixture's live
@@ -173,7 +173,7 @@ fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
         r#"{"type":"user","uuid":"u0","cwd":"/Users/x/r","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"HUMAN-QUESTION-MARKER please explain the carry-propagation bug in detail"}}"#.to_string(),
         r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The carry is the partial line held across a chunk boundary; here is the full explanation of the propagation path and the fix."}]}}"#.to_string(),
     ];
-    // SEVEN newer automation pulses (each a round-trip pulse→ack) - recency-first, these
+    // SEVEN newer automation pulses (each a round-trip pulse->ack) - recency-first, these
     // would be picked before the human turn and (under the bug) consume the floor.
     for i in 0..7 {
         lines.push(format!(
@@ -206,7 +206,7 @@ fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
 
 #[test]
 fn turns_fidelity_beats_summary_verbatim_count() {
-    // The summary holds ~1 verbatim assistant quote (§9) + a handful of clipped §6
+    // The summary holds ~1 verbatim assistant quote (section 9) + a handful of clipped section 6
     // bullets. `turns` restores MANY more verbatim units. Assert concrete counts:
     // >= 3 restored user units and >= 3 restored assistant units, far exceeding the
     // summary's single verbatim assistant quote.

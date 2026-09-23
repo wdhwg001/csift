@@ -7,9 +7,9 @@ use crate::harness::*;
 const ENC: &str = "-Users-dev-example-project";
 const SESS: &str = "7a6b5c40-3d2e-4f1a-8b9c-0d1e2f3a4b5c";
 
-/// L1 user · L2 queued human text · L3 queued automation rider · L4 dequeue (no content) ·
-/// L5 assistant · L6 stop-hook ledger · L7 turn duration · L8 away recap · L9 snapshot ·
-/// L10 delta · L11 the queued text removed with a reason.
+/// L1 user, L2 queued human text, L3 queued automation rider, L4 dequeue (no content),
+/// L5 assistant, L6 stop-hook ledger, L7 turn duration, L8 away recap, L9 snapshot,
+/// L10 delta, L11 the queued text removed with a reason.
 fn promoted_home() -> Home {
     let h = Home::new();
     h.write(
