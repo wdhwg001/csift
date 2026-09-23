@@ -3024,14 +3024,14 @@ about 2.3 percent of CPU for 3.1 percent more output, and the whole-scope JSON d
 9.2 percent of CPU for 17.6 percent more output: both SUB-LINEAR in the bytes they add,
 which is the strongest statement available while the fields ship.
 
-### 7h. The taxonomy: the INTEGRATION pass measured, the whole rewrite pending
+### 7h. The taxonomy: the INTEGRATION pass, and the WHOLE REWRITE against the last release
 
 **What this section measures, and what it does not.** The taxonomy rewrite landed as six
 family branches merged onto one commit, and then an integration pass on top of that commit.
 The A/B below has arm A at the MERGED commit, so what it measures is the INTEGRATION
 pass - the shared-engine changes, the render fixes and the docs that ride with them - and
-not the rewrite as a whole. The rewrite's own cost against a pre-taxonomy build is a
-separate measurement, still to be run; its shape is named at the end of this section. Read every
+not the rewrite as a whole. The rewrite's own cost against the last installed release is
+the separate measurement at the end of this section. Read every
 number here as "what the integration pass cost on top of the picked taxonomy", which is the
 question it can answer.
 
@@ -3086,14 +3086,46 @@ hour than it cost. The per-record widths a size-dependent cost would have to tra
 are pinned exactly instead (`size_of::<Record>()` 1,376 and `size_of::<SpineRow>()` 72,
 both unchanged by this version).
 
-**PENDING: the whole rewrite, against a pre-taxonomy build.** That is a different run and
-it has not been made. Its shape: arm A the last installed release before the rewrite,
-arm B this tip, the same rotated interleaved driver at the same 21 reps, over all THREE
-size classes - tiny, compacted, and the 38-row LANDMARK class this pass skipped - on an
-IDLE host, so the control band is narrow enough to carry a directional claim about a
-rewrite rather than about one pass over it. Until that runs, csift states no whole-rewrite
-cost: the numbers above bound the integration pass and nothing wider, and the absence
-should be read as an absence rather than as a null result.
+**THE WHOLE REWRITE, against the last installed release.** A different run, on an IDLE
+host (one-minute load average 3.8 at its start, after ten consecutive 30 s samples under 7
+with no compiler alive): arm A the last installed release before the rewrite, arm B this
+tip's release build, the 24 default-path rows over all three size classes at the same 21
+reps, the same-binary control band first over the same 72 pairs - every one byte-identical
+with matching exit codes - reading 0.0274 tiny, 0.0293 compacted and 0.0148 landmark (the
+class medians of that drift 0.011, 0.011 and 0.005). The A/B was read TWICE on the
+compacted and landmark classes, because one cell of the first reading was disturbed: the
+script-mention regex row on the landmark carried an interquartile range ten times the
+control's on both arms, while the same binary had read that row an hour earlier at a
+fortieth of that spread. The second reading, whose every cell sits inside the control's own
+spread, is the one quoted here; the two agree on every other row within two points. Exit
+codes match on 72 of 72 pairs. Stdout is byte-identical on 12 of the 48 compacted-and-
+landmark pairs (the zero-hit scans and the censuses) and differs on 36, which is the
+rewrite's own surface: the label taxonomy, `for_root` and `for[]` on every hit, the crossing
+keys, the `list` and `image` columns.
+
+The rewrite's cost on a LANDMARK SCAN is the four byte-identical landmark rows, zero-hit
+scans over the 397 MiB transcript printing 83 bytes: 1.037, 1.073, 1.039 and 1.037, that is
+24 to 53 ms on runs of 0.63 to 0.73 s, ABOVE the landmark band on all four. That is the
+survival axis, the crossing and the label engine on every parsed line, and it agrees with
+the per-command axis ratios of section 7g. The growth rows on the landmark read 1.026 to
+1.104 for 3 to 13 percent more bytes, the widest absolute slowdown +74 ms (the
+script-mention regex, 1.076 to 1.150 s); `show --line` on one record reads 1.094 while
+printing twice the bytes, the families' facts on that record. Where the rewrite is FASTER:
+the whole-scope JSON dump 0.677 (2.204 to 1.491 s while printing 27 percent more bytes -
+section 7k's ordered-parallel render), the two wide-match text scans `search 'x'` and
+`search 'the'` 0.915 and 0.916 (1.04 to 0.95 s each), `(a+)+b` 0.966 and one wide literal
+0.980. Class medians: compacted 1.023 (rows of 12 to 20 ms, the slowest +2 ms), landmark
+1.038; the heaviest row of the whole set runs in 1.49 s where it ran in 2.20.
+
+THE ACCEPTANCE RULE a rewrite is judged by has two halves, and this section states them
+because the band alone cannot judge a rewrite: the same-binary band on the rows whose
+output is unchanged, and an ABSOLUTE CEILING on the heaviest rows - no row of the set may
+run a second slower than it did, because the wall-clock a reader waits on is what the
+contract protects, and a band measured on a binary that does less cannot be met by one
+that adds an axis to every scan. Under the band the scan cost sits 2 to 6 points above the
+landmark band; under the ceiling every row passes by an order of magnitude, the widest
+slowdown being 74 ms and the heaviest row 713 ms faster. The four scan figures are the
+receipt the next release measures against.
 
 ### 7k. The RENDER is the other serial half
 
