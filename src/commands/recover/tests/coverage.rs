@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (3) jsonl line-number counter (the new capability) ──
+// -- (3) jsonl line-number counter (the new capability) --
 
 #[test]
 fn line_number_counter_is_one_to_one_with_jsonl_lines() {
@@ -44,7 +44,7 @@ fn line_number_counter_is_one_to_one_with_jsonl_lines() {
     assert_eq!(sr.skipped_lines, 1, "the one malformed line is counted");
 }
 
-// ── cutoff resolution (--at) ──
+// -- cutoff resolution (--at) --
 
 #[test]
 fn resolve_cutoff_line_turn_and_datetime() {
@@ -84,20 +84,20 @@ fn resolve_cutoff_line_turn_and_datetime() {
         },
     ];
     assert_eq!(resolve_cutoff("@line:25", &events).unwrap(), Some(25));
-    // @turn:1 → the last line whose turn ≤ 1 is line 20.
+    // @turn:1 -> the last line whose turn <= 1 is line 20.
     assert_eq!(resolve_cutoff("@turn:1", &events).unwrap(), Some(20));
-    // a datetime bound: ≤ 06:30 → line 20 is the highest admitted.
+    // a datetime bound: <= 06:30 -> line 20 is the highest admitted.
     assert_eq!(
         resolve_cutoff("2026-06-07T06:30:00Z", &events).unwrap(),
         Some(20)
     );
-    // empty → no cutoff.
+    // empty -> no cutoff.
     assert_eq!(resolve_cutoff("", &events).unwrap(), None);
 }
 
 #[test]
 fn at_snapshot_marks_gaps_never_fabricates() {
-    // Only a windowed read of lines 3-4 → lines 1-2 and 5-6 are explicit gaps.
+    // Only a windowed read of lines 3-4 -> lines 1-2 and 5-6 are explicit gaps.
     let events = vec![FileEvent {
         line_no: 1,
         turn_index: 0,
@@ -127,7 +127,7 @@ fn at_snapshot_marks_gaps_never_fabricates() {
     );
 }
 
-// ── range parsers ──
+// -- range parsers --
 
 #[test]
 fn parse_line_range_is_one_based_and_validated() {
@@ -152,7 +152,7 @@ fn parse_turn_range_matches_files_contract() {
     assert!(parse_turn_range("3..1").is_err());
 }
 
-// ── coverage / spans / counts formatting ──
+// -- coverage / spans / counts formatting --
 
 #[test]
 fn covered_spans_collapse_contiguous_runs() {
@@ -176,7 +176,7 @@ fn gap_ranges_include_interior_and_trailing() {
     ];
     // gap before 2 (1..1), gap 4..4, trailing 6..10.
     assert_eq!(gap_ranges(&known, 10), vec![(1, 1), (4, 4), (6, 10)]);
-    // Empty known + a total → the whole file is a gap.
+    // Empty known + a total -> the whole file is a gap.
     assert_eq!(gap_ranges(&[], 5), vec![(1, 5)]);
 }
 
@@ -201,11 +201,11 @@ fn window_admits_turn_and_time() {
     );
 }
 
-// ── Branch-completeness: error / edge arms ──
+// -- Branch-completeness: error / edge arms --
 
 #[test]
 fn scan_one_file_empty_is_safe() {
-    // A zero-byte file → mmap None → empty ScanResult (the early-return arm).
+    // A zero-byte file -> mmap None -> empty ScanResult (the early-return arm).
     let (_dir, p) = crate::testfs::Scratch::file("recover-empty", "empty.jsonl");
     std::fs::File::create(&p).unwrap();
     let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan empty");
@@ -252,10 +252,10 @@ fn window_admits_turn_below_low_bound_is_rejected() {
 
 #[test]
 fn gap_ranges_whole_file_unknown_when_no_known_lines() {
-    // Empty known + total>0 → the `else if known.is_empty() && total > 0` arm yields one
+    // Empty known + total>0 -> the `else if known.is_empty() && total > 0` arm yields one
     // whole-file gap. (The interior/trailing arms were already covered.)
     assert_eq!(gap_ranges(&[], 4), vec![(1, 4)]);
-    // Empty known + total == 0 → no gaps at all (nothing seen, nothing to mark).
+    // Empty known + total == 0 -> no gaps at all (nothing seen, nothing to mark).
     assert_eq!(gap_ranges(&[], 0), Vec::<(usize, usize)>::new());
 }
 

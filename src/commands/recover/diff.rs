@@ -3,9 +3,9 @@
 use super::*;
 
 /// Compute a unified diff between two line vectors, emitting `@@ -a,b +c,d @@` hunks with
-/// ` `/`-`/`+` prefixes. A compact LCS-based diff (O(n·m) DP) - fine for single-file
+/// ` `/`-`/`+` prefixes. A compact LCS-based diff (O(n*m) DP) - fine for single-file
 /// reconstruction sizes and fully unit-testable. Returns an empty string when identical.
-/// `context` = number of equal lines to keep around each change. `usize::MAX` ⇒ FULL context:
+/// `context` = number of equal lines to keep around each change. `usize::MAX` => FULL context:
 /// every line of `old`/`new` is shown. `--patches` passes MAX on purpose - `old`/`new` are the
 /// segment's READ-covered lines, and CC's strict Read-before-Edit means each of those lines was
 /// genuinely observed, so showing them all is valid, high-quality context (a fully-read,
@@ -68,7 +68,7 @@ pub(crate) fn lcs_diff(old: &[String], new: &[String]) -> Vec<(DiffOp, usize, us
 }
 
 /// Format an LCS op-script as unified-diff hunks. `context` equal lines surround each change
-/// (`usize::MAX` ⇒ full context: all lines emitted, every change merged into one spanning hunk).
+/// (`usize::MAX` => full context: all lines emitted, every change merged into one spanning hunk).
 pub(crate) fn format_unified(
     ops: &[(DiffOp, usize, usize)],
     old: &[String],
@@ -94,7 +94,7 @@ pub(crate) fn format_unified(
         }
         let mut end = idx;
         // Walk to the end of this hunk: include changes + up to CONTEXT trailing equals,
-        // but merge adjacent change runs separated by ≤ 2*CONTEXT equals.
+        // but merge adjacent change runs separated by <= 2*CONTEXT equals.
         while end < ops.len() {
             if is_change[end] {
                 end += 1;
@@ -158,9 +158,9 @@ pub(crate) fn format_unified(
     out
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Shared text helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// Split content into lines WITHOUT a trailing empty element for a final newline (so a
 /// file `"a\nb\n"` is `["a","b"]`, matching how CC numbers lines).
@@ -184,7 +184,7 @@ pub(crate) fn first_line(s: &str) -> String {
 
 /// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles
 /// BOTH the TAB gutter (`\d+\t<text>`, what current CC Read content uses) and the arrow
-/// gutter (`\d+→<text>`, an older form). Returns `(file_line_no, text)` pairs; a line
+/// gutter (`\d+-><text>`, an older form). Returns `(file_line_no, text)` pairs; a line
 /// with no recognizable gutter is skipped (we never fabricate a number).
 pub(crate) fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {
     let mut out = Vec::new();
@@ -223,11 +223,11 @@ pub(crate) fn parse_line_range(s: &str) -> Result<crate::text::RangeSpec> {
     crate::text::parse_range_spec(s, "--file-lines", true)
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `... (+N chars)` marker.
 pub(crate) fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // At-cutoff resolution
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

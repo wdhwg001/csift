@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (5) boundary detection ──
+// -- (5) boundary detection --
 
 #[test]
 fn boundary_modified_since_read_is_hard() {
@@ -139,7 +139,7 @@ fn boundary_bash_is_heuristic_soft() {
 
 #[test]
 fn boundary_originalfile_disagreement_is_hard() {
-    // A full anchor sets a\nb\nc; an edit's originalFile claims X\nY\nZ (a total drift) →
+    // A full anchor sets a\nb\nc; an edit's originalFile claims X\nY\nZ (a total drift) ->
     // a disagreement boundary (the signal claude-file-recovery discards).
     let events = vec![
         FileEvent {
@@ -185,17 +185,17 @@ fn boundary_originalfile_disagreement_is_hard() {
 fn buffer_disagrees_with_original_only_on_real_mismatch() {
     let mut buf = SparseBuffer::default();
     buf.reset_to_full("a\nb\nc", 3, 1);
-    // Same content → no disagreement.
+    // Same content -> no disagreement.
     assert!(!buffer_disagrees_with_original(&buf, "a\nb\nc"));
-    // Total drift → disagreement.
+    // Total drift -> disagreement.
     assert!(buffer_disagrees_with_original(&buf, "X\nY\nZ"));
-    // Nothing comparable (empty original) → no false positive.
+    // Nothing comparable (empty original) -> no false positive.
     assert!(!buffer_disagrees_with_original(&buf, ""));
 }
 
 #[test]
 fn buffer_disagrees_below_threshold_does_not_flag() {
-    // A single mismatch in many comparable lines stays UNDER the 25% threshold → the
+    // A single mismatch in many comparable lines stays UNDER the 25% threshold -> the
     // `mismatches * 4 >= compared` FALSE side: not flagged (one fluke is not a boundary).
     let mut buf = SparseBuffer::default();
     buf.reset_to_full("a\nb\nc\nd\ne\nf\ng\nh", 8, 1);
@@ -211,7 +211,7 @@ fn buffer_disagrees_requires_partial_overlap_and_threshold() {
     // Known lines that fall OUTSIDE the original's length are skipped (the `*k <= len`
     // guard), and a single mismatch below the 25% threshold does NOT flag.
     let mut buf = SparseBuffer::default();
-    // Known lines 1,2,3,4 - original is only 4 long; one of four mismatches = 25% → flags.
+    // Known lines 1,2,3,4 - original is only 4 long; one of four mismatches = 25% -> flags.
     buf.reset_to_full("a\nb\nc\nQ", 4, 1);
     assert!(
         buffer_disagrees_with_original(&buf, "a\nb\nc\nd"),

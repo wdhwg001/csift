@@ -20310,7 +20310,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "22-33",
-          "snippet": "    // \u2500\u2500 (0) Bash result hint: `staleReadFileStateHint` names files THIS command\n    //    modified out of the read set. CC computed the list from its own readFileState\n    //    (an mtime stat over every read file), so a named match is authoritative. The\n    //    paths are rendered relative to the shell's cwd; resolve before matching. A\n    //    truncated tail (\"\u2026 and N more\") names no paths, so only the named first-5 can\n    //    ever match: a target hidden in the remainder is NOT detected here (documented\n    //    limit; the window's bash disclosure still covers the command itself).\n    if let Some(hint) = tur\n        .get(\"staleReadFileStateHint\")\n        .and_then(serde_json::Value::as_str)\n    {\n        if let Some((paths, _more)) = parse_stale_read_hint(hint) {"
+          "snippet": "    // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command\n    //    modified out of the read set. CC computed the list from its own readFileState\n    //    (an mtime stat over every read file), so a named match is authoritative. The\n    //    paths are rendered relative to the shell's cwd; resolve before matching. A\n    //    truncated tail (\"... and N more\") names no paths, so only the named first-5 can\n    //    ever match: a target hidden in the remainder is NOT detected here (documented\n    //    limit; the window's bash disclosure still covers the command itself).\n    if let Some(hint) = tur\n        .get(\"staleReadFileStateHint\")\n        .and_then(serde_json::Value::as_str)\n    {\n        if let Some((paths, _more)) = parse_stale_read_hint(hint) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -20320,7 +20320,7 @@
         {
           "path": "src/commands/recover/types.rs",
           "lines": "88-94",
-          "snippet": "    /// Claude Code's own modified-file attribution: a Bash result's\n    /// `staleReadFileStateHint` named this file as modified by the command (\"[This\n    /// command modified N file(s) you've previously read: \u2026]\"). The hint's paths are\n    /// rendered RELATIVE to the recording shell's cwd and are resolved against the\n    /// carrying record's own `cwd` before matching. AUTHORITATIVE (CC stat'd the\n    /// read-set itself), content-less: a hard boundary at replay.\n    StaleReadHint { path: String },"
+          "snippet": "    /// Claude Code's own modified-file attribution: a Bash result's\n    /// `staleReadFileStateHint` named this file as modified by the command (\"[This\n    /// command modified N file(s) you've previously read: ...]\"). The hint's paths are\n    /// rendered RELATIVE to the recording shell's cwd and are resolved against the\n    /// carrying record's own `cwd` before matching. AUTHORITATIVE (CC stat'd the\n    /// read-set itself), content-less: a hard boundary at replay.\n    StaleReadHint { path: String },"
         }
       ],
       "states": [
@@ -20480,7 +20480,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "270-282",
-          "snippet": "    // (7a) edited_text_file \u2192 an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {\n            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
+          "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {\n            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
         },
         {
           "path": "src/commands/recover/types.rs",
@@ -20571,7 +20571,7 @@
         {
           "path": "src/commands/recover/diff.rs",
           "lines": "185-189",
-          "snippet": "/// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles\n/// BOTH the TAB gutter (`\\d+\\t<text>`, what current CC Read content uses) and the arrow\n/// gutter (`\\d+\u2192<text>`, an older form). Returns `(file_line_no, text)` pairs; a line\n/// with no recognizable gutter is skipped (we never fabricate a number).\npub(crate) fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {"
+          "snippet": "/// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles\n/// BOTH the TAB gutter (`\\d+\\t<text>`, what current CC Read content uses) and the arrow\n/// gutter (`\\d+-><text>`, an older form). Returns `(file_line_no, text)` pairs; a line\n/// with no recognizable gutter is skipped (we never fabricate a number).\npub(crate) fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {"
         }
       ],
       "states": [
@@ -21000,7 +21000,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "22-28",
-          "snippet": "    // \u2500\u2500 (0) Bash result hint: `staleReadFileStateHint` names files THIS command\n    //    modified out of the read set. CC computed the list from its own readFileState\n    //    (an mtime stat over every read file), so a named match is authoritative. The\n    //    paths are rendered relative to the shell's cwd; resolve before matching. A\n    //    truncated tail (\"\u2026 and N more\") names no paths, so only the named first-5 can\n    //    ever match: a target hidden in the remainder is NOT detected here (documented\n    //    limit; the window's bash disclosure still covers the command itself)."
+          "snippet": "    // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command\n    //    modified out of the read set. CC computed the list from its own readFileState\n    //    (an mtime stat over every read file), so a named match is authoritative. The\n    //    paths are rendered relative to the shell's cwd; resolve before matching. A\n    //    truncated tail (\"... and N more\") names no paths, so only the named first-5 can\n    //    ever match: a target hidden in the remainder is NOT detected here (documented\n    //    limit; the window's bash disclosure still covers the command itself)."
         }
       ],
       "states": [
@@ -23175,7 +23175,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "64-66",
-          "snippet": "    // \u2500\u2500 (2) Write result: {type:create|update, filePath, content, \u2026} \u2500\u2500\n    // \u2500\u2500 (3) Edit result: {filePath, oldString, newString, structuredPatch, \u2026} (no type) \u2500\u2500\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);"
+          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);"
         }
       ],
       "states": [
@@ -24577,7 +24577,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "268-274",
-          "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file \u2192 an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
+          "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
         }
       ],
       "states": [
@@ -24901,7 +24901,7 @@
         {
           "path": "src/commands/recover/diff.rs",
           "lines": "185-189",
-          "snippet": "/// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles\n/// BOTH the TAB gutter (`\\d+\\t<text>`, what current CC Read content uses) and the arrow\n/// gutter (`\\d+\u2192<text>`, an older form). Returns `(file_line_no, text)` pairs; a line\n/// with no recognizable gutter is skipped (we never fabricate a number).\npub(crate) fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {"
+          "snippet": "/// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles\n/// BOTH the TAB gutter (`\\d+\\t<text>`, what current CC Read content uses) and the arrow\n/// gutter (`\\d+-><text>`, an older form). Returns `(file_line_no, text)` pairs; a line\n/// with no recognizable gutter is skipped (we never fabricate a number).\npub(crate) fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {"
         }
       ],
       "states": [
@@ -51674,7 +51674,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // \u2500\u2500 (1a) Read result: toolUseResult.file = {filePath, content, startLine, \u2026} \u2500\u2500\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -51786,7 +51786,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // \u2500\u2500 (1a) Read result: toolUseResult.file = {filePath, content, startLine, \u2026} \u2500\u2500\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -52017,7 +52017,7 @@
         {
           "path": "src/commands/recover/diff.rs",
           "lines": "185-188",
-          "snippet": "/// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles\n/// BOTH the TAB gutter (`\\d+\\t<text>`, what current CC Read content uses) and the arrow\n/// gutter (`\\d+\u2192<text>`, an older form). Returns `(file_line_no, text)` pairs; a line\n/// with no recognizable gutter is skipped (we never fabricate a number)."
+          "snippet": "/// Strip a leading line-number gutter from each line of a cat -n style snippet. Handles\n/// BOTH the TAB gutter (`\\d+\\t<text>`, what current CC Read content uses) and the arrow\n/// gutter (`\\d+-><text>`, an older form). Returns `(file_line_no, text)` pairs; a line\n/// with no recognizable gutter is skipped (we never fabricate a number)."
         }
       ],
       "states": [
@@ -52354,7 +52354,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // \u2500\u2500 (1a) Read result: toolUseResult.file = {filePath, content, startLine, \u2026} \u2500\u2500\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
         }
       ],
       "states": [
@@ -52766,7 +52766,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "268-274",
-          "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file \u2192 an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
+          "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
         }
       ],
       "states": [
@@ -53229,7 +53229,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "64-66",
-          "snippet": "    // \u2500\u2500 (2) Write result: {type:create|update, filePath, content, \u2026} \u2500\u2500\n    // \u2500\u2500 (3) Edit result: {filePath, oldString, newString, structuredPatch, \u2026} (no type) \u2500\u2500\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);"
+          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);"
         }
       ],
       "states": [
@@ -53849,7 +53849,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "64-71",
-          "snippet": "    // \u2500\u2500 (2) Write result: {type:create|update, filePath, content, \u2026} \u2500\u2500\n    // \u2500\u2500 (3) Edit result: {filePath, oldString, newString, structuredPatch, \u2026} (no type) \u2500\u2500\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default()) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
+          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default()) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -54093,7 +54093,7 @@
         {
           "path": "src/commands/recover/types.rs",
           "lines": "182-188",
-          "snippet": "/// One hunk of an Edit (old\u2192new strings), from the tool_use `input`.\n#[derive(Debug, Clone)]\npub(crate) struct EditHunk {\n    pub(crate) old_string: String,\n    pub(crate) new_string: String,\n    pub(crate) replace_all: bool,\n}"
+          "snippet": "/// One hunk of an Edit (old->new strings), from the tool_use `input`.\n#[derive(Debug, Clone)]\npub(crate) struct EditHunk {\n    pub(crate) old_string: String,\n    pub(crate) new_string: String,\n    pub(crate) replace_all: bool,\n}"
         }
       ],
       "states": [
@@ -54221,7 +54221,7 @@
         {
           "path": "src/commands/recover/types.rs",
           "lines": "190-197",
-          "snippet": "/// One structured-patch hunk (`toolUseResult.structuredPatch[]`): a mirror of CC's\n/// `{oldStart, oldLines, newStart, newLines, lines:[\" \",\"-\",\"+\", \u2026]}`. `newStart` is not\n/// retained - replay derives the new position from `oldStart` + the running line offset.\n#[derive(Debug, Clone)]\npub(crate) struct PatchHunk {\n    pub(crate) old_start: usize,\n    pub(crate) old_lines: usize,\n    pub(crate) new_lines: usize,"
+          "snippet": "/// One structured-patch hunk (`toolUseResult.structuredPatch[]`): a mirror of CC's\n/// `{oldStart, oldLines, newStart, newLines, lines:[\" \",\"-\",\"+\", ...]}`. `newStart` is not\n/// retained - replay derives the new position from `oldStart` + the running line offset.\n#[derive(Debug, Clone)]\npub(crate) struct PatchHunk {\n    pub(crate) old_start: usize,\n    pub(crate) old_lines: usize,\n    pub(crate) new_lines: usize,"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -56784,7 +56784,7 @@
         {
           "path": "src/commands/recover/scan.rs",
           "lines": "431-433",
-          "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
+          "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id -> file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
@@ -57357,7 +57357,7 @@
         {
           "path": "src/commands/recover/events.rs",
           "lines": "36",
-          "snippet": "/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: \u2026\"`) with"
+          "snippet": "/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with"
         }
       ],
       "states": [
@@ -63783,12 +63783,12 @@
         {
           "path": "src/commands/recover/events.rs",
           "lines": "35-41",
-          "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: \u2026\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, \u2026}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
+          "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
         },
         {
           "path": "src/commands/recover/scan.rs",
           "lines": "434-440",
-          "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
+          "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (section subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
       "states": [
@@ -63938,7 +63938,7 @@
         {
           "path": "src/commands/recover/scan.rs",
           "lines": "434-438",
-          "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover)."
+          "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (section subagent recover)."
         }
       ],
       "states": [
@@ -64119,12 +64119,12 @@
         {
           "path": "src/commands/recover/events.rs",
           "lines": "35-41",
-          "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: \u2026\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, \u2026}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
+          "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
         },
         {
           "path": "src/commands/recover/scan.rs",
           "lines": "434-440",
-          "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully\u2026\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (\u00a7 subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
+          "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content (section subagent recover).\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
       "states": [
@@ -82127,7 +82127,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "270-275",
-          "snippet": "    // (7a) edited_text_file \u2192 an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);"
+          "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);"
         }
       ],
       "states": [

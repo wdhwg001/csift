@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (4) sparse-buffer replay ──
+// -- (4) sparse-buffer replay --
 
 #[test]
 fn replay_full_snapshot_resets_then_partial_splices_without_padding() {
@@ -78,7 +78,7 @@ fn replay_full_read_after_write_does_not_invent_trailing_gap() {
         Some(3),
         "the separator-count read must not invent a phantom 4th line"
     );
-    // complete == (known.len() == seen_total) → restore succeeds instead of hard-failing.
+    // complete == (known.len() == seen_total) -> restore succeeds instead of hard-failing.
     assert_eq!(
         rep.final_buffer.known_lines().len(),
         rep.final_buffer.seen_total_lines.unwrap()
@@ -87,7 +87,7 @@ fn replay_full_read_after_write_does_not_invent_trailing_gap() {
 
 #[test]
 fn replay_edit_applies_to_running_buffer_not_originalfile() {
-    // The buffer holds a\nb\nc; an edit's structuredPatch changes line 2 b→B. We apply to
+    // The buffer holds a\nb\nc; an edit's structuredPatch changes line 2 b->B. We apply to
     // the BUFFER (structured patch), not the originalFile field.
     let events = vec![
         FileEvent {
@@ -182,7 +182,7 @@ fn replay_unanchorable_edit_is_a_hole_not_a_fabrication() {
 
 #[test]
 fn replay_string_edit_fallback_when_no_structured_patch() {
-    // No structuredPatch → string replacement over the contiguous-from-1 known text.
+    // No structuredPatch -> string replacement over the contiguous-from-1 known text.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -260,7 +260,7 @@ fn replay_edit_into_already_open_segment_does_not_reopen() {
         1,
         "the edit extended the read's open segment (seg_open was already Some)"
     );
-    // The structured patch anchored on the known contiguous lines 1-2 → applied.
+    // The structured patch anchored on the known contiguous lines 1-2 -> applied.
     assert_eq!(
         rep.final_buffer.known.get(&1).map(|c| c.text.as_str()),
         Some("A"),

@@ -162,7 +162,7 @@ pub(crate) fn render_restore(
         ..
     } = cand;
     let disclosure = window_disclosure(source, ctx.file.as_deref());
-    // Every line_no is ≤ total, so knowing `total` distinct lines ⇒ the whole 1..=total is known.
+    // Every line_no is <= total, so knowing `total` distinct lines => the whole 1..=total is known.
     let complete = total > 0 && known.len() == total;
     if !complete {
         bail_json(

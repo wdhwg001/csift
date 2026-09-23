@@ -25,7 +25,7 @@ pub(crate) fn scan_one_file_multi(
         return Ok(Vec::new());
     }
     // Which manifest basenames appear (overlapping, so a basename that is a substring of
-    // another match region is still detected) → the targets worth extracting from this file.
+    // another match region is still detected) -> the targets worth extracting from this file.
     let mut present: Vec<usize> = ac
         .find_overlapping_iter(bytes)
         .map(|m| m.pattern().as_usize())
@@ -212,7 +212,7 @@ pub(crate) fn window_admits(
     time_window.contains(ts)
 }
 
-/// Scan one session file: mmap → forward line-numbered scan → extract `--file` events.
+/// Scan one session file: mmap -> forward line-numbered scan -> extract `--file` events.
 /// The forward `scan_lines_bytes` path is mandatory (NOT head/tail): it visits every line
 /// including blanks, so the local counter == the true jsonl line.
 pub(crate) fn scan_one_file(
@@ -246,13 +246,13 @@ pub(crate) fn scan_one_file(
     };
     let bytes: &[u8] = &mmap;
 
-    // ── File-level prefilter (the dominant cost of an UNSCOPED recover). A transcript that
+    // -- File-level prefilter (the dominant cost of an UNSCOPED recover). A transcript that
     //    never mentions the target's BASENAME holds no events for it: every Read/Edit/Write/Bash
     //    op and result `extract` replays carries the path literal somewhere in that transcript,
     //    and `extract` matches by full path OR basename-suffix - so the basename is the correct
     //    SUPERSET gate. One SIMD `memmem` over the mmap lets us skip PARSING the file entirely,
     //    turning an unscoped recover from a whole-corpus JSON parse into a parse of only the few
-    //    transcripts that touched the file. (No target ⇒ no gate; behaviour unchanged.)
+    //    transcripts that touched the file. (No target => no gate; behaviour unchanged.)
     if let Some(t) = target_file {
         // Both separators: a Windows path's basename must carry no `\` - a needle
         // with a backslash can never match the raw line (JSON escapes it to `\\`).
@@ -334,9 +334,9 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
     crate::parse::line_has_user_role_marker(line) || NEEDLES.iter().any(|f| f.find(line).is_some())
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Extraction: (line_no, Record) → FileEvent
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Extraction: (line_no, Record) -> FileEvent
+// -----------------------------------------------------------------------------
 
 /// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS
 /// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,
@@ -429,13 +429,13 @@ pub(crate) fn extract_with_turns(
         .collect();
 
     for (stamp, idxs) in view.groups() {
-        // tool_use_id → file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.
+        // tool_use_id -> file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.
         let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();
         // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -
         // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and
         // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a
-        // `"File created successfully…"` string), so those ids are absent here and the
-        // input-side fallback below supplies their content (§ subagent recover).
+        // `"File created successfully..."` string), so those ids are absent here and the
+        // input-side fallback below supplies their content (section subagent recover).
         let mut ids_with_result: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         // tool_use_ids whose RESULT was an error (`is_error:true`) - e.g. a failed Edit

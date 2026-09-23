@@ -3,7 +3,7 @@
 
 use super::*;
 
-/// Record, for each Read/Edit/Write/MultiEdit tool_use block, its `tool_use_id →
+/// Record, for each Read/Edit/Write/MultiEdit tool_use block, its `tool_use_id ->
 /// file_path` so a later integrity-error carrier (which has no inline path) can be
 /// attributed by id.
 pub(crate) fn collect_tool_use_paths(blocks: Option<&[Block]>, out: &mut BTreeMap<String, String>) {
@@ -33,14 +33,14 @@ pub(crate) fn collect_tool_use_paths(blocks: Option<&[Block]>, out: &mut BTreeMa
 /// has NO `toolUseResult` carrier (its id is absent from `ids_with_result`).
 ///
 /// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the
-/// tool RESULT as a bare `tool_result` string (`"File created successfully at: …"`) with
+/// tool RESULT as a bare `tool_result` string (`"File created successfully at: ..."`) with
 /// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries
-/// `{type:create, filePath, content, …}`. `extract_from_tool_use_result` reads that echo,
+/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,
 /// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`
 /// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use
 /// input directly). The authoritative content IS in the input - `Write.content`,
 /// `Edit.{old_string,new_string,replace_all}`, `MultiEdit.edits[]` - present in EVERY
-/// transcript. An Edit reconstructs via `apply_string_edit` (old→new), so the missing
+/// transcript. An Edit reconstructs via `apply_string_edit` (old->new), so the missing
 /// `structuredPatch` is not needed.
 ///
 /// Gated on `ids_with_result` so it never double-emits in a top-level session.
@@ -193,7 +193,7 @@ pub(crate) fn extract_from_record(
 ) {
     let ts = rec.timestamp.clone();
 
-    // ── (8) file-history-snapshot marker (a top-level sibling, no `message`) ──
+    // -- (8) file-history-snapshot marker (a top-level sibling, no `message`) --
     if let Some(snap) = rec.snapshot.as_ref() {
         if let Some(tfb) = snap.get("trackedFileBackups").and_then(|v| v.as_object()) {
             for (path, entry) in tfb {
@@ -224,7 +224,7 @@ pub(crate) fn extract_from_record(
         }
     }
 
-    // ── (8b) file-history-delta: ONE path's version bump (`trackingPath` + `backup`) ──
+    // -- (8b) file-history-delta: ONE path's version bump (`trackingPath` + `backup`) --
     // The same instrument as the snapshot table, at a finer grain: a delta lands whenever
     // that one file's backed-up bytes changed. Reading both shapes is what lets the
     // external-write inference name the exact interval it bounds instead of the whole gap
@@ -251,14 +251,14 @@ pub(crate) fn extract_from_record(
         }
     }
 
-    // ── (7) attachment (edited_text_file external edit / file snapshot) ──
+    // -- (7) attachment (edited_text_file external edit / file snapshot) --
     // The raw blob is parsed to a full tree ON DEMAND (the model keeps it unparsed so
     // the scanning subcommands never pay for it; recover is the deep consumer).
     if let Some(att) = rec.attachment_value() {
         extract_from_attachment(line_no, turn_index, &ts, att, target_file, events);
     }
 
-    // ── toolUseResult-bearing carriers: Read / Write / Edit / Bash-hint results ──
+    // -- toolUseResult-bearing carriers: Read / Write / Edit / Bash-hint results --
     if let Some(tur) = rec.tool_use_result_value() {
         extract_from_tool_use_result(
             line_no,
@@ -271,11 +271,11 @@ pub(crate) fn extract_from_record(
         );
     }
 
-    // ── Per-block extraction over message.content[] ──
+    // -- Per-block extraction over message.content[] --
     let Some(blocks) = rec.blocks() else { return };
     for b in blocks {
         match b {
-            // (5) integrity error on a tool_result carrier (no inline path → id-join).
+            // (5) integrity error on a tool_result carrier (no inline path -> id-join).
             Block::ToolResult {
                 tool_use_id,
                 content: Some(content),

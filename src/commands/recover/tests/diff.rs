@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (6) unified diff ──
+// -- (6) unified diff --
 
 #[test]
 fn unified_diff_basic_change() {
@@ -57,7 +57,7 @@ fn lcs_diff_op_script_is_minimal() {
 
 #[test]
 fn lcs_diff_emits_trailing_deletions_when_old_is_longer() {
-    // old has lines new lacks at the END → the `while i < n` tail-delete loop runs (the
+    // old has lines new lacks at the END -> the `while i < n` tail-delete loop runs (the
     // first pass only exercised balanced / leading change runs).
     let old = vec!["keep".to_string(), "drop1".to_string(), "drop2".to_string()];
     let new = vec!["keep".to_string()];
@@ -66,7 +66,7 @@ fn lcs_diff_emits_trailing_deletions_when_old_is_longer() {
         d.contains("-drop1") && d.contains("-drop2"),
         "tail deletes: {d}"
     );
-    // A pure deletion's new side is zero-length → the 0,0-style new header.
+    // A pure deletion's new side is zero-length -> the 0,0-style new header.
     assert!(
         d.contains("+0,0") || d.contains(" +1,1 "),
         "new header form: {d}"
@@ -81,7 +81,7 @@ fn lcs_diff_emits_trailing_deletions_when_old_is_longer() {
 
 #[test]
 fn lcs_diff_emits_trailing_insertions_when_new_is_longer() {
-    // new has lines old lacks at the END → the `while j < m` tail-insert loop runs.
+    // new has lines old lacks at the END -> the `while j < m` tail-insert loop runs.
     let old = vec!["keep".to_string()];
     let new = vec!["keep".to_string(), "add1".to_string(), "add2".to_string()];
     let d = unified_diff(&old, &new, 3);
@@ -99,7 +99,7 @@ fn lcs_diff_emits_trailing_insertions_when_new_is_longer() {
 
 #[test]
 fn unified_diff_pure_deletion_uses_zero_length_new_header() {
-    // A diff that ONLY removes lines (no inserts, no surviving context) → `new_count == 0`
+    // A diff that ONLY removes lines (no inserts, no surviving context) -> `new_count == 0`
     // and `new_lo == usize::MAX`, driving the `if new_lo == usize::MAX` reset and the
     // `if new_count == 0` header form on the NEW side.
     let old = vec!["x".to_string(), "y".to_string()];

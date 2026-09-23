@@ -12,10 +12,10 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     if args.files_from.is_some() {
         return run_recover_batch(args, cross);
     }
-    // ── Validate window mutual-exclusion (same rule + wording as `files`/`search`) ──
+    // -- Validate window mutual-exclusion (same rule + wording as `files`/`search`) --
     let mode = args.mode();
 
-    // ── `--out` is a no-op in `--coverage` mode (coverage is a scoping summary, not an
+    // -- `--out` is a no-op in `--coverage` mode (coverage is a scoping summary, not an
     //    artifact) - make the no-op VISIBLE at runtime so a "save the coverage report" call
     //    is not silently swallowed. The other three modes honor `--out` in render_text/json.
     if matches!(mode, RecoverMode::Coverage) && args.out.is_some() {
@@ -25,7 +25,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
         );
     }
 
-    // ── `--file` is required for every mode (an absolute path, or the `@plan` sigil) ──
+    // -- `--file` is required for every mode (an absolute path, or the `@plan` sigil) --
     if args.file.is_none() {
         bail!("--file <ABS_PATH> (or `@plan`) is required for --patches / --at / --coverage");
     }
@@ -42,7 +42,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    // ── Resolve targets → session files (spanning subagents by default) ──
+    // -- Resolve targets -> session files (spanning subagents by default) --
     let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
@@ -51,10 +51,10 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     )?;
     let session_files = resolved.files;
 
-    // ── `--file @plan`: substitute the session-bound plan file (the `plan_mode` attachment's
+    // -- `--file @plan`: substitute the session-bound plan file (the `plan_mode` attachment's
     //    `planFilePath`) as the real target, then reconstruct it exactly like any file - every
     //    Write/Edit on it counts, not just the latest Write. Owns the plan-locating concern so
-    //    a deleted plan is recoverable from the transcript alone. ──
+    //    a deleted plan is recoverable from the transcript alone. --
     let plan_target: Option<String> = match args.file.as_deref() {
         Some(f) if f == crate::commands::plan::PLAN_SIGIL => {
             let pref = crate::commands::plan::resolve_plan_target(&session_files)?;
@@ -71,14 +71,14 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     };
     let target_file = plan_target.as_deref().or(args.file.as_deref());
 
-    // ── Parallel scan across files (default rayon pool = CPU count) ──
+    // -- Parallel scan across files (default rayon pool = CPU count) --
     let per_file: Vec<ScanResult> = session_files
         .par_iter()
         .map(|p| scan_one_file(p, target_file, cross))
         .collect::<Result<Vec<_>>>()?;
 
-    // ── Merge, keeping each session's events grouped (ordering inside a session is the
-    //    jsonl line order; across sessions we sort sessions by id for determinism). ──
+    // -- Merge, keeping each session's events grouped (ordering inside a session is the
+    //    jsonl line order; across sessions we sort sessions by id for determinism). --
     let mut skipped_lines = 0usize;
     let mut sessions: Vec<ScanResult> = Vec::new();
     for sr in per_file {
@@ -87,10 +87,10 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     }
     sessions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
-    // ── Apply the turn / time window to events per session. The `--turn` spec resolves
+    // -- Apply the turn / time window to events per session. The `--turn` spec resolves
     //    its open/from-end forms against THIS session's own turns (max event turn + 1).
     //    Integrity-relevant events the window excludes are COUNTED, never silently
-    //    dropped: a boundary outside the window still happened to the file. ──
+    //    dropped: a boundary outside the window still happened to the file. --
     let mut windowed_out_integrity = 0usize;
     for sr in &mut sessions {
         let bounds = turn_range.map(|spec| {
@@ -143,7 +143,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     // reconstruction merge folds subagents into their parent.
     let (scope_top, scope_sub) = scope_span(&sessions);
 
-    // ── Cross-session reconstruction merge (At / Coverage) ──
+    // -- Cross-session reconstruction merge (At / Coverage) --
     // A file's history spans a top-level session AND its own subagents, interleaved by
     // wall-clock: main edits a few lines, a subagent edits some, main edits again, a
     // subagent edits again. Per-session replay sees only fragments - a subagent that
@@ -181,7 +181,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     Ok(())
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Batch reconstruction (`--files-from` / `--out-dir`)
 //
 // The dominant cost of recovering MANY files one-by-one is re-parsing the same huge
@@ -189,7 +189,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
 // hundreds of files is re-parsed hundreds of times). Batch mode parses + turn-groups each
 // transcript ONCE and extracts every listed file it touched, so the corpus is walked a
 // single time regardless of manifest size.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// One target's batch outcome, for the TSV report + the summary line.
 pub(crate) struct BatchOutcome {
@@ -230,7 +230,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
         bail!("--files-from (batch) is mutually exclusive with --file (single-file mode)");
     }
 
-    // ── Manifest: one absolute path per line; blank lines and `#` comments ignored; deduped. ──
+    // -- Manifest: one absolute path per line; blank lines and `#` comments ignored; deduped. --
     let raw = std::fs::read_to_string(manifest)
         .with_context(|| format!("cannot read manifest {}", manifest.display()))?;
     let mut seen = std::collections::HashSet::new();
@@ -245,9 +245,9 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
         bail!("manifest {} lists no files", manifest.display());
     }
 
-    // ── Multi-pattern byte prefilter: which manifest BASENAMES a transcript mentions. A
+    // -- Multi-pattern byte prefilter: which manifest BASENAMES a transcript mentions. A
     //    transcript matching none is skipped without parsing (the single-file prefilter,
-    //    generalized to the whole manifest in one Aho-Corasick pass). ──
+    //    generalized to the whole manifest in one Aho-Corasick pass). --
     let basenames: Vec<String> = targets.iter().map(|t| basename_of(t).to_string()).collect();
     // A basename JSON serialization can rewrite is no raw-byte needle: its target is
     // ALWAYS scanned rather than silently gated out (the SPEC 7d prefilter law).
@@ -280,7 +280,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
         session_files.len()
     );
 
-    // ── ONE parse per transcript; extract every present target from its shared turn grouping. ──
+    // -- ONE parse per transcript; extract every present target from its shared turn grouping. --
     let per_file: Vec<Vec<(usize, ScanResult)>> = session_files
         .par_iter()
         .map(|p| scan_one_file_multi(p, &targets, &ac, &always, cross))
@@ -293,7 +293,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
         }
     }
 
-    // ── Reconstruct + write each target (the file's final state, honoring any window). ──
+    // -- Reconstruct + write each target (the file's final state, honoring any window). --
     let mut outcomes: Vec<BatchOutcome> = Vec::with_capacity(targets.len());
     let mut windowed_out_integrity = 0usize;
     for (ti, mut scans) in by_target.into_iter().enumerate() {
@@ -350,7 +350,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
             });
             continue;
         };
-        // Mirror the absolute path under out_dir (strip leading separators → safe join).
+        // Mirror the absolute path under out_dir (strip leading separators -> safe join).
         let dest = out_dir.join(target.trim_start_matches('/'));
         if dest.exists() && !args.force {
             outcomes.push(BatchOutcome {

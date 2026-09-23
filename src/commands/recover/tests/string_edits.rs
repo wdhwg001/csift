@@ -2,11 +2,11 @@
 
 use super::*;
 
-// ── (7) no-op / duplicate edit do not inflate ──
+// -- (7) no-op / duplicate edit do not inflate --
 
 #[test]
 fn noop_edit_does_not_change_buffer_or_inflate_diff() {
-    // An edit whose old==new (a no-op) leaves the buffer unchanged → an empty segment diff.
+    // An edit whose old==new (a no-op) leaves the buffer unchanged -> an empty segment diff.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -51,7 +51,7 @@ fn noop_edit_does_not_change_buffer_or_inflate_diff() {
         "a matching no-op is anchorable, not a hole"
     );
     // The single segment was opened by the Write anchor (pre-state empty), so its diff is
-    // the file CREATION (empty → a,b) - the no-op added no further change on top of it.
+    // the file CREATION (empty -> a,b) - the no-op added no further change on top of it.
     let seg = &rep.segments[0];
     let diff = unified_diff(
         &filter_lines(&seg.start_buffer, None),
@@ -66,8 +66,8 @@ fn noop_edit_does_not_change_buffer_or_inflate_diff() {
 
 #[test]
 fn string_edit_unanchorable_when_buffer_not_contiguous_from_one() {
-    // A non-contiguous buffer (a windowed read starting at line 5) → a string-replacement
-    // edit (no structuredPatch) cannot safely anchor → un-anchorable, no fabrication.
+    // A non-contiguous buffer (a windowed read starting at line 5) -> a string-replacement
+    // edit (no structuredPatch) cannot safely anchor -> un-anchorable, no fabrication.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -108,7 +108,7 @@ fn string_edit_unanchorable_when_buffer_not_contiguous_from_one() {
 
 #[test]
 fn string_edit_unanchorable_when_old_string_absent() {
-    // The buffer is contiguous from 1, but old_string is not present → un-anchorable.
+    // The buffer is contiguous from 1, but old_string is not present -> un-anchorable.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -181,7 +181,7 @@ fn string_edit_replace_all_replaces_every_occurrence() {
 #[test]
 fn string_edit_empty_old_string_is_unanchorable() {
     // The string-replacement fallback refuses an empty old_string (the FIRST operand of
-    // `old_string.is_empty() || !contains`). An empty old_string would match everywhere →
+    // `old_string.is_empty() || !contains`). An empty old_string would match everywhere ->
     // we never guess, so it is un-anchorable and the buffer is unchanged.
     let events = vec![
         FileEvent {
@@ -223,7 +223,7 @@ fn string_edit_empty_old_string_is_unanchorable() {
 
 #[test]
 fn string_edit_with_no_hunks_is_unanchorable() {
-    // An Edit carrying ZERO hunks never sets `any` → the `if !any` guard returns
+    // An Edit carrying ZERO hunks never sets `any` -> the `if !any` guard returns
     // un-anchorable (a real harness shape when a MultiEdit result has an empty edit list).
     let mut buf = SparseBuffer::default();
     buf.reset_to_full("a\nb", 2, 1);
@@ -266,7 +266,7 @@ fn apply_edit_falls_back_to_string_edit_when_structured_patch_is_empty() {
 #[test]
 fn edit_originalfile_present_but_no_full_anchor_does_not_flag() {
     // An Edit carrying an originalFile arrives BEFORE any full anchor (had_full_anchor is
-    // false) → the `had_full_anchor && …` short-circuit FALSE side: no disagreement
+    // false) -> the `had_full_anchor && ...` short-circuit FALSE side: no disagreement
     // boundary is raised (we cannot prove drift without an anchor to compare against).
     let events = vec![FileEvent {
         line_no: 1,
@@ -292,7 +292,7 @@ fn edit_originalfile_present_but_no_full_anchor_does_not_flag() {
 #[test]
 fn edit_originalfile_agreeing_with_buffer_raises_no_boundary() {
     // An Edit whose originalFile MATCHES the anchored buffer drives the
-    // `buffer_disagrees_with_original(...)` FALSE side (anchor present, no drift) → no
+    // `buffer_disagrees_with_original(...)` FALSE side (anchor present, no drift) -> no
     // disagreement boundary, and the edit applies normally.
     let events = vec![
         FileEvent {
@@ -315,7 +315,7 @@ fn edit_originalfile_agreeing_with_buffer_raises_no_boundary() {
                     new_string: "B".into(),
                     replace_all: false,
                 }],
-                // originalFile AGREES with the replayed buffer → no disagreement.
+                // originalFile AGREES with the replayed buffer -> no disagreement.
                 original_file: Some("a\nb\nc".into()),
                 structured_patch: Some(vec![PatchHunk {
                     old_start: 2,

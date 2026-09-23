@@ -18,7 +18,7 @@ pub(crate) struct SparseBuffer {
     pub(crate) seen_total_lines: Option<usize>,
     /// Whether the last full-content anchor ended in a file-final newline. The Read tool
     /// reports `totalLines` by SEPARATOR count (so a newline-terminated file gets a phantom
-    /// empty last line: 12 content lines → totalLines 13), while `split_lines` uses
+    /// empty last line: 12 content lines -> totalLines 13), while `split_lines` uses
     /// TERMINATOR count (12). When this is set, a windowed read's `total_lines` is
     /// normalised down by that phantom so the two conventions agree and no spurious trailing
     /// `??? line N+1 unknown` gap is reported for a fully-recovered file.
@@ -196,7 +196,7 @@ pub(crate) fn apply_structured_patch(
 
         let start = (h.old_start as isize + offset).max(1) as usize;
         let end = start + h.old_lines; // exclusive
-                                       // Defensive grow: `dense` is pre-sized to `span + 1` (≥ every hunk's
+                                       // Defensive grow: `dense` is pre-sized to `span + 1` (>= every hunk's
                                        // `old_start + old_lines`) and each splice grows it by the running offset, so with
                                        // well-formed ascending hunks `end` never exceeds `dense.len()`. We keep the guard
                                        // anyway because the hunk stream is untrusted transcript data - a pathological
@@ -216,7 +216,7 @@ pub(crate) fn apply_structured_patch(
             return EditOutcome::UnAnchorable;
         }
         // Verify the removed region is fully known (anchorable). If any line in the old
-        // range is an unknown gap, we cannot safely re-anchor → un-anchorable.
+        // range is an unknown gap, we cannot safely re-anchor -> un-anchorable.
         let region_known = (start..end).all(|i| dense.get(i).map(Option::is_some).unwrap_or(false));
         if h.old_lines > 0 && !region_known {
             return EditOutcome::UnAnchorable;
@@ -265,11 +265,11 @@ pub(crate) fn apply_structured_patch(
     }
     let max_known = buf.known.keys().copied().max().unwrap_or(0);
     // A structured patch is AUTHORITATIVE about the file's new length: adjust the total
-    // seen so far by this edit's net line delta (`offset` = added − removed accumulated
+    // seen so far by this edit's net line delta (`offset` = added - removed accumulated
     // over the hunks) rather than monotonically maxing it. Maxing leaves a phantom
     // trailing gap after a net deletion (e.g. an insert that grew the file to N+1
     // followed by a delete back to N would still report N+1, emitting a spurious
-    // `??? line N+1 unknown`). Clamp to ≥ the max known line and ≥ 0.
+    // `??? line N+1 unknown`). Clamp to >= the max known line and >= 0.
     let prev_total = buf.seen_total_lines.unwrap_or(0) as isize;
     let adjusted = (prev_total + offset).max(max_known as isize).max(0) as usize;
     buf.seen_total_lines = Some(adjusted);
@@ -333,6 +333,6 @@ pub(crate) fn apply_string_edit(
     EditOutcome::Applied
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Boundaries + segmentation
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

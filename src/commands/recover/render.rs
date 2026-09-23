@@ -3,14 +3,14 @@
 use super::*;
 
 /// Resolve an `--at <WHEN>` spec to a cutoff jsonl line over a session's events.
-/// Supports `@latest` (no cutoff → the file's FINAL state), `@line:<N>`, `@turn:<N>` (first line
-/// strictly after turn N), an ISO8601 / relative datetime (events with ts ≤ the bound - the bound
-/// is INCLUSIVE), or returns `None` (no cutoff → replay everything) when `when` is empty.
+/// Supports `@latest` (no cutoff -> the file's FINAL state), `@line:<N>`, `@turn:<N>` (first line
+/// strictly after turn N), an ISO8601 / relative datetime (events with ts <= the bound - the bound
+/// is INCLUSIVE), or returns `None` (no cutoff -> replay everything) when `when` is empty.
 pub(crate) fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<usize>> {
     let when = when.trim();
-    // `@latest` / empty → the final reconstructed state (replay every event, no cutoff). The
+    // `@latest` / empty -> the final reconstructed state (replay every event, no cutoff). The
     // clean way to ask for "the file's last form" without guessing a timestamp past the last
-    // write (a datetime cutoff is ≤-inclusive, so a too-early ts simply yields less).
+    // write (a datetime cutoff is <=-inclusive, so a too-early ts simply yields less).
     if when.is_empty() || when == "@latest" {
         return Ok(None);
     }
@@ -26,7 +26,7 @@ pub(crate) fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<
             .trim()
             .parse()
             .with_context(|| format!("--at @turn:<N> needs an integer, got {rest:?}"))?;
-        // Cutoff = the last jsonl line whose turn_index ≤ target.
+        // Cutoff = the last jsonl line whose turn_index <= target.
         let cutoff = events
             .iter()
             .filter(|e| e.turn_index <= target)
@@ -35,7 +35,7 @@ pub(crate) fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<
         // If nothing is at/below the target turn, cutoff at 0 (empty snapshot).
         return Ok(Some(cutoff.unwrap_or(0)));
     }
-    // Datetime bound: the cutoff is the highest line_no whose ts ≤ bound.
+    // Datetime bound: the cutoff is the highest line_no whose ts <= bound.
     let window = TimeWindow::from_args(None, Some(when))?;
     let cutoff = events
         .iter()
@@ -45,9 +45,9 @@ pub(crate) fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<
     Ok(Some(cutoff.unwrap_or(0)))
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Render context + line-range filtering
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// Everything the renderers need beyond the per-session scan results.
 #[derive(Debug)]
@@ -62,7 +62,7 @@ pub(crate) struct RenderCtx {
     /// announces the true `1 top-level + N subagent` fan-out).
     pub(crate) scope_top: usize,
     pub(crate) scope_sub: usize,
-    /// Session ids the resolver found under more than one project directory (§2 `dedup`):
+    /// Session ids the resolver found under more than one project directory (section 2 `dedup`):
     /// the merged copies are named beside the scope banner and counted in the JSON header,
     /// so a reconstruction assembled from one copy says the other was dropped.
     pub(crate) duplicates: Vec<crate::path::DuplicateGroup>,
@@ -90,15 +90,15 @@ pub(crate) fn apply_line_range(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Text rendering
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// Write the `--out` artifact ONLY when it has content. An EMPTY reconstruction (no
 /// recoverable history / over-budget) must NOT clobber the destination - a user reusing a
 /// scratch path (the advertised `--out /tmp/restored.md` idiom) would otherwise lose
-/// pre-existing content AND read a false `(wrote …)` success line. Returns `true` when a
-/// write happened (so the caller prints its `(wrote …)` line) and `false` (with a stderr
+/// pre-existing content AND read a false `(wrote ...)` success line. Returns `true` when a
+/// write happened (so the caller prints its `(wrote ...)` line) and `false` (with a stderr
 /// note) when the blob was empty and the file was left untouched. Uniform across patches/at
 /// + their JSON twins + turns.
 pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
@@ -139,7 +139,7 @@ pub(crate) fn cmp_ts(a: &Option<String>, b: &Option<String>) -> std::cmp::Orderi
 /// Fold each top-level group (a session + ITS OWN subagents, keyed by `parent_session_id`)
 /// into one cross-session reconstruction timeline. A group whose target-file events come
 /// from <2 transcripts is returned unchanged (byte-identical legacy single-session path).
-/// A group with ≥2 contributing transcripts is collapsed into ONE synthetic `ScanResult`
+/// A group with >=2 contributing transcripts is collapsed into ONE synthetic `ScanResult`
 /// whose events are the union, stably sorted by wall-clock timestamp, with `line_no`
 /// re-stamped to a monotonic 1..N over the merged order so `--at` cutoffs (`@line` / `@turn`
 /// / datetime) and `replay`'s cutoff stay well-defined across the merged stream.
@@ -161,7 +161,7 @@ pub(crate) fn merge_groups_for_reconstruction(
     for (parent_key, group) in groups {
         let contributing = group.iter().filter(|s| !s.events.is_empty()).count();
         if contributing < 2 {
-            // 0 or 1 transcript touched the file in this group → no merge; the renderers
+            // 0 or 1 transcript touched the file in this group -> no merge; the renderers
             // skip the empty members exactly as before.
             out.extend(group);
             continue;
@@ -400,8 +400,8 @@ pub(crate) fn render_text(
     match ctx.mode {
         RecoverMode::Restore => unreachable!("handled above"),
         RecoverMode::Coverage => render_coverage_text(ctx, sessions),
-        // Salvage == `--at @latest`: render_at_text reads ctx.at (None here) → empty `when`
-        // → resolve_cutoff returns None → the final-state best-effort fragment.
+        // Salvage == `--at @latest`: render_at_text reads ctx.at (None here) -> empty `when`
+        // -> resolve_cutoff returns None -> the final-state best-effort fragment.
         RecoverMode::At | RecoverMode::Salvage => render_at_text(ctx, sessions, out_path),
         RecoverMode::Patches => render_patches_text(ctx, sessions, out_path),
     }

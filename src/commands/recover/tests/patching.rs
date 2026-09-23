@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn structured_patch_insertion_into_isolated_gap_is_unanchorable() {
     // A pure insertion (old_lines == 0) whose position is an isolated gap (no adjacent
-    // known line) must NOT fabricate island lines → un-anchorable.
+    // known line) must NOT fabricate island lines -> un-anchorable.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -52,7 +52,7 @@ fn structured_patch_insertion_into_isolated_gap_is_unanchorable() {
 #[test]
 fn structured_patch_context_mismatch_refuses_to_corrupt() {
     // The buffer holds a\nb\nc; a patch hunk at line 2 claims its old context is "WRONG"
-    // (the buffer disagrees) → the edit is refused (un-anchorable), the known line stays.
+    // (the buffer disagrees) -> the edit is refused (un-anchorable), the known line stays.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -98,7 +98,7 @@ fn structured_patch_resizes_dense_when_hunk_extends_past_known_end() {
     // A patch hunk whose old region runs PAST the current known buffer length forces the
     // `end > dense.len()` resize path. The buffer knows lines 1-2; a hunk at oldStart 2,
     // oldLines 2 reaches line 3 (one past the end). The trailing unknown line is a gap, so
-    // the region is not fully known → the edit is un-anchorable (no fabrication), but the
+    // the region is not fully known -> the edit is un-anchorable (no fabrication), but the
     // resize branch is exercised on the way to that verdict.
     let events = vec![
         FileEvent {
@@ -173,15 +173,15 @@ fn structured_patch_multi_hunk_running_offset_anchors_later_hunk() {
                 }],
                 original_file: None,
                 structured_patch: Some(vec![
-                    // hunk 1: line 1 (a) → three lines → running offset +2.
+                    // hunk 1: line 1 (a) -> three lines -> running offset +2.
                     PatchHunk {
                         old_start: 1,
                         old_lines: 1,
                         new_lines: 3,
                         lines: vec!["-a".into(), "+a1".into(), "+a2".into(), "+a3".into()],
                     },
-                    // hunk 2: original line 3 (c) → C. With offset +2 its start is 5, end 6,
-                    // past the span+1 (=5) dense length → forces the resize.
+                    // hunk 2: original line 3 (c) -> C. With offset +2 its start is 5, end 6,
+                    // past the span+1 (=5) dense length -> forces the resize.
                     PatchHunk {
                         old_start: 3,
                         old_lines: 1,
@@ -264,7 +264,7 @@ fn structured_patch_skips_context_check_when_old_region_len_mismatches() {
     // (impossible) context comparison.
     let mut buf = SparseBuffer::default();
     buf.reset_to_full("a\nb\nc", 3, 1);
-    // old_lines=2 but only one " " context line listed → old_region.len()==1 != 2.
+    // old_lines=2 but only one " " context line listed -> old_region.len()==1 != 2.
     let patches = vec![PatchHunk {
         old_start: 1,
         old_lines: 2,

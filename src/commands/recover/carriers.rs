@@ -19,11 +19,11 @@ pub(crate) fn extract_from_tool_use_result(
     target_file: Option<&str>,
     events: &mut Vec<FileEvent>,
 ) {
-    // ── (0) Bash result hint: `staleReadFileStateHint` names files THIS command
+    // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command
     //    modified out of the read set. CC computed the list from its own readFileState
     //    (an mtime stat over every read file), so a named match is authoritative. The
     //    paths are rendered relative to the shell's cwd; resolve before matching. A
-    //    truncated tail ("… and N more") names no paths, so only the named first-5 can
+    //    truncated tail ("... and N more") names no paths, so only the named first-5 can
     //    ever match: a target hidden in the remainder is NOT detected here (documented
     //    limit; the window's bash disclosure still covers the command itself).
     if let Some(hint) = tur
@@ -52,7 +52,7 @@ pub(crate) fn extract_from_tool_use_result(
             }
         }
     }
-    // ── (1a) Read result: toolUseResult.file = {filePath, content, startLine, …} ──
+    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --
     if let Some(file) = tur.get("file").and_then(|v| v.as_object()) {
         let path = file.get("filePath").and_then(serde_json::Value::as_str);
         if path_matches(target_file, path.unwrap_or_default()) {
@@ -61,8 +61,8 @@ pub(crate) fn extract_from_tool_use_result(
         }
     }
 
-    // ── (2) Write result: {type:create|update, filePath, content, …} ──
-    // ── (3) Edit result: {filePath, oldString, newString, structuredPatch, …} (no type) ──
+    // -- (2) Write result: {type:create|update, filePath, content, ...} --
+    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --
     let path = tur.get("filePath").and_then(serde_json::Value::as_str);
     if !path_matches(target_file, path.unwrap_or_default()) {
         return;
@@ -267,7 +267,7 @@ pub(crate) fn extract_from_attachment(
 ) {
     let atype = att.get("type").and_then(serde_json::Value::as_str);
 
-    // (7a) edited_text_file → an external edit (hard boundary).
+    // (7a) edited_text_file -> an external edit (hard boundary).
     if atype == Some("edited_text_file") {
         let path = att
             .get("filename")
@@ -290,7 +290,7 @@ pub(crate) fn extract_from_attachment(
         return;
     }
 
-    // (7b) a `file` attachment → same shape as a structured Read.
+    // (7b) a `file` attachment -> same shape as a structured Read.
     if let Some(file) = att
         .get("content")
         .and_then(|c| c.get("file"))
@@ -390,6 +390,6 @@ pub(crate) fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Ve
     Some(out)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Reconstruction - the sparse line-keyed buffer
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------

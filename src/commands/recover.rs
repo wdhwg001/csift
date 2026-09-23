@@ -41,13 +41,13 @@ use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
 
-/// Max characters of inline content shown before an explicit `… (+N chars)` marker in
+/// Max characters of inline content shown before an explicit `... (+N chars)` marker in
 /// HUMAN text output (JSON + `--out` are verbatim). Mirrors `search::EXCERPT_MAX`.
 const EXCERPT_MAX: usize = 400;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Data model
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 mod backups;
 mod bash_anchors;

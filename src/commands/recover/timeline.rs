@@ -150,9 +150,9 @@ impl Replay {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // JSON rendering (NDJSON - one object per line, trailing summary)
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 pub(crate) fn render_json(
     ctx: &RenderCtx,
@@ -165,7 +165,7 @@ pub(crate) fn render_json(
     }
     let mut session_count = 0usize;
 
-    // envelope v2: header (always) → kind-tagged rows → summary (always).
+    // envelope v2: header (always) -> kind-tagged rows -> summary (always).
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
@@ -274,7 +274,7 @@ pub(crate) fn render_json(
             }
         }
         RecoverMode::At | RecoverMode::Salvage => {
-            // Salvage feeds an empty `when` (ctx.at is None) → @latest (no cutoff).
+            // Salvage feeds an empty `when` (ctx.at is None) -> @latest (no cutoff).
             let when = ctx.at.as_deref().unwrap_or("");
             let mut out_blob = String::new();
             for s in sessions {
@@ -330,7 +330,7 @@ pub(crate) fn render_json(
     }
 
     // envelope v2 summary: FLAT, so a consumer reads one object per line rather than
-    // reaching through a {"summary":{…}} wrapper.
+    // reaching through a {"summary":{...}} wrapper.
     let mut summary_fields = json!({
         "sessions": session_count,
         "file": ctx.file,
@@ -382,7 +382,7 @@ pub(crate) fn boundary_json(b: &Boundary) -> serde_json::Value {
         "turn_index": b.turn_index,
         "ts_utc": b.timestamp_utc,
         "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
-        // WHAT invalidated the buffer (modified-since-read / external edit / bash / …) -
+        // WHAT invalidated the buffer (modified-since-read / external edit / bash / ...) -
         // named `cause` so `kind` stays the envelope discriminator exclusively.
         "cause": b.kind,
         "confidence": b.confidence.json(),

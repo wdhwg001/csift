@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (1b) gutter strip - BOTH tab and arrow forms ──
+// -- (1b) gutter strip - BOTH tab and arrow forms --
 
 #[test]
 fn strip_gutter_handles_tab_and_arrow_and_skips_unguttered() {
@@ -39,7 +39,7 @@ fn fmt_counts_omits_zeroes_and_flags_heuristic_bash() {
     assert_eq!(fmt_counts(&EventCounts::default()), "0");
 }
 
-// ── helpers ──
+// -- helpers --
 
 #[test]
 fn split_lines_drops_only_trailing_newline() {
@@ -79,10 +79,10 @@ fn snap_source_and_confidence_labels() {
 
 #[test]
 fn render_snapshot_body_empty_known_is_explicit() {
-    // No known lines + a seen total → the whole file is one explicit gap, never content.
+    // No known lines + a seen total -> the whole file is one explicit gap, never content.
     let body = render_snapshot_body(&[], 5, false);
     assert!(body.contains("??? lines 1..5 unknown"), "{body}");
-    // No known lines + no total → an honest "no content" note.
+    // No known lines + no total -> an honest "no content" note.
     let none = render_snapshot_body(&[], 0, false);
     assert!(none.contains("no content seen"), "{none}");
 }
@@ -99,7 +99,7 @@ fn apply_line_range_filters_known_lines() {
         Some(crate::text::parse_range_spec("5..10", "--file-lines", true).unwrap()),
     );
     assert_eq!(got, vec![(5, "b".to_string()), (10, "c".to_string())]);
-    // None → unchanged.
+    // None -> unchanged.
     assert_eq!(apply_line_range(lines.clone(), None), lines);
 }
 
@@ -122,7 +122,7 @@ fn fmt_counts_write_only_and_external_and_integrity_arms() {
         "history-snapshot arm: {s}"
     );
     assert!(s.contains("3 integrity-error"), "integrity-error arm: {s}");
-    // An edit with NO un-anchorable companion → the empty-suffix branch of the edit arm.
+    // An edit with NO un-anchorable companion -> the empty-suffix branch of the edit arm.
     let only_edit = EventCounts {
         edit: 2,
         ..EventCounts::default()
@@ -153,8 +153,8 @@ fn render_snapshot_body_inline_truncates_long_known_lines() {
 
 #[test]
 fn strip_gutter_skips_digits_without_a_separator_and_unparseable_widths() {
-    // A line with leading digits but NEITHER a tab NOR an arrow separator → the final else
-    // `continue` (no gutter recognized). And a digit run too large for usize → the
+    // A line with leading digits but NEITHER a tab NOR an arrow separator -> the final else
+    // `continue` (no gutter recognized). And a digit run too large for usize -> the
     // `digits.parse::<usize>()` Err side: skipped, never fabricated.
     let huge = "9".repeat(40); // overflows usize
     let snippet = format!("12 no-separator-here\n{huge}\tlost\n7\tkept");

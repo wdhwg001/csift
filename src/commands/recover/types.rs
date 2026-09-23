@@ -61,7 +61,7 @@ pub(crate) enum EventKind {
     /// FH-048). Replaying such an echo as a read of N empty lines, or as a one-line file,
     /// fabricates content; it is COUNTED and disclosed, never spliced.
     BlankedRead { total_lines: Option<usize> },
-    /// An Edit/MultiEdit applied old→new. `structured_patch` (when present) gives exact
+    /// An Edit/MultiEdit applied old->new. `structured_patch` (when present) gives exact
     /// line positions; `original_file` (when present) is used ONLY to cross-check for a
     /// boundary, never to paper over drift.
     Edit {
@@ -87,7 +87,7 @@ pub(crate) enum EventKind {
     ExternalEdit { snippet: Vec<(usize, String)> },
     /// Claude Code's own modified-file attribution: a Bash result's
     /// `staleReadFileStateHint` named this file as modified by the command ("[This
-    /// command modified N file(s) you've previously read: …]"). The hint's paths are
+    /// command modified N file(s) you've previously read: ...]"). The hint's paths are
     /// rendered RELATIVE to the recording shell's cwd and are resolved against the
     /// carrying record's own `cwd` before matching. AUTHORITATIVE (CC stat'd the
     /// read-set itself), content-less: a hard boundary at replay.
@@ -169,17 +169,17 @@ impl SnapSource {
 /// a scan that saw them must say so instead of dropping them).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IntegrityKind {
-    /// "File has been modified since read, …" - a HARD boundary (disk drift detected).
+    /// "File has been modified since read, ..." - a HARD boundary (disk drift detected).
     ModifiedSinceRead,
-    /// "File has not been read yet. …" - the edit never landed; NOT a boundary.
+    /// "File has not been read yet. ..." - the edit never landed; NOT a boundary.
     NotReadYet,
-    /// "String to replace not found in file. …" - the edit never landed; counted.
+    /// "String to replace not found in file. ..." - the edit never landed; counted.
     StringNotFound,
-    /// "File does not exist. …" - the op never landed; counted.
+    /// "File does not exist. ..." - the op never landed; counted.
     FileDoesNotExist,
 }
 
-/// One hunk of an Edit (old→new strings), from the tool_use `input`.
+/// One hunk of an Edit (old->new strings), from the tool_use `input`.
 #[derive(Debug, Clone)]
 pub(crate) struct EditHunk {
     pub(crate) old_string: String,
@@ -188,7 +188,7 @@ pub(crate) struct EditHunk {
 }
 
 /// One structured-patch hunk (`toolUseResult.structuredPatch[]`): a mirror of CC's
-/// `{oldStart, oldLines, newStart, newLines, lines:[" ","-","+", …]}`. `newStart` is not
+/// `{oldStart, oldLines, newStart, newLines, lines:[" ","-","+", ...]}`. `newStart` is not
 /// retained - replay derives the new position from `oldStart` + the running line offset.
 #[derive(Debug, Clone)]
 pub(crate) struct PatchHunk {
@@ -199,9 +199,9 @@ pub(crate) struct PatchHunk {
     pub(crate) lines: Vec<String>,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Per-file scan
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /// One shell command in a scanned transcript whose touched-file set the lexical layer
 /// cannot name: a mutating-CLASS marker (`fmt:cargo`, `interp:python`, `pkg:npm`,

@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (4) Extraction per EventKind ──
+// -- (4) Extraction per EventKind --
 
 #[test]
 fn extract_full_read_is_full_snapshot() {
@@ -302,7 +302,7 @@ fn extract_multiedit_synthetic_hunks_apply_in_order() {
     );
 }
 
-// ── path matching ──
+// -- path matching --
 
 #[test]
 fn path_matches_exact_and_basename_suffix() {
@@ -338,11 +338,11 @@ fn classify_integrity_error_distinguishes_kinds_and_ignores_other_errors() {
     assert_eq!(classify_integrity_error(&other), None);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Branch completeness: the error / second-operand / short-circuit arms the
 // happy-path cases above do not reach. Each drives a SPECIFIC branch with a
 // real assertion on the documented behavior (never a coverage-only touch).
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #[test]
 fn classify_integrity_error_accepts_alternate_phrasings() {
@@ -409,7 +409,7 @@ fn line_is_recover_candidate_matches_each_distinct_marker() {
 
 #[test]
 fn collect_tool_use_paths_skips_missing_and_empty_file_path() {
-    // A Read tool_use with NO file_path input, and an Edit tool_use with an EMPTY one →
+    // A Read tool_use with NO file_path input, and an Edit tool_use with an EMPTY one ->
     // neither is recorded (the `if let Some(p)` None side + the `!p.is_empty()` false side).
     let recs = numbered(&[
         r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
@@ -427,7 +427,7 @@ fn collect_tool_use_paths_skips_missing_and_empty_file_path() {
 
 #[test]
 fn bash_tool_use_without_command_is_ignored() {
-    // A Bash tool_use with no `command` input → the `if let Some(cmd)` None side; no
+    // A Bash tool_use with no `command` input -> the `if let Some(cmd)` None side; no
     // BashTouch is produced (and nothing panics on the missing field).
     let recs = numbered(&[
         r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
@@ -443,7 +443,7 @@ fn bash_tool_use_without_command_is_ignored() {
 
 #[test]
 fn history_snapshot_without_tracked_backups_is_ignored() {
-    // A file-history-snapshot whose snapshot object lacks `trackedFileBackups` → the
+    // A file-history-snapshot whose snapshot object lacks `trackedFileBackups` -> the
     // `if let Some(tfb)` None side; no marker event is emitted.
     let recs = numbered(&[
         r#"{"type":"file-history-snapshot","snapshot":{"timestamp":"2026-06-07T05:00:00.000Z","messageId":"m1"}}"#,

@@ -3,7 +3,7 @@
 use super::*;
 
 /// Replay a session's ordered `--file` events into segments + boundaries + counts.
-/// `cutoff_line` (when `Some`) stops replay at jsonl line ≤ cutoff (for `--at`).
+/// `cutoff_line` (when `Some`) stops replay at jsonl line <= cutoff (for `--at`).
 pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay {
     let mut out = Replay::default();
     let mut buf = SparseBuffer::default();
@@ -76,9 +76,9 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     }
                 }
                 let opened_here = seg_open.is_none();
-                // A WRITE is a creation/whole-file event → its segment's pre-state is the
+                // A WRITE is a creation/whole-file event -> its segment's pre-state is the
                 // buffer BEFORE the write (so the diff shows the write as a real change). A
-                // full READ / file attachment is an OBSERVATION of existing state → its
+                // full READ / file attachment is an OBSERVATION of existing state -> its
                 // segment's pre-state is the anchor content itself (post-read), so the diff
                 // shows only the edits made AFTER the read, not a spurious "creation".
                 let pre_before_reset = buf.clone();
@@ -577,7 +577,7 @@ pub(crate) fn buffer_disagrees_with_original(buf: &SparseBuffer, original_file: 
             }
         }
     }
-    // Require a reasonable comparison base (≥1 line) and ANY mismatch to flag - but only
+    // Require a reasonable comparison base (>=1 line) and ANY mismatch to flag - but only
     // when we compared enough to be meaningful (avoid a single fluke). A mismatch ratio
     // over a small threshold is a real disagreement.
     compared > 0 && mismatches > 0 && (mismatches * 4 >= compared)
