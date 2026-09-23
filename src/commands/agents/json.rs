@@ -17,9 +17,9 @@ pub(crate) fn render_json(
     use std::collections::{BTreeMap, BTreeSet};
     let mut out = crate::text::Out::stdout();
 
-    // envelope v2, FLAT rows: header → per session a light `kind:"session"` row
-    // (counts only) → each workflow run as its own `kind:"run"` row followed by its
-    // member `kind:"agent"` rows (tree PRE-ORDER) → the built-in agents (pre-order) →
+    // envelope v2, FLAT rows: header -> per session a light `kind:"session"` row
+    // (counts only) -> each workflow run as its own `kind:"run"` row followed by its
+    // member `kind:"agent"` rows (tree PRE-ORDER) -> the built-in agents (pre-order) ->
     // summary. The tree nests in TEXT mode only; JSON consumers reconstruct it from
     // `parent_agent_id`/`depth` - so `jq 'select(.kind=="agent")'` addresses every node,
     // which one session row carrying the whole tree as a nested field would not.
@@ -110,7 +110,7 @@ pub(crate) fn render_json(
 ///
 /// The visited set keys on each node's POSITION in the set, not on its `agent_id`. Two
 /// copies of one session under two project directories whose contents DIVERGE stay in scope
-/// by the merge rule (§2.5), and they carry two copies of each agent transcript, which share
+/// by the merge rule (section 2.5), and they carry two copies of each agent transcript, which share
 /// an id by construction - identical copies merge away, a DIVERGENT pair does not, so the
 /// set can still hold two nodes under one id: keying on the id emitted one of the pair while
 /// the session row counted both, which is exactly the disagreement between the count and the
@@ -292,9 +292,9 @@ pub(crate) fn workflow_run_json(run: &WorkflowRun, session_id: &str) -> serde_js
 pub(crate) const ONE_LINE_MAX: usize = 200;
 
 /// Collapse a (possibly multi-line) returned message to a single line for the text view, via
-/// the SHARED excerpt helper - so the elision is marked with the same explicit `… (+N
+/// the SHARED excerpt helper - so the elision is marked with the same explicit `... (+N
 /// chars)` count every other content-excerpt path emits (the never-silent-truncation
-/// contract, SPEC §0/§8.1). A bare `…` with no count is a silent truncation, which that
+/// contract, SPEC section 0/section 8.1). A bare `...` with no count is a silent truncation, which that
 /// contract forbids - hence the shared helper rather than a local cut.
 pub(crate) fn one_line(s: &str) -> String {
     crate::text::collapse_and_truncate(s, ONE_LINE_MAX)

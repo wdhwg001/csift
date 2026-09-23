@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Human-readable duration between two ISO timestamps (best-effort; None → "-"). The
+/// Human-readable duration between two ISO timestamps (best-effort; None -> "-"). The
 /// rendering is the shared one (`agents` prints the same shapes), so the two never drift.
 fn duration_label(first: Option<&str>, last: Option<&str>) -> String {
     let (Some(f), Some(l)) = (first, last) else {
@@ -32,7 +32,7 @@ fn merged_tokens(rows: &[SessionStats]) -> BTreeMap<String, TokenSums> {
     total
 }
 
-/// Sum one per-session `key → count` census across the scope (tools, line types,
+/// Sum one per-session `key -> count` census across the scope (tools, line types,
 /// narration blocks - one merge, so a fourth census cannot drift into its own copy).
 fn merged_counts<'a>(
     rows: &'a [SessionStats],
@@ -73,7 +73,7 @@ fn merged_crossing(rows: &[SessionStats], cross: CrossingBudget) -> CrossingRepo
     CrossingReport::fold(cross, rows.iter().map(|r| &r.crossing))
 }
 
-/// Count-desc `key×n` census line (`types` rows; the small closed-ish type space needs no
+/// Count-desc `keyxn` census line (`types` rows; the small closed-ish type space needs no
 /// cap - a cap would be silent truncation).
 fn line_types_line(types: &BTreeMap<String, usize>) -> String {
     let mut lt: Vec<(&String, &usize)> = types.iter().collect();

@@ -4,11 +4,11 @@ use super::*;
 
 /// Entry point for `csift list`.
 pub fn run_list(args: &ListArgs) -> Result<()> {
-    // 1+2. Resolve targets → the concrete session jsonl files, via the SAME shared resolver
+    // 1+2. Resolve targets -> the concrete session jsonl files, via the SAME shared resolver
     //       every other session-operating subcommand uses (`path::resolve_session_files`).
     //       This routes an `@<uuid>` / `@<hex>` POSITIONAL (and a `*.jsonl` file) to the session
     //       filter, so `csift list @<uuid>` identifies that one session instead of erroring - and
-    //       0 targets ⇒ every project. Subagent transcripts (built-in Task/Agent-tool + workflow /
+    //       0 targets => every project. Subagent transcripts (built-in Task/Agent-tool + workflow /
     //       OMC agents) span by default; `--no-subagents` keeps only the top-level `<uuid>.jsonl`
     //       set. Workflow `journal.jsonl` event logs are never transcripts and are excluded by the
     //       resolver.
@@ -145,12 +145,12 @@ pub(crate) fn last_activity(s: &SessionSummary) -> Option<&str> {
         .max()
 }
 
-/// The one-line PREVIEW body for a `list` first/last scan (the §1 / automation-label polish):
-/// - a `<task-notification>` automation pulse → its parsed `[<kind> …] <summary>` attribution
-///   label, never the raw `<task-notification>…<output-file>…` XML wrapper;
-/// - an inbound `<teammate-message>` peer message → a CLEAN `agent.communication.{inbox,signal}
-///   <from> ⇨ self  <body>` render (the wrapper tags + trailing harness footer stripped), never
-///   the raw `<teammate-message …>` XML blob;
+/// The one-line PREVIEW body for a `list` first/last scan (the section 1 / automation-label polish):
+/// - a `<task-notification>` automation pulse -> its parsed `[<kind> ...] <summary>` attribution
+///   label, never the raw `<task-notification>...<output-file>...` XML wrapper;
+/// - an inbound `<teammate-message>` peer message -> a CLEAN `agent.communication.{inbox,signal}`
+///   `<from> ⇨ self  <body>` render (the wrapper tags + trailing harness footer stripped), never
+///   the raw `<teammate-message ...>` XML blob;
 /// - otherwise the normal genuine-user / AUQ / rejection reconstruction.
 ///
 /// Eligibility MATCHES the plain `reconstructed_user_text(None)` gate: a task-notification and a

@@ -23,7 +23,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // Resolve the target session files from the positional target(s). With none, every
     // project is scanned - the same target model as list/search. `agents` discovers each
     // session's subagents itself, so it never spans subagent TRANSCRIPT files here - pass
-    // `false` (⇒ `SubagentScope::TopLevelOnly`).
+    // `false` (=> `SubagentScope::TopLevelOnly`).
     let resolved = path::resolve_targets_with_session_list_reported(
         &args.paths,
         args.sessions_from.as_deref(),
@@ -230,13 +230,13 @@ pub(crate) fn topology_for_session(
 }
 
 /// True when the node's `agent_type` passes the repeatable `--agent-type` filter
-/// (exact match, empty filter ⇒ all). A node with NO agent_type only passes an
+/// (exact match, empty filter => all). A node with NO agent_type only passes an
 /// empty filter - an explicit filter never matches the unknown.
 fn agent_type_allowed(agent_type: Option<&str>, wanted: &[String]) -> bool {
     wanted.is_empty() || agent_type.is_some_and(|t| wanted.iter().any(|w| w == t))
 }
 
-/// True when `kind` passes the `--shape` filter (empty filter ⇒ all kinds).
+/// True when `kind` passes the `--shape` filter (empty filter => all kinds).
 pub(crate) fn kind_allowed(kind: SubagentKind, want: &[AgentKindFilter]) -> bool {
     if want.is_empty() {
         return true;
@@ -270,7 +270,7 @@ pub(crate) fn window_admits(node: &SubagentNode, window: &TimeWindow, axis: Agen
     window.contains(ts)
 }
 
-// ── Rendering ──
+// -- Rendering --
 
 /// True if any node in the tree (self or any descendant) is a teammate.
 pub(crate) fn any_teammate(nodes: &[SubagentNode]) -> bool {
@@ -280,7 +280,7 @@ pub(crate) fn any_teammate(nodes: &[SubagentNode]) -> bool {
 }
 
 /// Control-mechanism hint for teammates (`in_process_teammate`), surfaced in `agents` text
-/// output whenever the scope holds ≥1 teammate. csift is the LLM's only window into a session's
+/// output whenever the scope holds >=1 teammate. csift is the LLM's only window into a session's
 /// teammates, so it is the natural place to point at the CORRECT control tool - a real session
 /// burned ~30 min trying to `TaskStop` / `pkill` a runaway teammate (feeding it the name, the
 /// `Name@team` form, AND the exact `aName-<hash>` agentId csift prints) before discovering the

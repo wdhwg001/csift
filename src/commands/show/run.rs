@@ -93,7 +93,7 @@ pub(crate) fn run_raw(
     };
     let bytes: &[u8] = &mmap;
 
-    // uuid → line resolution: parse only the lines whose raw bytes contain a wanted
+    // uuid -> line resolution: parse only the lines whose raw bytes contain a wanted
     // uuid (cheap memmem prefilter), then confirm against the parsed record's own uuid.
     let mut uuid_line: std::collections::BTreeMap<&String, Option<usize>> =
         uuids.iter().map(|u| (u, None)).collect();
@@ -245,7 +245,7 @@ pub(crate) fn run_rendered(
         }
     }
 
-    // Address-miss accounting (explicit lines + uuids must resolve; ranges must yield ≥1).
+    // Address-miss accounting (explicit lines + uuids must resolve; ranges must yield >=1).
     let mut hit_lines: BTreeSet<usize> = BTreeSet::new();
     let mut hit_uuids: BTreeSet<String> = BTreeSet::new();
     for ex in &exchanges {

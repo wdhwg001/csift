@@ -86,7 +86,7 @@ pub(crate) fn run_plan_audit(args: &PlanArgs, session_files: &[PathBuf]) -> Resu
         })
         .collect();
 
-    // 3. Corpus binder map: plan file → every session bound to it. Paid only when the
+    // 3. Corpus binder map: plan file -> every session bound to it. Paid only when the
     //    scope mutated anything (the join is what identifies a "plan file").
     let mut binder_map: std::collections::BTreeMap<String, Vec<PlanRef>> =
         std::collections::BTreeMap::new();

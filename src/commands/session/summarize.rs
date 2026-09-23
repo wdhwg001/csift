@@ -30,7 +30,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     // (the record `agentId`, what `agents` prints) so a `list` subagent row is joinable.
     let session_id = crate::subagent::session_id_from_path(path);
 
-    // ── HEAD read: first genuine-user message + identity fields ──
+    // -- HEAD read: first genuine-user message + identity fields --
     let mut first_user: Option<MessagePreview> = None;
     let mut cwd: Option<String> = None;
     let mut version: Option<String> = None;
@@ -72,9 +72,9 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
                 }
             }
             // First user message = a genuine human turn, an answered AskUserQuestion, or a
-            // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
+            // tool-use rejection-with-message (sections 4.1/4.4/4.2.4). No PlanIndex in this
             // single-record head scan, so a rejection surfaces its typed instruction without
-            // the `[plan: …]` pointer (the pointer is a turns/search affordance). A
+            // the `[plan: ...]` pointer (the pointer is a turns/search affordance). A
             // `<task-notification>` / inbound `<teammate-message>` renders its clean label /
             // inbound-comm form via `preview_text`, never the raw XML.
             if let Some(text) = preview_text(rec) {
@@ -90,7 +90,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
             true
         })?;
 
-    // ── TAIL read: last genuine-user + last agent message (newest-first) ──
+    // -- TAIL read: last genuine-user + last agent message (newest-first) --
     let mut last_user: Option<MessagePreview> = None;
     let mut last_agent: Option<MessagePreview> = None;
     // LAST-seen identity: the tail walks newest-first, so the first record it visits
@@ -141,7 +141,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
             last_user.is_none() || last_agent.is_none()
         })?;
 
-    // Prefer the filename-derived id; cross-check with the data id (§2.4 spirit).
+    // Prefer the filename-derived id; cross-check with the data id (section 2.4 spirit).
     let session_id = if session_id.is_empty() {
         data_session_id.unwrap_or_default()
     } else {
@@ -156,11 +156,11 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
-    // ── Transparent elicitation-sidecar merge (§3.10) ──
+    // -- Transparent elicitation-sidecar merge (section 3.10) --
     // A TOP-LEVEL session's unresolved-pending elicitations (the latest activity, MISSING from
     // the native transcript) annotate the row with `with elicitation sidecar` + the pending
     // kind. A subagent transcript has no sidecar (keyed by the top-level session). The sidecar
-    // is tiny → a plain read; its malformed-line count folds into `skipped_lines` (never silent).
+    // is tiny -> a plain read; its malformed-line count folds into `skipped_lines` (never silent).
     let mut sidecar_skipped = 0usize;
     let pending_elicitations = if is_subagent {
         Vec::new()
@@ -177,7 +177,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
     let sidecar_present = !is_subagent
         && crate::commands::elicitation::sidecar_path(path).is_some_and(|p| p.is_file());
 
-    // ── Clone lineage (top-level rows only; forks copy whole session files) ──
+    // -- Clone lineage (top-level rows only; forks copy whole session files) --
     let clone_boundary_uuid = if is_subagent {
         None
     } else {
@@ -187,7 +187,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
         .as_deref()
         .and_then(|u| clone_origin(path, u));
 
-    // ── `/clear` lineage (top-level rows only; a subagent is never cleared) ──
+    // -- `/clear` lineage (top-level rows only; a subagent is never cleared) --
     let minted_by_clear = minted_by_clear && !is_subagent;
     let clear_join = match clear_wrapper_ts.as_deref() {
         Some(ts) if minted_by_clear => cleared_from_origin(path, ts),
@@ -403,4 +403,4 @@ pub(crate) fn capture_identity_if_empty(
     }
 }
 
-// ── Text rendering ──
+// -- Text rendering --

@@ -3,7 +3,7 @@
 use super::*;
 
 /// Max characters of a message excerpt shown inline before truncation. Truncation
-/// is ALWAYS explicit (`… (+N chars)`) - never silent (SPEC §0, §8.1).
+/// is ALWAYS explicit (`... (+N chars)`) - never silent (SPEC section 0, section 8.1).
 ///
 /// Deliberately SHORTER than `search`'s 400-char cap (`search::EXCERPT_MAX`): `list`
 /// is a scannable identity index (many one-line previews at a glance), whereas
@@ -26,7 +26,7 @@ pub struct SessionSummary {
     pub parent_session_id: String,
     /// Absolute path to the session jsonl.
     pub path: PathBuf,
-    /// Decoded human-readable cwd (read from the data, §2.4), if present. FIRST-seen
+    /// Decoded human-readable cwd (read from the data, section 2.4), if present. FIRST-seen
     /// deliberately: the record cwd follows the tracked shell cwd (SPEC 4.9), so the
     /// last-seen value can legitimately be a subdirectory; the session's home is the
     /// opening value. Asymmetric with version/git_branch below on purpose.
@@ -47,7 +47,7 @@ pub struct SessionSummary {
     pub last_agent: Option<MessagePreview>,
     /// Count of malformed lines skipped while reading this session (never hidden).
     pub skipped_lines: usize,
-    /// One-line renders of this session's UNRESOLVED-pending elicitations (§3.10) merged from
+    /// One-line renders of this session's UNRESOLVED-pending elicitations (section 3.10) merged from
     /// the hook-written sidecar - what the session is currently blocked on (AskUserQuestion /
     /// ExitPlanMode / MCP), MISSING from the native transcript. Empty for a top-level session
     /// with no sidecar / no pending, and ALWAYS empty for a subagent row (the sidecar is keyed
@@ -127,7 +127,7 @@ pub struct SessionSummary {
     /// from "no carrier".
     pub minted_elsewhere: Vec<String>,
     /// The OTHER copies of this session id on disk - the same basename under a different
-    /// project directory (§2 `dedup`). For a merged group these are the copies the
+    /// project directory (section 2 `dedup`). For a merged group these are the copies the
     /// resolver dropped, so this row stands for all of them; for a DIVERGENT group
     /// nothing merged, both copies have their own row, and each names the other here.
     /// Empty for every ordinary session, which is nearly all of them.
@@ -156,7 +156,7 @@ impl MessagePreview {
     }
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `... (+N chars)` marker.
 pub(crate) fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }

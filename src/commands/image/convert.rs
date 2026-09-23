@@ -13,7 +13,7 @@
 
 use super::*;
 
-/// A source `media_type` → an [`ImageOutFormat`]. `None` for a media type outside the four
+/// A source `media_type` -> an [`ImageOutFormat`]. `None` for a media type outside the four
 /// Claude-API image types (shouldn't occur - CC only stores those).
 pub(crate) fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {
     match mt {
@@ -27,7 +27,7 @@ pub(crate) fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {
 
 /// Decode `bytes` and RE-ENCODE to `target` (caller handles the same-format passthrough). An
 /// animated GIF flattened to a still target yields its FIRST frame (with a warning note);
-/// →jpeg is quality-90 lossy, →gif is palette-quantized, →webp is pure-Rust lossless. Returns
+/// ->jpeg is quality-90 lossy, ->gif is palette-quantized, ->webp is pure-Rust lossless. Returns
 /// the encoded bytes plus any short human notes. A decode/encode failure is surfaced, never a
 /// wrong file.
 pub(crate) fn convert_image(
@@ -37,7 +37,7 @@ pub(crate) fn convert_image(
     let mut notes = Vec::new();
     let src_is_gif = image::guess_format(bytes).ok() == Some(image::ImageFormat::Gif);
 
-    // Decode to a single still image. An animated GIF → still target keeps only the first frame.
+    // Decode to a single still image. An animated GIF -> still target keeps only the first frame.
     let img: image::DynamicImage = if src_is_gif && target != ImageOutFormat::Gif {
         let decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes))
             .context("decode gif")?;
@@ -78,7 +78,7 @@ pub(crate) fn convert_image(
                 .context("encode png")?;
         }
         ImageOutFormat::Jpeg => {
-            // JPEG has no alpha → flatten to RGB; quality fixed at 90.
+            // JPEG has no alpha -> flatten to RGB; quality fixed at 90.
             let rgb = img.to_rgb8();
             image::codecs::jpeg::JpegEncoder::new_with_quality(
                 &mut std::io::Cursor::new(&mut out),
@@ -89,9 +89,9 @@ pub(crate) fn convert_image(
             notes.push("lossy re-encode (jpeg quality 90)".to_string());
         }
         ImageOutFormat::Gif => {
-            // Build a ≤256-color palette (NeuQuant) and Floyd-Steinberg dither INTO it before
+            // Build a <=256-color palette (NeuQuant) and Floyd-Steinberg dither INTO it before
             // encoding, so a photographic source doesn't band. `image`'s dither diffuses error to
-            // x+1 unconditionally → it panics on a 1px-wide buffer; a sub-2px image has nothing to
+            // x+1 unconditionally -> it panics on a 1px-wide buffer; a sub-2px image has nothing to
             // dither anyway, so skip it there (the encoder still quantizes) and never crash.
             let mut rgba = img.to_rgba8();
             let dithered = rgba.width() >= 2 && rgba.height() >= 2;
@@ -142,7 +142,7 @@ pub(crate) fn extract(
         .and_then(ImageOutFormat::from_ext);
 
     if let Some(t) = file_target {
-        // One file ⇒ exactly one image; create the parent dir (the path itself is the file).
+        // One file => exactly one image; create the parent dir (the path itself is the file).
         if selected.len() != 1 {
             bail!(
                 "--out {} is a single {} file, but {} image(s) are selected — give a directory \
@@ -191,8 +191,8 @@ pub(crate) fn extract(
             .with_context(|| format!("{}: base64 decode failed (corrupt data)", img.id()))?;
 
         let src_fmt = format_of_media_type(&img.media_type);
-        // FILE mode → convert to the path's format (raw if it already matches, keeping an animated
-        // GIF animated); DIR mode → keep the source format (the "auto"/no-conversion path).
+        // FILE mode -> convert to the path's format (raw if it already matches, keeping an animated
+        // GIF animated); DIR mode -> keep the source format (the "auto"/no-conversion path).
         let (out_bytes, out_ext, out_media, notes): (Vec<u8>, String, String, Vec<String>) =
             match file_target {
                 None => (

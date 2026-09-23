@@ -3,7 +3,7 @@
 //!
 //! Three Claude Code elicitations stall a session on a human yet are invisible / ambiguous
 //! in the native jsonl while pending: **AskUserQuestion** and **ExitPlanMode** (CC buffers
-//! the whole assistant turn until answered - nothing on disk during the wait, see §3.4) and
+//! the whole assistant turn until answered - nothing on disk during the wait, see section 3.4) and
 //! an **MCP Elicitation** (the inner request lives in memory). A Claude Code hook records
 //! each one to an append-only SIDECAR jsonl beside the session
 //! (`<claude-home>/projects/<ENC>/<uuid>/elicitations.jsonl`, via
@@ -22,11 +22,11 @@
 //! Group the sidecar's lines by `csiftKey`. A key with a `csiftPhase:"pending"` record and NO
 //! `csiftPhase:"resolved"` record is UNRESOLVED - its pending record is exactly the one
 //! missing from the native transcript, so it is emitted. A malformed line is skipped +
-//! COUNTED (the never-silent invariant, AGENTS.md §4), and so is a SENTINEL-BEARING marker
+//! COUNTED (the never-silent invariant, AGENTS.md section 4), and so is a SENTINEL-BEARING marker
 //! whose `csiftPhase` the current schema cannot read (schema skew, e.g. a pre-release
 //! fossil: provably ours yet uninterpretable is a failure signature, never silent);
 //! only a non-marker line (no `csift:"elicitation-marker-v1"`) is skipped silently. A
-//! missing sidecar dir / file ⇒ no merge (never an error).
+//! missing sidecar dir / file => no merge (never an error).
 //!
 //! ## Keyed by the TOP-LEVEL session
 //!
@@ -56,7 +56,7 @@ pub fn sidecar_path(session_jsonl: &Path) -> Option<PathBuf> {
 /// native-shaped [`Record`]s, ordered by `timestamp` ascending) plus the malformed-line skip
 /// count.
 ///
-/// A missing sidecar dir / file ⇒ `(vec![], 0)` (no merge, never an error). A plain
+/// A missing sidecar dir / file => `(vec![], 0)` (no merge, never an error). A plain
 /// `read_to_string` suffices - the sidecar is tiny (one short line per elicitation
 /// open/close), so the mmap+memchr machinery the big transcripts need is unnecessary - but
 /// every malformed line is STILL counted.
@@ -64,7 +64,7 @@ pub fn unresolved_pending(session_jsonl: &Path) -> Result<(Vec<Record>, usize)> 
     let Some(path) = sidecar_path(session_jsonl) else {
         return Ok((Vec::new(), 0));
     };
-    // A missing file (no elicitations ever) is the common case → empty, not an error.
+    // A missing file (no elicitations ever) is the common case -> empty, not an error.
     let Ok(contents) = std::fs::read_to_string(&path) else {
         return Ok((Vec::new(), 0));
     };
@@ -92,7 +92,7 @@ pub fn unresolved_pending(session_jsonl: &Path) -> Result<(Vec<Record>, usize)> 
 /// stays its only signal - and its `csiftKey` may be a non-unique server name, unsafe to
 /// substring-scan.
 ///
-/// Cost: paid ONLY when ≥1 AUQ/ExitPlanMode key is sidecar-unresolved (rare - typically
+/// Cost: paid ONLY when >=1 AUQ/ExitPlanMode key is sidecar-unresolved (rare - typically
 /// zero). One mmap + a per-key `memmem` byte scan; only the few lines containing the key
 /// bytes are parsed, and a key merely QUOTED in prose (e.g. a Bash command grepping for it)
 /// fails the structural block-id check and does not count as closure.
@@ -101,7 +101,7 @@ fn drop_natively_closed(session_jsonl: &Path, pending: &mut Vec<Record>) {
         return;
     }
     let Ok(Some(map)) = crate::parse::mmap_bytes(session_jsonl) else {
-        return; // Unreadable/empty native transcript ⇒ no closure evidence; keep pendings.
+        return; // Unreadable/empty native transcript => no closure evidence; keep pendings.
     };
     let bytes: &[u8] = &map;
     pending.retain(|rec| {
@@ -162,7 +162,7 @@ fn record_bears_tool_id(rec: &Record, key: &str) -> bool {
 
 /// True when `path` is a csift elicitation sidecar - either by basename (`elicitations.jsonl`)
 /// or by content SNIFF (a renamed / moved sidecar): every parseable non-empty line carries
-/// the `csift:"elicitation-marker-v1"` marker and there is ≥1 such line and NO genuine CC
+/// the `csift:"elicitation-marker-v1"` marker and there is >=1 such line and NO genuine CC
 /// record. Used by the targeting rejection so the sidecar cannot be searched directly.
 #[must_use]
 pub fn is_sidecar_path(path: &Path) -> bool {
@@ -176,7 +176,7 @@ pub fn is_sidecar_path(path: &Path) -> bool {
 }
 
 /// Content sniff for [`is_sidecar_path`]: every parseable non-empty line is a
-/// `csift`-marked elicitation record, with ≥1 such line and NO genuine CC record. An
+/// `csift`-marked elicitation record, with >=1 such line and NO genuine CC record. An
 /// unparseable line disqualifies (a real transcript has many heavy lines that would not all
 /// parse as a small marker, but more importantly a sidecar is hook-written clean JSONL).
 fn content_is_sidecar(contents: &str) -> bool {
@@ -188,7 +188,7 @@ fn content_is_sidecar(contents: &str) -> bool {
         }
         match crate::parse::parse_line(trimmed.as_bytes()) {
             Ok(Some(rec)) if rec.is_elicitation_marker() => marked += 1,
-            // A parseable NON-marker record OR an unparseable line ⇒ this is not a pure
+            // A parseable NON-marker record OR an unparseable line => this is not a pure
             // sidecar (a native transcript or a foreign file).
             _ => return false,
         }
@@ -204,7 +204,7 @@ struct PendingRec {
 
 /// Pair a sidecar's lines by `csiftKey` and return (unresolved-pending records sorted by
 /// timestamp ascending, malformed-line count). A key with a `pending` record and NO
-/// `resolved` record is unresolved → its pending record is emitted (the one CC has not yet
+/// `resolved` record is unresolved -> its pending record is emitted (the one CC has not yet
 /// written natively). A non-marker line is skipped silently; a malformed (unparseable,
 /// non-blank) line is skipped + counted, and so is a sentinel-bearing marker whose
 /// `csiftPhase` is absent/unknown (schema skew - counted, never invisible).
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn schema_skewed_marker_is_counted_not_invisible() {
         // A pre-release fossil carries the sentinel but an OLD field naming
-        // (`phase`/`kind`/`key`, not `csiftPhase`/…) - provably ours, uninterpretable
+        // (`phase`/`kind`/`key`, not `csiftPhase`/...) - provably ours, uninterpretable
         // by the current schema. It must move the skip counter, never merge, never
         // vanish (valid-JSON-ness does not buy silence).
         let lines = concat!(

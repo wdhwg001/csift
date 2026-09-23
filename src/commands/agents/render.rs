@@ -71,7 +71,7 @@ pub(crate) fn render_text(
     Ok(())
 }
 
-/// Tree text: each session → its workflow RUN nodes (with their agents nested) → then the
+/// Tree text: each session -> its workflow RUN nodes (with their agents nested) -> then the
 /// remaining built-in agents. Joins workflow agents to a run by `workflow_id == run_id`.
 pub(crate) fn render_tree_text<W: std::io::Write>(
     w: &mut W,
@@ -127,7 +127,7 @@ pub(crate) fn render_tree_text<W: std::io::Write>(
             }
         }
 
-        // Built-in agents (no workflow_id), NESTED by the agent→agent topology: a
+        // Built-in agents (no workflow_id), NESTED by the agent->agent topology: a
         // sub-subagent renders UNDER its spawning agent (indent grows with depth), not flat.
         // The on-disk set is flat, so this is reconstructed from `parent_agent_id`.
         let builtin: Vec<&SubagentNode> = snodes

@@ -52,7 +52,7 @@ struct SessionStats {
     compactions: usize,
     skipped_lines: usize,
     /// Whole-file census: every parseable physical line counted by its top-level `type`
-    /// value (`user`, `assistant`, `attachment`, `file-history-snapshot`, …; `(untyped)`
+    /// value (`user`, `assistant`, `attachment`, `file-history-snapshot`, ...; `(untyped)`
     /// when the field is absent). A FILE fact like `lines`: never windowed by
     /// `--since`/`--turn`.
     line_types: BTreeMap<String, usize>,
@@ -225,7 +225,7 @@ fn stats_one_file(
         }
     }
 
-    // ONE chain, ONE grouping (§3.3): `turns` counts LIVE numbered turns - the exact
+    // ONE chain, ONE grouping (section 3.3): `turns` counts LIVE numbered turns - the exact
     // numbering `search` prints as `·tN` and `show --turn` addresses - and the three
     // survival totals are whole-file facts read straight off the chain.
     let chain = Chain::build_by(&rows, |r| *r, None, cross);

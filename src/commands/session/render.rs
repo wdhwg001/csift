@@ -16,7 +16,7 @@ pub(crate) fn render_text(
     // return 1 top-level + N subagent rows - surface that split up front (mirroring
     // `verbatim --subagents`, `files`, `search` and `recover`) so the default-span
     // surprise is announced, not buried. Printed only when the resolved set actually spans
-    // ≥1 subagent. ONE shared emitter / wording across every spanning surface. The counts
+    // >=1 subagent. ONE shared emitter / wording across every spanning surface. The counts
     // are the PRE-CAP scope: the row flood-guard never shrinks them.
     crate::text::emit_scope_banner(scope_top, scope_sub);
     for (i, s) in summaries.iter().enumerate() {
@@ -108,7 +108,7 @@ pub(crate) fn render_text(
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
 
-        // Currently-pending elicitation(s) merged from the sidecar (§3.10) - the session is
+        // Currently-pending elicitation(s) merged from the sidecar (section 3.10) - the session is
         // blocked on a human; this is its LATEST activity, missing from the native transcript.
         if !s.pending_elicitations.is_empty() {
             println!("  pending  with elicitation sidecar");
@@ -238,7 +238,7 @@ pub(crate) fn print_preview(label: &str, preview: Option<&MessagePreview>) {
     }
 }
 
-// ── JSON rendering (deterministic, one object per session) ──
+// -- JSON rendering (deterministic, one object per session) --
 
 pub(crate) fn render_json(
     summaries: &[SessionSummary],
@@ -248,7 +248,7 @@ pub(crate) fn render_json(
     duplicates: &[path::DuplicateGroup],
 ) -> Result<()> {
     use serde_json::json;
-    // envelope v2: header (always) → kind-tagged session rows → summary (always). Header scope
+    // envelope v2: header (always) -> kind-tagged session rows -> summary (always). Header scope
     // = the PRE-CAP resolved range (the flood-guard caps ROWS, never the scope numbers); the
     // summary's `sessions` stays the emitted-row count. `sessions_in_scope` counts DISTINCT
     // sessions because the resolver merged the copies of one id, so the two duplicate keys
@@ -291,7 +291,7 @@ pub(crate) fn render_json(
             // resolved pairs stay in the file), so present+no-pending genuinely means "not
             // blocked on an elicitation", while absent means "hook unknown - cannot conclude".
             "sidecar_present": s.sidecar_present,
-            // Unresolved-pending elicitations merged from the sidecar (§3.10): the one-line
+            // Unresolved-pending elicitations merged from the sidecar (section 3.10): the one-line
             // renders + a `with_elicitation_sidecar` flag (the machine echo of the text note).
             // Empty / false for a session with no pending and for every subagent row.
             "pending_elicitations": s.pending_elicitations,
@@ -334,7 +334,7 @@ pub(crate) fn render_json(
             // separates from "scanned and found none".
             "minted_elsewhere": s.minted_elsewhere,
             "minted_elsewhere_count": s.minted_elsewhere.len(),
-            // The OTHER copies of this session id on disk (§2 `dedup`). With
+            // The OTHER copies of this session id on disk (section 2 `dedup`). With
             // `duplicate_relation` `identical` / `prefix` the resolver merged them and
             // this row stands for all of them; with `divergent` it merged none, every
             // copy has its own row, and every count in this listing covers all of them;

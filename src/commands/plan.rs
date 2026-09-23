@@ -9,18 +9,18 @@
 //!
 //! ```text
 //! {"type":"attachment","attachment":{"type":"plan_mode",
-//!    "planFilePath":"/Users/…/.claude/plans/nested-prancing-popcorn.md",
-//!    "isSubAgent":false,"planExists":false}, …}
+//!    "planFilePath":"/Users/.../.claude/plans/nested-prancing-popcorn.md",
+//!    "isSubAgent":false,"planExists":false}, ...}
 //! ```
 //!
 //! This `plan_mode` attachment is the AUTHORITATIVE binding. Crucially it is the *only*
 //! reliable one: a session may freely `Edit`/`Write` OTHER sessions' plan files (they
-//! show up as ordinary tool calls on a `~/.claude/plans/…` path), so "any plans/ path the
+//! show up as ordinary tool calls on a `~/.claude/plans/...` path), so "any plans/ path the
 //! session touched" is NOT the session's own plan. The bound plan is the one named in the
 //! `plan_mode` attachment, full stop - no path heuristics.
 //!
 //! Within one transcript every `plan_mode` attachment carries the same `planFilePath`
-//! (only `planExists` flips `false→true` once the plan is first written); we take the
+//! (only `planExists` flips `false->true` once the plan is first written); we take the
 //! LATEST occurrence as the current binding.
 //!
 //! A `/clear` ENDS the binding and csift needs no code for it (claim PLAN-021). The
@@ -50,7 +50,7 @@ use facts::*;
 use slug::*;
 
 /// The magic `--file` value that tells `recover` to reconstruct the session-bound plan
-/// file instead of an explicit path. Bash-safe (no shell metacharacters → no escaping in
+/// file instead of an explicit path. Bash-safe (no shell metacharacters -> no escaping in
 /// a mixed script) and consistent with `--at`'s `@line:` / `@turn:` sigils.
 pub const PLAN_SIGIL: &str = "@plan";
 
@@ -224,7 +224,7 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
 /// REVERSE plan lookup: which session(s) are bound to `plan_file`. Scans the resolved scope
 /// (default every project; narrow with a PATH target) for transcripts whose `plan_mode`
 /// attachment names this exact plan file (absolute-path identity), and reports the bound
-/// session/subagent id(s). The inverse of the default session→plan direction.
+/// session/subagent id(s). The inverse of the default session->plan direction.
 fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
     let want = path::absolutize(plan_file)?;
     // No session pin (the whole point is we don't know the session); paths narrow scope.
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn plan_sigil_is_bash_safe_and_at_prefixed() {
-        // No shell metacharacter → no escaping needed in a mixed script; `@`-sigil matches
+        // No shell metacharacter -> no escaping needed in a mixed script; `@`-sigil matches
         // the `--at @line:`/`@turn:` convention.
         assert_eq!(PLAN_SIGIL, "@plan");
         assert!(PLAN_SIGIL.starts_with('@'));
@@ -497,33 +497,33 @@ mod tests {
             p
         };
 
-        // (a) empty transcript → no binding (mmap returns None).
+        // (a) empty transcript -> no binding (mmap returns None).
         let empty = write("empty.jsonl", "");
         assert!(resolve_session_plan(&empty).unwrap().is_none());
 
         // (b) the word "plan_mode" appears in ordinary USER TEXT (passes the byte prefilter)
-        //     but there is no attachment at all → no binding.
+        //     but there is no attachment at all -> no binding.
         let decoy = write(
             "decoy.jsonl",
             "{\"type\":\"user\",\"timestamp\":\"2026-06-07T05:00:00Z\",\"message\":{\"role\":\"user\",\"content\":\"what does plan_mode do\"}}\n",
         );
         assert!(resolve_session_plan(&decoy).unwrap().is_none());
 
-        // (c) an attachment of a DIFFERENT type that happens to contain the token → skipped.
+        // (c) an attachment of a DIFFERENT type that happens to contain the token -> skipped.
         let other_att = write(
             "other.jsonl",
             "{\"type\":\"attachment\",\"attachment\":{\"type\":\"file\",\"note\":\"see plan_mode\"},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",
         );
         assert!(resolve_session_plan(&other_att).unwrap().is_none());
 
-        // (d) a real plan_mode attachment but with NO planFilePath → skipped.
+        // (d) a real plan_mode attachment but with NO planFilePath -> skipped.
         let no_path = write(
             "nopath.jsonl",
             "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"isSubAgent\":false,\"planExists\":false},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",
         );
         assert!(resolve_session_plan(&no_path).unwrap().is_none());
 
-        // (e) a real, complete plan_mode attachment → bound. The binding record's own
+        // (e) a real, complete plan_mode attachment -> bound. The binding record's own
         //     top-level `slug` rides along (the harness mints it at Plan-Mode entry, so
         //     the bind record always carries it on current CC).
         let real = write(
@@ -537,7 +537,7 @@ mod tests {
         assert!(!got.is_subagent);
         assert_eq!(got.slug.as_deref(), Some("quiet-harbor-relay"));
 
-        // (f) an OLDER binding record without the slug field → None, never fabricated.
+        // (f) an OLDER binding record without the slug field -> None, never fabricated.
         let no_slug = write(
             "noslug.jsonl",
             "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"isSubAgent\":false,\"planFilePath\":\"/x/q.md\",\"planExists\":false},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",

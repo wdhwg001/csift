@@ -57,7 +57,7 @@ fn human_bytes_boundaries() {
 
 #[test]
 fn base64_roundtrip_standard_and_padded() {
-    // "hi" → "aGk=", "caf\u{e9}" bytes → padded; whitespace tolerated.
+    // "hi" -> "aGk=", "caf\u{e9}" bytes -> padded; whitespace tolerated.
     assert_eq!(decode_base64("aGk=").unwrap(), b"hi");
     assert_eq!(decode_base64("aGVsbG8=").unwrap(), b"hello");
     assert_eq!(decode_base64("a G V s\nbG8=").unwrap(), b"hello");
@@ -121,7 +121,7 @@ fn parse_id_selection_forms() {
 
 #[test]
 fn seq_extracted_by_positional_zip_of_image_markers() {
-    // Text lists `[Image #2] [Image #3]` and the record has 2 image blocks → positional.
+    // Text lists `[Image #2] [Image #3]` and the record has 2 image blocks -> positional.
     let r: Record = serde_json::from_str(
             r#"{"type":"user","message":{"role":"user","content":[
                 {"type":"text","text":"see [Image #2] and [Image #3] please"},
@@ -239,7 +239,7 @@ fn excerpt_around_centers_on_marker_and_is_char_safe() {
         ex.contains('☕') || ex.contains("dolor"),
         "window around it: {ex}"
     );
-    // No marker → head fallback, still char-safe (no panic on the multi-byte head).
+    // No marker -> head fallback, still char-safe (no panic on the multi-byte head).
     let head = excerpt_around("résumé piñata ☕ über no marker here", "[Image #9]", 4);
     assert!(!head.is_empty());
 }

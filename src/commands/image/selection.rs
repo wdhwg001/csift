@@ -99,11 +99,11 @@ pub(crate) fn pinned_path<'a>(
 }
 
 /// The DISTINCT images among `cands` (same `#N`): dedup by content fingerprint keeping the
-/// latest occurrence, ordered by line. Length 1 ⇒ `#N` is unambiguous; >1 ⇒ genuine reuse.
+/// latest occurrence, ordered by line. Length 1 => `#N` is unambiguous; >1 => genuine reuse.
 pub(crate) fn distinct_by_fingerprint<'a>(cands: &[&'a ImageRef]) -> Vec<&'a ImageRef> {
     let mut seen = std::collections::HashSet::new();
     let mut v: Vec<&ImageRef> = Vec::new();
-    // `cands` are ascending by line; walk reverse + keep first-seen ⇒ latest per content.
+    // `cands` are ascending by line; walk reverse + keep first-seen => latest per content.
     for i in cands.iter().rev() {
         if seen.insert(i.fingerprint.as_str()) {
             v.push(i);

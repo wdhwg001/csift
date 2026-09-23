@@ -44,9 +44,9 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
         .then((a.line_no, a.img_index).cmp(&(b.line_no, b.img_index)))
     });
 
-    // ── Scope filters: each NARROWS the image set, so an ambiguous `#N` can resolve in a
+    // -- Scope filters: each NARROWS the image set, so an ambiguous `#N` can resolve in a
     //    window / turn / uuid where it is unique - the disambiguators the ambiguity error
-    //    names, and pre-applyable up front (`--since 1h` so `#N` is unique in the last hour). ──
+    //    names, and pre-applyable up front (`--since 1h` so `#N` is unique in the last hour). --
     let time_window =
         crate::time_window::TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
     images.retain(|i| time_window.contains(i.ts_utc.as_deref()));
@@ -85,9 +85,9 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
     }
 
     // Apply the `--id` selection (if any). `#N` and `L<line>i<n>` are both per-transcript, so
-    // a multi-transcript scope is ambiguous → require a single transcript (like `show`).
+    // a multi-transcript scope is ambiguous -> require a single transcript (like `show`).
     let selected: Vec<&ImageRef> = if selection.is_empty() {
-        // List/extract ALL → dedup the SAME image re-injected across context windows (by
+        // List/extract ALL -> dedup the SAME image re-injected across context windows (by
         // content fingerprint). Two DISTINCT-content images that share a `#N` both survive, so
         // the listing shows the reuse - and an `--id #N` against it ERRORS (never silent-picks).
         dedup_latest(&images)

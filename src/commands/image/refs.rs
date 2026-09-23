@@ -64,7 +64,7 @@ impl ImageRef {
     }
 
     /// The session-facing handle `#N` when known, else the locator - so output leads with the
-    /// number the model already uses ("re-share #32" → `--id #32`).
+    /// number the model already uses ("re-share #32" -> `--id #32`).
     pub(crate) fn handle(&self) -> String {
         match self.seq {
             Some(n) => format!("#{n}"),
@@ -128,7 +128,7 @@ pub(crate) fn human_bytes(n: usize) -> String {
     }
 }
 
-/// Estimated decoded size of a base64 string (4 chars → 3 bytes, minus `=` padding). Exact
+/// Estimated decoded size of a base64 string (4 chars -> 3 bytes, minus `=` padding). Exact
 /// enough for a listing without decoding the (large) payload.
 pub(crate) fn est_decoded_len(b64: &str) -> usize {
     let pad = b64

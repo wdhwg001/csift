@@ -82,7 +82,7 @@ fn kind_filter_restricts() {
 
 #[test]
 fn window_on_trigger_axis_is_the_default() {
-    // Trigger at 05:00 → before a 06:00 lower bound → excluded on the TRIGGER axis.
+    // Trigger at 05:00 -> before a 06:00 lower bound -> excluded on the TRIGGER axis.
     let w = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
     let n = node(
         Some("2026-06-07T05:00:00Z"),
@@ -91,7 +91,7 @@ fn window_on_trigger_axis_is_the_default() {
         SubagentKind::BuiltinTask,
     );
     assert!(!window_admits(&n, &w, AgentTimeAxis::Trigger));
-    // …but its COMPLETION (07:00) is inside the window.
+    // ...but its COMPLETION (07:00) is inside the window.
     assert!(window_admits(&n, &w, AgentTimeAxis::Completion));
 }
 
@@ -122,7 +122,7 @@ fn unbounded_window_admits_even_missing_timestamp() {
 #[test]
 fn bounded_window_excludes_missing_axis_timestamp() {
     let w = TimeWindow::from_args(Some("2026-06-01"), None).unwrap();
-    // No trigger timestamp at all → a bounded trigger-window must NOT admit it.
+    // No trigger timestamp at all -> a bounded trigger-window must NOT admit it.
     let n = node(
         None,
         None,
@@ -138,8 +138,8 @@ fn bounded_window_excludes_missing_axis_timestamp() {
 fn one_line_collapses_and_marks_elision_count() {
     assert_eq!(one_line("a\n  b\tc"), "a b c");
     // A long multi-byte string truncated on a CHAR boundary never panics AND marks the
-    // dropped-char count explicitly: a bare `…` drops the count, which the
-    // never-silent-truncation contract forbids. 400 chars in, 200 kept → `… (+200 chars)`.
+    // dropped-char count explicitly: a bare `...` drops the count, which the
+    // never-silent-truncation contract forbids. 400 chars in, 200 kept -> `... (+200 chars)`.
     let multibyte = "🤖🎉✅🚀".repeat(100); // 400 chars
     let out = one_line(&multibyte);
     assert!(

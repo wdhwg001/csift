@@ -3,7 +3,7 @@
 use super::*;
 
 /// Parsed `--line` tokens: the EXPLICIT singletons (each must resolve - a miss is a
-/// hard error) and the inclusive ranges (each clamps, but must yield ≥1 record).
+/// hard error) and the inclusive ranges (each clamps, but must yield >=1 record).
 #[derive(Debug, Default)]
 pub(crate) struct LineSpecs {
     pub(crate) explicit: BTreeSet<usize>,
@@ -22,7 +22,7 @@ impl LineSpecs {
 }
 
 /// Parse `--line` tokens (already comma-split by clap) into `(is_explicit, RangeSpec)` pairs
-/// via the shared [`crate::text::parse_range_spec`] grammar (`N` · `A..B` · `N..` · `..N` ·
+/// via the shared [`crate::text::parse_range_spec`] grammar (`N`, `A..B`, `N..`, `..N`,
 /// `-k` from the end). A single token (no `..`) is an EXPLICIT address (miss = hard error); a
 /// `..` token is a clamping range. Open/from-end forms resolve against the file's line count in
 /// [`resolve_line_specs`]. No subagent prefix - the TARGET names the transcript.
@@ -61,7 +61,7 @@ pub(crate) fn resolve_line_specs(
 }
 
 /// Count a transcript's physical jsonl lines (newlines + a torn final fragment), the 1-based
-/// domain the `--line` from-end / open forms resolve against. An empty/missing file ⇒ 0.
+/// domain the `--line` from-end / open forms resolve against. An empty/missing file => 0.
 pub(crate) fn count_lines(file: &std::path::Path) -> Result<usize> {
     let Some(mmap) = mmap_bytes(file)? else {
         return Ok(0);
@@ -71,9 +71,9 @@ pub(crate) fn count_lines(file: &std::path::Path) -> Result<usize> {
         + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n")))
 }
 
-/// Resolve the TARGET to exactly ONE transcript file. `@<uuid>` → that top-level
-/// transcript (never spans); `@<agent-id>` → that subagent transcript alone; a
-/// `*.jsonl` path → that file. Anything resolving to ≠1 file is a pointed error.
+/// Resolve the TARGET to exactly ONE transcript file. `@<uuid>` -> that top-level
+/// transcript (never spans); `@<agent-id>` -> that subagent transcript alone; a
+/// `*.jsonl` path -> that file. Anything resolving to !=1 file is a pointed error.
 pub(crate) fn resolve_single_transcript(target: &std::path::Path) -> Result<PathBuf> {
     let resolved = path::resolve_session_files_reported(
         std::slice::from_ref(&target.to_path_buf()),

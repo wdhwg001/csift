@@ -86,8 +86,8 @@ struct Child {
     /// This child's place in the surviving conversation (`live` | `pre-cut` |
     /// `abandoned`).
     survival: &'static str,
-    /// The finer read: `live` · `rewound` (answered, then rewound past) · `draft`
-    /// (nothing ever answered it) · `abandoned` (off-chain, not an opener) · `pre-cut`.
+    /// The finer read: `live`, `rewound` (answered, then rewound past), `draft`
+    /// (nothing ever answered it), `abandoned` (off-chain, not an opener), `pre-cut`.
     verdict: &'static str,
 }
 
@@ -125,7 +125,7 @@ fn parse_ts(raw: &str) -> Option<jiff::Timestamp> {
     raw.parse().ok()
 }
 
-/// `7190` → `1h59m50s` (compact, no zero-padding of the leading unit).
+/// `7190` -> `1h59m50s` (compact, no zero-padding of the leading unit).
 fn gap_label(secs: i64) -> String {
     let h = secs / 3600;
     let m = (secs % 3600) / 60;
@@ -241,7 +241,7 @@ pub(crate) fn run_branch_points(
             .map(str::to_string),
     );
 
-    // uuid → (own line, own type), over EVERY parsed line - a fork parent can be an
+    // uuid -> (own line, own type), over EVERY parsed line - a fork parent can be an
     // attachment, a turn_duration system record, or any other line the loader admits.
     let line_of: std::collections::HashMap<&str, (usize, &str)> = rows
         .iter()
@@ -251,7 +251,7 @@ pub(crate) fn run_branch_points(
                 .map(|u| (u, (r.line(), n.kind().unwrap_or("(untyped)"))))
         })
         .collect();
-    // parentUuid → conversation children, file order.
+    // parentUuid -> conversation children, file order.
     let mut children_of: std::collections::HashMap<String, Vec<Child>> =
         std::collections::HashMap::new();
     let mut conversation_records = 0usize;

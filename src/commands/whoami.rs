@@ -42,7 +42,7 @@ use crate::path;
 const SESSION_ID_ENV: &str = "CLAUDE_CODE_SESSION_ID";
 
 /// Secondary alias mirrored by the Codex companion plugin. Accepted only when the
-/// canonical var is absent (SPEC §6.3 - prefer the canonical var).
+/// canonical var is absent (SPEC section 6.3 - prefer the canonical var).
 const SESSION_ID_ENV_ALIAS: &str = "CODEX_COMPANION_SESSION_ID";
 
 /// The guidance shown when no definitive signal exists. Kept as a const so the
@@ -106,7 +106,7 @@ pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
     }
 }
 
-/// True for the two lane id forms `whoami` answers for: the transcript form (a bare `a…`
+/// True for the two lane id forms `whoami` answers for: the transcript form (a bare `a...`
 /// agent id or a name-embedded teammate id) and a teammate's routing form `Name@Team`. A session
 /// uuid is deliberately NOT one: `whoami` answers about a lane, and the session forms already
 /// have `list` / `agents`.
@@ -204,7 +204,7 @@ fn finish_json(
 }
 
 /// `whoami @trap:<marker>`: resolve the caller's UPSTREAM ancestry chain from the unique literal
-/// marker it embedded in THIS very command, and report it self → ancestors → top-level root. This
+/// marker it embedded in THIS very command, and report it self -> ancestors -> top-level root. This
 /// is the walk-UP mirror of `agents` (walk-DOWN): a subagent learns its own bare hex AND the whole
 /// re-feedable lineage above it. Env-independent - reliable for a built-in Task AND a workflow
 /// subagent (whose env id is the PARENT, not itself).
@@ -233,7 +233,7 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
         }
         OutputFormat::Json => {
             // envelope v2: one kind:"identity" row per ancestry node, self first (depth 0)
-            // → top-level root last. The former single `{chain:[…]}` wrapper is gone -
+            // -> top-level root last. The former single `{chain:[...]}` wrapper is gone -
             // the SAME stream shape as the env form, just more rows.
             println!("{}", crate::text::envelope_header("whoami", json!({})));
             for n in &chain {
@@ -286,7 +286,7 @@ fn locate_transcript(session_id: &str) -> Option<PathBuf> {
     None
 }
 
-// ── Rendering ──
+// -- Rendering --
 
 fn render_text(me: &WhoAmI) {
     println!("session  {}", me.session_id);

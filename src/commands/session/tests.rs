@@ -29,7 +29,7 @@ fn truncate_counts_chars_not_bytes() {
 fn format_timestamp_uses_system_local_canonical_marker() {
     // tz-agnostic: the local portion must equal what the system tz itself yields
     // for this instant (derived in-test, not a hardcoded zone). The marker is
-    // `<TZAB>(UTC±offset)` with NO raw-UTC copy: a second copy invites LLM
+    // `<TZAB>(UTC+/-offset)` with NO raw-UTC copy: a second copy invites LLM
     // conversion arithmetic, and machine consumers read JSON ts_utc.
     let raw = "2026-06-07T05:48:22.880Z";
     let out = format_timestamp(Some(raw));
@@ -86,7 +86,7 @@ fn capture_identity_if_empty_only_fills_blanks() {
         )
         .unwrap();
     let mut cwd = None;
-    let mut version = Some("keep".to_string()); // already set → must NOT be overwritten
+    let mut version = Some("keep".to_string()); // already set -> must NOT be overwritten
     let mut branch = None;
     let mut sid = None;
     capture_identity_if_empty(&rec, &mut cwd, &mut version, &mut branch, &mut sid);
@@ -98,7 +98,7 @@ fn capture_identity_if_empty_only_fills_blanks() {
 
 #[test]
 fn summarize_head_first_user_captures_identity() {
-    // The head finds a genuine user FIRST → identity captured from it; the tail
+    // The head finds a genuine user FIRST -> identity captured from it; the tail
     // finds the last user + last agent. Exercises the head identity-capture arm
     // and both tail `is_none()` branches.
     let (_dir, p) = tmp_session(
@@ -169,7 +169,7 @@ fn summarize_session_id_from_data_when_filename_has_no_stem() {
 #[test]
 fn summarize_head_skips_non_genuine_records_before_first_user() {
     // The head stream leads with non-genuine records (metadata, an isMeta pseudo-
-    // turn, a tool_result carrier) → the head closure's `genuine_user_text()`
+    // turn, a tool_result carrier) -> the head closure's `genuine_user_text()`
     // returns None for each (the FALSE arm) until the real first user is reached.
     let (_dir, p) = tmp_session(
         "headnoise",
@@ -204,7 +204,7 @@ fn top_level_summary_is_not_subagent_and_is_its_own_parent() {
 
 #[test]
 fn subagent_summary_carries_is_subagent_and_refeedable_parent() {
-    // A subagent transcript path `…/<PARENT-UUID>/subagents/workflows/wf_x/agent-<hex>.jsonl`:
+    // A subagent transcript path `.../<PARENT-UUID>/subagents/workflows/wf_x/agent-<hex>.jsonl`:
     // session_id is the bare hex (NOT re-feedable), is_subagent=true, and
     // parent_session_id is the re-feedable PARENT uuid (the dir before `subagents/`).
     let root = crate::testfs::Scratch::dir("subdir");
