@@ -95,16 +95,20 @@ fn acceptance_compaction_summary_and_boundary_searchable() {
     );
 
     let boundary = acc(&h, "zzboundary", "harness.compaction.boundary");
-    assert!(boundary.success, "D7: stderr {}", boundary.stderr);
+    assert!(
+        boundary.success,
+        "the boundary keep: stderr {}",
+        boundary.stderr
+    );
     assert!(
         boundary.stdout.contains("harness.compaction.boundary"),
-        "D7 compact_boundary → now searchable:\n{}",
+        "the boundary keep surfaces a compact_boundary:\n{}",
         boundary.stdout
     );
     // The compactMetadata renders as the excerpt (trigger / pre/post tokens / duration).
     assert!(
         boundary.stdout.contains("trigger") && boundary.stdout.contains("auto"),
-        "D7 boundary excerpt carries its compactMetadata:\n{}",
+        "the boundary excerpt carries its compactMetadata:\n{}",
         boundary.stdout
     );
 }

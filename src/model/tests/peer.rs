@@ -241,7 +241,7 @@ fn agent_message_non_meta_excluded_opens_turn_inbox() {
     );
     assert!(
         !r.is_genuine_user(),
-        "an agent-message peer form must not count as a genuine human turn (FINDING-2)"
+        "an agent-message peer form must not count as a genuine human turn"
     );
     assert!(r.opens_turn(), "but it MUST still delimit a turn");
     assert!(r.is_peer_message_record());

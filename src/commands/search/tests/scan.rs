@@ -39,7 +39,7 @@ fn the_boundary_keep_admits_a_boundary_in_either_serialization() {
     let gates = flagless_gates();
     assert!(
         line_is_transcript_candidate(BOUNDARY.as_bytes(), &gates),
-        "a compact boundary is the whole point of the D7 keep"
+        "a compact boundary is the whole point of the boundary keep"
     );
     assert!(
         line_is_transcript_candidate(BOUNDARY_RESERIALIZED.as_bytes(), &gates),

@@ -138,7 +138,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
     assert!(um.success, "stderr: {}", um.stderr);
     assert!(
         um.stdout.contains("user.message"),
-        "FINDING-1: quoted tags stay user.message:\n{}",
+        "the section-boundary rule: quoted tags stay user.message:\n{}",
         um.stdout
     );
     // … and NOT under harness.notification …
@@ -153,7 +153,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
     assert!(notif.success, "stderr: {}", notif.stderr);
     assert!(
         notif.stdout.contains("no matching exchanges"),
-        "FINDING-1: a quoted <task-notification> is not a notification:\n{}",
+        "the section-boundary rule: a quoted <task-notification> is not a notification:\n{}",
         notif.stdout
     );
     // … and NOT under agent.communication.inbox.
@@ -168,7 +168,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
     assert!(inbox.success, "stderr: {}", inbox.stderr);
     assert!(
         inbox.stdout.contains("no matching exchanges"),
-        "FINDING-1: a quoted <teammate-message> is not inbox:\n{}",
+        "the section-boundary rule: a quoted <teammate-message> is not inbox:\n{}",
         inbox.stdout
     );
 }
