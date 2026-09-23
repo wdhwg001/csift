@@ -120,8 +120,9 @@ use super::*;
         backup instant (the @vN name collides across a mid-session counter reset, so \
         an unverified blob is refused), COMPARES the replayed buffer against the \
         snapshot content at each version change: a disagreement is an authoritative \
-        `external_write` boundary and the replay REBASES on the snapshot bytes - the \
-        never-existed state a silent write used to produce is gone. Without the blob, \
+        `external_write` boundary and the replay REBASES on the snapshot bytes, so the \
+        reconstruction continues from what the disk held rather than from a buffer no \
+        file ever carried. Without the blob, \
         a version jump with no tool write since the previous snapshot still discloses \
         the same boundary content-less: `external write (inferred, snapshot vN->vM, no \
         tool record since L<line>)`, naming the interval it bounds so you can go read it \
@@ -280,7 +281,7 @@ pub struct RecoverArgs {
     /// row per stored checkpoint (backup instant, bytes, @vN, store path), ordered by
     /// backup instant. The store key is sha256 of the absolute path (first 16 hex), so
     /// `--file` must be a literal absolute path (`@plan` cannot be hashed). Provenance
-    /// bounds, verified against the live store and the binary: written by the structured
+    /// bounds: written by the structured
     /// file tools and by an approved in-place `sed` preview only (other shell writes and
     /// manual edits never land here), PRUNED over time, and `@vN` counters reset per
     /// session dir (never an order key) - so absence proves nothing and a listing is

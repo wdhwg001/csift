@@ -20761,7 +20761,7 @@
         },
         {
           "path": "src/cli/files_recover_args/recover.rs",
-          "lines": "149-157",
+          "lines": "150-158",
           "snippet": "        FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\\n  \\\n          A Bash result's `staleReadFileStateHint` is Claude Code itself reporting \\\n        that the command modified files in its read set, BY NAME (paths relative to \\\n        the shell cwd, resolved before matching): an authoritative HARD \\\n        `hint_modified` boundary, and the one signal that attributes a formatter-class \\\n        rewrite to concrete files. A successful Edit flagged `staleRecovered` means \\\n        the disk had drifted since the last read but the edit still applied: an \\\n        authoritative `stale_recovered` annotation (nothing invalidated, other \\\n        changes exist outside the stream). An `edited_text_file` external-edit \\"
         }
       ],
@@ -32191,7 +32191,7 @@
         {
           "path": "src/cli/search_args.rs",
           "lines": "396-401",
-          "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
+          "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
       "states": [
@@ -49255,7 +49255,7 @@
         {
           "path": "src/cli/search_args.rs",
           "lines": "396-401",
-          "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it\n    /// with `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
+          "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
       "states": [
@@ -62605,7 +62605,7 @@
         {
           "path": "src/cli/agents_args.rs",
           "lines": "141-147",
-          "snippet": "        SEMANTICS: it answers \\\"what did the ORCHESTRATOR record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
+          "snippet": "        SEMANTICS: it answers \\\"what did the PARENT SESSION record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
         }
       ],
       "states": [

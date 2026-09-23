@@ -236,9 +236,10 @@ pub struct FilesArgs {
 }
 
 impl FilesArgs {
-    /// Whether subagent transcripts are spanned (the default). `files` now matches every
-    /// other default-on command: `--no-subagents` restricts to the top-level session;
-    /// otherwise subagents are spanned. Feeds [`crate::path::SubagentScope::from`].
+    /// Whether subagent transcripts are spanned (the default). `files` answers the same
+    /// two switches as every other default-on command: `--no-subagents` restricts to the
+    /// top-level session; otherwise subagents are spanned. Feeds
+    /// [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         self.subagents || !self.no_subagents

@@ -468,7 +468,7 @@ impl VerbatimArgs {
         SUBAGENT CAVEAT\n  \
           What the env var names depends on HOW the subagent was spawned and has CHANGED \
         across CC versions: current CC hands an Agent-tool subagent the PARENT session's id \
-        (verified live 2026-07-12: the subagent's OWN id is withheld from its env), and an \
+        (the subagent's OWN id is withheld from its env), and an \
         ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) likewise holds the \
         PARENT id; older builds handed a built-in Task subagent its OWN id. So from a \
         subagent, plain `whoami` usually resolves the ROOT, not you. For a DEFINITIVE, \

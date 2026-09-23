@@ -81,7 +81,7 @@ pub struct SearchArgs {
     pub pattern: String,
 
     /// Project target(s) as a POSITIONAL `[PATH]...`: the SAME scope-target surface every
-    /// sibling subcommand uses (`csift search PATTERN .` now works, matching
+    /// sibling subcommand uses (`csift search PATTERN .` is the same gesture as
     /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable.
     /// With none, every project is scanned. A target may ALSO be an `@<uuid>` (8-4-4-4-12 hex)
     /// session token (so `csift search PATTERN @<uuid>` scopes to that one session), an
@@ -320,7 +320,7 @@ pub struct SearchArgs {
     /// the parent link - `attached_to`, `blocked`, `redoes`, `fires`, `wraps`), it carries
     /// a `tool_result` answering a member's call (`result_of`), or it names a member's
     /// call by id in its own text or payload (`reports`, `for_tool_use`). The rest of the
-    /// vocabulary is not reverse-walked today, so `--for` on a record that only a
+    /// vocabulary is not reverse-walked, so `--for` on a record that only a
     /// non-structural relation points AT comes back empty - `versions`, `refused`,
     /// `interrupted`, `leaf`, `forked_from`, `continued_in`, `replies_to`, `armed_by`,
     /// `banner`, `hook_run`, the four survival words, `precedes` and `preserves`.
@@ -395,8 +395,8 @@ pub struct SearchArgs {
     /// RETIRED. A TOMBSTONE: hidden from `--help`, accepted by the parser
     /// and then a hard error naming the successor, so a stale invocation fails loudly
     /// instead of silently scanning less than it asked for (the `turns` tombstone
-    /// precedent). The flag gated ONE leaf, and that leaf now has a name: select it
-    /// with `-t harness.hook.context`.
+    /// precedent). The leaf it gated has a name: select it with
+    /// `-t harness.hook.context`.
     #[arg(long, hide = true)]
     pub additional_context: bool,
 

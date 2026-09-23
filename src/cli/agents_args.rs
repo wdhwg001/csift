@@ -24,7 +24,7 @@ pub enum AgentKindFilter {
     long_about = "List a session's SUBAGENT lifecycle: every subagent transcript the \
         session spawned, with its id, KIND, start + completion timestamps, duration, \
         and a determinable status. Three on-disk shapes are discovered under \
-        `<session>/subagents/**` (verified empirically against ~/.claude/projects):\n  \
+        `<session>/subagents/**`:\n  \
           • builtin-task  subagents/agent-<hex>.jsonl                 (Task/Agent tool)\n  \
           • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n  \
           • teammate      subagents/agent-a<Name>-<hex>.jsonl         (in_process_teammate / FleetView; meta taskKind)\n\
@@ -138,7 +138,7 @@ pub enum AgentKindFilter {
         pending_*: the return is history, the pending_* fields are now; the TEXT render \
         brands a non-completed lane's message inline (`history — predates the still-open \
         lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending. \
-        SEMANTICS: it answers \"what did the ORCHESTRATOR record as the return\", not \
+        SEMANTICS: it answers \"what did the PARENT SESSION record as the return\", not \
         \"what did the agent conclude\": a `sync-tool-result` source faithfully reports \
         the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \
         plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \
