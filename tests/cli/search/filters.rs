@@ -13,7 +13,7 @@ fn legacy_flat_selector_error_names_the_successor() {
         let out = h.run(&["search", "x", &at(SESS), "-t", legacy]);
         assert!(!out.success, "legacy selector must still hard-error");
         assert!(
-            out.stderr.contains("pre-v0.5") && out.stderr.contains(successor),
+            out.stderr.contains("is a flat spelling") && out.stderr.contains(successor),
             "'{legacy}' should point at '{successor}': {}",
             out.stderr
         );

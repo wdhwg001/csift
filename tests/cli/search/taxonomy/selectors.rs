@@ -93,11 +93,11 @@ fn every_retired_spelling_is_a_hard_error_naming_its_successors() {
 }
 
 /// The parenthetical the error carries for a RETIRED spelling, isolated from the rest of
-/// the message: `('<selector>' is the <era> - today that is: <successors>.)`. Panics when
-/// it is absent, because a retired spelling that errors without naming where its records
-/// went is the failure this pins.
+/// the message: `('<selector>' <why it is not a selector>, so this is: <successors>.)`.
+/// Panics when it is absent, because a retired spelling that errors without naming where
+/// its records went is the failure this pins.
 fn retirement_hint(stderr: &str, retired: &str) -> String {
-    let opener = format!("('{retired}' is the ");
+    let opener = format!("('{retired}' ");
     let at = stderr
         .find(&opener)
         .unwrap_or_else(|| panic!("no retirement hint for {retired} in: {stderr}"));

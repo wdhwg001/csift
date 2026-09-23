@@ -450,8 +450,9 @@ fn the_retired_continuation_selector_names_its_successor() {
         out.stderr
     );
     assert!(
-        out.stderr.contains("pre-v0.12.0 name"),
-        "and say it is a retired spelling:\n{}",
+        out.stderr
+            .contains("put the resume loader's own prompt under the scheduler's category"),
+        "and say WHY the spelling is not a selector:\n{}",
         out.stderr
     );
     // `harness.schedule` itself is still a valid prefix - only `wakeup` lives under it now.

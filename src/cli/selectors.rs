@@ -281,8 +281,8 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
     // the full selector list) - a guidance hint, not a compat shim: still a hard error.
     // The `.*` form of a retired prefix is the same retirement, so it is looked up bare.
     let bare = s.strip_suffix(".*").unwrap_or(s);
-    let hint = retired_successors(bare).map_or(String::new(), |(era, t)| {
-        format!(" ('{bare}' is the {era} - today that is: {t}.)")
+    let hint = retired_successors(bare).map_or(String::new(), |(reason, t)| {
+        format!(" ('{bare}' {reason}, so this is: {t}.)")
     });
     Err(format!(
         "unknown label selector '{s}'.{hint} A selector is a dotted role.category.leaf path, \
@@ -302,17 +302,29 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
 /// UI events. Two more entries are LEAF spellings that became CATEGORIES rather than
 /// disappearing: `agent.message` and `agent.thinking` are still valid selectors, so they
 /// never reach this table - only the paths below do.
-/// The table itself: `(retired selector, the era it belonged to, its successors)`.
+/// The table itself: `(retired selector, why the spelling is not a selector, its
+/// successors)`. The middle column is a REASON rather than a release, because the
+/// only reader of the message holds a binary on which the spelling is already gone:
+/// which release retired it changes nothing, while the reason carries to the next
+/// spelling they guess.
 ///
 /// A TABLE rather than a match, so the set is WALKABLE. `SKILL.md` section 10 is the one
 /// place a stale caller is sent to, and the only way to keep it from drifting away from
 /// these strings is a test that iterates them - which a match arm cannot offer.
 pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
-    ("thinking", "pre-v0.5 flat spelling", "agent.thinking"),
-    ("tool", "pre-v0.5 flat spelling", "agent.tool"),
+    (
+        "thinking",
+        "is a flat spelling and the taxonomy is role.category.leaf",
+        "agent.thinking",
+    ),
+    (
+        "tool",
+        "is a flat spelling and the taxonomy is role.category.leaf",
+        "agent.tool",
+    ),
     (
         "tool-response",
-        "pre-v0.5 flat spelling",
+        "is a flat spelling and the taxonomy is role.category.leaf",
         "agent.tool.result",
     ),
     // The resume repair prompt belongs outside the schedule family: the record comes from
@@ -320,12 +332,14 @@ pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
     // different path.
     (
         "harness.schedule.continuation",
-        "pre-v0.12.0 name",
+        "put the resume loader's own prompt under the scheduler's category, and a \
+         category is decided by the producer that wrote the record",
         "harness.resume.prompt",
     ),
     (
         "harness.meta",
-        "pre-v0.13.0 catch-all category",
+        "pooled several producers under one category, and a category is decided by \
+         the producer that wrote the record",
         "harness.hook.* · harness.command.caveat · harness.enforce.retry · \
          harness.schedule.tick · harness.schedule.event · harness.context.* · \
          harness.turn.* · harness.system.* · harness.bookkeeping.* · \
@@ -333,7 +347,7 @@ pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
     ),
     (
         "harness.meta.hook",
-        "pre-v0.13.0 name",
+        "pooled four producers under one leaf, and a leaf names one shape",
         "harness.hook.context (hook-injected text) · harness.hook.feedback (a \
          blocking hook's feedback, content opening <Name> hook feedback: and a \
          newline) · harness.command.caveat (<local-command-caveat>) · \
@@ -341,44 +355,51 @@ pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
     ),
     (
         "harness.meta.loop",
-        "pre-v0.13.0 name",
+        "named a record by the category it was pooled in, and a category is decided \
+         by the producer that wrote the record",
         "harness.schedule.tick",
     ),
     (
         "harness.meta.attachment",
-        "pre-v0.13.0 catch-all",
+        "pooled three producers under one leaf, and a leaf names one shape",
         "harness.context.* (the injected payloads) · harness.hook.outcome (a hook \
          run's own record) · agent.message.structured (a subagent's structured answer)",
     ),
     (
         "harness.meta.turn-duration",
-        "pre-v0.13.0 name",
+        "named a record by the category it was pooled in, and a category is decided \
+         by the producer that wrote the record",
         "harness.turn.duration",
     ),
     (
         "harness.meta.away-summary",
-        "pre-v0.13.0 name",
+        "named a record by the category it was pooled in, and a category is decided \
+         by the producer that wrote the record",
         "harness.turn.recap",
     ),
     (
         "harness.meta.stop-hooks",
-        "pre-v0.13.0 name",
+        "named a record by the category it was pooled in, and a category is decided \
+         by the producer that wrote the record",
         "harness.turn.stop-hooks",
     ),
     (
         "harness.meta.snapshot",
-        "pre-v0.13.0 name",
+        "named a record by the category it was pooled in, and a category is decided \
+         by the producer that wrote the record",
         "harness.bookkeeping.file-history",
     ),
     (
         "harness.meta.system",
-        "pre-v0.13.0 catch-all",
+        "pooled the harness's own system events under one leaf, and a leaf names \
+         one shape",
         "harness.system.{refusal,api-error,notice,kill,command} · \
          harness.schedule.event (the scheduler's fire record)",
     ),
 ];
 
-/// `(the era it belonged to, its successors)` for a retired selector, else `None`.
+/// `(why the spelling is not a selector, its successors)` for a retired selector,
+/// else `None`.
 ///
 /// A lookup over [`RETIRED_SELECTORS`] rather than a match, so the set stays WALKABLE:
 /// the table is what `SKILL.md` section 10 is held to, and a match arm could not be
@@ -388,5 +409,5 @@ fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
     RETIRED_SELECTORS
         .iter()
         .find(|(s, _, _)| *s == selector)
-        .map(|(_, era, to)| (*era, *to))
+        .map(|(_, reason, to)| (*reason, *to))
 }
