@@ -399,7 +399,7 @@ pub(crate) fn auq_answer_text(rec: &Record) -> Option<String> {
     None
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `... (+N chars)` marker.
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 /// Test-only: production excerpting goes through [`match_excerpt`], which carries the
 /// caller's (possibly `--no-truncate`) budget; this fixed-budget wrapper backs the unit tests.
 #[cfg(test)]
@@ -428,8 +428,8 @@ pub(crate) fn uncapped_body(text: &str, max: usize) -> Option<String> {
 /// `span` is the first match's BYTE range, or `None` for the pure filter (no specific
 /// match -> show the head). When the message fits in `max` chars it is shown whole.
 /// Otherwise a `max`-char window is taken around the match (a quarter of the budget as
-/// leading context), whitespace-normalized, with a leading `...` when content precedes
-/// the window and the shared `... (+N chars)` marker when content follows - so clipping
+/// leading context), whitespace-normalized, with a leading `…` when content precedes
+/// the window and the shared `… (+N chars)` marker when content follows - so clipping
 /// on either side is explicit, never silent (SPEC section 0).
 ///
 /// Returns `(excerpt, truncated)` - `truncated` is true iff content was CLIPPED to fit `max`

@@ -43558,7 +43558,7 @@
         {
           "path": "src/commands/search/record_text/promoted.rs",
           "lines": "47-53",
-          "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration: `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908\n///   pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, ...]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
+          "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration:\n///   `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908 pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, ...]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
         }
       ],
       "states": [

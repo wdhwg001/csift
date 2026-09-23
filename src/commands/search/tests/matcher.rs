@@ -212,7 +212,7 @@ fn synth_marker_keeps_line_and_file_matchable_without_literal() {
     let line = br#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#;
     assert!(m.line_may_match(line));
     assert!(m.file_may_match(line));
-    // The rejection reconstruction appends a `[plan: ...]` pointer resolved from a
+    // The rejection reconstruction appends a `[plan: …]` pointer resolved from a
     // DIFFERENT record - its marker keeps the carrier matchable too.
     let rej = br#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"To tell you how to proceed, the user said:\ngo"}]}}"#;
     let m_plan = build_matcher(&args("plan")).unwrap();

@@ -45,8 +45,8 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
 /// verbatim `content` string (a raw byte substring, prefilter-safe). The other three
 /// fabricate a bracketed key=value excerpt from the record's own fields - present
 /// fields only, stable order - so the leaf is both matchable and legible:
-/// - turn-duration: `[turn duration: 1m 5s · durationMs=64911 messageCount=908
-///   pendingBackgroundAgentCount=2]`;
+/// - turn-duration:
+///   `[turn duration: 1m 5s · durationMs=64911 messageCount=908 pendingBackgroundAgentCount=2]`;
 /// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`
 ///   line per hook (the commands are the record's only text);
 /// - snapshot: `[file-history snapshot at <ts>: <path>@vN, ...]` (paths sorted) or

@@ -28,7 +28,7 @@ pub struct Matcher {
     /// SYNTHESIZED-text markers (built only when `prefilter` is `Some`): a record whose
     /// raw line carries one of these can render matchable text that is NOT a verbatim
     /// substring of its raw bytes (an automation label's fabricated kind slug / status,
-    /// the AUQ Q+options+answer scaffold, a rejection's `[plan: ...]` pointer resolved from
+    /// the AUQ Q+options+answer scaffold, a rejection's `[plan: …]` pointer resolved from
     /// ANOTHER record, the compact-boundary `trigger=...` excerpt, `--resolve-persisted`
     /// external file content). The literal prefilter can only prove absence for
     /// VERBATIM-derived text, so a marker-bearing line/file always passes to the parse +
@@ -49,7 +49,7 @@ pub struct Matcher {
     ///   parse JUST the marker lines, render via the SHARED engines
     ///   (`record_text_sections` / `auq_exchange` / `record_raw_text`) and regex-check
     ///   them - so a big marker-heavy main session still gates without a whole-file parse.
-    /// - `synth_conservative` - a rejection's `[plan: ...]` pointer resolves through
+    /// - `synth_conservative` - a rejection's `[plan: …]` pointer resolves through
     ///   ANOTHER record (`PlanIndex`) and `--resolve-persisted` content lives in an
     ///   external file, so those lines force the full scan (rare).
     pub(crate) synth_verifiable: Vec<memmem::Finder<'static>>,
