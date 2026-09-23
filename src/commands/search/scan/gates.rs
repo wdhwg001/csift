@@ -58,32 +58,32 @@ pub(crate) struct CandidateGates {
     pub(crate) hook_context: bool,
     /// `--attachments` / the attachment axis (or an address): every attachment line.
     pub(crate) attachments: bool,
-    /// v0.11.0 (a selector reaching `agent.communication.channel`, which a bare scan
-    /// does): a csift-channel delivery attachment. DEFAULT-ON, unlike every other
+    /// A selector reaching `agent.communication.channel`, which a bare scan
+    /// does: a csift-channel delivery attachment. DEFAULT-ON, unlike every other
     /// attachment keep - a delivery is a message, not machinery.
     pub(crate) channel: bool,
-    /// v0.10.0 (explicit selector or address): `queue-operation` lines.
+    /// Explicit selector or address: `queue-operation` lines.
     pub(crate) queued: bool,
-    /// v0.13.0: one bit per [`crate::cli::attachment_view_needles`] entry, set unless
+    /// One bit per [`crate::cli::attachment_view_needles`] entry, set unless
     /// the label set EXCLUDES that entry's leaf - so a FLAGLESS scan sets both, and a
     /// selector that cannot reach either (`-t harness`) sets none and short-circuits the
     /// whole group. What the bits never turn on is the COARSE attachment keep, which is
-    /// the point: `-t user` and `-t agent` each reach one of these leaves and used to
-    /// parse every attachment line in the transcript.
+    /// the point: `-t user` and `-t agent` each reach one of these leaves, so turning it
+    /// on for them would parse every attachment line in the transcript.
     pub(crate) attachment_views: u32,
-    /// v0.10.0: `file-history-snapshot` + `file-history-delta` lines.
+    /// `file-history-snapshot` + `file-history-delta` lines.
     pub(crate) snapshot: bool,
-    /// v0.10.1, widened at v0.13.0: EVERY `type:"system"` subtype but the compaction
-    /// boundary - the `harness.system.*`, `harness.turn.*` and `harness.schedule.event`
-    /// leaves. One key-only `"subtype"` needle covers the whole axis, which is why the
-    /// three v0.10.0 per-subtype value needles are gone: their flags were this one and
-    /// every line they could admit carries the key.
+    /// EVERY `type:"system"` subtype but the compaction boundary - the
+    /// `harness.system.*`, `harness.turn.*` and `harness.schedule.event` leaves. One
+    /// key-only `"subtype"` needle covers the whole axis, so per-subtype value needles buy
+    /// nothing: their gate would be this one and every line they could admit carries the
+    /// key.
     pub(crate) system: bool,
-    /// v0.12.2 (a selector reaching `harness.schedule.fire`, which a bare scan does): the
+    /// A selector reaching `harness.schedule.fire`, which a bare scan does: the
     /// `system`/`scheduled_task_fire` line that names WHEN a fired prompt fired. DEFAULT-ON
     /// like the channel keep, and demoted to a chain row again once its instant is read.
     pub(crate) schedule_fire: bool,
-    /// v0.13.0: one bit per [`BOOKKEEPING_NEEDLES`] entry (`bookkeeping_mask`). Zero on a
+    /// One bit per [`BOOKKEEPING_NEEDLES`] entry (`bookkeeping_mask`). Zero on a
     /// default scan, which short-circuits the whole group.
     pub(crate) bookkeeping: u32,
 }
@@ -181,13 +181,13 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     // survives a reserialize; R13).
     static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
-    // v0.11.0 csift channel: the envelope needle is a bare VALUE substring of the injected
+    // The csift channel: the envelope needle is a bare VALUE substring of the injected
     // content - ASCII, no JSON-escaped character - so it survives a reserialize (R13) and a
     // decoded match implies a raw match. Shared with the classifier via one constant so the
     // byte scan and the leaf can never drift.
     static CHANNEL_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(Record::CSIFT_CHANNEL_NEEDLE.as_bytes()));
-    // v0.10.0 promoted lines. Quoted-value needles per the R13 law: the `type` values
+    // The promoted lines. Quoted-value needles per the R13 law: the `type` values
     // `"queue-operation"` and `"file-history-` (a prefix covering both `-snapshot` and
     // `-delta`). The system SUBTYPES need no value needle of their own - the key-only
     // `"subtype"` keep below admits every one of them under the same flag.
@@ -195,14 +195,14 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"queue-operation\""));
     static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"file-history-"));
-    // v0.10.1 catch-all system subtypes: the key-only needle `"subtype"` (every system
+    // The catch-all system subtypes: the key-only needle `"subtype"` (every system
     // record carries it; a quoted KEY survives a reserialize, and the classify arm
     // decides which subtype it is - the already-modeled ones simply reclassify). Also the
     // second half of the D7 boundary conjunction below, which narrows the same property to
     // the one subtype it models.
     static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"subtype\""));
-    // v0.12.2: the fired-prompt sibling. Bare VALUE substring (R13-safe) shared with the
+    // The fired-prompt sibling. Bare VALUE substring (R13-safe) shared with the
     // classifier through one constant, and the RARE half of the conjunction below, so it is
     // tested first and the key needle runs on the handful of lines that carry it.
     static SCHEDULE_FIRE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
@@ -236,36 +236,37 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
         // explicit address). Same `&&`-gating law: a default scan pays ZERO.
         || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())
-        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on
+        // A csift-channel delivery, kept under a DEFAULT scan (the label gate is on
         // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it
         // still runs only on a line that failed both role checks, and a `-t` that cannot
         // reach the leaf short-circuits before the memmem.
         || (gates.channel && CHANNEL_FINDER.find(line).is_some())
-        // v0.10.0 promoted lines, each behind its own explicit-selector gate.
+        // The promoted lines, each behind its own explicit-selector gate.
         || (gates.queued && QUEUED_FINDER.find(line).is_some())
-        // v0.13.0: the attachment VIEWS, each behind its own needle and its own bit. A
+        // The attachment VIEWS, each behind its own needle and its own bit. A
         // flagless scan runs both (the two leaves a scan asking for the conversation has
         // to reach); `-t user` / `-t agent` run one each; neither ever turns the coarse
-        // attachment keep on, which is what those selectors used to pay for.
+        // attachment keep on, which is what those selectors would otherwise pay for.
         || (gates.attachment_views != 0 && view_hit(line, gates.attachment_views))
         || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
         || (gates.system && SUBTYPE_FINDER.find(line).is_some())
-        // v0.12.2: the `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a
+        // The `system`/`scheduled_task_fire` sibling of a fired prompt, kept under a
         // DEFAULT scan (the label gate is on whenever a selector can reach the leaf). A
-        // CONJUNCTION for the C-40 reason - measured over the 80 top-level transcripts of one
-        // corpus, all 465 records with top-level `type:"system"` and `subtype:"scheduled_task_fire"`
-        // carry the key-only bytes `"subtype"`, and of the lines carrying the literal WITHOUT
-        // being such a record not one does. That second population is a MOVING count, not a
-        // fixed one: 216 lines at the instant of the measurement, 72 of them reached by no role
-        // keep, and 211 of the 216 sat in the transcript of the session doing the measuring,
-        // because a session writing ABOUT the literal accumulates it in prose. That is the
-        // hazard itself, and it is why the discriminator is the KEY - a property of the
-        // producer - and never the literal's rarity. The rare literal is tested FIRST, so the
-        // key memmem runs on those few hundred lines rather than on every non-role line.
+        // CONJUNCTION for the boundary keep's reason - measured over the 80 top-level
+        // transcripts of one corpus, all 465 records with top-level `type:"system"` and
+        // `subtype:"scheduled_task_fire"` carry the key-only bytes `"subtype"`, and of the
+        // lines carrying the literal WITHOUT being such a record not one does. That second
+        // population is a MOVING count, not a fixed one: 216 lines at the instant of the
+        // measurement, 72 of them reached by no role keep, and 211 of the 216 sat in the
+        // transcript of the session doing the measuring, because a session writing ABOUT
+        // the literal accumulates it in prose. That is the hazard itself, and it is why the
+        // discriminator is the KEY - a property of the producer - and never the literal's
+        // rarity. The rare literal is tested FIRST, so the key memmem runs on those few
+        // hundred lines rather than on every non-role line.
         || (gates.schedule_fire
             && SCHEDULE_FIRE_FINDER.find(line).is_some()
             && SUBTYPE_FINDER.find(line).is_some())
-        // v0.13.0: the remaining non-transcript line types. ONE short-circuit for the
+        // The remaining non-transcript line types. ONE short-circuit for the
         // whole group, then only the needles whose leaf a selector actually reached.
         || (gates.bookkeeping != 0 && bookkeeping_hit(line, gates.bookkeeping))
 }

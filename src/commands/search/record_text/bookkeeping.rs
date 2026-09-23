@@ -199,8 +199,7 @@ pub(crate) fn render(
 
 /// The `harness.bookkeeping` family's own facts.
 ///
-/// UNINHABITED at the skeleton amendment apart from the pin below - the family lane adds
-/// its variants HERE and nowhere else: one enum per family is what keeps
+/// A family's own variants live HERE and nowhere else: one enum per family is what keeps
 /// `types/facts.rs` out of every family's way, and what stops two families minting one
 /// idea twice.
 ///
@@ -218,10 +217,9 @@ pub(crate) enum Fact {
     /// The DELEGATION PIN. Each of [`HitFact`]'s six family arms forwards `label_zone`
     /// and `json` to its family's own enum, and a forward nothing ever takes is a
     /// forward that can be deleted with every test still passing - which is exactly the
-    /// state six uninhabited enums leave the crate in. This variant is the one inhabited
-    /// value in the whole set, so a unit test can watch a family fact cross both
-    /// projections. The family lane adds its real variants BESIDE it and leaves it
-    /// alone.
+    /// state an uninhabited enum leaves the crate in. It is a value a unit test can watch
+    /// cross both projections whatever else the family carries, so real variants sit
+    /// BESIDE it rather than replacing it.
     #[cfg(test)]
     Probe(&'static str),
     /// `cost-state`: the instant this checkpoint stopped accumulating, `startTime` plus

@@ -1,4 +1,4 @@
-//! Record-text resolution for the v0.10.0 promoted leaves + the duration formatter.
+//! Record-text resolution for the promoted leaves + the duration formatter.
 
 use super::*;
 
@@ -160,8 +160,9 @@ fn fmt_ms_picks_the_top_two_units() {
     assert_eq!(fmt_ms(926_676_611), "10d 17h");
 }
 
-/// C-33: the boundary excerpt gains the harness's own SURVIVOR fields, and a legacy
-/// boundary carrying only the four scalars still renders byte-for-byte what it always did.
+/// The boundary excerpt names the harness's own SURVIVOR fields, and a boundary carrying
+/// only the four scalars renders exactly those four - nothing is fabricated for an
+/// absent key.
 #[test]
 fn boundary_excerpt_keeps_the_legacy_four_scalar_form_byte_for_byte() {
     let legacy = rec(

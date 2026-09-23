@@ -274,16 +274,15 @@ pub(crate) fn facts(
 /// WHERE THE TEXT THIS UNIT SHOWS CAME FROM - [`attachment_body`]'s own answer, for every
 /// view of an attachment line.
 ///
-/// It carried an exception for one view and no longer does. The person's mid-turn steer
-/// is a `user.message` unit, and `record_text_emission` used to resolve that class as the
+/// It carries NO exception, and the person's mid-turn steer is the view that would want
+/// one: it is a `user.message` unit, so an emission path resolving that class to the
 /// reconstructed opener text, then the VERBATIM payload, and only then the seam this
-/// family answers at - so a steer whose record also carried a persisted conversion showed
-/// the payload JSON while every other view of the same line showed the conversion, and the
-/// fact had to say `[payload]` to describe the body the unit was actually showing. The
-/// emission now falls through to the seam instead, so there is one body and one word for
-/// it. Measured over one projects root, one parse per non-blank line: 20 of the 164
-/// `queued_command` lines whose payload `origin.kind` is `human` carry a `rendered`, and
-/// those 20 are the records the two views used to disagree about.
+/// family answers at shows the payload JSON where every other view of the same line shows
+/// the conversion - and the fact then has to say `[payload]` about a body it is not
+/// describing. `record_text_emission` falls through to the seam instead, so there is one
+/// body and one word for it. Measured over one projects root, one parse per non-blank
+/// line: 20 of the 164 `queued_command` lines whose payload `origin.kind` is `human` carry
+/// a `rendered`, and those 20 are the records the two views can disagree about.
 ///
 /// `None` for a record with no body of its own, which is every non-attachment line.
 fn body_source(rec: &Record) -> Option<&'static str> {

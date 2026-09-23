@@ -10,13 +10,12 @@ use super::*;
 
 /// THE RENDER SEAM: the family that owns a line's leaf decides what that line SAYS.
 ///
-/// A family owns one classify file and one render file. Before this, its renders lived
-/// in the shared chain instead - `record_raw_text`'s arms and `promoted.rs`'s per-leaf
-/// match - so a family lane changing a body had to edit a file five other lanes were
-/// editing at the same time. This dispatch is what moved those decisions into the
-/// family files: `Some` wins, `None` falls through to the engine's own generic arms
-/// below, and a family that has nothing to say about a record answers `None` on one
-/// compare.
+/// A family owns one classify file and one render file. The alternative is a shared
+/// chain - `record_raw_text`'s arms plus `promoted.rs`'s per-leaf match - where changing
+/// one family's body means editing the file every other family also renders through.
+/// This dispatch keeps those decisions in the family files instead: `Some` wins, `None`
+/// falls through to the engine's own generic arms below, and a family that has nothing
+/// to say about a record answers `None` on one compare.
 ///
 /// Which families are offered a record, and in which order, is [`render_families`]. Two
 /// categories name two families, and there FIRST-SOME-WINS is a tie-break, never a

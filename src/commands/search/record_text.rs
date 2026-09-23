@@ -1,7 +1,7 @@
 //! Record-text resolution: class views, raw text, persisted output, excerpts.
 //!
 //! A PAIRED ROOT: the shared resolution lives here and the per-family renders live in
-//! the children, so a family lane adds a file rather than widening this one.
+//! the children, so a new family is a new file rather than a widening of this one.
 
 mod promoted;
 mod seam;
@@ -30,7 +30,7 @@ pub(crate) mod probe;
 
 use super::*;
 
-/// True for the four `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).
+/// True for the four `agent.communication.*` leaves (they render a `from ⇨ to` direction).
 pub(crate) fn is_comm_class(c: Class) -> bool {
     matches!(
         c,
@@ -39,7 +39,7 @@ pub(crate) fn is_comm_class(c: Class) -> bool {
 }
 
 /// Render the transcript owner's own id as the literal `self` on either side of a comm direction
-/// (GOLD §3/§4 notation: `self ⇨ to`, `from ⇨ self`) - a verbose session uuid / bare agent hex on
+/// (`self ⇨ to` outbound, `from ⇨ self` inbound) - a verbose session uuid / bare agent hex on
 /// the self side becomes `self`, while a peer id/name on the OTHER side is kept verbatim (a peer
 /// never equals the owner). No-op when `owner_id` is `None`.
 pub(crate) fn alias_self(
@@ -129,7 +129,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
     )
 }
 
-/// The richest SELECTED record-level text class + its display text (GOLD §3/§6). Iterates the
+/// The richest SELECTED record-level text class + its display text. Iterates the
 /// record's labels in `classify`'s richest-first order, taking the first record-text class that
 /// is selected, then resolving its text source: a `<task-notification>` → `automation_label`; a
 /// genuine/AUQ/rejection/teammate-prose/subagent-opener → `reconstructed_user_text`; any other
@@ -242,7 +242,7 @@ pub(crate) fn record_raw_text(
     if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }
-    // v0.10.0 promoted non-message lines: verbatim content where the line has one
+    // Promoted non-message lines: verbatim content where the line has one
     // (queued text, away recap), a fabricated key=value excerpt otherwise (turn
     // duration, stop hooks) - each fabricated form is registered as a synth marker
     // (`synth_marker_finders`) so the whole-file gate stays sound.
@@ -274,8 +274,8 @@ pub(crate) fn record_raw_text(
 /// A key=value head is a summary, and a summary is lossy by construction: it shortens a
 /// uuid to eight characters, prints three of a line's twelve keys, and formats a number.
 /// Rendering only the head makes the elided material UNSEARCHABLE - `search` matches
-/// rendered text, so a full uuid that no longer appears in any rendered string cannot be
-/// found at all. The verbatim line is also free of every section 7 hazard for the same
+/// rendered text, so a full uuid absent from every rendered string cannot be found at
+/// all. The verbatim line is also free of every section 7 hazard for the same
 /// reason `--attachments` renders a payload verbatim: it is a byte substring of the
 /// source line, so the 7d literal prefilter and the 7f whole-file gate hold with no
 /// synthesized-marker registration.
@@ -308,7 +308,7 @@ pub(crate) fn head_and_body(head: Option<String>, body: Option<String>) -> Optio
     }
 }
 
-/// The communication [`Class`] a `tool_use` block carries (GOLD §3): a `SendMessage` →
+/// The communication [`Class`] a `tool_use` block carries: a `SendMessage` →
 /// `…sent`/`…signal`; a `Task`/`Agent`/`Workflow` spawn → `…sent`. `None` for any other tool.
 /// REPLICATES the engine's per-record decision per-BLOCK (so a record with mixed comm/non-comm
 /// tool_use blocks labels each correctly) - kept faithful to model.rs `classify_assistant`.

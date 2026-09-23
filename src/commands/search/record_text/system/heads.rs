@@ -7,11 +7,10 @@
 //!
 //! The `key=` WORDS are the harness's own spellings (`originalModel=`, not `original=`)
 //! so a reader can grep a rendered head's value straight back to the record; the JSON
-//! keys stay the snake_case names a consumer reads. That is a deliberate split from the
-//! short forms the brief proposed, and it is not only taste: the repo's own
-//! `docs_do_not_resurrect_removed_tokens` guard denies the substring `category=` in the
-//! four documents, a retired 0.x CLI spelling, and renaming the field rather than
-//! weakening the guard is the cheaper of the two.
+//! keys stay the snake_case names a consumer reads. Short forms are not an option, and
+//! not only for taste: the repo's own `docs_do_not_resurrect_removed_tokens` guard denies
+//! the substring `category=` in the four documents, a retired CLI spelling, and keeping
+//! the harness's own field name is cheaper than weakening that guard.
 
 use super::*;
 

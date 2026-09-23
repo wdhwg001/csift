@@ -82,12 +82,11 @@ fn marker_heads(hits: &[Hit]) -> Vec<Vec<&'static str>> {
 /// it is the ONLY thing there.
 ///
 /// The three seam tests below pin the WIRING, not a family's output, and every real
-/// family is about to start stamping facts and markers of its own onto the very records
-/// these fixtures use. An equality assertion would make each of those a failure here, in
-/// a file the family does not own, for a reason that has nothing to do with the seam -
-/// which is exactly what happened to the first family that landed a per-block fact. So:
-/// contained, and contained once, because a probe arriving twice would mean the site is
-/// called twice and that is a defect the equality form used to catch.
+/// family stamps facts and markers of its own onto the very records these fixtures use.
+/// An equality assertion would make each of those a failure here, in a file the family
+/// does not own, for a reason that has nothing to do with the seam - one family landing
+/// one per-block fact is enough. So: contained, and contained once, because a probe
+/// arriving twice means the site is called twice, the defect this form still catches.
 fn appears_once<T: PartialEq + std::fmt::Debug>(have: &[T], want: &T, what: &str) {
     let n = have.iter().filter(|x| *x == want).count();
     assert_eq!(n, 1, "{what}: expected {want:?} exactly once in {have:?}");

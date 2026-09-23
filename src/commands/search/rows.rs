@@ -146,8 +146,8 @@ impl std::fmt::Debug for RowLines<'_> {
     }
 }
 
-/// Merge two ascending-by-line spine streams into one: the scan's own, and the rows the
-/// C-39 demotion produced from records the gates left unsearchable.
+/// Merge two ascending-by-line spine streams into one: the scan's own, and the rows
+/// demoted from records the gates left unsearchable.
 pub(crate) fn merge_spine(
     scanned: Vec<crate::parse::SpineRow>,
     demoted: Vec<crate::parse::SpineRow>,

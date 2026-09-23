@@ -103,7 +103,7 @@ fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> 
 }
 
 pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
-    // The retired `--additional-context` (v0.13.0). A hard error, never a quiet no-op:
+    // The retired `--additional-context`. A hard error, never a quiet no-op:
     // a run that silently scanned fewer lines than the caller asked for would read as a
     // definitive absence, which is the one thing csift promises an empty result means.
     if args.additional_context {
@@ -182,15 +182,15 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // parallel scan just borrows the result.
     let want_siblings = args.siblings;
 
-    // ── Spawn-lookup hoist (GOLD §3): build each DISTINCT discovery-root's DiscoveredSpawns
+    // ── Spawn-lookup hoist: build each DISTINCT discovery-root's DiscoveredSpawns
     //    ONCE, then share it across the whole par_iter. A subagent's discovery-root is its parent
-    //    top-level `.jsonl` (the SAME for all its siblings), so building the lookup per file made
-    //    `search .` O(subagent_count²) - 3290 files each re-running `discover_subagents` over the
-    //    parent's 3290-entry `subagents/` tree (~66s on a 1.4 GB corpus). Distinct roots number
-    //    only a handful (one per top-level session in scope), so `discover_subagents` now runs
-    //    ~7× total instead of once per file. The lookup values are IDENTICAL - only WHEN/how
-    //    often they are built changes - so output is byte-for-byte unchanged. Sequential build is
-    //    fine: distinct-root count is tiny. `None` ⇒ that root has no resolvable spawns. ──
+    //    top-level `.jsonl` (the SAME for all its siblings), so building the lookup per file is
+    //    O(subagent_count²) on `search .` - 3290 files each re-running `discover_subagents` over
+    //    the parent's 3290-entry `subagents/` tree (~66s on a 1.4 GB corpus). Distinct roots
+    //    number only a handful (one per top-level session in scope), so `discover_subagents` runs
+    //    ~7× total rather than once per file. The lookup values are IDENTICAL either way - only
+    //    how often they are built changes - so the hoist cannot move the output. Sequential build
+    //    is fine: distinct-root count is tiny. `None` ⇒ that root has no resolvable spawns. ──
     let mut spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
     for p in &session_files {
         spawn_map

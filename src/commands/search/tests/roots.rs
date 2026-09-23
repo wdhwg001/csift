@@ -138,14 +138,13 @@ fn a_group_with_no_opener_names_none_for_every_position() {
 /// ONE table per TURN, not one per PASS - asserted THROUGH the real path.
 ///
 /// A turn with both matched hits and siblings runs two passes over the same records, and
-/// each used to hold an `Option<TurnRoots>` of its own, so the table was built twice for a
+/// ONE cell serves both: an `Option<TurnRoots>` per pass builds the table twice for a
 /// turn whose cost is stated as "built on its FIRST hit and not before".
 ///
 /// The count comes from `TurnRoots::build` itself and the driver is `reconstruct_and_match`
 /// with `--siblings`, because that is the only shape where both passes run: a pin that
 /// drove the cell directly and counted on the cell's own side passed BOTH mutations - an
-/// unconditional rebuild inside the cell, and reverting the fix so the sibling pass gets a
-/// fresh cell.
+/// unconditional rebuild inside the cell, and handing the sibling pass a cell of its own.
 #[test]
 fn a_turn_with_hits_and_siblings_builds_one_root_table() {
     // `carry` matches three records of turn 0 and none of turn 1, and turn 0's remaining

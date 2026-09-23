@@ -6,7 +6,7 @@
 //! excerpt built from its fields. A fabricated form is not a byte substring of the
 //! source line, so each registers a raw marker in `matcher::synth_marker_finders` -
 //! without that the whole-file gate would prune a file whose only hit lies in the
-//! fabricated head. A family lane adding a render for its own leaves adds it here.
+//! fabricated head. A render for a family's own non-message leaves belongs here too.
 
 use super::*;
 
@@ -40,7 +40,7 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" "))
 }
 
-/// The searchable + renderable text of a v0.10.0 PROMOTED non-message line, keyed on
+/// The searchable + renderable text of a PROMOTED non-message line, keyed on
 /// [`Record::promoted_class`]. `user.queued` / `harness.turn.recap` return the
 /// verbatim `content` string (a raw byte substring, prefilter-safe). The other three
 /// fabricate a bracketed key=value excerpt from the record's own fields - present
@@ -166,8 +166,8 @@ pub(crate) use crate::text::fmt_ms;
 /// present fields, stable order, scalars unquoted). `None` when it is not an object or carries none
 /// of the known fields.
 ///
-/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a
-/// legacy boundary carrying just the four scalars renders byte-for-byte as before:
+/// It also names the harness's own SURVIVOR fields, each printed only when present, so a
+/// boundary carrying just the four scalars renders those four and nothing else:
 /// `messagesSummarized=` (a `/rewind` summarize wrote this boundary - an ordinary compaction never
 /// passes the argument), `cumulativeDroppedTokens=` (the running total of context tokens every
 /// compaction of this session has dropped), `preserved=<N uuids, M allUuids, anchor <first8>>` (the

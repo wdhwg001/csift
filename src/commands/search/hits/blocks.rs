@@ -119,11 +119,11 @@ pub(crate) fn collect_block_hits(
                     is_error,
                     ..
                 } => {
-                    // C-13: every result hit states its error side explicitly - an absent
+                    // Every result hit states its error side explicitly - an absent
                     // field IS a clean result on the wire, so it maps to false, never null
                     // (pairing answers "did a result come back"; this answers "was it good").
                     let result_errored = is_error.unwrap_or(false);
-                    // The user-facing dual was SELECTED + emitted as the richest view (§3 Q4) → skip
+                    // The user-facing dual was SELECTED + emitted as the richest view → skip
                     // the agent.tool.result duplicate. (When the dual is present but NOT selected -
                     // e.g. `-t agent.tool.result` alone - `user_dual` is None, so the plain result
                     // still surfaces and the answer is never lost.)

@@ -323,7 +323,7 @@ fn top_level_key_excerpt(raw: Option<&str>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" "))
 }
 
-/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything
+/// The [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything
 /// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists
 /// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]
 /// paired to it; the summary hands over its own mode and the verbatim `direction`. A boundary the

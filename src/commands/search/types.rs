@@ -18,7 +18,7 @@ use super::*;
 /// is a dense at-a-glance identity index. The difference is intentional.
 pub(crate) const EXCERPT_MAX: usize = 400;
 
-/// The `agent.tool.use ▹ agent.tool.result` pairing state of a tool hit (GOLD §7), joined by
+/// The `agent.tool.use ▹ agent.tool.result` pairing state of a tool hit, joined by
 /// `tool_use_id` across the transcript. Drives the render (`▹` / `(no result - pending)` /
 /// `(use not in scope)`). `None` on a non-tool hit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,7 +105,7 @@ impl ChainCounts {
 }
 
 /// The compaction facts a `harness.compaction.boundary` / `harness.compaction.summary` hit
-/// carries (C-33). Boxed onto [`Hit::compaction`] as ONE optional field: it is `None` on every
+/// carries. Boxed onto [`Hit::compaction`] as ONE optional field: it is `None` on every
 /// other hit, and compaction records are rare enough that widening every hit would be pure cost.
 #[derive(Debug, Clone)]
 pub struct CompactionHit {
@@ -127,7 +127,7 @@ pub struct CompactionHit {
 /// A single label-tagged hit inside an exchange.
 #[derive(Debug, Clone)]
 pub struct Hit {
-    /// The matched LEAF [`Class`] - its [`Class::path`] is the rendered/JSON `label` (GOLD §6).
+    /// The matched LEAF [`Class`] - its [`Class::path`] is the rendered/JSON `label`.
     /// `None` on the ONE shape that has no leaf: a record an explicit `show --line`/`--uuid`
     /// address named that [`Record::classify`] models no label for (an `isMeta` pseudo-turn
     /// matching no harness marker, a text-less block record). The refetch law says an address
@@ -175,10 +175,10 @@ pub struct Hit {
     /// disk, so this field is the whole forensic answer to "why did that call not run".
     /// `None` on every record that carries no such field.
     pub denial_kind: Option<String>,
-    /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`
-    /// (GOLD §4); `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
+    /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`;
+    /// `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
     pub direction: Option<(String, String)>,
-    /// The block's `tool_use_id` (the use's `id` / the result's `tool_use_id`) for the GOLD §7
+    /// The block's `tool_use_id` (the use's `id` / the result's `tool_use_id`) for the
     /// `▹` pairing join; `None` on a non-tool hit.
     pub tool_use_id: Option<String>,
     /// The resolved [`Pairing`] of a tool hit (filled by the per-file pairing pass); `None` on a
@@ -206,11 +206,11 @@ pub struct Hit {
     /// renders `(elicitation sidecar)` in place of `Lnnnn` and carries `source:"elicitation-
     /// sidecar"` in JSON. Backfilled with the address.
     pub from_sidecar: bool,
-    /// v0.10.0: a `user.queued` hit's queue event (`enqueue` / `popAll` / `remove`), verbatim
+    /// A `user.queued` hit's queue event (`enqueue` / `popAll` / `remove`), verbatim
     /// from the `queue-operation` line; `None` on every other hit. Rendered in the label
     /// zone, JSON `queue_operation`.
     pub queue_operation: Option<String>,
-    /// v0.10.0: the `remove` reason when the line carries one (`absorbed_mid_turn` /
+    /// The `remove` reason when the line carries one (`absorbed_mid_turn` /
     /// `delivered_to_agent` - structural evidence the queued text was consumed); `None`
     /// otherwise. JSON `queue_reason`.
     pub queue_reason: Option<String>,
@@ -227,7 +227,7 @@ pub struct Hit {
     /// the `[not delivered]` label-zone marker and JSON `delivered`. Read
     /// [`Hit::delivered`] rather than this field for the verdict itself.
     pub delivery: Option<bool>,
-    /// v0.12.0: on a `harness.resume.placeholder` hit ONLY, whether it closes a resume
+    /// On a `harness.resume.placeholder` hit ONLY, whether it closes a resume
     /// repair PAIR - `Some(true)` when its `parentUuid` is a `harness.resume.prompt`
     /// record in the same transcript, `Some(false)` when it is not (the same splice
     /// writes the unpaired form after any other trailing user record). `None` on every
@@ -245,10 +245,10 @@ pub struct Hit {
     /// re-anchor re-appended the record and the last copy is the survivor. `None` when
     /// this line IS the survivor.
     pub replay_copy_of: Option<usize>,
-    /// C-33: the compaction facts of a `harness.compaction.*` hit ([`CompactionHit`]);
+    /// The compaction facts of a `harness.compaction.*` hit ([`CompactionHit`]);
     /// `None` on every other hit.
     pub compaction: Option<Box<CompactionHit>>,
-    /// v0.12.2: on a `harness.schedule.fire` hit ONLY, the instant its
+    /// On a `harness.schedule.fire` hit ONLY, the instant its
     /// `system`/`scheduled_task_fire` sibling names, verbatim (the text inside that
     /// record's trailing parentheses). `None` on every other hit, and on a fired prompt
     /// whose sibling this transcript does not hold - the builds that write no fire record
@@ -292,7 +292,7 @@ impl Hit {
     }
 }
 
-/// C-27: how far a superseded draft sits from the message that replaced it, plus that
+/// How far a superseded draft sits from the message that replaced it, plus that
 /// message's address. Present ONLY on a rendered draft unit whose superseding sibling is
 /// in the same transcript (it always is - the sibling is what makes the record a draft -
 /// unless a `--turn` window or a terminal count mode means nothing is rendered at all).
@@ -361,7 +361,7 @@ impl DraftDiff {
         }
     }
 
-    /// Attach the five C-27 keys to a `search` exchange row. Present only on a draft
+    /// Attach the five draft-diff keys to a `search` exchange row. Present only on a draft
     /// unit, the same lean-envelope rule the `siblings` block follows; `show`'s flat
     /// record rows carry them as explicit nulls instead.
     pub(crate) fn attach_json(&self, obj: &mut serde_json::Value) {
@@ -391,9 +391,9 @@ pub struct Exchange {
     /// at the whole session. Equal to `session_id` for a top-level hit.
     pub parent_session_id: String,
     /// 0-based turn index (turns delimited by genuine-user messages), or `None` for a
-    /// record the conversation chain no longer reaches: an abandoned unit belongs to no
+    /// record the conversation chain does not reach: an abandoned unit belongs to no
     /// numbered turn, and a numeric placeholder would bucket every one of them into t0 -
-    /// which is exactly what the `--count-by turn` census used to report.
+    /// which is exactly what the `--count-by turn` census would then report.
     pub turn_index: Option<usize>,
     /// Turn-opening (genuine-user) record timestamp - this exchange's position in the
     /// COMBINED chronological timeline (top-level + subagent exchanges interleaved by
@@ -417,18 +417,18 @@ pub struct Exchange {
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
     /// True for an ABANDONED unit - a record (or branch) Claude Code's conversation chain
-    /// no longer reaches. Such a unit sits OUTSIDE turn numbering (`turn_index` is
+    /// does not reach. Such a unit sits OUTSIDE turn numbering (`turn_index` is
     /// meaningless and renders null/annotated); an abandoned OPENER carries the single
     /// label `user.unsent` (a recalled draft) or `user.rewound` (a turn that WAS answered
     /// and was rewound past). A scan emits it when it matches (except under a `--turn`
     /// window); an explicit `show --line`/`--uuid` address always reaches it.
     pub superseded_draft: bool,
     /// The abandoned unit's kind, when its head is an opener - the header wording and the
-    /// C-27 diff line both key on it.
+    /// draft-diff line both key on it.
     pub abandoned_kind: Option<crate::model::Kind>,
     /// The 1-based line of the abandoned branch's head, when the unit is abandoned.
     pub abandoned_root_line: Option<usize>,
-    /// C-27: the draft's distance from the message that replaced it (see [`DraftDiff`]).
+    /// The draft's distance from the message that replaced it (see [`DraftDiff`]).
     /// `None` on every non-draft exchange.
     pub draft_diff: Option<DraftDiff>,
 }

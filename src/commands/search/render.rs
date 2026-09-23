@@ -49,7 +49,7 @@ fn extension_zone(h: &Hit) -> String {
         .collect()
 }
 
-/// Glyph for the ROLE a hit sits on (GOLD §6): `◂` user, `▸` agent, `⚙` harness machinery.
+/// Glyph for the ROLE a hit sits on: `◂` user, `▸` agent, `⚙` harness machinery.
 /// (`⚙`/gear is the chosen distinct harness marker - visually separate from the two
 /// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.) An
 /// UNLABELED unit (an addressed record with no modeled leaf - see [`Hit::class`]) has no
@@ -63,7 +63,7 @@ pub(crate) fn role_glyph(class: Option<Class>) -> char {
     }
 }
 
-/// The rendered label for a hit: the dotted [`Class::path`], DECORATED with the GOLD §4/§7
+/// The rendered label for a hit: the dotted [`Class::path`], DECORATED with the engine's own
 /// markers - a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
 pub(crate) fn render_label(h: &Hit) -> String {
     // The EXTENSION POINTS ride the label zone after the markers this function computes
@@ -96,15 +96,15 @@ pub(crate) fn render_label(h: &Hit) -> String {
             None => format!("unmodeled{ext}"),
         };
     };
-    // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
-    // C-13: a RESULT-side hit whose tool_result carried `is_error` says so in-band -
+    // Tool pairing (▹) takes the dedicated two-sided form below.
+    // A RESULT-side hit whose tool_result carried `is_error` says so in-band -
     // pairing answers "did a result come back"; the decoration answers "was it good".
     let err = if class == Class::AgentToolResult && h.is_error == Some(true) {
         " [error]"
     } else {
         ""
     };
-    // C-28: a record Claude Code's request assembler DROPPED says so in the label zone -
+    // A record Claude Code's request assembler DROPPED says so in the label zone -
     // display-only, like [narration summary]: it is not matchable text, so it needs no
     // synthesized-marker registration. Reachable only through a glob or an explicit
     // leaf; a bare role never selects such a record in the first place.
@@ -115,7 +115,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
     } else {
         String::new()
     };
-    // C-31: the SURVIVAL AXIS rides the label zone the same way - display-only, so it
+    // The SURVIVAL AXIS rides the label zone the same way - display-only, so it
     // needs no synthesized-marker registration. `[rewound]` says the branch WAS answered
     // before the conversation left it; `[abandoned]` says nothing ever answered.
     let sv = match (h.survival, h.rewound_branch, h.replay_copy_of) {
@@ -152,7 +152,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
     if class == Class::AgentThinkingNarration {
         return format!("{} [narration summary]{nd}", class.path());
     }
-    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label
+    // A queued line names its queue event (and a remove's reason) in the label
     // zone - display-only; the matchable text stays the verbatim queued content.
     if class == Class::UserQueued {
         let op = h.queue_operation.as_deref().unwrap_or("queued");
@@ -161,7 +161,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
             None => format!("{} [{op}]{nd}", class.path()),
         };
     }
-    // C-34: a resume PLACEHOLDER says whether it closes a repair pair - display-only, like
+    // A resume PLACEHOLDER says whether it closes a repair pair - display-only, like
     // [narration summary]. The label cannot carry it (one writer produces both forms, so a
     // second leaf would split one producer in two); the marker and JSON `resume_paired` do.
     if class == Class::ResumePlaceholder {
@@ -170,7 +170,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
             return format!("{} [{state}]{nd}", class.path());
         }
     }
-    // v0.12.2: a fired prompt names the instant it fired, read off its
+    // A fired prompt names the instant it fired, read off its
     // `system`/`scheduled_task_fire` sibling. Label zone, display-only, like [summarize <dir>]
     // and for the same reason: the text comes from ANOTHER record, so putting it in the
     // matchable excerpt would need a synthesized-marker registration it does not earn. The
@@ -181,17 +181,17 @@ pub(crate) fn render_label(h: &Hit) -> String {
             return format!("{} [scheduled fire {when}]{nd}", class.path());
         }
     }
-    // C-33: a compaction summary written by a `/rewind` summarize names its direction in the
+    // A compaction summary written by a `/rewind` summarize names its direction in the
     // label zone - display-only, like [narration summary] and [not delivered]: it is not
     // matchable text, so it needs no synthesized-marker registration, and the summary body
-    // stays the verbatim recap. An ordinary compaction summary carries no `summarizeMetadata`
-    // and renders exactly as before.
+    // stays the verbatim recap. An ordinary compaction summary carries no `summarizeMetadata`,
+    // so it renders the bare leaf.
     if class == Class::CompactionSummary {
         if let Some(dir) = h.compaction.as_ref().and_then(|c| c.direction.as_deref()) {
             return format!("{} [summarize {dir}]{nd}", class.path());
         }
     }
-    // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
+    // Comm direction (⇨): append `from ⇨ to` to the label path.
     if let Some((from, to)) = &h.direction {
         return format!("{}{nd}  {from} ⇨ {to}", class.path());
     }

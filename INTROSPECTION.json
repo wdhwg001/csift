@@ -12967,8 +12967,8 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "184-187",
-          "snippet": "    // v0.10.0 promoted lines whose render FABRICATES text (key=value excerpts): the\n    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
+          "lines": "185-187",
+          "snippet": "    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
       "states": [
@@ -13051,7 +13051,7 @@
         {
           "path": "src/commands/search/scan/gates.rs",
           "lines": "74",
-          "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
+          "snippet": "    /// `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
       "states": [
@@ -13402,8 +13402,8 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "169-170",
-          "snippet": "/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a\n/// legacy boundary carrying just the four scalars renders byte-for-byte as before:"
+          "lines": "169",
+          "snippet": "/// It also names the harness's own SURVIVOR fields, each printed only when present, so a"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
@@ -37727,7 +37727,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "382-384",
+          "lines": "380-382",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -42360,8 +42360,8 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "155-163",
-          "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
+          "lines": "156-163",
+          "snippet": "    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -50601,7 +50601,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "105-112",
+          "lines": "103-110",
           "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
         },
         {
@@ -50692,12 +50692,12 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "226-234",
+          "lines": "228-236",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "305-315",
+          "lines": "303-313",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
@@ -50707,7 +50707,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "389-393",
+          "lines": "391-395",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -51335,8 +51335,8 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "198-204",
-          "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
+          "lines": "199-204",
+          "snippet": "    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
       "states": [
@@ -64595,7 +64595,7 @@
         },
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "32",
+          "lines": "31",
           "snippet": "        Class::SystemNotice => match rec.level.as_deref() {"
         },
         {
@@ -68098,7 +68098,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "231-234",
+          "lines": "233-236",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -73188,8 +73188,8 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "239-243",
-          "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
+          "lines": "240-243",
+          "snippet": "        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
       "states": [
@@ -73350,8 +73350,8 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "120-127",
-          "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
+          "lines": "121-127",
+          "snippet": "    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
       "states": [
@@ -79458,7 +79458,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "61-65",
+          "lines": "59-63",
           "snippet": "    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();"
         }
       ],
@@ -79526,7 +79526,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "226-234",
+          "lines": "228-236",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -80146,7 +80146,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "273-278",
+          "lines": "274-279",
           "snippet": "pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {\n    eprintln!(\n        \"csift: 0 matches \u2014 a DEFINITIVE absence (exit 0), NOT an error. \\\n         Scope: {} session(s). Active filters: {}.\",\n        diag.sessions_in_scope, diag.active_filters\n    );"
         },
         {
@@ -80332,7 +80332,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "209-212",
+          "lines": "210-213",
           "snippet": "/// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare \"no matching\n/// exchanges\" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;\n/// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the\n/// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)"
         },
         {
@@ -81828,8 +81828,8 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "326-328",
-          "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]"
+          "lines": "327-328",
+          "snippet": "/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]"
         }
       ],
       "states": [
@@ -82995,7 +82995,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "371",
+          "lines": "369",
           "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         }
       ],
@@ -86820,7 +86820,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "342-348",
+          "lines": "340-346",
           "snippet": "        \"fork-context-ref\" => super::for_edge(\n            EdgeKind::ForkedFrom,\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -87013,7 +87013,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "350-356",
+          "lines": "348-354",
           "snippet": "        \"continued-in\" => super::for_edge(\n            EdgeKind::ContinuedIn,\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -87408,7 +87408,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "249",
+          "lines": "251",
           "snippet": "    let resume_paired = rec.resume_paired(ctx);"
         },
         {
@@ -87651,7 +87651,7 @@
         },
         {
           "path": "src/commands/search/record_text/seam.rs",
-          "lines": "248-250",
+          "lines": "247-249",
           "snippet": "    let line = uuid.and_then(|u| ctx.line_of_uuid(u).or_else(|| ctx.line_of_tool_use(u)));\n    for_edge_at(kind, basis, uuid, session, line)\n}"
         },
         {
@@ -87837,7 +87837,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "378-384",
+          "lines": "377-383",
           "snippet": "    let attached_to = super::for_edge(\n        EdgeKind::AttachedTo,\n        Basis::Key,\n        rec.parent_uuid.as_deref(),\n        None,\n        ctx,\n    );"
         },
         {
@@ -87884,12 +87884,12 @@
       "code": [
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "391-397",
+          "lines": "390-396",
           "snippet": "    let for_tool_use = super::for_edge(\n        EdgeKind::ForToolUse,\n        Basis::Key,\n        payload_str(rec, \"toolUseID\"),\n        None,\n        ctx,\n    );"
         },
         {
           "path": "src/commands/search/record_text/attachments.rs",
-          "lines": "360-362",
+          "lines": "359-361",
           "snippet": "fn payload_str<'a>(rec: &'a Record, key: &str) -> Option<&'a str> {\n    rec.attachment_value()?.get(key)?.as_str()\n}"
         },
         {
@@ -88006,7 +88006,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "67",
+          "lines": "66",
           "snippet": "fn refusal_head(rec: &Record, p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
         },
         {
@@ -88073,12 +88073,12 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "99",
+          "lines": "98",
           "snippet": "fn api_error_head(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
         },
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "223",
+          "lines": "222",
           "snippet": "fn error_text(p: Option<&serde_json::Map<String, serde_json::Value>>) -> String {"
         },
         {
@@ -88137,7 +88137,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "38",
+          "lines": "37",
           "snippet": "        Class::SystemKill => \"[kill]\".to_string(),"
         }
       ],
@@ -88194,7 +88194,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "32",
+          "lines": "31",
           "snippet": "        Class::SystemNotice => match rec.level.as_deref() {"
         }
       ],
@@ -88244,7 +88244,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "135",
+          "lines": "134",
           "snippet": "fn schedule_event_head("
         },
         {
@@ -88437,7 +88437,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/heads.rs",
-          "lines": "39",
+          "lines": "38",
           "snippet": "        Class::SystemCommand => \"[command]\".to_string(),"
         },
         {

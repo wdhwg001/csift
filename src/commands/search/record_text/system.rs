@@ -41,9 +41,9 @@
 //! leaf IS selected, such a line has a leaf of its OWN ([`super::render_leaf`] reads
 //! `promoted_class`), so the gate renders it ONCE rather than walking
 //! [`super::rendering_classes`]; the added cost against the head this replaced is one
-//! `serde_json::from_str` of that line. Bounded, but not zero: see the deviation in this
-//! lane's report - the acid rows the amendment asks a render-filling family to re-measure
-//! are the integration harness's, not this lane's.
+//! `serde_json::from_str` of that line. Bounded, but not zero: the section 7 acid rows are
+//! the measurement of it, and they run over the whole binary rather than over this family
+//! alone.
 
 use super::*;
 

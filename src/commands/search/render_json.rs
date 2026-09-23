@@ -54,7 +54,7 @@ pub(crate) fn refetch_json(session_id: &str, h: &Hit) -> serde_json::Value {
     }
 }
 
-/// The uuid-addressed twin of [`refetch_json`] (v0.10.5, ledger REC-093): a physical
+/// The uuid-addressed twin of [`refetch_json`] (ledger REC-093): a physical
 /// line number is a durable address only on the append path. Three harness paths
 /// rewrite a live transcript in place (a stream tombstone truncates and rewrites the
 /// tail, a local compaction rewrite, a remote-ingress resume), and each shifts the
@@ -68,7 +68,7 @@ pub(crate) fn refetch_uuid_json(session_id: &str, h: &Hit) -> serde_json::Value 
     }
 }
 
-/// C-33: the compaction MODE of a boundary/summary hit as its stable slug (`compact` /
+/// The compaction MODE of a boundary/summary hit as its stable slug (`compact` /
 /// `summarize-from-here` / `summarize-up-to-here`), else null. Null covers both "not a
 /// compaction record" and "the mode is not knowable here" - an unpaired boundary, or a
 /// `direction` value csift does not model.
@@ -84,7 +84,7 @@ pub(crate) fn compaction_mode_json(h: &Hit) -> serde_json::Value {
     }
 }
 
-/// C-33: a boundary hit's `compactMetadata` object VERBATIM (the full `preservedMessages` /
+/// A boundary hit's `compactMetadata` object VERBATIM (the full `preservedMessages` /
 /// `preservedSegment` uuid lists the one-line excerpt only counts), else null.
 pub(crate) fn compact_metadata_json(h: &Hit) -> serde_json::Value {
     h.compaction
@@ -95,12 +95,12 @@ pub(crate) fn compact_metadata_json(h: &Hit) -> serde_json::Value {
 
 pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
     let session_id: &str = &ex.session_id;
-    // Comm direction (GOLD §4): `from`/`to` only for an `agent.communication.*` hit, else null.
+    // Comm direction: `from`/`to` only for an `agent.communication.*` hit, else null.
     let (from, to) = match &h.direction {
         Some((f, t)) => (serde_json::json!(f), serde_json::json!(t)),
         None => (serde_json::Value::Null, serde_json::Value::Null),
     };
-    // Tool pairing (GOLD §7): the `▹` join state of an agent.tool.use/result hit, else null.
+    // Tool pairing: the `▹` join state of an agent.tool.use/result hit, else null.
     let pairing = pairing_json(h.pair);
     let mut obj = serde_json::json!({
         // The id TRIO rides EVERY hit row too (R9): bare `.hits[]` flattening is the single
@@ -115,7 +115,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
         "label": h.class.map(Class::path),
         "labels": h.labels,
-        // C-28: did the model RECEIVE this record? The matched leaf's default,
+        // Did the model RECEIVE this record? The matched leaf's default,
         // overridden per record by Claude Code's own request-assembler drop predicate.
         // `labels` is not the delivery verdict, which is why this rides beside it.
         "delivered": h.delivered(),
@@ -144,7 +144,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // non-null there while `pairing`, `tool_name` and `is_error` stay null - those
         // three are the tool VIEW of the record, and the dual is the person's.
         "tool_use_id": h.tool_use_id,
-        // v0.10.0 queue facts (a `user.queued` hit); null on every other hit.
+        // The queue facts (a `user.queued` hit); null on every other hit.
         "queue_operation": h.queue_operation,
         "queue_reason": h.queue_reason,
         // Every REAL task id this `harness.notification.*` pulse closes (empty array on every
@@ -153,23 +153,23 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // so the ids are data here as well as text in the label.
         "task_ids": h.task_ids,
         "orphan_kind": h.orphan_kind,
-        // v0.12.0: does this `harness.resume.placeholder` close a repair PAIR (its parent is
+        // Does this `harness.resume.placeholder` close a repair PAIR (its parent is
         // a `harness.resume.prompt` record)? Null on every other hit - one writer produces
         // both forms, so the fact rides the hit instead of splitting the leaf.
         "resume_paired": h.resume_paired,
-        // C-31 SURVIVAL AXIS: is this record still in the conversation Claude Code's own
+        // The SURVIVAL AXIS: is this record still in the conversation Claude Code's own
         // chain rule reconstructs, which branch head it hangs off when it is not, and
         // whether the line is an earlier copy of a record a later line carries.
         "survival": h.survival.as_str(),
         "abandoned_root_line": ex.abandoned_root_line,
         "replay_copy_of": h.replay_copy_of,
-        // C-33 compaction facts; null on every non-compaction hit. `mode` names the gesture
+        // The compaction facts; null on every non-compaction hit. `mode` names the gesture
         // (a plain compact, or one of the two `/rewind` summarize directions) and rides BOTH
         // the boundary and its summary; `compact_metadata` is the boundary's own object,
         // verbatim, uuid lists included.
         "mode": compaction_mode_json(h),
         "compact_metadata": compact_metadata_json(h),
-        // v0.12.2: the instant a `harness.schedule.fire` prompt fired, verbatim from its
+        // The instant a `harness.schedule.fire` prompt fired, verbatim from its
         // `system`/`scheduled_task_fire` sibling. Null on every other hit, and on a fired
         // prompt whose sibling this transcript does not hold.
         "scheduled_at": h.scheduled_at,
@@ -247,7 +247,7 @@ pub(crate) fn render_json(
         "transcript_ids_truncated": ids_truncated,
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
-        // C-18 + C-31: what the SURVIVAL AXIS took out of turn numbering. Real records,
+        // What the SURVIVAL AXIS takes out of turn numbering. Real records,
         // outside numbering, fetchable by explicit address.
         "superseded_drafts": outcome.chain.drafts,
         "abandoned_records": outcome.chain.abandoned_records,
@@ -264,10 +264,11 @@ pub(crate) fn render_json(
         // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
     });
-    // C-42, the BOUNDED CROSSING: present whenever crossing was ENABLED, so a machine
+    // The BOUNDED CROSSING: present whenever crossing was ENABLED, so a machine
     // reader can tell "asked to cross, nothing to cross" from "asked not to cross". Under
     // `--cross-compactions 0` csift crossed nothing on purpose and the keys are absent,
-    // which keeps that run byte-identical to the reading before the budget existed.
+    // which is Claude Code's own reading: its loader never follows a boundary's
+    // `logicalParentUuid`.
     for (k, v) in outcome.chain.crossing.json_fields() {
         summary_fields[k] = v;
     }
@@ -330,7 +331,7 @@ pub(crate) fn exchange_json(ex: &Exchange, buf: &mut Vec<u8>) -> Result<()> {
         "hits": hits,
         "record_uuids": ex.record_uuids,
     });
-    // C-27: on a draft unit, the address of the message that replaced it and the
+    // On a draft unit, the address of the message that replaced it and the
     // distance between the two texts.
     if let Some(d) = &ex.draft_diff {
         d.attach_json(&mut obj);

@@ -10,11 +10,11 @@ use super::*;
 
 /// Everything ONE walk over a file's `tool_use` / `tool_result` blocks answers.
 ///
-/// Three questions used to be three walks over the same blocks - what is this tool called,
-/// did a result come back, and which line carries the call - and the third is what the
-/// `result_of` provenance edge needs. Walking three times to answer three questions about
-/// one block is the cost a file pays for the separation, and the separation buys nothing:
-/// the questions are asked together, at the same place, about the same blocks.
+/// Three questions about one block - what is this tool called, did a result come back, and
+/// which line carries the call (the last is what the `result_of` provenance edge needs) -
+/// answered by ONE walk. Three separate walks would pay three passes over the same blocks
+/// and buy nothing: the questions are asked together, at the same place, about the same
+/// blocks.
 #[derive(Debug, Default)]
 pub(crate) struct ToolIndex {
     /// `tool_use_id -> tool name`. A later `tool_result` carries only the id, so a
@@ -22,7 +22,7 @@ pub(crate) struct ToolIndex {
     /// wins (ids are unique).
     pub(crate) names: HashMap<String, String>,
     /// Every `tool_use` block's `id` in this transcript - the use side of the use/result
-    /// pairing join (GOLD section 7), which is membership and not contiguity so a use pairs
+    /// pairing join, which is membership and not contiguity so a use pairs
     /// with its result across records and parallel calls.
     pub(crate) uses: HashSet<String>,
     /// Every `tool_result` block's `tool_use_id` - the result side of the same join.
@@ -68,7 +68,7 @@ pub(crate) fn build_tool_index(rows: &[Row<'_>]) -> ToolIndex {
     ix
 }
 
-/// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7). Pairing is a
+/// Resolve a tool hit's [`Pairing`] against the file-level id sets. Pairing is a
 /// property of the underlying tool_use/tool_result BLOCK, so it rides EVERY view of that
 /// block - the plain `agent.tool.*` views AND the communication views that supersede them
 /// under the richest-view law (a SendMessage/spawn `agent.communication.sent`/`.signal`

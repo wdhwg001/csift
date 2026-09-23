@@ -45,10 +45,8 @@ pub(crate) fn reconstruct_and_match(
     // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
     // the 0-based turn index; map each index group back to its `Kept` borrows.
-    // The skip set is computed EXPLICITLY (not inside the deduped grouper) so the
-    // collapse can be DISCLOSED and an addressed draft can still be fetched (C-18).
     // The SURVIVAL AXIS decides all three at once: which openers the conversation chain
-    // no longer reaches (a recalled draft, a rewound turn), which lines are a compaction
+    // does not reach (a recalled draft, a rewound turn), which lines are a compaction
     // re-anchor's earlier copies, and where the chain was cut. It is computed EXPLICITLY
     // (not inside the deduped grouper) so the answer can be DISCLOSED and an addressed
     // abandoned record can still be fetched.
@@ -68,7 +66,7 @@ pub(crate) fn reconstruct_and_match(
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(rows.iter().filter_map(|r| r.kept()).map(|k| &k.rec));
     let filter = args.label_filter();
-    // C-33: pair each `compact_boundary` with the compaction SUMMARY that follows it, so a
+    // Pair each `compact_boundary` with the compaction SUMMARY that follows it, so a
     // boundary hit can name the gesture that minted it. One pass, empty on a transcript that
     // never compacted - and SKIPPED outright when the active `-t`/`-T` can reach neither
     // compaction leaf, because then no hit can ever read the pairing (SPEC section 7: a
@@ -81,7 +79,7 @@ pub(crate) fn reconstruct_and_match(
 
     // ONE walk over this file's tool blocks, answering the three questions a hit asks of
     // them: what the tool is called (a bare `tool_result` carries only the id), whether a
-    // result came back (the `▹` pairing join, GOLD §7 - membership and not contiguity, so a
+    // result came back (the `▹` pairing join - membership and not contiguity, so a
     // use pairs with its result across records and parallel calls), and which LINE carries
     // the call (the `result_of` provenance edge, the one join the chain's uuid map cannot
     // make). TWO walks over the same blocks answered the first two; the third rides along.
@@ -92,16 +90,16 @@ pub(crate) fn reconstruct_and_match(
     // `-t`/time/pattern filters rather than as an address, so the excerpt cap stays at its
     // default and no unmodeled unit is emitted: `--for` is a scan, not an address.
     let for_lines = for_addr.map(|addr| for_closure(rows, addr));
-    // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
-    // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is HOISTED
-    // (GOLD §3): `run_search` built one `DiscoveredSpawns` per DISTINCT discovery-root up front, so
-    // here we just BORROW this file's root's entry from the shared map - never re-run the (formerly
-    // O(N²) per-file) `discover_subagents` dir+meta scan.
+    // Cross-record classify context: owner identity, subagent-ness, parent id, the first
+    // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is
+    // HOISTED: `run_search` builds one `DiscoveredSpawns` per DISTINCT discovery-root up
+    // front, so here we just BORROW this file's root's entry from the shared map - never
+    // re-run the O(N²)-per-file `discover_subagents` dir+meta scan.
     let spawn_lookup = spawn_map
         .get(&discovery_root_for(path))
         .and_then(|o| o.as_deref());
     // The spawn-prompt seed is the FIRST turn-opener of a genuine subagent transcript. A
-    // `/fork` clone has none: its openers are the parent's own human messages (v0.10.2).
+    // `/fork` clone has none: its openers are the parent's own human messages.
     let first_opener_line = if head_is_fork {
         None
     } else {
@@ -135,7 +133,7 @@ pub(crate) fn reconstruct_and_match(
     // Resolve the `--turn` spec against THIS transcript's turn count (0-based), so
     // open/from-end forms (`N..`, `-3..` = the last 3) materialize per-file.
     let turn_bounds = turn_range.map(|spec| spec.resolve(index_turns.len(), false));
-    // C-27: the diff is a RENDER fact, so it is computed only where an exchange will
+    // The diff is a RENDER fact, so it is computed only where an exchange will
     // actually be printed - never during the scan, never for a draft that only gets
     // counted in the footer, and never under the terminal count modes (`-c` / `-l` /
     // `--count-by` print no exchange at all). The corpus holds multi-megabyte drafts;
@@ -208,7 +206,7 @@ pub(crate) fn reconstruct_and_match(
         };
 
         // Resolve the `▹` tool-pairing state of every tool hit/sibling against the file-level id
-        // sets (GOLD §7) now that the hits are collected.
+        // sets now that the hits are collected.
         for h in hits.iter_mut().chain(siblings.iter_mut()) {
             set_pairing(h, &tools);
         }
@@ -238,7 +236,7 @@ pub(crate) fn reconstruct_and_match(
             (Some(&a), Some(&b)) => (a, b),
             _ => (0, 0),
         };
-        // C-27: a draft that is about to be RENDERED states its distance from the
+        // A draft that is about to be RENDERED states its distance from the
         // message that replaced it. The survivor is already in `records` (it is what
         // made this record a draft), so no second pass over the file is needed - and
         // that holds for `show` too, whose address restricts which records HIT, not
@@ -273,9 +271,9 @@ pub(crate) fn reconstruct_and_match(
         })
     };
 
-    // Per-turn match+render is INDEPENDENT work, and it used to run serially per file -
-    // on a scoped query against a single giant transcript the whole phase sat on one
-    // worker while the pool idled (the dominant `cvwait` in a real-corpus profile).
+    // Per-turn match+render is INDEPENDENT work, and running it serially per file leaves
+    // a scoped query against a single giant transcript on one worker while the pool idles
+    // (the dominant `cvwait` in a real-corpus profile).
     // The fan-out is DOUBLE-GATED: `inner_parallel` (the caller's scope is too small to
     // fill the pool from the outside - a broad scan keeps the serial walk: nested
     // fan-out under a saturated pool measurably ADDS steal churn) and a size threshold
@@ -336,7 +334,7 @@ pub(crate) fn reconstruct_and_match(
     (out, index_turns.len(), counts)
 }
 
-/// The C-27 unsent diff for ONE draft record: its distance from the message that
+/// The unsent diff for ONE draft record: its distance from the message that
 /// replaced it, plus that message's address. Both texts come from
 /// [`Record::reconstructed_user_text`] - the SAME engine the draft's own hit renders
 /// through - so the number describes what the reader is looking at.
@@ -407,7 +405,7 @@ pub(crate) struct Turn<'a> {
 /// A [`SpawnLookup`] for one session, built from its discovered subagents (a cheap
 /// `discover_subagents` dir+meta scan - NOT a transcript re-read). Maps the spawn `tool_use_id`
 /// → the spawned child's agent id (the id-join) and the spawn NAME → child (the teammate
-/// name-join, GOLD §4). Powers comm direction (`self ⇨ child`) + subagent-return detection in
+/// name-join). Powers comm direction (`self ⇨ child`) + subagent-return detection in
 /// [`Record::classify`]/[`Record::direction`]. Absent ⇒ those degrade to the raw name / `?`.
 #[derive(Debug, Default)]
 pub(crate) struct DiscoveredSpawns {
@@ -427,7 +425,7 @@ impl SpawnLookup for DiscoveredSpawns {
 /// The TOP-LEVEL parent session `.jsonl` for a subagent transcript path
 /// `<ENCODED>/<uuid>/subagents/…/agent-<hex>.jsonl` → `<ENCODED>/<uuid>.jsonl`. `None` when `path`
 /// is not under a `subagents/` dir. The parent's sidecar holds the FLAT set of ALL subagents under
-/// it, so a lookup built from it resolves an in-subagent spawn / Task-return (GOLD §4).
+/// it, so a lookup built from it resolves an in-subagent spawn / Task-return.
 pub(crate) fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
     for anc in path.ancestors() {
         if anc.file_name().and_then(|n| n.to_str()) == Some("subagents") {
@@ -443,7 +441,7 @@ pub(crate) fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
 /// subagents that `classify()`/`direction()` must resolve. For a SUBAGENT transcript that is its
 /// PARENT top-level `.jsonl` (ALL of a session's subagents share ONE root); for a TOP-LEVEL file
 /// it is the file itself. Because the spawn lookup is IDENTICAL for every file sharing a root,
-/// `run_search` builds it ONCE per distinct root and shares it - the O(N²)→O(N) hoist (GOLD §3).
+/// `run_search` builds it ONCE per distinct root and shares it - the O(N²)→O(N) hoist.
 /// (The `parent_session_jsonl` fallback is unreachable: `is_subagent_path` true ⇒ a `subagents/`
 /// ancestor exists ⇒ `parent_session_jsonl` returns `Some`; the `unwrap_or_else` only satisfies
 /// the type and, even if hit, `discover_subagents` on a subagent path yields no spawns ⇒ `None`.)
@@ -459,7 +457,7 @@ pub(crate) fn discovery_root_for(path: &Path) -> PathBuf {
 /// detection, from an already-resolved DISCOVERY-ROOT (see [`discovery_root_for`]). A failed /
 /// empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing + small
 /// `meta.json` reads, bounded by the subagent count - never a transcript content scan. Called ONCE
-/// per distinct root (not per file) - the GOLD §3 hoist.
+/// per distinct root (not per file) - the spawn-lookup hoist.
 pub(crate) fn build_spawn_lookup(discovery_root: &Path) -> Option<DiscoveredSpawns> {
     let subs = discover_subagents(discovery_root).ok()?;
     if subs.is_empty() {
@@ -480,7 +478,7 @@ pub(crate) fn build_spawn_lookup(discovery_root: &Path) -> Option<DiscoveredSpaw
     Some(out)
 }
 
-/// The per-file cross-record context [`Record::classify`]/[`Record::direction`] need (GOLD §6):
+/// The per-file cross-record context [`Record::classify`]/[`Record::direction`] need:
 /// the transcript-owner identity, whether it is a subagent transcript, the parent id (a subagent
 /// opener's FROM), the FIRST turn-opener line (the spawn-prompt seed), and the spawn lookup.
 /// [`Self::ctx_for`] mints the per-record [`ClassifyCtx`] (only `is_transcript_opener` varies).
@@ -496,11 +494,11 @@ pub(crate) struct ClassifyEnv<'a> {
     /// `harness.resume.placeholder` hit's pair verdict joins against
     /// ([`Record::resume_paired`]). Empty on the overwhelming majority of transcripts.
     pub(crate) resume_prompts: &'a HashSet<String>,
-    /// Boundary -> compaction-mode pairing (C-33): the direction that separates the two
+    /// Boundary -> compaction-mode pairing: the direction that separates the two
     /// `/rewind` summarize gestures from an ordinary compaction sits on the SUMMARY record,
     /// so a boundary reads its own mode through this per-file pairing.
     pub(crate) summarize: &'a crate::model::SummarizeIndex,
-    /// Fired-prompt -> fire-instant join (v0.12.2): the `[scheduled fire <when>]` a
+    /// Fired-prompt -> fire-instant join: the `[scheduled fire <when>]` a
     /// `harness.schedule.fire` hit names lives on the `system`/`scheduled_task_fire`
     /// sibling, so the leaf reads its own instant through this per-file join.
     pub(crate) schedule_fires: &'a crate::model::ScheduleFireIndex,

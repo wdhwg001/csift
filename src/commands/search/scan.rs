@@ -103,21 +103,21 @@ pub(crate) fn search_one_file(
         .selected(Class::CompactionBoundary.path());
     // The hook-context keep is SELECTOR-gated like every other gated leaf: an explicit
     // `-t` reaching `harness.hook.context`, or an ADDRESS, which must render an addressed
-    // attachment record flag-free. The flag that used to open it is retired; naming the
-    // leaf is the form that survived.
+    // attachment record flag-free. It takes no flag of its own - the leaf's own name is
+    // the way in.
     let needs_hook_context = args.scans_gated(Class::HookContext) || address.is_some();
     // The FULL attachment keep: every `type:"attachment"` line, admitted by `--attachments`
     // (or the `--count-by attachment` axis, which implies it) with a selector that can
     // reach some attachment-carried leaf, by an explicit selector naming one of those
     // leaves, or by an ADDRESS.
     let needs_attachments = args.scans_attachment_lines() || address.is_some();
-    // v0.10.0 promoted non-record lines: admitted ONLY under a selector that reaches the
+    // Promoted non-record lines: admitted ONLY under a selector that reaches the
     // leaf (`scans_gated` - a bare no-`-t` scan never parses them) or an address (`show
     // --line`/`--uuid` renders an addressed line flag-free). `scans_gated` is the ONE
     // predicate the zero-match diagnosis shares, so the note can never claim a line
     // shape was unscanned when this gate parsed it.
     let reach = |c: Class| args.scans_gated(c) || address.is_some();
-    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not
+    // The csift channel: a delivery is a real MESSAGE addressed at this lane, not
     // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not
     // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any
     // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`
@@ -125,10 +125,10 @@ pub(crate) fn search_one_file(
     // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by
     // the two attachment gates above.
     let needs_channel = args.label_filter().selected(Class::CommChannel.path());
-    // v0.12.2 `harness.schedule.fire`: the fired PROMPT is an ordinary role-bearing line the
+    // `harness.schedule.fire`: the fired PROMPT is an ordinary role-bearing line the
     // scan already keeps, but the instant it fired lives on the `system`/`scheduled_task_fire`
     // sibling, which has no role marker. Same LABEL-only gate as the channel keep (a bare scan
-    // is on, `-t user` / `-t agent.*` short-circuits) and, per C-40, a CONJUNCTION rather than
+    // is on, `-t user` / `-t agent.*` short-circuits) and a CONJUNCTION rather than
     // the bare literal - a payload can quote the word. The admitted lines are read for the
     // instant and then DEMOTED below, so a default scan gains no `harness.schedule.event` hit.
     let needs_schedule_fire = args.label_filter().selected(Class::ScheduleFire.path());
@@ -146,11 +146,11 @@ pub(crate) fn search_one_file(
         // so neither turns the coarse attachment keep on.
         attachment_views: attachment_view_mask(args, address.is_some()),
         snapshot: reach(Class::BookkeepingFileHistory),
-        // v0.13.0: the 15 remaining non-transcript line types, one needle each behind
+        // The 15 remaining non-transcript line types, one needle each behind
         // its own leaf's gate (the bitmask below). The whole group short-circuits on a
         // zero mask, so a default scan pays for none of them.
         bookkeeping: bookkeeping_mask(args, address.is_some()),
-        // v0.11.1: `scans_gated` ALSO admits this leaf under a BARE `harness` role
+        // `scans_gated` ALSO admits this leaf under a BARE `harness` role
         // selector. It holds the one gated shape the model actually receives - a
         // `system`/`local_command` record, which the request assembler re-mints as a
         // user message - so a bare `-t harness` would otherwise be blind to the only
@@ -324,9 +324,9 @@ pub(crate) fn search_one_file(
         });
 
     // A DEFAULT-ON needle admits attachment lines this scan cannot search. The channel
-    // needle is the v0.11.0 one - it keeps any line carrying the envelope literal, so a hook
-    // context that quotes the header or a file-edit payload whose snippet does arrives here
-    // too - and the D7 `compact_boundary` needle is a bare value substring, so on a flagless
+    // needle keeps any line carrying the envelope literal, so a hook context that quotes
+    // the header or a file-edit payload whose snippet does arrives here too - and the D7
+    // `compact_boundary` needle is a bare value substring, so on a flagless
     // scan it admits any payload that merely mentions the word. Both attachment leaves keep
     // their own flag (the gated-leaves law): such a record surfaces on a default scan only as
     // a delivery (its first content string opens with the header), never as bare
@@ -370,7 +370,7 @@ pub(crate) fn search_one_file(
         }
     }
 
-    // v0.12.2: read the fired-prompt instants off the `system`/`scheduled_task_fire` lines the
+    // Read the fired-prompt instants off the `system`/`scheduled_task_fire` lines the
     // gate above admitted, THEN put those lines back where a default scan had them. The join is
     // built first because the demote is what makes it unreachable afterwards.
     let schedule_fires = if gates.schedule_fire {
@@ -420,7 +420,7 @@ pub(crate) fn search_one_file(
 
     // A `/fork` child's line 1 is a `fork-context-ref` record: the transcript is a CLONE
     // of its parent's, so its first turn-opener is the parent's human message, not a
-    // spawn-prompt seed (v0.10.2). The value substring is the R13-safe needle.
+    // spawn-prompt seed. The value substring is the R13-safe needle.
     let head_end = memchr::memchr(b'\n', bytes)
         .unwrap_or(bytes.len())
         .min(4096);

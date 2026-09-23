@@ -227,7 +227,7 @@ fn a_block_this_family_does_not_own_has_no_body() {
 ///
 /// `None` is the honest current state for four of the seven, not a gap: an isMeta
 /// injection's text is its own `message.content`, which the engine's generic arms already
-/// join, and the routing exists so the family lane can give a template a head of its own
+/// join, and the routing exists so a family can give a template a head of its own
 /// without touching the shared chain. Those rows flip to `injections` when it does, and
 /// this table is where that gets said.
 /// The rows are in `Class::ALL` order, which is what the totality check compares against.
@@ -400,13 +400,13 @@ fn a_family_refuses_a_record_that_is_not_its_own() {
 /// when it does not, and the second half is a whole family: an isMeta injection and a
 /// `<task-notification>` are `type:"user"` lines with no attachment payload type and no
 /// promoted class, so `render_leaf` answers `None` for both and the injections family is
-/// reachable through a class or not at all. The gate used to re-render the LINE - one
-/// call, no class - which made it structurally blind to that family: a file whose only
-/// hit lay in such a head was pruned and reported as a definitive absence while
-/// `show --line` rendered the head perfectly well. That is section 7's silent-drop
-/// landmine on the one path csift allows to prove a negative.
+/// reachable through a class or not at all. Re-rendering the LINE alone - one call, no
+/// class - is structurally blind to that family: a file whose only hit lies in such a
+/// head is pruned and reported as a definitive absence while `show --line` renders the
+/// head perfectly well. That is section 7's silent-drop landmine on the one path csift
+/// allows to prove a negative.
 ///
-/// The probe render stands in for a head the family lane has not written yet. What it
+/// The probe render stands in for a head no family has written yet. What it
 /// proves is the reachability, which is what the gate is blind to; the text itself is
 /// deliberately a fixture's.
 #[test]

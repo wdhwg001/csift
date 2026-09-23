@@ -5,11 +5,11 @@
 //! by, and the section 7f stage-2 machinery that re-renders those lines and checks them.
 //!
 //! The split is a structure-cap answer, and the cap binds for a reason a reader should
-//! know: `synth_marker_finders` is the ONE shared-file edit a taxonomy family lane may
-//! make (it must register the raw marker of any head it fabricates, or the whole-file
-//! gate prunes a file whose only hit is in that head), and a four-line registration on a
-//! 599-line file would have tripped the 600-line cap on the FIRST family. The registry
-//! now has a file of its own with room in it.
+//! know: `synth_marker_finders` is the ONE shared file a taxonomy family edits (a family
+//! that fabricates a head must register that head's raw marker, or the whole-file gate
+//! prunes a file whose only hit is in it), so the registry needs room for a four-line
+//! registration per family - on a 599-line file the 600-line cap would refuse the first
+//! one.
 
 pub(crate) mod synth;
 
@@ -48,7 +48,7 @@ pub struct Matcher {
     ///   line's every synthesized text derives from the line alone, so the gate can
     ///   parse JUST the marker lines, render via the SHARED engines
     ///   (`record_text_sections` / `auq_exchange` / `record_raw_text`) and regex-check
-    ///   them - a big marker-heavy main session no longer forces a whole-file parse.
+    ///   them - so a big marker-heavy main session still gates without a whole-file parse.
     /// - `synth_conservative` - a rejection's `[plan: …]` pointer resolves through
     ///   ANOTHER record (`PlanIndex`) and `--resolve-persisted` content lives in an
     ///   external file, so those lines force the full scan (rare).
@@ -201,7 +201,7 @@ pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
     // for a lowercase pattern) → a `(?i)`-wrapped ESCAPED literal compiled as its own
     // bytes regex: `memmem` has no caseless mode, but the regex engine lowers a
     // caseless literal to an accelerated multi-substring scan, so the dominant
-    // lowercase search is no longer forced to parse every candidate line.
+    // lowercase search gates on raw bytes instead of parsing every candidate line.
     let prefilter = match required_needles(&args.pattern) {
         None => None,
         Some(needles) if case_insensitive => {
@@ -321,9 +321,9 @@ pub(crate) fn required_literal(pattern: &str) -> Option<Vec<u8>> {
 /// NECESSITY-ONLY walk of its parsed HIR ([`hir_needles`]). Each needle must pass the
 /// SAME safety predicate the single-literal path enforces (whitespace-free,
 /// JSON-escape-free - see [`required_literal`]'s safety argument, which transfers
-/// per needle), so the historical "never extract a literal from a regex" rule's
-/// RATIONALE is preserved while its blanket form is retired: the rule guarded against
-/// unsafe or non-required extractions, and this walk emits neither.
+/// per needle). A blanket "never extract a literal from a regex" ban guards the same
+/// thing more coarsely: what makes an extraction unsafe is a needle a match could LACK
+/// or one the raw bytes do not carry verbatim, and this walk emits neither.
 pub(crate) fn required_needles(pattern: &str) -> Option<Vec<String>> {
     if let Some(lit) = required_literal(pattern) {
         return String::from_utf8(lit).ok().map(|s| vec![s]);

@@ -15,8 +15,8 @@ impl AddressSet {
 }
 
 /// Iterate an exchange's hits as RECORD groups. One record can emit SEVERAL hits - one per
-/// matching section (GOLD §3 G4/G5: a batched notification surfaces each section, a
-/// text+tool_use assistant record surfaces both views) - as a run of consecutive hits
+/// matching section (a batched notification surfaces each section, a text+tool_use
+/// assistant record surfaces both views) - as a run of consecutive hits
 /// sharing a physical jsonl line ([`collect_record_hits`] emits per record, in order). A
 /// sidecar-merged hit has no physical line (`line == 0`) and a sidecar record emits exactly
 /// ONE hit, so it forms its own group. Censuses count RECORDS, never sections - without
@@ -38,15 +38,16 @@ pub(crate) fn record_groups(hits: &[Hit]) -> Vec<&[Hit]> {
     out
 }
 
-/// Per-leaf record census of a matched exchange set (GOLD §5): each matched RECORD (a
-/// multi-section record is grouped by [`record_groups`], never multi-counted) contributes
-/// to every leaf in its label set that SURVIVES the active `-t`/`-T` filter, so a leaf's
-/// tally is exactly how many records `-t <leaf>` (composed with your other filters) would
-/// surface. With no filter that is the record's FULL label set - but under `-t`/`-T` a
-/// dual-labeled record must not leak its filtered-out twin into the census (R7 §2.3: a
-/// `-t user -T user.message` census showing `agent.tool.result`, or a `-t harness` census
-/// dominated by `agent.communication.inbox` keys, reads as the filter not working). The
-/// filter decides membership per-VIEW already; the census keys follow the same predicate.
+/// Per-leaf record census of a matched exchange set over the label taxonomy (SPEC section
+/// 5): each matched RECORD (a multi-section record is grouped by [`record_groups`], never
+/// multi-counted) contributes to every leaf in its label set that SURVIVES the active
+/// `-t`/`-T` filter, so a leaf's tally is exactly how many records `-t <leaf>` (composed
+/// with your other filters) would surface. With no filter that is the record's FULL label
+/// set - but under `-t`/`-T` a dual-labeled record must not leak its filtered-out twin
+/// into the census (R7 §2.3: a `-t user -T user.message` census showing
+/// `agent.tool.result`, or a `-t harness` census dominated by `agent.communication.inbox`
+/// keys, reads as the filter not working). The filter decides membership per-VIEW already;
+/// the census keys follow the same predicate.
 /// Returns the per-leaf counts and the distinct matched-record total. Shared by
 /// `--count-by label` and the zero-hit label probe (the probe passes
 /// [`LabelFilter::all`] - it deliberately reports what the DROPPED filter excluded).
@@ -94,7 +95,7 @@ pub(crate) fn axis_census(
     use crate::cli::CountAxis as A;
     let multi_transcript = distinct_session_count(exchanges) > 1;
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    // `None` is the ABANDONED bucket: a record the conversation chain no longer reaches
+    // `None` is the ABANDONED bucket: a record the conversation chain does not reach
     // belongs to no numbered turn, and BTreeMap orders `None` first, so the render puts it
     // last deliberately rather than letting it read as turn zero.
     let mut turn_counts: BTreeMap<(String, Option<usize>), usize> = BTreeMap::new();
@@ -224,7 +225,7 @@ pub(crate) struct EmptyDiagnosis {
     /// AND the pattern matches under OTHER labels; `None` when no label filter, or the pattern
     /// is genuinely absent even unfiltered.
     pub(crate) excluded_by_label: Option<(Vec<(String, usize)>, usize)>,
-    /// v0.10.0: true when no active selector reached a gated (promoted non-record)
+    /// True when no active selector reached a gated (promoted non-record)
     /// leaf - those lines were never parsed, so the absence does not cover them.
     pub(crate) gated_unreached: bool,
     /// The bare ROLE or CATEGORY selectors whose LLM-visible face is empty

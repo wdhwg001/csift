@@ -73,7 +73,7 @@ pub(crate) fn collect_turn_hits(
         }
         let before = hits.len();
         let idx = turn.indices.get(i).copied().unwrap_or(usize::MAX);
-        // C-31: whether the model still receives a record is the THIRD exclusion axis
+        // SURVIVAL: whether the model still receives a record is the THIRD exclusion axis
         // beside leaf visibility and the delivery override, and like them it is per
         // RECORD - so the filter is specialised HERE, once, before any label is tested.
         let filter = filter.with_survival(chain.survival(idx).selectable());
@@ -199,10 +199,12 @@ pub(crate) fn collect_turn_siblings(
     (sibs, hidden)
 }
 
-/// Emit hits for every label-eligible UNIT of `rec` that matches the regex (the P2 cutover -
-/// GOLD §6). The record is classified ONCE via [`Record::classify`]; each emission UNIT (the
-/// record-level user/comm/harness text, the user-facing tool_result dual, or a block) picks the
-/// RICHEST selected [`Class`] among its candidate labels (GOLD §3 Q4 dedup) and emits ONE hit.
+/// Emit hits for every label-eligible UNIT of `rec` that matches the regex - eligible means
+/// the unit's leaf survives the `-t`/`-T` selector (SPEC section 5). The record is classified
+/// ONCE via [`Record::classify`]; each emission UNIT (the record-level user/comm/harness text,
+/// the user-facing tool_result dual, or a block) picks the RICHEST selected [`Class`] among
+/// its candidate labels (the richest-view law: a unit the selector admits under two of its
+/// labels emits ONCE, under the richer one) and emits ONE hit.
 /// Comm units carry the `from ⇨ to` direction ([`Record::direction`]); tool units carry the
 /// `tool_use_id` for the later `▹` pairing pass. A record carrying NO label (metadata / an
 /// excluded isMeta pseudo-turn) yields nothing.
@@ -235,7 +237,7 @@ pub(crate) fn collect_record_hits(
     if labels.is_empty() {
         return; // unmodeled / excluded record - carries no role.class.sub label
     }
-    // C-28: whether the model RECEIVED a record is a per-RECORD fact, and a bare ROLE
+    // DELIVERY: whether the model RECEIVED a record is a per-RECORD fact, and a bare ROLE
     // selector asks exactly that - so the filter is specialised HERE, once, before any
     // label is tested (the seam where the bare-role expansion first meets a record).
     // The scan-layer `user.unsent` assignment above is the precedent for a fact a pure
@@ -260,10 +262,10 @@ pub(crate) fn collect_record_hits(
     // carries the rejection's tool_result. Per-record like `delivery`, because the
     // field is top-level and applies to the whole carrier.
     let denial_kind = rec.tool_denial_kind.clone();
-    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).
+    // The queue facts ride only a queue-operation record (None elsewhere).
     let (queue_operation, queue_reason) = queue_facts(rec);
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
-    // C-33: the compaction facts of a boundary/summary record. The BOUNDARY carries the
+    // The compaction facts of a boundary/summary record. The BOUNDARY carries the
     // metrics but no direction, so its mode comes from the per-file pairing in `ctx`; the
     // SUMMARY carries the direction itself. Gated on the label set `classify` just produced
     // (an enum compare over a one- or two-element Vec), so a record that is neither never
@@ -276,7 +278,7 @@ pub(crate) fn collect_record_hits(
     } else {
         None
     };
-    // v0.12.2: the instant a fired prompt fired lives on its `system`/`scheduled_task_fire`
+    // The instant a fired prompt fired lives on its `system`/`scheduled_task_fire`
     // sibling, joined by `parentUuid` through the per-file index on `ctx`. Gated on the label
     // set `classify` just produced, like the compaction facts above, so every other hit pays
     // one enum compare and carries a null.
@@ -299,7 +301,7 @@ pub(crate) fn collect_record_hits(
     let has = |c: Class| labels.contains(&c);
     // Direction is per-record (the first comm direction); computed only when a comm label is
     // present (it parses peer sections / scans blocks), and attached to comm hits only. The
-    // owner's own id renders as `self` (GOLD §3/§4: `self ⇨ to`, `from ⇨ self`).
+    // owner's own id renders as `self` (`self ⇨ to` outbound, `from ⇨ self` inbound).
     let direction = if labels.iter().copied().any(is_comm_class) {
         alias_self(rec.direction(ctx), ctx.owner_id)
     } else {
@@ -377,15 +379,15 @@ pub(crate) fn collect_record_hits(
     };
 
     // ── 1. Record-level TEXT unit(s). A BATCHED record (≥1 `<task-notification>` / inbound-peer
-    //    section) renders ONE hit PER section (GOLD §3 G4/G5), each with its own label + direction
-    //    - so a notification-with-`<result>` ALSO surfaces its `agent.communication.inbox`
-    //    (child ⇨ self, G1), and several mixed-kind sections no longer collapse to one. Any other
+    //    section) renders ONE hit PER section, each with its own label + direction - so a
+    //    notification-with-`<result>` ALSO surfaces its `agent.communication.inbox`
+    //    (child ⇨ self), and mixed-kind sections never collapse to one. Any other
     //    record-text class (user.message, harness markers, compaction, a subagent-opener inbox)
-    //    renders ONE richest-label hit. The §1 fix (teammate → inbox) + the `<task-notification>`
-    //    → harness.notification reparent flow straight from `classify`. ──
+    //    renders ONE richest-label hit. A teammate message's inbox label and a
+    //    `<task-notification>`'s harness.notification label come straight from `classify`. ──
     // A superseded draft keeps its single `user.unsent` view whatever its shape: a
     // sectioned draft (a pulse- or relay-shaped text) must not fan out into per-section
-    // classes the record's own `labels[]` does not carry (v0.10.2).
+    // classes the record's own `labels[]` does not carry.
     let sections = if opener_override.is_some() {
         Vec::new()
     } else {
@@ -432,8 +434,8 @@ pub(crate) fn collect_record_hits(
     }
 
     // ── 2. Record-level user-facing tool_result DUAL (AUQ answer / typed rejection) ──
-    // These are RECORD-level facts, so emit ONCE (not per tool_result block); GOLD §3 Q4: the
-    // user-facing view is RICHEST, superseding the agent.tool.result copy (the block loop then
+    // These are RECORD-level facts, so emit ONCE (not per tool_result block); by the richest-view
+    // law the user-facing view supersedes the agent.tool.result copy (the block loop then
     // skips it). `reconstructed_user_text` yields the clean Q+options+answer / rejection (+[plan:])
     // unit. When neither user-facing label is SELECTED, `user_dual` is None and the block loop
     // surfaces the plain agent.tool.result instead (so `-t agent.tool.result` still finds it).

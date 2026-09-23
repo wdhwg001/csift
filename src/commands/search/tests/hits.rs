@@ -214,10 +214,9 @@ fn auq_answer_surfaces_under_user_category_end_to_end() {
     let mut a = args("bold option");
     a.labels = vec!["user".to_string()];
     let ex = search(&lines, &a);
-    // The AUQ answer is surfaced under `user` (it rides on a carrier) AND - the
-    // sanctioned behavior change (§6.4) - it now OPENS a new turn (the answer is a
-    // genuine user message that was previously missed as a boundary). So the hit
-    // lands in turn 1 (the genuine "pick one" opener is turn 0).
+    // The AUQ answer is surfaced under `user` (it rides on a carrier) AND it OPENS a
+    // new turn: the answer IS the user's message, so it is a turn boundary like any
+    // other genuine one. The hit lands in turn 1 ("pick one" is the turn-0 opener).
     assert_eq!(ex.len(), 1);
     assert_eq!(ex[0].turn_index, Some(1));
     assert!(ex[0]

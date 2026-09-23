@@ -10,9 +10,9 @@
 //! PERF (SPEC section 7): the keys reach this family as [`Record::exposed_keys`] - the
 //! eighteen of them in ONE [`crate::model::Exposed`] behind ONE `Box`, read by the same
 //! serde pass that builds the record (`#[serde(flatten)]`) and allocated only for a record
-//! that names at least one. That shape answers both halves of the C-41 law this family is
-//! built around: the row every parsed line of every scan carries grows by a pointer rather
-//! than by eighteen `Option`s (`size_of::<Record>()` 1368 -> 1376, pinned in
+//! that names at least one. That shape answers both halves of the RECORD-WIDTH law this
+//! family is built around: the row every parsed line of every scan carries grows by a
+//! pointer rather than by eighteen `Option`s (`size_of::<Record>()` 1368 -> 1376, pinned in
 //! `parse::tests::spine`), and nothing walks the line twice. The walk was the alternative,
 //! and it was built and measured rather than argued about: a depth-1 key read at the one
 //! place a `Record` is built from bytes cost 48 to 79 percent of user CPU on three section

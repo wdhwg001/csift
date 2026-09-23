@@ -141,7 +141,7 @@ impl Matcher {
 ///   `harness.compaction.boundary` - otherwise the boundary line is not even a scan
 ///   candidate, so its synthesized excerpt is unreachable) - `trigger=…`/`preTokens=…`
 ///   key=value text is fabricated from `compactMetadata`.
-/// - `turn_duration` / `stop_hook_summary` / `file-history-` (v0.10.0, only under an
+/// - `turn_duration` / `stop_hook_summary` / `file-history-` (only under an
 ///   explicit selector reaching the leaf) - the promoted renders fabricate
 ///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
 /// - `"subtype"` (only under a selector that scans `type:"system"` lines) - the system
@@ -181,7 +181,7 @@ pub(crate) fn synth_marker_finders(
     {
         verifiable.push(b"compact_boundary");
     }
-    // v0.10.0 promoted lines whose render FABRICATES text (key=value excerpts): the
+    // Promoted lines whose render FABRICATES text (key=value excerpts): the
     // marker is the line's own type/subtype value, active only when the explicit
     // selector admits the line (otherwise it is not a candidate at all). The queued
     // and away-summary leaves render VERBATIM content and need no marker.

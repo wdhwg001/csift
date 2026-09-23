@@ -96,7 +96,7 @@ pub(crate) fn write_exchange<W: std::io::Write>(
             format_local_compact(ex.started_utc.as_deref())
         )?;
     }
-    // C-27: what the user changed before sending. Printed once per draft unit,
+    // What the user changed before sending. Printed once per draft unit,
     // under the header, so the reader weighs the draft against what replaced it
     // instead of reading an abandoned text as the message.
     if let Some(d) = &ex.draft_diff {
@@ -164,7 +164,7 @@ fn write_image_hint<W: std::io::Write>(
 
 /// One hit/sibling line: `<marker> <label>[ <tool>]  L<line>  <excerpt>` (excerpt inline; its
 /// newlines are already collapsed to single spaces). `marker` is the role glyph for a match or a
-/// dim `·` for a `--siblings` context record; `<label>` is the dotted path with the GOLD §4/§7
+/// dim `·` for a `--siblings` context record; `<label>` is the dotted path with its
 /// `⇨`/`▹` decorations ([`render_label`]).
 pub(crate) fn write_record_line<W: std::io::Write>(
     w: &mut W,
@@ -203,8 +203,9 @@ pub(crate) fn image_suffix(ids: &[String]) -> String {
 }
 
 /// The paste-ready extraction command for a row's images, printed ONCE per run under the
-/// first image-bearing row (C-11: the inline `[N image(s): #7]` annotation taught nothing
-/// about extraction, and fleets classified images as unreadable without ever testing).
+/// first image-bearing row: the inline `[N image(s): #7]` annotation alone says nothing
+/// about extraction, and a reader who does not know the command takes images for
+/// unreadable without ever trying.
 /// INPUT forms only: `#7` is display, `--id` takes the bare number; `L<line>i<n>` is
 /// identical in both. Addressed at the row's OWNING transcript id (the per-FILE ID law).
 pub(crate) fn image_hint_line(session_id: &str, ids: &[String]) -> Option<String> {

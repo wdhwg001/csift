@@ -476,12 +476,12 @@ fn a_leaf_outside_the_family_takes_no_marker() {
 /// view of an attachment line: the conversion the harness persisted, which is what the
 /// model received.
 ///
-/// It used to be the ONE exception. `record_text_emission` resolved a `user.message` unit
-/// as the reconstructed opener text, then the verbatim payload, and only then the seam -
-/// so a steer whose record carried a conversion showed the payload JSON while an address
-/// on the same line showed the conversion, and the fact had to say `[payload]` to describe
-/// the body the unit was actually showing. The emission falls through to the seam now, so
-/// there is one body and one word for it.
+/// It is NOT an exception, and the emission path is where one would come from: resolving a
+/// `user.message` unit as the reconstructed opener text, then the verbatim payload, and
+/// only then the seam would show the payload JSON here while an address on the same line
+/// showed the conversion, and the fact would have to say `[payload]` about a body it is not
+/// describing. `record_text_emission` falls through to the seam, so there is one body and
+/// one word for it.
 #[test]
 fn the_mid_turn_steer_reports_the_conversion_the_model_received() {
     let line = r#"{"type":"attachment","attachment":{"type":"queued_command","origin":{"kind":"human"},"prompt":"stop"},"rendered":[{"content":"the converted copy"}]}"#;

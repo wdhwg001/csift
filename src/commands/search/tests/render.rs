@@ -320,9 +320,9 @@ fn sibling_cap_policy_is_fixed_and_message_classes_uncapped() {
     assert_eq!(sibling_cap(Class::CommandStdout), Some(2));
 }
 
-/// C-33: a compaction summary written by a `/rewind` summarize names its direction in the
+/// A compaction summary written by a `/rewind` summarize names its direction in the
 /// label zone (display-only, like `[narration summary]`); an ordinary compaction summary
-/// renders the bare leaf path exactly as before.
+/// carries no direction, so it renders the bare leaf path.
 #[test]
 fn a_summarize_summary_names_its_direction_in_the_label_zone() {
     let mk = |compaction: Option<Box<CompactionHit>>| Hit {
@@ -390,7 +390,7 @@ fn a_summarize_summary_names_its_direction_in_the_label_zone() {
     );
 }
 
-/// C-33 PERF: the boundary -> mode pairing is built only when the active selection can
+/// PERF: the boundary -> mode pairing is built only when the active selection can
 /// surface a compaction leaf, so a `-t user`/`-t agent.*` scan never walks the records for a
 /// feature it cannot show. The gate is a named predicate precisely so this is pinned.
 #[test]
@@ -431,7 +431,7 @@ fn the_compaction_pairing_is_skipped_when_no_compaction_leaf_is_selectable() {
     assert!(!wants_compaction_pairing(&LabelFilter::new(&inc, &exc)));
 }
 
-/// The two EXTENSION POINTS a family lane adds to, pinned at their contract rather than
+/// The two EXTENSION POINTS a family adds to, pinned at their contract rather than
 /// through a surface: a `Marker` renders `[head]` or `[head detail]`, and a `HitFact`
 /// projects itself into the label zone and into JSON. A family that adds a variant gets
 /// both surfaces for free only while these two projections stay the one place it is

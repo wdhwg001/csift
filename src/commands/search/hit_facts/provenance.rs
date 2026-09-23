@@ -123,11 +123,11 @@ impl TurnRoots {
 /// before.
 ///
 /// TWO passes can need the table - the matched hits, and the siblings under `--siblings` -
-/// and each used to hold an `Option<TurnRoots>` of its own, so a turn with both built the
-/// same table twice. "Built on a turn's first hit" is the cost this axis is stated at, and
-/// the second build buys nothing: the table is a function of the turn, which neither pass
-/// changes. The cell is owned by the caller that owns the turn, so the sentence is true of
-/// the TURN rather than of each pass.
+/// and ONE cell serves both: an `Option<TurnRoots>` per pass builds the same table twice
+/// for a turn that has both. "Built on a turn's first hit" is the cost this axis is stated
+/// at, and the second build buys nothing: the table is a function of the turn, which
+/// neither pass changes. The cell is owned by the caller that owns the turn, so the
+/// sentence is true of the TURN rather than of each pass.
 #[derive(Debug, Default)]
 pub(crate) struct TurnRootsCell {
     table: Option<TurnRoots>,

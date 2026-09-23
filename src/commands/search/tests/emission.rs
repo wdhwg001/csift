@@ -157,7 +157,7 @@ fn every_visible_leaf_specimen_emits_exactly_one_hit() {
     // carries no leaf at all, and `redacted_thinking`, whose leaf is invisible by
     // construction - and 2 are the exemptions named above, leaving 18. A `>=` bound would
     // pass while a row quietly stopped being swept, which is the drift this guard exists
-    // to catch; a family lane that ADDS a specimen updates the number and says which row.
+    // to catch; ADDING a specimen means updating the number here and naming the new row.
     assert_eq!(
         swept, 18,
         "every specimen carrying a visible leaf is swept, minus the two named exemptions"

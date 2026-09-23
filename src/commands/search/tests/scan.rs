@@ -154,7 +154,7 @@ const STRUCTURED_LINE: &str = r#"{"type":"attachment","uuid":"v2","attachment":{
 const FILE_ATTACHMENT_LINE: &str = r#"{"type":"attachment","uuid":"v3","attachment":{"type":"file","filePath":"/Users/dev/x.rs","content":"fn main(){}"}}"#;
 
 /// Naming ONE view leaf runs that leaf's needle and no other, and a query naming neither
-/// runs none - which is the whole point of the bits: `-t user` used to admit every
+/// runs none - which is the whole point of the bits: without them `-t user` admits every
 /// attachment line in the transcript, at four times the cost of a flagless scan. A census
 /// cannot show this (a wrongly admitted line classifies to a leaf the filter drops), so
 /// the candidate predicate is where it is pinned.
