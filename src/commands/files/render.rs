@@ -96,7 +96,7 @@ pub(crate) fn survival_marker(survival: &str) -> String {
 
 /// Group mutations under their session header, then call `body` per session with that
 /// session's mutations. Sessions render in sorted id order for determinism. A SUBAGENT
-/// group's header is branded `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring `search`'s
+/// group's header is branded `SUBAGENT <hex>  ·  parent SESSION <uuid>` (mirroring `search`'s
 /// header + `turns`' `(subagent transcript)` annotation) so a consumer never reads a bare
 /// subagent hex as a re-feedable `@<uuid>` target. All mutations in one group share the
 /// same id-domain (same transcript), so the first row's flags brand the whole header.
