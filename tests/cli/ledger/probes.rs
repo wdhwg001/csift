@@ -165,11 +165,11 @@ fn names<'a>(scope: &str, words: &[&'a str]) -> Option<&'a str> {
 /// Rule 22: a probe's KIND and its SCOPE name the SAME artefact.
 ///
 /// The kind is decided by the artefact the command reads and the scope is derived from the
-/// instrument, and until now nothing asked whether the two agreed. They did not: thirty-eight
+/// instrument, and nothing else asks whether the two agree. They can disagree: thirty-eight
 /// states carried `corpus` beside a scope reading `the shipped Claude Code binary the state
 /// names`, and one carried `bytes` beside `the top-level *.jsonl of one projects root`. Each
-/// half was defensible alone, which is why the pair could ship - a reader asking the file
-/// which probes read a build got one answer from the kind and another from the scope.
+/// half is defensible alone, which is how such a pair ships - a reader asking the file which
+/// probes read a build gets one answer from the kind and another from the scope.
 ///
 /// The test is on the two kinds whose artefact is FIXED. `csift`, `live` and `repo` name a
 /// run, a gesture and this tree, and any of the three can legitimately mention either noun -

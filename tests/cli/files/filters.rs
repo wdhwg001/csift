@@ -16,8 +16,8 @@ fn files_bare_uuid_positional_routes_to_session() {
         "summary",
         "--no-subagents",
     ]);
-    // Routing success = the command resolved the session and ran (exit 0), NOT the old
-    // "no Claude Code project dir for …/<uuid>" hard error.
+    // Routing success = the command resolved the session and ran (exit 0), never the path
+    // branch's "no Claude Code project dir for …/<uuid>" hard error.
     assert!(
         out.success,
         "bare-uuid positional must resolve as a session; stderr: {}",

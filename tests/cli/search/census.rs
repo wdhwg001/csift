@@ -118,7 +118,7 @@ fn search_census_counts_records_not_sections_and_pairing_rides_comm_views() {
     assert_eq!(count("pending"), 1, "the frozen SendMessage: {rows:?}");
     assert_eq!(summary["excluded_records"], 1, "the opener: {summary}");
 
-    // The comm selector agrees - the send is IN the pairing domain now, not excluded.
+    // The comm selector agrees - the send is IN the pairing domain, not excluded.
     let (rows, summary) = census(&["-t", "agent.communication.sent", "--count-by", "pairing"]);
     assert_eq!(rows.len(), 1, "rows: {rows:?}");
     assert_eq!(rows[0]["key"], "pending");

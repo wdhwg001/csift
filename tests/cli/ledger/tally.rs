@@ -23,8 +23,8 @@
 //! THE ELLIPSIS SUBSET IS DERIVED, NOT TYPED, and that is the whole point of it. The page
 //! says an ellipsis is no evidence that an excerpt was never a quote, and it says so with a
 //! number; that number is a property of the shipped file and of the build, it moved by 154
-//! the first time anchors were relocated, and it was still being stated in four documents
-//! in the present tense at its old value. The anchor walk already classifies every
+//! the first time anchors were relocated, and a document stating it in the present tense
+//! states a value nobody re-derives. The anchor walk already classifies every
 //! `...`-bearing excerpt, so the count is a subset of what it decided rather than a second
 //! measurement, and rule 8 holds the README to it exactly as it holds the table.
 

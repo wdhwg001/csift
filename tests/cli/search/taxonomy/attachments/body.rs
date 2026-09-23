@@ -105,10 +105,10 @@ fn a_backslash_in_a_needle_matches_the_text_it_is_rendered_from() {
     // string. The BACKSLASH is one of those characters: a raw line stores it doubled, so a
     // needle carrying one occurs nowhere in the bytes the prefilter scans.
     //
-    // `matcher::json_escapes_in_string` did not count it, so a needle carrying a backslash
-    // was emitted and the line prefilter proved absence over text csift had just put on
-    // screen. It counts it now, which SPLITS such a run exactly as a quote already splits
-    // it - `C:\Users\dev` derives the needle `Users`, which is in the raw bytes.
+    // `matcher::json_escapes_in_string` counts it, which SPLITS such a run exactly as a
+    // quote already splits it - `C:\Users\dev` derives the needle `Users`, which is in the
+    // raw bytes. A predicate that does not count it emits a needle carrying a backslash,
+    // and the line prefilter then proves absence over text csift has just put on screen.
     //
     // BOTH PAIRS MATCH, and the second pair is why the predicate is where the fix went:
     // the identical drop happened on a plain `user.message`, which no attachment code

@@ -462,7 +462,7 @@ fn whoami_prints_not_found_note_when_unresolved() {
 #[test]
 fn whoami_text_prints_not_found_note_when_unresolved() {
     // The path line is ALWAYS printed; a session id that resolves to no file gets a `not found`
-    // note (the old `--show-path`-gated silence was removed).
+    // note (no flag gates it into silence).
     let h = Home::new();
     let out = h.run_with_env(
         &["whoami"],

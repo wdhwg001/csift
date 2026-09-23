@@ -315,8 +315,9 @@ fn search_no_truncate_emits_the_untruncated_record() {
         full.stdout
     );
 
-    // Zero back-compat: the old `--full` spelling is GONE - it must ERROR (unknown argument),
-    // never silently work, so existing users are forced onto the unambiguous `--no-truncate`.
+    // Zero back-compat: `--full` is not a spelling csift accepts - it must ERROR (unknown
+    // argument) rather than silently work, so a reader is sent to the unambiguous
+    // `--no-truncate`.
     let removed = h.run(&["search", "needle", "--no-subagents", "--full"]);
     assert!(
         !removed.success,

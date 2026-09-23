@@ -230,8 +230,9 @@ fn files_resolves_relative_bash_operands_against_the_record_cwd() {
 
 #[test]
 fn files_keeps_and_flags_mutations_from_a_partially_failed_bash_chain() {
-    // `A && B; C` can mutate in A before C fails. The old behavior dropped every
-    // mutation of an is_error command silently; now they are kept and flagged.
+    // `A && B; C` can mutate in A before C fails. Dropping every mutation of an is_error
+    // command loses a write that landed on disk, and loses it in silence; they are kept
+    // and flagged instead.
     let h = Home::new();
     let lines = concat!(
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,

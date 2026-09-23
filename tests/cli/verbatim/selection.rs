@@ -330,7 +330,7 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
         "all",
     ]);
     assert!(all.success, "stderr: {}", all.stderr);
-    // Even the pure declarations appear verbatim now.
+    // Even the pure declarations appear verbatim.
     assert!(
         all.stdout.contains("LETMEDECL"),
         "all keeps declarations: {}",

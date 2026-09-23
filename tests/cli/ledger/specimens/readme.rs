@@ -58,7 +58,7 @@ fn ledger_gate_rule_8_names_a_tally_block_that_disagrees_with_the_ledger() {
     tally::ledger_tally(&claims, &a, "2.1.258", &bad, &mut f);
     assert!(only(&f).contains("README ledger tally block differs from the ledger's"));
 
-    // A SHARE - the column the old row regex never read at all.
+    // A SHARE - the column a counts-only row regex never reads at all.
     let bad = good.replace("| 100.0% |", "| 79.2% |");
     let mut f = Vec::new();
     tally::ledger_tally(&claims, &a, "2.1.258", &bad, &mut f);

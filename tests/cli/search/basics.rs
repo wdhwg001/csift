@@ -163,7 +163,8 @@ fn search_text_output_is_token_lean() {
         "no ordinal header: {}",
         out.stdout
     );
-    // The old heavyweight header is gone: no `═══` rule, no uppercase `SESSION `/`TURN `.
+    // The header carries no `═══` rule and no uppercase `SESSION `/`TURN `: a hit is one
+    // scannable row, not a banner.
     assert!(
         !out.stdout.contains("═══"),
         "no rule glyphs: {}",

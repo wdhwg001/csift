@@ -30,7 +30,8 @@ fn chain_stats_home() -> Home {
 #[test]
 fn every_session_row_key_is_named_in_the_help() {
     // help IS surface, and the failure it guards against is silent: a new JSON key ships,
-    // the help keeps describing the old set, and the manual is wrong with nothing failing.
+    // the help keeps describing the set without it, and the manual is wrong with nothing
+    // failing.
     // So the help text is asserted against the keys the command actually emits.
     let h = chain_stats_home();
     let j = h.run(&["stats", &at(SESS), "--format", "json"]);

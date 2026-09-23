@@ -29,7 +29,7 @@ fn search_tool_response_names_the_tool_it_answers() {
 fn turns_and_search_label_automation_triggers() {
     // A `<task-notification>` automation trigger opens a turn but must render as the
     // parsed `[<kind> <id> …]` ATTRIBUTION label - with the TRUE kind parsed from the
-    // summary (a `Background command "…"` summary renders `background-command`, NOT the old
+    // summary (a `Background command "…"` summary renders `background-command`, never a
     // blanket `workflow`) - never the raw XML blob - and `turns` reports the automation
     // count in its header.
     let h = Home::new();

@@ -26,7 +26,7 @@ fn search_category_filter_and_max_count() {
     // "carry" matches the top-level session AND both subagents (each is one exchange), so
     // --max-count 1 caps to one and DROPS the rest (the drop note appears only when something is
     // actually dropped - never a "0 dropped" footer). (No `-t`: the subagent "carry"
-    // records are spawn-prompt openers, now `agent.communication.inbox`, not `user`.)
+    // records are spawn-prompt openers - `agent.communication.inbox`, not `user`.)
     let out = h.run(&["search", "carry", "--max-count", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The footer reports the TRUE match total (both-ends law) - the cap only windows the
@@ -243,9 +243,9 @@ fn search_session_filter_and_turn_range() {
 
 #[test]
 fn search_turn_range_intersects_with_time_window() {
-    // --turn ∧ --since/--until INTERSECT (both filters AND) - the old
-    // mutual-exclusion interface law is gone. An impossible intersection (turns exist,
-    // but none inside the window) is an honest empty result, exit 0.
+    // --turn ∧ --since/--until INTERSECT (both filters AND), never an either/or. An
+    // impossible intersection (turns exist, but none inside the window) is an honest
+    // empty result, exit 0.
     let h = populated_home();
     let ok = h.run(&[
         "search",

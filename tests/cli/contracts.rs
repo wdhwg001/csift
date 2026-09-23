@@ -196,7 +196,8 @@ fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
     // Bare date = local midnight → both turns.
     assert_eq!(count("2026-06-07"), "2");
     // Bare datetime 16:00 AEST sits between the two (15:00 / 19:00 AEST) → exactly 1.
-    // Under the old midnight-collapse this returned 2, identically to the bare date.
+    // A parser that collapses a bare datetime to midnight answers 2 here, identically to
+    // the bare date - which is what makes these three counts the discriminator.
     assert_eq!(count("2026-06-07T16:00:00"), "1");
     // And a bare datetime PAST both → 0 (three distinct answers ⇒ time-of-day honored).
     assert_eq!(count("2026-06-07T20:00:00"), "0");

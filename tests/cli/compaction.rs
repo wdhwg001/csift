@@ -24,7 +24,7 @@ fn summarize_home() -> Home {
             r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:11:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"sounding the channel"}]}}"#, "\n",
         ),
     );
-    // A second transcript with the OLD four-scalar boundary and a plain compaction summary.
+    // A second transcript with the FOUR-SCALAR boundary shape and a plain compaction summary.
     h.write(
         &format!("{ENC}/{LEGACY}.jsonl"),
         concat!(

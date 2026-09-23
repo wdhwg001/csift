@@ -110,8 +110,9 @@ fn stats_usage_dedupe_is_per_file_and_total_sums_files() {
 
 #[test]
 fn stats_usage_idless_records_count_individually() {
-    // A record with no message.id keeps the old per-record semantics beside an
-    // id-bearing pair (every pre-id transcript takes this path).
+    // A record with no message.id is counted PER RECORD - the dedupe has no key to fold
+    // it onto - beside an id-bearing pair; every transcript written before the key existed
+    // takes this path.
     let h = Home::new();
     h.write(
         &format!("{DEDUP_ENC}/{DEDUP_SESS}.jsonl"),

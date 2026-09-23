@@ -260,8 +260,9 @@ fn restore_partial_error_keeps_the_json_envelope_whole() {
 #[test]
 fn restore_invalidated_history_is_not_reported_as_never_touched() {
     // A full Write anchor followed by a modified-since-read rejection: the buffer is
-    // cleared and nothing survives, but the file WAS touched here. The old message
-    // claimed "never Read/Written/Edited"; the accurate one names the invalidation.
+    // cleared and nothing survives, but the file WAS touched here. A message reading
+    // "never Read/Written/Edited" is false about this file; the accurate one names the
+    // invalidation.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

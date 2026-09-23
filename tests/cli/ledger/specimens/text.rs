@@ -99,7 +99,7 @@ fn ledger_gate_rule_14_names_every_barred_prose_family() {
 /// Rule 14's three widenings, each one a defect the older shape shipped.
 #[test]
 fn ledger_gate_rule_14_reaches_what_the_older_shape_let_through() {
-    // (a) The old guard spared any match ADJACENT to `.`, `/` or `-`, which spared four
+    // (a) A guard sparing any match ADJACENT to `.`, `/` or `-` spares four
     // process words. csift's own spellings are spared by SHAPE instead.
     for text in [
         "re-worded from the kicked-back version",

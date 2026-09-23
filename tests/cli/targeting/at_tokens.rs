@@ -250,7 +250,7 @@ fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
 }
 
 // An UNRECOGNIZED `@`-shape must fail loud naming the @-grammar - never strip the `@` and
-// fall through to cwd-relative path resolution (the old behavior sent an ID typo down a
+// fall through to cwd-relative path resolution (stripping it sends an ID typo down a
 // misleading "no Claude Code project dir" filesystem trail).
 #[test]
 fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {

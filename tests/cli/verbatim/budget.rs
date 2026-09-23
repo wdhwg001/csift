@@ -96,8 +96,8 @@ fn turns_budget_respected_real_emitted_chars() {
     // HONEST budget test: drive the compiled binary in default TEXT form AND with `--out`,
     // read the ACTUAL emitted bytes, count the WHOLE document with `.chars().count()`, and
     // assert it is <= budget at three real budgets on the multi-compaction fixture. This
-    // replaces the old circular checks (the reported "chars used" number, and the JSON sum
-    // re-derived with a hardcoded `+ 24`) - neither of which measured the real document.
+    // A check reading back the reported "chars used" number, or re-deriving the JSON sum
+    // with a hardcoded `+ 24`, is circular: neither measures the real document.
     //
     // The contract binds the default TEXT form (SPEC §6.8 - budget allocation + text output).
     // We bound BOTH the stdout document (doc-header-block + banners + units, minus the
