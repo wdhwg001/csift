@@ -34,7 +34,7 @@ pub fn is_bare_subagent_hex(s: &str) -> bool {
 
 /// True for the NEW "teammate" subagent id shape (`taskKind:"in_process_teammate"`): the
 /// canonical agent id EMBEDS the teammate name, e.g. `aVSRepro-68a2a1661c9390c1` - a leading
-/// `a`, the name, then `-<hex>=12>`. Unlike a built-in/workflow agent (a bare hex run) it
+/// `a`, the name, then `-<hex>` of 12+ chars. Unlike a built-in/workflow agent (a bare hex run) it
 /// carries a dash + uppercase, so [`is_bare_subagent_hex`] rejects it. The NAME itself may
 /// carry dashes (a real `aP1-engine-9cf2f06d6235ca64` was minted from the teammate name
 /// `P1-engine`), so the head accepts `[A-Za-z0-9-]`; the explicit `!is_uuid` guard keeps an
