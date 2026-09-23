@@ -35,7 +35,7 @@ fn output_flag_format_selector_edge_forms() {
     );
 }
 
-// ── Fix B - curl / wget output flags ──
+// ── curl / wget output flags ──
 
 #[test]
 fn curl_dash_o_output_caught() {
@@ -87,7 +87,7 @@ fn wget_output_document_caught() {
     );
 }
 
-// ── Fix C - flag-specified outputs, dd, zip ──
+// ── flag-specified outputs, dd, zip ──
 
 #[test]
 fn junit_xml_flag_both_dashes_caught() {

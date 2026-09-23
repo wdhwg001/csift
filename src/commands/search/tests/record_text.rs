@@ -351,7 +351,7 @@ fn a_raw_read_bookkeeping_head_renders_over_its_own_bytes() {
 }
 
 /// And with no source line in hand the head still renders. A caller that holds no bytes
-/// (the whole-file gate before this lane handed the line through, a fixture) gets the
+/// (the whole-file gate re-rendering a line it has not handed through, a fixture) gets the
 /// summary rather than nothing, which is the conservative half of the law.
 #[test]
 fn a_bookkeeping_line_without_its_bytes_renders_the_head_alone() {

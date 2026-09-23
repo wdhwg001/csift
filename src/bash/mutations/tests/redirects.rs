@@ -93,7 +93,7 @@ fn input_redirect_file_is_not_a_target() {
 // fabricated path is worse than a missing one.
 // ────────────────────────────────────────────────────────────────────────────
 
-// ── Fix A - fd-qualified redirects (the dominant class a bare `>` scan misses) ──
+// ── fd-qualified redirects (the dominant class a bare `>` scan misses) ──
 
 #[test]
 fn fd_stderr_redirect_attached_and_spaced() {
@@ -186,7 +186,7 @@ fn plain_redirect_still_caught_after_fd_generalization() {
     );
 }
 
-// ── Fix D - PRECISION: noisy pseudo-paths are DROPPED, never fabricated ──
+// ── PRECISION: noisy pseudo-paths are DROPPED, never fabricated ──
 
 #[test]
 fn unresolved_var_redirect_is_dropped() {

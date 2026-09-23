@@ -6,8 +6,8 @@
 //! re-render that spends that right - the ONE place csift re-renders a line to decide
 //! whether a whole file can be skipped.
 //!
-//! A FAMILY LANE edits this file and no other shared one: a family that fabricates a
-//! head registers its raw marker here, beside the marker it belongs with.
+//! A taxonomy family's own facts reach this file and no other shared one: a family that
+//! fabricates a head registers its raw marker here, beside the marker it belongs with.
 
 use super::*;
 
