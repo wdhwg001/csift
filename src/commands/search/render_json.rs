@@ -43,7 +43,7 @@ pub(crate) fn for_root_json(r: &crate::model::RootLink) -> serde_json::Value {
 /// The ready-to-run fetch command for a hit - `csift show` addressed at the transcript that
 /// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are
 /// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG
-/// record). A sidecar hit has no physical line → address by uuid; neither → null.
+/// record). A sidecar hit has no physical line -> address by uuid; neither -> null.
 pub(crate) fn refetch_json(session_id: &str, h: &Hit) -> serde_json::Value {
     if !h.from_sidecar && h.line > 0 {
         serde_json::json!(format!("csift show @{session_id} --line {}", h.line))
@@ -131,7 +131,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // Comm direction (`agent.communication.*`); null on a non-comm hit.
         "from": from,
         "to": to,
-        // Tool-pairing (§7): the use<->result join state; null on a non-tool hit, which the
+        // Tool-pairing (section 7): the use<->result join state; null on a non-tool hit, which the
         // two USER-FACING duals are - the pairing verdict keys on the leaf and
         // `user.answer` / `user.rejection` have always been outside its domain.
         "pairing": pairing,
@@ -174,7 +174,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "scheduled_at": h.scheduled_at,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
-        // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.
+        // `source:"elicitation-sidecar"` marks the provenance (section 3.10); a native hit omits `source`.
         "line": if h.from_sidecar { serde_json::Value::Null } else { serde_json::json!(h.line) },
         "uuid": h.uuid,
         "source": if h.from_sidecar { serde_json::json!("elicitation-sidecar") } else { serde_json::Value::Null },
@@ -204,7 +204,7 @@ pub(crate) fn render_json(
 ) -> Result<()> {
     use serde_json::json;
     let mut out = crate::text::Out::stdout();
-    // envelope v2: header (always) → kind-tagged exchange rows → summary (always).
+    // envelope v2: header (always) -> kind-tagged exchange rows -> summary (always).
     writeln!(
         out,
         "{}",
@@ -218,7 +218,7 @@ pub(crate) fn render_json(
     // The exchange rows render in bounded parallel chunks and reach stdout in file order.
     // Each row is a pure projection of its own exchange - the header above and the summary
     // below are the only cross-row parts, and both are written serially around the
-    // pipeline (§7k).
+    // pipeline (section 7k).
     crate::text::write_ordered(&mut out, &outcome.exchanges, |_i, ex, buf| {
         exchange_json(ex, buf)
     })?;
@@ -254,10 +254,10 @@ pub(crate) fn render_json(
         "replay_copies": outcome.chain.replay_copies,
         "boundary_cut_line": outcome.chain.boundary_cut_line,
         "leaf_source": outcome.chain.leaf_source,
-        // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) - the
+        // True when >=1 emitted record was merged from the elicitation sidecar (section 3.10) - the
         // machine echo of the `with elicitation sidecar` text note.
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
-        // True when ≥1 emitted excerpt was CLIPPED to the default cap - the machine echo of the
+        // True when >=1 emitted excerpt was CLIPPED to the default cap - the machine echo of the
         // trailing reader-caution. A consumer seeing this should re-fetch the record in full
         // (per-hit `excerpt` is a match-centered fragment, not the whole text) via
         // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
@@ -283,7 +283,7 @@ pub(crate) fn render_json(
             "transcripts": distinct_session_count(&outcome.exchanges),
         });
     }
-    // Zero-match self-diagnosis (§T0.1): make the empty result machine-legible as a definitive
+    // Zero-match self-diagnosis (section T0.1): make the empty result machine-legible as a definitive
     // absence (never a syntax error), echo the active filters, and - when a `-t`/`-T` filter hid
     // otherwise-matching records - carry the excluded labels so a consumer can self-correct.
     if let Some(d) = diagnosis {
@@ -336,7 +336,7 @@ pub(crate) fn exchange_json(ex: &Exchange, buf: &mut Vec<u8>) -> Result<()> {
         d.attach_json(&mut obj);
     }
     // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
-    // Present only when there are siblings - absent ⇒ none (keeps the common envelope lean).
+    // Present only when there are siblings - absent => none (keeps the common envelope lean).
     if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
         let sibs: Vec<_> = ex.siblings.iter().map(|h| hit_json(ex, h)).collect();
         obj["siblings"] = json!(sibs);

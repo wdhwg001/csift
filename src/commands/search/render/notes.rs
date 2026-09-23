@@ -68,7 +68,7 @@ pub(crate) fn write_chain_disclosure<W: std::io::Write>(
     Ok(())
 }
 
-/// The trailing reader-caution printed when ≥1 excerpt was truncated: what the excerpts ARE
+/// The trailing reader-caution printed when >=1 excerpt was truncated: what the excerpts ARE
 /// (clipped fragments, not summaries), why that matters (a fragment can misrepresent the whole),
 /// and the exact flags to read the full text. Kept as its own fn so the wording lives in one
 /// place (text only - JSON callers read the `excerpts_truncated` summary flag instead).

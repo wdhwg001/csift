@@ -13606,7 +13606,7 @@
         {
           "path": "src/commands/search/record_text/promoted.rs",
           "lines": "15-18",
-          "snippet": "/// Combines the top-level `content` string (`\"Conversation compacted \u2026\"`) with a readable\n/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE\n/// what each compaction clipped. `None` when neither is present (no fabricated text).\npub(crate) fn system_record_text(rec: &Record) -> Option<String> {"
+          "snippet": "/// Combines the top-level `content` string (`\"Conversation compacted ...\"`) with a readable\n/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE\n/// what each compaction clipped. `None` when neither is present (no fabricated text).\npub(crate) fn system_record_text(rec: &Record) -> Option<String> {"
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
@@ -43558,7 +43558,7 @@
         {
           "path": "src/commands/search/record_text/promoted.rs",
           "lines": "47-53",
-          "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration: `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908\n///   pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, \u2026]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
+          "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration: `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908\n///   pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, ...]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
         }
       ],
       "states": [
@@ -47725,7 +47725,7 @@
         {
           "path": "src/commands/search/scan/gates.rs",
           "lines": "159-164",
-          "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
+          "snippet": "/// section 7d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
       "states": [
@@ -49151,7 +49151,7 @@
         {
           "path": "src/commands/search/scan/gates.rs",
           "lines": "159-164",
-          "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
+          "snippet": "/// section 7d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/commands/search/scan/gates.rs",

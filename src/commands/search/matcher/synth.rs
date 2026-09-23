@@ -34,7 +34,7 @@ impl Matcher {
             .any(|f| f.find(haystack).is_some())
     }
 
-    /// §7f stage-2: could this parsed marker-line record's SYNTHESIZED texts match?
+    /// section 7f stage-2: could this parsed marker-line record's SYNTHESIZED texts match?
     /// Renders through the same shared engines the hit collector uses (no drift):
     /// notification section labels + normalized `<result>` bodies
     /// (`record_text_sections` - direction/owner do not affect the TEXT, so the neutral
@@ -126,7 +126,7 @@ impl Matcher {
 /// paths synthesizes text from other sources; each is detectable by a raw marker its
 /// carrier record ALWAYS contains:
 /// - `<task-notification>` - `automation_label` fabricates the kind slug
-///   (`subagent`/`background-command`/…), a `completed` status fallback, and `[…]`
+///   (`subagent`/`background-command`/...), a `completed` status fallback, and `[...]`
 ///   scaffolding; the inbox view normalizes the `<result>` body.
 /// - `"answers"` + the three synthesized answer markers - the ANSWER carrier's
 ///   `auq_exchange` render fabricates the `[AskUserQuestion · N question(s)]` scaffold,
@@ -139,15 +139,15 @@ impl Matcher {
 ///   `[plan: <path>]` pointer whose path lives on a DIFFERENT record.
 /// - `compact_boundary` (only when the `-t` selection can reach
 ///   `harness.compaction.boundary` - otherwise the boundary line is not even a scan
-///   candidate, so its synthesized excerpt is unreachable) - `trigger=…`/`preTokens=…`
+///   candidate, so its synthesized excerpt is unreachable) - `trigger=...`/`preTokens=...`
 ///   key=value text is fabricated from `compactMetadata`.
 /// - `turn_duration` / `stop_hook_summary` / `file-history-` (only under an
 ///   explicit selector reaching the leaf) - the promoted renders fabricate
-///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
+///   `[turn duration: ...]` / `[stop hooks: ...]` / `<path>@vN` text from the fields.
 /// - `"subtype"` (only under a selector that scans `type:"system"` lines) - the system
-///   family fabricates a head per EVENT KIND (`[refusal <subtype>] originalModel=…`,
-///   `[api-error status=… retry N/M in Xms]`, `[notice <level>]`, `[kill]`, `[command]`,
-///   `[scheduled <when>] task=… cron=… prompt=…`), and not one of those words is a byte
+///   family fabricates a head per EVENT KIND (`[refusal <subtype>] originalModel=...`,
+///   `[api-error status=... retry N/M in Xms]`, `[notice <level>]`, `[kill]`, `[command]`,
+///   `[scheduled <when>] task=... cron=... prompt=...`), and not one of those words is a byte
 ///   substring of the line.
 /// - the sixteen BOOKKEEPING line-type values (only under a selector reaching that
 ///   leaf) - the family render fabricates a `[<line type> key=value ...]` head from the

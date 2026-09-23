@@ -17,7 +17,7 @@ fn turn_range_parsing() {
     assert!(parse_turn_range("a..b").is_err());
 }
 
-// ── End-to-end exchange reconstruction over a synthetic multi-turn fixture ──
+// -- End-to-end exchange reconstruction over a synthetic multi-turn fixture --
 //
 // Records as they appear in a real jsonl (file order). Two genuine-user turns;
 // each expands into the assistant chain + a tool round-trip. Interleaved noise:
@@ -25,8 +25,8 @@ fn turn_range_parsing() {
 
 #[test]
 fn started_utc_is_none_when_opener_and_hits_lack_timestamps() {
-    // A genuine-user opener with NO `timestamp` and no later hit ts → started_utc is None
-    // (the `.or_else(hits…)` fallback finds nothing). Such an exchange sorts LAST in the
+    // A genuine-user opener with NO `timestamp` and no later hit ts -> started_utc is None
+    // (the `.or_else(hits...)` fallback finds nothing). Such an exchange sorts LAST in the
     // combined timeline (the timestamp_sort_key None arm, asserted separately).
     let lines = vec![
         r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"no ts but matches carry"}}"#,
@@ -41,7 +41,7 @@ fn started_utc_is_none_when_opener_and_hits_lack_timestamps() {
 
 #[test]
 fn started_utc_falls_back_to_first_hit_when_opener_lacks_timestamp() {
-    // The opener carries no ts, but a later agent record in the turn does → started_utc falls
+    // The opener carries no ts, but a later agent record in the turn does -> started_utc falls
     // back to that hit's timestamp rather than staying None.
     let lines = vec![
         r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"opener carry no ts"}}"#,
@@ -274,7 +274,7 @@ fn reconstruct_synthetic_lead_records_merge_into_first_real_turn() {
 
 #[test]
 fn reconstruct_only_synthetic_lead_no_genuine_user() {
-    // A file with ONLY non-genuine records (no genuine user ever) → a single
+    // A file with ONLY non-genuine records (no genuine user ever) -> a single
     // standalone turn 0 holding the orphans (the `else` seed-turn-0 arm, and the
     // `turns.len() > 1` false guard so no re-index).
     let lines = vec![

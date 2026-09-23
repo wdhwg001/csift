@@ -112,8 +112,8 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
              -t harness.hook.context"
         );
     }
-    // ── PATTERN-position traps (the ONE place csift's positional grammar differs:
-    //    search's first positional is the PATTERN, not a target) ──
+    // -- PATTERN-position traps (the ONE place csift's positional grammar differs:
+    //    search's first positional is the PATTERN, not a target) --
     if args.pattern.starts_with('@') {
         bail!(
             "search's FIRST positional is the regex PATTERN — targets come AFTER it: \
@@ -134,7 +134,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
     // A truly unbounded search (empty pattern + no filters) will emit a lot. Warn,
-    // but do not refuse - SPEC §6.2 explicitly allows it. An `@<uuid>` / `@<hex>` / `*.jsonl`
+    // but do not refuse - SPEC section 6.2 explicitly allows it. An `@<uuid>` / `@<hex>` / `*.jsonl`
     // POSITIONAL pins a single session (via resolve_session_files), so it counts as a session
     // filter here too - otherwise the warning would falsely claim "no session filter" on a run
     // that is in fact scoped to one session.
@@ -157,10 +157,10 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
 
     let matcher = build_matcher(args)?;
 
-    // ── Resolve targets → session files via the shared (optionally subagent-spanning)
+    // -- Resolve targets -> session files via the shared (optionally subagent-spanning)
     //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.)
     //    Resolution runs BEFORE the advisory notes below: an unreachable target must fail
-    //    first, not after a scope warning about a run that was never going to happen. ──
+    //    first, not after a scope warning about a run that was never going to happen. --
     let resolved = path::resolve_targets_with_session_list_reported(
         &args.targets(),
         args.sessions_from.as_deref(),
@@ -178,19 +178,19 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     );
 
     // `--siblings <SPEC>`: parse the repeatable caps ONCE here (a malformed spec is a hard
-    // error, surfaced before any scan). `None` ⇒ siblings off. Parsed up front so the per-file
+    // error, surfaced before any scan). `None` => siblings off. Parsed up front so the per-file
     // parallel scan just borrows the result.
     let want_siblings = args.siblings;
 
-    // ── Spawn-lookup hoist: build each DISTINCT discovery-root's DiscoveredSpawns
+    // -- Spawn-lookup hoist: build each DISTINCT discovery-root's DiscoveredSpawns
     //    ONCE, then share it across the whole par_iter. A subagent's discovery-root is its parent
     //    top-level `.jsonl` (the SAME for all its siblings), so building the lookup per file is
-    //    O(subagent_count²) on `search .` - 3290 files each re-running `discover_subagents` over
+    //    O(subagent_count^2) on `search .` - 3290 files each re-running `discover_subagents` over
     //    the parent's 3290-entry `subagents/` tree (~66s on a 1.4 GB corpus). Distinct roots
     //    number only a handful (one per top-level session in scope), so `discover_subagents` runs
-    //    ~7× total rather than once per file. The lookup values are IDENTICAL either way - only
+    //    ~7x total rather than once per file. The lookup values are IDENTICAL either way - only
     //    how often they are built changes - so the hoist cannot move the output. Sequential build
-    //    is fine: distinct-root count is tiny. `None` ⇒ that root has no resolvable spawns. ──
+    //    is fine: distinct-root count is tiny. `None` => that root has no resolvable spawns. --
     let mut spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
     for p in &session_files {
         spawn_map
@@ -198,7 +198,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
             .or_insert_with_key(|root| build_spawn_lookup(root).map(Arc::new));
     }
 
-    // ── Parallel scan across files; collect order-stable, then merge ──
+    // -- Parallel scan across files; collect order-stable, then merge --
     // Inner per-turn fan-out is enabled only when the resolved scope is too SMALL to fill
     // the pool from the outside (a scoped one/few-transcript query, `show`'s fetch): with
     // thousands of files the across-files fan-out already saturates every worker, and
@@ -232,7 +232,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // session the disk holds twice rather than two.
     let (scope_top, scope_sub) = crate::subagent::scope_span_files(&session_files);
 
-    // ── Combined STABLE chronological timeline (SPEC §6.2) ──
+    // -- Combined STABLE chronological timeline (SPEC section 6.2) --
     // Flatten every file's exchanges into ONE timeline, then stable-sort by the
     // turn-opening timestamp so subagent exchanges INTERLEAVE with top-level ones by
     // absolute time (both clocks are the same machine's UTC). ISO-8601 sorts as text;
@@ -445,13 +445,13 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         return Ok(());
     }
 
-    // ── Empty-result self-diagnosis (anti-slippage keystone, §T0.1). A zero-match result is a
+    // -- Empty-result self-diagnosis (anti-slippage keystone, section T0.1). A zero-match result is a
     //    DEFINITIVE absence, not a syntax error - but a bare "no matching exchanges" reads as
     //    failure and drives a model back to hand-parsing. On zero hits we emit (to stderr;
     //    stdout stays pure) what was searched + that this is exit-0-honest, and - the killer -
     //    when a `-t`/`-T` filter is active, a re-scan WITHOUT it that names the label(s) the
     //    pattern DOES occur under. The re-scan is paid ONLY on a zero-hit + label-filtered
-    //    query, so the happy path is untouched. ──
+    //    query, so the happy path is untouched. --
     let diagnosis = if outcome.exchanges.is_empty() {
         let label_filtered = !args.labels.is_empty() || !args.labels_not.is_empty();
         let excluded_by_label = if label_filtered {
@@ -523,7 +523,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     Ok(())
 }
 
-/// True when ANY emitted hit/sibling came from the elicitation sidecar (§3.10) - drives the
+/// True when ANY emitted hit/sibling came from the elicitation sidecar (section 3.10) - drives the
 /// `with elicitation sidecar` note so a consumer knows the output includes hook-backfilled
 /// records, not raw native jsonl.
 pub(crate) fn merged_any_sidecar(exchanges: &[Exchange]) -> bool {

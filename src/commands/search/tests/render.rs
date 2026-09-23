@@ -2,12 +2,12 @@
 
 use super::*;
 
-// ── Branch-completeness for the pure render helpers ──
+// -- Branch-completeness for the pure render helpers --
 
 #[test]
 fn class_path_and_role_glyph_cover_every_leaf() {
     // Every Class::ALL leaf round-trips through path() (the rendered/JSON label) and maps to a
-    // role glyph (◂ user, ▸ agent, ⚙ harness). Both are total over the leaf space: a leaf
+    // role glyph (`◂` user, `▸` agent, `⚙` harness). Both are total over the leaf space: a leaf
     // reaching neither would render with no label or with no glyph.
     for &c in Class::ALL {
         assert!(!c.path().is_empty());
@@ -24,8 +24,8 @@ fn class_path_and_role_glyph_cover_every_leaf() {
 
 #[test]
 fn render_label_decorates_pairing_and_direction() {
-    // ▹ pairing: a paired tool.use renders the two-sided form; a pending use / orphan result
-    // render their notes. ⇨ direction: a comm hit appends `from ⇨ to`.
+    // `▹` pairing: a paired tool.use renders the two-sided form; a pending use / orphan result
+    // render their notes. `⇨` direction: a comm hit appends `from ⇨ to`.
     let paired = Hit {
         class: Some(Class::AgentToolUse),
         labels: vec!["agent.tool.use"],
@@ -97,14 +97,14 @@ fn render_label_decorates_pairing_and_direction() {
 fn render_tool_use_name_only_input_only_both_neither() {
     assert_eq!(render_tool_use(Some("Bash"), None), "Bash");
     let v = serde_json::json!({"k":"v"});
-    // input only (no name) → leading space then the json.
+    // input only (no name) -> leading space then the json.
     assert_eq!(render_tool_use(None, Some(&v)), " {\"k\":\"v\"}");
     // both
     assert_eq!(
         render_tool_use(Some("Read"), Some(&v)),
         "Read {\"k\":\"v\"}"
     );
-    // neither → empty
+    // neither -> empty
     assert_eq!(render_tool_use(None, None), "");
 }
 

@@ -123,7 +123,7 @@ pub(crate) fn collect_block_hits(
                     // field IS a clean result on the wire, so it maps to false, never null
                     // (pairing answers "did a result come back"; this answers "was it good").
                     let result_errored = is_error.unwrap_or(false);
-                    // The user-facing dual was SELECTED + emitted as the richest view → skip
+                    // The user-facing dual was SELECTED + emitted as the richest view -> skip
                     // the agent.tool.result duplicate. (When the dual is present but NOT selected -
                     // e.g. `-t agent.tool.result` alone - `user_dual` is None, so the plain result
                     // still surfaces and the answer is never lost.)
@@ -139,7 +139,7 @@ pub(crate) fn collect_block_hits(
                         continue;
                     };
                     let mut text = tool_result_content_text(c);
-                    // §4.6: when asked, replace the inline persisted-output pointer with the real
+                    // section 4.6: when asked, replace the inline persisted-output pointer with the real
                     // file content (matching runs against the resolved text).
                     if resolve_persisted {
                         if let Some(path) = rec.persisted_output_path() {

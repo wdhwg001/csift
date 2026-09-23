@@ -20,16 +20,16 @@ use super::*;
 /// A compiled pattern + flags, plus the optional literal prefilter needle.
 #[derive(Debug)]
 pub struct Matcher {
-    /// `None` ⇒ empty pattern (pure filter: every label-eligible record matches).
+    /// `None` => empty pattern (pure filter: every label-eligible record matches).
     pub(crate) regex: Option<BytesRegex>,
     /// A required-literal prefilter derived from the pattern, run against RAW line/file
-    /// bytes (§7d stage 2 + the §7f whole-file gate). `None` ⇒ no anchorable literal.
+    /// bytes (section 7d stage 2 + the section 7f whole-file gate). `None` => no anchorable literal.
     pub(crate) prefilter: Option<Prefilter>,
     /// SYNTHESIZED-text markers (built only when `prefilter` is `Some`): a record whose
     /// raw line carries one of these can render matchable text that is NOT a verbatim
     /// substring of its raw bytes (an automation label's fabricated kind slug / status,
-    /// the AUQ Q+options+answer scaffold, a rejection's `[plan: …]` pointer resolved from
-    /// ANOTHER record, the compact-boundary `trigger=…` excerpt, `--resolve-persisted`
+    /// the AUQ Q+options+answer scaffold, a rejection's `[plan: ...]` pointer resolved from
+    /// ANOTHER record, the compact-boundary `trigger=...` excerpt, `--resolve-persisted`
     /// external file content). The literal prefilter can only prove absence for
     /// VERBATIM-derived text, so a marker-bearing line/file always passes to the parse +
     /// regex stage. Without the marker set a `memmem` prefilter silently skips the regex
@@ -43,13 +43,13 @@ pub struct Matcher {
     /// so per-needle scans stay at memory speed regardless of the leading byte.
     ///
     /// Two tiers, split by whether a marker-bearing line's synthesized text can be
-    /// re-rendered SELF-CONTAINED for the §7f stage-2 verification:
+    /// re-rendered SELF-CONTAINED for the section 7f stage-2 verification:
     /// - `synth_verifiable` - notification / AUQ-answer / compact-boundary markers: the
     ///   line's every synthesized text derives from the line alone, so the gate can
     ///   parse JUST the marker lines, render via the SHARED engines
     ///   (`record_text_sections` / `auq_exchange` / `record_raw_text`) and regex-check
     ///   them - so a big marker-heavy main session still gates without a whole-file parse.
-    /// - `synth_conservative` - a rejection's `[plan: …]` pointer resolves through
+    /// - `synth_conservative` - a rejection's `[plan: ...]` pointer resolves through
     ///   ANOTHER record (`PlanIndex`) and `--resolve-persisted` content lives in an
     ///   external file, so those lines force the full scan (rare).
     pub(crate) synth_verifiable: Vec<memmem::Finder<'static>>,
@@ -123,7 +123,7 @@ impl Matcher {
     /// always showing the message head. Returns:
     /// - `None` - no match (the record is not a hit);
     /// - `Some(None)` - matches with no specific span (the pure filter matches every
-    ///   record, so there is no offset to center on → excerpt shows the head);
+    ///   record, so there is no offset to center on -> excerpt shows the head);
     /// - `Some(Some((start, end)))` - matches at this BYTE range.
     pub(crate) fn locate(&self, text: &str) -> Option<Option<(usize, usize)>> {
         match &self.regex {
@@ -132,7 +132,7 @@ impl Matcher {
         }
     }
 
-    /// Cheap raw-line prefilter (§7d stage 2): if a required literal exists and the
+    /// Cheap raw-line prefilter (section 7d stage 2): if a required literal exists and the
     /// line lacks it, the line cannot match - drop it pre-JSON. With no literal (or
     /// pure filter) we cannot prove absence, so the line passes to the parse stage.
     pub(crate) fn line_may_match(&self, line: &[u8]) -> bool {
@@ -142,7 +142,7 @@ impl Matcher {
         }
     }
 
-    /// The literal-prefilter check ALONE (no synth-marker OR) - the §7f pre-scan needs
+    /// The literal-prefilter check ALONE (no synth-marker OR) - the section 7f pre-scan needs
     /// the two signals separately (a literal hit forces the full scan; a marker hit
     /// routes to its tier). `false` is only possible when a prefilter is anchored.
     pub(crate) fn line_prefilter_hits(&self, line: &[u8]) -> bool {
@@ -152,7 +152,7 @@ impl Matcher {
         }
     }
 
-    /// True when a prefilter is anchored - the precondition for the §7f whole-file gate
+    /// True when a prefilter is anchored - the precondition for the section 7f whole-file gate
     /// (without one nothing is provably a miss, so the gate pre-scan would be waste).
     pub(crate) fn has_prefilter(&self) -> bool {
         self.prefilter.is_some()
@@ -197,8 +197,8 @@ pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
     .with_context(|| format!("invalid regex pattern: {:?}", args.pattern))?;
 
     // Extract a required literal for the cheap raw-byte prefilter (line + whole-file).
-    // Case-sensitive → byte-exact `memmem`. Case-insensitive (the smart-case DEFAULT
-    // for a lowercase pattern) → a `(?i)`-wrapped ESCAPED literal compiled as its own
+    // Case-sensitive -> byte-exact `memmem`. Case-insensitive (the smart-case DEFAULT
+    // for a lowercase pattern) -> a `(?i)`-wrapped ESCAPED literal compiled as its own
     // bytes regex: `memmem` has no caseless mode, but the regex engine lowers a
     // caseless literal to an accelerated multi-substring scan, so the dominant
     // lowercase search gates on raw bytes instead of parsing every candidate line.
@@ -272,10 +272,10 @@ pub(crate) fn apply_builder(
 /// (A richer HIR analysis is possible but this captures the common keyword case -
 /// `csift search "carry"` - with zero false negatives.)
 ///
-/// **JSON-escape safety (load-bearing - SPEC §0 "no silent truncation").** The
+/// **JSON-escape safety (load-bearing - SPEC section 0 "no silent truncation").** The
 /// prefilter runs the literal against the RAW JSON line bytes, where string content
 /// is JSON-encoded: `"` is stored as `\"`, `\` as `\\`, and every control char
-/// (`< 0x20`) plus DEL (`0x7f`) as a `\uXXXX`/`\n`/`\t`/… escape. A literal
+/// (`< 0x20`) plus DEL (`0x7f`) as a `\uXXXX`/`\n`/`\t`/... escape. A literal
 /// containing any such char therefore can NOT appear verbatim in the raw line - a
 /// `memmem` for it would falsely report "absent" and silently drop a line whose
 /// DECODED text actually matches (e.g. searching `Say"Xello`). So we refuse to emit

@@ -99,7 +99,7 @@ fn a_sidecar_record_lands_after_every_scanned_row() {
     );
 }
 
-// ── The uuid -> LINE lookup over that same row space ──
+// -- The uuid -> LINE lookup over that same row space --
 
 /// A uuid resolves to the PHYSICAL line of the row carrying it, whichever kind of row
 /// that is. A spine row is the interesting half: most records a `for` edge names are

@@ -14,11 +14,11 @@
 
 use super::*;
 
-/// A retained record. `can_hit` is the §7d keyword-prefilter verdict on the raw
+/// A retained record. `can_hit` is the section 7d keyword-prefilter verdict on the raw
 /// line: when `false`, the line provably lacks the required literal, so it can
 /// never be a regex hit and we skip the (more expensive) per-block regex matching
 /// on it - but it is STILL retained so it can appear as a sibling record in a
-/// matched turn's complete round-trip (SPEC §6.4). When the matcher has no
+/// matched turn's complete round-trip (SPEC section 6.4). When the matcher has no
 /// anchorable literal (case-insensitive or regex-with-metachars) every record is
 /// `can_hit`.
 #[derive(Debug)]
@@ -30,12 +30,12 @@ pub(crate) struct Kept {
     /// raw `sed -n 'Np'`) can re-fetch the exact record. `0` for a merged elicitation-sidecar
     /// record (it has no physical transcript line - see `from_sidecar`).
     pub(crate) line_no: usize,
-    /// True when this record was merged from the elicitation SIDECAR (§3.10), not scanned from
+    /// True when this record was merged from the elicitation SIDECAR (section 3.10), not scanned from
     /// the native jsonl. Such a record has no physical `line_no` (0); its hits render
     /// `(elicitation sidecar)` instead of `Lnnnn`.
     pub(crate) from_sidecar: bool,
     /// The record's own source line, kept ONLY for a NON-ROLE line - one a gate or an
-    /// explicit address admitted, never one the §7d role keep already had. Those are the
+    /// explicit address admitted, never one the section 7d role keep already had. Those are the
     /// lines whose content the `Record` struct cannot answer for: it deserializes what
     /// csift uses and ignores the rest, and a bookkeeping line consists of exactly the
     /// rest. The render and the unmodeled unit read it; `None` on every conversation
@@ -46,7 +46,7 @@ pub(crate) struct Kept {
 /// One row of the file-order list the SURVIVAL AXIS walks: a searchable record, or a
 /// chain-only SPINE row.
 ///
-/// A spine row is an `attachment`/`system`/`last-prompt` line the §7d candidate prefilter
+/// A spine row is an `attachment`/`system`/`last-prompt` line the section 7d candidate prefilter
 /// drops, lifted to its chain-structural fields ONLY ([`crate::parse::spine_record`]) so
 /// the chain can see the DAG it walks. It carries no `message`, classifies to nothing and
 /// is skipped by every record-consuming pass - it exists for [`crate::model::Chain`] alone.

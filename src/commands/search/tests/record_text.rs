@@ -311,7 +311,7 @@ fn a_windowed_excerpt_keeps_its_quarter_of_context_and_counts_only_real_remainde
     );
 }
 
-// ── The matchable-text law: a key=value HEAD over the line's verbatim BODY ──
+// -- The matchable-text law: a key=value HEAD over the line's verbatim BODY --
 
 /// A bookkeeping line with a head renders BOTH: the summary a reader scans, then the
 /// bytes a pattern searches. The instrument is a key the head elides - a file-history

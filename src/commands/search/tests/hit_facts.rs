@@ -62,7 +62,7 @@ fn an_unmodeled_shape_names_the_axis_that_decides_it() {
     );
 }
 
-// ── The ONE stamping site, read back from BOTH hit-construction sites ──
+// -- The ONE stamping site, read back from BOTH hit-construction sites --
 //
 // Every real family ships here as a stub returning nothing, so what has to be pinned is
 // not a family's answer but the wiring: that `family_facts` runs on a scanned unit AND on

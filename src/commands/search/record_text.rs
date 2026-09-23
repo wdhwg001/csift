@@ -131,9 +131,9 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
 
 /// The richest SELECTED record-level text class + its display text. Iterates the
 /// record's labels in `classify`'s richest-first order, taking the first record-text class that
-/// is selected, then resolving its text source: a `<task-notification>` → `automation_label`; a
-/// genuine/AUQ/rejection/teammate-prose/subagent-opener → `reconstructed_user_text`; any other
-/// harness marker / compaction summary → the raw string. `None` ⇒ no record-text class is
+/// is selected, then resolving its text source: a `<task-notification>` -> `automation_label`; a
+/// genuine/AUQ/rejection/teammate-prose/subagent-opener -> `reconstructed_user_text`; any other
+/// harness marker / compaction summary -> the raw string. `None` => no record-text class is
 /// selected (or it has no text).
 ///
 /// `agent.communication.signal` is deliberately NOT in the class list, and the reason is a
@@ -250,7 +250,7 @@ pub(crate) fn record_raw_text(
         return Some(text);
     }
     let Some(msg) = rec.message.as_ref() else {
-        // No `message` blocks → a system record: the boundary's content + compactMetadata.
+        // No `message` blocks -> a system record: the boundary's content + compactMetadata.
         return system_record_text(rec);
     };
     match msg.content.as_ref()? {
@@ -308,8 +308,8 @@ pub(crate) fn head_and_body(head: Option<String>, body: Option<String>) -> Optio
     }
 }
 
-/// The communication [`Class`] a `tool_use` block carries: a `SendMessage` →
-/// `…sent`/`…signal`; a `Task`/`Agent`/`Workflow` spawn → `…sent`. `None` for any other tool.
+/// The communication [`Class`] a `tool_use` block carries: a `SendMessage` ->
+/// `...sent`/`...signal`; a `Task`/`Agent`/`Workflow` spawn -> `...sent`. `None` for any other tool.
 /// REPLICATES the engine's per-record decision per-BLOCK (so a record with mixed comm/non-comm
 /// tool_use blocks labels each correctly) - kept faithful to model.rs `classify_assistant`.
 pub(crate) fn tool_use_comm_class(
@@ -367,9 +367,9 @@ pub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Val
     s
 }
 
-/// Resolve a `<persisted-output>` pointer (§4.6) to the referenced file's content.
+/// Resolve a `<persisted-output>` pointer (section 4.6) to the referenced file's content.
 /// On a read failure the inline text is kept and an explicit note appended - a
-/// missing persisted file is reported, never fatal (SPEC §4.6).
+/// missing persisted file is reported, never fatal (SPEC section 4.6).
 pub(crate) fn resolve_persisted_text(path: &str, inline: &str) -> String {
     match std::fs::read_to_string(path) {
         Ok(content) => content,
@@ -377,10 +377,10 @@ pub(crate) fn resolve_persisted_text(path: &str, inline: &str) -> String {
     }
 }
 
-/// The synthesized AUQ-answer string from a carrier's `tool_result` (§4.4). Matches
+/// The synthesized AUQ-answer string from a carrier's `tool_result` (section 4.4). Matches
 /// any known AUQ-answer marker (every shipped phrasing, see `model::AUQ_ANSWER_MARKERS`).
 /// Test-only: production surfaces the AUQ answer via the model's reconstructed unit
-/// ([`Record::reconstructed_user_text`] → [`Record::auq_exchange`]), which prefers the
+/// ([`Record::reconstructed_user_text`] -> [`Record::auq_exchange`]), which prefers the
 /// clean structured `toolUseResult.answers`; this helper backs the legacy-shape tests.
 #[cfg(test)]
 pub(crate) fn auq_answer_text(rec: &Record) -> Option<String> {
@@ -399,7 +399,7 @@ pub(crate) fn auq_answer_text(rec: &Record) -> Option<String> {
     None
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `... (+N chars)` marker.
 /// Test-only: production excerpting goes through [`match_excerpt`], which carries the
 /// caller's (possibly `--no-truncate`) budget; this fixed-budget wrapper backs the unit tests.
 #[cfg(test)]
@@ -426,11 +426,11 @@ pub(crate) fn uncapped_body(text: &str, max: usize) -> Option<String> {
 /// match past the first `max` chars and sends a reader back to the raw jsonl.
 ///
 /// `span` is the first match's BYTE range, or `None` for the pure filter (no specific
-/// match → show the head). When the message fits in `max` chars it is shown whole.
+/// match -> show the head). When the message fits in `max` chars it is shown whole.
 /// Otherwise a `max`-char window is taken around the match (a quarter of the budget as
-/// leading context), whitespace-normalized, with a leading `…` when content precedes
-/// the window and the shared `… (+N chars)` marker when content follows - so clipping
-/// on either side is explicit, never silent (SPEC §0).
+/// leading context), whitespace-normalized, with a leading `...` when content precedes
+/// the window and the shared `... (+N chars)` marker when content follows - so clipping
+/// on either side is explicit, never silent (SPEC section 0).
 ///
 /// Returns `(excerpt, truncated)` - `truncated` is true iff content was CLIPPED to fit `max`
 /// (the head form when the normalized text exceeds `max`, or any match-centered window). Under
@@ -482,7 +482,7 @@ pub(crate) fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
     crate::text::parse_range_spec(s, "--turn", false)
 }
 
-// ── Rendering ──
+// -- Rendering --
 //
 // Timestamp formatting (system-local + raw UTC) lives in `crate::timez`, shared
 // with `list` so the local-timezone choice is defined once.

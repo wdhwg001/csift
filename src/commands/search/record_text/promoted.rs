@@ -12,7 +12,7 @@ use super::*;
 
 /// The searchable + renderable text of a MESSAGE-LESS system record - in practice the
 /// `compact_boundary` metrics record (the only message-less system record `classify` labels).
-/// Combines the top-level `content` string (`"Conversation compacted …"`) with a readable
+/// Combines the top-level `content` string (`"Conversation compacted ..."`) with a readable
 /// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE
 /// what each compaction clipped. `None` when neither is present (no fabricated text).
 pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
@@ -49,7 +49,7 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
 ///   pendingBackgroundAgentCount=2]`;
 /// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`
 ///   line per hook (the commands are the record's only text);
-/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, …]` (paths sorted) or
+/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, ...]` (paths sorted) or
 ///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix
 ///   only when the delta carries a non-null `backupFileName`).
 ///

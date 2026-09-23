@@ -42,7 +42,7 @@ pub(crate) fn reconstruct_and_match(
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
-    // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
+    // Group records into turns via the shared section 6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
     // the 0-based turn index; map each index group back to its `Kept` borrows.
     // The SURVIVAL AXIS decides all three at once: which openers the conversation chain
@@ -62,7 +62,7 @@ pub(crate) fn reconstruct_and_match(
         .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))
         .collect();
     let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.node(), &chain);
-    // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
+    // ExitPlanMode plan pointers for this session (section 4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(rows.iter().filter_map(|r| r.kept()).map(|k| &k.rec));
     let filter = args.label_filter();
@@ -94,7 +94,7 @@ pub(crate) fn reconstruct_and_match(
     // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is
     // HOISTED: `run_search` builds one `DiscoveredSpawns` per DISTINCT discovery-root up
     // front, so here we just BORROW this file's root's entry from the shared map - never
-    // re-run the O(N²)-per-file `discover_subagents` dir+meta scan.
+    // re-run the O(N^2)-per-file `discover_subagents` dir+meta scan.
     let spawn_lookup = spawn_map
         .get(&discovery_root_for(path))
         .and_then(|o| o.as_deref());
@@ -123,8 +123,8 @@ pub(crate) fn reconstruct_and_match(
         rows,
         wants_engine_edges: engine_edges,
     };
-    // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
-    // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
+    // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `... (+N)`).
+    // Addressing (`--line`/`--uuid`) means "fetch THIS record" -> always full, no excerpt cap.
     let excerpt_max = if args.no_truncate || address.is_some() {
         usize::MAX
     } else {
@@ -372,10 +372,10 @@ fn draft_diff_for(
 /// zero-argument flag, one predictable behavior): within a matched turn's non-matched
 /// records, MESSAGE-class units always render (user.*, agent.message,
 /// agent.communication.*); the chattier machinery is capped per LEAF -
-/// agent.thinking ≤ 2, agent.thinking.narration ≤ 1 (a summary of the reasoning
-/// beside it - one suffices), agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2.
+/// agent.thinking <= 2, agent.thinking.narration <= 1 (a summary of the reasoning
+/// beside it - one suffices), agent.tool.use <= 3, agent.tool.result <= 3, harness.* <= 2.
 /// Anything capped away is counted and surfaced as an explicit
-/// `(+N more · csift show …)` pointer - self-healing, never silent.
+/// `(+N more · csift show ...)` pointer - self-healing, never silent.
 pub(crate) fn sibling_cap(class: Class) -> Option<usize> {
     if class == Class::AgentThinkingNarration {
         return Some(1);
@@ -404,9 +404,9 @@ pub(crate) struct Turn<'a> {
 
 /// A [`SpawnLookup`] for one session, built from its discovered subagents (a cheap
 /// `discover_subagents` dir+meta scan - NOT a transcript re-read). Maps the spawn `tool_use_id`
-/// → the spawned child's agent id (the id-join) and the spawn NAME → child (the teammate
+/// -> the spawned child's agent id (the id-join) and the spawn NAME -> child (the teammate
 /// name-join). Powers comm direction (`self ⇨ child`) + subagent-return detection in
-/// [`Record::classify`]/[`Record::direction`]. Absent ⇒ those degrade to the raw name / `?`.
+/// [`Record::classify`]/[`Record::direction`]. Absent => those degrade to the raw name / `?`.
 #[derive(Debug, Default)]
 pub(crate) struct DiscoveredSpawns {
     pub(crate) by_tool_use_id: HashMap<String, String>,
@@ -423,7 +423,7 @@ impl SpawnLookup for DiscoveredSpawns {
 }
 
 /// The TOP-LEVEL parent session `.jsonl` for a subagent transcript path
-/// `<ENCODED>/<uuid>/subagents/…/agent-<hex>.jsonl` → `<ENCODED>/<uuid>.jsonl`. `None` when `path`
+/// `<ENCODED>/<uuid>/subagents/.../agent-<hex>.jsonl` -> `<ENCODED>/<uuid>.jsonl`. `None` when `path`
 /// is not under a `subagents/` dir. The parent's sidecar holds the FLAT set of ALL subagents under
 /// it, so a lookup built from it resolves an in-subagent spawn / Task-return.
 pub(crate) fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
@@ -441,10 +441,10 @@ pub(crate) fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
 /// subagents that `classify()`/`direction()` must resolve. For a SUBAGENT transcript that is its
 /// PARENT top-level `.jsonl` (ALL of a session's subagents share ONE root); for a TOP-LEVEL file
 /// it is the file itself. Because the spawn lookup is IDENTICAL for every file sharing a root,
-/// `run_search` builds it ONCE per distinct root and shares it - the O(N²)→O(N) hoist.
-/// (The `parent_session_jsonl` fallback is unreachable: `is_subagent_path` true ⇒ a `subagents/`
-/// ancestor exists ⇒ `parent_session_jsonl` returns `Some`; the `unwrap_or_else` only satisfies
-/// the type and, even if hit, `discover_subagents` on a subagent path yields no spawns ⇒ `None`.)
+/// `run_search` builds it ONCE per distinct root and shares it - the O(N^2)->O(N) hoist.
+/// (The `parent_session_jsonl` fallback is unreachable: `is_subagent_path` true => a `subagents/`
+/// ancestor exists => `parent_session_jsonl` returns `Some`; the `unwrap_or_else` only satisfies
+/// the type and, even if hit, `discover_subagents` on a subagent path yields no spawns => `None`.)
 pub(crate) fn discovery_root_for(path: &Path) -> PathBuf {
     if is_subagent_path(path) {
         parent_session_jsonl(path).unwrap_or_else(|| path.to_path_buf())
@@ -487,7 +487,7 @@ pub(crate) struct ClassifyEnv<'a> {
     pub(crate) is_subagent: bool,
     pub(crate) parent_id: &'a str,
     /// The physical line of the first record that `opens_turn()` - the subagent spawn-prompt seed
-    /// (flips it from `user.message` to `agent.communication.inbox`). `None` ⇒ no opener.
+    /// (flips it from `user.message` to `agent.communication.inbox`). `None` => no opener.
     pub(crate) first_opener_line: Option<usize>,
     pub(crate) spawn: Option<&'a (dyn SpawnLookup + Sync)>,
     /// The uuids of this file's `harness.resume.prompt` records - the index a

@@ -156,7 +156,7 @@ fn bookkeeping_hit(line: &[u8], mask: u32) -> bool {
         .any(|i| FINDERS[i].find(line).is_some())
 }
 
-/// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
+/// section 7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
 /// transcript message (user/assistant role marker) - drops `attachment`,
 /// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the
 /// matching [`CandidateGates`] flag admits them. Kept deliberately permissive
@@ -216,7 +216,7 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // (`needs_compact_boundary`, derived once via `label_selected`). For every other query the
         // `&&` short-circuits BEFORE the memmem, so a non-boundary search pays ZERO. When it IS run,
         // the `||` chain still reaches this memmem only on lines that already failed both role checks,
-        // and boundary records are rare - so the §7 perf contract holds either way.
+        // and boundary records are rare - so the section 7 perf contract holds either way.
         // The keep is a CONJUNCTION because the rare literal alone is not the discriminator:
         // over every top-level transcript on one corpus (76 files, 2661636749 bytes, lines
         // split on `\n` only) 252 of 252 true boundaries - a JSON object with top-level

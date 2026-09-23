@@ -59,7 +59,7 @@ fn a_scalar_fact_key_is_written_and_a_second_replaces_it() {
     assert_eq!(obj["label"], serde_json::json!("harness.bookkeeping.mode"));
 }
 
-// ── the ONE `for` edge ──
+// -- the ONE `for` edge --
 //
 // Four families carry edges, and every one of them goes through `for_edge`, so these
 // four cases are the whole contract: what a RESOLVED edge renders, what an edge naming a

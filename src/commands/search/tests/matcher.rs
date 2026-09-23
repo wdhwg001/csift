@@ -63,7 +63,7 @@ fn required_literal_rejects_json_escaped_chars() {
         required_literal("a\nb").is_none(),
         "newline is JSON-escaped"
     );
-    // Non-ASCII multi-byte UTF-8 is emitted verbatim by serde_json → still
+    // Non-ASCII multi-byte UTF-8 is emitted verbatim by serde_json -> still
     // prefilter-eligible (no JSON escaping). Use a locale-neutral fixture
     // (accented Latin + an emoji, both multi-byte) to prove the bytes pass
     // through unchanged.
@@ -74,8 +74,8 @@ fn required_literal_rejects_json_escaped_chars() {
 fn quote_pattern_no_silent_drop_case_sensitive() {
     // DEFECT 2 end-to-end: a record whose DECODED text is `Say"Xello there`. The
     // raw line stores the quote escaped as \". A case-sensitive search for
-    // `Say"Xello` must STILL match (no literal prefilter → regex runs on decoded
-    // text), not silently drop the hit (SPEC §0). Build the matcher with an
+    // `Say"Xello` must STILL match (no literal prefilter -> regex runs on decoded
+    // text), not silently drop the hit (SPEC section 0). Build the matcher with an
     // uppercase letter so smart-case stays case-SENSITIVE (the buggy path).
     let m = build_matcher(&args("Say\"Xello")).unwrap();
     // The WHOLE literal must never anchor (the quote is stored escaped), but its
@@ -96,7 +96,7 @@ fn quote_pattern_no_silent_drop_case_sensitive() {
 
 #[test]
 fn prefilter_drops_lines_without_literal() {
-    // Smart-case lowercased → case-insensitive → the CASELESS literal prefilter:
+    // Smart-case lowercased -> case-insensitive -> the CASELESS literal prefilter:
     // still a raw-byte gate, but folding case (any-case occurrences pass).
     let m = build_matcher(&args("carry")).unwrap();
     assert!(matches!(m.prefilter, Some(Prefilter::CaselessLiteral(_))));
@@ -144,7 +144,7 @@ fn required_needles_alternation_and_necessity() {
     );
     // Distinct branch literals union into an ANY-of set.
     // (The parser splits a literal run before a repetition: `betay+z` is
-    // beta·y+·z, so the branch's strongest safe part is "beta".)
+    // `beta` + `y+` + `z`, so the branch's strongest safe part is "beta".)
     assert_eq!(
         required_needles("alphax.*[0-9]|betay+z"),
         Some(vec!["alphax".to_string(), "beta".to_string()])
@@ -212,7 +212,7 @@ fn synth_marker_keeps_line_and_file_matchable_without_literal() {
     let line = br#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#;
     assert!(m.line_may_match(line));
     assert!(m.file_may_match(line));
-    // The rejection reconstruction appends a `[plan: …]` pointer resolved from a
+    // The rejection reconstruction appends a `[plan: ...]` pointer resolved from a
     // DIFFERENT record - its marker keeps the carrier matchable too.
     let rej = br#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"To tell you how to proceed, the user said:\ngo"}]}}"#;
     let m_plan = build_matcher(&args("plan")).unwrap();
@@ -222,7 +222,7 @@ fn synth_marker_keeps_line_and_file_matchable_without_literal() {
     assert!(!m.file_may_match(b"a whole file with nothing relevant"));
 }
 
-// ── Stage 2 of the whole-file gate re-renders from the SOURCE LINE ──
+// -- Stage 2 of the whole-file gate re-renders from the SOURCE LINE --
 
 /// The gate's second stage is the one place csift proves a NEGATIVE: it re-renders a
 /// marker-bearing line and, on a miss, declares the whole file unmatchable. So it has to
@@ -508,7 +508,7 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     );
     let r: Record = serde_json::from_str(&line).expect("valid record");
 
-    // WITHOUT resolution: the deep token is not in the inline content → no hit.
+    // WITHOUT resolution: the deep token is not in the inline content -> no hit.
     let m = build_matcher(&args("wibblewobble")).unwrap();
     let mut no_resolve = Vec::new();
     collect_record_hits(
@@ -526,7 +526,7 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     );
     assert!(no_resolve.is_empty(), "deep token must NOT match inline");
 
-    // WITH resolution: the file is read, the token is found → exactly one hit.
+    // WITH resolution: the file is read, the token is found -> exactly one hit.
     let mut with_resolve = Vec::new();
     collect_record_hits(
         &r,

@@ -11,7 +11,7 @@ pub(crate) use facts::*;
 use super::*;
 
 /// Max characters of a matched excerpt shown inline before truncation. Truncation
-/// is ALWAYS explicit (`… (+N chars)`) - never silent (SPEC §0, §8.1).
+/// is ALWAYS explicit (`... (+N chars)`) - never silent (SPEC section 0, section 8.1).
 ///
 /// Deliberately LONGER than `list`'s 200-char cap (`session::EXCERPT_MAX`): a search
 /// hit wants enough of the matched exchange to be useful in context, whereas `list`
@@ -23,7 +23,7 @@ pub(crate) const EXCERPT_MAX: usize = 400;
 /// `(use not in scope)`). `None` on a non-tool hit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pairing {
-    /// The use↔result partner is in scope (renders `agent.tool.use ▹ agent.tool.result`).
+    /// The use/result partner is in scope (renders `agent.tool.use ▹ agent.tool.result`).
     Paired,
     /// An `agent.tool.use` whose `tool_result` is not in scope (frozen / elicitation / unreturned).
     PendingNoResult,
@@ -196,11 +196,11 @@ pub struct Hit {
     /// (no physical line).
     pub raw: Option<String>,
     /// Stable image ids the SOURCE RECORD carries (`#N` session handle, else `L<line>i<n>`) -
-    /// the `[N image(s): …]` suffix, so a `search` hit on an image-bearing message exposes the
+    /// the `[N image(s): ...]` suffix, so a `search` hit on an image-bearing message exposes the
     /// SAME extractable id as `turns`/`image` (feed it to `csift image <session> --id <ID>`).
     /// Backfilled onto the record's first hit only (avoids repeating it per matched block).
     pub image_ids: Vec<String>,
-    /// True when this hit came from a hook-backfilled ELICITATION SIDECAR record (§3.10) - an
+    /// True when this hit came from a hook-backfilled ELICITATION SIDECAR record (section 3.10) - an
     /// unresolved-pending AskUserQuestion/ExitPlanMode/MCP that is MISSING from the native
     /// transcript. Such a hit has NO physical `line` (it is not a real jsonl line), so it
     /// renders `(elicitation sidecar)` in place of `Lnnnn` and carries `source:"elicitation-
@@ -438,7 +438,7 @@ pub struct Exchange {
 pub struct SearchOutcome {
     pub exchanges: Vec<Exchange>,
     /// TRUE total of matching exchanges BEFORE any `--max-count` window (== `exchanges.len()`
-    /// when uncapped). The head banner and tail footer both report THIS number (§6.2 both-ends
+    /// when uncapped). The head banner and tail footer both report THIS number (section 6.2 both-ends
     /// law) - a capped run additionally discloses the emitted window.
     pub total_matched: usize,
     /// Distinct matching transcripts BEFORE the cap (pairs with `total_matched`).
@@ -454,7 +454,7 @@ pub struct SearchOutcome {
     /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).
     pub scope_top: usize,
     pub scope_sub: usize,
-    /// Session ids the resolver found under more than one project directory (§2 `dedup`).
+    /// Session ids the resolver found under more than one project directory (section 2 `dedup`).
     /// Empty on an ordinary scope; when not, the merged copies are disclosed beside the
     /// scope banner and in the JSON header, because the counts above changed with them.
     pub duplicates: Vec<crate::path::DuplicateGroup>,

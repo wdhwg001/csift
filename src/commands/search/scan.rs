@@ -63,7 +63,7 @@ pub(crate) fn fetch_records(
     ))
 }
 
-/// Scan a single session file: prefilter → parse → delimit turns → match → stitch.
+/// Scan a single session file: prefilter -> parse -> delimit turns -> match -> stitch.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn search_one_file(
     path: &Path,
@@ -162,7 +162,7 @@ pub(crate) fn search_one_file(
         schedule_fire: needs_schedule_fire,
     };
 
-    // ── §7f whole-file gate ──
+    // -- section 7f whole-file gate --
     // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
     // this is NOT an addressing fetch (`--line`/`--uuid` emit records regardless of the
     // pattern), a cheap PARALLEL pre-scan can prove that no candidate line matches: no
@@ -261,7 +261,7 @@ pub(crate) fn search_one_file(
     }
 
     // Retain every TRANSCRIPT record in file order (genuine users delimit turns;
-    // the rest are turn members). Two-stage prefilter (§7d):
+    // the rest are turn members). Two-stage prefilter (section 7d):
     //   1. CATEGORY prefilter - drop pure-noise lines (attachment/system/metadata)
     //      pre-JSON. This is the dominant cost win (attachment alone is 54% of
     //      records). Broad-by-design (a role substring) so no genuine turn is lost.
@@ -397,7 +397,7 @@ pub(crate) fn search_one_file(
         }
     }
 
-    // ── Transparent elicitation-sidecar merge (§3.10) ──
+    // -- Transparent elicitation-sidecar merge (section 3.10) --
     // A TOP-LEVEL session may have a hook-written `elicitations.jsonl` carrying the
     // unresolved-pending AskUserQuestion/ExitPlanMode/MCP records that are MISSING from the
     // native transcript (whole-turn buffered / in-memory). Merge them in as native-shaped

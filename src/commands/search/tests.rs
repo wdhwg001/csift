@@ -83,7 +83,7 @@ static NO_RESUME_PROMPTS: std::sync::LazyLock<std::collections::HashSet<String>>
 /// The synthetic session, one jsonl line per element, in file order.
 fn fixture() -> Vec<&'static str> {
     vec![
-        // ── turn 0 ──
+        // -- turn 0 --
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"why is the tail-read carry needed?"}}"#,
         r#"{"type":"assistant","uuid":"a0t","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"the carry holds an incomplete line straddling a chunk boundary"}]}}"#,
         r#"{"type":"assistant","uuid":"a0u","parentUuid":"a0t","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call0","name":"Read","input":{"file":"parse.rs"}}]}}"#,
@@ -91,7 +91,7 @@ fn fixture() -> Vec<&'static str> {
         r#"{"type":"assistant","uuid":"a0f","parentUuid":"c0","timestamp":"2026-06-07T05:00:40.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The carry is the partial line at the low-offset edge of each chunk."}]}}"#,
         // An isMeta pseudo-turn - looks human, must NOT open a turn.
         r#"{"type":"user","uuid":"meta","isMeta":true,"parentUuid":"a0f","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"Continue from where you left off."}}"#,
-        // ── turn 1 ──
+        // -- turn 1 --
         r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"now explain the panic path"}}"#,
         r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T06:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"There is no panic on a malformed line — it is skipped and counted."}]}}"#,
     ]
@@ -108,7 +108,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         .unwrap();
     let tw = TimeWindow::from_args(a.since.as_deref(), a.until.as_deref()).unwrap();
     // The fixture path is a non-existent top-level transcript, so its discovery-root resolves
-    // no subagents - an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
+    // no subagents - an empty spawn map (lookup miss => `None`) reproduces exactly what the
     // former per-file `build_spawn_lookup` returned here.
     let spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
     let rows = merge_rows(&kept, &[]);

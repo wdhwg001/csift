@@ -1,7 +1,7 @@
 //! `search` subcommand - regex over transcripts, returning complete round-trip
 //! exchanges.
 //!
-//! Behavior (SPEC.md §6.2, §6.4):
+//! Behavior (SPEC.md section 6.2, section 6.4):
 //! - Pattern is ripgrep-like, default smart-case (`-i` forces insensitive,
 //!   `--multiline` lets `.` cross newlines). Empty pattern == pure filter.
 //! - Filters: `--category/-t` (repeatable), `--turn` XOR (`--since`/`--until`),
@@ -12,7 +12,7 @@
 //! - On a hit, the COMPLETE round-trip (Exchange) is returned: a matched `tool_use`
 //!   WITH its `tool_result`; a matched user turn WITH the agent response; etc. The
 //!   exchange is the whole turn (opening genuine-user + every record chained under
-//!   it until the next genuine-user), so every form of completeness in §6.4 holds.
+//!   it until the next genuine-user), so every form of completeness in section 6.4 holds.
 //! - `--max-count` caps results but NEVER silently - the dropped count is reported.
 //! - rayon parallelizes across files; lazy parse keeps it fast on 200 MB+ inputs.
 //!
@@ -20,7 +20,7 @@
 //!
 //! `list` can head/tail-read, but `search` must see the whole session to delimit
 //! turns and stitch exchanges, so it mmaps the file once and does a single forward
-//! [`crate::parse::scan_lines_bytes`] pass with the two-stage byte prefilter (§7d):
+//! [`crate::parse::scan_lines_bytes`] pass with the two-stage byte prefilter (section 7d):
 //! the category prefilter gates the `serde_json` parse (dropping the ~54%
 //! attachment/noise lines pre-JSON); the keyword prefilter marks `can_hit` so the
 //! match phase skips regex work on records that provably lack the literal. Turn

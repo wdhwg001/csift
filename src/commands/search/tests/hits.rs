@@ -77,9 +77,9 @@ fn collect_hits_tool_use_matches_name_and_input() {
 
 #[test]
 fn collect_hits_mcp_elicitation_system_marker() {
-    // §3.10: an MCP-elicitation pending marker is a `system` record with NO tool_use
+    // section 3.10: an MCP-elicitation pending marker is a `system` record with NO tool_use
     // block - `search` must still find it via its top-level `content` string (the gap the
-    // §3.10 arm closes), tagged `Tool` and named by `csiftKind`.
+    // section 3.10 arm closes), tagged `Tool` and named by `csiftKind`.
     let r = rec(
         r#"{"type":"system","subtype":"mcp_elicitation","timestamp":"2026-06-27T02:00:00.000Z","content":"MCP elicitation [gdrive] (url): authorize wibblewobble access","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp-elicitation","csiftKey":"el-1","csiftMcpServer":"gdrive"}"#,
     );
@@ -110,8 +110,8 @@ fn collect_hits_mcp_elicitation_system_marker() {
 
 #[test]
 fn collect_hits_auq_marker_does_not_double_emit() {
-    // §3.10: an AskUserQuestion pending marker DOES carry a tool_use block, so it matches
-    // via the `Block::ToolUse` arm. The §3.10 non-tool_use arm is guarded to markers with
+    // section 3.10: an AskUserQuestion pending marker DOES carry a tool_use block, so it matches
+    // via the `Block::ToolUse` arm. The section 3.10 non-tool_use arm is guarded to markers with
     // NO tool_use block, so this must yield EXACTLY ONE hit (not two).
     let r = rec(
         r#"{"type":"assistant","timestamp":"2026-06-27T01:00:00.000Z","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"k1","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"k1","name":"AskUserQuestion","input":{"questions":[{"question":"pick wibblewobble?"}]}}]}}"#,
@@ -227,7 +227,7 @@ fn auq_answer_surfaces_under_user_category_end_to_end() {
 
 #[test]
 fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
-    // The dominant real-data phrasing ("Your questions have been answered: …") must
+    // The dominant real-data phrasing ("Your questions have been answered: ...") must
     // surface under `user`, exactly like the other two: Claude Code has shipped THREE
     // phrasings for one synthesized answer, so a single hardcoded marker reaches one
     // population and misses this one entirely.
@@ -244,7 +244,7 @@ fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
         1,
         "alternate AUQ phrasing must surface a user hit"
     );
-    // §6.4 behavior change: the answer opens its own turn (turn 1), after the
+    // section 6.4 behavior change: the answer opens its own turn (turn 1), after the
     // genuine "pick one" opener (turn 0).
     assert_eq!(ex[0].turn_index, Some(1));
     assert!(ex[0]
@@ -256,13 +256,13 @@ fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
 #[test]
 fn auq_answer_not_double_counted_no_category_filter() {
     // DEFECT 3: with NO -t filter (all categories active) an AUQ answer must be
-    // surfaced ONCE (under `user`), NOT twice (also `tool-response`). SPEC §5.
+    // surfaced ONCE (under `user`), NOT twice (also `tool-response`). SPEC section 5.
     let lines = vec![
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
         r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
         r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"zzqq choice\". You can now continue."}]}}"#,
     ];
-    // No selector filter → every label eligible.
+    // No selector filter -> every label eligible.
     let ex = search(&lines, &args("zzqq"));
     assert_eq!(ex.len(), 1);
     let cats: Vec<Option<Class>> = ex[0].hits.iter().map(|h| h.class).collect();
@@ -275,10 +275,10 @@ fn auq_answer_not_double_counted_no_category_filter() {
 
 #[test]
 fn auq_answer_text_none_when_no_blocks_or_no_marker() {
-    // A record with string content → no blocks → None (the `blocks()?` arm).
+    // A record with string content -> no blocks -> None (the `blocks()?` arm).
     let r = rec(r#"{"type":"user","message":{"role":"user","content":"plain string"}}"#);
     assert!(auq_answer_text(&r).is_none());
-    // A carrier whose tool_result is NOT an AUQ answer → None (loop falls through).
+    // A carrier whose tool_result is NOT an AUQ answer -> None (loop falls through).
     let r2 = rec(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"just normal output"}]}}"#,
     );
@@ -301,7 +301,7 @@ fn auq_answer_text_skips_non_tool_result_blocks() {
 #[test]
 fn auq_answer_under_user_present_but_pattern_does_not_match() {
     // is_auq_answer is true and auq_answer_text returns Some, but the regex does
-    // NOT match the answer → the `matcher.is_match(&text)` FALSE arm: no hit.
+    // NOT match the answer -> the `matcher.is_match(&text)` FALSE arm: no hit.
     let r = rec(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"q\"=\"alpha\"."}]}}"#,
     );
@@ -331,8 +331,8 @@ fn auq_answer_under_user_present_but_pattern_does_not_match() {
 fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
     // A record marked `can_hit:false` is skipped before any regex work in
     // collect_turn_hits (the `if !kept.can_hit { continue }` arm).
-    let m = build_matcher(&args("Carry")).unwrap(); // case-sensitive → has prefilter
-                                                    // A line lacking the literal → can_hit=false.
+    let m = build_matcher(&args("Carry")).unwrap(); // case-sensitive -> has prefilter
+                                                    // A line lacking the literal -> can_hit=false.
     let raw = br#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"nothing relevant"}]}}"#;
     let kept = Kept {
         rec: serde_json::from_slice(raw).unwrap(),
@@ -386,7 +386,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         records: vec![Row::Rec(&kept)],
         indices: vec![0],
     };
-    // Window starting AFTER the record's timestamp → excluded.
+    // Window starting AFTER the record's timestamp -> excluded.
     let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
     assert!(collect_turn_hits(
         &turn,
@@ -430,7 +430,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
 
 #[test]
 fn collect_record_hits_resolve_persisted_with_no_pointer_keeps_inline() {
-    // resolve_persisted=true but the tool_result has NO persisted pointer → the
+    // resolve_persisted=true but the tool_result has NO persisted pointer -> the
     // `persisted_output_path()` None arm: the inline text is matched as-is.
     let r = rec(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"plain inline output with token zzinline"}]}}"#,

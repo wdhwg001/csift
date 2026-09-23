@@ -179,7 +179,7 @@ pub(crate) fn write_record_line<W: std::io::Write>(
         .unwrap_or_default();
     let images = image_suffix(&h.image_ids);
     // A merged elicitation-sidecar hit has no physical jsonl line - render the provenance
-    // locator instead of a fabricated `Lnnnn` (§3.10).
+    // locator instead of a fabricated `Lnnnn` (section 3.10).
     let locator = if h.from_sidecar {
         "(elicitation sidecar)".to_string()
     } else {
@@ -192,7 +192,7 @@ pub(crate) fn write_record_line<W: std::io::Write>(
     )
 }
 
-/// ` [N image(s): …]` suffix when the hit's record carries images - the SAME ids `turns` shows,
+/// ` [N image(s): ...]` suffix when the hit's record carries images - the SAME ids `turns` shows,
 /// feedable straight to `csift image <session> --id <ID>`. Empty string when there are none.
 pub(crate) fn image_suffix(ids: &[String]) -> String {
     if ids.is_empty() {

@@ -58,7 +58,7 @@ pub(crate) fn collect_turn_hits(
                 continue;
             }
         }
-        // §7d keyword prefilter: if the raw line provably lacks the required
+        // section 7d keyword prefilter: if the raw line provably lacks the required
         // literal, this record can't be a hit - skip the regex work. (It still
         // stays a member of this turn for the complete round-trip; we just don't
         // emit a hit for it.)
@@ -67,7 +67,7 @@ pub(crate) fn collect_turn_hits(
         }
         let rec = &kept.rec;
         // Time window applies per-record (records with no timestamp never match a
-        // bounded window, per SPEC §6.2).
+        // bounded window, per SPEC section 6.2).
         if !time_window.contains(rec.timestamp.as_deref()) {
             continue;
         }
@@ -178,7 +178,7 @@ pub(crate) fn collect_turn_siblings(
     }
     // FIXED policy (see [`sibling_cap`]): message classes always render; chattier
     // machinery keeps the FIRST N per leaf. The remainder is COUNTED (never silent) -
-    // the caller renders an explicit `(+N more · csift show …)` pointer.
+    // the caller renders an explicit `(+N more · csift show ...)` pointer.
     let mut kept_per_leaf: HashMap<&'static str, usize> = HashMap::new();
     let mut hidden = 0usize;
     sibs.retain(|hit| match hit.class.and_then(sibling_cap) {
@@ -378,13 +378,13 @@ pub(crate) fn collect_record_hits(
         }
     };
 
-    // ── 1. Record-level TEXT unit(s). A BATCHED record (≥1 `<task-notification>` / inbound-peer
+    // -- 1. Record-level TEXT unit(s). A BATCHED record (>=1 `<task-notification>` / inbound-peer
     //    section) renders ONE hit PER section, each with its own label + direction - so a
     //    notification-with-`<result>` ALSO surfaces its `agent.communication.inbox`
-    //    (child ⇨ self), and mixed-kind sections never collapse to one. Any other
+    //    (`child ⇨ self`), and mixed-kind sections never collapse to one. Any other
     //    record-text class (user.message, harness markers, compaction, a subagent-opener inbox)
     //    renders ONE richest-label hit. A teammate message's inbox label and a
-    //    `<task-notification>`'s harness.notification label come straight from `classify`. ──
+    //    `<task-notification>`'s harness.notification label come straight from `classify`. --
     // A superseded draft keeps its single `user.unsent` view whatever its shape: a
     // sectioned draft (a pulse- or relay-shaped text) must not fan out into per-section
     // classes the record's own `labels[]` does not carry.
@@ -433,7 +433,7 @@ pub(crate) fn collect_record_hits(
         }
     }
 
-    // ── 2. Record-level user-facing tool_result DUAL (AUQ answer / typed rejection) ──
+    // -- 2. Record-level user-facing tool_result DUAL (AUQ answer / typed rejection) --
     // These are RECORD-level facts, so emit ONCE (not per tool_result block); by the richest-view
     // law the user-facing view supersedes the agent.tool.result copy (the block loop then
     // skips it). `reconstructed_user_text` yields the clean Q+options+answer / rejection (+[plan:])
@@ -466,9 +466,9 @@ pub(crate) fn collect_record_hits(
         }
     }
 
-    // ── 3. §3.10 MCP elicitation marker with NO tool_use block → agent.tool.use (content string).
+    // -- 3. section 3.10 MCP elicitation marker with NO tool_use block -> agent.tool.use (content string).
     // The AUQ/ExitPlanMode markers DO carry a tool_use block and surface via the block loop, so
-    // this arm is GUARDED to a no-tool_use marker to avoid a double emit (keep the guard). ──
+    // this arm is GUARDED to a no-tool_use marker to avoid a double emit (keep the guard). --
     if has(Class::AgentToolUse)
         && sel(Class::AgentToolUse)
         && rec.is_elicitation_marker()
@@ -490,7 +490,7 @@ pub(crate) fn collect_record_hits(
         }
     }
 
-    // ── 4. Block-bearing units: thinking / agent text / tool_use (+comm) / tool_result (+comm). ──
+    // -- 4. Block-bearing units: thinking / agent text / tool_use (+comm) / tool_result (+comm). --
     collect_block_hits(
         rec,
         &labels,

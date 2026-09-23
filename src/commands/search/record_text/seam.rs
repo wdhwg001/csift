@@ -139,7 +139,7 @@ pub(crate) fn render_families(class: Class) -> &'static [RenderFamily] {
 /// Every leaf whose CATEGORY names at least one family - the classes a caller's view can
 /// carry into [`family_render`], and nothing else.
 ///
-/// The reader is the §7f WHOLE-FILE GATE, the one path in csift allowed to prove a
+/// The reader is the section 7f WHOLE-FILE GATE, the one path in csift allowed to prove a
 /// negative. Its stage-2 re-render has to see everything emission would render, and a
 /// record with no leaf of its OWN (every isMeta injection, every `<task-notification>`)
 /// renders only through the caller's class - so a gate that re-renders the line alone

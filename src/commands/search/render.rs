@@ -96,7 +96,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
             None => format!("unmodeled{ext}"),
         };
     };
-    // Tool pairing (▹) takes the dedicated two-sided form below.
+    // Tool pairing (`▹`) takes the dedicated two-sided form below.
     // A RESULT-side hit whose tool_result carried `is_error` says so in-band -
     // pairing answers "did a result come back"; the decoration answers "was it good".
     let err = if class == Class::AgentToolResult && h.is_error == Some(true) {
@@ -191,7 +191,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
             return format!("{} [summarize {dir}]{nd}", class.path());
         }
     }
-    // Comm direction (⇨): append `from ⇨ to` to the label path.
+    // Comm direction (`⇨`): append `from ⇨ to` to the label path.
     if let Some((from, to)) = &h.direction {
         return format!("{}{nd}  {from} ⇨ {to}", class.path());
     }
@@ -296,12 +296,12 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) -> Result<
         return Ok(());
     }
 
-    // ── MATCH banner (head): the TRUE totals + the emission direction, echoed BEFORE the
+    // -- MATCH banner (head): the TRUE totals + the emission direction, echoed BEFORE the
     //    first exchange so a `| head`-truncated read still knows what it is looking at; the
     //    tail footer repeats the totals (the both-ends placement law - anything load-bearing
     //    must survive a consumer that amputates one end). Free: the timeline is fully
     //    materialized before the first output byte. An active cap discloses the emitted
-    //    window inline; undated exchanges (sorted last) are called out only when present. ──
+    //    window inline; undated exchanges (sorted last) are called out only when present. --
     write!(
         out,
         "matches  {} {} · {} {} · oldest first",
@@ -323,25 +323,25 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) -> Result<
     }
     writeln!(out)?;
 
-    // ── Self-resolving exchange headers: each header opens with a STABLE token - the leading
+    // -- Self-resolving exchange headers: each header opens with a STABLE token - the leading
     //    chars of the owning transcript id - derived from the id alone, never from enumeration
     //    order, so a token pasted from ANY previous invocation still names the same transcript.
     //    The token is a valid `@` target as-is (prefix resolution is fail-loud on ambiguity),
     //    so every row is copy-paste addressable with zero joins, and the output has no
-    //    O(matched-sessions) legend block ahead of the first hit. ──
+    //    O(matched-sessions) legend block ahead of the first hit. --
     let tok = header_tokens(&outcome.exchanges);
 
     // The exchanges render in bounded parallel chunks and reach stdout in file order. An
     // exchange's block depends on nothing but the exchange, the token map and ONE
     // cross-row decision - which row owns the single image-extraction hint - so that
-    // decision is taken here, once, before any worker starts (§7k).
+    // decision is taken here, once, before any worker starts (section 7k).
     let hint = first_image_row(&outcome.exchanges);
     crate::text::write_ordered(&mut out, &outcome.exchanges, |i, ex, buf| {
         write_exchange(buf, ex, &tok, hint.filter(|h| h.exchange == i))
     })?;
 
-    // ── Compact lowercase footer: the SAME true totals the head banner carries (the both-ends
-    //    law - `-c`/`-l` isolate a single number for piping), drop accounting, unresolved. ──
+    // -- Compact lowercase footer: the SAME true totals the head banner carries (the both-ends
+    //    law - `-c`/`-l` isolate a single number for piping), drop accounting, unresolved. --
     let cat = if args.labels.is_empty() {
         "all".to_string()
     } else {
@@ -379,11 +379,11 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) -> Result<
             crate::text::malformed_note(outcome.skipped_lines)
         )?;
     }
-    // ── Reader-caution (LAST, only when the default cap actually CLIPPED ≥1 excerpt) ──
+    // -- Reader-caution (LAST, only when the default cap actually CLIPPED >=1 excerpt) --
     // The excerpts above are match-centered FRAGMENTS, not summaries - a consumer that trusts the
     // first sentences of a clipped fragment can badly misread the record's full intent. Tell it
     // exactly how to get the whole text. Auto-suppressed under --no-truncate / --line / --uuid (those
-    // lift the cap, so nothing is truncated → `any_truncated_excerpt` is false).
+    // lift the cap, so nothing is truncated -> `any_truncated_excerpt` is false).
     if any_image_ids(&outcome.exchanges) {
         writeln!(
             out,
