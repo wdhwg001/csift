@@ -348,10 +348,11 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
     }
 
     // Resolve each transcript's plan binding IN PARALLEL (rayon pool = CPU count) - mirrors
-    // recover/search/files. A big session's plan lives in its 300MB+ top-level transcript, and a
-    // `.`/multi-session target adds many more; scanning them serially leaves every core but one
-    // idle while the dominant file is read. The explicit sort below makes the output order deterministic
-    // regardless of completion order, so this is byte-identical - pure execution strategy.
+    // recover/search/files. A big session's plan lives in its 300MB+ top-level transcript,
+    // and a `.`/multi-session target adds many more; scanning them serially leaves every
+    // core but one idle while the dominant file is read. The explicit sort below makes the
+    // output order deterministic regardless of completion order, so this is byte-identical
+    // - pure execution strategy.
     let mut refs: Vec<PlanRef> = session_files
         .par_iter()
         .map(|p| resolve_session_plan(p))

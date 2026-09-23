@@ -95,7 +95,7 @@ fn turns_round_trip_floor_recovers_a_user_turn() {
 fn turns_budget_respected_real_emitted_chars() {
     // HONEST budget test: drive the compiled binary in default TEXT form AND with `--out`,
     // read the ACTUAL emitted bytes, count the WHOLE document with `.chars().count()`, and
-    // assert it is <= budget at three real budgets on the multi-compaction fixture. This
+    // assert it is <= budget at three real budgets on the multi-compaction fixture.
     // A check reading back the reported "chars used" number, or re-deriving the JSON sum
     // with a hardcoded `+ 24`, is circular: neither measures the real document.
     //

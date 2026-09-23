@@ -200,8 +200,8 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
 /// The cost of a turn's ASSISTANT LANE under the richness selection: the sum of each
 /// SURVIVING agent message's `unit_cost` + each collapsed placeholder's
 /// `agent_placeholder_cost`. This is the SAME walk the renderer + json emitter use, so
-/// summed cost == summed emitted chars. In `EotOnly` mode it equals the single-EOT
-/// `unit_cost` exactly (the lane is just `[Kept(last)]`) - the non-breaking guarantee.
+/// summed cost == summed emitted chars. In `EotOnly` mode it equals the last-only
+/// `unit_cost` exactly (the lane is just `[Kept(last)]`).
 pub(crate) fn assistant_lane_cost(turn: &TurnSlice, cfg: &RichnessCfg) -> usize {
     select_agent_messages(turn, cfg)
         .iter()

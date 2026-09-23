@@ -6,8 +6,8 @@ use crate::harness::*;
 fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     // `--agent-msgs rich` over the long-run turn: the rich first / sudden-rich middle /
     // fused body survive verbatim; the pure-declaration middles collapse into a
-    // placeholder carrying a fetchable L{a}–L{b} range. The default (eot-only) shows ONLY
-    // the EOT - proving the flag changes behavior.
+    // placeholder carrying a fetchable L{a}–L{b} range. `eot-only` shows ONLY the EOT, so
+    // the two modes render different documents from one turn.
     let h = turns_home();
     let rich = h.run(&[
         "verbatim",
@@ -347,8 +347,8 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
 
 #[test]
 fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
-    // The `eot-only` ESCAPE emits the LAST-ONLY document byte-for-byte (the "force
-    // last-only" guarantee), asserted TWO ways:
+    // The `eot-only` ESCAPE emits the LAST-ONLY document byte-for-byte (the "force last-only"
+    // guarantee), asserted TWO ways:
     //   (1) `--agent-msgs eot-only` is byte-identical to the CAPTURED last-only baseline -
     //       catches a drift in the last-only path even if the default moved with it;
     //   (2) the IMPLICIT default DIFFERS from it - it keeps intermediate substance (the
@@ -376,8 +376,8 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
          tests/turns_pre_feature_baseline.txt under TZ=UTC --agent-msgs eot-only"
     );
 
-    // The implicit default (Longest) is DIFFERENT - it restores the substance the
-    // single-EOT default dropped (proving the default changed, not just a flag alias).
+    // The implicit default (Longest) is DIFFERENT - it keeps the substance a last-only
+    // pick drops, so the default and the escape render different documents.
     let implicit = h.run_with_env(
         &[
             "verbatim",

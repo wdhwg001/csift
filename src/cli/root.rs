@@ -248,13 +248,12 @@ pub struct Cli {
     /// of `0` buys no hop at all, so the records above it read `pre-cut` instead of
     /// resolving. No transcript of the measured corpus - 32 streams over 8 transcripts -
     /// carries that shape, so read both budgets rather than assume they agree on one that
-    /// does. The footer names what was
-    /// crossed, what was not, and what you can do about the rest - it offers a flag value
-    /// only where raising the flag would MOVE the floor, which needs both that the BUDGET
-    /// is what stopped the walk and that the boundary it stopped at still names a record
-    /// the file carries; a boundary naming a record no line carries is a floor at every
-    /// budget. What the offered value promises is that every boundary here gets TRIED, not
-    /// that every one of them opens.
+    /// does. The footer names what was crossed, what was not, and what you can do about the
+    /// rest - it offers a flag value only where raising the flag would MOVE the floor,
+    /// which needs both that the BUDGET is what stopped the walk and that the boundary it
+    /// stopped at still names a record the file carries; a boundary naming a record no
+    /// line carries is a floor at every budget. What the offered value promises is that
+    /// every boundary here gets TRIED, not that every one of them opens.
     ///
     /// The floor's own reason rides JSON as `floor_cause`, over EIGHT values. Only
     /// `budget-exhausted` is one a larger budget can move, and only when that boundary's

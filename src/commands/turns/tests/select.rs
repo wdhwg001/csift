@@ -235,8 +235,8 @@ fn trigger_boundary_six_keeps_all_seven_filters() {
 
 #[test]
 fn eot_only_selection_is_byte_identical_to_single_eot_render() {
-    // GOLDEN non-breaking: a multi-agent turn rendered under EotOnly emits EXACTLY the
-    // single-EOT text (header + body of the last message), no placeholder, same cost.
+    // GOLDEN: a multi-agent turn rendered under EotOnly emits EXACTLY the last-only
+    // text (header + body of the last message), no placeholder, same cost.
     let t = mk_turn_agents(
         3,
         Some("the ask"),

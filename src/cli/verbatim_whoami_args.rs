@@ -295,13 +295,13 @@ pub struct VerbatimArgs {
     /// Per-turn agent-message policy (MASTER switch for the multi-agent-message model).
     /// `longest` (DEFAULT) keeps the LONGEST agent message: the substantive Rich Response,
     /// which is frequently a MIDDLE message, not the last ~50-char throwaway wrap-up a
-    /// last-only pick would take, PLUS the first message when it is
-    /// substantive (>= the mode's rich-min threshold) PLUS each rich middle (a number, commit
-    /// hash, file:line, backtick code, or finding/decision lexeme, or clearly long),
-    /// collapsing the rest into a placeholder. `eot-only` keeps only each turn's LAST agent
-    /// message, which takes that wrap-up whenever the substance of the run sits
-    /// earlier. `rich` keeps the last always + the first by position privilege + each
-    /// non-droppable middle, only on a long run (over the mode's run threshold).
+    /// last-only pick would take, PLUS the first message when it is substantive (>= the
+    /// mode's rich-min threshold) PLUS each rich middle (a number, commit hash, file:line,
+    /// backtick code, or finding/decision lexeme, or clearly long), collapsing the rest
+    /// into a placeholder. `eot-only` keeps only each turn's LAST agent message, which
+    /// takes that wrap-up whenever the substance of the run sits earlier. `rich` keeps the
+    /// last always + the first by position privilege + each non-droppable middle, only on
+    /// a long run (over the mode's run threshold).
     /// `all` keeps every agent message.
     #[arg(long = "agent-msgs", value_enum, default_value_t = crate::commands::turns::AgentMsgMode::Longest)]
     pub agent_msgs: crate::commands::turns::AgentMsgMode,

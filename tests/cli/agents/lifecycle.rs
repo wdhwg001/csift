@@ -6,9 +6,10 @@ use crate::harness::*;
 fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     // A background built-in subagent whose teardown Bash (dangerous `rm` of `$VAR/$f`) CC HOISTED
     // to a human approval prompt EVEN under bypass - its transcript freezes at the unreturned
-    // tool_use, PRECEDED by assistant text (the L629→L630 shape a tail walk-back
-    // mis-report `completed`). csift must report it running + escalation-blocked, then NOT pending
-    // once the result lands (Yes clicked). Mirrors the real fixture agent-ab8a4c5868015a8be.
+    // tool_use, PRECEDED by assistant text (the L629→L630 shape a tail walk-back for an
+    // end-of-turn text mis-reads as `completed`). csift must report it running +
+    // escalation-blocked, then NOT pending once the result lands (Yes clicked). Mirrors the
+    // real fixture agent-ab8a4c5868015a8be.
     let enc = "-Users-testuser-Projects-frozen";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let hex = "ab8a4c5868015a8be";

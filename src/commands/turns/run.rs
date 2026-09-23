@@ -150,7 +150,7 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
     }
 
     // Resolve the richness configuration (master mode + thresholds, profile applied
-    // first then explicit flags). Defaults to EotOnly → today's single-EOT behavior.
+    // first then explicit flags). The default mode is `longest`.
     let cfg = args.richness_cfg();
 
     let plans: Vec<SessionPlan> = sessions

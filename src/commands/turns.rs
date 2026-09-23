@@ -60,8 +60,8 @@
 //! declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A
 //! FUSED finding+declaration body trips a signal → kept WHOLE; its trailing declaration
 //! is shed only by the existing within-message `ASST_CAP` char-ellipsis, never by
-//! whole-message drop. `--profile heavy|light` bundles the thresholds; defaults equal
-//! today's behavior so the whole feature is dead code until a non-default mode is chosen.
+//! whole-message drop. `--profile heavy|light` bundles the thresholds the selected mode
+//! reads; under the `longest` default the selection runs on every multi-message turn.
 //!
 //! ## Never fabricate, never silently drop
 //!
