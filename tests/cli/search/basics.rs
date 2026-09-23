@@ -163,8 +163,9 @@ fn search_text_output_is_token_lean() {
         "no ordinal header: {}",
         out.stdout
     );
-    // The header carries no `═══` rule and no uppercase `SESSION `/`TURN `: a hit is one
-    // scannable row, not a banner.
+    // A hit is one scannable row, not a banner: no uppercase `SESSION `/`TURN ` token and
+    // none of the `══` rule `verbatim` heads a compaction boundary with (two of that
+    // character at each end; the needle below is a run of three, so a wider rule matches).
     assert!(
         !out.stdout.contains("═══"),
         "no rule glyphs: {}",
