@@ -11,7 +11,7 @@ pub(crate) use facts::*;
 use super::*;
 
 /// Max characters of a matched excerpt shown inline before truncation. Truncation
-/// is ALWAYS explicit (`... (+N chars)`) - never silent (SPEC section 0, section 8.1).
+/// is ALWAYS explicit (`… (+N chars)`) - never silent (SPEC section 0, section 8.1).
 ///
 /// Deliberately LONGER than `list`'s 200-char cap (`session::EXCERPT_MAX`): a search
 /// hit wants enough of the matched exchange to be useful in context, whereas `list`
