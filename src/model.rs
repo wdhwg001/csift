@@ -5,7 +5,7 @@
 //!
 //! - **Tolerate unknown fields.** Real records carry far more fields than the
 //!   ones modelled here (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`,
-//!   `isSidechain`, `userType`, `toolUseResult`, `slug`, `entrypoint`, …). We
+//!   `isSidechain`, `userType`, `toolUseResult`, `slug`, `entrypoint`, ...). We
 //!   deserialize only what we use and ignore the rest - never crash on a new field.
 //! - **Tolerate missing `timestamp`.** Metadata-only records (`last-prompt`,
 //!   `ai-title`, `permission-mode`, `file-history-snapshot`) have no timestamp;

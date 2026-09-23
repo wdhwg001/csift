@@ -145,7 +145,7 @@ fn persisted_output_path_empty_structured_falls_through_to_inline() {
 
 #[test]
 fn persisted_output_path_none_when_no_blocks() {
-    // user record with string content → blocks() is None → `?` short-circuits.
+    // user record with string content -> blocks() is None -> `?` short-circuits.
     let r =
         parse(r#"{"type":"user","message":{"role":"user","content":"no persisted pointer here"}}"#);
     assert!(r.persisted_output_path().is_none());
@@ -154,7 +154,7 @@ fn persisted_output_path_none_when_no_blocks() {
 #[test]
 fn persisted_output_path_structured_present_but_missing_key_falls_to_inline() {
     // `toolUseResult` exists but lacks `persistedOutputPath` (the
-    // `tur.get(...)` None arm) → fall through to the inline marker scan.
+    // `tur.get(...)` None arm) -> fall through to the inline marker scan.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"somethingElse":1},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"Full output saved to: /tmp/fallback.txt\n"}]}}"#,
     );
@@ -192,7 +192,7 @@ fn agent_text_handles_bare_string_assistant_content() {
 
 #[test]
 fn agent_text_none_for_empty_bare_string() {
-    // A bare-string assistant body that is all whitespace normalizes to empty → None.
+    // A bare-string assistant body that is all whitespace normalizes to empty -> None.
     let r = parse(r#"{"type":"assistant","message":{"role":"assistant","content":"   "}}"#);
     assert!(r.agent_text().is_none());
 }
@@ -237,10 +237,10 @@ fn tool_result_content_text_object_fallback() {
 
 #[test]
 fn scrape_persisted_path_empty_after_marker_is_none() {
-    // The marker is present but the path is blank → None (the `path.is_empty()`
+    // The marker is present but the path is blank -> None (the `path.is_empty()`
     // true arm).
     assert!(scrape_persisted_path("Full output saved to:   \nnext").is_none());
-    // Marker with the path running to EOF (no trailing newline) → the `unwrap_or`
+    // Marker with the path running to EOF (no trailing newline) -> the `unwrap_or`
     // line_end == rest.len() branch.
     assert_eq!(
         scrape_persisted_path("Full output saved to: /a/b.txt"),
@@ -263,17 +263,17 @@ fn bash_command_some_and_none() {
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"rm -rf /tmp/x","description":"clean"}}]}}"#,
     );
     assert_eq!(r.bash_command(), Some("rm -rf /tmp/x"));
-    // A Bash tool_use with NO command → None.
+    // A Bash tool_use with NO command -> None.
     let no_cmd = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"description":"x"}}]}}"#,
     );
     assert!(no_cmd.bash_command().is_none());
-    // A non-Bash tool_use → None.
+    // A non-Bash tool_use -> None.
     let other = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/p/x"}}]}}"#,
     );
     assert!(other.bash_command().is_none());
-    // A record with no blocks → None.
+    // A record with no blocks -> None.
     let no_blocks = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
     assert!(no_blocks.bash_command().is_none());
 }

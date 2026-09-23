@@ -71,7 +71,7 @@ impl Record {
     /// correction): a persistent teammate `Agent` spawn's tool_result is an immediate
     /// `toolUseResult.status == "teammate_spawned"` acknowledgement - the teammate's actual
     /// work returns LATER as inbound `<teammate-message>`s, never via this tool_result. So an
-    /// ACK is `agent.tool.result` ONLY, never `…inbox` (unlike a one-shot Task return).
+    /// ACK is `agent.tool.result` ONLY, never `...inbox` (unlike a one-shot Task return).
     pub(crate) fn is_teammate_spawn_ack(&self) -> bool {
         self.tur_probe()
             .as_ref()
@@ -82,13 +82,13 @@ impl Record {
 
     /// True when this carrier is an ASYNC-LAUNCH ACK rather than a child return: an
     /// ASYNC/background `Agent` spawn's tool_result is the immediate launch confirmation
-    /// (`"Async agent launched successfully.\nagentId: …"`), shaped on disk as
+    /// (`"Async agent launched successfully.\nagentId: ..."`), shaped on disk as
     /// `toolUseResult.{isAsync:true, status:"async_launched"}`. It shares the spawn
     /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it - but it is the LAUNCH ack, not
     /// the work product. The async child's real report arrives LATER via the
     /// `<task-notification>` `<result>` pulse, which carries `agent.communication.inbox`, never via this
     /// tool_result. So a launch ack is `agent.tool.result` ONLY (unlike a SYNC one-shot Task
-    /// return, which IS the child's reply → `…inbox`). Robust dual detection: the structured
+    /// return, which IS the child's reply -> `...inbox`). Robust dual detection: the structured
     /// `toolUseResult` shape first, then the content prefix ([`ASYNC_LAUNCH_ACK_PREFIX`]) for a
     /// record lacking the structured field.
     pub(crate) fn is_async_launch_ack(&self) -> bool {
@@ -113,14 +113,14 @@ impl Record {
     /// persistent teammate spawn ([`Record::is_teammate_spawn_ack`]) or an async/background
     /// `Agent` launch ([`Record::is_async_launch_ack`]). Both share the spawn `tool_use_id`
     /// (so the [`SpawnLookup`] would resolve them) yet are the launch confirmation, not the
-    /// work product → `agent.tool.result` ONLY, never `…inbox`/a child ⇨ self direction.
+    /// work product -> `agent.tool.result` ONLY, never `...inbox`/a `child ⇨ self` direction.
     pub(crate) fn is_spawn_launch_ack(&self) -> bool {
         self.is_teammate_spawn_ack() || self.is_async_launch_ack()
     }
 
     /// True when this record is a SUBAGENT RETURN - a tool_result whose
     /// `tool_use_id` the spawn lookup resolves to a spawned child (the Task tool_result of a
-    /// ONE-SHOT spawn = the child's return, child ⇨ self). `false` without a [`SpawnLookup`]
+    /// ONE-SHOT spawn = the child's return, `child ⇨ self`). `false` without a [`SpawnLookup`]
     /// in `ctx`, AND `false` for a spawn LAUNCH ACK ([`Record::is_spawn_launch_ack`] - teammate
     /// or async) - the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it
     /// is not a return.
@@ -156,9 +156,9 @@ impl Record {
     pub fn classify(&self, ctx: &ClassifyCtx) -> Vec<Class> {
         let mut out: Vec<Class> = Vec::new();
 
-        // Elicitation sidecar markers (§3.10): a PENDING marker stands in for the native
-        // tool_use CC has not yet written → agent.tool.use (covers the MCP `system` form too,
-        // which carries no tool_use block). A RESOLVED marker is a pairing artifact → no label.
+        // Elicitation sidecar markers (section 3.10): a PENDING marker stands in for the native
+        // tool_use CC has not yet written -> agent.tool.use (covers the MCP `system` form too,
+        // which carries no tool_use block). A RESOLVED marker is a pairing artifact -> no label.
         if self.is_elicitation_marker() {
             if self.csift_phase.as_deref() == Some("pending") {
                 push_unique(&mut out, Class::AgentToolUse);
@@ -225,13 +225,13 @@ impl Record {
         out
     }
 
-    /// Classify an `assistant` record's blocks: visible text → `agent.message.plain`;
-    /// a thinking-family block → its own leaf (`classify/thinking.rs`); tool_use →
-    /// `agent.tool.use` (+ `…sent`/`…signal` for a `SendMessage`/spawn); tool_result
-    /// (rare on assistant) → `agent.tool.result`.
+    /// Classify an `assistant` record's blocks: visible text -> `agent.message.plain`;
+    /// a thinking-family block -> its own leaf (`classify/thinking.rs`); tool_use ->
+    /// `agent.tool.use` (+ `...sent`/`...signal` for a `SendMessage`/spawn); tool_result
+    /// (rare on assistant) -> `agent.tool.result`.
     pub(crate) fn classify_assistant(&self, out: &mut Vec<Class>) {
         let Some(blocks) = self.blocks() else {
-            // A bare-string assistant body (rare) is a visible message (§ `agent_text`).
+            // A bare-string assistant body (rare) is a visible message (section `agent_text`).
             if self.agent_text().is_some() {
                 push_unique(out, Class::AgentMessagePlain);
             }
@@ -304,7 +304,7 @@ impl Record {
         // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an
         // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION
         // their labels, with notification precedence over a peer tag quoted inside a
-        // notification span. When ≥1 section matches, that fully classifies the record.
+        // notification span. When >=1 section matches, that fully classifies the record.
         if let Some(raw) = self.raw_message_text() {
             if classify_batched_sections(&raw, self.is_meta.unwrap_or(false), out) {
                 return;
@@ -320,7 +320,7 @@ impl Record {
     /// Classify the string body of a `user` record (also reused for the joined text of a
     /// no-tool_result block record): the harness markers (interrupts, `<local-command-stdout>`,
     /// `<command-name>`, schedule ticks, meta hook/loop), else genuine prose - or
-    /// `agent.communication.inbox` when this is a subagent transcript opener (parent ⇨ self).
+    /// `agent.communication.inbox` when this is a subagent transcript opener (`parent ⇨ self`).
     /// (Batched `<task-notification>` / peer-message sections are handled UPSTREAM by
     /// [`classify_batched_sections`], so they never reach here.)
     pub(crate) fn classify_user_string(&self, ctx: &ClassifyCtx, s: &str, out: &mut Vec<Class>) {
@@ -361,7 +361,7 @@ impl Record {
             push_unique(out, Class::NotificationSubagent);
             return;
         }
-        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent ⇨ self),
+        // The spawn-prompt seed of a subagent transcript is an inbound comm (`parent ⇨ self`),
         // not the operator - and that holds regardless of isMeta.
         if ctx.is_subagent && ctx.is_transcript_opener {
             push_unique(out, Class::CommInbox);
@@ -386,7 +386,7 @@ impl Record {
         }
     }
 
-    /// Classify a block-content `user` record. A tool_result carrier →
+    /// Classify a block-content `user` record. A tool_result carrier ->
     /// `agent.tool.result`, plus the dual labels (`user.answer` for an AUQ answer,
     /// `user.rejection` for a typed rejection, `agent.communication.inbox` for a subagent
     /// return). A no-tool_result block record is routed through the string classifier on its
@@ -401,7 +401,7 @@ impl Record {
         if has_tool_result {
             // Order is richest view first (label A then label B): the user-facing dual
             // label (`user.answer`/`user.rejection`) leads its carrier; a subagent return
-            // leads with its `agent.tool.result` base then the `…inbox` comm view. These
+            // leads with its `agent.tool.result` base then the `...inbox` comm view. These
             // dual-label shapes are mutually exclusive, so an if/else chain is deterministic.
             if self.is_auq_answer_boundary() {
                 push_unique(out, Class::UserAnswer);
@@ -453,15 +453,15 @@ impl Record {
         self.classify_user_string(ctx, &joined, out);
     }
 
-    /// The per-section record-level text emissions of a BATCHED `type:"user"` record (≥1
+    /// The per-section record-level text emissions of a BATCHED `type:"user"` record (>=1
     /// `<task-notification>` and/or inbound peer `<teammate-message>` / `<agent-message>` section).
     /// One [`RecordTextSection`] per section's label, MIRRORING [`classify_batched_sections`]
     /// EXACTLY (same notification-span precedence/masking) so the text
     /// render never drifts from the classification: each `<task-notification>` yields its
     /// `harness.notification.<kind>` (text = the per-section automation label) PLUS, when it carries
-    /// a `<result>`, an `agent.communication.inbox` section (child ⇨ self via the embedded
+    /// a `<result>`, an `agent.communication.inbox` section (`child ⇨ self` via the embedded
     /// `<tool-use-id>`, degrading to `?` without a [`SpawnLookup`]); each inbound peer section
-    /// outside every notification span yields `agent.communication.{inbox,signal}` (sender ⇨ self).
+    /// outside every notification span yields `agent.communication.{inbox,signal}` (`<sender> ⇨ self`).
     /// EMPTY when the record carries no such section - the caller then falls back to the single
     /// richest-label record-text emission.
     #[must_use]

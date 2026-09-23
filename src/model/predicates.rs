@@ -57,7 +57,7 @@ impl Record {
         self.r#type.as_deref() == Some(t)
     }
 
-    /// True when this record is a csift ELICITATION-SIDECAR marker (§3.10) - it carries
+    /// True when this record is a csift ELICITATION-SIDECAR marker (section 3.10) - it carries
     /// `csift:"elicitation-marker-v1"`. Distinguishes a hook-backfilled record (merged
     /// into search/turns/list) from a native CC transcript record.
     #[must_use]
@@ -68,13 +68,13 @@ impl Record {
     /// True when this record is a GENUINE human turn (or a user answer to
     /// AskUserQuestion), NOT a `tool_result`-carrier and NOT a compaction summary.
     ///
-    /// Rule (§4.1, ALL must hold):
+    /// Rule (section 4.1, ALL must hold):
     /// - must be `type:"user"` with `message.role == "user"`;
-    /// - `isCompactSummary` must be falsey (excludes compaction summaries, §4.7);
-    /// - `isMeta` must be falsey (excludes system-injected pseudo-turns, §4.2);
+    /// - `isCompactSummary` must be falsey (excludes compaction summaries, section 4.7);
+    /// - `isMeta` must be falsey (excludes system-injected pseudo-turns, section 4.2);
     /// - the content must NOT be a machine-synthesized marker the user never typed
-    ///   (§4.2.1–.3): an interrupt marker (`[Request interrupted by user]` etc.), a
-    ///   `<local-command-stdout>…` output, or a `<command-name>…` slash-command wrapper;
+    ///   (section 4.2.1-.3): an interrupt marker (`[Request interrupted by user]` etc.), a
+    ///   `<local-command-stdout>...` output, or a `<command-name>...` slash-command wrapper;
     /// - string content => genuine; block content => genuine iff it contains a
     ///   text block and NO `tool_result` block.
     ///
@@ -89,7 +89,7 @@ impl Record {
         if self.is_compact_summary.unwrap_or(false) {
             return false;
         }
-        // §4.2 TRAP: isMeta:true user records look human but are system-injected.
+        // section 4.2 TRAP: isMeta:true user records look human but are system-injected.
         if self.is_meta.unwrap_or(false) {
             return false;
         }
@@ -105,7 +105,7 @@ impl Record {
         if msg.role.as_deref() != Some("user") {
             return false;
         }
-        // An inbound PEER message - `<teammate-message>` OR `<agent-message from="…">` - is
+        // An inbound PEER message - `<teammate-message>` OR `<agent-message from="...">` - is
         // `type:user`/`role:user`/string content and matches no synthetic marker, so without
         // the guard below it slips through as a GENUINE HUMAN turn (106 peer messages counted
         // as the user in one real session). Both are PEER-AGENT messages - never the
@@ -121,7 +121,7 @@ impl Record {
                 if !has_text || has_tool_result {
                     return false;
                 }
-                // §4.2.1: an interrupt marker arrives as a single `text` block whose text
+                // section 4.2.1: an interrupt marker arrives as a single `text` block whose text
                 // is EXACTLY the marker - exclude it (exact match, codepoint-safe).
                 let joined = flatten_content_text(msg.content.as_ref().unwrap());
                 !is_synthetic_user_marker(&joined) && !is_peer_message(&joined)
@@ -130,8 +130,8 @@ impl Record {
         }
     }
 
-    /// The genuine prose a user typed after a slash command (§4.2.3), recovered from the
-    /// `<command-args>…</command-args>` body of a `<command-name>…` record. Returns the
+    /// The genuine prose a user typed after a slash command (section 4.2.3), recovered from the
+    /// `<command-args>...</command-args>` body of a `<command-name>...` record. Returns the
     /// trimmed args text, or `None` when the record is not a slash-command wrapper or the
     /// args are empty. Codepoint-safe: uses `str::find` on the ASCII tag bounds and slices
     /// only on those ASCII byte offsets (never inside the args text), so a CJK args body
@@ -158,7 +158,7 @@ impl Record {
     }
 
     /// The invoked slash command's name (e.g. `/csift`) from the wrapper's
-    /// `<command-name>…</command-name>` tag - EITHER tag order. `None` when the record
+    /// `<command-name>...</command-name>` tag - EITHER tag order. `None` when the record
     /// is not a slash-command wrapper or the tag is absent/empty. Same codepoint-safety
     /// as [`Record::slash_command_args`] (slices only on ASCII tag offsets).
     #[must_use]
@@ -314,7 +314,7 @@ impl Record {
 
     /// True when this is an AUQ-answer carrier: a `type:"user"` record carrying a
     /// `tool_result` block whose textual content is a synthesized AUQ-answer string
-    /// (any marker in `AUQ_ANSWER_MARKERS`, §4.4 - the three shipped phrasings; the
+    /// (any marker in `AUQ_ANSWER_MARKERS`, section 4.4 - the three shipped phrasings; the
     /// unanswered branch is never one). Such a record is surfaced under the
     /// `user` category even though it rides on a carrier.
     #[must_use]
@@ -335,7 +335,7 @@ impl Record {
     }
 
     /// True when this record is an ANSWERED AskUserQuestion carrier that should open a
-    /// turn (§4.4 / §6.4): a `type:"user"` record carrying a `tool_result` block whose
+    /// turn (sections 4.4 / 6.4): a `type:"user"` record carrying a `tool_result` block whose
     /// `is_error` is not true, AND it is a real answer - signalled by a non-empty
     /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback
     /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in
@@ -343,7 +343,7 @@ impl Record {
     /// selection + prose reasoning), so it is a turn boundary.
     ///
     /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,
-    /// or a `Cancelled…` / `<tool_use_error>…` body) is NOT a boundary - those carry no
+    /// or a `Cancelled...` / `<tool_use_error>...` body) is NOT a boundary - those carry no
     /// typed user message. Verified on real data: all 81 answered carriers have
     /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the
     /// rejection/cancel carriers have none of the three.
@@ -457,7 +457,7 @@ impl Record {
     }
 
     /// The attachment payload's own `type` value (`hook_additional_context`,
-    /// `edited_text_file`, `compact_file_reference`, …) - the `--count-by attachment`
+    /// `edited_text_file`, `compact_file_reference`, ...) - the `--count-by attachment`
     /// census key. `None` off a non-attachment record or when the payload has no type.
     #[must_use]
     pub fn attachment_type(&self) -> Option<String> {
@@ -473,8 +473,8 @@ impl Record {
 
     /// The VERBATIM payload JSON of a `type:"attachment"` record - the matchable/rendered
     /// text under `search --attachments` for every non-hook payload. Verbatim by design:
-    /// the text is a byte substring of the source line, so the §7d literal prefilter and
-    /// the §7f whole-file gate stay sound with no synthesized-marker machinery.
+    /// the text is a byte substring of the source line, so the section 7d literal prefilter and
+    /// the section 7f whole-file gate stay sound with no synthesized-marker machinery.
     #[must_use]
     pub fn attachment_payload_text(&self) -> Option<String> {
         if !self.is_type("attachment") {
@@ -484,8 +484,8 @@ impl Record {
     }
 
     /// Hook-injected `additionalContext` text: a `type:"attachment"` record whose payload is
-    /// `{"type":"hook_additional_context","content":[…],…}` - the context a SessionStart /
-    /// UserPromptSubmit / … hook injected into the turn. `content` is a string ARRAY in real
+    /// `{"type":"hook_additional_context","content":[...],...}` - the context a SessionStart /
+    /// UserPromptSubmit / ... hook injected into the turn. `content` is a string ARRAY in real
     /// data (one element per injected block; joined with `\n`), tolerated as a bare string.
     /// `None` for every other record shape. Cheap for non-attachment records (one type
     /// compare before any parse).
@@ -516,13 +516,13 @@ impl Record {
     /// deserializing it skips the huge content values (file bodies, stdout echoes)
     /// without allocating them. `None` when there is no `toolUseResult` or it is not a
     /// JSON object (e.g. a subagent's bare-string echo) - exactly the cases where every
-    /// former `.get(…)` probe answered `None` too.
+    /// former `.get(...)` probe answered `None` too.
     pub(crate) fn tur_probe(&self) -> Option<TurProbe> {
         let raw = self.tool_use_result.as_ref()?;
         serde_json::from_str(raw.get()).ok()
     }
 
-    /// The structured `toolUseResult.answers` object test (§4.4): present AND non-empty.
+    /// The structured `toolUseResult.answers` object test (section 4.4): present AND non-empty.
     /// `false` for a cancelled/rejected AUQ (no answers) or a non-AUQ carrier.
     pub(crate) fn has_auq_answers(&self) -> bool {
         self.tur_probe()

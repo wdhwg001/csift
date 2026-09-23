@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── group_turn_indices (the shared §6.4 turn delimiter) ──
+// -- group_turn_indices (the shared section 6.4 turn delimiter) --
 
 #[test]
 fn group_turn_indices_basic_two_turns() {
@@ -24,7 +24,7 @@ fn group_turn_indices_synthetic_lead_folds_into_first_turn() {
 
 #[test]
 fn group_turn_indices_only_synthetic_lead_no_genuine_user() {
-    // No genuine user ever → a single standalone turn 0 holding the orphans (the
+    // No genuine user ever -> a single standalone turn 0 holding the orphans (the
     // `turns.len() > 1` false guard means no fold).
     let flags = [false, false, false];
     let turns = group_turn_indices(&flags, |b| *b);
@@ -39,7 +39,7 @@ fn group_turn_indices_empty_is_empty() {
 
 #[test]
 fn group_turn_indices_first_record_genuine_no_fold() {
-    // The first record IS genuine → no synthetic lead → no fold.
+    // The first record IS genuine -> no synthetic lead -> no fold.
     let flags = [true, false, true];
     let turns = group_turn_indices(&flags, |b| *b);
     assert_eq!(turns, vec![vec![0, 1], vec![2]]);
@@ -48,12 +48,12 @@ fn group_turn_indices_first_record_genuine_no_fold() {
 #[test]
 fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
     // A realistic record sequence over the PRODUCTION predicate (`opens_turn`):
-    //   0 genuine user      → turn 0 opener
+    //   0 genuine user      -> turn 0 opener
     //   1 assistant AUQ tool_use (member of turn 0)
-    //   2 AUQ answer carrier → turn 1 opener (the behavior change)
+    //   2 AUQ answer carrier -> turn 1 opener (the behavior change)
     //   3 assistant reply   (member of turn 1)
-    //   4 interrupt marker  → NOT a boundary (member of turn 1)
-    //   5 genuine user      → turn 2 opener
+    //   4 interrupt marker  -> NOT a boundary (member of turn 1)
+    //   5 genuine user      -> turn 2 opener
     let records: Vec<Record> = [
             r#"{"type":"user","message":{"role":"user","content":"pick one"}}"#,
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
@@ -73,7 +73,7 @@ fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
     );
 }
 
-// ── §6.4.1 under the SURVIVAL AXIS ──
+// -- section 6.4.1 under the SURVIVAL AXIS --
 // `group_turn_indices_deduped` asks Claude Code's own conversation chain which records
 // the surviving conversation still reaches, and drops the rest; on a same-parent resend
 // the chain reduces to the answer a draft heuristic gives. The per-record verdicts are
@@ -83,8 +83,8 @@ fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
 
 #[test]
 fn superseded_drafts_collapse_same_parent_edit_resend() {
-    // u0 (parent root) → assistant a0 → THREE drafts of one turn under parent a0:
-    // "draft v1" → edited "draft v2" → "draft v2, with a tail" (the one that continued) → assistant a1.
+    // u0 (parent root) -> assistant a0 -> THREE drafts of one turn under parent a0:
+    // "draft v1" -> edited "draft v2" -> "draft v2, with a tail" (the one that continued) -> assistant a1.
     // Only the last sibling survives; the two earlier ones are superseded drafts.
     let records: Vec<Record> = [
             r#"{"type":"user","uuid":"u0","parentUuid":"root","message":{"role":"user","content":"start"}}"#,
@@ -127,7 +127,7 @@ fn superseded_drafts_collapse_same_parent_edit_resend() {
 
 #[test]
 fn superseded_drafts_exact_duplicate_collapses_to_one() {
-    // The same message appears 3× verbatim under one parent (ESC-cancel re-submits) →
+    // The same message appears 3x verbatim under one parent (ESC-cancel re-submits) ->
     // exactly one turn, not three.
     let records: Vec<Record> = [
             r#"{"type":"assistant","uuid":"a0","parentUuid":"root","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
@@ -168,7 +168,7 @@ fn superseded_drafts_distinct_parents_not_merged() {
 
 #[test]
 fn superseded_drafts_null_parent_never_grouped() {
-    // No parentUuid → never grouped (grouping on "no parent" would merge unrelated
+    // No parentUuid -> never grouped (grouping on "no parent" would merge unrelated
     // first-message records). In real data a genuine user always carries a parent.
     let records: Vec<Record> = [
         r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"a"}}"#,
@@ -184,7 +184,7 @@ fn superseded_drafts_null_parent_never_grouped() {
     );
 }
 
-// ── the compaction RE-ANCHOR replay ──
+// -- the compaction RE-ANCHOR replay --
 // A compaction re-anchor re-appends a contiguous block of records with their uuids
 // PRESERVED (the copies differ in `promptId` alone). The copy is the same logical record,
 // so it must not mark the original as an abandoned draft and must not open a second turn.

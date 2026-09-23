@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── Automation-trigger classification (`<task-notification>`) ──
+// -- Automation-trigger classification (`<task-notification>`) --
 
 #[test]
 fn automation_trigger_parses_task_notification() {
@@ -56,7 +56,7 @@ fn automation_trigger_none_for_human_and_partial_graceful() {
     let partial = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}}"#,
     );
-    // No summary → kind falls back to `task`; a blanket `workflow` fallback would name
+    // No summary -> kind falls back to `task`; a blanket `workflow` fallback would name
     // the wrong producer on every pulse that carries no summary.
     let label = partial.automation_label().unwrap();
     assert_eq!(label, "[task abc completed]");
@@ -64,8 +64,8 @@ fn automation_trigger_none_for_human_and_partial_graceful() {
 
 #[test]
 fn automation_kind_classifies_background_command_and_agent() {
-    // The kind is read from the SUMMARY: a `Background command "…"` summary renders
-    // `background-command` and an `Agent …` summary renders `agent`. A blanket `workflow`
+    // The kind is read from the SUMMARY: a `Background command "..."` summary renders
+    // `background-command` and an `Agent ...` summary renders `agent`. A blanket `workflow`
     // would name the wrong producer on both.
     let bg = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b497m4ncp</task-id>\n<status>completed</status>\n<summary>Background command \"build venvs\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
@@ -241,7 +241,7 @@ fn automation_kind_from_summary_direct() {
         BackgroundCommand
     );
     // A monitor-COMPLETION `<task-notification>` (summary opens Monitor/Scheduled/cron)
-    // is its own labeled class - the real `Monitor event: "…"` pulse (seen many times
+    // is its own labeled class - the real `Monitor event: "..."` pulse (seen many times
     // across captures) must NOT fall to `task`. (This is NOT the isMeta ScheduleWakeup tick
     // PROMPT, which never reaches this summary classifier; see AutomationKind::Monitor docs.)
     assert_eq!(
@@ -254,7 +254,7 @@ fn automation_kind_from_summary_direct() {
         Monitor
     );
     assert_eq!(AutomationKind::from_summary(Some("cron run")), Monitor);
-    // A `Background command "…"` pulse is ALWAYS background-command, whatever its
+    // A `Background command "..."` pulse is ALWAYS background-command, whatever its
     // quoted name says. The former quoted-name heuristic (monitor / re-arm / liveness in the
     // name routed to Monitor) predates the real Monitor tool and double-booked: measured 40
     // false `monitor` records on one project against zero genuine Monitor pulses.
@@ -304,8 +304,8 @@ fn automation_trigger_multibyte_summary_codepoint_safe() {
 #[test]
 fn extract_xml_tag_handles_missing_and_empty() {
     assert_eq!(extract_xml_tag("<a>x</a>", "a").as_deref(), Some("x"));
-    assert_eq!(extract_xml_tag("<a></a>", "a"), None); // empty inner → None
-    assert_eq!(extract_xml_tag("<a>x", "a"), None); // missing close → None
+    assert_eq!(extract_xml_tag("<a></a>", "a"), None); // empty inner -> None
+    assert_eq!(extract_xml_tag("<a>x", "a"), None); // missing close -> None
     assert_eq!(extract_xml_tag("no tags here", "a"), None);
 }
 
@@ -319,7 +319,7 @@ fn plural_word_pick_pinned() {
 
 #[test]
 fn background_command_pulses_never_route_to_monitor() {
-    // A `Background command "…"` pulse is a background-command whatever its quoted name
+    // A `Background command "..."` pulse is a background-command whatever its quoted name
     // says: every cadence-flavored name below stays one, and the genuine Monitor-tool
     // shapes are the only Monitor route.
     use AutomationKind::{BackgroundCommand, Monitor};
@@ -353,12 +353,12 @@ fn automation_label_failed_status_and_no_summary() {
     let failed = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>bad7</task-id>\n<status>failed</status>\n<summary>The build broke</summary>\n</task-notification>"}}"#,
     );
-    // "The build broke" carries no kind classifier → `task` fallback.
+    // "The build broke" carries no kind classifier -> `task` fallback.
     assert_eq!(
         failed.automation_label().as_deref(),
         Some("[task bad7 failed] The build broke")
     );
-    // A trigger with a status but EMPTY summary → the head-only arm (no trailing text).
+    // A trigger with a status but EMPTY summary -> the head-only arm (no trailing text).
     let no_sum = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>q9</task-id>\n<status>running</status>\n<summary></summary>\n</task-notification>"}}"#,
     );
@@ -366,7 +366,7 @@ fn automation_label_failed_status_and_no_summary() {
         no_sum.automation_label().as_deref(),
         Some("[task q9 running]")
     );
-    // A trigger with NO task-id and NO status → both `?`/`completed` fallbacks fire.
+    // A trigger with NO task-id and NO status -> both `?`/`completed` fallbacks fire.
     let bare = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>just a note</summary>\n</task-notification>"}}"#,
     );

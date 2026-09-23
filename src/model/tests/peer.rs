@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── is_teammate_message + parse_teammate_message ──
+// -- is_teammate_message + parse_teammate_message --
 
 #[test]
 fn is_teammate_message_bare_and_peer_forms() {
@@ -97,7 +97,7 @@ fn parse_teammate_message_none_for_non_teammate() {
     assert!(parse_teammate_message("just a normal message").is_none());
 }
 
-// ── a teammate message is NOT genuine-user but STILL opens a turn ──
+// -- a teammate message is NOT genuine-user but STILL opens a turn --
 
 #[test]
 fn teammate_message_not_genuine_user_but_opens_turn_bare() {
@@ -134,7 +134,7 @@ fn teammate_message_not_genuine_user_peer_form() {
 #[test]
 fn inbound_comm_preview_strips_wrapper_and_footer() {
     // #14: the clean inbound-comm preview (turns/list) must yield the comm class, the sender
-    // (the FROM), and ONLY the peer's prose - the relay preamble, the `<teammate-message …>`
+    // (the FROM), and ONLY the peer's prose - the relay preamble, the `<teammate-message ...>`
     // wrapper tags, and the trailing harness security footer all stripped.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"VSMultiRegion\" color=\"blue\">\nplease check the rate limit handling\n</teammate-message>\n\nThis came from another Claude session — not typed by your user."}}"#,
@@ -147,7 +147,7 @@ fn inbound_comm_preview_strips_wrapper_and_footer() {
 
 #[test]
 fn inbound_comm_preview_signal_payload_is_signal_class() {
-    // A control payload (JSON `{"type":…}`) → CommSignal, not CommInbox.
+    // A control payload (JSON `{"type":...}`) -> CommSignal, not CommInbox.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"SOurDnd\">{\"type\":\"idle_notification\",\"from\":\"SOurDnd\"}</teammate-message>"}}"#,
     );
@@ -234,7 +234,7 @@ fn embedded_both_tags_mid_prose_stays_user_message() {
 
 #[test]
 fn agent_message_non_meta_excluded_opens_turn_inbox() {
-    // An `<agent-message from="…">` peer form (even non-isMeta) is NOT genuine-user,
+    // An `<agent-message from="...">` peer form (even non-isMeta) is NOT genuine-user,
     // STILL opens a turn, and classifies `agent.communication.inbox` (symmetry with teammate).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<agent-message from=\"oh-my-claudecode:architect\">use the shared resolver.</agent-message>"}}"#,
@@ -255,7 +255,7 @@ fn agent_message_non_meta_excluded_opens_turn_inbox() {
     );
 }
 
-// ── the `<cross-session-message>` peer framing ──
+// -- the `<cross-session-message>` peer framing --
 
 /// The full on-disk shape of one inbound cross-session message: the relay preamble, the tag with
 /// its attributes, the body, the close tag and the security footer, plus the `origin` object and

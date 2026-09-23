@@ -131,7 +131,7 @@ fn the_skill_manual_head_occurs_once() {
 ///
 /// The check is CONTAINMENT rather than equality, and that is a property of the cell
 /// rather than a concession: a cell is prose, it factors a shared prefix across several
-/// values (`attachment.type:"skill_listing" · "agent_listing_delta" · …`) and it adds the
+/// values (`attachment.type:"skill_listing" · "agent_listing_delta" · ...`) and it adds the
 /// sentence a shape needs beside it. Equality would pin the wording and fail on every
 /// rewrite. So the assertion is per INVENTORY ROW - one row, one shape, one leaf - and it
 /// accepts the three spellings the table itself uses, measured over all of it rather than

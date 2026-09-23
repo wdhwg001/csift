@@ -60,7 +60,7 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
     }
     // EVERY ARM BELOW MATCHES ON TEXT, AND `isMeta` IS WHAT PROTECTS A PERSON. A human can
     // write any sentence a template opens with - quote the reminder they were just shown,
-    // paste the retry nudge they are asking about, open a message with `[Image: …]` - and
+    // paste the retry nudge they are asking about, open a message with `[Image: ...]` - and
     // without this guard that message is relabelled out of `user` while it still opens its
     // turn. `isMeta` is the authorship flag the injecting call site stamps; Claude Code's
     // own recogniser tests it for the same reason, and the map's shape rows all read

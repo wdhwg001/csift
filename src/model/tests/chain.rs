@@ -33,7 +33,7 @@ fn survivals(c: &Chain, n: usize) -> Vec<&'static str> {
     (0..n).map(|i| c.survival(i).as_str()).collect()
 }
 
-// ── the ordinary shape: everything the walk reaches is live ──
+// -- the ordinary shape: everything the walk reaches is live --
 
 #[test]
 fn a_linear_transcript_is_entirely_live() {
@@ -51,7 +51,7 @@ fn a_linear_transcript_is_entirely_live() {
     assert!(c.kind(0).is_none());
 }
 
-// ── the recalled draft: an opener with no assistant descendant ──
+// -- the recalled draft: an opener with no assistant descendant --
 
 #[test]
 fn a_recalled_draft_is_abandoned_and_names_its_resend() {
@@ -82,7 +82,7 @@ fn a_recalled_draft_is_abandoned_and_names_its_resend() {
     assert_eq!(turns, vec![vec![0, 1], vec![3, 4]]);
 }
 
-// ── the rewind: an abandoned opener that WAS answered ──
+// -- the rewind: an abandoned opener that WAS answered --
 
 #[test]
 fn a_rewound_turn_carries_its_own_leaf_and_takes_its_subtree_with_it() {
@@ -171,7 +171,7 @@ fn two_rewinds_from_one_parent_are_two_branches() {
     assert_eq!(c.abandoned_root(5), Some(4));
 }
 
-// ── Replay copies: the LAST copy of a replayed uuid is the survivor ──
+// -- Replay copies: the LAST copy of a replayed uuid is the survivor --
 
 #[test]
 fn a_replayed_block_keeps_the_last_copy_and_flags_the_earlier_line() {
@@ -201,7 +201,7 @@ fn a_replayed_block_keeps_the_last_copy_and_flags_the_earlier_line() {
     assert_eq!(c.drafts, 0, "a replay copy is never a draft");
 }
 
-// ── the compaction cut ──
+// -- the compaction cut --
 
 #[test]
 fn a_plain_boundary_cuts_the_chain_and_the_history_above_it_is_pre_cut() {
@@ -259,7 +259,7 @@ fn a_boundary_with_preserved_messages_keeps_the_listed_records_and_cuts_the_rest
     assert_eq!(c.rewound_turns, 0);
 }
 
-// ── the leaf gates ──
+// -- the leaf gates --
 
 #[test]
 fn the_last_prompt_leaf_hint_needs_no_uuid_of_its_own() {
@@ -354,7 +354,7 @@ fn an_explicit_leaf_hint_overrides_the_recorded_one() {
     assert_eq!(c.leaf_index, Some(3));
 }
 
-// ── membership beyond ancestry ──
+// -- membership beyond ancestry --
 
 #[test]
 fn same_message_id_assistant_siblings_and_their_tool_results_are_live() {
@@ -377,7 +377,7 @@ fn same_message_id_assistant_siblings_and_their_tool_results_are_live() {
     );
 }
 
-// ── robustness ──
+// -- robustness --
 
 #[test]
 fn a_parent_cycle_stops_the_walk_without_hanging() {

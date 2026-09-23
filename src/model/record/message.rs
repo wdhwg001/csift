@@ -15,7 +15,7 @@ pub struct Message {
     #[serde(default)]
     pub content: Option<Content>,
 
-    /// The model id on assistant records (`claude-…`). Kept as a raw `Value` so an
+    /// The model id on assistant records (`claude-...`). Kept as a raw `Value` so an
     /// unexpected shape can never fail the whole record (tolerance discipline); read
     /// via `as_str`. Consumed by `stats`.
     #[serde(default)]
@@ -70,7 +70,7 @@ impl Message {
 /// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree
 /// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe
 /// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the
-/// former `.get(…)` chains did - byte-identical semantics). Crucially, the blob's HUGE
+/// former `.get(...)` chains did - byte-identical semantics). Crucially, the blob's HUGE
 /// unlisted values (file bodies, stdout echoes, structured patches) are skipped by
 /// serde's ignore path without ever being allocated.
 #[derive(Debug, Default, Deserialize)]

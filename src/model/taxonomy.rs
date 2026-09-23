@@ -46,7 +46,7 @@ impl Role {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
-    // ── user (6) ──
+    // -- user (6) --
     /// `user.message` - the person's own message. `type:"user"`, `role:"user"`, string
     /// or `[{text}]` content, no `isMeta` (a with-args slash wrapper is dual-labeled,
     /// this leaf first) - or, when the person typed again mid-turn, the `queued_command`
@@ -73,7 +73,7 @@ pub enum Class {
     /// `type:"queue-operation"` line carrying the human's own `content`.
     UserQueued,
 
-    // ── agent.message (2) ──
+    // -- agent.message (2) --
     /// `agent.message.plain` - the assistant's own text: a `type:"assistant"` record's
     /// `[{text}]` block(s).
     AgentMessagePlain,
@@ -83,7 +83,7 @@ pub enum Class {
     /// so it is LLM-visible although the harness never converts the attachment back.
     AgentMessageStructured,
 
-    // ── agent.thinking (4) ──
+    // -- agent.thinking (4) --
     /// `agent.thinking.summary` - the API-side summary of the reasoning (never the raw
     /// chain of thought): a `{type:"thinking", thinking, signature}` block whose
     /// signature tag reads `thinking`.
@@ -101,7 +101,7 @@ pub enum Class {
     /// no readable text, so the leaf is invisible.
     AgentThinkingRedacted,
 
-    // ── agent.tool (2) ──
+    // -- agent.tool (2) --
     /// `agent.tool.use` - a `type:"assistant"` record's `[{tool_use}]` block (incl. a
     /// pending elicitation sidecar marker).
     AgentToolUse,
@@ -119,12 +119,12 @@ pub enum Class {
     CommSignal,
     /// `agent.communication.channel` - a csift-channel delivery: a
     /// `hook_additional_context` attachment whose FIRST content string opens with the
-    /// envelope header `[csift-channel v1 …]`. A MESSAGE addressed at this lane, so it
+    /// envelope header `[csift-channel v1 ...]`. A MESSAGE addressed at this lane, so it
     /// is the RICHEST view of a record that also carries [`Class::HookContext`] - and
     /// unlike that leaf it is admitted by a DEFAULT scan.
     CommChannel,
 
-    // ── harness.notification (5) ──
+    // -- harness.notification (5) --
     /// `harness.notification.workflow` - a `<task-notification>` for a dynamic/OMC
     /// workflow.
     NotificationWorkflow,
@@ -138,31 +138,31 @@ pub enum Class {
     /// `harness.notification.task` - any other / unclassified `<task-notification>`.
     NotificationTask,
 
-    // ── harness.compaction (2) ──
+    // -- harness.compaction (2) --
     /// `harness.compaction.summary` - the `isCompactSummary` summary record.
     CompactionSummary,
     /// `harness.compaction.boundary` - the `type:"system"` / `subtype:"compact_boundary"`
     /// metrics record. No `message{}`, so it is not in the surviving conversation.
     CompactionBoundary,
 
-    // ── harness.command (3) ──
+    // -- harness.command (3) --
     /// `harness.command.invocation` - a `<command-name>` / `<command-message>` slash
     /// wrapper.
     CommandInvocation,
-    /// `harness.command.stdout` - a `<local-command-stdout>…` local-command output.
+    /// `harness.command.stdout` - a `<local-command-stdout>...` local-command output.
     CommandStdout,
     /// `harness.command.caveat` - the caveat the slash-command EXECUTOR writes after a
     /// local command: an `isMeta` `type:"user"` record whose content opens
     /// `<local-command-caveat>`. Delivered to the model, never shown to the human.
     CommandCaveat,
 
-    // ── harness.interrupt (2) ──
+    // -- harness.interrupt (2) --
     /// `harness.interrupt.user` - `[Request interrupted by user]`.
     InterruptUser,
     /// `harness.interrupt.tool` - `[Request interrupted by user for tool use]`.
     InterruptTool,
 
-    // ── harness.schedule (4) ──
+    // -- harness.schedule (4) --
     /// `harness.schedule.wakeup` - a fired `ScheduleWakeup` TIMER tick: the isMeta user
     /// record carrying one of the wakeup markers at content start.
     ScheduleWakeup,
@@ -180,7 +180,7 @@ pub enum Class {
     /// timer above.
     ScheduleTick,
 
-    // ── harness.resume (2) ──
+    // -- harness.resume (2) --
     /// `harness.resume.prompt` - the repair PROMPT the loader appends when a resumed
     /// transcript ends on a dangling user record: an `isMeta` `type:"user"` record
     /// whose text opens `Continue from where you left off.`. Delivered, never the
@@ -192,7 +192,7 @@ pub enum Class {
     /// a second leaf.
     ResumePlaceholder,
 
-    // ── harness.hook (3) ──
+    // -- harness.hook (3) --
     /// `harness.hook.context` - context a hook injected: a `type:"attachment"` record
     /// whose payload `type` is `hook_additional_context` (with `hookName`, `hookEvent`
     /// and a `content` string array). Delivered to the model as a
@@ -200,7 +200,7 @@ pub enum Class {
     HookContext,
     /// `harness.hook.outcome` - a hook RUN's own record: a `type:"attachment"` whose
     /// payload `type` is one of the `hook_*` family (`hook_success`,
-    /// `hook_blocking_error`, …) or `async_hook_response_batch`. Not delivered, except
+    /// `hook_blocking_error`, ...) or `async_hook_response_batch`. Not delivered, except
     /// a `hook_success` that carries a rendered body.
     HookOutcome,
     /// `harness.hook.feedback` - a BLOCKING HOOK's feedback the model received: an
@@ -216,7 +216,7 @@ pub enum Class {
     /// way still classifies; only the `Stop` name has a corpus specimen.
     HookFeedback,
 
-    // ── harness.context (9) ──
+    // -- harness.context (9) --
     /// `harness.context.reminder` - a nudge the harness re-injects each turn: the
     /// reminder attachment payloads, plus the isMeta `<system-reminder>` injections
     /// that match no more specific template.
@@ -240,7 +240,7 @@ pub enum Class {
     /// a `queued_command` that is NOT the human's own text.
     ContextTask,
     /// `harness.context.image` - an image the harness referenced into the conversation:
-    /// the isMeta `[Image: …]` reference records and the image-only isMeta records.
+    /// the isMeta `[Image: ...]` reference records and the image-only isMeta records.
     ContextImage,
     /// `harness.context.skill` - an isMeta `type:"user"` record whose text OPENS with
     /// `Base directory for this skill:`, the instruction body a spawn builder preloaded
@@ -248,7 +248,7 @@ pub enum Class {
     /// as the first text block of an array.
     ContextSkill,
 
-    // ── harness.enforce (4) ──
+    // -- harness.enforce (4) --
     /// `harness.enforce.structured-output` - the redo nudge that tells the model it
     /// must call the StructuredOutput tool.
     EnforceStructuredOutput,
@@ -262,7 +262,7 @@ pub enum Class {
     /// ([`EDIT_RETRY_MARKER`]).
     EnforceRetry,
 
-    // ── harness.turn (3) ──
+    // -- harness.turn (3) --
     /// `harness.turn.duration` - the `type:"system"` / `subtype:"turn_duration"`
     /// end-of-turn telemetry record. No `message{}`.
     TurnDuration,
@@ -273,7 +273,7 @@ pub enum Class {
     /// harness generates when the operator returns after time away. No `message{}`.
     TurnRecap,
 
-    // ── harness.system (5) ──
+    // -- harness.system (5) --
     /// `harness.system.refusal` - a `type:"system"` record with subtype
     /// `model_refusal_fallback` / `model_refusal_no_fallback`.
     SystemRefusal,
@@ -288,7 +288,7 @@ pub enum Class {
     /// message, so it is DELIVERED although it carries no `message{}`.
     SystemCommand,
 
-    // ── harness.bookkeeping (13) ──
+    // -- harness.bookkeeping (13) --
     /// `harness.bookkeeping.last-prompt` - a `type:"last-prompt"` line (`leafUuid`,
     /// `explicit`, `lastPrompt`).
     BookkeepingLastPrompt,

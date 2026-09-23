@@ -5,13 +5,13 @@ use super::*;
 #[test]
 fn auq_answer_carrier_detected() {
     // Real shape: a user-carrier whose tool_result content is the synthesized
-    // "User has answered your questions: …" string (§4.4).
+    // "User has answered your questions: ..." string (section 4.4).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"A\". You can now continue."}]}}"#,
     );
     assert!(r.is_auq_answer());
     // It is NOT a genuine user (it's a carrier) but IS an AUQ answer - and, per the
-    // §6.4 behavior change, it DOES open a turn (the answer is the user's message).
+    // section 6.4 behavior change, it DOES open a turn (the answer is the user's message).
     assert!(!r.is_genuine_user());
     assert!(r.is_auq_answer_boundary());
     assert!(r.opens_turn());
@@ -20,7 +20,7 @@ fn auq_answer_carrier_detected() {
 #[test]
 fn auq_answer_alternate_phrasing_detected() {
     // The DOMINANT real-data phrasing, and the one a single hardcoded marker misses:
-    // "Your questions have been answered: …" (verified across real sessions -
+    // "Your questions have been answered: ..." (verified across real sessions -
     // 16 sessions use this form vs 13 the other, 4 contain BOTH). Must be
     // recognised under the `user` category exactly like the other phrasing.
     let r = parse(
@@ -28,7 +28,7 @@ fn auq_answer_alternate_phrasing_detected() {
     );
     assert!(r.is_auq_answer(), "alternate AUQ phrasing must be detected");
     assert!(!r.is_genuine_user());
-    // The dominant phrasing is also a turn boundary (§6.4).
+    // The dominant phrasing is also a turn boundary (section 6.4).
     assert!(r.is_auq_answer_boundary());
     assert!(r.opens_turn());
 }
@@ -75,8 +75,8 @@ fn auq_answer_no_false_positive_on_file_quoting_marker() {
     // A Read/grep tool_result whose content QUOTES the marker mid-text (the csift
     // dev-session failure): NOT an AUQ answer, NOT a boundary, and classify yields a
     // plain `agent.tool.result` - never `user.answer` dumping the whole file.
-    // NB: `r##"…"##` delimiter - the JSON `"content":"# SPEC.md` has `"#`, which would
-    // close a plain `r#"…"#` raw string early.
+    // NB: `r##"..."##` delimiter - the JSON `"content":"# SPEC.md` has `"#`, which would
+    // close a plain `r#"..."#` raw string early.
     let r = parse(
         r##"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"# SPEC.md (10000 chars)\n...the marker is \"User has answered your questions:\" which CC emits to synthesize the answer record. Lots more file content follows here."}]}}"##,
     );
@@ -137,7 +137,7 @@ fn is_auq_answer_false_for_non_user() {
 
 #[test]
 fn is_auq_answer_false_when_no_blocks() {
-    // user record with string content → no blocks → not an AUQ answer.
+    // user record with string content -> no blocks -> not an AUQ answer.
     let r = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
     assert!(!r.is_auq_answer());
 }
@@ -152,9 +152,9 @@ fn is_auq_answer_skips_non_tool_result_blocks() {
     assert!(!r.is_auq_answer());
 }
 
-// ── §4.4 AskUserQuestion answer = a genuine-user TURN BOUNDARY (the sanctioned
+// -- section 4.4 AskUserQuestion answer = a genuine-user TURN BOUNDARY (the sanctioned
 //    behavior change). Real shape verified on a captured sample: a user tool_result
-//    carrier with toolUseResult.answers + the synthesized marker, is_error absent. ──
+//    carrier with toolUseResult.answers + the synthesized marker, is_error absent. --
 
 #[test]
 fn auq_answer_with_structured_answers_is_a_boundary() {
@@ -244,7 +244,7 @@ fn auq_exchange_surfaces_notes_when_answer_is_notes_only() {
 #[test]
 fn auq_answer_marker_only_fallback_is_a_boundary() {
     // Older-shape carrier: the synthesized marker is present but there is no
-    // toolUseResult.answers → the marker fallback still classifies it a boundary.
+    // toolUseResult.answers -> the marker fallback still classifies it a boundary.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"q\"=\"chosen label\". You can now continue."}]}}"#,
     );
@@ -258,7 +258,7 @@ fn auq_answer_marker_only_fallback_is_a_boundary() {
 #[test]
 fn cancelled_auq_is_not_a_boundary() {
     // A rejected/cancelled AUQ: is_error:true, no answers, the generic rejection
-    // marker WITHOUT a "the user said" tail → must NOT open a turn (no user message).
+    // marker WITHOUT a "the user said" tail -> must NOT open a turn (no user message).
     let r = parse(
         r#"{"type":"user","toolUseResult":"User rejected tool use","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."}]}}"#,
     );
@@ -275,8 +275,8 @@ fn cancelled_auq_is_not_a_boundary() {
 
 #[test]
 fn auq_validation_error_is_not_a_boundary() {
-    // An InputValidationError AUQ result (is_error:true, <tool_use_error>…) is not an
-    // answer → not a boundary.
+    // An InputValidationError AUQ result (is_error:true, <tool_use_error>...) is not an
+    // answer -> not a boundary.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","is_error":true,"content":"<tool_use_error>InputValidationError: AskUserQuestion failed…</tool_use_error>"}]}}"#,
     );
@@ -284,8 +284,8 @@ fn auq_validation_error_is_not_a_boundary() {
     assert!(!r.opens_turn());
 }
 
-// ── §4.2.4 ExitPlanMode / tool-use rejection WITH a typed message = a genuine-user
-//    boundary + a plan pointer. Real-captured shape (the typed tail is the message). ──
+// -- section 4.2.4 ExitPlanMode / tool-use rejection WITH a typed message = a genuine-user
+//    boundary + a plan pointer. Real-captured shape (the typed tail is the message). --
 
 #[test]
 fn plan_rejection_with_typed_message_is_a_boundary() {
@@ -350,7 +350,7 @@ fn a_carrier_with_no_id_answers_no_call() {
 
 #[test]
 fn plan_rejection_without_message_is_not_a_boundary() {
-    // The `STOP what you are doing and wait…` form carries NO typed message → no
+    // The `STOP what you are doing and wait...` form carries NO typed message -> no
     // boundary (36 such records in the corpus).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."}]}}"#,
@@ -375,7 +375,7 @@ fn plan_approval_is_not_a_boundary() {
 #[test]
 fn plan_rejection_surfaces_plan_pointer_via_index() {
     // The ExitPlanMode tool_use carries planFilePath; the rejection resolves it via
-    // the PlanIndex → the reconstructed user text carries a `[plan: …]` pointer.
+    // the PlanIndex -> the reconstructed user text carries a `[plan: ...]` pointer.
     let tool_use = parse(
         r##"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN","name":"ExitPlanMode","input":{"plan":"# the plan body","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"##,
     );
@@ -399,7 +399,7 @@ fn plan_rejection_surfaces_plan_pointer_via_index() {
 
 #[test]
 fn plan_rejection_of_non_exit_plan_tool_has_no_pointer() {
-    // A rejection-with-message whose tool_use_id is NOT an ExitPlanMode → still a
+    // A rejection-with-message whose tool_use_id is NOT an ExitPlanMode -> still a
     // genuine-user boundary, but no plan pointer (the index does not resolve it).
     let rejection = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_EDIT","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nuse a different file path"}]}}"#,
@@ -429,7 +429,7 @@ fn exit_plan_pointers_extracts_id_and_path() {
 
 #[test]
 fn plan_index_skips_pointer_without_path() {
-    // An ExitPlanMode with NO planFilePath is not indexed (empty path → no pointer).
+    // An ExitPlanMode with NO planFilePath is not indexed (empty path -> no pointer).
     let r = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"x"}}]}}"#,
     );

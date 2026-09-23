@@ -110,8 +110,8 @@ impl ScheduleFireIndex {
     }
 }
 
-/// Build the `[<kind> <id>[, <id>…] <status>] <summary>` attribution label for ONE
-/// `<task-notification>…</task-notification>` section string. Shared by
+/// Build the `[<kind> <id>[, <id>...] <status>] <summary>` attribution label for ONE
+/// `<task-notification>...</task-notification>` section string. Shared by
 /// [`Record::automation_label`] (whole-record = the single section) and the batched per-section
 /// render ([`Record::record_text_sections`]) so the two never drift. The status slot prefers the
 /// explicit `<status>`; absent (the common Monitor/ScheduleWakeup case), the real outcome lives in
@@ -156,7 +156,7 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
 /// `<task-notification>` automation pulse(s) AND inbound peer
 /// message(s) (`<teammate-message>` / `<agent-message>`), unioning every section's labels
 /// (deduped, first-seen order). Each notification contributes its `harness.notification.<kind>`,
-/// plus `agent.communication.inbox` when it carries a `<result>` (the child ⇨ parent
+/// plus `agent.communication.inbox` when it carries a `<result>` (the `child ⇨ parent`
 /// dual-label); each peer section contributes `agent.communication.{inbox,signal}`.
 ///
 /// PRECEDENCE: notification spans are matched FIRST and a peer tag whose open falls INSIDE
@@ -165,7 +165,7 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
 /// carrying a real notification section AND a real peer section (outside any notification span)
 /// unions both families' labels.
 ///
-/// Returns `true` iff ≥1 section matched (the caller's classification is then complete); `false`
+/// Returns `true` iff >=1 section matched (the caller's classification is then complete); `false`
 /// leaves the record to the plain marker/prose classifier.
 pub(crate) fn classify_batched_sections(raw: &str, framed: bool, out: &mut Vec<Class>) -> bool {
     let mut matched = false;
@@ -234,14 +234,14 @@ pub struct RecordTextSection {
 /// [`Record::classify`] / [`Record::opens_turn`] - a peer opener still opens a turn and classifies
 /// `agent.communication.{inbox,signal}` through the engine; this is only the human-facing render of
 /// that opener, so a preview shows what the peer SAID rather than the raw
-/// `<teammate-message …>` XML blob.
+/// `<teammate-message ...>` XML blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InboundComm {
     /// [`Class::CommInbox`] (a prose message) or [`Class::CommSignal`] (a control payload).
     pub class: Class,
     /// The sender id (the comm FROM); the comm TO is always the transcript owner (`self`).
     pub from: String,
-    /// The peer's own message body - the `<teammate-message …>` / `<agent-message …>` wrapper tags
+    /// The peer's own message body - the `<teammate-message ...>` / `<agent-message ...>` wrapper tags
     /// AND the trailing harness security footer stripped, normalized to one line (only the prose).
     pub body: String,
 }
@@ -263,7 +263,7 @@ pub(crate) fn push_unique(out: &mut Vec<Class>, c: Class) {
 pub trait SpawnLookup {
     /// The spawned child's agent id for a spawn `tool_use_id` (the `id` of a Task/Agent/
     /// Workflow tool_use; equivalently the `tool_use_id` of its returning tool_result).
-    /// `Some` ⇒ that id spawned a subagent - used for the spawn TO and the return FROM.
+    /// `Some` => that id spawned a subagent - used for the spawn TO and the return FROM.
     fn child_for_spawn_tool_use_id(&self, tool_use_id: &str) -> Option<String>;
     /// The spawned child's agent id for a spawn by NAME / `subagent_type` (the teammate
     /// name-join, where the meta carries no `toolUseId`). The fallback when the id-join misses.
@@ -306,14 +306,14 @@ pub trait LineOfUuid {
 ///   `subagent::parent_session_id_from_path` / the topology `parent_agent_id`.
 /// - `is_transcript_opener`: `true` ONLY for the positional FIRST turn-opener of a subagent
 ///   transcript (the spawn-prompt seed) - flips that genuine-user-shaped record from
-///   `user.message` to `agent.communication.inbox` (parent ⇨ self). The caller sets it by
+///   `user.message` to `agent.communication.inbox` (`parent ⇨ self`). The caller sets it by
 ///   position, since no field of the record says it is the seed.
 /// - `spawn`: the [`SpawnLookup`] (the global spawn index) for comm direction + subagent-return
-///   detection. `None` ⇒ direction degrades gracefully (spawn TO / return falls back to the
+///   detection. `None` => direction degrades gracefully (spawn TO / return falls back to the
 ///   raw name or `?`), so the engine is fully testable without a real index.
 /// - `resume_prompt_uuids`: the uuids of this file's [`Class::ResumePrompt`] records, so a
 ///   [`Class::ResumePlaceholder`] can say whether it closes a repair PAIR
-///   ([`Record::resume_paired`]). `None` ⇒ no verdict rather than a guessed one.
+///   ([`Record::resume_paired`]). `None` => no verdict rather than a guessed one.
 #[allow(dead_code)]
 pub struct ClassifyCtx<'a> {
     /// The transcript owner's re-feedable id (session uuid / bare agent id) = comm `self`.
@@ -332,7 +332,7 @@ pub struct ClassifyCtx<'a> {
     pub resume_prompt_uuids: Option<&'a HashSet<String>>,
     /// Boundary -> compaction-MODE pairing for this transcript ([`SummarizeIndex`]): a
     /// `compact_boundary` carries the metrics but never the direction, so its mode is only
-    /// readable through the compaction SUMMARY that follows it. `None` ⇒ a boundary's mode
+    /// readable through the compaction SUMMARY that follows it. `None` => a boundary's mode
     /// stays unknown (an honest null, never a guessed `compact`).
     pub summarize: Option<&'a SummarizeIndex>,
     /// Fired-prompt -> fire INSTANT join for this transcript ([`ScheduleFireIndex`]): a

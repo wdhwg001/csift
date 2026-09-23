@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── classify(): communication (the leaf and its direction) ──
+// -- classify(): communication (the leaf and its direction) --
 
 #[test]
 fn classify_sendmessage_message_is_tool_use_plus_sent() {
@@ -99,7 +99,7 @@ fn classify_teammate_signal_is_signal() {
 
 #[test]
 fn classify_subagent_return_is_tool_result_plus_inbox() {
-    // A tool_result whose tool_use_id was a spawn → the subagent return (child ⇨ self).
+    // A tool_result whose tool_use_id was a spawn -> the subagent return (`child ⇨ self`).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"subagent done: 3 files changed"}]}}"#,
     );
@@ -122,7 +122,7 @@ fn classify_subagent_return_is_tool_result_plus_inbox() {
 fn classify_teammate_spawn_ack_is_tool_result_only_not_inbox() {
     // Edge-fixtures correction #3: a persistent teammate `Agent` spawn's tool_result is an
     // immediate {status:"teammate_spawned"} ACK that shares the spawn tool_use_id (so the
-    // lookup WOULD resolve it), but it is NOT the child's return → agent.tool.result ONLY.
+    // lookup WOULD resolve it), but it is NOT the child's return -> agent.tool.result ONLY.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"status":"teammate_spawned","name":"P1-engine","agent_id":"aP1-engine-9cf2","agent_type":"executor"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"teammate spawned"}]}}"#,
     );
@@ -137,7 +137,7 @@ fn classify_teammate_spawn_ack_is_tool_result_only_not_inbox() {
         vec![Class::AgentToolResult],
         "the ACK must NOT carry agent.communication.inbox"
     );
-    // And it produces NO child ⇨ self direction (the real reply arrives later).
+    // And it produces NO `child ⇨ self` direction (the real reply arrives later).
     assert!(r.direction(&ctx).is_none());
 }
 
@@ -145,10 +145,10 @@ fn classify_teammate_spawn_ack_is_tool_result_only_not_inbox() {
 fn classify_async_launch_ack_is_tool_result_only_not_inbox() {
     // THE TRAP: an ASYNC/background `Agent` spawn's tool_result is the LAUNCH ack
     // (`toolUseResult.{isAsync:true,status:"async_launched"}`, content begins "Async agent
-    // launched successfully…"). It shares the spawn tool_use_id (so the lookup WOULD
+    // launched successfully..."). It shares the spawn tool_use_id (so the lookup WOULD
     // resolve it), but it is NOT the child's return - the report arrives LATER via the
     // <task-notification> <result> pulse, which is what carries inbox. So agent.tool.result
-    // ONLY, no …inbox.
+    // ONLY, no ...inbox.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"ad8012462a52f5c25","description":"draft the fold"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":[{"type":"text","text":"Async agent launched successfully.\nagentId: ad8012462a52f5c25 (internal ID - do not mention to user.)"}]}]}}"#,
     );
@@ -164,7 +164,7 @@ fn classify_async_launch_ack_is_tool_result_only_not_inbox() {
         vec![Class::AgentToolResult],
         "the async-launch ACK must NOT carry agent.communication.inbox"
     );
-    // And it produces NO child ⇨ self direction (the real report arrives later).
+    // And it produces NO `child ⇨ self` direction (the real report arrives later).
     assert!(
         r.direction(&ctx).is_none(),
         "a launch ack carries no child ⇨ self direction"
@@ -190,8 +190,8 @@ fn classify_async_launch_ack_detected_by_content_prefix_fallback() {
 #[test]
 fn classify_sync_task_return_still_tool_result_plus_inbox_vs_async_ack() {
     // Contrast guard: a SYNC one-shot Task tool_result IS the child's reply (no ack shape,
-    // no launch-ack prefix) → [agent.tool.result, agent.communication.inbox] with a child ⇨
-    // self direction - the async-launch ACK fix must NOT regress this.
+    // no launch-ack prefix) -> [agent.tool.result, agent.communication.inbox] with a `child ⇨ self`
+    // direction - the async-launch ACK fix must NOT regress this.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"subagent done: 3 files changed"}]}}"#,
     );
@@ -272,7 +272,7 @@ fn classify_sendmessage_real_shutdown_request_dict_message_shape() {
 #[test]
 fn classify_subagent_opener_is_inbox_via_ctx() {
     // The spawn-prompt seed of a subagent transcript: a genuine-user-shaped record that
-    // ctx reclassifies as parent ⇨ self inbox.
+    // ctx reclassifies as `parent ⇨ self` inbox.
     let r = parse(
         r#"{"type":"user","isSidechain":true,"message":{"role":"user","content":"go repro the bug"}}"#,
     );
@@ -289,11 +289,11 @@ fn classify_subagent_opener_is_inbox_via_ctx() {
     );
 }
 
-// ── <agent-message from="…"> peer form → agent.communication.inbox ──
+// -- <agent-message from="..."> peer form -> agent.communication.inbox --
 
 #[test]
 fn classify_agent_message_peer_form_is_inbox() {
-    // Real shape: an isMeta type:user string carrying an <agent-message from="…"> peer reply
+    // Real shape: an isMeta type:user string carrying an <agent-message from="..."> peer reply
     // relayed into this session. Must classify agent.communication.inbox, NOT user.message -
     // and the isMeta guard must NOT suppress it (the peer marker is matched first).
     let r = parse(
@@ -303,7 +303,7 @@ fn classify_agent_message_peer_form_is_inbox() {
         r.classify(&ClassifyCtx::top_level()),
         vec![Class::CommInbox]
     );
-    // Direction: the from="" attribute ⇨ self.
+    // Direction: the from="" attribute as `<from> ⇨ self`.
     let ctx = ClassifyCtx {
         owner_id: Some("me"),
         ..ClassifyCtx::top_level()

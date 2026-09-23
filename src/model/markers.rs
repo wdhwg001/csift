@@ -6,13 +6,13 @@
 //! is not. To re-locate one of these in a build, search for the LITERAL.
 
 /// The synthesized prefixes Claude Code writes into the `tool_result` answering an
-/// `AskUserQuestion` (§4.4). CC has shipped THREE phrasings for the same synthesized
+/// `AskUserQuestion` (section 4.4). CC has shipped THREE phrasings for the same synthesized
 /// answer - verified across real `~/.claude/projects` data and the 2.1.258 binary:
 ///
-/// - `"User has answered your questions: \"<q>\"=\"<a>\". …"`
-/// - `"Your questions have been answered: \"<q>\"=\"<a>\". …"`  (the dominant form
+/// - `"User has answered your questions: \"<q>\"=\"<a>\". ..."`
+/// - `"Your questions have been answered: \"<q>\"=\"<a>\". ..."`  (the dominant form
 ///   in older data; a single hardcoded marker missed it entirely)
-/// - `"The user answered: \"<q>\"=\"<a>\". Read the answers carefully …"` (2.1.258)
+/// - `"The user answered: \"<q>\"=\"<a>\". Read the answers carefully ..."` (2.1.258)
 ///
 /// Some sessions span a version transition and contain several forms, so an AUQ
 /// answer must be recognised if it carries ANY listed prefix. Used to surface AUQ
@@ -31,11 +31,11 @@ pub const AUQ_ANSWER_MARKERS: &[&str] = &[
 ];
 
 /// True when `text` (a `tool_result`'s rendered content) is a synthesized
-/// AskUserQuestion answer - i.e. it STARTS WITH a known AUQ-answer marker (§4.4).
+/// AskUserQuestion answer - i.e. it STARTS WITH a known AUQ-answer marker (section 4.4).
 ///
 /// START-anchored, not `contains`: a real AUQ answer is a CC-machine-synthesized
-/// string that always LEADS with its marker (`"User has answered your questions: …"`
-/// / `"Your questions have been answered: …"`). A `contains` check false-positives on
+/// string that always LEADS with its marker (`"User has answered your questions: ..."`
+/// / `"Your questions have been answered: ..."`). A `contains` check false-positives on
 /// any tool_result that merely QUOTES the marker mid-content - e.g. csift's own dev
 /// sessions Read/grep SPEC.md + fixtures that DOCUMENT these markers, which such a check
 /// labels `user.answer` and dumps whole files for. `trim_start` tolerates leading
@@ -47,9 +47,9 @@ pub fn is_auq_answer_text(text: &str) -> bool {
 }
 
 /// True when `content` (a user record's string or joined-text body) is a
-/// machine-synthesized marker the user never typed (§4.2.1–.3) and so must NOT count
-/// as a genuine human turn: an exact interrupt marker, a `<local-command-stdout>…`
-/// output, or a `<command-name>…` slash-command wrapper. CODEPOINT-SAFE - exact `==`
+/// machine-synthesized marker the user never typed (section 4.2.1-.3) and so must NOT count
+/// as a genuine human turn: an exact interrupt marker, a `<local-command-stdout>...`
+/// output, or a `<command-name>...` slash-command wrapper. CODEPOINT-SAFE - exact `==`
 /// (interrupts, whole-token) or `starts_with` (the two ASCII-tag prefixes); never a
 /// byte-offset slice.
 #[must_use]
@@ -88,7 +88,7 @@ pub fn is_agents_stopped_notice(content: &str) -> bool {
 pub const AGENTS_STOPPED_MARKER: &str = "stopped by the user";
 
 /// The two exact-content synthesized strings Claude Code writes when the user
-/// interrupts (§4.2.1). They are a `type:"user"` `text`-block record whose content is
+/// interrupts (section 4.2.1). They are a `type:"user"` `text`-block record whose content is
 /// EXACTLY one of these - a machine-synthesized interrupt marker, NOT a human turn.
 /// Verified across real `~/.claude/projects` data: 116 + 21 occurrences, all
 /// non-`isMeta`, none carrying any extra prose (dropping them as turn boundaries loses
@@ -98,21 +98,21 @@ pub const INTERRUPT_MARKERS: &[&str] = &[
     "[Request interrupted by user for tool use]",
 ];
 
-/// Prefix of a `<local-command-stdout>…` user record (§4.2.2) - local-command OUTPUT
+/// Prefix of a `<local-command-stdout>...` user record (section 4.2.2) - local-command OUTPUT
 /// (machine), not the user's prose. Non-`isMeta` string content (its sibling
 /// `<local-command-caveat>` carries `isMeta` and is already excluded). Must NOT open a
 /// turn.
 pub const LOCAL_COMMAND_STDOUT_PREFIX: &str = "<local-command-stdout>";
 
-/// Prefix of a `<command-name>/x…</command-name>` slash-command invocation record
-/// (§4.2.3) - the machine-templated EXPANSION of a slash command, non-`isMeta`. The
+/// Prefix of a `<command-name>/x...</command-name>` slash-command invocation record
+/// (section 4.2.3) - the machine-templated EXPANSION of a slash command, non-`isMeta`. The
 /// templated wrapper must NOT open a turn; any genuine prose the user typed after the
-/// command lives in the `<command-args>…</command-args>` body and is recovered
+/// command lives in the `<command-args>...</command-args>` body and is recovered
 /// separately (see [`Record::slash_command_args`]).
 pub const COMMAND_NAME_PREFIX: &str = "<command-name>";
 
 /// The SAME slash-command wrapper in the NEWER tag order: current CC emits
-/// `<command-message>…</command-message>\n<command-name>/x</command-name>\n<command-args>…`
+/// `<command-message>...</command-message>\n<command-name>/x</command-name>\n<command-args>...`
 /// -- the message tag FIRST. BOTH orders coexist on disk (counting one session per order,
 /// one real corpus carries 14 new-order against 35 old-order), so detection must accept
 /// EITHER leading tag: anchoring on `<command-name>` alone reads every new-order record as
@@ -120,13 +120,13 @@ pub const COMMAND_NAME_PREFIX: &str = "<command-name>";
 /// wrapper opening a turn.
 pub const COMMAND_MESSAGE_PREFIX: &str = "<command-message>";
 
-/// True when `content` is a slash-command wrapper (§4.2.3) in EITHER tag order.
+/// True when `content` is a slash-command wrapper (section 4.2.3) in EITHER tag order.
 #[must_use]
 pub fn is_slash_command_wrapper(content: &str) -> bool {
     content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)
 }
 
-/// Prefix of a `<task-notification>…</task-notification>` user record - a MACHINE-INJECTED
+/// Prefix of a `<task-notification>...</task-notification>` user record - a MACHINE-INJECTED
 /// automation trigger (a background-command / workflow / spawned-task completion notice CC
 /// inserts as a `type:"user"`, non-`isMeta`, STRING-content record). It LOOKS like a human
 /// turn to [`Record::is_genuine_user`] (it passes every gate), so it DOES open a turn - but
@@ -136,19 +136,19 @@ pub fn is_slash_command_wrapper(content: &str) -> bool {
 pub const TASK_NOTIFICATION_PREFIX: &str = "<task-notification>";
 
 /// The synthesized marker Claude Code writes into the `tool_result` when the user
-/// REJECTS a tool use (§4.2.4) - fires for ANY rejected tool_use (ExitPlanMode plan
+/// REJECTS a tool use (section 4.2.4) - fires for ANY rejected tool_use (ExitPlanMode plan
 /// kick-backs AND rejected AskUserQuestion / Edit / etc.). On its own it is NOT a user
 /// turn; it becomes one only when followed by the [`PLAN_REJECTION_USER_PREFIX`] tail
 /// (a real typed user instruction).
 pub const PLAN_REJECTION_MARKER: &str = "The user doesn't want to proceed with this tool use";
 
 /// The fixed ASCII delimiter that precedes the user's typed instruction in a
-/// rejection-with-message (§4.2.4): everything AFTER it is the genuine user message.
-/// A rejection WITHOUT this delimiter (the `STOP what you are doing and wait…` form)
+/// rejection-with-message (section 4.2.4): everything AFTER it is the genuine user message.
+/// A rejection WITHOUT this delimiter (the `STOP what you are doing and wait...` form)
 /// carries no typed message and must NOT open a turn.
 pub const PLAN_REJECTION_USER_PREFIX: &str = "To tell you how to proceed, the user said:\n";
 
-/// The opening tag of an inbound `<teammate-message …>` peer-agent message. A
+/// The opening tag of an inbound `<teammate-message ...>` peer-agent message. A
 /// teammate (another Claude session on the same team / FleetView) sends prose or a control
 /// signal that Claude Code delivers as a `type:"user"`, `role:"user"`, STRING-content record
 /// -- so it LOOKS like a human turn, and a predicate keyed on that shape alone reads it as
@@ -158,7 +158,7 @@ pub const PLAN_REJECTION_USER_PREFIX: &str = "To tell you how to proceed, the us
 pub const TEAMMATE_MESSAGE_OPEN: &str = "<teammate-message";
 
 /// The preambles Claude Code prepends to a peer message it relays into a session:
-/// `Another Claude session sent a message:\n<teammate-message …>`. A peer tag IMMEDIATELY after
+/// `Another Claude session sent a message:\n<teammate-message ...>`. A peer tag IMMEDIATELY after
 /// a preamble is at a section BOUNDARY (the section-boundary rule, [`is_section_boundary`]) - so a real relayed
 /// peer message is recognized while a tag merely QUOTED mid-prose is not. CC 2.1.258 defines
 /// THREE forms in one binary literal (`"Another Claude session sent a message"` + `:` or
@@ -171,14 +171,14 @@ pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[
     "A peer session sent a message while you were working:",
 ];
 
-/// The opening tag of an inbound `<agent-message from="…">` peer form - a DISTINCT
+/// The opening tag of an inbound `<agent-message from="...">` peer form - a DISTINCT
 /// inbound peer message from [`TEAMMATE_MESSAGE_OPEN`], seen `isMeta` in real data (e.g. an OMC
 /// agent replying to a peer, relayed into this session: `<agent-message
-/// from="oh-my-claudecode:architect">…`). Classifies `agent.communication.inbox` (the
-/// `from="…"` attribute ⇨ self), never `user.message`.
+/// from="oh-my-claudecode:architect">...`). Classifies `agent.communication.inbox` (the
+/// `from="..."` attribute as `<from> ⇨ self`), never `user.message`.
 pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 
-/// The opening tag of an inbound `<cross-session-message …>` peer form - the THIRD peer
+/// The opening tag of an inbound `<cross-session-message ...>` peer form - the THIRD peer
 /// framing, and the one a session-to-session send lands in. Claude Code writes it as a
 /// `type:"user"`, `role:"user"`, STRING-content record carrying `isMeta:true`,
 /// `promptSource:"system"`, `userType:"external"` and a top-level `origin` object
@@ -188,7 +188,7 @@ pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 /// `from-name` (the sender session's display name) and `from-mode` - and the body sits between
 /// the tag's newline and [`CROSS_SESSION_MESSAGE_CLOSE`], inside the same relay preamble +
 /// security-footer envelope the other two peer forms use. Classifies
-/// `agent.communication.inbox` (`from-name`, else `from`, ⇨ self), never `user.message`.
+/// `agent.communication.inbox` (`from-name`, else `from`, as `<from> ⇨ self`), never `user.message`.
 pub const CROSS_SESSION_MESSAGE_OPEN: &str = "<cross-session-message";
 
 /// Section CLOSE tags of the section-boundary rule. A peer / `<task-notification>` open tag right after
@@ -202,7 +202,7 @@ pub(crate) const AGENT_MESSAGE_CLOSE: &str = "</agent-message>";
 pub(crate) const CROSS_SESSION_MESSAGE_CLOSE: &str = "</cross-session-message>";
 
 /// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result
-/// (`"Async agent launched successfully.\nagentId: …"`). This is a launch ACK, NOT the child's
+/// (`"Async agent launched successfully.\nagentId: ..."`). This is a launch ACK, NOT the child's
 /// report - the report arrives LATER via the `<task-notification>` `<result>` pulse, and a
 /// pulse carrying a `<result>` is that inbound report (`agent.communication.inbox`).
 /// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:"async_launched"}`
@@ -252,7 +252,7 @@ pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
 /// The header of the harness-injected FIRED autonomous-loop / `ScheduleWakeup` timer tick -
 /// `harness.schedule.wakeup`. When the timer FIRES, the harness injects an
 /// `isMeta` `type:"user"` record whose content opens `# Autonomous loop check\n\nYou're being
-/// invoked on a timer …`. DISTINCT from the `meta.loop` DRIVER ticks
+/// invoked on a timer ...`. DISTINCT from the `meta.loop` DRIVER ticks
 /// ([`AUTONOMOUS_LOOP_TICK_PREFIX`] = `# Autonomous loop tick` / [`AUTONOMOUS_CHECK_MARKER`]):
 /// `check` != `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the
 /// meta.loop arm in [`Record::classify`], so the fired tick routes to `schedule.wakeup`.
@@ -284,7 +284,7 @@ pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer"
 /// of hook names; csift matches all four through `injections::HOOK_FEEDBACK_PREFIXES`,
 /// the `Stop` form being the only one with a corpus specimen.
 pub const STOP_HOOK_FEEDBACK_PREFIX: &str = "Stop hook feedback:";
-/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>…` executor wrapper.
+/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>...` executor wrapper.
 pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
 /// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the edit-failed-retry notice, anchored at CONTENT
 /// START like every other template arm. Its own carrier is a failed tool's RESULT text

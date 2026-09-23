@@ -17,10 +17,10 @@ use super::*;
 #[must_use]
 pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
     Some(match attachment_type {
-        // ── harness.hook.context: the one payload the model reads as injected text ──
+        // -- harness.hook.context: the one payload the model reads as injected text --
         "hook_additional_context" => Class::HookContext,
 
-        // ── harness.hook.outcome: a hook RUN's own record ──
+        // -- harness.hook.outcome: a hook RUN's own record --
         "hook_success"
         | "hook_blocking_error"
         | "hook_non_blocking_error"
@@ -29,17 +29,17 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
         | "hook_system_message"
         | "async_hook_response_batch" => Class::HookOutcome,
 
-        // ── agent.message.structured: text the MODEL produced ──
+        // -- agent.message.structured: text the MODEL produced --
         "structured_output" => Class::AgentMessageStructured,
 
-        // ── harness.context.reminder: a nudge re-injected each turn ──
+        // -- harness.context.reminder: a nudge re-injected each turn --
         "total_tokens_reminder"
         | "task_reminder"
         | "silent_turn_reminder"
         | "batching_reminder_sent"
         | "ultrathink_effort" => Class::ContextReminder,
 
-        // ── harness.context.listing: an inventory the harness injects ──
+        // -- harness.context.listing: an inventory the harness injects --
         "skill_listing"
         | "dynamic_skill"
         | "agent_listing_delta"
@@ -47,11 +47,11 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
         | "deferred_tools_record"
         | "invoked_skills" => Class::ContextListing,
 
-        // ── harness.context.prompt: a persisted system-prompt section ──
+        // -- harness.context.prompt: a persisted system-prompt section --
         "instructions" | "date" | "session_context" | "environment" | "model"
         | "prompt_snapshot" | "date_change" => Class::ContextPrompt,
 
-        // ── harness.context.file: file content the harness attached ──
+        // -- harness.context.file: file content the harness attached --
         "file"
         | "edited_text_file"
         | "compact_file_reference"
@@ -60,17 +60,17 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
         | "read_truncation_notice"
         | "bash_output_audience_note" => Class::ContextFile,
 
-        // ── harness.context.mode: a mode transition the harness recorded ──
+        // -- harness.context.mode: a mode transition the harness recorded --
         "plan_mode"
         | "plan_mode_exit"
         | "plan_mode_reentry"
         | "auto_mode"
         | "command_permissions" => Class::ContextMode,
 
-        // ── harness.context.ide: IDE state ──
+        // -- harness.context.ide: IDE state --
         "opened_file_in_ide" | "selected_lines_in_ide" | "diagnostics" => Class::ContextIde,
 
-        // ── harness.context.task: task / goal / memory state ──
+        // -- harness.context.task: task / goal / memory state --
         // `queued_command` lands here only when it is NOT the human's own steer; the
         // caller tests the payload's `origin.kind` first (see [`payload_origin_is_human`]).
         "task_status"

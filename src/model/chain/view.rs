@@ -7,7 +7,7 @@
 //! [`ChainView`] closes the gap: it merges the surface's records with the spine rows of the
 //! lines it dropped, runs the ONE chain, and answers back IN THE SURFACE'S OWN INDEX SPACE.
 //! Turn numbers therefore agree with what `search` prints for the same transcript, which is
-//! the whole point - a `verbatim` turn 7 and a `search … --count-by turn` row 7 are the same
+//! the whole point - a `verbatim` turn 7 and a `search ... --count-by turn` row 7 are the same
 //! turn.
 //!
 //! Two answers per record, and they are different questions. [`ChainView::survival`] says

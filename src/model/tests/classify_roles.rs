@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── classify(): single-label record shapes ──
+// -- classify(): single-label record shapes --
 
 #[test]
 fn classify_genuine_user_message() {
@@ -82,7 +82,7 @@ fn classify_assistant_bare_string_message() {
     );
 }
 
-// ── classify(): dual-label user carriers ──
+// -- classify(): dual-label user carriers --
 
 #[test]
 fn classify_auq_answer_is_user_answer_plus_tool_result() {
@@ -119,7 +119,7 @@ fn classify_plain_tool_result_carrier_is_tool_result_only() {
 
 #[test]
 fn classify_dedups_repeated_labels() {
-    // Two SendMessage blocks in one record → each label appears ONCE.
+    // Two SendMessage blocks in one record -> each label appears ONCE.
     let r = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"a","name":"SendMessage","input":{"to":"x","message":"1"}},{"type":"tool_use","id":"b","name":"SendMessage","input":{"to":"y","message":"2"}}]}}"#,
     );

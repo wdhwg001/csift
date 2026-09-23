@@ -5,7 +5,7 @@
 
 use super::*;
 
-// ── direction() ──
+// -- direction() --
 
 #[test]
 fn direction_teammate_inbox_from_peer_to_self() {
@@ -77,7 +77,7 @@ fn direction_spawn_resolves_child_via_lookup_then_degrades() {
         by_name.direction(&ctx),
         Some(("parent".to_string(), "aVSRepro-deadbeef".to_string()))
     );
-    // No lookup at all → degrade to the raw spawn name.
+    // No lookup at all -> degrade to the raw spawn name.
     assert_eq!(
         by_name.direction(&ClassifyCtx::top_level()),
         Some(("self".to_string(), "VSRepro".to_string()))
@@ -133,7 +133,7 @@ fn direction_none_for_non_comm_records() {
     assert!(tr.direction(&ClassifyCtx::top_level()).is_none());
 }
 
-// ── send_message_is_signal helper edge arms ──
+// -- send_message_is_signal helper edge arms --
 
 #[test]
 fn send_message_is_signal_arms() {
@@ -146,7 +146,7 @@ fn send_message_is_signal_arms() {
     assert!(send_message_is_signal(Some(
         &json!({"message":{"type":"shutdown_response"}})
     )));
-    assert!(!send_message_is_signal(Some(&json!({"to":"x"})))); // no type → message
+    assert!(!send_message_is_signal(Some(&json!({"to":"x"})))); // no type -> message
     assert!(!send_message_is_signal(None));
 }
 
@@ -162,7 +162,7 @@ fn classify_ctx_debug_renders_spawn_presence() {
 
 #[test]
 fn hook_additional_context_text_shapes_and_classify() {
-    // Array content (the real on-disk shape) joins with `\n`; classify → MetaHook only.
+    // Array content (the real on-disk shape) joins with `\n`; classify -> MetaHook only.
     let arr: Record = serde_json::from_str(
             r#"{"type":"attachment","uuid":"x1","attachment":{"type":"hook_additional_context","content":["alpha block","beta block"],"hookEvent":"SessionStart"}}"#,
         )

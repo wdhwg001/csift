@@ -19,8 +19,8 @@ impl Record {
 
         // NOTIFICATION PRECEDENCE: a <task-notification> record is resolved FIRST - BEFORE the peer scan -
         // so a notification whose <result> merely QUOTES a "<teammate-message" tag never takes
-        // the peer direction. A <result>-bearing pulse is the bg-agent's report (child ⇨
-        // self), the child resolved via the embedded <tool-use-id> spawn id (degrading to "?"
+        // the peer direction. A <result>-bearing pulse is the bg-agent's report (`child ⇨ self`),
+        // the child resolved via the embedded <tool-use-id> spawn id (degrading to "?"
         // without a lookup); a bare launch-ack pulse (no <result>) carries no comm direction.
         if let Some(Content::Text(s)) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
             if s.starts_with(TASK_NOTIFICATION_PREFIX) {
@@ -34,7 +34,7 @@ impl Record {
             }
         }
 
-        // Inbound peer message (teammate-message / agent-message): from ⇨ self. The FIRST
+        // Inbound peer message (teammate-message / agent-message): `<from> ⇨ self`. The FIRST
         // section's sender (most-salient), per the multi-section rule; the <agent-message> peer
         // form is an inbound peer message alongside <teammate-message>.
         if let Some(from) = self.first_peer_from() {
@@ -72,9 +72,9 @@ impl Record {
                             return Some((owner(), to));
                         }
                     }
-                    // Subagent return: child ⇨ self (the Task tool_result of a one-shot spawn).
+                    // Subagent return: `child ⇨ self` (the Task tool_result of a one-shot spawn).
                     // A spawn LAUNCH ACK (teammate OR async/background Agent) shares the spawn id
-                    // but is NOT a return → no direction (the real reply comes later - a teammate
+                    // but is NOT a return -> no direction (the real reply comes later - a teammate
                     // via a teammate-message, an async agent via the <task-notification> result).
                     Block::ToolResult {
                         tool_use_id: Some(tid),
@@ -91,7 +91,7 @@ impl Record {
             }
         }
 
-        // Subagent transcript opener (the spawn-prompt seed): parent ⇨ self.
+        // Subagent transcript opener (the spawn-prompt seed): `parent ⇨ self`.
         if ctx.is_subagent && ctx.is_transcript_opener && self.opens_turn() {
             let from = ctx.parent_id.unwrap_or("parent").to_string();
             return Some((from, owner()));

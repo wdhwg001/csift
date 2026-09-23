@@ -26,7 +26,7 @@ fn compaction_summary_is_not_genuine_user() {
 
 #[test]
 fn is_meta_user_is_not_genuine_user() {
-    // §4.2 TRAP: looks human, is system-injected - must be excluded.
+    // section 4.2 TRAP: looks human, is system-injected - must be excluded.
     let r = parse(
         r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"Continue from where you left off."}}"#,
     );
@@ -43,7 +43,7 @@ fn is_meta_local_command_caveat_excluded() {
     assert!(!r.is_genuine_user());
 }
 
-// ── Branch-completeness: the negative / fallback arms ──
+// -- Branch-completeness: the negative / fallback arms --
 
 #[test]
 fn is_genuine_user_false_for_non_user_type() {
@@ -78,16 +78,16 @@ fn is_genuine_user_false_when_content_absent() {
 
 #[test]
 fn is_genuine_user_false_for_blocks_without_text() {
-    // Block content that has NO text block (only an image) → not genuine.
+    // Block content that has NO text block (only an image) -> not genuine.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
     );
     assert!(!r.is_genuine_user());
 }
 
-// ── §4.2.1 interrupts: synthesized markers are NOT genuine-user (spurious-boundary
+// -- section 4.2.1 interrupts: synthesized markers are NOT genuine-user (spurious-boundary
 //    removal). Real shape: a text-block user record whose text is EXACTLY the marker
-//    (116 + 21 occurrences in the corpus, none isMeta, none carrying extra prose). ──
+//    (116 + 21 occurrences in the corpus, none isMeta, none carrying extra prose). --
 
 #[test]
 fn interrupt_marker_plain_is_not_genuine_user() {
@@ -132,8 +132,8 @@ fn text_that_merely_contains_interrupt_phrase_is_still_genuine() {
     );
 }
 
-// ── §4.2.2 / §4.2.3: <local-command-stdout> output + <command-name> slash wrapper
-//    are machine-templated, NOT genuine-user (string content, non-isMeta). ──
+// -- sections 4.2.2 / 4.2.3: <local-command-stdout> output + <command-name> slash wrapper
+//    are machine-templated, NOT genuine-user (string content, non-isMeta). --
 
 #[test]
 fn local_command_stdout_is_not_genuine_user() {
@@ -154,13 +154,13 @@ fn command_name_wrapper_is_not_genuine_user() {
         "slash-command wrapper must not open a turn"
     );
     assert!(!r.opens_turn());
-    // Empty args → no recoverable prose.
+    // Empty args -> no recoverable prose.
     assert!(r.slash_command_args().is_none());
 }
 
 #[test]
 fn command_name_wrapper_with_args_recovers_prose() {
-    // Real shape: `/compact Just shipped spec-batch-14 …` - the typed prose lives in
+    // Real shape: `/compact Just shipped spec-batch-14 ...` - the typed prose lives in
     // <command-args>; it is recovered (and is the reconstructed user text), but the
     // wrapper itself is still not a standalone genuine-user record.
     let r = parse(
@@ -252,7 +252,7 @@ fn is_synthetic_user_marker_matches_each_form() {
     ));
 }
 
-// ── One payload parse per attachment record ──
+// -- One payload parse per attachment record --
 
 /// TWO calls, ONE parse. The instrument is identity: a second parse would build a second
 /// tree at a second address, so two calls returning the SAME address is the parse count.

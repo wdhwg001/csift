@@ -4,21 +4,21 @@ use super::TASK_NOTIFICATION_CLOSE;
 
 /// The TRUE class of a `<task-notification>` automation trigger, parsed from the leading
 /// classifier of its `<summary>` (verified against real sessions: the summary opens with
-/// `Background command "…"`, `Dynamic workflow "…"`, or `Agent …`). This is the attribution
+/// `Background command "..."`, `Dynamic workflow "..."`, or `Agent ...`). This is the attribution
 /// turn segmentation demands: hardcoding the literal `workflow` for EVERY trigger mislabels the
 /// background-command and agent pulses, 81% of the triggers on a captured session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutomationKind {
-    /// A `Background command "…"` completion pulse (a `&`-detached shell command CC ran).
+    /// A `Background command "..."` completion pulse (a `&`-detached shell command CC ran).
     BackgroundCommand,
-    /// A `Dynamic workflow "…"` completion pulse (an OMC / dynamic workflow run).
+    /// A `Dynamic workflow "..."` completion pulse (an OMC / dynamic workflow run).
     Workflow,
-    /// An `Agent …` completion pulse (a spawned subagent).
+    /// An `Agent ...` completion pulse (a spawned subagent).
     Agent,
     /// A monitor / cron cadence COMPLETION pulse. Matches a `<task-notification>` whose summary
-    /// EITHER opens `Monitor`/`scheduled`/`cron` (the captured-monitor shape: `Monitor event: …`)
-    /// OR opens `Background command "…"` with a monitor-cadence token in the quoted command NAME
-    /// (the captured-monitor shape: `Relaunch monitor timer (cycle N)`, `Re-arm corrected monitor …`,
+    /// EITHER opens `Monitor`/`scheduled`/`cron` (the captured-monitor shape: `Monitor event: ...`)
+    /// OR opens `Background command "..."` with a monitor-cadence token in the quoted command NAME
+    /// (the captured-monitor shape: `Relaunch monitor timer (cycle N)`, `Re-arm corrected monitor ...`,
     /// `nightly monitor tick (25min)`). The captured session's monitor loop is implemented as `&`-detached
     /// background commands, so without the quoted-name scan it ALL read as `background-command`
     /// and this class matched zero of it. NOTE: this still matches only `<task-notification>`
@@ -35,8 +35,8 @@ impl AutomationKind {
     /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything
     /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`
     /// LEADING prefixes route a Monitor-tool pulse or termination notice
-    /// (`Monitor event: …` / `Monitor "…" …`) to [`AutomationKind::Monitor`]. A `Background
-    /// command "…"` pulse is ALWAYS `background-command`, whatever its quoted name says: routing
+    /// (`Monitor event: ...` / `Monitor "..." ...`) to [`AutomationKind::Monitor`]. A `Background
+    /// command "..."` pulse is ALWAYS `background-command`, whatever its quoted name says: routing
     /// on the quoted NAME (`monitor`/`re-arm`/`liveness` in it) double-books a background command
     /// as a Monitor pulse, because the Monitor tool has its own leading prefix and a shell command
     /// may be named anything - measured on one project, 40 such `monitor` records against zero
@@ -46,7 +46,7 @@ impl AutomationKind {
     pub fn from_summary(summary: Option<&str>) -> Self {
         let s = summary.unwrap_or("").trim_start();
         // The classifiers are a fixed leading phrase; match the longest-distinguishing
-        // prefix case-insensitively so a `Background command "…"` is not mistaken for `task`.
+        // prefix case-insensitively so a `Background command "..."` is not mistaken for `task`.
         let lower = s.to_ascii_lowercase();
         if lower.starts_with("background command") {
             AutomationKind::BackgroundCommand
@@ -89,7 +89,7 @@ pub struct AutomationTrigger {
     /// The FIRST REAL `<task-id>` (the workflow / background-command id), if present -
     /// never an orphan-reconciliation sentinel, which names no task ([`section_task_ids`]).
     pub task_id: Option<String>,
-    /// The `<status>` (`completed` / `failed` / …), if present.
+    /// The `<status>` (`completed` / `failed` / ...), if present.
     pub status: Option<String>,
     /// The `<summary>` (the human-readable "what completed" line), if present.
     pub summary: Option<String>,
@@ -145,7 +145,7 @@ pub(crate) fn section_task_ids(section: &str) -> TaskIds {
     out
 }
 
-/// Every `<tag>…</tag>` value in order (an orphan summary carries several).
+/// Every `<tag>...</tag>` value in order (an orphan summary carries several).
 pub(crate) fn all_xml_tags(s: &str, tag: &str) -> Vec<String> {
     let open = format!("<{tag}>");
     let close = format!("</{tag}>");
@@ -184,7 +184,7 @@ pub(crate) fn extract_xml_tag(s: &str, tag: &str) -> Option<String> {
 
 /// Collapse all runs of ASCII whitespace (incl. newlines/tabs) to single spaces
 /// and trim the ends, so an excerpt renders on one line. Does NOT truncate -
-/// length capping with an explicit `… (+N chars)` marker is the caller's job.
+/// length capping with an explicit `... (+N chars)` marker is the caller's job.
 pub(crate) fn normalize_line(s: &str) -> String {
     normalize_collapse(s, |_| {})
 }

@@ -36,7 +36,7 @@ use super::*;
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Record {
     /// Record discriminator: "user", "assistant", "system", "summary",
-    /// "last-prompt", "attachment", … (open set - keep as String, never enum-panic).
+    /// "last-prompt", "attachment", ... (open set - keep as String, never enum-panic).
     #[serde(default)]
     pub r#type: Option<String>,
 
@@ -111,14 +111,14 @@ pub struct Record {
     #[serde(default, rename = "isCompactSummary")]
     pub is_compact_summary: Option<bool>,
 
-    /// System-injected pseudo-turn marker (§4.2). `true` ⇒ a `type:"user"` record
+    /// System-injected pseudo-turn marker (section 4.2). `true` => a `type:"user"` record
     /// whose string/text content LOOKS human ("Continue from where you left off.",
-    /// loop ticks, stop-hook feedback, `<local-command-caveat>…`) but is machine-
+    /// loop ticks, stop-hook feedback, `<local-command-caveat>...`) but is machine-
     /// generated - must be excluded from genuine-user and from turn-delimiting.
     #[serde(default, rename = "isMeta")]
     pub is_meta: Option<bool>,
 
-    /// Co-set with `isCompactSummary` on compaction-summary records (§4.7).
+    /// Co-set with `isCompactSummary` on compaction-summary records (section 4.7).
     #[serde(default, rename = "isVisibleInTranscriptOnly")]
     pub is_visible_in_transcript_only: Option<bool>,
 
@@ -163,8 +163,8 @@ pub struct Record {
 
     /// Provenance of a message Claude Code did not receive from the operator's own prompt
     /// box. An inbound cross-session PEER message carries `{kind:"peer", from,
-    /// verifiedPeerPid, msg_id?, name?, fromMode?, body?, …}`; other kinds (`human`,
-    /// `task-notification`, …) ride the same field. Kept as a raw `Value` (a tiny flat object)
+    /// verifiedPeerPid, msg_id?, name?, fromMode?, body?, ...}`; other kinds (`human`,
+    /// `task-notification`, ...) ride the same field. Kept as a raw `Value` (a tiny flat object)
     /// and read tolerantly through [`Record::peer_origin`], so an added key or an odd shape can
     /// never fail the record. Absent on every record the operator typed.
     #[serde(default)]
@@ -172,7 +172,7 @@ pub struct Record {
 
     /// `system` record subtype: stop_hook_summary | turn_duration | away_summary
     /// | compact_boundary | informational | api_error | model_refusal_* | agents_killed
-    /// | local_command | scheduled_task_fire | …
+    /// | local_command | scheduled_task_fire | ...
     #[serde(default)]
     pub subtype: Option<String>,
 
@@ -182,11 +182,11 @@ pub struct Record {
     pub level: Option<String>,
 
     /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`
-    /// `"Conversation compacted …"` line). Read by `search` as the message-less fallback text.
+    /// `"Conversation compacted ..."` line). Read by `search` as the message-less fallback text.
     #[serde(default)]
     pub content: Option<serde_json::Value>,
 
-    /// `compact_boundary` metrics (§3.5): `{trigger, preTokens, postTokens, durationMs}` on a
+    /// `compact_boundary` metrics (section 3.5): `{trigger, preTokens, postTokens, durationMs}` on a
     /// `type:"system"`/`subtype:"compact_boundary"` record. Kept RAW; `search` renders it as a
     /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate
     /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.
@@ -232,9 +232,9 @@ pub struct Record {
     #[serde(default)]
     pub message: Option<Message>,
 
-    /// Structured echo on tool-result carriers (§4.6). Kept as UNPARSED raw JSON text
+    /// Structured echo on tool-result carriers (section 4.6). Kept as UNPARSED raw JSON text
     /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries
-    /// the full file/output content a tool returned (≈20-25% of a candidate line's
+    /// the full file/output content a tool returned (~20-25% of a candidate line's
     /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost
     /// of every scanning subcommand. The hot paths consult only a handful of small
     /// fields - read them via the [`Record::tur_probe`] typed probe (skips the huge
@@ -376,7 +376,7 @@ pub struct Record {
     #[serde(default, rename = "hookCount")]
     pub hook_count: Option<serde_json::Value>,
 
-    /// `stop_hook_summary`: `[{command, durationMs}, …]` - the hook command lines are
+    /// `stop_hook_summary`: `[{command, durationMs}, ...]` - the hook command lines are
     /// the record's only text.
     #[serde(default, rename = "hookInfos")]
     pub hook_infos: Option<serde_json::Value>,
@@ -389,7 +389,7 @@ pub struct Record {
     #[serde(default, rename = "preventedContinuation")]
     pub prevented_continuation: Option<bool>,
 
-    /// csift's own provenance marker on an ELICITATION SIDECAR record (§3.10). A
+    /// csift's own provenance marker on an ELICITATION SIDECAR record (section 3.10). A
     /// hook-written `elicitations.jsonl` line carries `csift:"elicitation-marker-v1"`
     /// on every record so a merged sidecar record is distinguishable from a native CC
     /// record. `None` on every native transcript record. Additive + tolerant.
@@ -419,5 +419,5 @@ pub struct Record {
 }
 
 /// The provenance value every csift elicitation-sidecar record carries in its `csift`
-/// field (§3.10). A line lacking this is a native CC record / foreign line.
+/// field (section 3.10). A line lacking this is a native CC record / foreign line.
 pub const ELICITATION_MARKER: &str = "elicitation-marker-v1";

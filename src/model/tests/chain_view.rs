@@ -19,8 +19,8 @@ fn spine_row(line: usize, raw: &str) -> crate::parse::SpineRow {
 }
 
 /// The rewind shape, split the way a prefilter splits it. Physical lines:
-/// L1 opener · L2 its reply · L3 a hook attachment · L4 the REWOUND opener · L5 its reply ·
-/// L6 the resend (same parent as L4) · L7 its reply.
+/// L1 opener, L2 its reply, L3 a hook attachment, L4 the REWOUND opener, L5 its reply,
+/// L6 the resend (same parent as L4), L7 its reply.
 /// The surface keeps only the three USER records; everything else is spine.
 fn split_fixture() -> Split {
     let records = vec![

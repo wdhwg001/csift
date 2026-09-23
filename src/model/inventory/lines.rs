@@ -11,7 +11,7 @@ use super::*;
 /// One row per top-level `type`. Transcript types first, then the bookkeeping set in the
 /// order the map lists it.
 pub(crate) const ROWS: &[Entry] = &[
-    // ── the four transcript types: the leaf is decided deeper ──
+    // -- the four transcript types: the leaf is decided deeper --
     e(
         Shape::TopLevelType("user"),
         None,
@@ -40,7 +40,7 @@ pub(crate) const ROWS: &[Entry] = &[
         true,
         Human::Never,
     ),
-    // ── the 18 non-transcript types ──
+    // -- the 18 non-transcript types --
     e(
         Shape::TopLevelType("last-prompt"),
         Some(Class::BookkeepingLastPrompt),

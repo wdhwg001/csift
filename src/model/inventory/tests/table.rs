@@ -114,7 +114,7 @@ fn every_row_agrees_with_the_classify_family_table_it_records() {
     }
 }
 
-// ── The RENDERED table: SPEC section 5 and this inventory are one answer ──
+// -- The RENDERED table: SPEC section 5 and this inventory are one answer --
 
 /// How the rendered SPEC table spells each axis.
 fn spec_kind(s: Shape) -> &'static str {

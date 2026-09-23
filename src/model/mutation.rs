@@ -108,7 +108,7 @@ pub struct FileMutation {
 
 impl Record {
     /// The NON-HEURISTIC file mutations carried by this record's structured tool_use
-    /// blocks (`Write`/`Edit`/`MultiEdit` → `input.file_path`; `NotebookEdit` →
+    /// blocks (`Write`/`Edit`/`MultiEdit` -> `input.file_path`; `NotebookEdit` ->
     /// `input.notebook_path`). One [`FileMutation`] per qualifying block.
     ///
     /// MODELLING NOTE: in real data the `file_path` lives on the **tool_use** record
@@ -178,8 +178,8 @@ impl Record {
     /// matching structured mutation (and fall back to this `filePath` if the
     /// tool_use's own path was somehow absent).
     ///
-    /// `toolUseResult.type` ∈ {`create`, `update`, `file_unchanged`, `text`, `image`};
-    /// only `create` ⇒ `is_create = true`, everything else ⇒ `false`. When there is no
+    /// `toolUseResult.type` is one of {`create`, `update`, `file_unchanged`, `text`, `image`};
+    /// only `create` => `is_create = true`, everything else => `false`. When there is no
     /// `toolUseResult`, it is not an object, or it has no `filePath`, the result is
     /// empty (defensive arms, each tested).
     #[must_use]

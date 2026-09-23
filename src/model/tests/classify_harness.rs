@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── classify(): harness records ──
+// -- classify(): harness records --
 
 #[test]
 fn classify_task_notification_each_kind() {
@@ -162,7 +162,7 @@ fn classify_injection_template_variants() {
 
 #[test]
 fn classify_ismeta_image_record_takes_the_context_image_leaf() {
-    // An isMeta `[Image: …]` pseudo-record is the harness's stand-in for a pasted or
+    // An isMeta `[Image: ...]` pseudo-record is the harness's stand-in for a pasted or
     // attached image. It was EXCLUDED while the taxonomy had no leaf to put it under -
     // better silent than mislabeled `user.message` - and `harness.context.image` is that
     // leaf. Both openings the builder writes land on it.
@@ -195,14 +195,14 @@ fn classify_ismeta_image_record_takes_the_context_image_leaf() {
     );
 }
 
-// ── a notification carrying a <result> is ALSO an inbound report (child ⇨ parent) ──
+// -- a notification carrying a <result> is ALSO an inbound report (`child ⇨ parent`) --
 
 #[test]
 fn classify_notification_with_result_dual_labels_inbox() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<tool-use-id>toolu_spawn</tool-use-id>\n<status>completed</status>\n<summary>Agent executor finished</summary>\n<result>the agent's real report body</result>\n</task-notification>"}}"#,
     );
-    // notification.subagent (Agent kind) + the child⇨parent inbox dual-label.
+    // notification.subagent (Agent kind) + the `child ⇨ parent` inbox dual-label.
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
         vec![Class::NotificationSubagent, Class::CommInbox]
@@ -228,15 +228,15 @@ fn classify_notification_without_result_is_notification_only() {
         r.classify(&ClassifyCtx::top_level()),
         vec![Class::NotificationSubagent]
     );
-    // A launch-ack notification (no <result>) is NOT a comm → no direction.
+    // A launch-ack notification (no <result>) is NOT a comm -> no direction.
     assert!(r.direction(&ClassifyCtx::top_level()).is_none());
 }
 
-// ── ONE record batches MANY sections of MIXED kind → UNION of labels ──
+// -- ONE record batches MANY sections of MIXED kind -> UNION of labels --
 
 #[test]
 fn classify_batched_teammate_sections_union() {
-    // A record with a prose section AND an idle_notification section → [inbox, signal]. The
+    // A record with a prose section AND an idle_notification section -> [inbox, signal]. The
     // second section is boundary-anchored, right after the first's close tag; the
     // trailing security footer sits OUTSIDE both section spans and contributes no label.
     let r = parse(
@@ -250,7 +250,7 @@ fn classify_batched_teammate_sections_union() {
 
 #[test]
 fn classify_batched_teammate_all_signals_dedup_to_one() {
-    // Two signal sections → CommSignal once (push_unique dedup).
+    // Two signal sections -> CommSignal once (push_unique dedup).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"system\">\n{\"type\":\"teammate_terminated\",\"message\":\"X shut down.\"}\n</teammate-message>\n<teammate-message teammate_id=\"y\">\n{\"type\":\"shutdown_approved\",\"from\":\"y\"}\n</teammate-message>"}}"#,
     );
@@ -270,7 +270,7 @@ fn classify_batched_teammate_all_signals_dedup_to_one() {
 
 #[test]
 fn classify_batched_notification_sections_union() {
-    // Two task-notification sections of different kind → both notification classes.
+    // Two task-notification sections of different kind -> both notification classes.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>Background command build completed</summary>\n</task-notification>\n<task-notification>\n<summary>Dynamic workflow deploy completed</summary>\n</task-notification>"}}"#,
     );
@@ -283,7 +283,7 @@ fn classify_batched_notification_sections_union() {
     );
 }
 
-// ── an isMeta record matching no marker is EXCLUDED (never user.message) ──
+// -- an isMeta record matching no marker is EXCLUDED (never user.message) --
 
 #[test]
 fn classify_ismeta_unmarked_record_is_excluded() {
@@ -317,7 +317,7 @@ fn classify_nonmeta_unmarked_prose_is_user_message() {
 #[test]
 fn classify_ismeta_subagent_opener_still_inbox() {
     // The isMeta exclusion does not reach the subagent-opener inbox case - even an isMeta
-    // seed → CommInbox, because the opener check precedes the isMeta guard.
+    // seed -> CommInbox, because the opener check precedes the isMeta guard.
     let r = parse(
         r#"{"type":"user","isMeta":true,"isSidechain":true,"message":{"role":"user","content":"go map the bridge"}}"#,
     );
@@ -329,14 +329,14 @@ fn classify_ismeta_subagent_opener_still_inbox() {
     assert_eq!(r.classify(&ctx), vec![Class::CommInbox]);
 }
 
-// ── task-notification precedence over a quoted teammate tag + cross-family union ──
+// -- task-notification precedence over a quoted teammate tag + cross-family union --
 
 #[test]
 fn classify_notification_quoting_teammate_tag_stays_notification() {
     // A <task-notification> whose <result> body merely QUOTES "<teammate-message" must stay
     // harness.notification.* - the quoted tag (inside the notification span) is masked, so no
     // spurious teammate comm label/direction leaks. The CommInbox here is the <result>
-    // dual-label (child ⇨ self), NOT a teammate-derived label.
+    // dual-label (`child ⇨ self`), NOT a teammate-derived label.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<tool-use-id>toolu_spawn</tool-use-id>\n<summary>Agent executor finished</summary>\n<result>I sent a <teammate-message teammate_id=\"peer\"> earlier</result>\n</task-notification>"}}"#,
     );
@@ -344,7 +344,7 @@ fn classify_notification_quoting_teammate_tag_stays_notification() {
         r.classify(&ClassifyCtx::top_level()),
         vec![Class::NotificationSubagent, Class::CommInbox]
     );
-    // Direction is child ⇨ self (resolved via <tool-use-id>), NOT the quoted teammate "peer".
+    // Direction is `child ⇨ self` (resolved via <tool-use-id>), NOT the quoted teammate "peer".
     let ctx = ClassifyCtx {
         owner_id: Some("parent"),
         spawn: Some(&FakeSpawn),
@@ -358,7 +358,7 @@ fn classify_notification_quoting_teammate_tag_stays_notification() {
 
 #[test]
 fn classify_notification_no_result_quoting_teammate_has_no_comm() {
-    // The same masking without a <result>: a launch-ack notification that quotes the tag →
+    // The same masking without a <result>: a launch-ack notification that quotes the tag ->
     // notification ONLY, NO comm label and NO direction (the quoted tag is masked).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<summary>Background command grep <teammate-message done</summary>\n</task-notification>"}}"#,
@@ -373,7 +373,7 @@ fn classify_notification_no_result_quoting_teammate_has_no_comm() {
 #[test]
 fn classify_cross_family_notification_and_teammate_union() {
     // CROSS-FAMILY: a record carrying a REAL <task-notification> section AND a REAL <teammate-message>
-    // section (outside the notification span) → UNION both families' labels.
+    // section (outside the notification span) -> UNION both families' labels.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>Background command build completed</summary>\n</task-notification>\nAnother Claude session sent a message:\n<teammate-message teammate_id=\"peer\">heads up, merged</teammate-message>"}}"#,
     );
@@ -385,8 +385,8 @@ fn classify_cross_family_notification_and_teammate_union() {
 
 #[test]
 fn classify_cross_family_notification_result_plus_teammate_signal() {
-    // CROSS-FAMILY: notification-with-<result> (→ notification + inbox) AND a teammate idle-signal
-    // section after it → [notification, inbox, signal] (inbox deduped to one).
+    // CROSS-FAMILY: notification-with-<result> (-> notification + inbox) AND a teammate idle-signal
+    // section after it -> [notification, inbox, signal] (inbox deduped to one).
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>Dynamic workflow deploy completed</summary>\n<result>done</result>\n</task-notification>\n<teammate-message teammate_id=\"peer\">\n{\"type\":\"idle_notification\",\"from\":\"peer\"}\n</teammate-message>"}}"#,
     );

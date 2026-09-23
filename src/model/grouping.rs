@@ -2,8 +2,8 @@
 
 use super::*;
 
-/// An index of ExitPlanMode `tool_use_id → planFilePath` built from a session's records
-/// (§4.2.4). A tool-use rejection-with-message ([`Record::plan_rejection_message`])
+/// An index of ExitPlanMode `tool_use_id -> planFilePath` built from a session's records
+/// (section 4.2.4). A tool-use rejection-with-message ([`Record::plan_rejection_message`])
 /// resolves the rejected `tool_use_id` through this index to surface a `[plan: <path>]`
 /// pointer so a consuming LLM can go Read the plan. Built once per session via
 /// [`PlanIndex::from_records`]; cheap (one `BTreeMap` of the few ExitPlanMode calls).
@@ -14,7 +14,7 @@ pub struct PlanIndex {
 
 impl PlanIndex {
     /// Build the index from a session's records: every ExitPlanMode tool_use's
-    /// `id → planFilePath` (see [`Record::exit_plan_pointers`]). A block with no
+    /// `id -> planFilePath` (see [`Record::exit_plan_pointers`]). A block with no
     /// `planFilePath` is skipped (an empty path is not a useful pointer).
     #[must_use]
     pub fn from_records<'a, I>(records: I) -> Self
@@ -51,7 +51,7 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// Group records (in file order) into TURNS, returning one `Vec<usize>` of record
 /// indices per turn - the outer index IS the 0-based turn index (genuine-user order).
 ///
-/// The single source of truth for turn delimiting (§6.4), shared by `search`'s
+/// The single source of truth for turn delimiting (section 6.4), shared by `search`'s
 /// exchange reconstruction and `files`'s mutation attribution so the two never drift:
 ///
 /// - A turn opens on a boundary record (`is_genuine`); every record after it, up to the
@@ -65,15 +65,15 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// `is_genuine` is a closure (rather than calling [`Record::opens_turn`] directly) only
 /// so callers can test the grouping over lightweight bool fixtures; in production it is
 /// always [`Record::opens_turn`] - which opens on a genuine human message, an answered
-/// AskUserQuestion (the answer is the user's message, §4.4), OR a tool-use
-/// rejection-with-message (§4.2.4). An AUQ answer and a plan rejection ARE boundaries even
+/// AskUserQuestion (the answer is the user's message, section 4.4), OR a tool-use
+/// rejection-with-message (section 4.2.4). An AUQ answer and a plan rejection ARE boundaries even
 /// though they ride a machine-looking carrier - each is the user's own message; interrupts,
 /// `<local-command-stdout>` and `<command-name>` wrappers are NOT, even though each looks
 /// like human prose - `is_genuine_user` excludes them because the harness wrote them.
 ///
 /// NOTE: this raw grouper trusts file order and knows nothing of the SURVIVAL AXIS. The
 /// production surfaces use [`group_turn_indices_chained`], which drops every record
-/// Claude Code's own conversation chain does not reach (§6.4.1). This bare form stays
+/// Claude Code's own conversation chain does not reach (section 6.4.1). This bare form stays
 /// for the lightweight bool-fixture tests and any caller that has no `Record`.
 // Production routes through `group_turn_indices_chained`, so in the bin build this bare
 // generic is reached only from `#[cfg(test)]` - kept as the documented base primitive +
@@ -194,7 +194,7 @@ pub(crate) fn group_turn_indices_core<T>(
 }
 
 /// Flatten a `Content` to a single normalized line of its textual parts.
-/// `string` → itself; `blocks` → all `text` blocks joined (other block types,
+/// `string` -> itself; `blocks` -> all `text` blocks joined (other block types,
 /// which never co-occur with a genuine user `text` block, are ignored).
 pub(crate) fn flatten_content_text(content: &Content) -> String {
     match content {
@@ -213,7 +213,7 @@ pub(crate) fn flatten_content_text(content: &Content) -> String {
     }
 }
 
-/// Extract the textual payload of a `tool_result` block's `content` (§4.5). The
+/// Extract the textual payload of a `tool_result` block's `content` (section 4.5). The
 /// content is raw `serde_json::Value`: a bare string, OR an array of
 /// `{type:"text",text}` / `{type:"image"}` / `{type:"tool_reference",tool_name}`
 /// objects. We concatenate every `text` field found and, for `tool_reference`,
@@ -243,7 +243,7 @@ pub fn tool_result_content_text(content: &serde_json::Value) -> String {
     }
 }
 
-/// Scrape the inline persisted-output pointer (§4.6 fallback): the line
+/// Scrape the inline persisted-output pointer (section 4.6 fallback): the line
 /// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.
 /// Returns the trimmed path, or `None` if the marker is absent.
 pub(crate) fn scrape_persisted_path(text: &str) -> Option<String> {

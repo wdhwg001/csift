@@ -3,7 +3,7 @@
 use super::*;
 
 impl Record {
-    /// Reconstruct the COMPLETE AskUserQuestion exchange (§4.4) as one genuine-user unit:
+    /// Reconstruct the COMPLETE AskUserQuestion exchange (section 4.4) as one genuine-user unit:
     /// `[AskUserQuestion · N questions]` followed by, per question, the header, the
     /// question, each option WITH its description (supplementary note), the user's answer, and any
     /// free-text `annotations.notes` attached to that answer (the `"(notes only)"` path,
@@ -34,7 +34,7 @@ impl Record {
                 .as_ref()
                 .and_then(|t| t.get("questions"))
                 .and_then(serde_json::Value::as_array);
-            // `annotations` map (§4.4) - per-question `{notes?, preview?}`; when the answer
+            // `annotations` map (section 4.4) - per-question `{notes?, preview?}`; when the answer
             // is the `"(notes only)"` placeholder the user's ENTIRE real message lives here.
             let annotations = tur
                 .as_ref()
@@ -154,7 +154,7 @@ impl Record {
             .map(|t| format!("[AskUserQuestion] {}", normalize_line(&t)))
     }
 
-    /// The synthesized AUQ-answer string from this carrier's `tool_result` (§4.4) - the
+    /// The synthesized AUQ-answer string from this carrier's `tool_result` (section 4.4) - the
     /// fallback content when `toolUseResult.answers` is absent. `None` if no AUQ marker.
     pub(crate) fn auq_answer_marker_text(&self) -> Option<String> {
         let blocks = self.blocks()?;
@@ -173,11 +173,11 @@ impl Record {
     }
 
     /// When this record is a tool-use REJECTION carrying a typed user instruction
-    /// (§4.2.4), return `(rejected_tool_use_id, user_message)`. The genuine user message
+    /// (section 4.2.4), return `(rejected_tool_use_id, user_message)`. The genuine user message
     /// is everything AFTER the fixed [`PLAN_REJECTION_USER_PREFIX`] delimiter.
     ///
     /// `None` when this is not a rejection, or it is a rejection WITHOUT a typed message
-    /// (the `STOP what you are doing and wait…` form - the user clicked reject but typed
+    /// (the `STOP what you are doing and wait...` form - the user clicked reject but typed
     /// nothing, so there is no user turn).
     ///
     /// CODEPOINT-SAFE: the tail is taken with `str::split_once` on the ASCII delimiter
@@ -239,14 +239,14 @@ impl Record {
     }
 
     /// True when this record is a tool-use rejection carrying a typed user instruction
-    /// (§4.2.4) and so should open a turn. A rejection without a typed message is NOT a
+    /// (section 4.2.4) and so should open a turn. A rejection without a typed message is NOT a
     /// boundary (see [`Record::plan_rejection_message`]).
     #[must_use]
     pub fn is_plan_rejection_boundary(&self) -> bool {
         self.plan_rejection_message().is_some()
     }
 
-    /// The single boundary predicate (§6.4): this record opens a new turn iff it is a
+    /// The single boundary predicate (section 6.4): this record opens a new turn iff it is a
     /// genuine human message, an ANSWERED AskUserQuestion (the answer is the user's
     /// message), a tool-use rejection carrying a typed user instruction, OR an inbound
     /// teammate/peer message. Every surface (turns / search / recover / files) keys turn
@@ -268,12 +268,12 @@ impl Record {
     /// The rendered genuine-user text for any boundary-opening record, normalized to a
     /// single line - the unified opener body used by `turns` / `search` / `list` /
     /// `recover`:
-    /// - a plain genuine user → its text (same as [`Record::genuine_user_text`]);
-    /// - an answered AskUserQuestion → the full Q+options+answer unit
+    /// - a plain genuine user -> its text (same as [`Record::genuine_user_text`]);
+    /// - an answered AskUserQuestion -> the full Q+options+answer unit
     ///   ([`Record::auq_exchange`]);
-    /// - a tool-use rejection-with-message → the user's typed instruction, optionally
+    /// - a tool-use rejection-with-message -> the user's typed instruction, optionally
     ///   suffixed with a `[plan: <path>]` pointer when `plan_index` resolves the rejected
-    ///   `tool_use_id` to an ExitPlanMode plan (§4.2.4). `plan_index` may be `None` (no
+    ///   `tool_use_id` to an ExitPlanMode plan (section 4.2.4). `plan_index` may be `None` (no
     ///   plan resolution attempted), in which case the rejection text is returned alone.
     ///
     /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout
@@ -295,7 +295,7 @@ impl Record {
             }
             return Some(out);
         }
-        // A slash-command wrapper is NOT a turn boundary (§4.2.3), but when the user
+        // A slash-command wrapper is NOT a turn boundary (section 4.2.3), but when the user
         // typed prose after the command (`/compact <prose>`) that prose IS genuine user
         // input - surface it as `/name args` so `search -t user` still finds it within
         // its turn and the wrapper XML never masquerades as prose. Prefilter/gate note:
@@ -356,13 +356,13 @@ impl Record {
         out
     }
 
-    /// The persisted-output file path for this carrier (§4.6), preferring the
+    /// The persisted-output file path for this carrier (section 4.6), preferring the
     /// structured `toolUseResult.persistedOutputPath` (exact - no regex) and falling
     /// back to scraping the inline `Full output saved to: <path>` marker from a
     /// `tool_result` block. Returns `None` when there is no persisted pointer.
     #[must_use]
     pub fn persisted_output_path(&self) -> Option<String> {
-        // Structured field first (SPEC §4.6 resolution rule).
+        // Structured field first (SPEC section 4.6 resolution rule).
         if let Some(probe) = self.tur_probe() {
             if let Some(p) = probe
                 .persisted_output_path

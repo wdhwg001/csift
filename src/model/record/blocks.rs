@@ -18,10 +18,10 @@ pub enum Content {
 /// A typed content block within `message.content`. `#[serde(other)]` Unknown
 /// catches any future block type without a parse error.
 ///
-/// Some block fields are deserialized for the documented model (SPEC §3.5) but not
+/// Some block fields are deserialized for the documented model (SPEC section 3.5) but not
 /// read by current logic (`signature`, the `ToolUse.id`, the `ToolResult`
 /// `tool_use_id`/`is_error`, `Image.source`). The round-trip reconstruction returns
-/// the whole turn, so `tool_use`↔`tool_result` pairing-by-id is not needed (both sit
+/// the whole turn, so `tool_use`/`tool_result` pairing-by-id is not needed (both sit
 /// in the same emitted exchange); the fields stay for shape-completeness + future use.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
