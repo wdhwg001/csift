@@ -262,7 +262,7 @@ fn the_sessions_from_id_list_takes_transcript_ids_only() {
 #[test]
 fn malformed_routing_shapes_stay_with_the_at_grammar_error() {
     // A second `@`, an empty half or a character outside the name charset is NOT a routing
-    // form: it falls to the @-grammar error, which now names the routing shape too.
+    // form: it falls to the @-grammar error, which names the routing shape among the rest.
     let h = relay_home(false);
     for token in ["@Relay@har@bor", "@Relay@", "@Relay@har.bor"] {
         let out = h.run(&["show", token, "--line", "1"]);

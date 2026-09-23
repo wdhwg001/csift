@@ -7,7 +7,7 @@ fn search_text_subagent_hit_carries_exact_refetch() {
     let h = populated_home();
     // "carry" occurs in the SUBAGENT transcripts (agent-aaa111 / agent-bbb222). A subagent
     // hit's line number is per-FILE, so the fetch MUST use the subagent's own id, never the
-    // parent uuid. Text mode now prints the ready-to-run command so a model never derives it.
+    // parent uuid. Text mode prints the ready-to-run command so a model never derives it.
     let out = h.run(&["search", "carry"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(

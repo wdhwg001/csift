@@ -6,7 +6,7 @@ use super::*;
 
 fn specimen_anchors() -> anchors::Anchors {
     anchors::Anchors {
-        // The five counts PARTITION the total, which the gate now asserts, so the fixture
+        // The five counts PARTITION the total, which the gate asserts, so the fixture
         // every rule-8 specimen deviates from is one that does: 1 + 1 + 1 + 0 + 1 = 4.
         total: 4,
         absent: 1,

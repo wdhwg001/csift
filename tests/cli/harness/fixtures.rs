@@ -282,7 +282,7 @@ pub(crate) fn turns_two_sessions_home() -> Home {
 /// The captured pre-feature baseline: the EXACT single-EOT stdout the `turns` tool emitted
 /// on the §fixture BEFORE the multi-agent-message richness feature (one agent EOT message
 /// per turn, no `△ L…–L…` collapsed-agents placeholder, no intermediate rich members). The
-/// DEFAULT now keeps the LONGEST agent message + the first-if-substantive + the rich
+/// DEFAULT keeps the LONGEST agent message + the first-if-substantive + the rich
 /// middles, so this baseline is reproduced by the `--agent-msgs eot-only` ESCAPE, not by
 /// the implicit default. Captured under `TZ=UTC` so the system-local timestamp render is
 /// deterministic across machines. Re-capture (ONLY on an INTENDED eot-only-output change):

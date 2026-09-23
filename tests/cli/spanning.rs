@@ -38,8 +38,8 @@ fn no_subagents_restricts_span_end_to_end() {
 }
 
 /// `--subagents-only` is GONE crate-wide (no user-facing flag, no hidden migration no-op). On
-/// every span-aware subcommand it now falls through to the generic clap "unexpected argument"
-/// rejection - the acceptable outcome once the pointed-migration machinery was removed.
+/// every span-aware subcommand it falls through to the generic clap "unexpected argument"
+/// rejection, which is what a removed flag with no pointed-migration arm gets.
 #[test]
 fn subagents_only_is_an_unknown_argument_everywhere() {
     let h = populated_home();

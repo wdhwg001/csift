@@ -76,8 +76,9 @@ fn turns_and_search_label_automation_triggers() {
     );
 
     // search: the same attribution label is matchable; the raw blob is not surfaced. The
-    // `<task-notification>` now classifies as `harness.notification.background-command` (NOT
-    // `user` - the §1 reparent), so it surfaces under that selector (or `-t harness.notification`).
+    // `<task-notification>` classifies as `harness.notification.background-command` rather
+    // than `user` (a machine trigger is not the operator), so it surfaces under that
+    // selector (or `-t harness.notification`).
     let s = h.run(&[
         "search",
         "background-command",

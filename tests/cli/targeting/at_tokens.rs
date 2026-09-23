@@ -131,8 +131,8 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
         "json",
     ]);
     let search = h.run(&["search", "", ENC, at(SESS).as_str(), "--format", "json"]);
-    // turns now defaults to top-level-only, so opt INTO spanning subagents to exercise the
-    // cross-surface id-form check on the turns surface too.
+    // `verbatim` defaults to top-level-only, so opt INTO spanning subagents to exercise
+    // the cross-surface id-form check on that surface too.
     let turns = h.run(&[
         "verbatim",
         at(SESS).as_str(),
@@ -164,7 +164,7 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
 
 #[test]
 fn at_agent_hex_scopes_to_the_subtree() {
-    // `@<agent-hex>` now SCOPES to that subagent (+ its topological descendants, unless
+    // `@<agent-hex>` SCOPES to that subagent (+ its topological descendants, unless
     // --no-subagents), per the rule "locating an agent: itself, or itself + descendants".
     // A realistic >=12-char hex is needed (a <=11-char token is a uuid PREFIX, not an agent).
     let enc = "-Users-testuser-Projects-agentscope";

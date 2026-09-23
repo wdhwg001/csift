@@ -351,8 +351,8 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     // (the "force last-only" guarantee), asserted TWO ways:
     //   (1) `--agent-msgs eot-only` is byte-identical to a CAPTURED pre-feature baseline -
     //       catches a drift in the last-only path even if the default moved with it;
-    //   (2) the IMPLICIT default now DIFFERS - it restores intermediate substance (the
-    //       longest + rich members) the old single-EOT default silently dropped.
+    //   (2) the IMPLICIT default DIFFERS from it - it keeps intermediate substance (the
+    //       longest + rich members) that a last-only pick drops.
     // `TZ=UTC` pins the system-local timestamp render so the captured baseline is portable.
     let h = turns_home();
     let tz_utc = [("TZ", "UTC")];

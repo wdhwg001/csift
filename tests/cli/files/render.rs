@@ -218,7 +218,7 @@ fn files_timeline_is_chronological_with_heuristic_label() {
 #[test]
 fn files_timeline_keeps_every_row_when_a_branch_left_the_conversation() {
     // The GOLDEN PIN on the ROW SET, and it holds either way the chain is built. `files`
-    // now splices the structural spine rows of the lines its prefilter drops (via
+    // splices the structural spine rows of the lines its prefilter drops (via
     // `ChainView`), so its chain sees the whole DAG and CAN name the abandoned branch -
     // and it still lists every row, because disk truth is file order: an Edit on a branch
     // the operator later rewound past really did land. What survival changes is the turn

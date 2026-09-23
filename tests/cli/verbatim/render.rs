@@ -77,7 +77,7 @@ fn turns_teammate_opener_renders_clean_inbound_comm() {
     );
 }
 
-/// turns text now brands a subagent block `SUBAGENT <hex> · parent SESSION <uuid>` (uniform
+/// `verbatim` text brands a subagent block `SUBAGENT <hex> · parent SESSION <uuid>` (uniform
 /// with list/files/search), never tokening a bare subagent hex as `SESSION`.
 #[test]
 fn turns_text_brands_subagent_uniformly() {

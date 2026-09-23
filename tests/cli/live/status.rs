@@ -188,7 +188,7 @@ fn p3b_waiting_hitl_from_the_tail_and_the_registry_without_a_sidecar() {
         "registry waiting = blocked on a dialog:\n{}",
         out2.stdout
     );
-    // An idle row keeps idle-eot, and the permission-prompt note now names the row.
+    // An idle row keeps idle-eot, and the permission-prompt note names the row it is about.
     let h3 = Home::new();
     live_eot_main(&h3);
     h3.write_session_registry(

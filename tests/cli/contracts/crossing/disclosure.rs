@@ -220,7 +220,7 @@ fn an_address_and_a_census_both_move_with_the_budget_and_both_say_so() {
     assert_eq!(survival_at("0"), "pre-cut");
     assert_eq!(survival_at("2"), "abandoned", "the address moved");
 
-    // And the summary that carried no way to tell those two runs apart now does.
+    // And the summary tells those two runs apart: without the cause the two read alike.
     let out = h.run(&[
         "show",
         t.as_str(),

@@ -299,7 +299,7 @@ fn an_unpaired_summary_names_the_reason_the_file_gives() {
 /// wherever another edge on the unit already names that same target, which `pairs` does.
 ///
 /// The two facts read as a contradiction to anyone holding only one of them, which is why
-/// `--for`'s help now says both, and why this pins them together: the help lists `precedes`
+/// `--for`'s help says both, and why this pins them together: the help lists `precedes`
 /// and `preserves` among the relations the walk does not follow, and `pairs` is NOT in that
 /// list even though it is not one of the three structural arms either.
 #[test]

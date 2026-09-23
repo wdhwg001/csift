@@ -331,7 +331,7 @@ fn turns_clean_session_reports_no_skipped_lines() {
 
 #[test]
 fn turns_json_clean_session_emits_zero_skipped_terminator() {
-    // JSON: a clean session now ALWAYS closes with a {"kind":"skipped_lines",
+    // JSON: a clean session ALWAYS closes with a {"kind":"skipped_lines",
     // "skipped_lines":0} terminator (so a consumer can detect end-of-stream) - the record is
     // unconditional, mirroring search/files/recover.
     let h = Home::new();
