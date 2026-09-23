@@ -36,9 +36,9 @@ const DEEPER: &str = r#"{"type":"user","uuid":"n3","parentUuid":"n2","message":{
 /// their own answer.
 ///
 /// Position 0 here is a hook attachment - the shape the shared grouper folds into turn 0 and
-/// the shape a real transcript almost always starts with. Reading it as the opener named it
-/// as the message every unit of the turn corresponds to; it now names nothing at all,
-/// because the opener BELOW it would point a reader the wrong way down the file.
+/// the shape a real transcript almost always starts with. It names nothing at all, because
+/// reading it as the opener would name that lead as the message every unit of the turn
+/// corresponds to and point a reader the wrong way down the file.
 #[test]
 fn the_opener_is_the_record_that_opens_the_turn_not_the_first_one() {
     let kept = [

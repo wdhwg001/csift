@@ -215,8 +215,8 @@ pub(crate) fn assistant_lane_cost(turn: &TurnSlice, cfg: &RichnessCfg) -> usize 
 
 /// Cost of a whole turn at the chosen selection granularity (`sides`): both sides +
 /// the `[N tool calls]` marker when both are taken; a single side (no marker) otherwise.
-/// The assistant side now sums the kept agent messages + placeholders (richness model);
-/// in `EotOnly` mode that reduces to the single EOT, so existing budgets are unchanged.
+/// The assistant side sums the kept agent messages + placeholders (richness model);
+/// in `EotOnly` mode that reduces to the single EOT, so a budget costs the same there.
 /// This is the SAME accounting the renderer uses, so summed cost == summed rendered chars
 /// (the budget test relies on it).
 pub(crate) fn turn_cost(turn: &TurnSlice, sides: SelSides, cfg: &RichnessCfg) -> usize {

@@ -379,7 +379,7 @@ pub(crate) fn resolve_persisted_text(path: &str, inline: &str) -> String {
 
 /// The synthesized AUQ-answer string from a carrier's `tool_result` (§4.4). Matches
 /// any known AUQ-answer marker (every shipped phrasing, see `model::AUQ_ANSWER_MARKERS`).
-/// Test-only: production now surfaces the AUQ answer via the model's reconstructed unit
+/// Test-only: production surfaces the AUQ answer via the model's reconstructed unit
 /// ([`Record::reconstructed_user_text`] → [`Record::auq_exchange`]), which prefers the
 /// clean structured `toolUseResult.answers`; this helper backs the legacy-shape tests.
 #[cfg(test)]

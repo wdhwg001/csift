@@ -301,7 +301,7 @@ pub(crate) fn extract_from_record(
             }
             // (6) Bash heuristic mutation touching `--file`. The operand is RESOLVED
             // against the recording shell's cwd (the record's own `cwd` field, see
-            // `bash::mutations::cwd`) BEFORE matching, so an absolute `--file` now joins
+            // `bash::mutations::cwd`) BEFORE matching, so an absolute `--file` joins
             // the dominant real shape `cd <proj> && sed -i rel/path`; the verbatim
             // spelling stays as a belt so a relative `--file` keeps matching exactly
             // what the command typed. A class-marker pseudo-path is never a file: it is

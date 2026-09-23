@@ -1,9 +1,9 @@
 //! `whoami` subcommand - identify the CALLING Claude Code session, false-positive-safe.
 //!
-//! ## Detection (verified empirically inside a live Claude Code Bash tool)
+//! ## Detection
 //!
-//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.
-//! It was confirmed to equal exactly the session's own jsonl filename:
+//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment, and
+//! its value equals exactly the session's own jsonl filename:
 //!
 //! ```text
 //! CLAUDE_CODE_SESSION_ID=0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
@@ -106,7 +106,7 @@ pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
     }
 }
 
-/// True for the two lane id forms `whoami` now answers for: the transcript form (a bare `a…`
+/// True for the two lane id forms `whoami` answers for: the transcript form (a bare `a…`
 /// agent id or a name-embedded teammate id) and a teammate's routing form `Name@Team`. A session
 /// uuid is deliberately NOT one: `whoami` answers about a lane, and the session forms already
 /// have `list` / `agents`.

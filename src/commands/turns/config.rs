@@ -66,11 +66,11 @@ pub(crate) const DEDUP_PREFIX: usize = 80;
 // WHY THE DEFAULT IS "LONGEST", NOT "LAST": the LAST agent message of a turn is frequently
 // a ~50-char throwaway wrap-up ("Done.", "Let me know if you want X") while the
 // SUBSTANTIVE Rich Response - the actual finding, the committed answer, the design - sits
-// in a MIDDLE message. The pre-feature default kept `agents.last()`, so it silently
-// DROPPED the substance of exactly those turns. The default now keeps the LONGEST agent
-// message (by `full_chars`), which is the single best one-message proxy for "where the
-// substance is". On a tie `max_by_key` returns the LAST maximum, so an all-equal run
-// coincides with the old `agents.last()` pick.
+// in a MIDDLE message. A default of `agents.last()` silently DROPS the substance of
+// exactly those turns, so the default keeps the LONGEST agent message (by `full_chars`),
+// which is the single best one-message proxy for "where the substance is". On a tie
+// `max_by_key` returns the LAST maximum, so an all-equal run coincides with the
+// last-only pick.
 //
 // But "more than one message matters" is common, so `Longest` ALSO keeps:
 //   • the LONGEST agent message - ALWAYS (the substantive Rich Response).

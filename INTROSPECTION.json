@@ -33353,7 +33353,7 @@
         {
           "path": "src/commands/whoami.rs",
           "lines": "4-7",
-          "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.\n//! It was confirmed to equal exactly the session's own jsonl filename:\n//!"
+          "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment, and\n//! its value equals exactly the session's own jsonl filename:\n//!"
         },
         {
           "path": "src/commands/whoami.rs",
@@ -62841,7 +62841,7 @@
         {
           "path": "src/commands/whoami.rs",
           "lines": "4-7",
-          "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment.\n//! It was confirmed to equal exactly the session's own jsonl filename:\n//!"
+          "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment, and\n//! its value equals exactly the session's own jsonl filename:\n//!"
         },
         {
           "path": "src/commands/whoami.rs",

@@ -137,9 +137,9 @@ fn bounded_window_excludes_missing_axis_timestamp() {
 #[test]
 fn one_line_collapses_and_marks_elision_count() {
     assert_eq!(one_line("a\n  b\tc"), "a b c");
-    // A long multi-byte string truncated on a CHAR boundary never panics AND now marks
-    // the dropped-char count explicitly (the never-silent-truncation contract - the old
-    // bare `…` dropped the count). 400 chars in, 200 kept → `… (+200 chars)`.
+    // A long multi-byte string truncated on a CHAR boundary never panics AND marks the
+    // dropped-char count explicitly: a bare `…` drops the count, which the
+    // never-silent-truncation contract forbids. 400 chars in, 200 kept → `… (+200 chars)`.
     let multibyte = "🤖🎉✅🚀".repeat(100); // 400 chars
     let out = one_line(&multibyte);
     assert!(
