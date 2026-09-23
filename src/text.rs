@@ -4,8 +4,8 @@
 //!
 //! ## Why one place
 //!
-//! The never-silent-truncation contract (SPEC §0, §8.1) requires EVERY content excerpt to
-//! mark dropped characters with an explicit `… (+N chars)` count. That algorithm lived in
+//! The never-silent-truncation contract (SPEC section 0, section 8.1) requires EVERY content excerpt to
+//! mark dropped characters with an explicit `... (+N chars)` count. That algorithm lived in
 //! three byte-identical `truncate_excerpt` copies (differing only by a per-file cap) plus a
 //! DIVERGENT fourth in `agents::one_line` that omitted the count (a real contract
 //! violation). Folding them here keeps the algorithm - and the marker - singular; callers
@@ -22,7 +22,7 @@ mod out;
 pub(crate) use out::*;
 
 /// Truncate `s` to at most `max` CHARACTERS, marking any elision with an explicit
-/// `… (+N chars)` suffix (N = dropped char count). Counts CHARACTERS, never bytes, so
+/// `... (+N chars)` suffix (N = dropped char count). Counts CHARACTERS, never bytes, so
 /// multi-byte UTF-8 (CJK / emoji) truncates on a codepoint boundary. NEVER silent: a string
 /// longer than `max` always carries the count. A string within `max` is returned unchanged.
 #[must_use]
@@ -38,7 +38,7 @@ pub fn truncate_excerpt(s: &str, max: usize) -> String {
 /// Collapse internal whitespace runs to single spaces, then [`truncate_excerpt`] to `max`.
 /// CODEPOINT-SAFE (collapses + truncates on char boundaries). Used by the `agents`
 /// one-line returned-message preview, which both flattens multi-line content AND must mark
-/// its elision with the same `… (+N chars)` count as every other excerpt path: a preview
+/// its elision with the same `... (+N chars)` count as every other excerpt path: a preview
 /// that flattens without the count is a silent truncation, which the output contract forbids.
 #[must_use]
 pub fn collapse_and_truncate(s: &str, max: usize) -> String {
@@ -115,11 +115,11 @@ pub fn write_scope_banner<W: std::io::Write>(
     }
 }
 
-/// envelope v2 (SPEC §8) - EVERY `--format json` stream is exactly three parts:
-///   `{"kind":"header","command":"<cmd>", …}`   the FIRST line, ALWAYS emitted;
-///   `{"kind":"<row-kind>", …}` × N             command-specific kind-tagged rows;
-///   `{"kind":"summary", …}`                    the LAST line, ALWAYS emitted (even all-zero).
-/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="…")'` - no
+/// envelope v2 (SPEC section 8) - EVERY `--format json` stream is exactly three parts:
+///   `{"kind":"header","command":"<cmd>", ...}`   the FIRST line, ALWAYS emitted;
+///   `{"kind":"<row-kind>", ...}` x N             command-specific kind-tagged rows;
+///   `{"kind":"summary", ...}`                    the LAST line, ALWAYS emitted (even all-zero).
+/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="...")'` - no
 /// per-command envelope knowledge, no conditional first line, no shape-varied trailer.
 /// These two builders are the ONLY way a module makes its header/summary line, so the
 /// invariant cannot drift per command.
@@ -153,7 +153,7 @@ pub fn envelope_scope_header(
     )
 }
 
-/// The closing `{"kind":"summary", …}` line (see [`envelope_header`]).
+/// The closing `{"kind":"summary", ...}` line (see [`envelope_header`]).
 #[must_use]
 pub fn envelope_summary(extra: serde_json::Value) -> serde_json::Value {
     merge_into(serde_json::json!({"kind": "summary"}), extra)
@@ -185,9 +185,9 @@ pub enum Endpoint {
 }
 
 /// A parsed inclusive index range with possibly-open / from-the-end endpoints. THE range
-/// grammar, shared by every range flag (`show --line`/`--turn` · `--turn` ·
-/// `--file-lines`): `N` (single) · `A..B` (closed) · `N..` (to the end) · `..N` (from the
-/// start) · `..` (all) · negative `-k` = `k`-th from the end, so `-3..` = the last 3 and `-1`
+/// grammar, shared by every range flag (`show --line`/`--turn`, `--turn`,
+/// `--file-lines`): `N` (single), `A..B` (closed), `N..` (to the end), `..N` (from the
+/// start), `..` (all), negative `-k` = `k`-th from the end, so `-3..` = the last 3 and `-1`
 /// = the last. Resolve against a concrete domain length with [`RangeSpec::resolve`]. Both
 /// sides trimmed; the dash-form `A-B` is a HARD error that teaches the `..` spelling; `END <
 /// START` after resolution is an error.
@@ -197,9 +197,9 @@ pub struct RangeSpec {
     pub end: Endpoint,
 }
 
-/// Parse one `..`-split, trimmed endpoint token. Empty ⇒ [`Endpoint::Open`]; `-k` ⇒
-/// [`Endpoint::FromEnd`]; digits ⇒ [`Endpoint::At`]. A dash inside a number-bearing token
-/// (`495-500`) is the removed `A-B` spelling → a teaching error.
+/// Parse one `..`-split, trimmed endpoint token. Empty => [`Endpoint::Open`]; `-k` =>
+/// [`Endpoint::FromEnd`]; digits => [`Endpoint::At`]. A dash inside a number-bearing token
+/// (`495-500`) is the removed `A-B` spelling -> a teaching error.
 fn parse_endpoint(tok: &str, label: &str) -> anyhow::Result<Endpoint> {
     use anyhow::bail;
     if tok.is_empty() {
@@ -268,7 +268,7 @@ pub fn parse_range_spec(s: &str, label: &str, one_based: bool) -> anyhow::Result
 
 impl RangeSpec {
     /// Resolve to a concrete inclusive `(lo, hi)` in a domain of `len` elements - `one_based`
-    /// ⇒ indices 1..=len, else 0..=len-1. Open/from-end endpoints materialize against `len`
+    /// => indices 1..=len, else 0..=len-1. Open/from-end endpoints materialize against `len`
     /// (a from-end index past the start clamps to the first index, so `-100..` of 5 = all 5);
     /// an explicit `At` is returned as-written (the caller clamps/validates a bare
     /// out-of-range index, matching each flag's existing behavior). Infallible: a
@@ -381,7 +381,7 @@ mod tests {
     fn truncate_short_is_unchanged() {
         assert_eq!(truncate_excerpt("hello", 200), "hello");
         assert_eq!(truncate_excerpt("", 10), "");
-        // Exactly at the cap → unchanged (boundary).
+        // Exactly at the cap -> unchanged (boundary).
         assert_eq!(truncate_excerpt("abcde", 5), "abcde");
     }
 
@@ -450,11 +450,11 @@ mod tests {
         assert_eq!(rng("270", false, 100), (270, 270));
         assert_eq!(rng(" 42 ", true, 100), (42, 42));
         assert_eq!(rng("0", false, 10), (0, 0));
-        // Open ends materialize against len. 0-based turn domain of 10 → 0..=9.
+        // Open ends materialize against len. 0-based turn domain of 10 -> 0..=9.
         assert_eq!(rng("3..", false, 10), (3, 9)); // to the end
         assert_eq!(rng("..4", false, 10), (0, 4)); // from the start
         assert_eq!(rng("..", false, 10), (0, 9)); // all
-                                                  // 1-based line domain of 200 → 1..=200.
+                                                  // 1-based line domain of 200 -> 1..=200.
         assert_eq!(rng("5..", true, 200), (5, 200));
         assert_eq!(rng("..50", true, 200), (1, 50));
     }
@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(rng("-3..", false, 10), (7, 9));
         assert_eq!(rng("-1", false, 10), (9, 9)); // the last element
         assert_eq!(rng("-1..", false, 10), (9, 9)); // last 1
-        assert_eq!(rng("3..-1", false, 10), (3, 9)); // turn 3 → the last
+        assert_eq!(rng("3..-1", false, 10), (3, 9)); // turn 3 -> the last
                                                      // 1-based lines: last 20 of a 200-line file.
         assert_eq!(rng("-20..", true, 200), (181, 200));
         assert_eq!(rng("-1", true, 200), (200, 200));

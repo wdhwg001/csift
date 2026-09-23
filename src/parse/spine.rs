@@ -4,7 +4,7 @@
 //! Claude Code reconstructs a resumed conversation by walking `parentUuid` from one
 //! leaf, and that walk threads through `attachment` and `system` records - a prompt
 //! submitted after a SessionStart hook is parented to the hook's attachment record,
-//! not to the assistant message before it. csift's §7d candidate prefilter keeps only
+//! not to the assistant message before it. csift's section 7d candidate prefilter keeps only
 //! role-bearing lines, so a chain built from those alone breaks at the first
 //! attachment and resolves nothing (measured: 1 of 30,613 conversation records
 //! reachable on a real session).
@@ -199,7 +199,7 @@ impl SpineRow {
 }
 
 /// Lift one raw jsonl line's chain-structural fields into a [`SpineRow`]. `None` when the
-/// line is blank, is not a `{…}` object, is malformed, or carries a `type` outside
+/// line is blank, is not a `{...}` object, is malformed, or carries a `type` outside
 /// [`spine_type_wanted`].
 pub(crate) fn spine_record(line_no: usize, line: &[u8]) -> Option<SpineRow> {
     spine_record_from(line_no, &spine_fields(line)?)

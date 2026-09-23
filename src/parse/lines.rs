@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Default backward-scan chunk size (§7b). 64 KiB balances syscall/cache pressure;
+/// Default backward-scan chunk size (section 7b). 64 KiB balances syscall/cache pressure;
 /// [`RevLines`] grows it transparently when a chunk yields no newline (guards the
 /// observed 400 KB single-line max).
 pub(crate) const TAIL_CHUNK: usize = 64 * 1024;
@@ -89,7 +89,7 @@ pub(crate) fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
 /// DROPS such a line one layer BEFORE any malformed counter could see it: not
 /// skipped, not counted, simply invisible on every surface. One `memmem` pass for
 /// the quoted key + an O(1) verify per hit; a keyless line costs ONE scan where a
-/// two-spelling disjunct costs two, so §7 holds (benchmarked on the real corpus).
+/// two-spelling disjunct costs two, so section 7 holds (benchmarked on the real corpus).
 /// The quoted-key needle cannot match content text: inside a JSON string the quotes
 /// are escaped (`\"role\"`), which breaks the needle bytes.
 pub(crate) fn line_role_value_matches(
@@ -135,7 +135,7 @@ pub fn line_has_role_marker(line: &[u8]) -> bool {
 
 /// `"role"` is `"user"` only - the genuine-user/carrier hook `files`/`recover` use
 /// (their assistant-side coverage rides tool-name needles, so admitting every
-/// assistant text record here would repeal their §7 prefilter).
+/// assistant text record here would repeal their section 7 prefilter).
 pub fn line_has_user_role_marker(line: &[u8]) -> bool {
     line_role_value_matches(line, true, false)
 }

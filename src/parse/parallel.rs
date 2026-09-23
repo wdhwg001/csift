@@ -7,7 +7,7 @@ use super::*;
 /// the file - identical numbering to a serial [`scan_lines_bytes`] pass). Each `Keep(T)` is
 /// collected in file order; each `Skip` increments the returned malformed count. The slice is
 /// split into newline-aligned chunks run on the `rayon` pool, so a single GIANT transcript
-/// (SPEC §7's "200MB+" case) is not bottlenecked on one core, which is what an across-files
+/// (SPEC section 7's "200MB+" case) is not bottlenecked on one core, which is what an across-files
 /// fan-out on its own leaves it doing. Below `MIN_PARALLEL_BYTES` it runs as a single chunk
 /// (split/merge overhead isn't worth it). The `(items, skipped)` result is byte-for-byte
 /// equivalent to the serial scan.
@@ -87,7 +87,7 @@ where
     })
 }
 
-/// The verdict for a line a byte-prefilter rejected: `Skip` (⇒ counted malformed) when the
+/// The verdict for a line a byte-prefilter rejected: `Skip` (=> counted malformed) when the
 /// line is OBVIOUSLY not a JSON object, else `Ignore` (a legit non-candidate record).
 /// Convenience wrapper over [`line_shape_malformed`] for the scan closures.
 #[must_use]
@@ -113,13 +113,13 @@ pub fn non_candidate_split<A, B>(line: &[u8]) -> SplitVerdict<A, B> {
 }
 
 /// True when a line is OBVIOUSLY not a JSON object record: non-blank but not brace-framed
-/// (`{…}`). This is the O(1) malformed-shape check every non-candidate prefilter path runs
-/// so the "a skipped malformed line is COUNTED, never hidden" law (AGENTS §4) survives the
-/// §7 byte prefilters - free-text garbage has no leading `{`, and a crash-truncated record
+/// (`{...}`). This is the O(1) malformed-shape check every non-candidate prefilter path runs
+/// so the "a skipped malformed line is COUNTED, never hidden" law (AGENTS section 4) survives the
+/// section 7 byte prefilters - free-text garbage has no leading `{`, and a crash-truncated record
 /// loses its trailing `}` (the two realistic corruption shapes; without the check they are
 /// invisible to every `skipped_lines` counter). The documented residual boundary: a
 /// brace-framed line whose INTERIOR is invalid JSON is only detected when it is a parse
-/// CANDIDATE - validating every non-candidate line would repeal the §7 perf contract.
+/// CANDIDATE - validating every non-candidate line would repeal the section 7 perf contract.
 #[must_use]
 pub fn line_shape_malformed(line: &[u8]) -> bool {
     let t = line.trim_ascii();
@@ -205,8 +205,8 @@ where
     if bytes.is_empty() {
         return (Vec::new(), Vec::new(), 0);
     }
-    // ── Newline-aligned chunk boundaries. Each interior bound is the first byte AFTER a
-    //    newline (a line start), so no line is ever split across a chunk. ──
+    // -- Newline-aligned chunk boundaries. Each interior bound is the first byte AFTER a
+    //    newline (a line start), so no line is ever split across a chunk. --
     let target_chunks = target_chunks.max(1);
     let approx = (bytes.len() / target_chunks).max(1);
     let mut bounds = vec![0usize];
@@ -247,8 +247,8 @@ where
         }
     }
 
-    // ── Parallel scan; rayon's ordered collect keeps chunk order, and each chunk's items are
-    //    already in ascending line order, so the flattened result is in exact file order. ──
+    // -- Parallel scan; rayon's ordered collect keeps chunk order, and each chunk's items are
+    //    already in ascending line order, so the flattened result is in exact file order. --
     let per_chunk: Vec<(Vec<A>, Vec<B>, usize)> = chunks
         .par_iter()
         .enumerate()

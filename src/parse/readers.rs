@@ -3,7 +3,7 @@
 use super::*;
 
 /// Backward, newest-first line iterator over a byte slice, realized as a
-/// chunk-with-carry scan from EOF (§7b). Each `next()` yields one line's bytes
+/// chunk-with-carry scan from EOF (section 7b). Each `next()` yields one line's bytes
 /// **without** the trailing newline, from the end of the slice toward the start.
 ///
 /// The "carry" is the bytes of the line that straddles the LOW-offset edge of the
@@ -74,13 +74,13 @@ impl<'a> RevLines<'a> {
             let at_bof = lo == 0;
 
             // Split `buf` on '\n' into segments. With newlines at positions
-            // n0<n1<…<n(k-1), the segments are:
+            // n0<n1<...<n(k-1), the segments are:
             //   seg0 = buf[0..n0]                (the LOW-edge segment)
             //   segI = buf[n(I-1)+1 .. nI]       for 1..=k-1
             //   segK = buf[n(k-1)+1 .. ]         (the HIGH-edge tail; complete,
             //                                     since its newline was consumed
             //                                     by the chunk above as a carry)
-            // seg0 is provisional → it is the new carry, UNLESS we are at BOF, in
+            // seg0 is provisional -> it is the new carry, UNLESS we are at BOF, in
             // which case it is the file's line 0 (complete). seg1..=segK are all
             // complete lines. They must be yielded newest-first (highest first).
             let nls: Vec<usize> = memchr_iter(b'\n', &buf).collect();
@@ -111,8 +111,8 @@ impl<'a> RevLines<'a> {
                 ranges.push((tail_start, buf.len()));
             }
 
-            // Emit newest-first: highest range first → push_back in reverse order
-            // so pop_front hands them out newest→oldest.
+            // Emit newest-first: highest range first -> push_back in reverse order
+            // so pop_front hands them out newest->oldest.
             for &(s, e) in ranges.iter().rev() {
                 self.pending.push_back(buf[s..e].to_vec());
             }
@@ -120,7 +120,7 @@ impl<'a> RevLines<'a> {
             // seg0 (low-edge): carry, or - at BOF - the oldest complete line.
             let seg0 = buf[..nls[0]].to_vec();
             if at_bof {
-                self.pending.push_back(seg0); // oldest → yielded last
+                self.pending.push_back(seg0); // oldest -> yielded last
             } else {
                 self.carry = seg0;
             }

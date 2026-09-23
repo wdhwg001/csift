@@ -45,11 +45,11 @@ fn empty_file_is_safe() {
     assert_eq!(consumed, 0);
 }
 
-// ── Branch-completeness ──
+// -- Branch-completeness --
 
 #[test]
 fn mmap_open_error_surfaces_context() {
-    // A path that does not exist → the `File::open` error context arm of mmap_file. The
+    // A path that does not exist -> the `File::open` error context arm of mmap_file. The
     // tree is this run's own, so nothing can have left a file at that name.
     let (_dir, missing) = Scratch::file("missing", "missing.jsonl");
     let err = mmap_bytes(&missing).unwrap_err();
@@ -94,7 +94,7 @@ fn scan_lines_bytes_visits_every_line_including_torn_tail() {
 #[test]
 fn scan_lines_parallel_chunked_matches_serial_for_any_chunk_count() {
     // A mix of candidate lines, blank lines (counted in line numbering, never kept) and a
-    // malformed candidate (parsed → skipped). The (kept line_no list, skip count) must be
+    // malformed candidate (parsed -> skipped). The (kept line_no list, skip count) must be
     // IDENTICAL across every chunk split - that is the contract that lets recover/search/
     // files swap in the parallel scan with zero behaviour change.
     let mut raw = String::new();
@@ -108,11 +108,11 @@ fn scan_lines_parallel_chunked_matches_serial_for_any_chunk_count() {
             ));
         raw.push('\n');
         if i % 11 == 5 {
-            raw.push_str("{ broken json keep but unparseable\n"); // candidate → skip
+            raw.push_str("{ broken json keep but unparseable\n"); // candidate -> skip
         }
     }
     let bytes = raw.as_bytes();
-    // Visitor keeps each parseable "keep" line's NUMBER; a malformed "keep" line → Skip.
+    // Visitor keeps each parseable "keep" line's NUMBER; a malformed "keep" line -> Skip.
     let visit = |line: &[u8], line_no: usize| -> LineVerdict<usize> {
         if !line.windows(4).any(|w| w == b"keep") {
             return LineVerdict::Ignore;

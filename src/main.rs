@@ -30,7 +30,7 @@ use crate::cli::{parse_argv, Cli, Command};
 /// per-record Strings from many rayon workers at once; macOS's default libmalloc
 /// serializes under that load (nanov2/tiny-malloc lock contention shows up directly
 /// in profiles). mimalloc's per-thread heaps remove the contention - a measured
-/// multi-subcommand win with zero behaviour change (SPEC §7 performance contract).
+/// multi-subcommand win with zero behaviour change (SPEC section 7 performance contract).
 #[global_allocator]
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

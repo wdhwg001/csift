@@ -133,7 +133,7 @@ fn tail_records_skips_malformed_lines_and_counts() {
     .expect("tail read");
     // The malformed middle line is between agent (end) and the first record,
     // so whether it is counted depends on how far we scan; here we stop at the
-    // agent line (newest), so the malformed line is not reached → skipped==0.
+    // agent line (newest), so the malformed line is not reached -> skipped==0.
     assert_eq!(agent.as_deref(), Some("a"));
     assert_eq!(skipped, 0);
 }
@@ -195,8 +195,8 @@ fn head_records_skips_blank_and_malformed_then_continues() {
     // A blank line (Ok(None) arm), a malformed line (Err skip+count arm), then a
     // valid record reached at the torn-tail position (no trailing newline).
     let f = tmp_jsonl(&[
-        "",                 // blank → Ok(None)
-        r#"{ broken json"#, // malformed → counted
+        "",                 // blank -> Ok(None)
+        r#"{ broken json"#, // malformed -> counted
         r#"{"type":"user","message":{"role":"user","content":"real"}}"#,
     ]);
     let mut first: Option<String> = None;
@@ -229,7 +229,7 @@ fn head_records_visits_torn_tail_fragment() {
         if let Some(t) = rec.agent_text() {
             last_agent = Some(t);
         }
-        true // scan all → reach the torn tail
+        true // scan all -> reach the torn tail
     })
     .expect("head read");
     std::fs::remove_file(&p).ok();
@@ -257,7 +257,7 @@ fn head_records_early_stop_before_tail_fragment() {
 #[test]
 fn head_tail_disjoint_windows_never_double_count() {
     // The window-census rule: a head scan and a tail scan over the SAME file double-book every
-    // malformed line both passes walk - an all-garbage file reports exactly 2× - unless the two
+    // malformed line both passes walk - an all-garbage file reports exactly 2x - unless the two
     // windows are disjoint. The head returns its consumed-end offset; passing it as the tail
     // floor keeps them disjoint, so each line is booked exactly once.
     let f = tmp_jsonl(&["{ garbage one", "{ garbage two", "{ garbage three"]);
@@ -322,7 +322,7 @@ fn tail_floor_still_walks_below_for_anchors_without_counting() {
 
 #[test]
 fn revlines_all_blank_slice() {
-    // A slice of only newlines → every line is blank, none survive the filter.
+    // A slice of only newlines -> every line is blank, none survive the filter.
     assert!(rev_nonblank(b"\n\n\n", 2).is_empty());
 }
 
@@ -330,7 +330,7 @@ fn revlines_all_blank_slice() {
 fn revlines_next_after_exhaustion_returns_none() {
     // Calling `next()` again after the iterator is exhausted hits the `if
     // self.done { return None }` true arm (a normal `for` loop never re-polls).
-    // Content has no trailing newline → exactly two raw lines yielded.
+    // Content has no trailing newline -> exactly two raw lines yielded.
     let mut it = RevLines::with_chunk(b"a\nb", 64);
     let mut all = Vec::new();
     for l in it.by_ref() {
@@ -348,7 +348,7 @@ fn revlines_next_after_exhaustion_returns_none() {
 
 #[test]
 fn revlines_empty_slice_is_immediately_none() {
-    // An empty slice: hi==0 at construction, carry empty → fill returns false on
+    // An empty slice: hi==0 at construction, carry empty -> fill returns false on
     // the first poll (the `self.carry.is_empty()` TRUE arm at hi==0).
     let mut it = RevLines::with_chunk(b"", 4);
     assert!(it.next().is_none());
@@ -357,7 +357,7 @@ fn revlines_empty_slice_is_immediately_none() {
 #[test]
 fn revlines_trailing_newline_only_carry_empty_at_bof() {
     // Content that is a single newline: the high tail after the newline is empty,
-    // seg0 (low edge) is also empty at BOF → buf-empty / empty-carry arms. No
+    // seg0 (low edge) is also empty at BOF -> buf-empty / empty-carry arms. No
     // non-blank lines survive.
     assert!(rev_nonblank(b"\n", 1).is_empty());
     assert!(rev_nonblank(b"\n", 64).is_empty());
@@ -366,7 +366,7 @@ fn revlines_trailing_newline_only_carry_empty_at_bof() {
 #[test]
 fn revlines_carry_nonempty_flush_at_bof() {
     // A leading partial line with NO newline before it, reached only after the
-    // carry has accumulated across chunks → the `self.carry.is_empty()` FALSE arm
+    // carry has accumulated across chunks -> the `self.carry.is_empty()` FALSE arm
     // at hi==0 (flush the carry as the first line). chunk=2 forces accumulation.
     let data = b"abcdefghij\nz\n";
     assert_eq!(rev_nonblank(data, 2), vec!["z", "abcdefghij"]);

@@ -1,6 +1,6 @@
 //! Streaming + tail jsonl readers.
 //!
-//! Performance contract (NON-FUNCTIONAL, SPEC.md §7): must stay fast on 200MB+ files.
+//! Performance contract (NON-FUNCTIONAL, SPEC.md section 7): must stay fast on 200MB+ files.
 //! - `mmap` the file (immutable `memmap2::Mmap`, length fixed at open), scan line
 //!   boundaries with `memchr` (SIMD newline search) - never a `BufReader` copy of
 //!   every line.
@@ -18,7 +18,7 @@
 //!
 //! ## Backward iteration: chunk-with-carry vs mmap
 //!
-//! SPEC §7b frames the tail read as a seek-from-EOF backward chunk scan with a
+//! SPEC section 7b frames the tail read as a seek-from-EOF backward chunk scan with a
 //! "carry" - the incomplete line straddling the LOW-offset edge of each chunk,
 //! provisional until the next-lower chunk is read. On a memory-mapped file the
 //! whole byte range is addressable, so we realize the same backward, newest-first

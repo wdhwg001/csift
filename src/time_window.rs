@@ -1,4 +1,4 @@
-//! Time-window parsing for `search --since`/`--until` (SPEC §6.2).
+//! Time-window parsing for `search --since`/`--until` (SPEC section 6.2).
 //!
 //! A bound is EITHER an absolute ISO8601 instant/date OR a relative form
 //! (`2h`, `3d`, `90m`, `45s`, `1w`, `2mo`, `1y`) interpreted as "that long ago" relative to
@@ -8,7 +8,7 @@
 //! I started"). A leading `-` on a relative form is tolerated (`-1d` == `1d`: the only
 //! direction is "ago"). `mo` = 30 days and `y` = 365 days, calendar-approximate. A record's `timestamp` (raw UTC ISO8601) is
 //! compared against the resolved bounds; a record with no timestamp NEVER falls
-//! inside a bounded window (SPEC §6.2).
+//! inside a bounded window (SPEC section 6.2).
 //!
 //! `--since` is inclusive lower, `--until` is inclusive upper. An unbounded window
 //! (neither set) admits every record, including timestamp-less ones.
@@ -48,8 +48,8 @@ impl TimeWindow {
     /// INTERSECTS the window - the `list` rule: a session is admitted when ANY part of its
     /// [first-activity, last-activity] span falls inside `[since, until]` (a long-running
     /// session that straddles the whole window still matches). One missing/unparseable
-    /// endpoint degrades the span to a point; both missing ⇒ a bounded window never admits
-    /// (the SPEC §6.2 timestamp-less rule).
+    /// endpoint degrades the span to a point; both missing => a bounded window never admits
+    /// (the SPEC section 6.2 timestamp-less rule).
     #[must_use]
     pub fn intersects_span(&self, first: Option<&str>, last: Option<&str>) -> bool {
         if self.is_unbounded() {
@@ -76,7 +76,7 @@ impl TimeWindow {
 
     /// True if a record's raw timestamp falls inside the window. An unbounded
     /// window always returns true (even for `None`). A bounded window NEVER admits
-    /// a record with no/unparseable timestamp (SPEC §6.2).
+    /// a record with no/unparseable timestamp (SPEC section 6.2).
     #[must_use]
     pub fn contains(&self, raw_ts: Option<&str>) -> bool {
         if self.is_unbounded() {
@@ -120,7 +120,7 @@ pub(crate) fn parse_bound(s: &str) -> Result<Timestamp> {
 /// Relative form: an integer followed by a unit (`s` `m` `h` `d` `w` `mo` `y`), with
 /// an optional leading `-` (tolerated: "ago" is the only direction). `Ok(None)` when
 /// `s` is not in this shape (so the caller falls through to absolute parsing).
-/// Resolved against now in the system-local timezone → UTC.
+/// Resolved against now in the system-local timezone -> UTC.
 fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
     let body = s.strip_prefix('-').unwrap_or(s);
     // Digits, then the unit (one or two ASCII letters).
@@ -148,7 +148,7 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
             || Span::new().try_days(i64::MAX),
             |d| Span::new().try_days(d),
         ),
-        _ => return Ok(None), // not a recognized unit → let absolute parsing try
+        _ => return Ok(None), // not a recognized unit -> let absolute parsing try
     }
     .with_context(|| format!("relative-time span out of range in {s:?}"))?;
 
@@ -160,14 +160,14 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
     Ok(Some(then.timestamp()))
 }
 
-/// Absolute ISO8601: a full instant (`2026-06-01T05:00:00Z` / `…+10:00`), a bare civil
+/// Absolute ISO8601: a full instant (`2026-06-01T05:00:00Z` / `...+10:00`), a bare civil
 /// DATETIME (`2026-06-01T05:00:00` - system-LOCAL wall-clock time, the same local
 /// convention as a bare date), or a bare date (`2026-06-01`, system-local midnight).
 fn parse_absolute(s: &str) -> Result<Timestamp> {
     if let Ok(ts) = s.parse::<Timestamp>() {
         return Ok(ts);
     }
-    // Bare civil DATETIME (no offset / `Z`) → system-local wall clock → UTC. This arm MUST
+    // Bare civil DATETIME (no offset / `Z`) -> system-local wall clock -> UTC. This arm MUST
     // precede the Date arm: jiff's civil-Date parser ACCEPTS a full datetime string and
     // keeps only its date part, so with Date tried first a bare "2026-07-13T20:00:00"
     // silently collapsed to local MIDNIGHT - a bounded window that looked exactly like a
@@ -184,7 +184,7 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
             return Ok(zoned.timestamp());
         }
     }
-    // Bare civil date → system-local midnight → UTC.
+    // Bare civil date -> system-local midnight -> UTC.
     if let Ok(date) = s.parse::<jiff::civil::Date>() {
         let zoned = date
             .to_zoned(local_tz())
@@ -293,12 +293,12 @@ mod tests {
     #[test]
     fn relative_form_resolves_to_past() {
         // "1h" ago must be in the past relative to "now"; a far-future ts is out of
-        // a [since=1h-ago, ∞) window only if it's BEFORE the bound - future is in.
+        // a [since=1h-ago, +inf) window only if it's BEFORE the bound - future is in.
         let w = TimeWindow::from_args(Some("1h"), None).unwrap();
         assert!(!w.is_unbounded());
-        // A timestamp from the distant past is before "1 hour ago" → excluded.
+        // A timestamp from the distant past is before "1 hour ago" -> excluded.
         assert!(!w.contains(Some("2000-01-01T00:00:00Z")));
-        // A timestamp far in the future is after "1 hour ago" → included.
+        // A timestamp far in the future is after "1 hour ago" -> included.
         assert!(w.contains(Some("2999-01-01T00:00:00Z")));
     }
 
@@ -365,11 +365,11 @@ mod tests {
         );
     }
 
-    // ── Branch-completeness ──
+    // -- Branch-completeness --
 
     #[test]
     fn contains_unparseable_timestamp_excluded_from_bounded() {
-        // A bounded window with a record whose timestamp does not parse → excluded
+        // A bounded window with a record whose timestamp does not parse -> excluded
         // (the `Err(_) => false` arm in `contains`).
         let w = TimeWindow::from_args(Some("2026-06-01"), None).unwrap();
         assert!(!w.contains(Some("not-a-timestamp")));
@@ -410,14 +410,14 @@ mod tests {
 
     #[test]
     fn relative_non_digit_quantity_falls_through() {
-        // `ah` has a unit letter but a non-digit quantity → not relative; falls to
-        // absolute, which also fails → error.
+        // `ah` has a unit letter but a non-digit quantity -> not relative; falls to
+        // absolute, which also fails -> error.
         assert!(TimeWindow::from_args(Some("ah"), None).is_err());
     }
 
     #[test]
     fn relative_unrecognized_unit_falls_through_to_absolute() {
-        // `5q` - digits + an unrecognized unit → parse_relative returns None
+        // `5q` - digits + an unrecognized unit -> parse_relative returns None
         // (the `_ => return Ok(None)` arm) and absolute parsing then fails. So does a
         // three-letter unit.
         assert!(TimeWindow::from_args(Some("5q"), None).is_err());
@@ -426,14 +426,14 @@ mod tests {
 
     #[test]
     fn relative_quantity_overflow_errors() {
-        // A quantity too large for i64 → the `.parse::<i64>()` with_context error path.
+        // A quantity too large for i64 -> the `.parse::<i64>()` with_context error path.
         let huge = format!("{}h", "9".repeat(40));
         assert!(TimeWindow::from_args(Some(&huge), None).is_err());
     }
 
     #[test]
     fn relative_span_out_of_range_errors() {
-        // A numerically-valid i64 quantity whose span is out of jiff's range → the
+        // A numerically-valid i64 quantity whose span is out of jiff's range -> the
         // span `.with_context` error arm (weeks magnify the value the most).
         let big = format!("{}w", i64::MAX);
         assert!(TimeWindow::from_args(Some(&big), None).is_err());

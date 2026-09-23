@@ -268,7 +268,7 @@ fn a_value_of_an_unexpected_json_type_reads_as_absent_in_both() {
 
 #[test]
 fn a_torn_interior_is_malformed_for_the_probe_and_no_row_for_the_walk() {
-    // The exact-census contract: `{…}`-framed but invalid inside still counts.
+    // The exact-census contract: `{...}`-framed but invalid inside still counts.
     let line = br#"{"type":"attachment","uuid":"u-1","attachment":{"conte"#;
     assert!(line_type_and_spine(L, line).is_err());
     assert!(spine_record(L, line).is_none());
