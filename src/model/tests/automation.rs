@@ -9,7 +9,8 @@ fn automation_trigger_parses_task_notification() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>wh1it9jlj</task-id>\n<tool-use-id>toolu_x</tool-use-id>\n<output-file>/tmp/x.output</output-file>\n<status>completed</status>\n<summary>Dynamic workflow \"READ-ONLY: verify csift files\" completed</summary>\n</task-notification>"}}"#,
     );
-    // It STILL opens a turn (it is a real boundary) - but is now classified.
+    // It STILL opens a turn (it is a real boundary), and it classifies as the automation
+    // pulse it is rather than as the operator's prose.
     assert!(
         r.is_genuine_user(),
         "a task-notification passes the genuine-user gate"

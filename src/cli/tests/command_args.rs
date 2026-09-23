@@ -203,8 +203,8 @@ fn agents_session_target_and_window() {
 
 #[test]
 fn agents_old_by_and_tree_flags_are_gone() {
-    // `--by` was renamed to `--order-by`, and `--tree` was removed (tree is always on);
-    // both now error as unknown arguments.
+    // `--by` is spelled `--order-by`, and there is no `--tree` (the tree is always on);
+    // both spellings error as unknown arguments, with no alias and no forwarding arm.
     let by = parse(&["csift", "agents", ".", "--by", "trigger"]);
     assert!(by.is_err(), "--by must be an unknown argument now");
     let tree = parse(&["csift", "agents", ".", "--tree"]);

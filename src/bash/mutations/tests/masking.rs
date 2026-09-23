@@ -138,8 +138,9 @@ fn quoted_space_bearing_path_stays_one_token_not_a_partial() {
     // CRITICAL precision fix: a quoted redirect/operand path CONTAINING A SPACE (the most
     // common macOS path shape - Library/Application Support, Google Drive, My Documents)
     // must stay ONE token and be emitted WHOLE, never split mid-filename into a fabricated
-    // partial (the prior `"…/Application Support/x"` → `Support/x` bug). Whitespace is now
-    // read off the MASK, where an in-quote space is `0x01` (non-whitespace).
+    // partial - splitting on raw whitespace cuts `"…/Application Support/x"` down to
+    // `Support/x`. Whitespace is read off the MASK, where an in-quote space is `0x01`
+    // (non-whitespace).
     assert_eq!(
         paths("cp config.json \"/Users/me/Library/Application Support/app/config.json\""),
         vec![(

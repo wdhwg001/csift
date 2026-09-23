@@ -274,8 +274,8 @@ fn fork_child_carrying_its_own_spawn_never_parents_itself() {
     // A `/fork` child is a CLONE of its parent's transcript, so the spawning tool_use
     // sits inside the child's own file and the global spawn index attributes the spawn
     // to the child itself. Without the guard the child became its own parent and the
-    // depth walk ran to the cycle cap (65); now the self-link is dropped (depth 0), and
-    // the meta's `parentAgentId` - the harness's own word - wins when present.
+    // depth walk runs to the cycle cap (65). The self-link is dropped instead (depth 0),
+    // and the meta's `parentAgentId` - the harness's own word - wins when present.
     let fx = Fixture::new();
     let enc = "-Users-forkself";
     let spawn = "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T04:00:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_k\",\"name\":\"Agent\",\"input\":{\"description\":\"fork\"}}]}}\n";

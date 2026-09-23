@@ -140,7 +140,8 @@ fn show_labels_an_addressed_draft_unsent() {
 #[test]
 fn role_selector_excludes_drafts_and_the_glob_reaches_them() {
     let h = unsent_home();
-    // The 0.7-era contract restored: `-t user` = what the human actually sent.
+    // `-t user` is what the human actually SENT: a bare role selects the LLM-visible
+    // face, and a draft the operator recalled is not on it.
     let role = h.run(&["search", "", &at(SESS), "-t", "user"]);
     assert!(
         !role.stdout.contains("draft (superseded"),
