@@ -83,7 +83,7 @@ pub(crate) fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
 }
 
 /// Serialization-tolerant role-marker test - THE stage-1 candidate needle for
-/// message records (R13). CC's own wire format is compact JSON, but a hand-authored
+/// message records (the needle law). CC's own wire format is compact JSON, but a hand-authored
 /// or reserialized line may carry whitespace around the colon (`"role": "user"`) -
 /// valid JSON, the same record. The old exact-byte needles (`"role":"user"`)
 /// silently DROPPED such lines one layer BEFORE any malformed counter could see

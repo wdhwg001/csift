@@ -148,7 +148,7 @@ fn scan_lines_bytes_empty_slice_visits_nothing() {
 
 #[test]
 fn role_marker_is_serialization_tolerant() {
-    // R13: the compact wire form and every JSON-whitespace variant are the SAME
+    // The needle law: the compact wire form and every JSON-whitespace variant are the SAME
     // record - all must be candidates.
     for ok in [
         br#"{"message":{"role":"user","content":"x"}}"#.as_slice(),

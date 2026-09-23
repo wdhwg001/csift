@@ -19,7 +19,7 @@
 //! - There is no parse to FAIL, so the walk reports no malformed lines. A torn line simply
 //!   carries no key, and `list`'s `skipped_lines` keeps its documented meaning - a census
 //!   of the head/tail lines it read - instead of gaining a third, overlapping source that
-//!   could book one line twice (the R12 rule).
+//!   could book one line twice (the window-census rule).
 
 use super::*;
 
@@ -76,13 +76,13 @@ impl LineageFields {
     }
 }
 
-/// Byte prefilter for a lineage sweep: a line carrying NONE of the three keys can be
-/// skipped before the walk. Every needle is a quoted KEY, the R13 serialization-safe form -
-/// a reserialized line keeps them. PROSE cannot trip one, and the reason is structural: a
-/// `"` inside a JSON string is escaped, so a quoted key mentioned in a message body is the
-/// bytes `\"sessionKind\"` and not the needle. What a needle does still admit is a NESTED
-/// object's own key, which is unescaped in the raw bytes - and the depth-1 walk refuses it,
-/// so that line costs a walk that finds nothing rather than a wrong answer.
+/// Byte prefilter for a lineage sweep: a line carrying NONE of the three keys can be skipped
+/// before the walk. Every needle is a quoted KEY, the serialization-safe form the needle law
+/// prescribes - a reserialized line keeps them. PROSE cannot trip one, and the reason is
+/// structural: a `"` inside a JSON string is escaped, so a quoted key mentioned in a message
+/// body is the bytes `\"sessionKind\"` and not the needle. What a needle does still admit is a
+/// NESTED object's own key, which is unescaped in the raw bytes - and the depth-1 walk refuses
+/// it, so that line costs a walk that finds nothing rather than a wrong answer.
 ///
 /// The snake-case `session_id` is the WIDEST of the three by a long way - it rides every
 /// conversation record of a bridged session - so it is tested LAST, after the two rare
@@ -97,7 +97,7 @@ pub(crate) fn line_has_lineage_key(line: &[u8]) -> bool {
     KIND.find(line).is_some() || CHILD.find(line).is_some() || MINTED.find(line).is_some()
 }
 
-/// Byte prefilter for a SLUG sweep (`plan --audit`): the quoted key, the same R13 key-only
+/// Byte prefilter for a SLUG sweep (`plan --audit`): the quoted key, the same key-only
 /// form, and the same two properties - prose cannot trip it because a `"` inside a JSON
 /// string is escaped, while a nested object's own `slug` key reaches the walk and is refused
 /// there.

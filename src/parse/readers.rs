@@ -158,7 +158,7 @@ impl Iterator for RevLines<'_> {
 /// the last line this scan examined (a line boundary; `bytes.len()` when the scan
 /// reached EOF). A caller pairing this with a tail scan over the SAME file MUST
 /// pass `consumed_end` as the tail's `floor` so the two windows are disjoint and a
-/// malformed line is counted exactly once (R12: the head+tail double-book).
+/// malformed line is counted exactly once (the window-census rule's head+tail double-book).
 pub fn head_records<F>(path: &Path, keep: F) -> Result<(usize, usize)>
 where
     F: FnMut(&Record) -> bool,
@@ -185,7 +185,7 @@ where
     let mut stop = false;
     let mut handle = |line: &[u8], skipped: &mut usize, stop: &mut bool| {
         if !pre(line) {
-            // R10: obviously-corrupt non-candidates are still COUNTED (the malformed law).
+            // The malformed-line rule: obviously-corrupt non-candidates are still COUNTED.
             if line_shape_malformed(line) {
                 *skipped += 1;
             }
@@ -222,7 +222,7 @@ where
 ///
 /// `floor` = the paired head scan's `consumed_end` (0 when there is no head scan):
 /// lines BELOW it are still walked for anchors when the tail region runs dry, but
-/// are never re-counted - the head scan already booked them (R12).
+/// are never re-counted - the head scan already booked them (the window-census rule).
 pub fn tail_records<F>(path: &Path, floor: usize, keep: F) -> Result<usize>
 where
     F: FnMut(&Record) -> bool,
@@ -254,7 +254,7 @@ where
     // a line boundary): parsed, anchored, and COUNTED.
     for raw in RevLines::with_chunk(&bytes[floor..], TAIL_CHUNK) {
         if !pre(&raw) {
-            // R10: obviously-corrupt non-candidates are still COUNTED (the malformed law).
+            // The malformed-line rule: obviously-corrupt non-candidates are still COUNTED.
             if line_shape_malformed(&raw) {
                 skipped += 1;
             }
@@ -273,7 +273,7 @@ where
     }
     // Phase 2 - anchors still missing: continue into the head-examined region
     // WITHOUT counting. The head scan already booked those lines, so counting them a
-    // second time is the R12 double-book. Same lines, same newest-first order as a
+    // second time is the window-census rule's double-book. Same lines, same newest-first order as a
     // walk of the whole file, so anchor semantics are unchanged.
     if !stopped && floor > 0 {
         for raw in RevLines::with_chunk(&bytes[..floor], TAIL_CHUNK) {

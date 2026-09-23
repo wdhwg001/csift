@@ -261,7 +261,7 @@ fn sudo_and_env_prefixes_are_stripped() {
     );
 }
 
-// ── R1: cp/mv/install `-t DIR` correctness (source-vs-dest inversion) ──
+// ── cp/mv/install `-t DIR` correctness (source-vs-dest inversion) ──
 
 #[test]
 fn cp_target_directory_flag_dest_is_the_t_value_not_a_source() {
@@ -306,7 +306,7 @@ fn mv_target_directory_flag_dest_and_sources() {
     );
 }
 
-// ── R1: recall - ln / install / rsync / >| ──
+// ── recall - ln / install / rsync / >| ──
 
 #[test]
 fn ln_install_rsync_destinations_caught() {
@@ -324,8 +324,8 @@ fn ln_install_rsync_destinations_caught() {
     );
 }
 
-// ── R7: a trailing OUTPUT redirect must not poison a positional-dest verb ──
-// collect_redirections now REMOVES the redirect tokens (operator + its spaced path) from
+// ── a trailing OUTPUT redirect must not poison a positional-dest verb ──
+// collect_redirections REMOVES the redirect tokens (operator + its spaced path) from
 // the operand stream before verb dispatch - symmetric to strip_input_redirects for `<`.
 // Without this, the surviving `2>&1` / `2>/dev/null` / spaced `> file` token displaced the
 // real cp/mv/ln/install/rsync destination (RECALL MISS), got mislabeled as a source
@@ -364,8 +364,9 @@ fn install_ln_rsync_dest_survive_trailing_redirect() {
 fn mv_into_dir_not_leaked_as_source_by_trailing_redirect() {
     // `mv /a /b /tmp/DESTDIR/ 2>/dev/null`: the spaced/attached `2>/dev/null` is a dev-sink
     // (emits no row) AND is removed from operands, so DESTDIR stays the dest (verb `mv`) and
-    // /a,/b stay sources (mv-from). Before the fix, `2>/dev/null` became the dest_tok
-    // (rejected as a sink → NO mv dest) and ALL of /a,/b,DESTDIR leaked as mv-from reads.
+    // /a,/b stay sources (mv-from). Left in the operand stream, `2>/dev/null` takes the
+    // dest_tok slot (rejected as a sink → NO mv dest) and ALL of /a,/b,DESTDIR leak as
+    // mv-from reads.
     assert_eq!(
         paths("mv /a /b /tmp/DESTDIR/ 2>/dev/null"),
         vec![

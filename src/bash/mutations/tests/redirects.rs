@@ -195,7 +195,7 @@ fn unresolved_var_redirect_is_dropped() {
     assert!(paths("svc 2>/tmp/$run.err").is_empty());
 }
 
-// ── R1: the DOMINANT garbage class - fd-redirect close-paren / process-sub leaks ──
+// ── the DOMINANT garbage class - fd-redirect close-paren / process-sub leaks ──
 
 #[test]
 fn devnull_with_glued_close_paren_is_dropped() {

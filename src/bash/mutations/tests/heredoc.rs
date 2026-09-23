@@ -57,7 +57,7 @@ fn inline_python_literal_write_is_extracted() {
     );
 }
 
-// ── R1: heredoc body is SKIPPED, not mis-reported (the never-mis-reported contract) ──
+// ── heredoc body is SKIPPED, not mis-reported (the never-mis-reported contract) ──
 
 #[test]
 fn heredoc_body_redirect_char_does_not_fabricate_a_row() {

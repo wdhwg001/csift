@@ -34,7 +34,7 @@ where
 {
     scan_lines_parallel(bytes, |line, line_no| {
         if !prefilter(line) {
-            // R10: a NON-candidate line still gets the O(1) shape check, so obviously-
+            // The malformed-line rule: a NON-candidate line still gets the O(1) shape check, so
             // corrupt lines (free-text garbage, crash-truncation) are COUNTED, never
             // invisible - the byte prefilter must not exempt them from the malformed law.
             return non_candidate_verdict(line);
@@ -116,7 +116,7 @@ pub fn non_candidate_split<A, B>(line: &[u8]) -> SplitVerdict<A, B> {
 /// (`{…}`). This is the O(1) malformed-shape check every non-candidate prefilter path runs
 /// so the "a skipped malformed line is COUNTED, never hidden" law (AGENTS §4) survives the
 /// §7 byte prefilters - free-text garbage has no leading `{`, and a crash-truncated record
-/// loses its trailing `}` (the two realistic corruption shapes; R10 found them silently
+/// loses its trailing `}` (the two realistic corruption shapes; without the check they are
 /// invisible to every `skipped_lines` counter). The documented residual boundary: a
 /// brace-framed line whose INTERIOR is invalid JSON is only detected when it is a parse
 /// CANDIDATE - validating every non-candidate line would repeal the §7 perf contract.

@@ -33,7 +33,7 @@ fn the_handoff_child_id_is_read_from_the_same_walk() {
 
 #[test]
 fn both_fields_ride_one_line_and_whitespace_around_the_colon_is_the_same_record() {
-    // A reserialized line (whitespace after the colon) is the same record - the R13 law the
+    // A reserialized line (whitespace after the colon) is the same record - the needle law the
     // prefilter's key-only needles obey, and the walk has to agree with them.
     let line = br#"{ "type" : "assistant" , "sessionKind" : "bg" , "continuedInSessionId" : "99999999-2222-4333-8444-555555555555" }"#;
     let f = lineage_fields(line).expect("an object");

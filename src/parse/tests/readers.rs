@@ -256,10 +256,10 @@ fn head_records_early_stop_before_tail_fragment() {
 
 #[test]
 fn head_tail_disjoint_windows_never_double_count() {
-    // R12: a head scan and a tail scan over the SAME file double-book every malformed
-    // line both passes walk - an all-garbage file reports exactly 2× - unless the two
-    // windows are disjoint. The head returns its consumed-end offset; passing it as the
-    // tail floor keeps them disjoint, so each line is booked exactly once.
+    // The window-census rule: a head scan and a tail scan over the SAME file double-book every
+    // malformed line both passes walk - an all-garbage file reports exactly 2× - unless the two
+    // windows are disjoint. The head returns its consumed-end offset; passing it as the tail
+    // floor keeps them disjoint, so each line is booked exactly once.
     let f = tmp_jsonl(&["{ garbage one", "{ garbage two", "{ garbage three"]);
     let (head_skipped, consumed) = head_records(f.path(), |_| true).expect("head");
     assert_eq!(head_skipped, 3);

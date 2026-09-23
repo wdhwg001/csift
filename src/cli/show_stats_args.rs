@@ -214,7 +214,7 @@ pub struct ShowArgs {
 
     /// HIDDEN no-op subagent-span flag. `show` has NO span control: it fetches from exactly
     /// ONE transcript, never a set, but ten sibling commands accept the span pair, so a
-    /// muscle-memory `--no-subagents` here is a REAL observed slip (R7 §2.3). Accepted only
+    /// muscle-memory `--no-subagents` here is a REAL observed slip. Accepted only
     /// to emit a pointed error naming the actual rule, instead of the misleading generic
     /// "did you mistype a flag?" the TARGET value-parser would give. See
     /// [`ShowArgs::span_flag_error`].

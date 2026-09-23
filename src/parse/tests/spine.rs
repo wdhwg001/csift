@@ -449,7 +449,7 @@ fn a_scalar_truncated_at_the_end_of_the_line_ends_the_walk_too() {
 #[test]
 fn an_escape_inside_a_key_never_ends_that_key_early() {
     // Claude Code's own writer emits no escaped key, but a reserialized line can carry
-    // one (the R13 law - escaping and whitespace do not make it a different record). Both
+    // one (the needle law - escaping and whitespace do not make it a different record). Both
     // shapes below hide a quote-looking byte inside the key: reading that key one byte
     // short, or one pair long, leaves the walk staring at a byte that is not the `:` it
     // needs, and every field after it is lost.

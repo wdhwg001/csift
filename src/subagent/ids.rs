@@ -1,4 +1,4 @@
-//! Canonical id derivation from paths (the r5 trio helpers).
+//! Canonical id derivation from paths (the id-trio helpers).
 
 use super::*;
 

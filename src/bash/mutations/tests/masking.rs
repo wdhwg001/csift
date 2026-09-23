@@ -182,7 +182,7 @@ fn backtick_command_substitution_target_is_not_a_path() {
     );
 }
 
-// ── R2: quote-aware redirect detection (the dominant remaining fabrication class) ──
+// ── quote-aware redirect detection (the dominant remaining fabrication class) ──
 
 #[test]
 fn quoted_inline_redirect_does_not_fabricate_a_file() {

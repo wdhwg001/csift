@@ -14,8 +14,8 @@ use super::*;
 /// ([`SearchArgs::reaches_gated`]) or a `show` address. DERIVED from the shape
 /// inventory's `Gate::Selector` rows, so a shape that becomes gated (or stops being)
 /// moves this set with it and the honest-empties note can never name a stale leaf.
-/// `harness.hook.context` is here too: `--additional-context` was retired, and the leaf
-/// it gated is now reached by naming it.
+/// `harness.hook.context` is here too: `--additional-context` is retired, so the leaf it
+/// gated is reached by naming it.
 #[must_use]
 pub fn gated_leaves() -> Vec<Class> {
     let mut out: Vec<Class> = Vec::new();
@@ -86,8 +86,8 @@ pub fn attachment_leaves() -> Vec<Class> {
 /// The attachment-carried leaves that need NO coarse keep: each is reached through a
 /// SINGLE payload type, so one quoted VALUE needle admits exactly its lines. A selector
 /// naming one costs a single memmem over the file instead of a parse of every attachment
-/// line, and the R13 law holds because each needle is a quoted value token rather than a
-/// key-and-value pair.
+/// line, and the needle law holds because each needle is a quoted value token rather than
+/// a key-and-value pair.
 ///
 /// Both entries are leaves an ordinary query names: `user.message` is the human's own
 /// message (an attachment carries it when the harness delivered a mid-turn steer) and
@@ -120,7 +120,8 @@ pub fn attachment_view_needles() -> Vec<(&'static str, Class)> {
 impl SearchArgs {
     /// True when the scan should keep `type:"attachment"` lines: the explicit
     /// `--attachments` flag, or the `--count-by attachment` axis (unanswerable without
-    /// the gate - the D7 implied-widening precedent).
+    /// the gate, so the axis implies it - the same widening a label selector gives the
+    /// boundary keep).
     #[must_use]
     pub fn scan_attachments(&self) -> bool {
         self.attachments || matches!(self.count_by, Some(CountAxis::Attachment))

@@ -43,7 +43,8 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     let mut saw_any = false;
     let mut newest_decided = false;
     let mut pending: Option<PendingToolUse> = None;
-    // Disjoint from the head window (R12): a malformed line is never double-booked.
+    // Disjoint from the head window (the window-census rule): a malformed line is never
+    // double-booked.
     let tail_skipped = tail_records(&subagent.path, head_consumed, |rec| {
         saw_any = true;
         if completed_utc.is_none() {

@@ -1,4 +1,4 @@
-//! parse_argv + normalize_argv: the P0 flag-reordering entrypoint (clap #3880 workaround).
+//! parse_argv + normalize_argv: the flag-reordering entrypoint (clap #3880 workaround).
 
 use super::*;
 

@@ -171,7 +171,7 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
     // precede the Date arm: jiff's civil-Date parser ACCEPTS a full datetime string and
     // keeps only its date part, so with Date tried first a bare "2026-07-13T20:00:00"
     // silently collapsed to local MIDNIGHT - a bounded window that looked exactly like a
-    // quiet time period (the R9 silent-wrong-answer bug; the worst failure shape a
+    // quiet time period - a silently wrong answer, the worst failure shape a
     // time-window flag can produce). The offset guard keeps this arm honest: jiff's civil
     // parsers also IGNORE a trailing offset, so a string that CARRIES one but failed the
     // Timestamp parse above is malformed and must fall through to the bail, never be
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn bare_datetime_is_local_wall_clock_not_midnight_collapse() {
-        // R9: jiff's civil-Date parser accepts a full datetime string (keeping only the
+        // jiff's civil-Date parser accepts a full datetime string (keeping only the
         // date), so with the Date arm tried first a bare datetime collapses silently to
         // local midnight. The DateTime arm must yield date-midnight + the time-of-day it
         // states, in the SAME local zone - assert the delta, which is TZ-independent (no
