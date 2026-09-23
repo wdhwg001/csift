@@ -3,7 +3,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-// ── The reported flag-ordering bug (CONFIRMED against target/debug/csift) ──
+// -- The reported flag-ordering bug (CONFIRMED against target/debug/csift) --
 
 #[test]
 fn list_format_json_after_encoded_positional_now_works() {
@@ -92,7 +92,7 @@ fn search_positional_path_like_siblings() {
     }
 }
 
-// ── argv normalizer (the actual fix mechanism) ──
+// -- argv normalizer (the actual fix mechanism) --
 
 #[test]
 fn normalize_moves_long_flag_with_value_ahead_of_positional() {
@@ -113,7 +113,7 @@ fn normalize_keeps_boolean_flag_without_grabbing_a_value() {
             .map(String::from)
             .to_vec(),
     );
-    // `--no-subagents` is a SetTrue flag → it must NOT consume the positional.
+    // `--no-subagents` is a SetTrue flag -> it must NOT consume the positional.
     assert_eq!(out, vec!["csift", "list", "--no-subagents", "-Users-foo"]);
 }
 
@@ -149,7 +149,7 @@ fn normalize_handles_equals_form() {
 
 #[test]
 fn normalize_value_flag_at_end_has_no_following_value() {
-    // A value-taking flag with NOTHING after it → the `i+1 < rest.len()` FALSE arm
+    // A value-taking flag with NOTHING after it -> the `i+1 < rest.len()` FALSE arm
     // (no value consumed). clap will later report the missing value; normalize
     // just leaves the flag in place.
     let out = normalize_argv(
@@ -163,7 +163,7 @@ fn normalize_value_flag_at_end_has_no_following_value() {
 #[test]
 fn normalize_value_flag_followed_by_another_flag_does_not_consume_it() {
     // `--since --format json`: `--since` is value-taking but the NEXT token is a
-    // declared long flag → it must NOT be consumed as the value (the
+    // declared long flag -> it must NOT be consumed as the value (the
     // `!all_long.contains(next)` FALSE arm). Both flags are emitted; clap reports
     // the missing `--since` value.
     let out = normalize_argv(
@@ -193,7 +193,7 @@ fn normalize_hoists_short_value_flag_after_positional() {
 
 #[test]
 fn normalize_hoists_short_bool_flag_after_positional() {
-    // `-i` is a boolean short flag → hoisted but NOT paired with a value.
+    // `-i` is a boolean short flag -> hoisted but NOT paired with a value.
     let out = normalize_argv(
         ["csift", "search", "spec", ".", "-i"]
             .map(String::from)
@@ -204,7 +204,7 @@ fn normalize_hoists_short_bool_flag_after_positional() {
 
 #[test]
 fn normalize_hoists_bundled_short_flag_after_positional() {
-    // A bundled `-tuser` carries its value inline (len != 2) → emitted as one token,
+    // A bundled `-tuser` carries its value inline (len != 2) -> emitted as one token,
     // never pairing the next positional.
     let out = normalize_argv(
         ["csift", "search", "spec", ".", "-tuser"]
@@ -216,7 +216,7 @@ fn normalize_hoists_bundled_short_flag_after_positional() {
 
 #[test]
 fn normalize_short_value_flag_at_end_has_no_following_value() {
-    // `-t` with nothing after it → the no-value arm (clap reports the missing value).
+    // `-t` with nothing after it -> the no-value arm (clap reports the missing value).
     let out = normalize_argv(
         ["csift", "search", "spec", ".", "-t"]
             .map(String::from)
@@ -227,7 +227,7 @@ fn normalize_short_value_flag_at_end_has_no_following_value() {
 
 #[test]
 fn normalize_short_value_flag_followed_by_flag_does_not_consume_it() {
-    // `-t -i`: `-t` is value-taking but the next token starts with `-` → not consumed.
+    // `-t -i`: `-t` is value-taking but the next token starts with `-` -> not consumed.
     let out = normalize_argv(
         ["csift", "search", "spec", ".", "-t", "-i"]
             .map(String::from)
@@ -238,7 +238,7 @@ fn normalize_short_value_flag_followed_by_flag_does_not_consume_it() {
 
 #[test]
 fn normalize_leaves_encoded_token_with_letter_short_collision_as_positional() {
-    // An encoded `-Users-…` token's first char `U` is NOT a declared short flag, so it
+    // An encoded `-Users-...` token's first char `U` is NOT a declared short flag, so it
     // stays a positional even though `-t`/`-i` exist. The short-flag set is per-char.
     let out = normalize_argv(
         [

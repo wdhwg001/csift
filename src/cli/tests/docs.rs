@@ -3,9 +3,9 @@
 #[allow(unused_imports)]
 use super::*;
 
-// ── Drift guards: the help text and the repo docs must never resurrect a removed
+// -- Drift guards: the help text and the repo docs must never resurrect a removed
 //    surface - a help page teaching a flag that hard-errors sends its reader down a
-//    dead path, and these pins make that class of drift a test failure. ──
+//    dead path, and these pins make that class of drift a test failure. --
 
 /// Every `--long-flag` token any rendered help page mentions must be a DECLARED long
 /// flag of some command (clap introspection - zero-drift), or sit on the tiny
@@ -46,7 +46,7 @@ fn help_mentions_only_declared_flags() {
     }
 }
 
-/// Every `csift <sub> …` EXAMPLE line in any help page must use only flags that
+/// Every `csift <sub> ...` EXAMPLE line in any help page must use only flags that
 /// SUB actually declares (+ the global --claude-home) - the exact drift a flag moving
 /// to another subcommand leaves behind (record fetching moved to `show`, so a
 /// `search --line` example is a dead one).
@@ -79,7 +79,7 @@ fn help_examples_use_the_named_subcommands_own_flags() {
     for help in &helps {
         for line in help.lines() {
             // A line may chain several invocations through pipes or nest them in
-            // `$( … )` command substitutions - check each segment independently.
+            // `$( ... )` command substitutions - check each segment independently.
             for seg in line.split('|').flat_map(|s| s.split("$(")) {
                 let Some(rest) = seg.trim_start().strip_prefix("csift ") else {
                     continue;
@@ -207,7 +207,7 @@ fn the_subcommands_block_matches_the_command_enum() {
 
 use crate::cli::show_keys::{k, record_row_keys, Family, FAMILY_ORDER, RECORD_KEYS};
 
-// ── The per-family HELP sections ──
+// -- The per-family HELP sections --
 
 /// `search --help`'s body is its section files joined in the fixed order, with nothing of
 /// the assembler's own between them.
@@ -387,7 +387,7 @@ fn the_search_help_leaf_list_is_the_class_set() {
 ///
 /// Four families build edges and every one of them folds into the same array through
 /// `attach_facts`, so four families listing the key produced four rows spelled four
-/// different ways - `for:[…] (kind/basis/reason + target{…})`, `for:[{kind|basis|target|
+/// different ways - `for:[...] (kind/basis/reason + target{...})`, `for:[{kind|basis|target|
 /// reason}] (what an injection was written for)`, and two more - which a consumer reading
 /// the help reads as four keys. The row is Shared, and this is what keeps it there: a
 /// family that starts carrying edges adds no row.

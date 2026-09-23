@@ -14,7 +14,7 @@ fn parse_search_rejects_old_flat_category() {
     // HARD-error.
     assert!(parse(&["csift", "search", "x", "-t", "thinking"]).is_err());
     assert!(parse(&["csift", "search", "x", "-t", "tool-response"]).is_err());
-    // …while a dotted selector + a bare role are accepted.
+    // ...while a dotted selector + a bare role are accepted.
     assert!(parse(&["csift", "search", "x", "-t", "agent.thinking"]).is_ok());
     assert!(parse(&["csift", "search", "x", "-t", "agent"]).is_ok());
     assert!(parse(&["csift", "search", "x", "-t", "agent.tool"]).is_ok());
@@ -62,7 +62,7 @@ fn category_selector_prefix_and_validity() {
     assert!(selector_is_valid("agent.communication.inbox"));
     assert!(!selector_is_valid("thinking")); // a flat spelling, not a selector
     assert!(!selector_is_valid("bogus.path"));
-    // label_selected: empty ⇒ all; otherwise prefix-gated.
+    // label_selected: empty => all; otherwise prefix-gated.
     assert!(label_selected(&[], "harness.interrupt.user", None));
     assert!(label_selected(
         &["agent".to_string()],
@@ -149,7 +149,7 @@ fn a_bare_agent_face_keeps_the_structured_answer_the_model_wrote() {
 
 #[test]
 fn selector_three_forms_and_visibility() {
-    // Bare ROLE: the leaves the model received (no record in hand ⇒ the leaf default).
+    // Bare ROLE: the leaves the model received (no record in hand => the leaf default).
     assert!(selector_matches("user", "user.message", None));
     assert!(selector_matches("user", "user.answer", None));
     assert!(

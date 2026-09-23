@@ -24,7 +24,7 @@ pub enum ImageOutFormat {
 
 impl ImageOutFormat {
     /// The output format implied by an `--out` path EXTENSION (case-insensitive), or `None` when
-    /// the extension isn't one of the four image types (⇒ the path is treated as a directory).
+    /// the extension isn't one of the four image types (=> the path is treated as a directory).
     #[must_use]
     pub fn from_ext(ext: &str) -> Option<Self> {
         match ext.to_ascii_lowercase().as_str() {

@@ -5,7 +5,7 @@
 //! (`send`, `msg`, `ack`, `deliver` - the hook entry, run by Claude Code through the hook the
 //! user installed, never by hand except `--recipe`).
 //! Each carries example-rich help (`--help`) keyed off
-//! the SPEC §6 baseline invocations. `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`
+//! the SPEC section 6 baseline invocations. `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`
 //! span each session's subagent transcripts by default (`--no-subagents` opts out); `verbatim`
 //! is the exception - a single-thread recovery tool whose per-session budget MULTIPLIES, so
 //! it defaults to the TOP-LEVEL thread only, opts INTO spanning via `--subagents`, and
@@ -28,7 +28,7 @@
 //! ## argv normalization (flag-ordering fix)
 //!
 //! The real entrypoint is [`parse_argv`], NOT `Cli::parse` - it runs [`normalize_argv`]
-//! first so a `--format`/`--shape`/… flag works in ANY position relative to a
+//! first so a `--format`/`--shape`/... flag works in ANY position relative to a
 //! leading-`-` encoded project target (clap's `allow_hyphen_values` otherwise lets a
 //! `Vec` positional greedily swallow the trailing flag). See [`normalize_argv`].
 

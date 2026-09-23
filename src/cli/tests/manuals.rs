@@ -249,7 +249,7 @@ fn the_root_help_names_every_floor_cause() {
     let start = help
         .find("--cross-compactions <N|all>")
         .expect("the root help declares the crossing flag");
-    // clap closes a flag's block with its own `[default: …]` line, so that is the block's
+    // clap closes a flag's block with its own `[default: ...]` line, so that is the block's
     // end and nothing from the next flag can leak in.
     let end = help[start..]
         .find("[default:")

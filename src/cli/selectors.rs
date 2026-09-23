@@ -45,7 +45,7 @@ pub fn selector_is_valid(selector: &str) -> bool {
 }
 
 /// A BARE FACE selector: a ROLE (`user` / `agent` / `harness`) or a CATEGORY
-/// (`agent.message`, `harness.bookkeeping`, …). These are the two coarse forms that
+/// (`agent.message`, `harness.bookkeeping`, ...). These are the two coarse forms that
 /// claim to show THE CONVERSATION, so they select only the leaves the model receives -
 /// and only they consult the per-record delivery and survival verdicts. Everything
 /// else a selector can be (a full leaf path, or any form ending `.*`) names what it
@@ -145,7 +145,7 @@ pub fn empty_visible_faces(selectors: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Does a record-label `path` satisfy the active `-t` selectors? Empty selectors ⇒ every label is
+/// Does a record-label `path` satisfy the active `-t` selectors? Empty selectors => every label is
 /// eligible (no `-t` filter). Otherwise the label matches iff ANY selector matches it under the
 /// three-form rule ([`selector_matches`]) - `-t agent` surfaces the agent role's delivered leaves,
 /// `-t agent.tool` use+result, `-t 'user.*'` every user leaf incl. `user.unsent`. `delivered`
@@ -158,10 +158,10 @@ pub fn label_selected(selectors: &[String], path: &str, delivered: Option<bool>)
             .any(|s| selector_matches(s, path, delivered))
 }
 
-/// The active `-t`/`-T` label filter - the include selectors (empty ⇒ every label) MINUS the
+/// The active `-t`/`-T` label filter - the include selectors (empty => every label) MINUS the
 /// exclude selectors, both matched by the same segment-prefix rule. The ONE membership
 /// predicate every hit-selection surface keys on (the rg `-t`/`-T` duality). Exclusion only
-/// ever SHRINKS the include set, so the §7 stage-1 role prefilter (a conservative superset)
+/// ever SHRINKS the include set, so the section 7 stage-1 role prefilter (a conservative superset)
 /// stays valid unchanged.
 #[derive(Debug, Clone, Copy)]
 pub struct LabelFilter<'a> {

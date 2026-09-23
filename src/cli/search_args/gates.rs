@@ -152,10 +152,10 @@ impl SearchArgs {
 
     /// True when the scan parses `type:"system"` candidate lines at all: an explicit
     /// selector reaching any [`SYSTEM_LINE_LEAVES`] leaf, or a bare `harness` role
-    /// selector. THE one predicate for that admission - the candidate gate and the §7f
+    /// selector. THE one predicate for that admission - the candidate gate and the section 7f
     /// whole-file gate's synthesized-marker set must agree, or a pattern that can only
     /// match the FABRICATED `[<subtype> <level>]` head would be gated away on a file
-    /// that holds it (a silent drop, the §7 landmine).
+    /// that holds it (a silent drop, the section 7 landmine).
     #[must_use]
     pub fn scans_system_lines(&self) -> bool {
         system_line_leaves()

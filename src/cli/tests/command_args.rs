@@ -49,7 +49,7 @@ fn whoami_accepts_trap_and_main_self_target_else_none() {
     }
 }
 
-// ── Subagent inclusion flags (default include) ──
+// -- Subagent inclusion flags (default include) --
 
 #[test]
 fn list_includes_subagents_by_default() {
@@ -98,13 +98,13 @@ fn span_switch_pair_is_uniform_across_commands() {
         Command::Verbatim(a) => assert!(a.want_subagents(), "verbatim --subagents opts in"),
         _ => panic!("expected verbatim"),
     }
-    // The default-on commands accept the explicit no-op --subagents…
+    // The default-on commands accept the explicit no-op --subagents...
     let cli = parse(&["csift", "list", SESS_UUID, "--subagents"]).unwrap();
     match cli.command {
         Command::List(a) => assert!(a.want_subagents()),
         _ => panic!("expected list"),
     }
-    // …and the PAIR conflicts (contradictory flags are a parse error, not last-wins).
+    // ...and the PAIR conflicts (contradictory flags are a parse error, not last-wins).
     assert!(
         parse(&["csift", "list", SESS_UUID, "--subagents", "--no-subagents"]).is_err(),
         "contradictory span switches must clash"
@@ -174,7 +174,7 @@ fn turns_include_then_no_subagents_cancels_the_opt_in() {
     }
 }
 
-// ── agents subcommand parsing ──
+// -- agents subcommand parsing --
 
 #[test]
 fn agents_session_target_and_window() {
@@ -230,7 +230,7 @@ fn agents_kind_filter_and_default_axis() {
     }
 }
 
-// ── files subcommand parsing ──
+// -- files subcommand parsing --
 
 #[test]
 fn files_default_detail_is_summary() {

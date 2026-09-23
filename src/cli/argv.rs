@@ -20,13 +20,13 @@ pub fn parse_argv() -> Cli {
 }
 
 /// Value parser for a project-target positional/option. Accepts a real cwd, an encoded
-/// token (`-Users-…` with a SINGLE leading `-`, or the Windows drive shape `C--Users-…`),
+/// token (`-Users-...` with a SINGLE leading `-`, or the Windows drive shape `C--Users-...`),
 /// or `.`. It REJECTS a `--`-leading token: overwhelmingly that is an unknown / typo'd
 /// flag the `allow_hyphen_values` positional would otherwise swallow, surfacing the
 /// misleading `no project dir named "--xxx"` error instead of clap's clean
 /// `unexpected argument '--xxx'` + `did you mean --no-subagents?` suggestion. (The ONE
-/// legitimate `--`-leading target - a UNC-encoded `--server-…` dir - is deliberately
-/// routed through the `@--server-…` form instead, which the error names.) Returning `Err`
+/// legitimate `--`-leading target - a UNC-encoded `--server-...` dir - is deliberately
+/// routed through the `@--server-...` form instead, which the error names.) Returning `Err`
 /// here makes clap reconsider the token and emit that standard message uniformly across
 /// every scope-operating subcommand (search/whoami already did; the rest did not). A SINGLE
 /// `-` token is still accepted (it is a genuine encoded target). The [`normalize_argv`]
@@ -74,8 +74,8 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// ## Algorithm (per subcommand args, after the subcommand name)
 ///
 /// - `--` terminator: everything after it is passed through verbatim (clap's escape).
-/// - A `--flag=value` token → a flag token (its value is inline).
-/// - A bare `--flag` token → a flag token; if that flag takes a value AND the next
+/// - A `--flag=value` token -> a flag token (its value is inline).
+/// - A bare `--flag` token -> a flag token; if that flag takes a value AND the next
 ///   token does not itself start with `-`, the next token is its value (kept paired).
 /// - A `-x` token whose `x` is a DECLARED short flag is hoisted ahead of the positionals
 ///   exactly like a long flag (`-t user` keeps its paired value if the flag takes one,
@@ -83,7 +83,7 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 ///   flag ahead of an `allow_hyphen_values` positional - the positional swallows it - so
 ///   we reorder it here too. A leading-dash ENCODED token (a single `-` followed by
 ///   alphanumerics/dashes, whose first char is NOT a declared short flag, e.g.
-///   `-Users-…`) is NOT a flag and stays a positional.
+///   `-Users-...`) is NOT a flag and stays a positional.
 /// - Everything else is a positional.
 ///
 /// Flags (with paired values) are emitted first, then positionals, preserving each
@@ -300,7 +300,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
                 // INCLUDING a leading-`-` token when that flag carries `allow_hyphen_values`.
                 // The only tokens that are NOT its value: the `--` terminator, or another
                 // DECLARED long flag (a user typo such as `--format --kind`, which we leave
-                // for clap to report). A bare short `-x` or an encoded `-Users-…` IS consumed.
+                // for clap to report). A bare short `-x` or an encoded `-Users-...` IS consumed.
                 if i + 1 < rest.len() && rest[i + 1] != "--" && !all_long.contains(&rest[i + 1]) {
                     flags.push(rest[i + 1].clone());
                     i += 2;
@@ -312,7 +312,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
                 // long is deliberately hoisted WITH the declared ones: on a command whose
                 // first positional refuses hyphen values (`search` PATTERN) clap then
                 // reports it as an unknown flag WITH a did-you-mean tip (the old-spelling
-                // recovery path, e.g. `--turn-range` → `--turn`), and on every
+                // recovery path, e.g. `--turn-range` -> `--turn`), and on every
                 // target-taking command the `allow_hyphen_values` PATH/TARGET Vec absorbs
                 // it into `parse_project_target`, which rejects it BY NAME ("did you
                 // mistype a flag?"). Correct attribution in both regimes - see
@@ -321,12 +321,12 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
                 i += 1;
             }
         } else if let Some(short_c) = declared_short_flag(tok, short_all) {
-            // A `-x…` token whose first post-dash char `x` is a DECLARED short flag. Hoist
+            // A `-x...` token whose first post-dash char `x` is a DECLARED short flag. Hoist
             // it ahead of the positionals like a long flag. A BARE `-x` (exactly two chars)
             // that takes a value consumes the NEXT token as its value (the same pairing
             // rule as a value-taking long flag); a bundled `-xVALUE` (`-tuser`) or a boolean
             // `-i` carries everything inline and is emitted as one token. A leading-`-`
-            // ENCODED token (`-Users-…`) never reaches here - its first char is not a
+            // ENCODED token (`-Users-...`) never reaches here - its first char is not a
             // declared short flag, so `declared_short_flag` returns `None` and it falls to
             // the positional arm below.
             flags.push(tok.clone());
@@ -352,11 +352,11 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
     (flags, positionals, passthrough)
 }
 
-/// If `tok` is a `-x…` short-flag token whose first post-dash character is a DECLARED
+/// If `tok` is a `-x...` short-flag token whose first post-dash character is a DECLARED
 /// short flag of the active subcommand, return that character; else `None`. Used by
 /// [`normalize_argv`] to distinguish a real short flag (`-t`, `-i`, a bundled `-tuser`)
 /// -- which must be hoisted ahead of an `allow_hyphen_values` positional - from a
-/// leading-`-` ENCODED project token (`-Users-…`, whose first char is not a declared
+/// leading-`-` ENCODED project token (`-Users-...`, whose first char is not a declared
 /// short flag) which stays a positional. A bare `-` or `--`-leading token is never a
 /// short flag here (the caller handles `--` separately; a lone `-` has no flag char).
 pub(crate) fn declared_short_flag(

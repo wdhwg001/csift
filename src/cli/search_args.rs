@@ -429,7 +429,7 @@ impl SearchArgs {
         self.subagents || !self.no_subagents
     }
 
-    /// The project targets to scope to: the positional `[PATH]...`. Empty ⇒ the shared
+    /// The project targets to scope to: the positional `[PATH]...`. Empty => the shared
     /// resolver scans every project.
     #[must_use]
     pub fn targets(&self) -> Vec<PathBuf> {

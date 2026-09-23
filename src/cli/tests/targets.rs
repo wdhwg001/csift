@@ -24,7 +24,7 @@ fn real_path_target_still_accepted() {
     }
 }
 
-// ── Value parser accepts real targets, REJECTS a `--`-leading unknown flag ──
+// -- Value parser accepts real targets, REJECTS a `--`-leading unknown flag --
 
 #[test]
 fn parse_project_target_accepts_real_targets_rejects_double_dash() {
@@ -34,7 +34,7 @@ fn parse_project_target_accepts_real_targets_rejects_double_dash() {
     assert!(parse_project_target(".").is_ok());
     assert!(parse_project_target("-a--claude-b").is_ok());
     assert!(parse_project_target("C--Users-dev-proj").is_ok()); // Windows drive shape
-                                                                // A bare `--`-leading token is rejected as a probable mistyped flag → clap reports
+                                                                // A bare `--`-leading token is rejected as a probable mistyped flag -> clap reports
                                                                 // "unexpected argument" instead of the misleading "no project dir named --xxx"
                                                                 // (the one real `--`-led target, a UNC-encoded dir, goes through the `@` form -
                                                                 // the error says so). A single `-` token still parses (encoded target).

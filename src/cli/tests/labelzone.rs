@@ -120,7 +120,7 @@ fn label_zone_sources() -> Vec<PathBuf> {
     files
 }
 
-/// The file with its inline `#[cfg(test)] mod … { … }` region and its comment lines removed:
+/// The file with its inline `#[cfg(test)] mod ... { ... }` region and its comment lines removed:
 /// a bracket in a doc comment is prose about the output, not output.
 ///
 /// It cuts at an inline test MODULE or nowhere, and that precision is the whole function. An
@@ -141,7 +141,7 @@ fn code_only(src: &str) -> String {
     }
 }
 
-/// The offset of an inline `#[cfg(test)] mod <name> { … }`, or `None` for every other use of
+/// The offset of an inline `#[cfg(test)] mod <name> { ... }`, or `None` for every other use of
 /// the attribute. The discriminator is the BRACE: a module reached by `{` carries its tests
 /// here, a `mod <name>;` reached by `;` carries them in another file.
 fn inline_test_module(body: &str) -> Option<usize> {
@@ -202,7 +202,7 @@ fn tags_in(src: &str) -> (Vec<String>, Vec<String>) {
     let (mut heads, mut dynamic) = (Vec::new(), Vec::new());
     for lit in string_literals(src) {
         // A `Marker`'s head is the literal itself, not a bracketed run: `Marker::plain`
-        // and the struct's `head:` field both render as `[<head> …]`.
+        // and the struct's `head:` field both render as `[<head> ...]`.
         if let Some(h) = marker_head(src, &lit) {
             heads.push(h);
         }
@@ -235,7 +235,7 @@ fn marker_head(src: &str, lit: &str) -> Option<String> {
 /// the manual does not carry is a word a reader meets on screen with nowhere to look it up.
 ///
 /// HEAD WORDS rather than whole tags, because almost every tag interpolates - `[for: <kind>
-/// L<n>]`, `[root L12 +3]`, `[api-error status=…]`. The head is the part a reader can grep
+/// L<n>]`, `[root L12 +3]`, `[api-error status=...]`. The head is the part a reader can grep
 /// for and the part a rename moves, so matching `[<head>` in `SKILL.md` survives every
 /// placeholder while still failing on a renamed or deleted tag.
 ///
@@ -247,7 +247,7 @@ fn marker_head(src: &str, lit: &str) -> Option<String> {
 ///
 /// What this test CANNOT catch, stated so nobody reads a green run as more than it is: a
 /// FALLBACK ARM sharing its head with the arm beside it. `[checkpoint closes <instant>]` and
-/// `[checkpoint closes unknown (…)]` are one head, and so are `[root L12 +3]` and the hopless
+/// `[checkpoint closes unknown (...)]` are one head, and so are `[root L12 +3]` and the hopless
 /// `[root L12]`. Documenting both arms is a duty the transparency law states and no head-word
 /// sweep can enforce.
 #[test]

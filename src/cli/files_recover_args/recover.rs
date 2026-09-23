@@ -367,7 +367,7 @@ impl RecoverArgs {
 
     /// Resolve the mode flags into the active [`RecoverMode`]. clap's `group = "mode"`
     /// (multiple=false) rejects more than one at parse time, so at most one is set;
-    /// none set ⇒ the `Restore` default (full content, or an error if only partial).
+    /// none set => the `Restore` default (full content, or an error if only partial).
     #[must_use]
     pub fn mode(&self) -> RecoverMode {
         if self.at.is_some() {
