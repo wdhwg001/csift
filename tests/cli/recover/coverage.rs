@@ -101,7 +101,7 @@ fn recover_coverage_heuristic_boundary_uses_soft_symbol() {
 #[test]
 fn recover_coverage_out_is_noop_with_stderr_note() {
     // `--out` is a no-op in --coverage mode: no file is written, and a stderr note makes the
-    // no-op visible (the help truth-up for r6).
+    // no-op visible, which is what the help promises.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

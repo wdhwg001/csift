@@ -195,9 +195,10 @@ pub(crate) fn render_text(
         let n_automation = count_automation(plan);
         // Brand a spanned SUBAGENT block with the SAME shape every other session-emitting
         // surface uses (`list`/`files`/`search`): `SUBAGENT <hex>  ·  parent SESSION <uuid>`
-        // - never token a bare non-re-feedable subagent hex as `SESSION` (the id-domain
-        // overload r6 removed elsewhere), and surface the re-feedable parent uuid inline so a
-        // turns-text reader has a re-feed path. A top-level uuid block stays `SESSION <uuid>`.
+        // - never token a bare non-re-feedable subagent hex as `SESSION` (a bare hex is not
+        // an `@` target, so that word would send a reader to a target that fails), and
+        // surface the re-feedable parent uuid inline so a turns-text reader has a re-feed
+        // path. A top-level uuid block stays `SESSION <uuid>`.
         if sr.is_subagent {
             writeln!(
                 out,
