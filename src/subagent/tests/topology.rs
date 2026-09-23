@@ -330,8 +330,8 @@ fn fork_child_carrying_its_own_spawn_never_parents_itself() {
 fn spawn_index_merge_keeps_the_first_issuer_for_a_repeated_tool_use_id() {
     // A `/fork` clone repeats every spawn record its parent issued before the fork.
     // The main transcript folds first; a later local carrying the same tool_use id
-    // must NOT displace the original issuer (v0.10.2: FIRST-wins), while ids only the
-    // local carries still join.
+    // must NOT displace the original issuer - FIRST-wins - while ids only the local
+    // carries still join.
     let mut main = crate::subagent::ParentSpawnIndex::default();
     main.issuer.insert("toolu_shared".to_string(), None);
     main.tool_results

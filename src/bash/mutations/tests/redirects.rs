@@ -92,7 +92,7 @@ fn input_redirect_file_is_not_a_target() {
 // caught; the precision cases (Fix D) must stay DROPPED.
 // ────────────────────────────────────────────────────────────────────────────
 
-// ── Fix A - fd-qualified redirects (the dominant previously-missed class) ──
+// ── Fix A - fd-qualified redirects (the dominant class a bare `>` scan misses) ──
 
 #[test]
 fn fd_stderr_redirect_attached_and_spaced() {

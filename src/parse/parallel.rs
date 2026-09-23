@@ -7,9 +7,10 @@ use super::*;
 /// the file - identical numbering to a serial [`scan_lines_bytes`] pass). Each `Keep(T)` is
 /// collected in file order; each `Skip` increments the returned malformed count. The slice is
 /// split into newline-aligned chunks run on the `rayon` pool, so a single GIANT transcript
-/// (SPEC §7's "200MB+" case) is no longer bottlenecked on one core the way the across-files
-/// fan-out leaves it. Below `MIN_PARALLEL_BYTES` it runs as a single chunk (split/merge overhead
-/// isn't worth it). The `(items, skipped)` result is byte-for-byte equivalent to the serial scan.
+/// (SPEC §7's "200MB+" case) is not bottlenecked on one core, which is what an across-files
+/// fan-out on its own leaves it doing. Below `MIN_PARALLEL_BYTES` it runs as a single chunk
+/// (split/merge overhead isn't worth it). The `(items, skipped)` result is byte-for-byte
+/// equivalent to the serial scan.
 pub fn scan_lines_parallel<T, F>(bytes: &[u8], visit: F) -> (Vec<T>, usize)
 where
     F: Fn(&[u8], usize) -> LineVerdict<T> + Sync,
@@ -229,9 +230,9 @@ where
     // start_line[i] = 1 + (newlines strictly before chunk i's first byte) = the serial scan's
     // line number for that chunk's first visited line. Only the PREFIX sums are consumed
     // (chunk 0 always starts at line 1), so a single-chunk scan skips the counting pass
-    // entirely, and a multi-chunk scan counts in PARALLEL and never counts the last chunk -
-    // the serial whole-slice count here used to be a full extra pass over every byte before
-    // any parallel work began (idle workers on the single-giant-file case).
+    // entirely, and a multi-chunk scan counts in PARALLEL and never counts the last chunk.
+    // Counting the whole slice SERIALLY here instead is a full extra pass over every byte
+    // before any parallel work begins, with idle workers on the single-giant-file case.
     let mut start_line = Vec::with_capacity(chunks.len());
     start_line.push(1usize);
     if chunks.len() > 1 {

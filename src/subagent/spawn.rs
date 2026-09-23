@@ -65,11 +65,11 @@ impl ParentSpawnIndex {
         self.issuer.get(spawn_tool_use_id).cloned().flatten()
     }
 
-    /// The spawning tool_use id for a NAMED spawn (the teammate name-join, §FIX3). Among the
+    /// The spawning tool_use id for a NAMED spawn (the teammate name-join). Among the
     /// spawns that share `name`, prefer the LATEST whose trigger ≤ `at_or_before` (the child's
     /// head ts - the spawn always precedes the child), so a recurring name binds to the right
     /// launch; fall back to the first recorded spawn when none qualifies (or no bound given).
-    /// `None` when the name was never used to spawn. ISO8601-UTC strings compare chronologically.
+    /// `None` for a name that never spawned anything. ISO8601-UTC strings compare chronologically.
     #[must_use]
     pub fn spawn_id_for_name(&self, name: &str, at_or_before: Option<&str>) -> Option<String> {
         let cands = self.by_name.get(name)?;
@@ -91,7 +91,7 @@ impl ParentSpawnIndex {
 
     /// Fold `other` INTO `self` - used by [`build_global_spawn_index`] to merge the per-subagent
     /// LOCAL indexes built in parallel back into the global one. The id-keyed maps
-    /// (`spawns`/`tool_results`/`issuer`) are FIRST-wins (v0.10.2): a tool_use id is unique
+    /// (`spawns`/`tool_results`/`issuer`) are FIRST-wins: a tool_use id is unique
     /// per SPAWN, but a `/fork` child is a clone of its parent's transcript and repeats every
     /// spawn record the parent had issued before the fork, so a later-wins fold would
     /// re-parent those siblings onto the clone. The main transcript is folded first and the

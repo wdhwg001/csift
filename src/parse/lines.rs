@@ -7,8 +7,8 @@ use super::*;
 /// observed 400 KB single-line max).
 pub(crate) const TAIL_CHUNK: usize = 64 * 1024;
 
-/// Plain positional read of `path[start..end)` into a `Vec` - the LIVE-FILE reader
-/// (v0.10.4). A memory map of a file another process truncates faults with SIGBUS the
+/// Plain positional read of `path[start..end)` into a `Vec` - the LIVE-FILE
+/// reader. A memory map of a file another process truncates faults with SIGBUS the
 /// moment a page past the new end is touched, and there is no `Result` to catch it;
 /// Claude Code rewrites a transcript in place on a rewind tombstone (truncate + tail
 /// rewrite) and, when its local GC is armed, on compaction. So the repeated readers
@@ -72,7 +72,7 @@ pub(crate) fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
     // with SIGBUS, and no Result catches it. Claude Code does rewrite a transcript in
     // place (a rewind tombstone; an armed local GC on compaction), so the readers that
     // run repeatedly against a live file - `wait`'s poll and the `status` tail window -
-    // use `read_range`/`read_tail` instead (v0.10.4); the one-shot full scans keep the
+    // use `read_range`/`read_tail` instead; the one-shot full scans keep the
     // map, whose sub-second life bounds the exposure (SPEC section 7a). The crate lints
     // `unsafe_code = "deny"`; mmap is irreducibly unsafe and SPEC-mandated, so this is
     // the single audited call site that explicitly allows it.
@@ -158,12 +158,11 @@ pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {
 /// such a line lossily everywhere else - a rendered body is the source line decoded with
 /// replacement characters - so a record whose only defect is a byte that does not decode is
 /// a record every surface can show, and dropping it would be a silent loss of the text on
-/// the same line. serde used to reach that outcome by accident, skipping the byte whenever
-/// it sat in a field the model does not read; the EXPOSED KEYS arrive through a
-/// `#[serde(flatten)]` map, which buffers every unknown key rather than skipping it, so the
-/// accident is gone and the decision is made here instead. The retry is gated on the
-/// payload actually being invalid UTF-8, so a line that is merely bad JSON takes exactly
-/// the path it always took: one parse, one error, one malformed count.
+/// the same line. The decision is made HERE rather than left to serde: the EXPOSED KEYS
+/// arrive through a `#[serde(flatten)]` map, which BUFFERS every unknown key instead of
+/// skipping past it, so a byte that does not decode fails the whole record wherever on the
+/// line it sits. The retry is gated on the payload actually being invalid UTF-8, so a line
+/// that is merely bad JSON takes one parse, one error and one malformed count.
 pub fn parse_line(line: &[u8]) -> Result<Option<Record>> {
     let Some(payload) = line_payload(line) else {
         return Ok(None);

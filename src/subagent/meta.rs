@@ -61,7 +61,7 @@ pub struct MetaFields {
     pub agent_type: Option<String>,
     pub description: Option<String>,
     /// The spawning parent `Task`/`Agent` tool_use id (built-in only; the topology join
-    /// key). Captured here so the previously-dropped `toolUseId` reaches the topology.
+    /// key). Read here because the topology join has no other source for it.
     pub tool_use_id: Option<String>,
     pub name: Option<String>,
     /// `taskKind` - `"in_process_teammate"` marks a teammate (the only way to distinguish it
@@ -74,7 +74,7 @@ pub struct MetaFields {
     /// 2.1.25x; 92 metas in the reference corpus). Load-bearing for a `/fork` child: its
     /// transcript is a CLONE of the parent's and therefore carries the spawning tool_use
     /// itself, so the tool_use-graph join names the child as its own parent. This field
-    /// breaks that self-cycle (v0.10.1).
+    /// breaks that self-cycle.
     pub parent_agent_id: Option<String>,
 }
 

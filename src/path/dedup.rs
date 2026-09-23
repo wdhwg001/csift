@@ -488,7 +488,7 @@ pub fn write_duplicate_banner<W: std::io::Write>(
 
 /// The shared JSON disclosure every spanning surface carries in its envelope header. FOUR
 /// keys, all 0 when no session id was duplicated, and each answering one question a count
-/// in the rows below can no longer answer on its own:
+/// in the rows below cannot answer on its own:
 ///
 /// - `duplicate_transcripts` - how many transcripts the merge REMOVED from the scope.
 /// - `duplicate_records_dropped` - their physical jsonl lines, the domain `show --line`

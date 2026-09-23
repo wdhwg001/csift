@@ -47,13 +47,13 @@ pub fn collapse_and_truncate(s: &str, max: usize) -> String {
 }
 
 /// The ONE canonical "malformed lines skipped" note fragment, e.g.
-/// `3 malformed line(s) skipped`. Every subcommand surfaces the same malformed-line event;
-/// it was previously phrased three different ways (`(N malformed line(s) skipped)` on
-/// files/recover/search, a `note`-prefixed form on list/agents, and a reordered
-/// `(skipped N malformed jsonl line(s))` on turns), which made a scripted grep over the note
-/// fragile. Callers wrap this in their own delimiter (a parenthesized standalone line, or a
-/// `note`-prefixed header row) but the WORDING is now singular. Returns the bare fragment
-/// (no surrounding parens) so each caller controls its own framing.
+/// `3 malformed line(s) skipped`. Every subcommand surfaces the same malformed-line event,
+/// so the WORDING is singular: several spellings of one event - a parenthesized form on one
+/// command, a `note`-prefixed one on another, a reordered `(skipped N malformed jsonl
+/// line(s))` on a third - make a scripted grep over the note fragile. Callers wrap this in
+/// their own delimiter (a parenthesized standalone line, or a `note`-prefixed header row),
+/// so this returns the bare fragment, no surrounding parens, and each caller controls its
+/// own framing.
 #[must_use]
 pub fn malformed_note(n: usize) -> String {
     format!("{n} malformed line(s) skipped")

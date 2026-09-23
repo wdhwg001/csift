@@ -13,9 +13,9 @@ set -euo pipefail
 # 2. No folder with more than 20 .rs files. A path-named module root (`name.rs`
 #    with a sibling `name/` dir) belongs to its directory and does not count
 #    against the parent folder.
-# 3. No folder with more than 16 direct subfolders. (Raised 15 -> 16 at v0.9.0:
-#    a flat architecture is the design, not nesting sprawl, which the depth rule
-#    still guards.)
+# 3. No folder with more than 16 direct subfolders: a flat architecture is the
+#    design, and what this cap holds back is nesting sprawl, which the depth rule
+#    below guards from the other side.
 # A CAP THAT BINDS IS A REFACTOR GATE. Re-manage the layout - group a family
 # under a path-named root, split a file along a seam that means something. Never
 # raise a cap, never squeeze a file in, never force a merge that reads wrong.

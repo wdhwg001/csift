@@ -1,9 +1,9 @@
 //! Unit pins for the dangerous-removal port.
 //!
-//! The table below is the tracer's twenty-two example commands, each with the
-//! branch it takes, the arm that decides it and the byte offset of that arm in the
-//! 2.1.258 build, evaluated at all three generations. A row whose three columns
-//! differ is a generational fact, not a bug.
+//! The table below is twenty-two example commands, each with the branch it takes,
+//! the arm that decides it and the byte offset of that arm in the 2.1.258 build,
+//! evaluated at all three generations. A row whose three columns differ is a
+//! generational fact, not a bug.
 
 use super::*;
 

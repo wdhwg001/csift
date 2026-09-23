@@ -9,10 +9,10 @@
 //! (DST-correct - a January instant in Sydney renders `AEDT(UTC+11)`, a July one
 //! `AEST(UTC+10)`; an Indian machine renders `IST(UTC+05:30)`), never hardcoded.
 //!
-//! Design intent (v0.5): an LLM reader gets the zone name AND its offset together, so
+//! Design intent: an LLM reader gets the zone name AND its offset together, so
 //! the only mental step left is "shift by the given offset" - never "recall what
-//! offset this zone name maps to". The former dual form (`… AEST (2026-…Z)`) invited
-//! exactly the UTC-conversion arithmetic LLMs get wrong; the raw UTC lives in JSON
+//! offset this zone name maps to". A dual form (`… AEST (2026-…Z)`) invites exactly
+//! the UTC-conversion arithmetic LLMs get wrong, so the raw UTC lives in JSON
 //! (`ts_utc`) and in `--raw` bytes, never in text.
 //!
 //! This module is the single place the local-timezone choice lives.
@@ -72,9 +72,9 @@ fn render_local(raw: Option<&str>, millis: bool) -> String {
 }
 
 /// Render a raw ISO8601 UTC timestamp in the canonical local form, second precision:
-/// `2026-07-11 15:33:37 AEST(UTC+10)`. (The pre-v0.5 `… <TZ> (<raw UTC>)` dual form is
-/// gone - the UTC copy invited LLM conversion errors; machine consumers read JSON
-/// `ts_utc`.)
+/// `2026-07-11 15:33:37 AEST(UTC+10)`. No raw-UTC copy rides beside it: a `… <TZ> (<raw
+/// UTC>)` dual form invites the conversion arithmetic an LLM reader gets wrong, and a
+/// machine consumer reads JSON `ts_utc` instead.
 #[must_use]
 pub fn format_timestamp(raw: Option<&str>) -> String {
     render_local(raw, false)

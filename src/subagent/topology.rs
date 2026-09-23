@@ -395,8 +395,8 @@ pub(crate) fn node_for(
     // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the
     // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its
     // parent's transcript, so the spawning tool_use sits in the child's own file and the
-    // graph join names the child as its own parent (measured: every depth-65 node was
-    // such a self-cycle before v0.10.1).
+    // graph join names the child as its own parent (measured: every depth-65 node the
+    // join produced was such a self-cycle).
     let not_self = |p: String| (p != subagent.agent_id).then_some(p);
     let parent_agent_id = subagent
         .meta_parent_agent_id

@@ -229,10 +229,10 @@ mod tests {
     #[test]
     fn bare_datetime_is_local_wall_clock_not_midnight_collapse() {
         // R9: jiff's civil-Date parser accepts a full datetime string (keeping only the
-        // date), so a bare datetime used to collapse silently to local midnight. The
-        // DateTime arm must yield date-midnight + the stated time-of-day, in the SAME
-        // local zone - assert the delta, which is TZ-independent (no DST transition on
-        // 2026-06-01 in any mainstream zone between 00:00 and 05:00).
+        // date), so with the Date arm tried first a bare datetime collapses silently to
+        // local midnight. The DateTime arm must yield date-midnight + the time-of-day it
+        // states, in the SAME local zone - assert the delta, which is TZ-independent (no
+        // DST transition on 2026-06-01 in any mainstream zone between 00:00 and 05:00).
         let midnight = parse_bound("2026-06-01").unwrap();
         let five_am = parse_bound("2026-06-01T05:00:00").unwrap();
         let delta = five_am.as_second() - midnight.as_second();

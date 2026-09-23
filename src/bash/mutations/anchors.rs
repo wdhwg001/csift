@@ -1,5 +1,5 @@
-//! Content-ANCHOR classification of one Bash command (the recover layer's v0.9.4
-//! "bash reads are reads, bash writes are writes" upgrade).
+//! Content-ANCHOR classification of one Bash command - the recover layer's "bash
+//! reads are reads, bash writes are writes" rule.
 //!
 //! A small closed set of shell shapes carries DETERMINISTIC file content in the
 //! transcript itself: a quoted-delimiter heredoc's body is byte-verbatim in the

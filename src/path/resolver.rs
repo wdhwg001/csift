@@ -225,7 +225,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         if let Some(id) = t.strip_prefix('@') {
             match id {
                 "main" => {
-                    // C-17: csift cannot know the CALLER's lane (the env id is the
+                    // LANE HONESTY: csift cannot know the CALLER's lane (the env id is the
                     // parent's inside a subagent), so the inference is named on EVERY
                     // resolution - stderr only, stdout stays pure for pipes. NOT inside
                     // resolve_env_session: @trap calls that helper on a correct path.
@@ -277,11 +277,11 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     session_target = true;
                 }
                 // Any other `@`-token is an UNRECOGNIZED id shape: fail loud naming the
-                // @-grammar. It must NEVER fall through to path resolution - a stripped
-                // `@a` used to become the cwd-relative path `a` and report a misleading
-                // "no Claude Code project dir", sending the caller down a filesystem
-                // debugging trail for what is an ID typo (the one spot the fail-loud
-                // targeting law was silently violated).
+                // @-grammar. It must NEVER fall through to path resolution - falling
+                // through, a stripped `@a` becomes the cwd-relative path `a` and reports a
+                // misleading "no Claude Code project dir", sending the caller down a
+                // filesystem debugging trail for what is an ID typo: the fail-loud
+                // targeting law broken in silence.
                 _ => {
                     let hexish = !id.is_empty() && id.bytes().all(|b| b.is_ascii_hexdigit());
                     if hexish && id.len() < 4 {
@@ -307,11 +307,11 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         // top-level `<uuid>.jsonl` → that session. Either way its project dir scopes the search.
         if t.ends_with(".jsonl") {
             // Absolutize FIRST: a bare-basename token (`x.jsonl` with no separator) has
-            // `parent() == Some("")`, which used to feed an empty dir into the scan (a
-            // tolerated read_dir failure ending in a wrong "no session file found" bail)
-            // AND made the `subagents` component test misclassify a bare
-            // `agent-<hex>.jsonl` as a top-level session. One canonical form fixes the
-            // dir, the classification, and the sidecar sniff together.
+            // `parent() == Some("")`, which feeds an empty dir into the scan (a tolerated
+            // read_dir failure ending in a wrong "no session file found" bail) AND makes
+            // the `subagents` component test misclassify a bare `agent-<hex>.jsonl` as a
+            // top-level session. One canonical form fixes the dir, the classification, and
+            // the sidecar sniff together.
             let file = crate::path::absolutize(Path::new(t))?;
             let file = file.as_path();
             // An elicitation SIDECAR (hook-written backfill, csift-elicitation marker records

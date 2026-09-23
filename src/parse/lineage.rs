@@ -3,8 +3,8 @@
 //! Six top-level string fields answer a lineage question over a WHOLE file: `sessionKind`
 //! (the background-lane stamp, on every record a background process writes),
 //! `continuedInSessionId` (the handoff line's child id) and the PAIR `session_id` /
-//! `sessionId` (the session a record was MINTED in, against the session whose file now
-//! holds it) for `list --lineage`, plus `slug` (the plan BINDING key) and `timestamp` for
+//! `sessionId` (the session that MINTED a record, against the session whose file holds
+//! it) for `list --lineage`, plus `slug` (the plan BINDING key) and `timestamp` for
 //! `plan --audit`. Reading any of them with a record parse would decode every payload on
 //! the way past - a megabyte attachment, a base64 image, a whole file in a snapshot - to
 //! answer a question about one key.

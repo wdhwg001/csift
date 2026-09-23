@@ -272,9 +272,9 @@ where
         }
     }
     // Phase 2 - anchors still missing: continue into the head-examined region
-    // WITHOUT counting (the head scan already booked those lines; re-counting is the
-    // pre-v0.6.8 double-book). Same lines, same newest-first order as the old
-    // full-file walk, so anchor semantics are unchanged.
+    // WITHOUT counting. The head scan already booked those lines, so counting them a
+    // second time is the R12 double-book. Same lines, same newest-first order as a
+    // walk of the whole file, so anchor semantics are unchanged.
     if !stopped && floor > 0 {
         for raw in RevLines::with_chunk(&bytes[..floor], TAIL_CHUNK) {
             if !pre(&raw) {

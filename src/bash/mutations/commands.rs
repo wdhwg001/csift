@@ -442,7 +442,8 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
 /// - **BSD `-i ''` empty suffix**: macOS/BSD sed spells in-place as `-i ''` where the
 ///   following `''` token is the (here empty) backup suffix, NOT the script. An
 ///   empty-after-quote-strip operand is therefore never the script nor a file → skipped,
-///   so the REAL script no longer slides into the script slot and gets emitted as a file.
+///   which is what keeps the REAL script in the script slot: counting the empty suffix as
+///   the script slides the script itself one operand along and emits it as a file.
 pub(crate) fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
     if !operands.iter().any(|t| is_sed_in_place_flag(t)) {
         return;

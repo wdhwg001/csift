@@ -78,7 +78,7 @@ fn resolve_claude_home_precedence_flag_then_env_then_home() {
         resolve_claude_home(None, Some(OsStr::new("")), home),
         PathBuf::from("/home/u/.claude")
     );
-    // 4. Nothing set → $HOME/.claude (the historical default, unchanged).
+    // 4. Nothing set → $HOME/.claude (the default).
     assert_eq!(
         resolve_claude_home(None, None, home),
         PathBuf::from("/home/u/.claude")

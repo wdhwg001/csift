@@ -128,8 +128,8 @@ fn read_meta_none_for_missing_unreadable_and_malformed() {
     // A file with invalid JSON → the `serde_json::from_slice` Err arm.
     let bad = fx.write("bad.meta.json", "{ not valid json");
     assert_eq!(read_meta(Some(&bad)), MetaFields::default());
-    // Valid JSON carrying ONLY toolUseId → the topology join key is now CAPTURED
-    // (previously dropped to (None,None)); agentType/description/name stay None.
+    // Valid JSON carrying ONLY toolUseId → the topology join key is CAPTURED on its own;
+    // agentType/description/name stay None.
     let only_id = fx.write("only-id.meta.json", "{\"toolUseId\":\"toolu_x\"}");
     assert_eq!(
         read_meta(Some(&only_id)),

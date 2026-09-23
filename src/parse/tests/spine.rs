@@ -383,8 +383,8 @@ fn a_spine_row_stays_far_narrower_than_a_record() {
 ///
 /// The loose bound above guards the ROW; this guards the record, and the two failures it
 /// is here to catch are different. A field added to `Record` widens every record in the
-/// vector - the C-41 measurement is what this costs - and the widening is almost always
-/// unintended: a memo holding its payload inline rather than behind a pointer, a small
+/// vector - what splitting the spine rows out of it measured - and the widening is almost
+/// always unintended: a memo holding its payload inline rather than behind a pointer, a small
 /// struct inlined where an `Option<Box<_>>` would do. So the number is written down, and
 /// changing it is a deliberate act with a measurement behind it rather than a side effect
 /// somebody reads about later.

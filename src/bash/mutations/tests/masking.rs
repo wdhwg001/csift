@@ -218,8 +218,8 @@ fn quoted_inline_redirect_does_not_fabricate_a_file() {
 #[test]
 fn process_sub_body_operand_does_not_leak() {
     // `tee >(grep foo) /tmp/real.log`: the real sink is kept; the procsub BODY arg `foo`
-    // must NOT be fabricated as a `tee` file (its surviving `)` previously let
-    // `trim_structural_tail` peel it back to `foo`).
+    // must NOT be fabricated as a `tee` file - a `)` left on the token lets
+    // `trim_structural_tail` peel it back to a bare `foo` that reads like an operand.
     let got = paths("tee >(grep foo) /tmp/real.log");
     assert!(
         got.contains(&("/tmp/real.log".to_string(), "tee")),
@@ -330,9 +330,9 @@ fn shell_mask_is_byte_length_preserving_with_multibyte_utf8() {
 
 #[test]
 fn quote_aware_split_does_not_break_on_in_quote_sequencing() {
-    // A `;`/`|`/`&&` INSIDE a quoted string no longer splits the segment (a side
-    // benefit of the mask), so a real trailing redirect after the quote is still found
-    // and the in-quote operator fabricates nothing.
+    // A `;`/`|`/`&&` INSIDE a quoted string does not split the segment - the mask hides
+    // it - so a real trailing redirect after the quote is still found and the in-quote
+    // operator fabricates nothing.
     assert_eq!(
         paths(r#"echo "a; b | c && d" > /tmp/seq.log"#),
         vec![("/tmp/seq.log".to_string(), ">")]

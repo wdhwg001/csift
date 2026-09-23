@@ -77,8 +77,8 @@ pub fn discover_subagents(session_jsonl: &Path) -> Result<Vec<Subagent>> {
         }
     }
 
-    // (C) DEFENSIVE recursion (insurance, not a present-data fix). Verified 2026-06-07:
-    // across all 2348 subagent transcripts on disk there are ZERO sub-sub-agents - the
+    // (C) DEFENSIVE recursion (insurance, not a present-data fix). Across all 2348
+    // subagent transcripts of one projects root there are ZERO sub-sub-agents - the
     // real layout is single-level FLAT (a child of a general-purpose subagent would land
     // flat in this SAME `subagents/` dir, already covered by (A)). But if a FUTURE Claude
     // Code layout nests a child under `subagents/agent-<hex>/subagents/agent-<hex>.jsonl`,

@@ -176,9 +176,9 @@ pub(crate) fn shell_mask(command: &str) -> String {
 /// Split a command into segments on the shell sequencing/pipe operators and newlines,
 /// QUOTE/PROCSUB-AWARE via `mask` (a parallel string where in-quote / in-procsub bytes are
 /// [`MASK_CHAR`]). An operator is honored only where the mask still shows it - a `;`/`|`
-/// inside a quoted string is masked, so it no longer splits (fixing the prior "a `;` inside
-/// a quote splits" limitation as a side benefit). Each returned slice is taken from the
-/// ORIGINAL `command` (so the segment text is verbatim).
+/// inside a quoted string is masked and does not split, because a splitter reading the raw
+/// bytes cuts a segment in the middle of a quoted argument. Each returned slice is taken
+/// from the ORIGINAL `command` (so the segment text is verbatim).
 pub(crate) fn split_segments<'a>(command: &'a str, mask: &str) -> Vec<&'a str> {
     let mbytes = mask.as_bytes();
     let mut segments = Vec::new();

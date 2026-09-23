@@ -1,6 +1,6 @@
 //! Character-level shortest-edit-script distance (Myers O(ND)), bounded.
 //!
-//! The one consumer is the C-27 unsent diff line: how far a superseded draft
+//! The one consumer is the unsent-draft distance line: how far a superseded draft
 //! (`user.unsent`) sits from the message that replaced it. The number reported is
 //! INSERTIONS + DELETIONS of a shortest character-level edit script - the count of
 //! characters covered by the differing regions - never a length difference, so a

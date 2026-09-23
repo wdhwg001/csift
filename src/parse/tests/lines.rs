@@ -193,7 +193,7 @@ fn role_marker_is_serialization_tolerant() {
 
 #[test]
 fn read_range_and_read_tail_are_plain_reads_that_tolerate_a_shrink() {
-    // The live-file readers (v0.10.4): a positional read past a shrunk end returns fewer
+    // The live-file readers: a positional read past a shrunk end returns fewer
     // bytes instead of faulting; `end` is clamped, a start past the end is empty.
     let f = tmp_jsonl(&["0123456789", "abcdef"]);
     let p = f.path().to_path_buf();

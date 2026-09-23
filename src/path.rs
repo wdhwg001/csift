@@ -1,6 +1,6 @@
 //! Claude Code project-directory path encoding + target resolution.
 //!
-//! ## Encoding rule (verified empirically against `~/.claude/projects`, 2026-06-07)
+//! ## Encoding rule (verified empirically against `~/.claude/projects`)
 //!
 //! Claude Code encodes a project's absolute cwd into a directory name by
 //! replacing **every** non-`[A-Za-z0-9]` byte with a single `-`. There is **no**

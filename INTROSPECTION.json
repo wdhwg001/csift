@@ -8806,8 +8806,8 @@
       "code": [
         {
           "path": "src/bash/mutations/anchors.rs",
-          "lines": "1-10",
-          "snippet": "//! Content-ANCHOR classification of one Bash command (the recover layer's v0.9.4\n//! \"bash reads are reads, bash writes are writes\" upgrade).\n//!\n//! A small closed set of shell shapes carries DETERMINISTIC file content in the\n//! transcript itself: a quoted-delimiter heredoc's body is byte-verbatim in the\n//! tool_use input; `cat <file>` / `head -n N <file>` / `sed -n 'A,Bp' <file>` stdout\n//! (under the caller's completeness gate) IS the file window; `echo`/`printf` with\n//! purely literal arguments write known bytes; `truncate -s 0` writes the empty file.\n//! Everything else stays in the boundary/heuristic lanes - correctness first, but\n//! honesty about the decidable subset is not surrender on it."
+          "lines": "3-10",
+          "snippet": "//!\n//! A small closed set of shell shapes carries DETERMINISTIC file content in the\n//! transcript itself: a quoted-delimiter heredoc's body is byte-verbatim in the\n//! tool_use input; `cat <file>` / `head -n N <file>` / `sed -n 'A,Bp' <file>` stdout\n//! (under the caller's completeness gate) IS the file window; `echo`/`printf` with\n//! purely literal arguments write known bytes; `truncate -s 0` writes the empty file.\n//! Everything else stays in the boundary/heuristic lanes - correctness first, but\n//! honesty about the decidable subset is not surrender on it."
         }
       ],
       "states": [
@@ -34014,7 +34014,7 @@
         {
           "path": "src/parse/lines.rs",
           "lines": "70-81",
-          "snippet": "    // and treat its length as fixed-at-open. The one hazard the map cannot contain is a\n    // concurrent TRUNCATION by another writer: touching a page past the new end faults\n    // with SIGBUS, and no Result catches it. Claude Code does rewrite a transcript in\n    // place (a rewind tombstone; an armed local GC on compaction), so the readers that\n    // run repeatedly against a live file - `wait`'s poll and the `status` tail window -\n    // use `read_range`/`read_tail` instead (v0.10.4); the one-shot full scans keep the\n    // map, whose sub-second life bounds the exposure (SPEC section 7a). The crate lints\n    // `unsafe_code = \"deny\"`; mmap is irreducibly unsafe and SPEC-mandated, so this is\n    // the single audited call site that explicitly allows it.\n    #[allow(unsafe_code)]\n    let mmap =\n        unsafe { Mmap::map(&file) }.with_context(|| format!(\"cannot mmap {}\", path.display()))?;"
+          "snippet": "    // and treat its length as fixed-at-open. The one hazard the map cannot contain is a\n    // concurrent TRUNCATION by another writer: touching a page past the new end faults\n    // with SIGBUS, and no Result catches it. Claude Code does rewrite a transcript in\n    // place (a rewind tombstone; an armed local GC on compaction), so the readers that\n    // run repeatedly against a live file - `wait`'s poll and the `status` tail window -\n    // use `read_range`/`read_tail` instead; the one-shot full scans keep the\n    // map, whose sub-second life bounds the exposure (SPEC section 7a). The crate lints\n    // `unsafe_code = \"deny\"`; mmap is irreducibly unsafe and SPEC-mandated, so this is\n    // the single audited call site that explicitly allows it.\n    #[allow(unsafe_code)]\n    let mmap =\n        unsafe { Mmap::map(&file) }.with_context(|| format!(\"cannot mmap {}\", path.display()))?;"
         }
       ],
       "states": [
@@ -34183,8 +34183,8 @@
       "code": [
         {
           "path": "src/path/trap.rs",
-          "lines": "14-19",
-          "snippet": "/// very command that launched this run. Mechanism + TIMING (subagent verified live 2026-07-12;\n/// main-lane mechanism re-measured 2026-08-29): a SUBAGENT's transcript flushes per content\n/// block as it closes, so its launching tool_use is on disk at dispatch and a first try\n/// resolves. The MAIN conversation writes an async flush of the COMPLETED assistant message\n/// that lands ~1-3.4s AFTER the tool was dispatched - a RACE, not a wait (a 263s command was\n/// observed with its unpaired tool_use already on disk 39s in). csift finishes well inside"
+          "lines": "16-19",
+          "snippet": "/// block as it closes, so its launching tool_use is on disk at dispatch and a first try\n/// resolves. The MAIN conversation writes an async flush of the COMPLETED assistant message\n/// that lands ~1-3.4s AFTER the tool was dispatched - a RACE, not a wait (a 263s command was\n/// observed with its unpaired tool_use already on disk 39s in). csift finishes well inside"
         }
       ],
       "states": [
@@ -60843,8 +60843,8 @@
         },
         {
           "path": "src/subagent/discover.rs",
-          "lines": "80-83",
-          "snippet": "    // (C) DEFENSIVE recursion (insurance, not a present-data fix). Verified 2026-06-07:\n    // across all 2348 subagent transcripts on disk there are ZERO sub-sub-agents - the\n    // real layout is single-level FLAT (a child of a general-purpose subagent would land\n    // flat in this SAME `subagents/` dir, already covered by (A)). But if a FUTURE Claude"
+          "lines": "82-83",
+          "snippet": "    // real layout is single-level FLAT (a child of a general-purpose subagent would land\n    // flat in this SAME `subagents/` dir, already covered by (A)). But if a FUTURE Claude"
         },
         {
           "path": "src/subagent/topology.rs",
@@ -60854,12 +60854,12 @@
         {
           "path": "src/subagent/topology.rs",
           "lines": "395-404",
-          "snippet": "    // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the\n    // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its\n    // parent's transcript, so the spawning tool_use sits in the child's own file and the\n    // graph join names the child as its own parent (measured: every depth-65 node was\n    // such a self-cycle before v0.10.1).\n    let not_self = |p: String| (p != subagent.agent_id).then_some(p);\n    let parent_agent_id = subagent\n        .meta_parent_agent_id\n        .clone()\n        .and_then(not_self)"
+          "snippet": "    // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the\n    // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its\n    // parent's transcript, so the spawning tool_use sits in the child's own file and the\n    // graph join names the child as its own parent (measured: every depth-65 node the\n    // join produced was such a self-cycle).\n    let not_self = |p: String| (p != subagent.agent_id).then_some(p);\n    let parent_agent_id = subagent\n        .meta_parent_agent_id\n        .clone()\n        .and_then(not_self)"
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "73-77",
-          "snippet": "    /// `parentAgentId` - the harness's own word on the spawning agent (written since CC\n    /// 2.1.25x; 92 metas in the reference corpus). Load-bearing for a `/fork` child: its\n    /// transcript is a CLONE of the parent's and therefore carries the spawning tool_use\n    /// itself, so the tool_use-graph join names the child as its own parent. This field\n    /// breaks that self-cycle (v0.10.1)."
+          "lines": "73-76",
+          "snippet": "    /// `parentAgentId` - the harness's own word on the spawning agent (written since CC\n    /// 2.1.25x; 92 metas in the reference corpus). Load-bearing for a `/fork` child: its\n    /// transcript is a CLONE of the parent's and therefore carries the spawning tool_use\n    /// itself, so the tool_use-graph join names the child as its own parent. This field"
         },
         {
           "path": "src/subagent/spawn.rs",
@@ -61157,7 +61157,7 @@
         {
           "path": "src/subagent/meta.rs",
           "lines": "63-65",
-          "snippet": "    /// The spawning parent `Task`/`Agent` tool_use id (built-in only; the topology join\n    /// key). Captured here so the previously-dropped `toolUseId` reaches the topology.\n    pub tool_use_id: Option<String>,"
+          "snippet": "    /// The spawning parent `Task`/`Agent` tool_use id (built-in only; the topology join\n    /// key). Read here because the topology join has no other source for it.\n    pub tool_use_id: Option<String>,"
         },
         {
           "path": "src/subagent/meta.rs",
@@ -63000,11 +63000,11 @@
         {
           "path": "src/path/trap.rs",
           "lines": "12-19",
-          "snippet": "/// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash\n/// `tool_use` command carries the (unique, literal) marker AND the literal `csift` - i.e. the\n/// very command that launched this run. Mechanism + TIMING (subagent verified live 2026-07-12;\n/// main-lane mechanism re-measured 2026-08-29): a SUBAGENT's transcript flushes per content\n/// block as it closes, so its launching tool_use is on disk at dispatch and a first try\n/// resolves. The MAIN conversation writes an async flush of the COMPLETED assistant message\n/// that lands ~1-3.4s AFTER the tool was dispatched - a RACE, not a wait (a 263s command was\n/// observed with its unpaired tool_use already on disk 39s in). csift finishes well inside"
+          "snippet": "/// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash\n/// `tool_use` command carries the (unique, literal) marker AND the literal `csift` - i.e. the\n/// very command that launched this run. Mechanism + TIMING, both measured live against a\n/// running session: a SUBAGENT's transcript flushes per content\n/// block as it closes, so its launching tool_use is on disk at dispatch and a first try\n/// resolves. The MAIN conversation writes an async flush of the COMPLETED assistant message\n/// that lands ~1-3.4s AFTER the tool was dispatched - a RACE, not a wait (a 263s command was\n/// observed with its unpaired tool_use already on disk 39s in). csift finishes well inside"
         },
         {
           "path": "src/path/trap.rs",
-          "lines": "302-308",
+          "lines": "303-309",
           "snippet": "pub(crate) fn bash_command_carries_trap(path: &Path, marker: &str) -> bool {\n    let Ok(Some(mmap)) = crate::parse::mmap_bytes(path) else {\n        return false;\n    };\n    let bytes: &[u8] = &mmap;\n    if memchr::memmem::find(bytes, marker.as_bytes()).is_none() {\n        return false;"
         }
       ],
@@ -68835,7 +68835,7 @@
       "code": [
         {
           "path": "src/path/trap.rs",
-          "lines": "324-331",
+          "lines": "325-332",
           "snippet": "                        // Both SHELL tools carry the invocation in `input.command`: `Bash`\n                        // everywhere, and Windows' SEPARATE `PowerShell` tool (CC 2.1.228:\n                        // the fallback when Git-for-Windows bash is absent, or the gated\n                        // preference - same `command` field, verbatim from the binary's\n                        // tool registry). A Bash-only gate left @trap blind exactly on the\n                        // mandatory Windows fallback.\n                        if (n == \"Bash\" || n == \"PowerShell\")\n                            && inp"
         },
         {
@@ -68939,7 +68939,7 @@
       "code": [
         {
           "path": "src/path/trap.rs",
-          "lines": "322-331",
+          "lines": "323-332",
           "snippet": "                    } = b\n                    {\n                        // Both SHELL tools carry the invocation in `input.command`: `Bash`\n                        // everywhere, and Windows' SEPARATE `PowerShell` tool (CC 2.1.228:\n                        // the fallback when Git-for-Windows bash is absent, or the gated\n                        // preference - same `command` field, verbatim from the binary's\n                        // tool registry). A Bash-only gate left @trap blind exactly on the\n                        // mandatory Windows fallback.\n                        if (n == \"Bash\" || n == \"PowerShell\")\n                            && inp"
         }
       ],

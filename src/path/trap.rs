@@ -11,8 +11,8 @@ pub(crate) enum TrapSelf {
 
 /// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash
 /// `tool_use` command carries the (unique, literal) marker AND the literal `csift` - i.e. the
-/// very command that launched this run. Mechanism + TIMING (subagent verified live 2026-07-12;
-/// main-lane mechanism re-measured 2026-08-29): a SUBAGENT's transcript flushes per content
+/// very command that launched this run. Mechanism + TIMING, both measured live against a
+/// running session: a SUBAGENT's transcript flushes per content
 /// block as it closes, so its launching tool_use is on disk at dispatch and a first try
 /// resolves. The MAIN conversation writes an async flush of the COMPLETED assistant message
 /// that lands ~1-3.4s AFTER the tool was dispatched - a RACE, not a wait (a 263s command was
@@ -49,10 +49,11 @@ pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
     match subagent_hits.len() {
         1 => Ok(TrapSelf::Agent(subagent_hits.remove(0))),
         0 if main_hit => {
-            // T4: this branch used to succeed SILENTLY, and that silence manufactured the
-            // wrong mechanism story (main trap -> miss -> retry -> hit -> written up as
-            // doctrine). Name the lane on stderr: stdout bytes unchanged, exit 0, and the
-            // signal is the RESOLUTION itself, so it holds regardless of flush timing.
+            // A SILENT success here is indistinguishable from a subagent match, so a
+            // top-level caller reads its own miss-then-retry as the subagent mechanism and
+            // writes that up as doctrine. Name the lane on stderr: stdout bytes unchanged,
+            // exit 0, and the signal is the RESOLUTION itself, so it holds regardless of
+            // flush timing.
             eprintln!(
                 "csift: note: @trap:{marker} resolved to the TOP-LEVEL session {session_id} - \
                  the marker was carried by the MAIN transcript, so you are NOT a subagent in \

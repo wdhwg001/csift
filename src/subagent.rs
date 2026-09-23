@@ -1,6 +1,6 @@
 //! Subagent / nested-transcript discovery, classification, and lifecycle.
 //!
-//! ## On-disk layout (empirically mapped against `~/.claude/projects`, 2026-06-07)
+//! ## On-disk layout (empirically mapped against `~/.claude/projects`)
 //!
 //! A top-level session `<ENCODED>/<session-uuid>.jsonl` may own a sibling sidecar
 //! directory `<ENCODED>/<session-uuid>/` holding its subagent transcripts in THREE
