@@ -222,8 +222,12 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // split on `\n` only) 252 of 252 true boundaries - a JSON object with top-level
         // `type=="system"` and `subtype=="compact_boundary"` - carry the key-only bytes
         // `"subtype"`, while 226 of 226 lines that carry the literal in a payload and would
-        // otherwise be admitted by the literal alone (attachments and `queue-operation` lines,
-        // which no other flagless keep reaches) carry it in none. The key needle is what the
+        // otherwise be admitted by the literal alone (189 `attachment` + 37 `queue-operation`,
+        // 33287888 bytes over 5 files, which no other flagless keep reaches) carry it in none.
+        // That second population is a MOVING count taken at an instant, never a fixed one: a
+        // session writing ABOUT the literal accumulates it in prose. That is the hazard itself,
+        // and it is why the discriminator is the KEY - a property of the producer - and never
+        // the literal's rarity, which is a property of the corpus. The key needle is what the
         // needle law admits by form (a quoted KEY survives a reserialize) and the boundary
         // finder stays FIRST, so the second memmem runs only on the handful of lines carrying
         // the rare literal.

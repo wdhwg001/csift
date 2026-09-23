@@ -12093,7 +12093,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "239",
+          "lines": "243",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -12281,7 +12281,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "246",
+          "lines": "250",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         }
       ],
@@ -13407,7 +13407,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "230-232",
+          "lines": "234-236",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -44313,7 +44313,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "246",
+          "lines": "250",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         }
       ],
@@ -44636,7 +44636,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "246",
+          "lines": "250",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())"
         },
         {
@@ -73188,7 +73188,7 @@
         },
         {
           "path": "src/commands/search/scan/gates.rs",
-          "lines": "241-244",
+          "lines": "245-248",
           "snippet": "        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
