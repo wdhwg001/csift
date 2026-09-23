@@ -444,7 +444,7 @@ Every relation csift can answer about a record, and where the answer lives. The 
 | `opens` / the turn root | any unit -> the record that OPENED its turn, with the hop distance | position | `for_root` on EVERY hit - the one answer that carries a distance, which no edge does |
 | `answers` / `rejects` | an answered AskUserQuestion, a refused tool call -> the call | key | `result_of` above - the two user-facing duals ride the answering carrier and its id |
 | `returns_to` | a subagent -> the call that spawned it | key | `agents` node `spawn_tool_use_id` + `parent_agent_id` - a CROSS-FILE join |
-| `parent_lane` | a subagent transcript -> its owner | position | the r5 trio (`parent_session_id`) on every spanning row - a CROSS-FILE join |
+| `parent_lane` | a subagent transcript -> its owner | position | the id trio (`parent_session_id`) on every spanning row - a CROSS-FILE join |
 | `clone_of` | a clone-head transcript -> the session it was copied from | inferred | `list` row `clone_of` - a CROSS-FILE join, inferred from a boundary shape |
 | `cleared_from` | a `/clear`-minted transcript -> its predecessor | inferred | `list` row `cleared_from` - a CROSS-FILE join, inferred from a cost checkpoint |
 | `session_id_names` | a record -> the session that MINTED it | key | `list --lineage` `minted_elsewhere` - a set, and a different question from the three above |
