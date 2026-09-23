@@ -119,7 +119,7 @@ pub fn write_scope_banner<W: std::io::Write>(
 ///   `{"kind":"header","command":"<cmd>", ...}`   the FIRST line, ALWAYS emitted;
 ///   `{"kind":"<row-kind>", ...}` x N             command-specific kind-tagged rows;
 ///   `{"kind":"summary", ...}`                    the LAST line, ALWAYS emitted (even all-zero).
-/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="...")'` - no
+/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="…")'` - no
 /// per-command envelope knowledge, no conditional first line, no shape-varied trailer.
 /// These two builders are the ONLY way a module makes its header/summary line, so the
 /// invariant cannot drift per command.
