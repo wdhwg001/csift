@@ -51,7 +51,7 @@ pub(crate) fn tz_marker(zoned: &jiff::Zoned) -> String {
 }
 
 /// The shared canonical renderer: `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC+/-offset)`.
-/// Absent -> `-`; present but unparseable -> the raw bytes surfaced with `(unparsed)`
+/// Absent -> the em dash U+2014; present but unparseable -> the raw bytes surfaced with `(unparsed)`
 /// (never a panic, never a fabricated time, never a silent drop).
 fn render_local(raw: Option<&str>, millis: bool) -> String {
     let Some(raw) = raw else {

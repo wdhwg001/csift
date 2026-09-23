@@ -160,7 +160,7 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
     Ok(Some(then.timestamp()))
 }
 
-/// Absolute ISO8601: a full instant (`2026-06-01T05:00:00Z` / `...+10:00`), a bare civil
+/// Absolute ISO8601: a full instant (`2026-06-01T05:00:00Z` / `…+10:00`), a bare civil
 /// DATETIME (`2026-06-01T05:00:00` - system-LOCAL wall-clock time, the same local
 /// convention as a bare date), or a bare date (`2026-06-01`, system-local midnight).
 fn parse_absolute(s: &str) -> Result<Timestamp> {

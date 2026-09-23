@@ -5,7 +5,7 @@
 //! ## Why one place
 //!
 //! The never-silent-truncation contract (SPEC section 0, section 8.1) requires EVERY content excerpt to
-//! mark dropped characters with an explicit `... (+N chars)` count. That algorithm lived in
+//! mark dropped characters with an explicit `… (+N chars)` count. That algorithm lived in
 //! three byte-identical `truncate_excerpt` copies (differing only by a per-file cap) plus a
 //! DIVERGENT fourth in `agents::one_line` that omitted the count (a real contract
 //! violation). Folding them here keeps the algorithm - and the marker - singular; callers
@@ -22,7 +22,7 @@ mod out;
 pub(crate) use out::*;
 
 /// Truncate `s` to at most `max` CHARACTERS, marking any elision with an explicit
-/// `... (+N chars)` suffix (N = dropped char count). Counts CHARACTERS, never bytes, so
+/// `… (+N chars)` suffix (N = dropped char count). Counts CHARACTERS, never bytes, so
 /// multi-byte UTF-8 (CJK / emoji) truncates on a codepoint boundary. NEVER silent: a string
 /// longer than `max` always carries the count. A string within `max` is returned unchanged.
 #[must_use]
@@ -38,7 +38,7 @@ pub fn truncate_excerpt(s: &str, max: usize) -> String {
 /// Collapse internal whitespace runs to single spaces, then [`truncate_excerpt`] to `max`.
 /// CODEPOINT-SAFE (collapses + truncates on char boundaries). Used by the `agents`
 /// one-line returned-message preview, which both flattens multi-line content AND must mark
-/// its elision with the same `... (+N chars)` count as every other excerpt path: a preview
+/// its elision with the same `… (+N chars)` count as every other excerpt path: a preview
 /// that flattens without the count is a silent truncation, which the output contract forbids.
 #[must_use]
 pub fn collapse_and_truncate(s: &str, max: usize) -> String {
