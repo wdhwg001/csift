@@ -21,9 +21,9 @@ pub enum AgentKindFilter {
 #[derive(Debug, Args)]
 #[command(
     about = "List a session's subagents with kind, start/completion timestamps + status",
-    long_about = "List a session's SUBAGENT lifecycle: every subagent transcript the \
-        session spawned, with its id, KIND, start + completion timestamps, duration, \
-        and a determinable status. Three on-disk shapes are discovered under \
+    long_about = "List a session's SUBAGENT lifecycle: every subagent transcript the session \
+        spawned, with its id, KIND, start + completion timestamps, duration, and a \
+        determinable status. Three on-disk shapes are discovered under \
         `<session>/subagents/**`:\n  \
           • builtin-task  subagents/agent-<hex>.jsonl                 (Task/Agent tool)\n  \
           • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n  \

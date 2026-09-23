@@ -23,8 +23,8 @@ use super::*;
         most needs); the EMITTED document is sorted ascending so it reads as a forward \
         transcript. The backward walk is TRANSPARENT to compaction boundaries: a summary \
         record is a turn MEMBER, never a delimiter, so a 40K-char budget reaches back \
-        across multiple boundaries by default (verified: 3 on one real sample, 2 on \
-        another). `--max-compactions` only caps how far.\n\n\
+        across multiple boundaries by default (3 and 2 on two real transcripts). \
+        `--max-compactions` only caps how far.\n\n\
         BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in CHARS \
         (sizing rule of thumb: ≈4 chars/token); it is applied PER session \
         in scope. The header's `spanned K of N compaction boundaries in scope` is \
@@ -62,8 +62,8 @@ use super::*;
         AGENT MESSAGES (`--agent-msgs`, default `longest`): a single genuine-user turn can \
         own a LONG run of agent messages (a debugging/build chain the model narrates) that \
         the summary clips to one §9 quote. `longest` keeps the longest message of the run \
-        plus the first when substantive plus each rich middle. `eot-only` restores just the \
-        last (the pre-expansion single-EOT output). `rich` ALSO restores the first/middle \
+        plus the first when substantive plus each rich middle. `eot-only` keeps just the \
+        last, which is the wrap-up when the substance sits earlier. `rich` ALSO restores the first/middle \
         messages that carry important info: a count, a commit hash, a `file.rs:NNN` ref, \
         backtick code, or a finding/decision lexeme, or that are clearly long, collapsing \
         pure \"let me look into this\" declarations into a `△ L… [X agent messages \
@@ -294,13 +294,13 @@ pub struct VerbatimArgs {
 
     /// Per-turn agent-message policy (MASTER switch for the multi-agent-message model).
     /// `longest` (DEFAULT) keeps the LONGEST agent message: the substantive Rich Response,
-    /// which is frequently a MIDDLE message, not the last ~50-char throwaway wrap-up that
-    /// the old `agents.last()` default silently kept, PLUS the first message when it is
+    /// which is frequently a MIDDLE message, not the last ~50-char throwaway wrap-up a
+    /// last-only pick would take, PLUS the first message when it is
     /// substantive (>= the mode's rich-min threshold) PLUS each rich middle (a number, commit
     /// hash, file:line, backtick code, or finding/decision lexeme, or clearly long),
-    /// collapsing the rest into a placeholder. `eot-only` forces the old single-EOT
-    /// behavior (only each turn's last agent message; byte-identical to the pre-feature
-    /// output). `rich` keeps the last always + the first by position privilege + each
+    /// collapsing the rest into a placeholder. `eot-only` keeps only each turn's LAST agent
+    /// message, which takes that wrap-up whenever the substance of the run sits
+    /// earlier. `rich` keeps the last always + the first by position privilege + each
     /// non-droppable middle, only on a long run (over the mode's run threshold).
     /// `all` keeps every agent message.
     #[arg(long = "agent-msgs", value_enum, default_value_t = crate::commands::turns::AgentMsgMode::Longest)]

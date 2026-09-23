@@ -80,7 +80,7 @@ pub(crate) const DEDUP_PREFIX: usize = 80;
 //   • everything else collapses into a placeholder.
 // `--agent-rich-min-chars` tunes BOTH the first-substantive gate and the rich length arm.
 //
-// `Rich` is the OLDER keep-set, retained as an explicit mode (a long run only; short runs
+// `Rich` is the LAST-ANCHORED keep-set, an explicit mode (a long run only; short runs
 // keep all): LAST always + FIRST by position privilege (under `--keep-first`) + each
 // non-droppable MIDDLE.
 //
@@ -99,9 +99,9 @@ pub(crate) const DEDUP_PREFIX: usize = 80;
 // less intent-verb opener under the declaration length), KEEP is the default fall-through.
 //
 // MODES. `AgentMsgMode::Longest` (the DEFAULT) keeps the longest + the first-if-
-// substantive + the rich middles, as above. `AgentMsgMode::EotOnly` forces the old single-
-// EOT behavior (only `agents.last()`, byte-identical to the pre-expansion output) - the
-// "force last-only" escape. `AgentMsgMode::All` keeps every message (no filtering). The
+// substantive + the rich middles, as above. `AgentMsgMode::EotOnly` keeps ONLY each turn's
+// last agent message - the "force last-only" escape, which takes the wrap-up whenever the
+// substance sits earlier. `AgentMsgMode::All` keeps every message (no filtering). The
 // `Rich` mode's filtering is only attempted on a LONG run (`agents.len() > run_threshold`,
 // default 6); short runs keep every message. `Longest` applies its longest+heuristic pick
 // to EVERY multi-message turn (no short-run escape - the headline "long Rich Response then
@@ -114,12 +114,12 @@ pub enum AgentMsgMode {
     /// Response, which is frequently a MIDDLE message, not the last throwaway wrap-up) +
     /// the FIRST when substantive (`full_chars >= rich_min_chars`) + each RICH middle;
     /// collapse everything else into a placeholder. Applies to every multi-message turn
-    /// (no short-run escape). On a tie the LAST maximum wins (an all-equal run coincides
-    /// with the old `agents.last()` pick).
+    /// (no short-run escape). On a tie the LAST maximum wins, so an all-equal run
+    /// coincides with the last-only pick.
     #[default]
     Longest,
-    /// Force the OLD single-EOT behavior: keep ONLY the last agent message per turn
-    /// (byte-identical to the pre-expansion output). The "force last-only" escape.
+    /// Keep ONLY the last agent message per turn: the "force last-only" escape, which
+    /// takes the wrap-up whenever the substance of the run sits earlier.
     #[value(name = "eot-only")]
     EotOnly,
     /// Keep the last always + the first by position privilege +

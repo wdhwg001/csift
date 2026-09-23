@@ -26,7 +26,7 @@ fn the_budget_decides_how_far_the_chain_climbs_and_the_summary_states_it() {
     let zero = at_budget("0");
     assert!(
         zero.get("boundaries_crossed").is_none(),
-        "budget 0 is the reading csift gave before the flag existed: {zero}"
+        "budget 0 crosses nothing, so it discloses nothing about crossing: {zero}"
     );
     assert_eq!(
         zero["boundary_cut_line"], 9,

@@ -238,15 +238,17 @@ pub struct Cli {
     /// rewound past up there is one csift could not name until the walk got to it. Above a
     /// CROSSED
     /// boundary records resolve by the ordinary rules (live / abandoned); above the FLOOR
-    /// where the walk stopped they stay `pre-cut`, exactly as before.
+    /// where the walk stopped they stay `pre-cut`.
     ///
     /// `0` restores the loader's reading and makes csift say nothing about crossing at
-    /// all; `all` follows every boundary a transcript carries. `0` also reproduces csift
-    /// before this flag existed, byte for byte on all 32 measured streams, with ONE known
-    /// exception: a boundary whose OWN `parentUuid` is non-null and names no record was
-    /// crossed by the old build's guard and is not crossed at `0`; no transcript of the
-    /// measured corpus carries that shape, so compare rather than assume if you need the
-    /// old reading exactly on one that does. The footer names what was
+    /// all; `all` follows every boundary a transcript carries. `0` ends the walk AT every
+    /// boundary with no exception, including the one shape where a BUDGET and a GUARD on
+    /// the `logicalParentUuid` arm decide differently: a boundary whose OWN `parentUuid`
+    /// is non-null and names no record is climbable by that arm as a guard, while a budget
+    /// of `0` buys no hop at all, so the records above it read `pre-cut` instead of
+    /// resolving. No transcript of the measured corpus - 32 streams over 8 transcripts -
+    /// carries that shape, so read both budgets rather than assume they agree on one that
+    /// does. The footer names what was
     /// crossed, what was not, and what you can do about the rest - it offers a flag value
     /// only where raising the flag would MOVE the floor, which needs both that the BUDGET
     /// is what stopped the walk and that the boundary it stopped at still names a record

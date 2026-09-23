@@ -115,28 +115,25 @@ use super::*;
         `version` only when the bytes changed - so the version sequence records DISK \
         TRUTH, including writes with NO tool record (the harness rewriting its \
         settings on /model or /config, an outside editor). recover reads the sequence \
-        from the transcript and, where the store blob under \
-        `<claude-home>/file-history/` survives AND its mtime matches the recorded \
-        backup instant (the @vN name collides across a mid-session counter reset, so \
-        an unverified blob is refused), COMPARES the replayed buffer against the \
-        snapshot content at each version change: a disagreement is an authoritative \
-        `external_write` boundary and the replay REBASES on the snapshot bytes, so the \
-        reconstruction continues from what the disk held rather than from a buffer no \
-        file ever carried. Without the blob, \
-        a version jump with no tool write since the previous snapshot still discloses \
-        the same boundary content-less: `external write (inferred, snapshot vN->vM, no \
-        tool record since L<line>)`, naming the interval it bounds so you can go read it \
-        (nothing rebased, trust ends there). Both the per-prompt `file-history-snapshot` \
-        table and the per-write `file-history-delta` line feed that sequence, so the \
-        interval is as tight as the harness's own bookkeeping allows. This runs for the \
-        `--file` TARGET on ANY path; `csift files` reports the same inference only for \
-        the settings family, because a global timeline row per tracked path would flood \
-        the output. A tool \
-        write and a silent write inside ONE snapshot interval merge into one bump; \
-        the content comparison is the complete detector, the number alone is not. The \
-        motivating producer is /rewind \"Restore code\", which writes NOTHING to the \
-        transcript - the next prompt's `edited_text_file` attachment is the only other \
-        trace, and it stays the authoritative boundary it already was.\n\n\
+        from the transcript and, where the store blob under `<claude-home>/file-history/` \
+        survives AND its mtime matches the recorded backup instant (the @vN name collides \
+        across a mid-session counter reset, so an unverified blob is refused), COMPARES the \
+        replayed buffer against the snapshot content at each version change: a disagreement \
+        is an authoritative `external_write` boundary and the replay REBASES on the snapshot \
+        bytes, so the reconstruction continues from what the disk held rather than from a \
+        buffer no file ever carried. Without the blob, a version jump with no tool write \
+        since the previous snapshot still discloses the same boundary content-less: `external \
+        write (inferred, snapshot vN->vM, no tool record since L<line>)`, naming the interval \
+        it bounds so you can go read it (nothing rebased, trust ends there). Both the \
+        per-prompt `file-history-snapshot` table and the per-write `file-history-delta` line \
+        feed that sequence, so the interval is as tight as the harness's own bookkeeping \
+        allows. This runs for the `--file` TARGET on ANY path; `csift files` reports the same \
+        inference only for the settings family, because a global timeline row per tracked \
+        path would flood the output. A tool write and a silent write inside ONE snapshot \
+        interval merge into one bump; the content comparison is the complete detector, the \
+        number alone is not. The motivating producer is /rewind \"Restore code\", which \
+        writes NOTHING to the transcript - the next prompt's `edited_text_file` attachment is \
+        the only other trace, and it stays the authoritative boundary it already was.\n\n\
         THE SURVIVAL AXIS: the replay is FILE ORDER and stays that way. An Edit made on a \
         branch the operator later rewound past DID hit the disk, so it is replayed like any \
         other write - what changes is the reporting. Turn numbers are the LIVE ones (the \
@@ -276,18 +273,16 @@ pub struct RecoverArgs {
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
 
-    /// List Claude Code's OWN file-history checkpoint store for `--file` (the rewind
-    /// feature's snapshots under `<claude-home>/file-history/<session>/<hash>@vN`): one
-    /// row per stored checkpoint (backup instant, bytes, @vN, store path), ordered by
-    /// backup instant. The store key is sha256 of the absolute path (first 16 hex), so
-    /// `--file` must be a literal absolute path (`@plan` cannot be hashed). Provenance
-    /// bounds: written by the structured
+    /// List Claude Code's OWN file-history checkpoint store for `--file` (the rewind feature's
+    /// snapshots under `<claude-home>/file-history/<session>/<hash>@vN`): one row per stored
+    /// checkpoint (backup instant, bytes, @vN, store path), ordered by backup instant. The
+    /// store key is sha256 of the absolute path (first 16 hex), so `--file` must be a literal
+    /// absolute path (`@plan` cannot be hashed). Provenance bounds: written by the structured
     /// file tools and by an approved in-place `sed` preview only (other shell writes and
-    /// manual edits never land here), PRUNED over time, and `@vN` counters reset per
-    /// session dir (never an order key) - so absence proves nothing and a listing is
-    /// NOT a history. Listing only: csift never merges checkpoint content into a
-    /// reconstruction (it has no transcript anchor); inspect or copy a row's store path
-    /// yourself.
+    /// manual edits never land here), PRUNED over time, and `@vN` counters reset per session
+    /// dir (never an order key) - so absence proves nothing and a listing is NOT a history.
+    /// Listing only: csift never merges checkpoint content into a reconstruction (it has no
+    /// transcript anchor); inspect or copy a row's store path yourself.
     #[arg(long = "list-backups", group = "mode", conflicts_with = "files_from")]
     pub list_backups: bool,
 

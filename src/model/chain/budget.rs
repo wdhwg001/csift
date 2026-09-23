@@ -2,8 +2,8 @@
 //! and what it says about the ones it did not.
 //!
 //! Claude Code's own loader stops dead at a `compact_boundary` - it reads `parentUuid`
-//! only, and every boundary carries a null one. csift walks the same links, so it stopped
-//! there too and flagged the whole region above as `PreCut`. But the conversation does
+//! only, and every boundary carries a null one. A walk over those same links alone ends
+//! there too and leaves the whole region above flagged `PreCut`. But the conversation does
 //! naturally continue across a compaction - the records above a cut are the same
 //! conversation, and until the walk gets up there csift cannot tell a turn the operator
 //! rewound past from history it simply could not resolve - and the boundary itself names the
@@ -15,28 +15,27 @@
 //! all of them by default would make every chain-walking command pay for history nobody
 //! asked about. So the walk carries a budget of N boundaries; when it runs out - or when a
 //! boundary's `logicalParentUuid` names no record the map still holds - the walk ends there
-//! and that record is the FLOOR, exactly as before. [`CrossingReport`] is what the surfaces
+//! and that record is the FLOOR. [`CrossingReport`] is what the surfaces
 //! print about it: what was crossed, what was not, where the floor is, WHY it is there, and
 //! whether raising the budget would move it - which for a boundary naming a deleted record
 //! it would not.
 //!
 //! Budget 0 is Claude Code's own rule, and under it csift discloses NOTHING about crossing,
-//! because it crossed nothing. It also reproduces the reading csift gave before the budget
-//! existed, and that is a MEASUREMENT with one known exception rather than a law: 32 of 32
-//! streams over the differential's eight transcripts are byte-identical to a build that
-//! predates the flag, and the exception is a boundary whose OWN `parentUuid` is non-null and
-//! resolves to no record. The pre-flag walk reached the `logicalParentUuid` arm there as a
-//! guard and crossed; at budget 0 this walk refuses, so that one shape can read differently.
-//! The corpus holds zero specimens of it - which is a fact about the corpus, not about the
-//! rule.
+//! because it crossed nothing. It ends the walk AT every boundary with no exception, which
+//! is the one place a BUDGET and a GUARD on the `logicalParentUuid` arm decide differently:
+//! a boundary whose OWN `parentUuid` is non-null and resolves to no record is climbable by
+//! that arm as a guard, while budget 0 buys no hop at all, so that one shape reads `PreCut`
+//! here and resolves at any non-zero budget. The corpus holds zero specimens of it - which
+//! is a fact about the corpus, not about the rule.
 
 /// The default crossing budget, and the value the global `--cross-compactions` flag
 /// carries when it is not given.
 ///
 /// PROVISIONAL: the value is chosen by measurement (the acid set's chain-walking rows on a
 /// compacted transcript and on the performance landmark, medians of 21 reps against the
-/// same-binary control band), and the measurement needs an idle host. Until that run lands
-/// this is the candidate the ruling names first, not a measured answer.
+/// same-binary control band), and the measurement needs an idle host. The rule is 3 if
+/// every row's median sits inside the band at 3, else 1 under the same test, else 0; until
+/// that run lands this is the rule's first candidate rather than its answer.
 pub const CROSS_COMPACTIONS_DEFAULT: CrossingBudget = CrossingBudget::Limited(3);
 
 /// How many compaction boundaries one walk may step over.
