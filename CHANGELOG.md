@@ -324,6 +324,75 @@ surface change bumps the PATCH.
   with its own key. A drift test holds the table's `for[]` block to `EdgeKind` in both
   directions.
 
+- **The harness's nine TURN CONTINUATIONS all reach `harness.enforce.retry`.** A turn the
+  model does not finish is continued by the harness writing a whole message into it as an
+  `isMeta` user record, and the producer interns nine of them in one constant block
+  collected into one array whose single consumer is its own is-this-a-record-I-wrote
+  predicate, tested by membership. csift knew four - the redo nudges - and carried no leaf
+  at all for the other five: nothing on any scan, no census key, and the residue unit under
+  an address. The five are the two CLASSIFIER-STOP forms, written when a safety classifier
+  stops a response mid-turn and the turn continues once on the same model (the second is
+  the first plus a sentence about a call that was already running); the OUTPUT-TOKEN-LIMIT
+  resume; and the two MID-STREAM CUT-OFF forms, chosen by lane. All nine are matched by
+  WHOLE-MESSAGE equality rather than by prefix, because they are complete bodies and the
+  producer tests them that way - a longer body opening with one is a record quoting it -
+  and five carry an em dash, so a text retyped with an ASCII hyphen matches no record. The
+  leaf's description widens with its domain, to the harness continuing a turn the model did
+  not finish on its own instruction, and the shape inventory gains a row per event. The
+  classifier stop writes THREE records and only the continuation needed a rule: the notice
+  beside it is decided by its subtype and the refused assistant turn by its own blocks.
+- **The API refusal is a fact on the assistant unit it stopped.** `message.stop_details` is
+  the API's own structured account of why it stopped a response - a type, the classifier
+  band, the API's own sentence about it, and whether a fallback claimed a prefill. The
+  client builds none of it: it copies the object off the response frame onto every
+  assistant record of the turn, removes exactly one member it does not persist, and
+  constructs one of its own only on refusal paths that null every remaining member, so a
+  true prefill claim on disk came from the API. csift read none of it, and a refusal whose
+  only content block is a thinking block classified `agent.thinking.summary` with nothing
+  on any surface saying the API had refused. The exposed-keys family stamps it on every
+  emitted unit of a record that names at least one member: a label-zone tag
+  `[api <type>: <category>]`, and `stop_details` beside the coarse `stop_reason` on the
+  wire. The gate is the OBJECT and not the leaf, because a key is true of a record whatever
+  csift labelled it; an object whose every member is null is refused, because the absent key
+  already says what four nulls would. The tag is label-zone text and so display-only, like
+  the thinking family's: a pattern scan matches a unit's rendered section and never its
+  zone. Two members stay out of the model and reachable with `--raw` alone - one never
+  reaches disk, the other reaches it only as a null. `size_of::<Record>()` moves from 1,376
+  to 1,384, the object sitting behind its own pointer inside `message`.
+- **Two attachment payload types get their inventory rows.** Both carried no leaf, so
+  neither reached a scan even under `--attachments`, neither could be a key on
+  `--count-by attachment` (that axis reads emitted units), and each rendered as the
+  unmodeled unit under an address. `mcp_instructions_delta` is what the harness writes when
+  the set of MCP servers whose instructions belong in the request changes; its builder
+  returns nothing when the diff is empty, so a record exists only where the set moved. The
+  converter turns it into CONTENT - a `# MCP Server Instructions` section carrying the
+  blocks added, and a second section naming servers that disconnected - and persists that
+  conversion back as a top-level `rendered`, so it is `harness.context.listing` with the
+  model column true and the body rule takes the persisted conversion, which is what makes
+  injected server instructions findable by a pattern scan. `thinking_drop` is the harness's
+  accounting of the thinking blocks it dropped from a request - the model, the query
+  source, the counts, and why - and its converter arm is an explicit empty list, so it
+  joins `NEVER_CONVERTS`, reads `not delivered` whatever its leaf default says, takes
+  `harness.context.task` beside `thinking_stripped`, and falls to the verbatim payload,
+  which is the only place its numbers are. The HUMAN column on all three rows is read off
+  the transcript render's own hide set, which names each of the payload types, rather than
+  inferred from the leaf - including `thinking_stripped`, whose column said unstated while
+  the same list answered for it.
+- **A bundled skill body that ships no files reaches `harness.context.skill`.** The
+  `Base directory for this skill:` line the leaf keys on is written by ONE wrapper in the
+  registrar, and only for a registration that names FILES: it materialises the directory
+  and prepends that line and a blank one to the first text block of the body the
+  registration returns. A registration with no files keeps its body getter untouched, so
+  the same kind of body reaches the same kind of record bare - and carried no leaf,
+  rendering `? unmodeled: user/text` under an address because its content is a text block
+  rather than a string. The leaf answers to a second content-start head, the
+  workflow-authoring reference's own, which is what the leaf already means; the prefix is
+  an artefact of shipping files rather than a property of the body. csift names the one
+  such body whose producer has been read and says so where the leaf is documented: the bare
+  bodies share no head, and the records carry no field saying which command expanded them -
+  the parent link names the command's own wrapper on three of the four measured records and
+  an attachment on the fourth.
+
 ### Changed
 
 - **The root `--help` names every `floor_cause` value.** `floor_cause` was named as a key on
@@ -869,6 +938,29 @@ surface change bumps the PATCH.
   and `search`'s `-c` / `-l` / `--count-by`. `plan` with no binding and `ack` write no
   stdout at all, and `csift --version` is clap's own writer and exits 0. What a reader that
   stays receives does not move; only the failure path does.
+
+- **A turn-companion record was counted as the person's own turn.** `turnCompanion` is the
+  harness's SECOND authorship stamp, on a `type:"user"` record it wrote to ACCOMPANY a turn
+  rather than receive from the person, and Claude Code's own is-this-the-person's-message
+  predicate excludes it beside `isMeta`, before it looks at the content at all. The two are
+  not one set: of the fourteen stamping sites in the verified build, twelve build an object
+  that carries `isMeta` and TWO do not - a mapper over a slash command's expansion messages,
+  and the tool-dispatch path for the extra `type:"user"` messages a tool returns beside its
+  result - and both spread an EXISTING record and add the one key, so a record carrying the
+  companion stamp and no meta flag is constructible from either. Reading `isMeta` alone made
+  such a record the operator's own turn: it opened a turn, shifted every later turn number
+  on that transcript, and moved the live-turn count every surface derives from the same
+  predicate - `search --count-by turn`, `stats`, the `<tok>·tN` headers and every `--turn`
+  window with them. `is_genuine_user` reads both flags now, so `opens_turn` opens no turn on
+  a companion, and `classify` reads them at the same arm, so the LABEL agrees with the
+  BOUNDARY: a record csift refuses to call the human is not `user.message` under a selector
+  either. A companion matching a template csift models keeps that template's leaf; one
+  matching none carries no leaf and renders `? unmodeled: user/turnCompanion` under an
+  address, naming which of the two stamps the harness used. The key rides the flattened,
+  boxed exposed-key struct rather than a field of `Record`, so it costs a record naming no
+  exposed key nothing and the row every parsed line of every scan carries does not grow; it
+  is the one exposed key read by a PREDICATE rather than projected as a fact, because what a
+  reader acts on is the leaf and the turn boundary it changes.
 
 ### Performance
 
