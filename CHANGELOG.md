@@ -750,7 +750,9 @@ surface change bumps the PATCH.
   subcommand) against the last released binary, both invoked under the basename the usage
   line echoes: 602 rendered non-blank lines differ counted once per PAGE - 215 only in the
   older arm, 387 only in this one - or 479 counted once per distinct line TEXT, the two
-  figures differing by the lines that render on more than one page. The new root
+  figures differing by the lines that render on more than one page and by the two lines
+  of the `--claude-home` entry that `search --help` moved within its page, which a diff
+  reports as removed and added. The new root
   `--cross-compactions` block is seven of those lines and renders on every page, so it is
   126 of the first figure and 7 of the second, and on `ack`, `plan` and `send` it is the
   whole difference; `search` carries 348 of the 602 by itself, its taxonomy block rewritten
