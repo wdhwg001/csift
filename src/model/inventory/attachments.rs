@@ -402,8 +402,12 @@ pub(crate) const ROWS: &[Entry] = &[
     e(
         // The render's hide set names this payload type, so the `Never` here and on the
         // row below are read off that list rather than inferred from the leaf - in the
-        // 2.1.278 build, which is the build that knows either type at all: the verified
-        // build's own hide set names neither, and neither name occurs anywhere in it.
+        // 2.1.278 build, the only cached one whose hide set names BOTH. The two names do
+        // not enter the client together: builds older than that one already name
+        // `thinking_stripped` and carry it in the same hide array, and none of them
+        // carries `thinking_drop` anywhere at all. The verified build carries neither
+        // name, so its own hide set could not have named them and says nothing about
+        // either row.
         Shape::AttachmentType("thinking_stripped"),
         Some(Class::ContextTask),
         Gate::Attachments,

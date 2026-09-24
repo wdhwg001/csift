@@ -90462,7 +90462,7 @@
         },
         {
           "path": "src/model/inventory/attachments.rs",
-          "lines": "419-423",
+          "lines": "423-427",
           "snippet": "        Shape::AttachmentType(\"thinking_drop\"),\n        Some(Class::ContextTask),\n        Gate::Attachments,\n        false,\n        Human::Never,"
         }
       ],
