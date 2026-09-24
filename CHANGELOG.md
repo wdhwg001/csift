@@ -857,6 +857,18 @@ surface change bumps the PATCH.
   `show --line`/`--uuid` address, while `show --turn` is a WINDOW over the turn numbering
   rather than an address, so its rows render through the ordinary excerpt budget and carry
   a null `body`.
+- **A `.rs` comment carries a non-ASCII character only as a quotation of csift's own
+  rendering.** A glyph in a comment used to be either a quotation of what csift prints or
+  the comment's own arrow, heading rule or ellipsis, and nothing in the character said
+  which. Now it is the first only: the glyph exactly as printed, inside a backtick span, and
+  the set a comment may quote is derived from what the binary prints (every non-ASCII
+  character in a string or char literal of a non-test source file under `src/`, decoded
+  through its escapes, plus every one in a clap `///` help doc), 26 glyphs. The pre-commit
+  gate enforces it (the character and the balance of the span; the em dash is one of the
+  printed glyphs, so the older outright ban on it is this rule read narrowly), and the
+  rewrite it required moved no byte of the release binary's strings or help pages: 2,027
+  comment lines carried such a character, 1,653 outside any quotation, and the tip carries 0
+  violations. `AGENTS.md` section 8 states the rule with its derivation.
 
 ### Fixed
 
