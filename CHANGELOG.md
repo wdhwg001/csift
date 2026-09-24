@@ -162,8 +162,11 @@ surface change bumps the PATCH.
   for all thirteen leaves while the text surface said nothing, because the engine prints
   that marker only for a record carrying a per-record delivery override and a bookkeeping
   line's invisibility comes from its leaf. It is the engine's own marker, so both surfaces
-  spell it one way. `show --format json` gains four record-row keys with it: `for`,
-  `continued_in`, `checkpoint_closes_at` and `checkpoint_join`.
+  spell it one way. `show --format json` gains three record-row keys with it: `for`,
+  `checkpoint_closes_at` and `checkpoint_join`. The handover relation is not a fourth key:
+  it rides the shared `for` array as the edge `continued_in`, whose target names the child
+  SESSION and no record in it, so a `continued-in` line's row carries that edge and no
+  `continued_in` key of its own.
 
 
 - **A thinking block says what it is, and which of the two wrote it.** Four label-zone
