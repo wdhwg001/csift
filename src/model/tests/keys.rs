@@ -508,3 +508,34 @@ fn a_stop_details_of_the_wrong_shape_reads_as_absent_and_never_fails_the_record(
         vec![Class::AgentMessagePlain]
     );
 }
+
+/// ONE member is enough, for each of the FOUR. The gate on the stop-details object is ANY
+/// member named, not all of them, and a record naming a single one is the ordinary shape
+/// rather than an edge case: the API sends three member sets and the smallest of them is
+/// three members, so each of the four has to carry the object on its own.
+#[test]
+fn any_single_stop_details_member_carries_the_object() {
+    let members = [
+        (r#""type":"refusal""#, "type"),
+        (r#""category":"cyber""#, "category"),
+        (r#""explanation":"withheld""#, "explanation"),
+        (
+            r#""fallback_has_prefill_claim":true"#,
+            "fallback_has_prefill_claim",
+        ),
+    ];
+    for (member, name) in members {
+        let line = format!(
+            r#"{{"type":"assistant","uuid":"a-55","message":{{"role":"assistant","stop_details":{{{member}}},"content":[{{"type":"text","text":"x"}}]}}}}"#
+        );
+        assert!(
+            parse(&line).stop_details().is_some(),
+            "{name} alone carries the object"
+        );
+    }
+    // And naming NONE of them does not, which is the other half of the same gate.
+    let empty = parse(
+        r#"{"type":"assistant","uuid":"a-56","message":{"role":"assistant","stop_details":{},"content":[{"type":"text","text":"x"}]}}"#,
+    );
+    assert!(empty.stop_details().is_none());
+}
