@@ -517,3 +517,5 @@ fn a_structured_answer_is_reachable_from_a_flagless_scan() {
         named.stdout
     );
 }
+
+mod converters;

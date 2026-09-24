@@ -1,4 +1,4 @@
-//! Axis 3: the payload `type` inside a `type:"attachment"` line - 50 values.
+//! Axis 3: the payload `type` inside a `type:"attachment"` line - 52 values.
 //!
 //! An attachment is the harness attaching something to the turn. Almost every row here
 //! is gated: a flagless scan parses no attachment line, and the leaf is reached by an
@@ -11,10 +11,12 @@
 //! .structured`, the model's own final answer). The first is detected by the envelope
 //! literal; the other two carry `Gate::DefaultNeedle` and their own value needles.
 //!
-//! `llm` here is the leaf default. Nine payload types never convert to model-visible
-//! content at all (the harness's own drop arms), and one - `hook_success` - converts
-//! only on the few records that carry a rendered body; that is a per-RECORD verdict and
-//! lives in `Record::delivery_override`, not in this column.
+//! `llm` here is the leaf default. The payload types in [`crate::model::NEVER_CONVERTS`]
+//! never convert to model-visible content at all - they are the harness's own drop arms -
+//! and one more, `hook_success`, converts only on the few records that carry a rendered
+//! body; that is a per-RECORD verdict and lives in `Record::delivery_override`, not in
+//! this column. The HUMAN column is read off the render's own hide set where that list
+//! names the type, and is `(unstated)` where it does not.
 
 use super::*;
 
@@ -167,6 +169,18 @@ pub(crate) const ROWS: &[Entry] = &[
         Gate::Attachments,
         true,
         Human::Unstated,
+    ),
+    e(
+        // The one member of this group whose payload the converter turns into CONTENT:
+        // a `# MCP Server Instructions` user message built from `addedBlocks` and
+        // `addedNames`, so the model receives the instructions of every server that
+        // joined. The person does not: the render's own hide set names this payload type,
+        // which is what the `Never` here is read off rather than inferred from the leaf.
+        Shape::AttachmentType("mcp_instructions_delta"),
+        Some(Class::ContextListing),
+        Gate::Attachments,
+        true,
+        Human::Never,
     ),
     // harness.context.prompt
     e(
@@ -383,10 +397,24 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Unstated,
     ),
     e(
+        // The render's hide set names this payload type, so the `Never` here and on the
+        // row below are read off that list rather than inferred from the leaf.
         Shape::AttachmentType("thinking_stripped"),
         Some(Class::ContextTask),
         Gate::Attachments,
         false,
-        Human::Unstated,
+        Human::Never,
+    ),
+    e(
+        // The harness's accounting of the thinking blocks it dropped from the request -
+        // which model, which query source, how many blocks and turns went, and why. Its
+        // converter arm is an EXPLICIT empty list, so the model receives none of it, and
+        // the render hides it, so neither does the person: it is bookkeeping the
+        // transcript keeps and nobody reads.
+        Shape::AttachmentType("thinking_drop"),
+        Some(Class::ContextTask),
+        Gate::Attachments,
+        false,
+        Human::Never,
     ),
 ];

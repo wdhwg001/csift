@@ -30,7 +30,11 @@ fn only_the_never_convert_payloads_disagree_with_their_leaf_default() {
         .collect();
     want.sort_unstable();
     assert_eq!(disagree, want, "the disagreeing rows are not the drop arms");
-    assert_eq!(NEVER_CONVERTS.len(), 11, "the never-convert set drifted");
+    assert_eq!(NEVER_CONVERTS.len(), 12, "the never-convert set drifted");
+    // The SPLIT the module doc states, pinned rather than left to a reader to count:
+    // eight of the twelve carry an otherwise-visible leaf and are exactly the
+    // disagreeing rows; the other four carry a leaf that is invisible anyway.
+    assert_eq!(disagree.len(), 8, "the visible-leaf drop arms drifted");
     // Every never-convert type is a real attachment row, and none of them converts.
     for v in NEVER_CONVERTS {
         let r = rows()

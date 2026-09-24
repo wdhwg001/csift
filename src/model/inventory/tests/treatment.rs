@@ -78,9 +78,9 @@ fn every_shaped_row_produces_its_leaf_from_a_whole_record() {
         );
     }
     // EXACT, like every other guard here: 18 non-transcript line types, 11 system
-    // subtypes and 50 attachment payload types carry a leaf, less the one that needs a
+    // subtypes and 52 attachment payload types carry a leaf, less the one that needs a
     // second fact. A `>=` bound would pass while a row quietly stopped being walked.
-    assert_eq!(checked, 78, "the walked set drifted");
+    assert_eq!(checked, 80, "the walked set drifted");
 }
 
 /// A value NO row holds renders the UNMODELED unit, naming the value.

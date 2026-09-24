@@ -277,20 +277,20 @@ Every range carries one receipt, and a receipt has to have measured something ou
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
-| end-to-end | 587 | 79.0% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| &nbsp;&nbsp;of which chain traced | 587 | 79.0% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
-| specimen-only | 47 | 6.3% | observed on disk or live; the writer not traced (or traced only in part) (21 of them with a partly traced writer) |
+| end-to-end | 588 | 78.9% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| &nbsp;&nbsp;of which chain traced | 588 | 78.9% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
+| specimen-only | 48 | 6.4% | observed on disk or live; the writer not traced (or traced only in part) (22 of them with a partly traced writer) |
 | producer-only | 79 | 10.6% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 13 | 1.7% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
 | upstream | 17 | 2.3% | the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed |
-| total | 743 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
+| total | 745 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
 
 A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
 
-`anchors byte-exact at Claude Code 2.1.258: 7,273 of 7,668 (elided 69, absent 30, prefix-only 80, read in another build 216), closed-state anchors 0, not checked`
+`anchors byte-exact at Claude Code 2.1.258: 7,278 of 7,677 (elided 69, absent 30, prefix-only 80, read in another build 220), closed-state anchors 0, not checked`
 
-The five counts partition the total, and the gate asserts that they do. BYTE-EXACT is read over two encodings: a few excerpts were captured from regions that are not valid UTF-8 and stored one code point per byte, and 14 of these anchors match only under that second reading. An ELIDED excerpt carries an ellipsis somewhere, which is not the same as having no byte-exact form: 1,477 such excerpts ARE byte-exact at their own offsets and are counted with the rest, because minified JavaScript's spread operator wears the same three dots. What is left in the elided count really did elide something, and the gate holds each of those to the run BEFORE its first ellipsis at its own offset. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A hop read in an artifact the badge does not name carries that build and is compared against THAT one, which is why it is disclosed as a count and never as a verdict: whether a given machine holds those artifacts is a property of the machine. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
+The five counts partition the total, and the gate asserts that they do. BYTE-EXACT is read over two encodings: a few excerpts were captured from regions that are not valid UTF-8 and stored one code point per byte, and 14 of these anchors match only under that second reading. An ELIDED excerpt carries an ellipsis somewhere, which is not the same as having no byte-exact form: 1,478 such excerpts ARE byte-exact at their own offsets and are counted with the rest, because minified JavaScript's spread operator wears the same three dots. What is left in the elided count really did elide something, and the gate holds each of those to the run BEFORE its first ellipsis at its own offset. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A hop read in an artifact the badge does not name carries that build and is compared against THAT one, which is why it is disclosed as a count and never as a verdict: whether a given machine holds those artifacts is a property of the machine. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->
 
 A claim that is not end-to-end lists the exact instrument that would close it, and a claim attributed by elimination can never be marked as holding.

@@ -40,11 +40,17 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
         | "ultrathink_effort" => Class::ContextReminder,
 
         // -- harness.context.listing: an inventory the harness injects --
+        // `mcp_instructions_delta` is an inventory of SERVER instructions, and it is the
+        // one member of this group the converter turns into CONTENT: it builds a
+        // `# MCP Server Instructions` user message out of the blocks and names it added,
+        // where its five neighbours list what is available and convert to nothing or to
+        // a listing the model already has.
         "skill_listing"
         | "dynamic_skill"
         | "agent_listing_delta"
         | "deferred_tools_delta"
         | "deferred_tools_record"
+        | "mcp_instructions_delta"
         | "invoked_skills" => Class::ContextListing,
 
         // -- harness.context.prompt: a persisted system-prompt section --
@@ -80,7 +86,8 @@ pub(crate) fn classify(attachment_type: &str) -> Option<Class> {
         | "remote_session_change"
         | "relevant_memories"
         | "memory_update"
-        | "thinking_stripped" => Class::ContextTask,
+        | "thinking_stripped"
+        | "thinking_drop" => Class::ContextTask,
 
         _ => return None,
     })

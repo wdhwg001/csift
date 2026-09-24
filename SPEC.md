@@ -647,6 +647,7 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | AttachmentType | `deferred_tools_record` | `harness.context.listing` | -t or --attachments | no | (unstated) |
 | AttachmentType | `dynamic_skill` | `harness.context.listing` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `invoked_skills` | `harness.context.listing` | -t or --attachments | yes | (unstated) |
+| AttachmentType | `mcp_instructions_delta` | `harness.context.listing` | -t or --attachments | yes | no |
 | AttachmentType | `instructions` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `date` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `session_context` | `harness.context.prompt` | -t or --attachments | yes | (unstated) |
@@ -676,7 +677,8 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | AttachmentType | `remote_session_change` | `harness.context.task` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `relevant_memories` | `harness.context.task` | -t or --attachments | yes | (unstated) |
 | AttachmentType | `memory_update` | `harness.context.task` | -t or --attachments | yes | (unstated) |
-| AttachmentType | `thinking_stripped` | `harness.context.task` | -t or --attachments | no | (unstated) |
+| AttachmentType | `thinking_stripped` | `harness.context.task` | -t or --attachments | no | no |
+| AttachmentType | `thinking_drop` | `harness.context.task` | -t or --attachments | no | no |
 | Block | `text` | `agent.message.plain` | default scan | yes | yes |
 | Block | `thinking` | `agent.thinking.summary` | default scan | yes | verbose |
 | Block | `redacted_thinking` | `agent.thinking.redacted` | default scan | no | verbose |

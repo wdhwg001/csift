@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2476",
+          "lines": "2478",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -52763,7 +52763,7 @@
       "code": [
         {
           "path": "src/model/classify/attachments.rs",
-          "lines": "54-61",
+          "lines": "60-67",
           "snippet": "        // -- harness.context.file: file content the harness attached --\n        \"file\"\n        | \"edited_text_file\"\n        | \"compact_file_reference\"\n        | \"nested_memory\"\n        | \"plan_file_reference\"\n        | \"read_truncation_notice\"\n        | \"bash_output_audience_note\" => Class::ContextFile,"
         },
         {
@@ -76649,7 +76649,7 @@
         },
         {
           "path": "src/model/classify/attachments.rs",
-          "lines": "124-130",
+          "lines": "131-137",
           "snippet": "pub(crate) fn payload_origin_is_human(payload: &serde_json::Value) -> bool {\n    payload\n        .get(\"origin\")\n        .and_then(|o| o.get(\"kind\"))\n        .and_then(serde_json::Value::as_str)\n        == Some(\"human\")\n}"
         }
       ],
@@ -85182,8 +85182,8 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "323-335",
-          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
+          "lines": "323-336",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         }
       ],
       "states": [
@@ -85539,12 +85539,12 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "323-335",
-          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
+          "lines": "323-336",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         },
         {
           "path": "src/model/inventory/attachments.rs",
-          "lines": "356-361",
+          "lines": "370-375",
           "snippet": "Shape::AttachmentType(\"goal_status\"),\n        Some(Class::ContextTask),\n        Gate::Attachments,\n        // The conversion table drops it (`goal_status:()=>[]`), so the model never\n        // receives one even though `harness.context.task` is otherwise visible.\n        false,"
         }
       ],
@@ -87946,8 +87946,8 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "323",
-          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &["
+          "lines": "323-336",
+          "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         },
         {
           "path": "src/model/delivery.rs",
@@ -89164,7 +89164,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3483"
+          "lines": "3485"
         }
       ],
       "states": [
@@ -90352,6 +90352,178 @@
           },
           "residue": [
             "the slash-command mapper's three call sites each build their first member with a meta flag, so the divergent shape needs a member from one of the arrays they splice in; which of those arrays can carry a `type:\"user\"` record without one is a read of those builders and would name the shape rather than bound it."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLS-071",
+      "area": "classification",
+      "code": [
+        {
+          "path": "src/model/classify/attachments.rs",
+          "lines": "53-54",
+          "snippet": "        | \"mcp_instructions_delta\"\n        | \"invoked_skills\" => Class::ContextListing,"
+        },
+        {
+          "path": "src/model/inventory/attachments.rs",
+          "lines": "179-183",
+          "snippet": "        Shape::AttachmentType(\"mcp_instructions_delta\"),\n        Some(Class::ContextListing),\n        Gate::Attachments,\n        true,\n        Human::Never,"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.100",
+          "from_basis": "first_seen",
+          "to": null,
+          "behavior": "`mcp_instructions_delta` is a `type:\"attachment\"` payload the harness writes when the set of MCP servers whose instructions belong in the request CHANGES. Its builder assembles the delta against the servers already announced and returns nothing when there is no change, so a record exists only where the set moved; the payload it returns carries `addedBlocks`, `addedNames` and `removedNames` beside its `type`. The attachment CONVERTER has a case for it and that case produces CONTENT: where blocks and names were added it pushes a `# MCP Server Instructions` section headed `The following MCP servers have provided instructions for how to use their tools and resources:` and carrying the added blocks, and where names were removed it pushes a second section saying those servers have disconnected and their instructions no longer apply. The conversion is persisted back onto the record as a top-level `rendered` array of content parts, and the measured records wrap it in a `<system-reminder>`. The person does NOT see it: the transcript render's own hide set names this payload type, and the filter that feeds the render keeps a record only when that predicate is false.",
+          "depends": "csift gives it `harness.context.listing` - an inventory the harness injects - with the LLM column true, because the converter turns it into content the model reads, and the HUMAN column `never`, read off that hide set rather than inferred from the leaf. Without a row it carried NO leaf: nothing on any scan even under `--attachments`, absent from `--count-by attachment` (which reads emitted units, so a leafless payload cannot be a key on its own census), and `? unmodeled: attachment/mcp_instructions_delta` under an address. Its body follows the attachment family's ordinary rule and takes the FIRST arm, the persisted conversion, which is what makes the injected server instructions findable by a pattern scan at all.",
+          "instrument": "Byte-search the build for `case\"mcp_instructions_delta\"` and read the case, and for the payload type inside the render's hide list; counting rule: one non-overlapping match walked forward from offset zero, over the whole file, per build. Then census a projects root: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object and count the `type:\"attachment\"` lines whose payload `type` reads `mcp_instructions_delta`, recording the payload's key set and whether the record carries a top-level `rendered`. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; count the `type:\"attachment\"` lines whose `attachment.type` reads `mcp_instructions_delta`, and tally the payload key set and the presence of a top-level `rendered`.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "the delta builder",
+              "offset": 165745039,
+              "excerpt": "function ymn(e,n,r,o,d){let f=[];if(_y()&&pj(r)&&!dj(ze(r))&&VLe(n)&&n.some((v)=>v.mcpInfo?.serverName===Cd&&oK(v,d,n)))f.push({serverName:Cd,block:Ner});f.push({serverName:f0,block:Ler});let _=Oer(e,o??[],f);if(!_)return[];return[{type:\"mcp_instructions_delta\",..._}]}",
+              "note": "returns an EMPTY list when the diff is empty, so a record exists only where the announced server set moved."
+            },
+            {
+              "role": "gate",
+              "name": "the render's hide set",
+              "offset": 180441826,
+              "excerpt": "kDt=[\"hook_success\",\"hook_additional_context\",\"inlined_image_paths\",\"command_permissions\"",
+              "note": "the list this payload type is a member of; it is turned into a Set and read by the predicate below, which is what makes the human column `never` a reading rather than a guess."
+            },
+            {
+              "role": "writer",
+              "name": "the converter's case",
+              "offset": 166025842,
+              "excerpt": "case\"mcp_instructions_delta\":{let o=Nc(e.addedBlocks),d=Nc(e.addedNames),f=Nc(e.removedNames),_=[];",
+              "note": "the one payload of the listing group the converter turns into content: two sections, one for the servers added and one for the servers removed."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "the hide predicate the set feeds",
+              "offset": 180443033,
+              "excerpt": "function tW(T){if(T.type!==\"attachment\")return!1;",
+              "verdict": "returns true for an attachment whose payload type is in the set, with two payload types given their own conditions ahead of it; neither is this one."
+            },
+            {
+              "site": "the filter that consumes that predicate",
+              "offset": 180544745,
+              "excerpt": "function jHt(dYo){return!tW(dYo)}",
+              "verdict": "keeps a record only where the predicate is FALSE, so membership in the set means the render never shows it."
+            },
+            {
+              "site": "the same converter case at the newer build",
+              "offset": 182130110,
+              "build": "2.1.278",
+              "excerpt": "case\"mcp_instructions_delta\":{let s=ma(e.addedBlocks),g=ma(e.addedNames),h=ma(e.removedNames),y=[];",
+              "verdict": "the same case with the same two sections and the same headings, so the conversion is not a property of one build."
+            }
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "the byte counts and site reads above in the verified build and in 2.1.278, plus the record census over a frozen snapshot root of 10,299 files and 2,312,350 parsed lines, and one projects root of 10,329 files and 2,039,387 parsed lines whole-root against 8,929 files and 1,420,765 parsed lines with the measuring tree removed.",
+            "observed": "`mcp_instructions_delta` counts 7 in the verified build and 9 in 2.1.278, and the converter's case is present in both, byte-read above. The snapshot root carries 0 such records; the projects root carries 253 whole-root and 123 with the measuring tree removed. All 123 carry the payload key set `addedBlocks`, `addedNames`, `removedNames`, `type` and all 123 carry a top-level `rendered`, whose first content part opens with a `<system-reminder>` wrapping the `# MCP Server Instructions` heading.",
+            "rule": "one non-overlapping match walked forward from offset zero for the literals; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the snapshot root's zero is a property of that corpus rather than of the build: the payload type predates the verified build by the floor ladder and the record exists only where a server set changed."
+          },
+          "residue": [
+            "the disconnect half of the conversion - the second section, for servers whose names were removed - has no specimen among the measured records, all of which carry an addition; a corpus with a server dropped mid-turn would carry one."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLS-072",
+      "area": "classification",
+      "code": [
+        {
+          "path": "src/model/classify/attachments.rs",
+          "lines": "89-90",
+          "snippet": "        | \"thinking_stripped\"\n        | \"thinking_drop\" => Class::ContextTask,"
+        },
+        {
+          "path": "src/model/inventory.rs",
+          "lines": "334-336",
+          "snippet": "    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
+        },
+        {
+          "path": "src/model/inventory/attachments.rs",
+          "lines": "414-418",
+          "snippet": "        Shape::AttachmentType(\"thinking_drop\"),\n        Some(Class::ContextTask),\n        Gate::Attachments,\n        false,\n        Human::Never,"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.278",
+          "from_basis": "first_seen",
+          "from_after_verified": "The payload type this claim states first appears at 2.1.278; its name occurs zero times in the verified build, so that build has no arm for it and the hops name the build they were read in.",
+          "to": null,
+          "behavior": "`thinking_drop` is a `type:\"attachment\"` payload carrying the harness's own accounting of the thinking blocks it dropped from a request: the request id, the model, the query source, how many blocks and turns were sent, a `newlyDropped` object with the counts and a reason, and the block hashes it compared. The attachment CONVERTER gives it an EXPLICIT empty arm - the type is spelled in the conversion table with a function returning an empty list, beside the arm for `deferred_tools_record` - so the model receives none of it. The transcript render's own hide set also names it, so neither does the person. The name occurs zero times in the verified build and eleven times at 2.1.278.",
+          "depends": "csift gives it `harness.context.task` - the harness's own state, beside `thinking_stripped`, which is the other record of what was removed from a request - with the LLM column false and the HUMAN column `never`, the second read off the hide set. It also joins `NEVER_CONVERTS`, which is what makes `Record::delivery_override` answer `not delivered` for the record whatever its leaf default says. Without a row it carried NO leaf: nothing on any scan even under `--attachments`, absent from `--count-by attachment`, and `? unmodeled: attachment/thinking_drop` under an address. Its body falls to the verbatim payload, because a record whose conversion is an empty list carries no `rendered` to render instead - which is also the only place its numbers are.",
+          "instrument": "Byte-search each build for `thinking_drop`, and read the conversion table's arm for it and the render's hide list; counting rule: one non-overlapping match walked forward from offset zero, over the whole file, per build. Then census a projects root: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object and count the `type:\"attachment\"` lines whose payload `type` reads `thinking_drop`, recording the payload's key set and whether the record carries a top-level `rendered`. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; count the `type:\"attachment\"` lines whose `attachment.type` reads `thinking_drop`, and tally the payload key set and the presence of a top-level `rendered`.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "partial",
+          "specimen": "observed",
+          "attribution": "specimen-only",
+          "open_legs": [
+            "the TRIGGER: which comparison decides that a thinking block is dropped and calls the builder that mints this payload. Closing it is a read of the callers of the request assembler's thinking-prefix comparison in the 2.1.278 build, starting from the `prefix_mismatch` reason the measured payloads carry."
+          ],
+          "producer_chain": [
+            {
+              "role": "writer",
+              "name": "the converter's empty arm",
+              "offset": 182104074,
+              "build": "2.1.278",
+              "excerpt": "thinking_drop:()=>[],deferred_tools_record:()=>[],",
+              "note": "an explicit empty list rather than a fall-through to the default arm, so the type is one the build knows and deliberately converts to nothing."
+            },
+            {
+              "role": "gate",
+              "name": "the render's hide set",
+              "offset": 197131621,
+              "build": "2.1.278",
+              "excerpt": "p3t=[\"hook_success\",\"hook_additional_context\",\"inlined_image_paths\",\"command_permissions\"",
+              "note": "the list this payload type is a member of, read by the predicate below - which is what the human column is taken from."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "the hide predicate the set feeds",
+              "offset": 197133058,
+              "build": "2.1.278",
+              "excerpt": "function _ye(h){if(h.type!==\"attachment\")return!1;",
+              "verdict": "returns true for an attachment whose payload type is in the set, with two payload types given their own conditions ahead of it; neither is this one."
+            }
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "one non-overlapping byte count of the name per build over 2.1.258 and 2.1.278, the two site reads at 2.1.278 above, and the record census over a frozen snapshot root of 10,299 files and 2,312,350 parsed lines, and one projects root of 10,329 files and 2,039,387 parsed lines whole-root against 8,929 files and 1,420,765 parsed lines with the measuring tree removed.",
+            "observed": "`thinking_drop` counts 0 in the verified build and 11 at 2.1.278. The snapshot root carries 0 such records; the projects root carries 12 whole-root and 2 with the measuring tree removed, and both of the 2 carry the payload key set `blockHashes`, `clientChange`, `firstReportForThreadInProcess`, `model`, `newlyDropped`, `querySource`, `requestId`, `thinkingBlocksSent`, `thinkingTurnsSent`, `type` and neither carries a top-level `rendered`, which is what the empty converter arm predicts.",
+            "rule": "one non-overlapping match walked forward from offset zero per build for the name; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the absent `rendered` on both records is the specimen half of the empty arm: a record whose conversion was an empty list has nothing to persist back."
+          },
+          "residue": [
+            "the `newlyDropped` reason is `prefix_mismatch` on both measured records; the other reasons the builder can write are unread, and a corpus carrying one would name them."
           ]
         }
       ]

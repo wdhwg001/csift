@@ -304,19 +304,19 @@ pub(crate) const UNSHAPED: &[(Class, &str)] = &[
 
 /// The attachment payload types the harness converts to NOTHING - its own drop arms.
 ///
-/// ELEVEN of them. What decides delivery is the CONVERTER'S ARM for the type, never the
+/// TWELVE of them. What decides delivery is the CONVERTER'S ARM for the type, never the
 /// type's presence in the build: the one converter reaches an empty list by THREE paths -
 /// an arm spelled `()=>[]` in the conversion table, a sixteen-name `.includes(e.type)`
 /// early return, and the default arm, which logs `Unknown attachment type:` and returns
 /// nothing. A payload type the build has never heard of therefore converts to nothing
 /// rather than to an error, and a build that later learns the type learns it as one more
-/// drop arm. `deferred_tools_record` and `thinking_stripped` are the two rows a build can
-/// be missing the name of entirely, which is why a row can be right about the conversion
-/// and hold no specimen from that build. Records carrying both are on disk, written by
-/// builds that do name them, and a build that adds the writer moves the specimen count
-/// and not the arm.
+/// drop arm. `deferred_tools_record`, `thinking_stripped` and `thinking_drop` are the
+/// three rows a build can be missing the name of entirely, which is why a row can be right
+/// about the conversion and hold no specimen from that build. Records carrying them are on
+/// disk, written by builds that do name them, and a build that adds the writer moves the
+/// specimen count and not the arm.
 ///
-/// The SEVEN whose leaf is otherwise visible are exactly the rows whose `llm` column
+/// The EIGHT whose leaf is otherwise visible are exactly the rows whose `llm` column
 /// disagrees with that leaf default; the other four carry `harness.hook.outcome`, which
 /// is invisible anyway. The drift test asserts that set equality in both directions, so a
 /// row cannot quietly claim a conversion it has not.
@@ -331,5 +331,6 @@ pub(crate) const NEVER_CONVERTS: &[&str] = &[
     "hook_system_message",
     "prompt_snapshot",
     "structured_output",
+    "thinking_drop",
     "thinking_stripped",
 ];
