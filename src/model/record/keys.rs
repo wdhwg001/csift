@@ -1,15 +1,20 @@
 //! The EXPOSED KEYS: what a record says about the CALL behind it - which agent
 //! definition, skill, plugin or MCP tool the request ran under, which API request and
 //! which block of its response, why the call failed, what a person typed refusing a
-//! tool, which scheduled task submitted the prompt, which hook run closed the turn.
+//! tool, which scheduled task submitted the prompt, which hook run closed the turn, and
+//! whether the harness wrote the record to accompany a turn rather than the person
+//! sending it.
 //!
 //! They belong to no single leaf, which is why they are a family of their own rather
-//! than fields of one classification.
+//! than fields of one classification. Eighteen of them are PROJECTED as facts on a hit;
+//! the authorship flag is read by a PREDICATE instead, because what a reader acts on is
+//! the leaf and the turn boundary it changes rather than the flag itself.
 //!
 //! WIDTH IS THE DESIGN CONSTRAINT, and the shape below is what satisfies it and the
-//! one-pass rule at once. Every parsed line of every scan carries a whole `Record`, so
-//! eighteen `Option`s in that struct are eighteen fields on every row - the same width
-//! discipline that keeps a spine row at 72 bytes. They live in ONE
+//! one-pass rule at once. Every parsed line of every scan carries a whole `Record`, so one
+//! `Option` per key in that struct is one field per key on every row - the same width
+//! discipline that keeps a spine row at 72 bytes, and measured at eighteen keys it cost
+//! 216 bytes. They live in ONE
 //! [`Exposed`] behind ONE `Box` instead, so the row grows by a pointer and the allocation
 //! is paid only by a record that actually names a key; `#[serde(flatten)]` is what keeps
 //! it to the SAME pass serde already makes, reading the keys where they sit at the top
@@ -31,7 +36,7 @@
 use super::lenient;
 use super::*;
 
-/// The eighteen EXPOSED KEYS of one record, as one value behind one pointer.
+/// The nineteen EXPOSED KEYS of one record, as one value behind one pointer.
 ///
 /// Built only for a record that names at least one of them ([`exposed_keys`]), so the
 /// common record - which names none - costs the 8 bytes of a null pointer and no
@@ -201,6 +206,21 @@ pub struct Exposed {
         deserialize_with = "lenient::string_only"
     )]
     pub tool_use_id_key: Option<Box<str>>,
+
+    /// `turnCompanion` - the harness ACCOMPANIED a turn with this record rather than the
+    /// person sending it. The harness's own "is this the person's message" predicate
+    /// excludes a record carrying `true`, and [`Record::is_genuine_user`] reads it for
+    /// exactly that: a companion never opens a turn and never counts as the human.
+    ///
+    /// It rides the exposed keys rather than a field of its own for the width reason the
+    /// module doc states - one more `Option` on `Record` is one more field on every parsed
+    /// line, while here it costs a record that names no exposed key nothing at all.
+    #[serde(
+        default,
+        rename = "turnCompanion",
+        deserialize_with = "lenient::bool_only"
+    )]
+    pub turn_companion: Option<bool>,
 }
 
 impl Exposed {
@@ -226,13 +246,14 @@ impl Exposed {
             || self.scheduled_task_id.is_some()
             || self.scheduled_fire_id.is_some()
             || self.tool_use_id_key.is_some()
+            || self.turn_companion.is_some()
     }
 }
 
-/// The `#[serde(flatten)]` hook on [`Record::exposed`]: read the eighteen keys out of the
+/// The `#[serde(flatten)]` hook on [`Record::exposed`]: read the nineteen keys out of the
 /// record's own top level, and BOX the result only when at least one of them is there.
 ///
-/// `Exposed` is built on the stack either way - that is what reading eighteen keys in one
+/// `Exposed` is built on the stack either way - that is what reading nineteen keys in one
 /// pass costs - and only a record that says something pays for a heap object that outlives
 /// the call.
 pub(super) fn exposed_keys<'de, D>(de: D) -> std::result::Result<Option<Box<Exposed>>, D::Error>
@@ -446,6 +467,22 @@ impl Record {
             return None;
         }
         self.exposed_keys()?.tool_use_id_key.as_deref()
+    }
+
+    /// Did the HARNESS write this record to accompany a turn, rather than the person
+    /// sending it? `turnCompanion` is the flag the injecting call sites stamp, and Claude
+    /// Code's own "is this the person's message" predicate excludes a record carrying it.
+    ///
+    /// A SECOND authorship flag beside `isMeta`, and the two are not the same set: the
+    /// shipped build stamps this one on records it also marks `isMeta`, and it stamps it
+    /// on two paths that touch no meta flag at all - a slash command's expansion messages,
+    /// and the extra `type:"user"` messages a tool returns beside its result. So a record
+    /// carrying this and no `isMeta` is constructible, and reading only `isMeta` would
+    /// count it as the human's own turn while the harness would not.
+    #[must_use]
+    pub fn is_turn_companion(&self) -> bool {
+        self.exposed_keys()
+            .is_some_and(|k| k.turn_companion == Some(true))
     }
 
     /// The API's own account of why it stopped this response - `message.stop_details`.

@@ -376,12 +376,15 @@ impl Record {
             push_unique(out, Class::ScheduleFire);
             return;
         }
-        // A genuine `user.message` is NEVER isMeta. An isMeta record that matched
-        // no marker above is a harness-injected pseudo-turn (a novel hook wrapper), NOT the
-        // operator - emit NOTHING rather than mislabel it `user.message` (the role-level isMeta
-        // gate `is_genuine_user` already applies). Only genuine, non-isMeta unmarked prose is
-        // `user.message`.
-        if !self.is_meta.unwrap_or(false) {
+        // A genuine `user.message` is NEVER the harness's own text. A record that matched
+        // no marker above and carries EITHER authorship flag is a harness-written
+        // pseudo-turn (a novel hook wrapper, a command's expansion, a message a tool
+        // returned beside its result), NOT the operator - emit NOTHING rather than
+        // mislabel it `user.message`. Both flags are read here and both are read by
+        // `is_genuine_user`, so the LABEL and the turn BOUNDARY answer alike: a record
+        // csift refuses to call the human never reads as the human under a selector
+        // either.
+        if !self.is_meta.unwrap_or(false) && !self.is_turn_companion() {
             push_unique(out, Class::UserMessage);
         }
     }

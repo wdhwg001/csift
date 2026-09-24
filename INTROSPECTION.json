@@ -485,7 +485,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "494-497",
+          "lines": "497-500",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -2001,7 +2001,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "230-234",
+          "lines": "240-244",
           "snippet": "    pub fn automation_label(&self) -> Option<String> {\n        let content = self.message.as_ref()?.content.as_ref()?;\n        let Content::Text(s) = content else {\n            return None;\n        };"
         },
         {
@@ -3872,7 +3872,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "366-373",
+          "lines": "371-378",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -11912,7 +11912,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "493-501",
+          "lines": "503-511",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -11995,7 +11995,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "463-466",
+          "lines": "473-476",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -12090,7 +12090,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "479-484",
+          "lines": "489-494",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -15612,12 +15612,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "345-349",
+          "lines": "355-359",
           "snippet": "    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled...` / `<tool_use_error>...` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "368-378",
+          "lines": "378-388",
           "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (the `The user responded:` branch writes the text\n        // there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
         }
       ],
@@ -16140,7 +16140,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "359-367",
+          "lines": "369-377",
           "snippet": "        let mut has_non_errored_tool_result = false;\n        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }"
         },
         {
@@ -17182,7 +17182,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "410-413",
+          "lines": "415-418",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2475",
+          "lines": "2476",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -18209,7 +18209,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "399-403",
+          "lines": "404-408",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -19278,7 +19278,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "492-498",
+          "lines": "502-508",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -20048,7 +20048,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "324-332",
+          "lines": "329-337",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so csift never fabricates content from it; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -20145,7 +20145,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "327-330",
+          "lines": "332-335",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so csift never fabricates content from it; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -20225,7 +20225,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "335-342",
+          "lines": "340-347",
           "snippet": "    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -33554,7 +33554,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "327-330",
+          "lines": "332-335",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so csift never fabricates content from it; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -41932,7 +41932,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "345-348",
+          "lines": "350-353",
           "snippet": "    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -42163,7 +42163,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "350-354",
+          "lines": "355-359",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -43027,7 +43027,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "366-369",
+          "lines": "371-374",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -44438,7 +44438,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "384-390",
+          "lines": "389-395",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -48352,7 +48352,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "116-121",
+          "lines": "126-131",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {"
         }
       ],
@@ -49073,7 +49073,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "463-467",
+          "lines": "473-477",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -49237,17 +49237,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "485-492",
+          "lines": "495-502",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[...],...}` - the context a SessionStart /\n    /// UserPromptSubmit / ... hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "493-500",
+          "lines": "503-510",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "505-509",
+          "lines": "515-519",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -50422,7 +50422,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "116-121",
+          "lines": "126-131",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {"
         }
       ],
@@ -50507,7 +50507,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "116-121",
+          "lines": "126-131",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {"
         }
       ],
@@ -50594,7 +50594,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "96-101",
+          "lines": "106-111",
           "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in\n        // any real corpus. Gating it would silently blank the subagent preview for zero\n        // real benefit; the per-surface scan owns subagent-vs-parent context instead."
         },
         {
@@ -60960,7 +60960,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "96-99",
+          "lines": "106-109",
           "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in"
         },
         {
@@ -64797,7 +64797,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "116-123",
+          "lines": "126-133",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {\n                    return false;\n                }"
         }
       ],
@@ -64895,7 +64895,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "116-123",
+          "lines": "126-133",
           "snippet": "        match &msg.content {\n            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_peer_message(s),\n            Some(Content::Blocks(blocks)) => {\n                let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));\n                let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));\n                if !has_text || has_tool_result {\n                    return false;\n                }"
         }
       ],
@@ -65753,7 +65753,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "148-153",
+          "lines": "158-163",
           "snippet": "        const OPEN: &str = \"<command-args>\";\n        const CLOSE: &str = \"</command-args>\";\n        let start = s.find(OPEN)? + OPEN.len();\n        let end = s[start..].find(CLOSE).map_or(s.len(), |rel| start + rel);\n        let args = s[start..end].trim();\n        if args.is_empty() {"
         },
         {
@@ -66000,12 +66000,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "337-349",
+          "lines": "347-359",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (sections 4.4 / 6.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary.\n    ///\n    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled...` / `<tool_use_error>...` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "351-359",
+          "lines": "361-369",
           "snippet": "    pub fn is_auq_answer_boundary(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
         },
         {
@@ -66110,7 +66110,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "360-370",
+          "lines": "370-380",
           "snippet": "        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }\n        if !has_non_errored_tool_result {\n            return false;\n        }"
         }
       ],
@@ -66216,7 +66216,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "337-343",
+          "lines": "347-353",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (sections 4.4 / 6.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary."
         }
       ],
@@ -67305,7 +67305,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "181-189",
+          "lines": "191-199",
           "snippet": "    /// Classify this record as a MACHINE-INJECTED automation trigger, if it is one.\n    ///\n    /// A `<task-notification>` record is a `type:\"user\"`, non-`isMeta`, STRING-content\n    /// record CC inserts when a background command / spawned task / workflow completes. It\n    /// passes every [`Record::is_genuine_user`] gate (so it opens a turn like a human\n    /// message), but it is an automation pulse - surfacing its raw `<task-id>` /\n    /// `<output-file>` / `<status>` XML as \"user prose\" is noise. This parser extracts the\n    /// stable inner tags so a surface can render `[workflow <task-id> completed] <summary>`\n    /// instead. Returns `None` for any non-`<task-notification>` record."
         }
       ],
@@ -67655,7 +67655,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "96-101",
+          "lines": "106-111",
           "snippet": "        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an\n        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s\n        // per-subagent preview legitimately treats that seed as the subagent's \"first\n        // user message\", and in TOP-LEVEL transcripts a sidechain seed does not occur in\n        // any real corpus. Gating it would silently blank the subagent preview for zero\n        // real benefit; the per-surface scan owns subagent-vs-parent context instead."
         }
       ],
@@ -70896,7 +70896,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "383-389",
+          "lines": "393-399",
           "snippet": "    pub(crate) fn has_auq_response(&self) -> bool {\n        self.tur_probe()\n            .as_ref()\n            .and_then(|p| p.response.as_ref())\n            .and_then(serde_json::Value::as_str)\n            .is_some_and(|s| !s.trim().is_empty())\n    }"
         },
         {
@@ -81832,7 +81832,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "327-328",
+          "lines": "337-338",
           "snippet": "/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]"
         }
       ],
@@ -85849,12 +85849,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "247-248",
+          "lines": "257-258",
           "snippet": "/// What an elided member renders as, everywhere and always: nothing.\npub(crate) const ELIDED_PLACEHOLDER: &str = \"<elided>\";"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "280-293",
+          "lines": "290-303",
           "snippet": "fn elide_members(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {\n                        serde_json::json!(ELIDED_PLACEHOLDER)\n                    } else {\n                        elide_members(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
         },
         {
@@ -85905,7 +85905,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "444-448",
+          "lines": "454-458",
           "snippet": "pub fn converted_text(&self) -> Option<&ConversionText> {\n        self.conversion_parsed\n            .get_or_init(|| {\n                let rendered = conversion_text(self.rendered.as_deref());\n                let human_turn = conversion_text(self.rendered_in_human_turn.as_deref());"
         },
         {
@@ -86200,7 +86200,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "446-450",
+          "lines": "449-453",
           "snippet": "if self.is_meta.unwrap_or(false)\n                && blocks.iter().any(|b| matches!(b, Block::Image { .. }))\n            {\n                push_unique(out, Class::ContextImage);\n            }"
         },
         {
@@ -88599,7 +88599,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    pub fn specific(&self) -> Option<(&'static str, &str)> {",
-          "lines": "271"
+          "lines": "292"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
@@ -88669,7 +88669,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(\n        default,\n        rename = \"requestId\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub request_id: Option<Box<str>>,",
-          "lines": "89-94"
+          "lines": "94-99"
         }
       ],
       "states": [
@@ -88713,7 +88713,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(\n        default,\n        rename = \"apiBlockIndex\",\n        deserialize_with = \"lenient::u32_only\"\n    )]\n    pub api_block_index: Option<u32>,",
-          "lines": "98-103"
+          "lines": "103-108"
         }
       ],
       "states": [
@@ -88760,7 +88760,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(\n        default,\n        rename = \"toolEndsTurn\",\n        deserialize_with = \"lenient::bool_only\"\n    )]\n    pub tool_ends_turn: Option<bool>,",
-          "lines": "108-113"
+          "lines": "113-118"
         }
       ],
       "states": [
@@ -88804,12 +88804,12 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    fn parts(&self) -> Vec<String> {",
-          "lines": "330"
+          "lines": "351"
         },
         {
           "path": "src/model/record/keys.rs",
           "snippet": "        f.headline().is_some().then_some(f)",
-          "lines": "429"
+          "lines": "450"
         }
       ],
       "states": [
@@ -88871,7 +88871,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(default, deserialize_with = \"lenient::string_only\")]\n    pub error: Option<Box<str>>,",
-          "lines": "130-131"
+          "lines": "135-136"
         },
         {
           "path": "src/model/record/lenient.rs",
@@ -88965,7 +88965,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(\n        default,\n        rename = \"scheduledTaskId\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub scheduled_task_id: Option<Box<str>>,",
-          "lines": "180-185"
+          "lines": "185-190"
         }
       ],
       "states": [
@@ -89010,7 +89010,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "const HOOK_RUN_SUBTYPE: &str = \"stop_hook_summary\";",
-          "lines": "369"
+          "lines": "390"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
@@ -89059,7 +89059,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(\n        default,\n        rename = \"userFeedback\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub user_feedback: Option<Box<str>>,",
-          "lines": "118-123"
+          "lines": "123-128"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
@@ -89159,12 +89159,12 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "    #[serde(\n        default,\n        rename = \"toolUseID\",\n        deserialize_with = \"lenient::string_only\"\n    )]\n    pub tool_use_id_key: Option<Box<str>>,",
-          "lines": "198-203"
+          "lines": "203-208"
         },
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3482"
+          "lines": "3483"
         }
       ],
       "states": [
@@ -90093,7 +90093,7 @@
         },
         {
           "path": "src/model/record/keys.rs",
-          "lines": "463-469",
+          "lines": "500-506",
           "snippet": "    pub fn stop_details(&self) -> Option<&StopDetails> {\n        self.message\n            .as_ref()?\n            .stop_details\n            .as_deref()\n            .filter(|s| s.says_something())\n    }"
         },
         {
@@ -90186,6 +90186,172 @@
           },
           "residue": [
             "`recommended_model` is a member the API sends and every measured record carries as null, so csift models no field for it; a corpus carrying one with a value would say whether it is worth a field."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TURN-034",
+      "area": "turn-boundary",
+      "code": [
+        {
+          "path": "src/model/predicates.rs",
+          "lines": "103-105",
+          "snippet": "        if self.is_turn_companion() {\n            return false;\n        }"
+        },
+        {
+          "path": "src/model/record/keys.rs",
+          "lines": "483-486",
+          "snippet": "    pub fn is_turn_companion(&self) -> bool {\n        self.exposed_keys()\n            .is_some_and(|k| k.turn_companion == Some(true))\n    }"
+        },
+        {
+          "path": "src/model/classify.rs",
+          "lines": "387-389",
+          "snippet": "        if !self.is_meta.unwrap_or(false) && !self.is_turn_companion() {\n            push_unique(out, Class::UserMessage);\n        }"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.236",
+          "from_basis": "first_seen",
+          "to": null,
+          "behavior": "`turnCompanion` is a top-level boolean the harness stamps on a `type:\"user\"` record it wrote to ACCOMPANY a turn rather than receive from the person - a usage-limit wrap-up, a release note, a recovery nudge, the message that continues a turn the model did not finish. Claude Code's own \"is this the person's message\" predicate excludes it explicitly, testing `isMeta!==!0 && turnCompanion!==!0` before it looks at the content at all, and its callers use that predicate to walk back for the person's last real prompt. So the two flags are TWO authorship stamps rather than one: the field-level test is `!== true`, which means a key written `false` says nothing and reads the same as an absent one. They are also not one SET. Of the fourteen sites in the verified build that stamp the flag, twelve build an object that carries `isMeta` beside it and TWO do not: a mapper that stamps every `type:\"user\"` member of a slash command's expansion messages, and a tool-dispatch path that stamps each `type:\"user\"` member of the extra messages a tool returns beside its result. Both paths spread an EXISTING record and add the one key, so they touch no meta flag, and a record carrying the companion stamp and no meta flag is constructible from either.",
+          "depends": "`Record::is_genuine_user` reads the flag beside `isMeta`, so a companion is never the human and `opens_turn` never opens a turn on one; `classify` reads it at the same arm, so the LABEL agrees with the BOUNDARY and such a record is not `user.message` under a selector either. Reading `isMeta` alone counted a companion as the operator's own turn: it opened a turn, shifted every later turn number on that transcript, and moved the live-turn count every surface derives from the same predicate. The field rides `model::Exposed` - the flattened, boxed exposed-key struct - rather than a field of `Record`, because a `Record`'s width is paid on every parsed line of every scan while a member of that struct costs nothing to a record naming no exposed key. It is the ONE exposed key read by a PREDICATE rather than projected as a fact, because what a reader acts on is the leaf and the boundary it changes. A companion matching a template csift models keeps that template's leaf; one matching none carries no leaf at all and an address renders it `? unmodeled: user/turnCompanion`, naming which of the two stamps the harness used.",
+          "instrument": "Byte-search the build for `turnCompanion:!0` and read a 150-byte window at each match, splitting on whether the constructed object also names `isMeta`; and for the predicate, byte-search for `e.isMeta!==!0&&e.turnCompanion!==!0`. Counting rule: one non-overlapping match walked forward from offset zero, over the whole file. Then census a projects root: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object, keep the `type:\"user\"` lines carrying the `turnCompanion` KEY, and split them three ways - the key `true` with `isMeta` `true`, the key `true` without, and the key present but not `true`. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; keep the `type:\"user\"` lines carrying the `turnCompanion` key; split them into `true` with `isMeta` true, `true` without, and present-but-not-true.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "the harness's own person-message predicate",
+              "offset": 160186436,
+              "excerpt": "function ISt(e){return e.type===\"user\"&&e.isMeta!==!0&&e.turnCompanion!==!0&&(typeof e.message.content===\"string\"||!e.message.content.some((n)=>n.type===\"tool_result\"))}",
+              "note": "the reason the flag is an authorship question at all: the harness tests it, before the content, in the predicate whose callers walk back for the person's last real prompt."
+            },
+            {
+              "role": "gate",
+              "name": "the slash-command expansion mapper",
+              "offset": 173538033,
+              "excerpt": "function be(e){return e.map((n)=>n.type===\"user\"?{...n,turnCompanion:!0}:n)}",
+              "note": "spreads an EXISTING record and adds the one key, so whatever meta flag that record had is what it keeps - the first of the two paths that produce the divergent shape."
+            },
+            {
+              "role": "writer",
+              "name": "the tool-dispatch path for a tool's extra messages",
+              "offset": 164460104,
+              "excerpt": "if(_o.type===\"user\"){let Eo={..._o,turnCompanion:!0};we.push({message:Eo})}",
+              "note": "the second such path: each `type:\"user\"` member of the messages a tool returned beside its result is stamped and pushed, again with no meta flag added."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164448046,
+              "excerpt": "message:xe({content:Hpt,isMeta:!0,turnCompanion:!0,now:B})})}return ",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object carries NO isMeta",
+              "offset": 164460125,
+              "excerpt": "let Eo={..._o,turnCompanion:!0};we.push({message",
+              "verdict": "NO `isMeta` in the constructed object: this is one of the two paths that make the divergent shape constructible."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164640421,
+              "excerpt": "content:F??(B===\"next-steps\"?rnn:Jtn),isMeta:!0,turnCompanion:!0,usageLimitNote:\"w",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164640632,
+              "excerpt": "let F=j1o(P(H1o,\"\"));if(F)v.push(xe({content:F,isMeta:!0,turnCompanion:!0,usageLimitNote:\"r",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164640806,
+              "excerpt": "if(v.push(Mt(snn,inn)),!I)v.push(xe({content:onn,isMeta:!0,turnCompanion:!0,usageLimitNote:\"w",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164740151,
+              "excerpt": "isMeta:!0,turnCompanion:!0,now:fe.now,uuidFn",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164741049,
+              "excerpt": " no recap. \"+\"If none of it survived, answer the request from the start.\",isMeta:!0,turnCompanion:!0,now:fe.now,uuidFn",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164741801,
+              "excerpt": "for(let md of Xo)yield{type:\"tombstone\",message:md};let Hc=xe({content:kpt,isMeta:!0,turnCompanion:!0,now:fe.now,uuidFn",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 164742681,
+              "excerpt": "if(!Tr){g(\"query_thinking_only_response\",\"nudged\");let _l=xe({content:xpt,isMeta:!0,turnCompanion:!0,now:fe.now,uuidFn",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 169791525,
+              "excerpt": "if(T.length>0)w.messages.push(xe({content:T.map((I)=>({type:\"text\",text:I})),isMeta:!0,turnCompanion:!0}));return w}funct",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object carries NO isMeta",
+              "offset": 173537997,
+              "excerpt": "...o,messages:[],settledInPlace:!0}}function be(e){return e.map((n)=>n.type===\"user\"?{...n,turnCompanion:!0}:n)}\nexport{uGe,B",
+              "verdict": "NO `isMeta` in the constructed object: this is one of the two paths that make the divergent shape constructible."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 183199749,
+              "excerpt": "content:f(fA),isMeta:!0,turnCompanion:!0}),xe({content:l,i",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 183199749,
+              "excerpt": "content:f(fA),isMeta:!0,turnCompanion:!0}),xe({content:l,isMeta:!0,turnCompanion:!0})]}function m(t,o",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            },
+            {
+              "site": "a stamping site whose object also carries isMeta",
+              "offset": 187387027,
+              "excerpt": "content:`[${o} prior /loop ${H(o,\"wakeup\")} found nothing actionable; loop is healthy.]`,isMeta:!0}),turnCompanion:!0}}function S(o){re",
+              "verdict": "the constructed object carries `isMeta` beside the flag, so csift's meta gate already refuses this record."
+            }
+          ],
+          "writer_literal_floor": {
+            "literal": "turnCompanion",
+            "lowest_present": "2.1.236",
+            "highest_absent": "2.1.234",
+            "ladder": "one non-overlapping byte count of the literal per cached build over 65 version-named builds, platform-suffixed directories excluded; the count reads 21 in 2.1.258, 23 in 2.1.268 and 25 in 2.1.278, so the field is older than the verified build and has been gaining stamping sites since."
+          },
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "the byte counts and window reads above in the verified build, the floor ladder over 65 cached builds, and the three-way census over one projects root and over a frozen snapshot root.",
+            "observed": "`turnCompanion` counts 21 in the verified build, of which 14 are `turnCompanion:!0` stamping sites; 12 of the 14 build an object naming `isMeta` and 2 do not, and both of those two are read above. The predicate literal `e.isMeta!==!0&&e.turnCompanion!==!0` counts 1. A frozen snapshot root of 10,299 files and 2,312,350 parsed lines carries 0 records with the key at all; one projects root of 10,325 files and 2,036,501 parsed lines carries 342 whole-root and 306 with the measuring tree removed, and on every one of them the key is `true` AND `isMeta` is `true` - 0 rows in each of the other two buckets on both readings.",
+            "rule": "one non-overlapping match walked forward from offset zero for the literals; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the divergent shape is CONSTRUCTIBLE from the two enumerated paths and has zero specimens on either root, so the exclusion is a correctness rule taken from the harness's own predicate rather than from a record on disk. The specimen the state rests on is the 342 and 306 records that carry the flag; what they show is that the flag is written, ordinarily, on records csift's meta gate already refused."
+          },
+          "residue": [
+            "the slash-command mapper's three call sites each build their first member with a meta flag, so the divergent shape needs a member from one of the arrays they splice in; which of those arrays can carry a `type:\"user\"` record without one is a read of those builders and would name the shape rather than bound it."
           ]
         }
       ]

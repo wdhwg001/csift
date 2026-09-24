@@ -93,6 +93,16 @@ impl Record {
         if self.is_meta.unwrap_or(false) {
             return false;
         }
+        // The SECOND authorship flag, and it is not a subset of the first. `turnCompanion`
+        // is what the harness stamps on a record it wrote to ACCOMPANY a turn, and Claude
+        // Code's own "is this the person's message" predicate excludes it for that reason.
+        // Two of the shipped build's stamping paths touch no meta flag at all - a slash
+        // command's expansion messages, and the extra `type:"user"` messages a tool
+        // returns beside its result - so reading `isMeta` alone would count such a record
+        // as the human's own turn, open a turn on it, and shift every later turn number.
+        if self.is_turn_companion() {
+            return false;
+        }
         // NOTE on `isSidechain`: a subagent transcript's FIRST record is an
         // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s
         // per-subagent preview legitimately treats that seed as the subagent's "first

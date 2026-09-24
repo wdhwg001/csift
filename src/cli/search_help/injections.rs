@@ -57,4 +57,7 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness
      absent edge. `harness.schedule.wakeup`, `harness.schedule.tick` and \
      `harness.resume.prompt` carry NO edge, because no key on those records names one. An \
      isMeta record matching no template carries no leaf: `show --line N` renders it as \
-     `? unmodeled: user/isMeta` and a scan never emits it.";
+     `? unmodeled: user/isMeta` and a scan never emits it. `turnCompanion` is the harness's \
+     OTHER authorship stamp and `is_genuine_user` reads it too, so a record carrying it is \
+     never the person and never opens a turn whatever `isMeta` says; one matching no \
+     template renders `? unmodeled: user/turnCompanion`.";

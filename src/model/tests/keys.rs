@@ -386,7 +386,7 @@ fn every_json_shape_reaches_every_decoder_and_only_its_own_type_decodes() {
     assert_eq!(q.resets_at, Some(1790000003));
 }
 
-/// ONE key is enough, for each of the EIGHTEEN.
+/// ONE key is enough, for each of the NINETEEN.
 ///
 /// `Exposed` is built only for a record that names at least one key, and the gate is ANY
 /// of them rather than all - so the statement is per KEY, and a record naming exactly one
@@ -414,11 +414,12 @@ fn any_one_exposed_key_alone_carries_the_box() {
         ("scheduledTaskId", r#""task-1""#),
         ("scheduledFireId", r#""fire-1""#),
         ("toolUseID", r#""66666666-7777-4888-8999-aaaaaaaaaaaa""#),
+        ("turnCompanion", "true"),
     ];
     assert_eq!(
         keys.len(),
-        18,
-        "the table is the eighteen exposed keys; a new key adds a row here"
+        19,
+        "the table is the nineteen exposed keys; a new key adds a row here"
     );
     for (key, value) in keys {
         let line = format!(r#"{{"type":"assistant","uuid":"a-40","{key}":{value}}}"#);

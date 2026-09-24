@@ -393,3 +393,72 @@ fn both_conversions_are_parsed_once_and_remembered() {
     );
     assert_eq!(first.rendered.as_deref(), Some("machine"));
 }
+
+/// `turnCompanion` is the SECOND authorship flag, and the harness's own
+/// "is this the person's message" predicate excludes it. A record carrying it is neither
+/// the human nor a turn opener, whichever way `isMeta` reads, and the turn numbering
+/// around it does not move.
+#[test]
+fn a_turn_companion_record_is_neither_the_person_nor_a_turn_opener() {
+    for meta in [false, true] {
+        let mut line = serde_json::json!({
+            "type": "user",
+            "uuid": "tc-1",
+            "turnCompanion": true,
+            "message": {"role": "user", "content": "carry on from where you stopped"},
+        });
+        if meta {
+            line["isMeta"] = serde_json::Value::Bool(true);
+        }
+        let r = parse(&line.to_string());
+        assert!(
+            !r.is_genuine_user(),
+            "a companion is not the person (isMeta {meta})"
+        );
+        assert!(!r.opens_turn(), "a companion opens no turn (isMeta {meta})");
+        assert!(
+            r.classify(&ClassifyCtx::top_level()).is_empty(),
+            "a companion matching no template carries no leaf (isMeta {meta}): {:?}",
+            r.classify(&ClassifyCtx::top_level())
+        );
+    }
+    // The SAME words with neither flag are the person's own message, opening their turn:
+    // the flags are what separate the two populations, never the text.
+    let typed = parse(
+        r#"{"type":"user","uuid":"tc-2","message":{"role":"user","content":"carry on from where you stopped"}}"#,
+    );
+    assert!(typed.is_genuine_user());
+    assert!(typed.opens_turn());
+    assert_eq!(
+        typed.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
+    );
+    // A record naming the key with a value that is not `true` says nothing: the harness's
+    // own predicate excludes on `true` alone, and a missing key and a false one are the
+    // same answer.
+    let falsey = parse(
+        r#"{"type":"user","uuid":"tc-3","turnCompanion":false,"message":{"role":"user","content":"carry on from where you stopped"}}"#,
+    );
+    assert!(falsey.is_genuine_user());
+    assert!(falsey.opens_turn());
+}
+
+/// The turn NUMBERING around a companion is unmoved: it folds into the turn it sits in,
+/// exactly like every other record the harness wrote into one.
+#[test]
+fn a_turn_companion_folds_into_the_turn_it_sits_in() {
+    let lines = [
+        r#"{"type":"user","uuid":"g0","message":{"role":"user","content":"first ask"}}"#,
+        r#"{"type":"assistant","uuid":"g1","parentUuid":"g0","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}"#,
+        r#"{"type":"user","uuid":"g2","parentUuid":"g1","turnCompanion":true,"message":{"role":"user","content":"carry on from where you stopped"}}"#,
+        r#"{"type":"assistant","uuid":"g3","parentUuid":"g2","message":{"role":"assistant","content":[{"type":"text","text":"carried on"}]}}"#,
+        r#"{"type":"user","uuid":"g4","parentUuid":"g3","message":{"role":"user","content":"second ask"}}"#,
+    ];
+    let recs: Vec<Record> = lines.iter().map(|l| parse(l)).collect();
+    let opens: Vec<bool> = recs.iter().map(Record::opens_turn).collect();
+    assert_eq!(
+        opens,
+        vec![true, false, false, false, true],
+        "two turns, and the companion opens neither"
+    );
+}

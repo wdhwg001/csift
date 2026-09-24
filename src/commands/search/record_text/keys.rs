@@ -8,11 +8,11 @@
 //! there is nothing here to answer with.
 //!
 //! PERF (SPEC section 7): the keys reach this family as [`Record::exposed_keys`] - the
-//! eighteen of them in ONE [`crate::model::Exposed`] behind ONE `Box`, read by the same
+//! nineteen of them in ONE [`crate::model::Exposed`] behind ONE `Box`, read by the same
 //! serde pass that builds the record (`#[serde(flatten)]`) and allocated only for a record
 //! that names at least one. That shape answers both halves of the RECORD-WIDTH law this
 //! family is built around: the row every parsed line of every scan carries grows by a
-//! pointer rather than by eighteen `Option`s (`size_of::<Record>()` 1368 -> 1376, and 1384 at
+//! pointer rather than by one `Option` per key (`size_of::<Record>()` 1368 -> 1376, and 1384 at
 //! this tip with the API's stop-details object behind its own pointer; pinned in
 //! `parse::tests::spine`), and nothing walks the line twice. The walk was the alternative,
 //! and it was built and measured rather than argued about: a depth-1 key read at the one

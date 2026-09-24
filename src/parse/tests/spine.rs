@@ -392,12 +392,12 @@ fn a_spine_row_stays_far_narrower_than_a_record() {
 /// The figure is platform-dependent in principle; it is asserted on the 64-bit targets the
 /// project builds for, and a port that moves it updates the number with its reason.
 ///
-/// It last moved by 8 bytes, for the eighteen EXPOSED KEYS (`model::record::keys`), and
-/// that is the whole point of the shape they landed in. The keys reach `Record` as ONE
-/// [`crate::model::Exposed`] behind ONE `Box`, so the row grows by a pointer rather than
-/// by eighteen `Option`s, which measured 216 bytes; the allocation behind the pointer is
-/// paid only by a record that names at least one key. `#[serde(flatten)]` is what keeps
-/// that to ONE pass. The alternative was built and measured rather than argued about:
+/// Two of its fields are POINTERS to shapes that would otherwise widen every row: the
+/// EXPOSED KEYS (`model::record::keys`) and the API's stop-details object, 8 bytes each.
+/// The keys reach `Record` as ONE [`crate::model::Exposed`] behind ONE `Box`, so the row
+/// grows by a pointer rather than by one `Option` per key - measured at eighteen keys,
+/// the inline form cost 216 bytes - and the allocation behind the pointer is paid only by
+/// a record that names at least one. `#[serde(flatten)]` is what keeps that to ONE pass. The alternative was built and measured rather than argued about:
 /// lifting the keys from the source line by a depth-1 walk, at the one place a record is
 /// built from bytes and behind a byte gate, cost 48 to 79 percent of USER CPU on three
 /// acid rows, being a second whole-line pass on top of serde's.

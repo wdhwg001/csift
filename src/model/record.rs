@@ -306,14 +306,19 @@ pub struct Record {
     #[serde(skip)]
     pub conversion_parsed: std::sync::OnceLock<Option<Box<ConversionText>>>,
 
-    /// THE EXPOSED KEYS ([`Exposed`], `record/keys.rs`): the eighteen top-level keys a
+    /// THE EXPOSED KEYS ([`Exposed`], `record/keys.rs`): the nineteen top-level keys a
     /// record states about the CALL behind it - which agent definition, skill, plugin and
     /// MCP tool the request ran under, which API request and block it came from, why it
     /// failed, what a person typed refusing a tool, which scheduled task submitted the
-    /// prompt, which hook run closed the turn.
+    /// prompt, which hook run closed the turn, and whether the harness wrote the record to
+    /// accompany a turn rather than the person sending it. Eighteen of them are PROJECTED
+    /// by the exposed-keys family; the nineteenth is read by a PREDICATE
+    /// ([`Record::is_genuine_user`]) and carries no fact of its own, because what a reader
+    /// acts on is the leaf it changes rather than the flag.
     ///
     /// ONE field, BOXED, because a `Record`'s width is paid on every parsed line of every
-    /// scan: eighteen `Option`s here cost 216 bytes on every row, where a
+    /// scan: one `Option` per key here costs a field per key on every row - measured at
+    /// eighteen keys, 216 bytes - where a
     /// pointer costs 8 and the allocation is paid only by a record that names at least one
     /// of the keys. `#[serde(flatten)]` is what keeps that to the SAME pass - serde reads
     /// the keys where they sit, at the record's own top level, rather than csift walking

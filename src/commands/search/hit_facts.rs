@@ -196,7 +196,17 @@ pub(crate) fn unmodeled_shape(rec: &Record, raw: Option<&str>) -> Option<String>
         if let Some(b) = distinguishing_block_type(raw) {
             return Some(format!("{ty}/{b}"));
         }
-        return rec.is_meta.unwrap_or(false).then(|| format!("{ty}/isMeta"));
+        // Either AUTHORSHIP flag names the shape, and `isMeta` leads because it is the
+        // one nearly every harness-written record carries. A record marked only
+        // `turnCompanion` is the other shape the harness writes - a command's expansion,
+        // or a message a tool returned beside its result - and naming the flag is what
+        // tells a reader which of the two they are looking at.
+        if rec.is_meta.unwrap_or(false) {
+            return Some(format!("{ty}/isMeta"));
+        }
+        return rec
+            .is_turn_companion()
+            .then(|| format!("{ty}/turnCompanion"));
     }
     // A record whose type IS modeled but whose own leaf is decided deeper: name the
     // deeper value, which is the part csift did not model.
