@@ -566,12 +566,12 @@ Three forms, and the first is what a coarse query means:
 
 No `-t` means every label. `-T` excludes with the same grammar, and `is_statically_empty` bails ONLY when `-T` is what cancelled `-t`: a bare category whose whole face is invisible also matches nothing, and that is a different fact with a different remedy. `harness.bookkeeping` is the one such category today (all 13 leaves are invisible): the selector is accepted, matches nothing BY THE LAW, and `search` prints one stderr note naming the remedy (`-t harness.bookkeeping.*`) beside the ordinary empty-result diagnosis, with `empty_visible_face` in the JSON summary. The set is derived (`cli::empty_visible_faces`), so a visibility change moves it without a second edit.
 
-**Retired spellings are HARD ERRORS naming their successors** - no alias, no forwarding arm, no `labels[]` twin:
+**Retired spellings are HARD ERRORS naming WHY the spelling is not a selector and where its records went** - no alias, no forwarding arm, no `labels[]` twin. The message carries `('<spelling>' <reason>, so this is: <successors>.)` ahead of the valid-selector list, and the middle column is a REASON rather than a release: the only reader of it holds a binary on which the spelling is already gone, so which release retired it changes nothing, while the reason carries to the next spelling they guess. Three reasons cover the thirteen rows - a flat spelling against a `role.category.leaf` taxonomy, a category decided by the producer that wrote the record, and a leaf naming one shape - and the successors below are the strings each error prints, which is what a test holds `SKILL.md` section 10 to row by row:
 
 | retired | successors the error names |
 |---|---|
-| `harness.meta` (bare) | `harness.hook.*` · `harness.command.caveat` · `harness.schedule.tick` · `harness.context.*` · `harness.turn.*` · `harness.system.*` · `harness.bookkeeping.*` · `agent.message.structured` |
-| `harness.meta.hook` | `harness.hook.context` (injected text) · `harness.hook.feedback` (a blocking hook's, over four names) · `harness.command.caveat` |
+| `harness.meta` (bare) | `harness.hook.*` · `harness.command.caveat` · `harness.enforce.retry` · `harness.schedule.tick` · `harness.schedule.event` · `harness.context.*` · `harness.turn.*` · `harness.system.*` · `harness.bookkeeping.*` · `agent.message.structured` |
+| `harness.meta.hook` | `harness.hook.context` (injected text) · `harness.hook.feedback` (a blocking hook's, over four names) · `harness.command.caveat` · `harness.enforce.retry` (the edit-failed-retry nudge) |
 | `harness.meta.loop` | `harness.schedule.tick` |
 | `harness.meta.attachment` | `harness.context.*` · `harness.hook.outcome` · `agent.message.structured` |
 | `harness.meta.turn-duration` / `-away-summary` / `-stop-hooks` | `harness.turn.duration` / `.recap` / `.stop-hooks` |

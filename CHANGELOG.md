@@ -722,6 +722,26 @@ surface change bumps the PATCH.
   `[for: hook_run ...]` label-zone tag, and the JSON `for[].kind`. Neither spelling has
   shipped in a released binary.
 
+- **A retired `-t` spelling says WHY it is not a selector, beside where its records went.**
+  All thirteen are hard errors, and each message carries
+  `('<spelling>' <reason>, so this is: <successors>.)` ahead of the valid-selector list. The
+  middle column is a REASON rather than a release, because the only reader of that message
+  holds a binary on which the spelling is already gone: which release retired it changes
+  nothing, while the reason carries to the next spelling they guess. Three reasons cover the
+  thirteen rows. `thinking`, `tool` and `tool-response` are flat spellings and the taxonomy
+  is `role.category.leaf`. Seven share one clause - a category is decided by the producer
+  that wrote the record - and each says what it did against that rule: `harness.meta` pooled
+  several producers under one category; the five
+  `harness.meta.{loop,turn-duration,away-summary,stop-hooks,snapshot}` paths each named a
+  record by the category it was pooled in; `harness.schedule.continuation` put the resume
+  loader's own prompt under the scheduler's. The last three,
+  `harness.meta.{hook,attachment,system}`, pooled three or four producers under one leaf,
+  and a leaf names one shape. A retired prefix plus `.*` is the same retirement and is
+  looked up bare, so it prints the bare row's message. The set is a walkable table rather
+  than a match arm, which is what lets a test hold `SKILL.md` section 10 to these exact
+  successor strings row by row; SPEC's own copy of the table was two successors short on
+  `harness.meta` and one short on `harness.meta.hook`, and now prints what the errors print.
+
 ### Fixed
 
 - **The two textless thinking leaves rendered a body they do not have.** An
