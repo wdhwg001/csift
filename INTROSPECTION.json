@@ -85179,7 +85179,7 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "317-329",
+          "lines": "323-335",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
         }
       ],
@@ -85531,7 +85531,7 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "317-329",
+          "lines": "323-335",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_stripped\",\n];"
         },
         {
@@ -85559,7 +85559,8 @@
           "attribution": "end-to-end",
           "open_legs": [],
           "residue": [
-            "An earlier reading, superseded by the receipt now standing on this state (Built a three-line transcript - a genuine user record, an assistant text turn, and a `type:\"attachment\"`...): The object spans 10,476 bytes and holds 18 empty arms; the early-return list holds 16 names and the default arm returns [] after reporting. Of the 50 payload types csift models, 9 have an empty arm (`async_hook_response_batch`, `batching_reminder_sent`, `command_permissions`, `goal_status`, `hook_cancelled`, `hook_non_blocking_error`, `hook_system_message`, `prompt_snapshot`, `structured_output`), 0 are in the early-return list, and 2 occur zero times in the whole executable (`deferred_tools_record`, `thinking_stripped`) - 11 in total, against the 9 csift carried. On disk over 9,793 jsonl files: `goal_status` 0 files / 0 payload lines, `async_hook_response_batch` 0 / 0, while `deferred_tools_record` reads 12 files / 61 payload lines and `thinking_stripped` 3 / 3. An empty arm is the literal `<name>:()=>[]` inside the conversion object's own brace window. A default-arm type is one whose name is a zero-count byte match over the whole executable, so nothing in the build can name it. The nine empty arms that name types csift does not model are recorded here rather than added: the inventory has no row for them, and a never-convert entry with no row is a rule about nothing. Walked the conversion object from the `hook_permission_decision:()=>[]` anchor to its enclosing braces and collected every `(\\w+):\\(\\)=>\\[\\]` arm inside; read the two arms below it from the `Unknown attachment type: ` literal; classified each of the 50 attachment payload types the inventory models as empty-arm, early-return or default-arm; then counted files and payload lines for the candidates over every `*.jsonl` under one projects root. Counting rule: A payload line is a byte match of `\"attachment\":{\"type\":\"<type>\"`; a file counts once however many such lines it holds."
+            "An earlier reading, superseded by the receipt now standing on this state (Built a three-line transcript - a genuine user record, an assistant text turn, and a `type:\"attachment\"`...): The object spans 10,476 bytes and holds 18 empty arms; the early-return list holds 16 names and the default arm returns [] after reporting. Of the 50 payload types csift models, 9 have an empty arm (`async_hook_response_batch`, `batching_reminder_sent`, `command_permissions`, `goal_status`, `hook_cancelled`, `hook_non_blocking_error`, `hook_system_message`, `prompt_snapshot`, `structured_output`), 0 are in the early-return list, and 2 occur zero times in the whole executable (`deferred_tools_record`, `thinking_stripped`) - 11 in total, against the 9 csift carried. On disk over 9,793 jsonl files: `goal_status` 0 files / 0 payload lines, `async_hook_response_batch` 0 / 0, while `deferred_tools_record` reads 12 files / 61 payload lines and `thinking_stripped` 3 / 3. An empty arm is the literal `<name>:()=>[]` inside the conversion object's own brace window. A default-arm type is one whose name is a zero-count byte match over the whole executable, so nothing in the build can name it. The nine empty arms that name types csift does not model are recorded here rather than added: the inventory has no row for them, and a never-convert entry with no row is a rule about nothing. Walked the conversion object from the `hook_permission_decision:()=>[]` anchor to its enclosing braces and collected every `(\\w+):\\(\\)=>\\[\\]` arm inside; read the two arms below it from the `Unknown attachment type: ` literal; classified each of the 50 attachment payload types the inventory models as empty-arm, early-return or default-arm; then counted files and payload lines for the candidates over every `*.jsonl` under one projects root. Counting rule: A payload line is a byte match of `\"attachment\":{\"type\":\"<type>\"`; a file counts once however many such lines it holds.",
+            "At 2.1.278 the conversion object holds TWENTY-TWO empty arms rather than eighteen, and the two types this state reaches through the default arm are among the four names added: `prompt_render_point:()=>[]` at 182104022, `thinking_stripped:()=>[]` at 182104049, `thinking_drop:()=>[]` at 182104074 and `deferred_tools_record:()=>[]` at 182104095. The conversion is therefore unchanged and only its REASON moved, from a name the build does not carry to an arm it does: a build that learns a payload type learns it as a drop. The sixteen-name `.includes(e.type))return[]` early return at 182131898 and the `Unknown attachment type: ${e.type}` default arm at 182131970 are the same there. `mcp_instructions_delta` is the opposite case at BOTH builds and has no inventory row: a `case\"mcp_instructions_delta\":` arm CONVERTS it to content (166025842 at the build this state names, 182130110 at 2.1.278), so a record carrying one is delivered and csift models no leaf for it. Counting rule: one arm per distinct payload-type name inside the conversion object window; one `bytes.count` per name per build file - `deferred_tools_record` 0 then 7, `thinking_stripped` 0 then 16, `thinking_drop` 0 then 11."
           ],
           "producer_chain": [
             {
@@ -87937,7 +87938,7 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "317",
+          "lines": "323",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &["
         },
         {
