@@ -328,8 +328,10 @@ fn an_unexpected_type_reads_as_an_absent_key() {
 /// and asserts the value the documented rule gives.
 #[test]
 fn every_json_shape_reaches_every_decoder_and_only_its_own_type_decodes() {
-    // (the JSON value as written, what each decoder makes of it)
-    //                      value        str        u32      bool     quota-object
+    // (the JSON value as written, what each decoder makes of it). The two OBJECT decoders
+    // answer alike on every shape, which is why one column carries both: each keeps an
+    // object and refuses every other type.
+    //                      value        str        u32      bool     the two objects
     let table: &[(&str, bool, bool, bool, bool)] = &[
         (r#""ok""#, true, false, false, false),
         (r#""a\nb""#, true, false, false, false),
@@ -342,6 +344,20 @@ fn every_json_shape_reaches_every_decoder_and_only_its_own_type_decodes() {
         (r#"{"k":1}"#, false, false, false, true),
     ];
     for (value, want_str, want_u32, want_bool, want_quota) in table {
+        // The stop-details decoder sits on `message`, so it rides the same value through
+        // its own key; a member it models is named so an object shape SAYS something and
+        // the accessor's own gate does not swallow the row.
+        let sd = parse(&format!(
+            r#"{{"type":"assistant","uuid":"a-32","message":{{"role":"assistant","stop_details":{value},"content":[{{"type":"text","text":"anchor"}}]}}}}"#
+        ));
+        assert_eq!(
+            sd.message
+                .as_ref()
+                .and_then(|m| m.stop_details.as_ref())
+                .is_some(),
+            *want_quota,
+            "stop_details_only on {value}"
+        );
         let r = parse(&format!(
             r#"{{"type":"assistant","uuid":"a-30","requestId":{value},"apiBlockIndex":{value},"toolEndsTurn":{value},"quotaLimits":{value},"attributionAgent":"anchor"}}"#
         ));
