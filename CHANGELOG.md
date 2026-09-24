@@ -1038,6 +1038,12 @@ surface change bumps the PATCH.
 - **An attachment payload is parsed once per record.** Four layers ask one attachment
   record about its payload, and each ask re-parsed bytes that can hold a whole file
   snapshot.
+- **The nine provenance relations cost nothing a same-binary band can see.** Measured on an
+  idle host, the tip that carries them against the tip they were built from, over 31 queries
+  in three transcript sizes at 21 repetitions per cell: 90 of 93 rows sit inside the control
+  band, the three outside are slower by 0.4, 27 and 51 milliseconds, the whole-scope JSON
+  dump of the 397 MiB transcript reads 1.0009, and the `for-kind` census reads 1.0034 while
+  printing 85 percent more. SPEC section 7i carries the rows.
 
 ### Removed
 

@@ -3000,13 +3000,28 @@ moves from 4.50 s to 4.44 s of a 4.34 s base, and the selective row `B08` return
 base exactly (2.29 s both). Output is byte-identical either way - 70,800,770 bytes on the
 landmark wide-match row with and without the gate.
 
-**The NINE relations that followed: measured on the OUTPUT, the timing PENDING.** The second
-half of the primitive (section 4.12's `supersedes`, `continues`, `replays`, `branches`,
-`pairs`, `precedes`, `preserves`, `repairs`, and `reports` widened to both pulse carriers)
-was built on a host whose 1-minute load average sat between 51 and 56, so no control band
-was measured and NO timing ratio is claimed for it; the A/B belongs to an idle host and is
-pending there, with the `K01`-`K03` rows that now cover `--count-by for-kind` and `--for` in
-the set. What COULD be measured without an idle host was run instead: every acid row of the
+**The NINE relations that followed, measured on an idle host.** The second half of the
+primitive (section 4.12's `supersedes`, `continues`, `replays`, `branches`, `pairs`,
+`precedes`, `preserves`, `repairs`, and `reports` widened to both pulse carriers) was
+measured by the same driver once the host was idle (ten consecutive 30 s samples under a
+1-minute load average of 7 with no compiler alive, 3.8 at the start): arm A the tip the
+relations were built from, arm B the tip that carries them, 31 rows over the three size
+classes - the 30 above plus `K01`-`K03`, which cover `--count-by for-kind` and `--for` - 21
+timed repetitions per cell, 93 pairs, the same-binary control band per class first. Exit
+codes match on 93 of 93 pairs; 62 rows are byte-identical and 31 print more. The control
+band reads 0.0364 tiny, 0.0249 compacted, 0.0206 landmark. 90 of the 93 rows sit inside
+their class band. The three outside are `A03` on the tiny class at 1.0552 (+0.4 ms on a
+6.7 ms `show --line`, a noise-limited row), `H05` on the landmark at 1.0297 (+27 ms on a
+0.91 s zero-hit scan, byte-identical) and `H04` on the landmark at 1.0401 (+51 ms on a
+1.27 s needle-less regex scan, printing 0.1 percent more). That 51 ms is the widest
+absolute slowdown over all 93 rows. The whole-scope JSON dump `C05` reads 1.0009 on the
+landmark (2.891 s to 2.894 s), because the four survival relations ride the reader-gated
+JSON path and the five that render add one tag to units that already print. Class medians
+read 0.998 tiny, 1.001 compacted and 1.001 landmark, over all rows and over the
+byte-identical rows alike. `K01`, the `for-kind` census, reads 1.0034 while printing 85
+percent more bytes (the nine relations are rows of that census); `K02` and `K03`, two
+`--for` closures, read 1.0019 and 0.9958, byte-identical. The byte accounting taken before
+the host went idle stands beside those ratios: every acid row of the
 tiny and compacted classes under a release build of the pre-relation tip and one of this
 one, stdouts compared byte for byte. 128 rows, 106 byte-identical, 22 differing, 0 exit-code
 differences, and 2 line-count differences - both of them `K01`, the `for-kind` census, where
@@ -3024,7 +3039,7 @@ because no family owns their leaf and nothing else on the unit gives their targe
 address, so `record_edges` builds them whatever the reader asked for. What that costs is one
 `match` on the unit's own leaf per emitted hit, falling through for every leaf but the eight
 that carry one; what it buys is that the tag is in the text a person reads. The byte
-accounting above is the honest statement of the rest until the timing runs.
+accounting above and the idle-host ratios beside it state the rest.
 
 **What is left, and why it stays.** The residue is the bytes: a per-hit tag the reader sees,
 and two per-hit JSON keys a consumer follows. `for_root` is answered for EVERY unit by
