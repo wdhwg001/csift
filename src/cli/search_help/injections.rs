@@ -44,7 +44,7 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness
      numbering. The other two are `agent.communication.inbox` and are told apart by the \
      same field: a COORDINATOR relay's `origin` carries only its kind, while a PEER \
      relay names the lane that sent it - `[peer lane <id>]`, JSON `peer_sender_task_id` - \
-     and a peer relay DOES open a turn, like any other delivered message. An \
+     and a peer relay DOES open a turn, like any other delivered message. A \
      `harness.context.image` record whose content is image blocks and no text renders \
      `[context image-only: N image block(s), M document block(s)]` (JSON `image_only`), \
      because it has no text of its own to show; the same shape WITHOUT `isMeta` is a \
