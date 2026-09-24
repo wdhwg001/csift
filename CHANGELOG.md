@@ -959,7 +959,8 @@ surface change bumps the PATCH.
   BOUNDARY: a record csift refuses to call the human is not `user.message` under a selector
   either. A companion matching a template csift models keeps that template's leaf; one
   matching none carries no leaf and renders `? unmodeled: user/turnCompanion` under an
-  address, naming which of the two stamps the harness used. The key rides the flattened,
+  address, naming the NARROWER stamp: the companion word describes exactly the records
+  that carry both, so it is the one a residue unit prints. The key rides the flattened,
   boxed exposed-key struct rather than a field of `Record`, so it costs a record naming no
   exposed key nothing and the row every parsed line of every scan carries does not grow; it
   is the one exposed key read by a PREDICATE rather than projected as a fact, because what a
