@@ -149,9 +149,12 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
     {
         return Some(Class::ContextImage);
     }
-    // harness.context.skill: a skill's whole instruction body, preloaded by the spawn
-    // builder into a lane's opening array.
-    if at_start.starts_with(SKILL_PRELOAD_PREFIX) {
+    // harness.context.skill: a skill's whole instruction body. TWO heads, because the
+    // registrar prepends the directory line only for a skill that ships FILES: a bundled
+    // skill with none gets the same body in the same record with no prefix at all, and
+    // the second marker is the head of the one such body whose producer has been read.
+    if at_start.starts_with(SKILL_PRELOAD_PREFIX) || at_start.starts_with(WORKFLOW_REFERENCE_PREFIX)
+    {
         return Some(Class::ContextSkill);
     }
     // agent.communication.inbox: the COORDINATOR relay, the peer relay's twin. Both

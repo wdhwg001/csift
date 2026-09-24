@@ -696,6 +696,7 @@ GATE words: `default scan` a role-bearing line already parsed · `explicit -t` t
 | IsMetaFamily | `roster-reminder` | `harness.context.reminder` | default scan | yes | no |
 | IsMetaFamily | `image-reference` | `harness.context.image` | default scan | yes | no |
 | IsMetaFamily | `skill-body` | `harness.context.skill` | default scan | yes | no |
+| IsMetaFamily | `bundled-skill-body` | `harness.context.skill` | default scan | yes | no |
 | IsMetaFamily | `enforce-structured-output` | `harness.enforce.structured-output` | default scan | yes | no |
 | IsMetaFamily | `enforce-brief` | `harness.enforce.brief` | default scan | yes | no |
 | IsMetaFamily | `enforce-handback` | `harness.enforce.handback` | default scan | yes | no |

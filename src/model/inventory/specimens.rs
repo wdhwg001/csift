@@ -118,6 +118,11 @@ pub(crate) const TEMPLATE_SPECIMENS: &[(&str, &str)] = &[
         r#"{"type":"user","uuid":"t9","isMeta":true,"message":{"role":"user","content":"Base directory for this skill: /Users/dev/skills/demo"}}"#,
     ),
     (
+        // A text BLOCK rather than a string, which is the shape the expansion path writes.
+        "bundled-skill-body",
+        r##"{"type":"user","uuid":"tj","isMeta":true,"turnCompanion":true,"message":{"role":"user","content":[{"type":"text","text":"# Workflow authoring reference\n\nA workflow structures work across many agents."}]}}"##,
+    ),
+    (
         "enforce-structured-output",
         r#"{"type":"user","uuid":"ta","isMeta":true,"message":{"role":"user","content":"[structured-output-enforce] You MUST call the tool to complete this turn."}}"#,
     ),

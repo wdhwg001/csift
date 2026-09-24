@@ -1,4 +1,4 @@
-//! Axis 5: the isMeta-USER TEMPLATE families - 18 named templates, the human relay, and
+//! Axis 5: the isMeta-USER TEMPLATE families - 19 named templates, the human relay, and
 //! the residue arm.
 //!
 //! These are the shapes with no field to key on: the harness writes text into the
@@ -78,6 +78,16 @@ pub(crate) const ROWS: &[Entry] = &[
     ),
     e(
         Shape::IsMetaFamily("skill-body"),
+        Some(Class::ContextSkill),
+        Gate::Default,
+        true,
+        Human::Never,
+    ),
+    e(
+        // The same skill body from a registration that ships no FILES: the registrar's
+        // directory wrapper never runs, so the record carries the body with no prefix.
+        // A separate shape because the head is what a reader greps for.
+        Shape::IsMetaFamily("bundled-skill-body"),
         Some(Class::ContextSkill),
         Gate::Default,
         true,

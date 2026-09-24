@@ -371,11 +371,26 @@ pub const ENFORCE_BRIEF_PREFIX: &str = "You ended the turn without calling SendU
 /// See [`ENFORCE_STRUCTURED_OUTPUT_PREFIX`] - the subagent hand-back enforcement sentinel.
 pub const ENFORCE_HANDBACK_PREFIX: &str = "[handback-send-enforce]";
 
-/// A SKILL's whole instruction body, preloaded into a lane's opening array by the spawn
-/// builder (`harness.context.skill`). The body template opens with this line
-/// builder; nobody invoked the skill in this turn, which is what separates it from
-/// a command invocation.
+/// A SKILL's whole instruction body, injected as an isMeta user record
+/// (`harness.context.skill`).
+///
+/// This prefix is written by ONE wrapper in the skill registrar, and only for a skill that
+/// ships FILES: the wrapper materialises the directory, then prepends this line and a
+/// blank one to the FIRST text block of the body the registration returns. A registration
+/// with no files gets no wrapper and no prefix, so its body arrives bare - see
+/// [`WORKFLOW_REFERENCE_PREFIX`], which is the head of one such body.
 pub const SKILL_PRELOAD_PREFIX: &str = "Base directory for this skill:";
+
+/// The head of a BUNDLED skill body that ships no files, and so carries no
+/// [`SKILL_PRELOAD_PREFIX`] (`harness.context.skill`).
+///
+/// Same registrar, same body slot, same isMeta user record: what differs is only that the
+/// registration names no files, so the directory wrapper never runs. csift names the ONE
+/// such body whose producer has been read; another bundled skill with no files is still
+/// residue, because the bodies share no head and the records carry no field that says
+/// which command expanded them - the parent link is the nearest thing and it names the
+/// command's own wrapper on only some of them.
+pub const WORKFLOW_REFERENCE_PREFIX: &str = "# Workflow authoring reference";
 
 /// A `<system-reminder>`-opening isMeta record the harness re-injects into a turn
 /// (`harness.context.reminder`). This is the LAST reminder arm, reached only when no

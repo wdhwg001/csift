@@ -306,3 +306,47 @@ fn both_blocking_hook_names_take_the_feedback_leaf() {
         );
     }
 }
+
+#[test]
+fn a_bundled_skill_body_with_no_directory_line_reaches_the_skill_leaf() {
+    // The registrar prepends `Base directory for this skill:` only for a skill that ships
+    // FILES, so a bundled body arrives bare - and its own head is what the leaf answers
+    // to. Its own fixture, because the shared one addresses records by line.
+    let h = Home::new();
+    let sess = "11111111-2222-4333-8444-555555555504";
+    let lines = [
+        r#"{"type":"user","uuid":"s0","sessionId":"11111111-2222-4333-8444-555555555504","cwd":"/Users/dev/bundled","version":"2.1.278","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"/workflow-authoring zzbundled"}}"#,
+        r##"{"type":"user","uuid":"s1","parentUuid":"s0","isMeta":true,"turnCompanion":true,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"# Workflow authoring reference\n\nzzbundled a workflow structures work across many agents."}]}}"##,
+        r#"{"type":"assistant","uuid":"s2","parentUuid":"s1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzbundled read it"}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-dev-bundled/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+    // A FLAGLESS pattern scan reaches it: the record rides a `type:"user"` line and the
+    // leaf is visible, so nothing gates it.
+    let out = h.run(&["search", "zzbundled", &at(sess), "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("harness.context.skill"),
+        "the bundled body reaches the skill leaf: {}",
+        out.stdout
+    );
+    // And it is not the person, nor a turn of its own: the record carries both authorship
+    // flags, so the transcript has ONE turn.
+    let turns = h.run(&[
+        "search",
+        "",
+        &at(sess),
+        "--no-subagents",
+        "--count-by",
+        "turn",
+    ]);
+    assert!(turns.success, "stderr: {}", turns.stderr);
+    let keys = turns
+        .stdout
+        .lines()
+        .filter(|l| l.trim_start().starts_with(char::is_numeric))
+        .count();
+    assert_eq!(keys, 1, "one turn over the fixture: {}", turns.stdout);
+}

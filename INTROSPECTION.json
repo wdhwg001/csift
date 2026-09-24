@@ -11371,7 +11371,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "408-411",
+          "lines": "423-426",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
@@ -11707,7 +11707,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "413-417",
+          "lines": "428-432",
           "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2478",
+          "lines": "2479",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -82532,12 +82532,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "193-199",
+          "lines": "196-202",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "200-205",
+          "lines": "203-208",
           "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
@@ -85446,7 +85446,7 @@
       "code": [
         {
           "path": "src/model/inventory/templates.rs",
-          "lines": "151-155",
+          "lines": "161-165",
           "snippet": "        Shape::IsMetaFamily(\"coordinator-relay\"),\n        Some(Class::CommInbox),\n        Gate::Default,\n        true,\n        Human::Never,"
         },
         {
@@ -86205,7 +86205,7 @@
         },
         {
           "path": "src/model/tests/classify_harness.rs",
-          "lines": "535-537",
+          "lines": "383-385",
           "snippet": "let mine = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{}}]}}\"#,\n    );"
         }
       ],
@@ -89164,7 +89164,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3485"
+          "lines": "3486"
         }
       ],
       "states": [
@@ -89849,7 +89849,7 @@
         },
         {
           "path": "src/model/inventory/templates.rs",
-          "lines": "122-126",
+          "lines": "132-136",
           "snippet": "        Shape::IsMetaFamily(\"classifier-stop\"),\n        Some(Class::EnforceRetry),\n        Gate::Default,\n        true,\n        Human::Never,"
         }
       ],
@@ -89983,7 +89983,7 @@
         },
         {
           "path": "src/model/inventory/templates.rs",
-          "lines": "130-134",
+          "lines": "140-144",
           "snippet": "        Shape::IsMetaFamily(\"output-limit\"),\n        Some(Class::EnforceRetry),\n        Gate::Default,\n        true,\n        Human::Never,"
         }
       ],
@@ -90524,6 +90524,100 @@
           },
           "residue": [
             "the `newlyDropped` reason is `prefix_mismatch` on both measured records; the other reasons the builder can write are unread, and a corpus carrying one would name them."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLS-073",
+      "area": "classification",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "393",
+          "snippet": "pub const WORKFLOW_REFERENCE_PREFIX: &str = \"# Workflow authoring reference\";"
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "156-159",
+          "snippet": "    if at_start.starts_with(SKILL_PRELOAD_PREFIX)\n        || at_start.starts_with(WORKFLOW_REFERENCE_PREFIX)\n    {\n        return Some(Class::ContextSkill);\n    }"
+        },
+        {
+          "path": "src/model/inventory/templates.rs",
+          "lines": "90-94",
+          "snippet": "        Shape::IsMetaFamily(\"bundled-skill-body\"),\n        Some(Class::ContextSkill),\n        Gate::Default,\n        true,\n        Human::Never,"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.248",
+          "from_basis": "first_seen",
+          "to": null,
+          "behavior": "The `Base directory for this skill:` line a skill body opens with is written by ONE wrapper in the skill registrar, and only for a registration that names FILES. The wrapper materialises the directory, then prepends that line and a blank one to the FIRST text block of whatever the registration's body getter returns; a registration with no files gets `skillRoot` undefined and its body getter passed through UNCHANGED, so the body arrives bare. BUNDLED skills of both kinds go through the same registrar - it builds one prompt-kind entry per registration with `source` and `loadedFrom` reading `bundled` - and the body reaches the conversation the same way: as the expansion of a user-invocable command, written into the turn as an `isMeta` `type:\"user\"` record whose `message.content` is an array with the body as its first text block. The workflow-authoring reference is such a registration: its name constant reads `workflow-authoring`, its body getter returns one text part built by a function whose template opens `# Workflow authoring reference`, and its registration names no files.",
+          "depends": "csift gives the bare body the SAME leaf as the prefixed one, `harness.context.skill`, by adding its head as a second content-start marker under the isMeta guard every template arm sits below. That is what the leaf already means - a skill's whole instruction body - and the prefix is an artefact of shipping files rather than a property of the body. Without the marker the record carried NO leaf: nothing on any scan, and `? unmodeled: user/text` under an address, because its content is a text BLOCK rather than a string. csift names the ONE such body whose producer has been read and leaves the rest of that population in the residue: the bare bodies share no head, and the records carry no field saying which command expanded them - the parent link is the nearest thing and it names the command's own wrapper on only some of them.",
+          "instrument": "Byte-search each build for `# Workflow authoring reference` and read the function whose template it opens, the body getter that wraps it in one text part, and the registration that names that getter; and read the registrar's file wrapper to see where the directory line is prepended. Counting rule: one non-overlapping match walked forward from offset zero, over the whole file, per build. Then census a projects root: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object and count the `type:\"user\"` lines whose `message.content` - a bare string, or the newline-join of its content array's `text` blocks - OPENS with that head after one left trim, split on `isMeta`. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; count the `type:\"user\"` lines whose `message.content` (a bare string, or the newline-join of its content array's `text` blocks) opens with `# Workflow authoring reference` after one left trim, split on `isMeta`.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "the registrar's file wrapper",
+              "offset": 160415767,
+              "excerpt": "function zTr(e){let{files:n}=e,o=typeof n===\"function\";if(!n||!o&&Object.keys(n).length===0)return{skillRoot:void 0,getPromptForCommand:e.getPromptForCommand};",
+              "note": "the early return IS the fact: a registration with no files keeps its body getter untouched, and only the branch below it prepends the directory line."
+            },
+            {
+              "role": "gate",
+              "name": "the registration that names no files",
+              "offset": 183189403,
+              "excerpt": "function nvr(){to({name:fA,description:",
+              "note": "the workflow-authoring registration, whose option object carries a name, a description, a menu description, `userInvocable`, an enable test and a body getter - and no files."
+            },
+            {
+              "role": "writer",
+              "name": "the body getter and its template",
+              "offset": 183189355,
+              "excerpt": "function OIt(){return[{type:\"text\",text:ain()}]}",
+              "note": "one text part holding the whole body, which is why the record's content is an array with the body as its first text block."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "the body template itself",
+              "offset": 176087762,
+              "excerpt": "function ain(){let e=a.CLAUDE_CODE_SUBAGENT_MODEL_FORCE;return`# Workflow authoring reference",
+              "verdict": "the only occurrence of the head in the build, and it opens the template at offset zero of the returned string."
+            },
+            {
+              "site": "the skill's name constant",
+              "offset": 160739873,
+              "excerpt": "fA=\"workflow-authoring\";",
+              "verdict": "the name the registration is filed under, and the name the command wrapper beside a real record carries."
+            }
+          ],
+          "writer_literal_floor": {
+            "literal": "# Workflow authoring reference",
+            "lowest_present": "2.1.248",
+            "highest_absent": "2.1.247",
+            "ladder": "one non-overlapping byte count of the literal per cached build over 65 version-named builds, platform-suffixed directories excluded; the count reads 1 in 2.1.258, 1 in 2.1.268 and 1 in 2.1.278."
+          },
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "the byte count and the four site reads above in the verified build, the floor ladder over 65 cached builds, and the record census over a frozen snapshot root of 10,299 files and 2,312,350 parsed lines and one projects root of 10,329 files and 2,039,387 parsed lines whole-root against 8,929 files and 1,420,765 parsed lines with the measuring tree removed.",
+            "observed": "the head counts 1 in the verified build, 1 in 2.1.268 and 1 in 2.1.278, and every site above is byte-read at its offset. The snapshot root carries 0 records opening with it; the projects root carries 7 whole-root and 4 with the measuring tree removed, ALL of them `isMeta` and 0 without it on either reading. Reading two of the four: each carries `isMeta` true, `turnCompanion` true, a `promptId`, and a `message.content` array whose single text block is the body at about 16.5 thousand characters. Of the 4, three are parented to the record carrying the `<command-message>workflow-authoring</command-message>` wrapper and one is parented to an attachment, which is why the parent link is not the discriminator.",
+            "rule": "one non-overlapping match walked forward from offset zero per build for the literal; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the leaf is keyed on the body's own head rather than on the parent link, because the link names the command's wrapper on three of the four measured records and an attachment on the fourth."
+          },
+          "residue": [
+            "other bundled registrations with no files write bodies of the same shape under other heads - the loop command's body is one such on the measured root - and they are residue. Naming them needs either a head each, read from the build, or a discriminator the records do not carry."
           ]
         }
       ]

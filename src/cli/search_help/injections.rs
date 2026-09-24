@@ -33,7 +33,10 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness
      response above was cut off mid-stream` - plus the edit-failed notice `The last Edit \
      failed because the target file was modified` at content start; five of the nine \
      texts carry an em dash, so a text retyped with an ASCII hyphen matches no record; `.command.caveat` is the slash-command \
-     executor's `<local-command-caveat>` wrapper, not a hook's. THREE records here are \
+     executor's `<local-command-caveat>` wrapper, not a hook's. `.context.skill` answers \
+     to TWO heads: `Base directory for this skill:`, which the registrar prepends only \
+     for a skill that ships FILES, and `# Workflow authoring reference`, the one bundled \
+     body with no files whose producer has been read. THREE records here are \
      not the harness talking to itself. A person's message the harness relayed into a \
      running lane (`origin.kind` `human`) is `user.message` with the marker `[relayed]` \
      (JSON `relayed`) and opens NO turn, so it is searchable without moving the turn \

@@ -23,6 +23,7 @@ mod chain_relink;
 mod chain_view;
 mod classify_comm;
 mod classify_harness;
+mod classify_injections;
 mod classify_roles;
 mod classify_schedule;
 mod compaction;
