@@ -71,7 +71,11 @@ impl Record {
     /// Rule (section 4.1, ALL must hold):
     /// - must be `type:"user"` with `message.role == "user"`;
     /// - `isCompactSummary` must be falsey (excludes compaction summaries, section 4.7);
-    /// - `isMeta` must be falsey (excludes system-injected pseudo-turns, section 4.2);
+    /// - NEITHER AUTHORSHIP STAMP: `isMeta` must be falsey (excludes system-injected
+    ///   pseudo-turns, section 4.2) AND `turnCompanion` must not be `true` (excludes a
+    ///   record the harness wrote to accompany a turn; the two are not one set, because
+    ///   two stamping paths add the companion flag to an EXISTING record and touch no
+    ///   meta flag);
     /// - the content must NOT be a machine-synthesized marker the user never typed
     ///   (section 4.2.1-.3): an interrupt marker (`[Request interrupted by user]` etc.), a
     ///   `<local-command-stdout>...` output, or a `<command-name>...` slash-command wrapper;

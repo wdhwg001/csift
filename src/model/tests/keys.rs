@@ -539,3 +539,21 @@ fn any_single_stop_details_member_carries_the_object() {
     );
     assert!(empty.stop_details().is_none());
 }
+
+/// A record can name the stop KIND and nothing else, and that alone says something: the
+/// gate is ANY member, so the object survives to the family that renders it. The TAG the
+/// family builds from this shape is pinned beside the family, where its own type is
+/// reachable.
+#[test]
+fn a_stop_details_naming_only_its_kind_still_says_something() {
+    let kind_only = parse(
+        r#"{"type":"assistant","uuid":"a-57","message":{"role":"assistant","stop_details":{"type":"refusal"},"content":[{"type":"text","text":"x"}]}}"#,
+    );
+    let s = kind_only
+        .stop_details()
+        .expect("the kind alone says something");
+    assert_eq!(s.r#type.as_deref(), Some("refusal"));
+    assert_eq!(s.category, None);
+    assert_eq!(s.explanation, None);
+    assert_eq!(s.fallback_has_prefill_claim, None);
+}

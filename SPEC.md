@@ -3460,9 +3460,11 @@ hook-run id. `pdf_pages` is an object `{first, last, count, path}` on the
 IMG-016 derivation, read off the same gate and the same offset `image` reads per page, so
 the two surfaces cannot drift; it is absent (never a range starting at 1) on any result
 whose own object names no `firstPage`. `stop_details` is an object `{type, category,
-explanation, fallback_has_prefill_claim}` on every unit of an assistant record whose
-`message.stop_details` names at least one member, with the coarse `stop_reason` beside it
-as a scalar; both are absent on a record naming no such object, and an object whose every
+explanation, fallback_has_prefill_claim}` on every unit of ANY record whose
+`message.stop_details` names at least one member - the gate is the OBJECT and not the
+role, so a `type:"user"` record carrying one is tagged like any other - with the coarse
+`stop_reason` beside it as a scalar. The two are ONE fact: `stop_reason` is `null` where
+the record names an object and no reason, and both are absent on a record naming no such object, and an object whose every
 member is null is refused, because the absent key already says what four nulls would. SIX
 keys ALSO render a label-zone tag: the specific
 half of `attribution`, `tool_ends_turn`, `user_feedback` cut to 60 characters, the

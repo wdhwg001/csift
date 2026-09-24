@@ -311,3 +311,65 @@ fn a_tool_result_without_the_offset_carries_no_range() {
         );
     }
 }
+
+/// The stop-details tag has TWO arms and a record decides which by what it names. A
+/// record naming the KIND and no category renders the kind alone - not a floor word, not
+/// a dangling separator - and the arm that does it is reached by no other shape, so it
+/// needs its own row. The category arm is here beside it because the pair is what makes
+/// the bare form a distinct answer rather than a truncation.
+#[test]
+fn the_stop_details_tag_renders_with_and_without_a_category() {
+    let kind_only = r#"{"type":"assistant","uuid":"a-60","message":{"role":"assistant","stop_reason":"refusal","stop_details":{"type":"refusal"},"content":[{"type":"text","text":"x"}]}}"#;
+    let (zones, json) = projections(kind_only, Some(Class::AgentMessagePlain));
+    assert!(
+        zones.iter().any(|z| z == "[api refusal]"),
+        "the kind alone: {zones:?}"
+    );
+    assert!(
+        json.iter().any(|j| j.starts_with("stop_details=")),
+        "and the object still rides the wire: {json:?}"
+    );
+
+    let with_category = r#"{"type":"assistant","uuid":"a-61","message":{"role":"assistant","stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber"},"content":[{"type":"text","text":"x"}]}}"#;
+    let (zones, _) = projections(with_category, Some(Class::AgentMessagePlain));
+    assert!(
+        zones.iter().any(|z| z == "[api refusal: cyber]"),
+        "both halves: {zones:?}"
+    );
+
+    // A record naming a category and NO kind renders no tag at all: the zone would carry
+    // a word for a kind the record did not state.
+    let category_only = r#"{"type":"assistant","uuid":"a-62","message":{"role":"assistant","stop_details":{"category":"cyber"},"content":[{"type":"text","text":"x"}]}}"#;
+    let (zones, json) = projections(category_only, Some(Class::AgentMessagePlain));
+    assert!(
+        !zones.iter().any(|z| z.starts_with("[api ")),
+        "no kind, no tag: {zones:?}"
+    );
+    assert!(
+        json.iter().any(|j| j.starts_with("stop_details=")),
+        "but the object is still on the wire, where the member is named: {json:?}"
+    );
+}
+
+/// The PAIR is one fact: `stop_reason` rides beside the object, `null` where the record
+/// names an object and no reason, and a record naming no object emits NEITHER key.
+#[test]
+fn the_stop_reason_rides_the_object_and_neither_rides_alone() {
+    let no_reason = r#"{"type":"assistant","uuid":"a-63","message":{"role":"assistant","stop_details":{"type":"refusal"},"content":[{"type":"text","text":"x"}]}}"#;
+    let (_, json) = projections(no_reason, Some(Class::AgentMessagePlain));
+    assert!(
+        json.iter().any(|j| j == "stop_reason=null"),
+        "the reason is an explicit null beside a present object: {json:?}"
+    );
+
+    let ended = r#"{"type":"assistant","uuid":"a-64","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"x"}]}}"#;
+    let (_, json) = projections(ended, Some(Class::AgentMessagePlain));
+    assert!(
+        !json.iter().any(|j| j.starts_with("stop_reason=")),
+        "a record naming no object emits neither key: {json:?}"
+    );
+    assert!(
+        !json.iter().any(|j| j.starts_with("stop_details=")),
+        "{json:?}"
+    );
+}
