@@ -742,6 +742,28 @@ surface change bumps the PATCH.
   successor strings row by row; SPEC's own copy of the table was two successors short on
   `harness.meta` and one short on `harness.meta.hook`, and now prints what the errors print.
 
+- **Every string a help page quotes is one the binary prints, and no page carries csift's
+  own chronology.** Measured over all eighteen pages (`csift --help` plus one per
+  subcommand) against the last released binary, both invoked under the basename the usage
+  line echoes: 602 rendered non-blank lines differ counted once per PAGE - 215 only in the
+  older arm, 387 only in this one - or 479 counted once per distinct line TEXT, the two
+  figures differing by the lines that render on more than one page. The new root
+  `--cross-compactions` block is seven of those lines and renders on every page, so it is
+  126 of the first figure and 7 of the second, and on `ack`, `plan` and `send` it is the
+  whole difference; `search` carries 348 of the 602 by itself, its taxonomy block rewritten
+  leaf by leaf. Every other moved line falls in one of three classes. Most restate a change
+  this record already names one by one. ONE is a quoted string corrected to the bytes:
+  `list --help` quoted the subagent brand with one space where `list` prints two after the
+  word and two around the separator, so a reader matching the manual against the output
+  matched nothing. The REST carry no fact about the binary and are gone: csift's own
+  chronology (eleven version riders naming seven versions over five pages, one date on
+  which something was measured, and the sentences describing a past csift), a word for who
+  is asking rather than for what a flag does, and an example token, now in the
+  hand-patterned shape every fixture id in these documents uses. Each of those was
+  rewritten as the fact it was there to give, so a page reads correctly to someone who has
+  seen no other csift. The dates that remain belong to the object: a Claude Code model
+  literal, and a `--since` example.
+
 ### Fixed
 
 - **The two textless thinking leaves rendered a body they do not have.** An
