@@ -761,8 +761,10 @@ surface change bumps the PATCH.
   is asking rather than for what a flag does, and an example token, now in the
   hand-patterned shape every fixture id in these documents uses. Each of those was
   rewritten as the fact it was there to give, so a page reads correctly to someone who has
-  seen no other csift. The dates that remain belong to the object: a Claude Code model
-  literal, and a `--since` example.
+  seen no other csift. Every date that remains is an EXAMPLE the grammar needs and belongs
+  to no release: twenty-three ISO8601 instants in the `--since`/`--until` blocks of five
+  pages, two more in the time-grammar list, the root page's timestamp-format sample, and
+  one synthetic record instant inside a rendered bookkeeping head.
 
 - **A manual quotes the brand its OWN command prints, because the subagent brand is four
   strings.** One fact - this row is a subagent transcript, and its bare id is not a
