@@ -11381,12 +11381,12 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "93-98",
+          "lines": "95-100",
           "snippet": "    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "150-154",
+          "lines": "152-156",
           "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
@@ -11467,7 +11467,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "91-98",
+          "lines": "93-100",
           "snippet": "    let at_start = s.trim_start();\n    // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick.\n    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         }
       ],
@@ -11558,7 +11558,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "125-127",
+          "lines": "127-129",
           "snippet": "    if at_start.starts_with(EDIT_RETRY_MARKER) {\n        return Some(Class::EnforceRetry);\n    }"
         }
       ],
@@ -11712,7 +11712,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "156-160",
+          "lines": "158-162",
           "snippet": "    if IMAGE_REFERENCE_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::ContextImage);"
         }
       ],
@@ -82532,12 +82532,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "206-212",
+          "lines": "208-214",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "213-218",
+          "lines": "215-220",
           "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
@@ -85331,7 +85331,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "134-136",
+          "lines": "136-138",
           "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
@@ -85341,7 +85341,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "79-81",
+          "lines": "81-83",
           "snippet": "    if !rec.is_meta.unwrap_or(false) && !rec.is_turn_companion() {\n        return None;\n    }"
         }
       ],
@@ -86251,7 +86251,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "105-110",
+          "lines": "107-112",
           "snippet": "    if HOOK_FEEDBACK_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::HookFeedback);\n    }"
         },
         {
@@ -87541,17 +87541,17 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "33-38",
+          "lines": "34-39",
           "snippet": "pub(crate) const HOOK_FEEDBACK_PREFIXES: &[&str] = &[\n    STOP_HOOK_FEEDBACK_PREFIX,\n    \"TeammateIdle hook feedback:\",\n    \"TaskCreated hook feedback:\",\n    \"TaskCompleted hook feedback:\",\n];"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "79-81",
+          "lines": "81-83",
           "snippet": "    if !rec.is_meta.unwrap_or(false) && !rec.is_turn_companion() {\n        return None;\n    }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "134-136",
+          "lines": "136-138",
           "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
@@ -89978,7 +89978,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "134-136",
+          "lines": "136-138",
           "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
@@ -90546,7 +90546,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "166-169",
+          "lines": "168-171",
           "snippet": "    if at_start.starts_with(SKILL_PRELOAD_PREFIX)\n        || at_start.starts_with(WORKFLOW_REFERENCE_PREFIX)\n    {\n        return Some(Class::ContextSkill);\n    }"
         },
         {

@@ -3,8 +3,9 @@
 //!
 //! These are the shapes with no FIELD to key on - the record looks like the operator's
 //! own message and only the text says which producer wrote it - so every arm here is a
-//! fixed template matched at CONTENT START, and a record that merely QUOTES a template
-//! keeps its own leaf. Two arms are structural instead, and say so at the arm.
+//! fixed template matched at CONTENT START below one AUTHORSHIP guard, and a record that
+//! merely QUOTES a template keeps its own leaf. Two arms are structural instead, and say
+//! so at the arm.
 //!
 //! The table covers every `Shape::IsMetaFamily` row of the shape inventory, which is
 //! what the drift test beside that table asserts: a row without an arm is an advertised
@@ -42,8 +43,9 @@ pub(crate) const HOOK_FEEDBACK_PREFIXES: &[&str] = &[
 ///
 /// Order is load-bearing and mirrors the producers. The HUMAN relay comes first: it is
 /// a real person's message that the harness merely delivered, so no template arm may
-/// reach it. Then the `isMeta` guard, because every arm after it matches on TEXT and a
-/// person can write any of those sentences. The resume loader's repair prompt is tested through its own `isMeta` gate
+/// reach it. Then the AUTHORSHIP guard, because every arm after it matches on TEXT and a
+/// person can write any of those sentences - and it reads BOTH stamps, because the harness
+/// writes both and a person writes neither. The resume loader's repair prompt is tested through its own `isMeta` gate
 /// (a human message that merely OPENS with the sentence keeps `user.message`). The FIRED
 /// timer tick is tested before the loop DRIVER tick, because `check` is not `tick` and
 /// the driver prefix would otherwise swallow it. The `<system-reminder>` arm is LAST of

@@ -21,10 +21,11 @@
 
 /// This family's `search --help` section. See the module doc.
 pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness.hook.feedback, harness.command.caveat, harness.context, harness.schedule, harness.resume, harness.notification, and the isMeta user.message / agent.communication.inbox)\n  \
-     Text the harness writes into a turn as an `isMeta` user record, shaped exactly like \
-     the operator's own message. Every arm matches at CONTENT START after one left trim \
-     and every arm needs the `isMeta` flag, so a person who QUOTES a template keeps \
-     `user.message`. `.hook.feedback` answers to all four names one formatter writes \
+     Text the harness writes into a turn as a user record, shaped exactly like the \
+     operator's own message. Every arm matches at CONTENT START after one left trim and \
+     every arm needs an AUTHORSHIP STAMP - `isMeta`, or `turnCompanion` on a record the \
+     harness wrote to accompany a turn - so a person, who writes neither, keeps \
+     `user.message` when they QUOTE a template. `.hook.feedback` answers to all four names one formatter writes \
      (Stop, TeammateIdle, TaskCreated, TaskCompleted); `.enforce.retry` is the harness \
      CONTINUING a turn the model did not finish, over NINE whole messages matched by \
      exact equality - the four redo nudges, the two classifier-stop forms opening `Your \
@@ -59,8 +60,9 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness
      that names no such key renders `[for: <kind> unknown (<reason>)]` - never a silently \
      absent edge. `harness.schedule.wakeup`, `harness.schedule.tick` and \
      `harness.resume.prompt` carry NO edge, because no key on those records names one. An \
-     isMeta record matching no template carries no leaf: `show --line N` renders it as \
-     `? unmodeled: user/isMeta` and a scan never emits it. `turnCompanion` is the harness's \
-     OTHER authorship stamp and `is_genuine_user` reads it too, so a record carrying it is \
-     never the person and never opens a turn whatever `isMeta` says; one matching no \
-     template renders `? unmodeled: user/turnCompanion`.";
+     record matching no template carries no leaf whichever stamp it bears: `show --line N` \
+     renders it as `? unmodeled: user/isMeta` or `? unmodeled: user/turnCompanion` - the \
+     AUTHORSHIP names the residue ahead of the content shape, so a companion whose content \
+     is a text-block array is named by its stamp and not by the block - and a scan never \
+     emits it. `turnCompanion` is read by `is_genuine_user` too, so a record carrying it is \
+     never the person and never opens a turn whatever `isMeta` says.";
