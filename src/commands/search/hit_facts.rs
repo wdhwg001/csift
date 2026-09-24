@@ -195,12 +195,17 @@ pub(crate) fn unmodeled_shape(rec: &Record, raw: Option<&str>) -> Option<String>
     if ty == "user" || ty == "assistant" {
         // THE AUTHORSHIP FLAGS DECIDE FIRST, and the block type only for a record
         // carrying neither. WHO WROTE a record is what a reader of a residue unit needs:
-        // the content shape is on the line either way and the excerpt below prints it,
-        // while the flag is the one fact that separates the harness's own text from the
+        // the flag is the one fact that separates the harness's own text from the
         // operator's, and it is what every document about this shape names. Asking the
         // BLOCK first hid it exactly where it mattered - the two paths that stamp a
         // record `turnCompanion` write a text-BLOCK array, so every companion residue
         // they produce read `user/text` and named no flag at all.
+        //
+        // The block type is ACCEPTED AS LOST for a flagged residue, rather than kept
+        // elsewhere: the key=value excerpt below is the line's own TOP-LEVEL keys, so a
+        // block type is not among them, and each value is cut at 80 characters, which a
+        // base64 source spends before it reaches anything that names the shape. A reader
+        // who needs it has the line - `show --line N --raw`.
         //
         // `turnCompanion` leads `isMeta` because it is the MORE SPECIFIC fact: a record
         // carrying it was written to accompany a turn, which is a narrower statement than
