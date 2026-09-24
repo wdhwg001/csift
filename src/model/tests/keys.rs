@@ -436,3 +436,58 @@ fn any_one_exposed_key_alone_carries_the_box() {
         "a record naming no exposed key carries no box"
     );
 }
+
+/// `message.stop_details` - the API's own account of a stop it made. The gate is the
+/// OBJECT, and an object saying nothing is the same answer as an absent key.
+#[test]
+fn stop_details_reads_every_member_and_refuses_an_object_that_says_nothing() {
+    let refused = parse(
+        r#"{"type":"assistant","uuid":"a-50","message":{"role":"assistant","stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"withheld","fallback_has_prefill_claim":null},"content":[{"type":"thinking","thinking":"weighing it","signature":"c2ln"}]}}"#,
+    );
+    let s = refused.stop_details().expect("the record names the object");
+    assert_eq!(s.r#type.as_deref(), Some("refusal"));
+    assert_eq!(s.category.as_deref(), Some("cyber"));
+    assert_eq!(s.explanation.as_deref(), Some("withheld"));
+    assert_eq!(
+        s.fallback_has_prefill_claim, None,
+        "a null member is the record not saying, not a false"
+    );
+    // A turn that ended normally names no such object at all.
+    let ended = parse(
+        r#"{"type":"assistant","uuid":"a-51","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#,
+    );
+    assert!(ended.stop_details().is_none());
+    // An object whose every member is null says only that the key was written, which the
+    // absent key already says, so the accessor refuses it.
+    let hollow = parse(
+        r#"{"type":"assistant","uuid":"a-52","message":{"role":"assistant","stop_reason":"refusal","stop_details":{"type":null,"category":null,"explanation":null,"fallback_has_prefill_claim":null},"content":[{"type":"text","text":"x"}]}}"#,
+    );
+    assert!(hollow.stop_details().is_none());
+}
+
+/// The same tolerance rule the exposed keys follow, applied to this object: a member of
+/// an unexpected JSON type reads as absent and costs its own member, never the record;
+/// a whole object of an unexpected type reads as absent and costs only the object.
+#[test]
+fn a_stop_details_of_the_wrong_shape_reads_as_absent_and_never_fails_the_record() {
+    let odd = parse(
+        r#"{"type":"assistant","uuid":"a-53","message":{"role":"assistant","stop_details":{"type":7,"category":"cyber","explanation":["a","b"],"fallback_has_prefill_claim":"yes"},"content":[{"type":"text","text":"still searchable"}]}}"#,
+    );
+    let s = odd.stop_details().expect("one member still reads");
+    assert_eq!(s.r#type, None, "a number is not the kind this field names");
+    assert_eq!(s.category.as_deref(), Some("cyber"));
+    assert_eq!(s.explanation, None);
+    assert_eq!(
+        s.fallback_has_prefill_claim, None,
+        "a string is not coerced to a boolean"
+    );
+    // A whole object of the wrong type is absent, and the record's own text survives.
+    let scalar = parse(
+        r#"{"type":"assistant","uuid":"a-54","message":{"role":"assistant","stop_details":"refusal","content":[{"type":"text","text":"still searchable"}]}}"#,
+    );
+    assert!(scalar.stop_details().is_none());
+    assert_eq!(
+        scalar.classify(&ClassifyCtx::top_level()),
+        vec![Class::AgentMessagePlain]
+    );
+}

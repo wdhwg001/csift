@@ -2898,7 +2898,7 @@ one chunking implementation rather than two. The row itself is not a `Record`:
 `parse::SpineRow` carries the physical line, a `SpineKind` tag instead of a decoded type
 string, `uuid`, `parentUuid`, the RAW `timestamp` and `isSidechain`, with the rare fields
 behind one `Option<Box<SpineExtra>>` an ordinary attachment row never allocates.
-`size_of::<SpineRow>()` is 72 bytes against `size_of::<Record>()` 1,376, and the width is
+`size_of::<SpineRow>()` is 72 bytes against `size_of::<Record>()` 1,384, and the width is
 asserted by an exact unit pin rather than assumed. Consumers merge the two streams back
 by line into a BORROWED file-order row list (`search::Row`, plus a local merge of the same shape
 in `stats` and in `show --branch-points`), which is the index space every chain answer is
@@ -3087,7 +3087,7 @@ transcripts) was not run. The tiny-and-compacted pair alone took hours of wall o
 host, and the band it produced is 13.75% wide for load reasons rather than code reasons -
 a third class measured on a host that had grown busier still would buy less information per
 hour than it cost. The per-record widths a size-dependent cost would have to travel through
-are pinned exactly instead (`size_of::<Record>()` 1,376 and `size_of::<SpineRow>()` 72,
+are pinned exactly instead (`size_of::<Record>()` 1,384 and `size_of::<SpineRow>()` 72,
 both unchanged by this version).
 
 **THE WHOLE REWRITE, against the last installed release.** A different run, on an IDLE
@@ -3453,10 +3453,21 @@ hook-run id. `pdf_pages` is an object `{first, last, count, path}` on the
 `agent.tool.result` of a `Read` that carried a `pages` parameter - the RANGE half of the
 IMG-016 derivation, read off the same gate and the same offset `image` reads per page, so
 the two surfaces cannot drift; it is absent (never a range starting at 1) on any result
-whose own object names no `firstPage`. FIVE keys ALSO render a label-zone tag: the specific
+whose own object names no `firstPage`. `stop_details` is an object `{type, category,
+explanation, fallback_has_prefill_claim}` on every unit of an assistant record whose
+`message.stop_details` names at least one member, with the coarse `stop_reason` beside it
+as a scalar; both are absent on a record naming no such object, and an object whose every
+member is null is refused, because the absent key already says what four nulls would. SIX
+keys ALSO render a label-zone tag: the specific
 half of `attribution`, `tool_ends_turn`, `user_feedback` cut to 60 characters, the
-api-failure headline, and `pdf_pages` as `[pdf pages A-B of <basename>]` - the basename
-because the tag sits beside a leaf path on one line, with the whole path on the wire.
+api-failure headline, `stop_details` as `[api <type>: <category>]` (the category half only
+when the record names one, and the EXPLANATION on the wire alone - it is the API's own
+prose about a response it withheld, which is not what a result list owes a reader on the
+line beside a leaf path), and `pdf_pages` as `[pdf pages A-B of <basename>]` - the basename
+because the tag sits beside a leaf path on one line, with the whole path on the wire. Every
+one of the six is label-zone text and so is display-only: a pattern scan matches a unit's
+rendered SECTION and never its zone, so the words in a tag are not a way to find the
+records that carry it.
 ABSENCE is read at KEY level: a key a record does not name is absent, and a fact object
 that IS present names every member with `null` for one the record lacks, so a consumer
 tests the key rather than an interior. The same stamping site fills both surfaces, so a

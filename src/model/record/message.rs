@@ -27,6 +27,24 @@ pub struct Message {
     #[serde(default, rename = "stop_reason")]
     pub stop_reason: Option<String>,
 
+    /// `stop_details` on assistant messages: the API's own structured account of WHY it
+    /// stopped, written when `stop_reason` reads `refusal`. The client does not build the
+    /// value - it copies the object the response delta carried, after removing one member
+    /// - so the shape is the API's and an added member survives into the record.
+    ///
+    /// BOXED, and [`Record`]'s width is why: every parsed line of every scan pays
+    /// `size_of::<Record>()`, and `Message` sits inside it, so four `Option`s here would
+    /// be four fields on every row for a key almost no record carries. Behind a pointer
+    /// the field costs 8 bytes whatever the object grows to, and the allocation is paid
+    /// only by a record that names it. Additive + tolerant: an unexpected JSON type reads
+    /// as absent rather than failing the record.
+    #[serde(
+        default,
+        rename = "stop_details",
+        deserialize_with = "lenient::stop_details_only"
+    )]
+    pub stop_details: Option<Box<StopDetails>>,
+
     /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC
     /// writes one line per content block and repeats the message envelope on each),
     /// so this is the usage-dedupe key for `stats`. Additive + tolerant.
@@ -37,6 +55,48 @@ pub struct Message {
     /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].
     #[serde(default)]
     pub usage: Option<Box<serde_json::value::RawValue>>,
+}
+
+/// The API's structured account of why it stopped a response - `message.stop_details`.
+///
+/// Four members, each tolerant, each answering `None` when the record does not name it or
+/// names it with an unexpected type. The object is the API's: the client copies it from
+/// the response delta onto every assistant record of the turn, strips exactly one member
+/// it does not persist, and constructs its own only on paths that set every remaining
+/// member to null. So a member csift models no field for still rides the line and is
+/// reachable with `--raw`, and `fallback_has_prefill_claim` reads null on every record the
+/// client built rather than received.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default)]
+pub struct StopDetails {
+    /// The stop KIND - `refusal` on every measured record. Open set, kept verbatim.
+    #[serde(rename = "type", deserialize_with = "lenient::string_only")]
+    pub r#type: Option<Box<str>>,
+    /// Which classifier band stopped it. Open set, kept verbatim.
+    #[serde(deserialize_with = "lenient::string_only")]
+    pub category: Option<Box<str>>,
+    /// The API's own sentence about the stop, when it sent one.
+    #[serde(deserialize_with = "lenient::string_only")]
+    pub explanation: Option<Box<str>>,
+    /// Whether a fallback response claimed a prefill. Null on every record the client
+    /// constructed, so a `true` can only have come from the API.
+    #[serde(
+        rename = "fallback_has_prefill_claim",
+        deserialize_with = "lenient::bool_only"
+    )]
+    pub fallback_has_prefill_claim: Option<bool>,
+}
+
+impl StopDetails {
+    /// Does this object name anything at all? An object whose every member is null says
+    /// only that the key was there, so [`Record::stop_details`] refuses it - the same gate
+    /// the quota summary and the API-failure set already take.
+    pub(crate) fn says_something(&self) -> bool {
+        self.r#type.is_some()
+            || self.category.is_some()
+            || self.explanation.is_some()
+            || self.fallback_has_prefill_claim.is_some()
+    }
 }
 
 /// The token-usage fields `stats` sums (each optional + tolerant - a missing/odd

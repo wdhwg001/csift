@@ -37,6 +37,12 @@ fn keys_home() -> Home {
         r#"{"type":"user","uuid":"u-5","parentUuid":"s-2","timestamp":"2026-06-07T05:00:09.000Z","isMeta":true,"scheduledTaskId":"task-1","scheduledFireId":"fire-1","message":{"role":"user","content":"zzkeys scheduled prompt"}}"#.to_string(),
         // L11 an api_error record: the ONE shape whose `error` is an object, headers and all
         r#"{"type":"system","uuid":"s-3","parentUuid":"u-5","timestamp":"2026-06-07T05:00:10.000Z","subtype":"api_error","content":"zzkeys api error line","error":{"type":"overloaded_error","status":529,"requestID":"req_x","headers":{"set-cookie":"ZZCOOKIEVALUE","cf-ray":"zzray"}}}"#.to_string(),
+        // L12 a response the API stopped: `stop_details` beside its coarse `stop_reason`,
+        // and a thinking block as its only content, which is what the API returns when
+        // the stop lands before any visible text
+        r#"{"type":"assistant","uuid":"a-4","parentUuid":"s-3","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","id":"msg_a4","model":"claude","stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"zzkeys withheld for policy"},"content":[{"type":"thinking","thinking":"zzkeys weighing the request","signature":"c2ln"}]}}"#.to_string(),
+        // L13 the same turn ending normally: no object, so no key on the wire at all
+        r#"{"type":"assistant","uuid":"a-5","parentUuid":"a-4","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","id":"msg_a5","model":"claude","stop_reason":"end_turn","content":[{"type":"text","text":"zzkeys ordinary reply"}]}}"#.to_string(),
     ];
     let h = Home::new();
     h.write(&format!("{ENC}/{SESS}.jsonl"), &(lines.join("\n") + "\n"));
@@ -377,4 +383,53 @@ fn an_unexpected_type_costs_its_own_key_and_never_the_record() {
         "the surviving layer still renders:\n{}",
         text.stdout
     );
+}
+
+/// The API's own account of a stop it made: the tag on the unit, the two keys on the
+/// wire, and the absence on a turn that ended normally.
+#[test]
+fn stop_details_tags_the_unit_and_rides_the_wire_beside_the_stop_reason() {
+    let h = keys_home();
+    // The TAG names the kind and the category. It is label-zone text and so is
+    // display-only: the scan that finds the record matches its thinking block, never the
+    // zone, which the second half of this test pins.
+    let out = h.run(&[
+        "search",
+        "zzkeys",
+        &at(SESS),
+        "-t",
+        "agent.thinking.summary",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("[api refusal: cyber]"),
+        "the tag names the kind and the category: {}",
+        out.stdout
+    );
+    // A pattern scan for the tag's own words finds nothing: the zone is not matchable.
+    let zone = h.run(&["search", "api refusal: cyber", &at(SESS)]);
+    assert!(zone.success, "stderr: {}", zone.stderr);
+    assert!(
+        zone.stdout.contains("no matching exchanges"),
+        "the label zone is display-only: {}",
+        zone.stdout
+    );
+    // The wire carries both keys, and the object names every member with null for the
+    // one the record lacks.
+    let refused = row(&h, "12");
+    assert_eq!(refused["stop_reason"], serde_json::json!("refusal"));
+    assert_eq!(
+        refused["stop_details"],
+        serde_json::json!({
+            "type": "refusal",
+            "category": "cyber",
+            "explanation": "zzkeys withheld for policy",
+            "fallback_has_prefill_claim": null,
+        })
+    );
+    // A turn that ended normally names no object, so NEITHER key is on the wire: the
+    // absent key means this record does not say.
+    let ended = row(&h, "13");
+    assert!(ended.get("stop_details").is_none(), "{ended}");
+    assert!(ended.get("stop_reason").is_none(), "{ended}");
 }

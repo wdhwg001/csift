@@ -447,4 +447,24 @@ impl Record {
         }
         self.exposed_keys()?.tool_use_id_key.as_deref()
     }
+
+    /// The API's own account of why it stopped this response - `message.stop_details`.
+    ///
+    /// It sits inside `message` rather than at the record's top level, and it belongs to
+    /// this family anyway: the family is what a record STATES about the call behind it,
+    /// and a refusal is the API's verdict on that call rather than anything csift
+    /// classified. The gate is the KEY, like every other fact here.
+    ///
+    /// `None` when the record names no such object, and also when it names one whose
+    /// every member is null: an object that says nothing renders a tag with no words in
+    /// it and puts four nulls on the wire, where the absent key already means "this
+    /// record does not say".
+    #[must_use]
+    pub fn stop_details(&self) -> Option<&StopDetails> {
+        self.message
+            .as_ref()?
+            .stop_details
+            .as_deref()
+            .filter(|s| s.says_something())
+    }
 }

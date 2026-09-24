@@ -6549,7 +6549,7 @@
         },
         {
           "path": "src/model/record/message.rs",
-          "lines": "82-84",
+          "lines": "142-144",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9022,7 +9022,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "69-75",
+          "lines": "129-135",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(...)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -17772,7 +17772,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1296-1301",
+          "lines": "1297-1302",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -18199,12 +18199,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1294",
+          "lines": "1295",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "1303-1304",
+          "lines": "1304-1305",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -19118,12 +19118,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1260",
+          "lines": "1261",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "1282",
+          "lines": "1283",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -19288,12 +19288,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "1260",
+          "lines": "1261",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "1282",
+          "lines": "1283",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -19470,7 +19470,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1326",
+          "lines": "1327",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -19723,12 +19723,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1262",
+          "lines": "1263",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "1326",
+          "lines": "1327",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -19813,7 +19813,7 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "1262",
+          "lines": "1263",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -32277,7 +32277,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "82-83",
+          "lines": "142-143",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -35138,12 +35138,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "1254",
+          "lines": "1255",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "1262",
+          "lines": "1263",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -46632,12 +46632,12 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "46-51",
+          "lines": "106-111",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record/message.rs",
-          "lines": "57-60",
+          "lines": "117-120",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -46723,12 +46723,12 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "57-60",
+          "lines": "117-120",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record/message.rs",
-          "lines": "46-51",
+          "lines": "106-111",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -48269,7 +48269,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "37-39",
+          "lines": "55-57",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -48972,7 +48972,7 @@
         },
         {
           "path": "src/model/record/message.rs",
-          "lines": "82-83",
+          "lines": "142-143",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -49435,7 +49435,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "30-34",
+          "lines": "48-52",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -55086,7 +55086,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "76-81",
+          "lines": "136-141",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -59784,7 +59784,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "46-51",
+          "lines": "106-111",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -59935,7 +59935,7 @@
       "code": [
         {
           "path": "src/model/record/message.rs",
-          "lines": "57-60",
+          "lines": "117-120",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -88604,7 +88604,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::Attribution(a) => a\n                .specific()\n                .map(|(kind, name)| format!(\"[via {kind} {name}]\")),",
-          "lines": "106-108"
+          "lines": "133-135"
         }
       ],
       "states": [
@@ -88876,7 +88876,7 @@
         {
           "path": "src/model/record/lenient.rs",
           "snippet": "pub(super) fn string_only<'de, D>(de: D) -> std::result::Result<Option<Box<str>>, D::Error>",
-          "lines": "246"
+          "lines": "294"
         }
       ],
       "states": [
@@ -88921,7 +88921,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(for_edge(\n            EdgeKind::Interrupted,\n            Basis::Key,\n            Some(id),\n            None,\n            ctx,\n        ));",
-          "lines": "289-295"
+          "lines": "355-361"
         }
       ],
       "states": [
@@ -89015,7 +89015,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(HitFact::ForUnknown {",
-          "lines": "304"
+          "lines": "370"
         }
       ],
       "states": [
@@ -89064,7 +89064,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::UserFeedback(text) => Some(format!(",
-          "lines": "110"
+          "lines": "137"
         }
       ],
       "states": [
@@ -89164,7 +89164,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3471"
+          "lines": "3482"
         }
       ],
       "states": [
@@ -89219,7 +89219,7 @@
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "lines": "259-266",
+          "lines": "325-332",
           "snippet": "    if let Some(p) = crate::commands::image::record_pdf_pages(rec) {\n        push(Fact::PdfPages {\n            first: p.first,\n            last: p.last(),\n            count: p.count,\n            path: p.path,\n        });\n    }"
         }
       ],
@@ -90078,6 +90078,114 @@
           },
           "residue": [
             "the two cut-off texts are chosen by query source, so a corpus carries whichever form its lanes produced; a root with no subagent truncation carries only the main-lane text and says nothing about the other."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "REC-152",
+      "area": "record-model",
+      "code": [
+        {
+          "path": "src/model/record/message.rs",
+          "lines": "41-46",
+          "snippet": "    #[serde(\n        default,\n        rename = \"stop_details\",\n        deserialize_with = \"lenient::stop_details_only\"\n    )]\n    pub stop_details: Option<Box<StopDetails>>,"
+        },
+        {
+          "path": "src/model/record/keys.rs",
+          "lines": "463-469",
+          "snippet": "    pub fn stop_details(&self) -> Option<&StopDetails> {\n        self.message\n            .as_ref()?\n            .stop_details\n            .as_deref()\n            .filter(|s| s.says_something())\n    }"
+        },
+        {
+          "path": "src/commands/search/record_text/keys.rs",
+          "lines": "286",
+          "snippet": "    if let Some(s) = rec.stop_details() {"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.258",
+          "from_basis": "first_seen",
+          "to": null,
+          "behavior": "`message.stop_details` is the API's own structured account of why it stopped a response, and the client does not build it: the streaming assembler takes the object off the `message_delta` frame and assigns it to EVERY assistant record of that turn beside the `stop_reason` from the same frame, with `??null` so a frame that names none writes an explicit null. Exactly ONE member is removed before that assignment, `fallback_credit_token`, deleted from the delta's own object by a statement that runs on both the streaming and the non-streaming path; every other member the server sends survives onto the record. A later normalisation pass copies `stop_reason`, `stop_details` and `usage` from a record onto its same-chain assistant siblings, so a turn written as several per-block records carries one answer across all of them. The OBSERVED member sets on records the API wrote are three: `type` with `category` and `explanation`; those plus `fallback_has_prefill_claim`; and those plus `recommended_model`. `type` reads `refusal` on every one, and so does the `message.stop_reason` written beside it. The client constructs a `stop_details` object of its own on three refusal paths only. All three read `category` off a field they already hold and set `fallback_credit_token`, `fallback_has_prefill_claim` and `recommended_model` to null; two of the three also read `explanation` off a field and the third writes it null. So a `true` in `fallback_has_prefill_claim` can only have come from the API, and such records are on disk.",
+          "depends": "csift models the object as a lenient four-member struct behind ONE `Box` on the message, and the exposed-keys family stamps it as a fact on every emitted unit of a record that names at least one member: a label-zone tag naming the kind and the category, and the two keys `stop_reason` and `stop_details` on the wire. Without it nothing on any csift surface said the API had refused - the record classified on its blocks, so a refusal whose only block is a thinking block read `agent.thinking.summary` and no field, marker or census key named the stop. The gate is the OBJECT rather than the leaf, because a key is true of the record whatever csift labelled it. An object whose every member is null is refused, because the absent key already means the record does not say and four nulls on the wire say the same thing more loudly. The members are read tolerantly, so a member of an unexpected JSON type costs itself and never the record, which is the same trade the exposed keys make; and the box is what keeps the record's width to one pointer for a key almost no record carries. `fallback_credit_token` and `recommended_model` are NOT modelled: the first never reaches disk at all, and the second reaches it only as a null, so `--raw` is its path until a corpus carries one with a value.",
+          "instrument": "Byte-search the verified build for `.message.stop_details=` and read each site, and for `fallback_has_prefill_claim`; counting rule: one non-overlapping match walked forward from offset zero, over the whole file. Then census a projects root for the RECORD: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object and count the lines whose `message.stop_details` is an object, tallying its member names and the value of `message.stop_reason` beside it. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; count the lines whose `message.stop_details` is an object, and tally its member names and the `message.stop_reason` beside it.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "upstream",
+          "specimen": "observed",
+          "attribution": "upstream",
+          "upstream_reason": "the VALUE is the API's: the client receives the object on a response frame and copies it, so what decides its members and their contents is outside the shipped binary. The client-side treatment - the one-member strip, the assignment onto every record of the turn, the sibling copy and the three all-null constructions - is traced in the verified build like any other fact.",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "the response frame the object arrives on",
+              "offset": 165443739,
+              "excerpt": "{let tg=la.delta.stop_details;if(tg&&\"fallback_credit_token\"in tg)delete tg.fallback_credit_token}",
+              "note": "the streaming `message_delta` handler, reading the object off the frame before anything is assigned."
+            },
+            {
+              "role": "gate",
+              "name": "the same strip on the non-streaming path",
+              "offset": 165393075,
+              "excerpt": "Ie=dut(ke.data.stop_details);{let Pe=ke.data.stop_details;if(Pe&&\"fallback_credit_token\"in Pe)delete Pe.fallback_credit_token}",
+              "note": "one member removed on both paths, which is why exactly one is missing from every record and the rest survive."
+            },
+            {
+              "role": "writer",
+              "name": "the assignment onto every record of the turn",
+              "offset": 165444727,
+              "excerpt": "for(let tg of ap)tg.message.usage=wl,tg.message.stop_reason=tf,tg.message.stop_details=la.delta.stop_details??null;",
+              "note": "the object and the coarse reason are written together, and `??null` makes a frame that names none write an explicit null."
+            },
+            {
+              "role": "writer",
+              "name": "the sibling copy in the normalisation pass",
+              "offset": 165939462,
+              "excerpt": "F.message.stop_reason=f.message.stop_reason,F.message.stop_details=f.message.stop_details,F.message.usage=f.message.usage",
+              "note": "carries the same three values across the per-block records of one API message."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "the first client-side refusal construction",
+              "offset": 164717489,
+              "excerpt": "hz(\"refusal\",{type:\"refusal\",category:ws.apiRefusalCategory??null,explanation:null,fallback_credit_token:null,fallback_has_prefill_claim:null,recommended_model:null}",
+              "verdict": "constructs the object with every member but `type` and `category` null, so the client never writes a prefill claim."
+            },
+            {
+              "site": "the second, on the fallback-edit cancellation path",
+              "offset": 164722690,
+              "excerpt": "hz(\"refusal\",{type:\"refusal\",category:ws.apiRefusalCategory??null,explanation:ws.apiRefusalExplanation??null,fallback_credit_token:null,fallback_has_prefill_claim:null,recommended_model:null}",
+              "verdict": "the same three nulls, and this one reads `explanation` off a field the client holds rather than writing it null."
+            },
+            {
+              "site": "the third, where no fallback was precomputed",
+              "offset": 164726276,
+              "excerpt": "hz(\"refusal\",{type:\"refusal\",category:ws.apiRefusalCategory??null,explanation:ws.apiRefusalExplanation??null,fallback_credit_token:null,fallback_has_prefill_claim:null,recommended_model:null}",
+              "verdict": "the same again; these three plus one string-table copy are every occurrence of the member name in the build, so no client path writes a true."
+            },
+            {
+              "site": "the refusal record's own assignment",
+              "offset": 162670832,
+              "excerpt": "F.message.stop_details=n??null",
+              "verdict": "the third and last `.message.stop_details=` site: the refusal factory writing the object it was handed, which is one of the three constructions above or the API's own."
+            }
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "one non-overlapping byte count per literal in the verified build, each site read at its offset, plus the record census over one projects root and over a frozen snapshot root.",
+            "observed": "`.message.stop_details=` counts 3 in the verified build and every one of the three is read above; `fallback_has_prefill_claim` counts 4, of which 3 are the client-side constructions and one is a string-table copy. A frozen snapshot root of 10,299 files and 2,312,350 parsed lines carries 6 records whose `message.stop_details` is an object; one projects root of 10,325 files and 2,036,501 parsed lines carries 18 whole-root and 9 with the measuring tree removed. On every record of all three readings `type` reads `refusal` and the `message.stop_reason` beside it reads `refusal`. Three member sets occur - `category` with `explanation` and `type` on 2, 2 and 1; those plus `fallback_has_prefill_claim` on 0, 3 and 2; those plus `recommended_model` on 4, 13 and 6. Of the records naming `fallback_has_prefill_claim` - 4, 16 and 8 - the snapshot's are all null while the live root carries 11 true and 1 false whole-root, and 4 true with the measuring tree removed. That is the specimen the client-side enumeration predicts, since no client path writes a true. `recommended_model` reads null on all 18 of the live records that name it.",
+            "rule": "one non-overlapping match walked forward from offset zero for the literals; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the member set is the API's, so a corpus can only report the members it has been sent; the enumeration of the client-side constructions is what makes the statement about `fallback_has_prefill_claim` a closure rather than an absence."
+          },
+          "residue": [
+            "`recommended_model` is a member the API sends and every measured record carries as null, so csift models no field for it; a corpus carrying one with a value would say whether it is worth a field."
           ]
         }
       ]

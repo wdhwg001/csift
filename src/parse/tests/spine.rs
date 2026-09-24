@@ -410,7 +410,7 @@ fn a_record_is_exactly_as_wide_as_it_is_written_down_to_be() {
     );
     assert_eq!(
         std::mem::size_of::<Record>(),
-        1376,
+        1384,
         "`Record`'s width moved - a field was added or a payload inlined; measure it, \
          say why the new width is worth paying on every parsed line, and update this \
          number and the one AGENTS section 3.3 quotes"

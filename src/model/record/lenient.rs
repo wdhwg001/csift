@@ -29,6 +29,7 @@
 //! by the decoder table in `model::tests::keys`.
 
 use super::keys::QuotaSummary;
+use super::message::StopDetails;
 use serde::de::{IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
 
@@ -234,6 +235,53 @@ impl<'de> Visitor<'de> for QuotaOrNone {
     }
 }
 
+/// A JSON object read as the four-member stop-details object, or `None` for any other
+/// shape. The same visitor pattern as [`QuotaOrNone`], for the same reason: the members
+/// are themselves tolerant, so only a malformed document can fail this.
+struct StopDetailsOrNone;
+
+impl<'de> Visitor<'de> for StopDetailsOrNone {
+    type Value = Option<Box<StopDetails>>;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("an object, or any other JSON value (which reads as absent)")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> std::result::Result<Self::Value, A::Error> {
+        StopDetails::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            .map(|s| Some(Box::new(s)))
+    }
+
+    fn visit_str<E: serde::de::Error>(self, _: &str) -> std::result::Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_bool<E: serde::de::Error>(self, _: bool) -> std::result::Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_i64<E: serde::de::Error>(self, _: i64) -> std::result::Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_u64<E: serde::de::Error>(self, _: u64) -> std::result::Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> std::result::Result<Self::Value, A::Error> {
+        skip_seq(seq)?;
+        Ok(None)
+    }
+}
+
 /// A JSON string value, or `None` for ANY other shape.
 ///
 /// TWO rules meet in this one decoder. It is the tolerance rule above for the eleven
@@ -284,4 +332,14 @@ where
     D: serde::Deserializer<'de>,
 {
     de.deserialize_any(QuotaOrNone)
+}
+
+/// The four-member stop-details object, from an object.
+pub(super) fn stop_details_only<'de, D>(
+    de: D,
+) -> std::result::Result<Option<Box<StopDetails>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    de.deserialize_any(StopDetailsOrNone)
 }

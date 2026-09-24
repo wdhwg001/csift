@@ -12,7 +12,8 @@
 //! serde pass that builds the record (`#[serde(flatten)]`) and allocated only for a record
 //! that names at least one. That shape answers both halves of the RECORD-WIDTH law this
 //! family is built around: the row every parsed line of every scan carries grows by a
-//! pointer rather than by eighteen `Option`s (`size_of::<Record>()` 1368 -> 1376, pinned in
+//! pointer rather than by eighteen `Option`s (`size_of::<Record>()` 1368 -> 1376, and 1384 at
+//! this tip with the API's stop-details object behind its own pointer; pinned in
 //! `parse::tests::spine`), and nothing walks the line twice. The walk was the alternative,
 //! and it was built and measured rather than argued about: a depth-1 key read at the one
 //! place a `Record` is built from bytes cost 48 to 79 percent of user CPU on three section
@@ -45,6 +46,24 @@ const FEEDBACK_MAX: usize = 60;
 /// Why a Stop-hook summary that names no hook run has an edge at all: the leaf OWES one.
 const NO_HOOK_RUN_REASON: &str = "no toolUseID on this stop_hook_summary record";
 
+/// What an assistant record says about the API's own decision to stop it: the four
+/// members of `message.stop_details`, plus the `stop_reason` beside them.
+///
+/// Held as owned values, like every other fact here, so the projections below are total.
+#[derive(Debug, Clone)]
+pub(crate) struct StopSummary {
+    /// `stop_reason`, the coarse word - `refusal` where the details are written.
+    pub(crate) reason: Option<String>,
+    /// `stop_details.type`, the stop KIND.
+    pub(crate) kind: Option<String>,
+    /// `stop_details.category`, the classifier band.
+    pub(crate) category: Option<String>,
+    /// `stop_details.explanation`, the API's own sentence.
+    pub(crate) explanation: Option<String>,
+    /// `stop_details.fallback_has_prefill_claim`.
+    pub(crate) fallback_has_prefill_claim: Option<bool>,
+}
+
 /// The exposed-keys family's own facts. One variant per key (or per key GROUP, where the
 /// harness writes a set that only means anything together).
 ///
@@ -74,6 +93,14 @@ pub(crate) enum Fact {
     ScheduledFireId(String),
     /// The HOOK RUN a `stop_hook_summary` reports on.
     HookRunId(String),
+    /// The API's own account of why it stopped this response, from `message.stop_details`
+    /// and the `stop_reason` beside it. Boxed for the same reason as the two above.
+    ///
+    /// The tag it renders is LABEL-ZONE text and is therefore display-only, like the
+    /// thinking family's: a pattern scan matches the rendered SECTION and never the zone,
+    /// so searching for the word a refusal is tagged with finds nothing. The selector and
+    /// the JSON key are the way to these records.
+    StopDetails(Box<StopSummary>),
     /// The PDF page RANGE a `Read` with a `pages` parameter returned, read off the pair of
     /// keys that carry it: `toolUseResult.firstPage` for the offset and the result's own
     /// content elements for how many pages followed it. `path` is `file.filePath`.
@@ -95,7 +122,7 @@ pub(crate) enum Fact {
 impl Fact {
     /// The label-zone tag this fact adds, if any.
     ///
-    /// Five of the eleven render a tag and six ride JSON alone, and the split is not
+    /// Six of the twelve render a tag and six ride JSON alone, and the split is not
     /// arbitrary: a tag is worth a reader's line only when it says something about THIS
     /// record that a person scanning a result list would act on. An id is a join key, and
     /// `attributionAgent` is on every record of a subagent transcript, so a tag naming it
@@ -114,6 +141,15 @@ impl Fact {
             // `headline` is `None` exactly when the failure says nothing, and the model
             // layer never builds one that does - so this can render no floor word.
             Fact::ApiFailure(f) => f.headline().map(|h| format!("[api failure {h}]")),
+            // The KIND, and the category when the record names one. The EXPLANATION is
+            // the API's own prose about a response it withheld, which is the one member
+            // a reader of a result list is not owed on the same line as a leaf path; it
+            // rides JSON. A record naming no kind renders no tag: the zone would carry a
+            // floor word where the record simply did not say.
+            Fact::StopDetails(s) => s.kind.as_deref().map(|k| match s.category.as_deref() {
+                Some(c) => format!("[api {k}: {c}]"),
+                None => format!("[api {k}]"),
+            }),
             Fact::RequestId(_)
             | Fact::ApiBlockIndex(_)
             | Fact::InterruptedMessage(_)
@@ -174,6 +210,22 @@ impl Fact {
             Fact::ScheduledTaskId(id) => vec![("scheduled_task_id", serde_json::json!(id))],
             Fact::ScheduledFireId(id) => vec![("scheduled_fire_id", serde_json::json!(id))],
             Fact::HookRunId(id) => vec![("hook_run_id", serde_json::json!(id))],
+            // TWO keys: the coarse reason the API gave and its structured account of the
+            // same stop. The object names every member with null for one the record
+            // lacks, so a consumer reads presence from the KEY - the absence-at-key-level
+            // rule this whole family follows.
+            Fact::StopDetails(s) => vec![
+                ("stop_reason", serde_json::json!(s.reason)),
+                (
+                    "stop_details",
+                    serde_json::json!({
+                        "type": s.kind,
+                        "category": s.category,
+                        "explanation": s.explanation,
+                        "fallback_has_prefill_claim": s.fallback_has_prefill_claim,
+                    }),
+                ),
+            ],
             Fact::PdfPages {
                 first,
                 last,
@@ -225,6 +277,20 @@ pub(crate) fn facts(
     }
     if let Some(f) = rec.api_failure() {
         push(Fact::ApiFailure(Box::new(f)));
+    }
+    // The API's own account of the stop, on EVERY section of the record that carries it -
+    // one assistant message is several records and each repeats the envelope, so the fact
+    // is the record's rather than one block's. The gate is the object, so a turn that
+    // ended normally carries nothing here and the absent key means the record does not
+    // say rather than that the API did not refuse.
+    if let Some(s) = rec.stop_details() {
+        push(Fact::StopDetails(Box::new(StopSummary {
+            reason: rec.message.as_ref().and_then(|m| m.stop_reason.clone()),
+            kind: s.r#type.as_deref().map(str::to_string),
+            category: s.category.as_deref().map(str::to_string),
+            explanation: s.explanation.as_deref().map(str::to_string),
+            fallback_has_prefill_claim: s.fallback_has_prefill_claim,
+        })));
     }
     if let Some(k) = rec.exposed_keys() {
         if k.tool_ends_turn == Some(true) {

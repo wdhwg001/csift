@@ -157,6 +157,11 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     // nothing more, and the pin is what keeps it one: a reader that re-parses the rendered
     // list by trimming every brace off both ends cannot read a row whose form ends in `}`
     // when it sits LAST (`cli::tests::docs::an_object_valued_key_parses_last` is the pin).
+    k(
+        Family::Keys,
+        "stop_details:{type category explanation fallback_has_prefill_claim}",
+    ),
+    k(Family::Keys, "stop_reason"),
     k(Family::Keys, "pdf_pages:{first last count path}"),
     k(Family::Keys, "interrupted_message_id"),
     k(Family::Keys, "hook_run_id"),
