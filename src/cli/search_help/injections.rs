@@ -59,7 +59,7 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness
      one it does not keeps the id as `[for: <kind> <id> (not in this file)]`, and a record \
      that names no such key renders `[for: <kind> unknown (<reason>)]` - never a silently \
      absent edge. `harness.schedule.wakeup`, `harness.schedule.tick` and \
-     `harness.resume.prompt` carry NO edge, because no key on those records names one. An \
+     `harness.resume.prompt` carry NO edge, because no key on those records names one. A \
      record matching no template carries no leaf whichever stamp it bears: `show --line N` \
      renders it as `? unmodeled: user/isMeta` or `? unmodeled: user/turnCompanion` - the \
      AUTHORSHIP names the residue ahead of the content shape, so a companion whose content \
