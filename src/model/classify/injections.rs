@@ -58,15 +58,25 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
     if rec.origin_kind().is_some_and(|k| k == "human") {
         return Some(Class::UserMessage);
     }
-    // EVERY ARM BELOW MATCHES ON TEXT, AND `isMeta` IS WHAT PROTECTS A PERSON. A human can
-    // write any sentence a template opens with - quote the reminder they were just shown,
-    // paste the retry nudge they are asking about, open a message with `[Image: ...]` - and
-    // without this guard that message is relabelled out of `user` while it still opens its
-    // turn. `isMeta` is the authorship flag the injecting call site stamps; Claude Code's
-    // own recogniser tests it for the same reason, and the map's shape rows all read
-    // `type:"user" isMeta:true template:<x>`. The two STRUCTURAL arms are above this line
-    // because they read a field rather than the prose.
-    if !rec.is_meta.unwrap_or(false) {
+    // EVERY ARM BELOW MATCHES ON TEXT, AND THE AUTHORSHIP FLAGS ARE WHAT PROTECT A PERSON.
+    // A human can write any sentence a template opens with - quote the reminder they were
+    // just shown, paste the retry nudge they are asking about, open a message with
+    // `[Image: ...]` - and without this guard that message is relabelled out of `user`
+    // while it still opens its turn.
+    //
+    // BOTH flags, because the harness writes BOTH and a person writes NEITHER. `isMeta` is
+    // the stamp the injecting call site sets and `turnCompanion` the stamp a record written
+    // to accompany a turn carries; Claude Code's own is-this-the-person's-message predicate
+    // tests the two together, before it looks at the content at all. Reading only the first
+    // left a record the harness wrote, whose text IS one of these templates, with no leaf:
+    // the two stamping paths that add the companion flag to an EXISTING record touch no
+    // meta flag, so the same body earned a leaf on one path and the residue on the other.
+    // The map's shape rows name the meta flag because that is the stamp every template
+    // producer sets; the companion flag reaches the same arms through the same door.
+    //
+    // The two STRUCTURAL arms are above this line because they read a field rather than
+    // the prose.
+    if !rec.is_meta.unwrap_or(false) && !rec.is_turn_companion() {
         return None;
     }
     // harness.resume.prompt: the LOADER's repair prompt for a resumed transcript that

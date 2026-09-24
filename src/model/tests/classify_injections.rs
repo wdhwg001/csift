@@ -192,3 +192,50 @@ fn a_bundled_skill_body_with_no_directory_line_still_takes_the_skill_leaf() {
     let quoting = user_record("the skill opens # Workflow authoring reference", true);
     assert!(quoting.classify(&ClassifyCtx::top_level()).is_empty());
 }
+
+/// The authorship guard reads BOTH stamps, because the harness writes both and a person
+/// writes neither. A record carrying only the COMPANION stamp is the shape the two
+/// spread-an-existing-record paths produce, and its text is a template like any other.
+#[test]
+fn a_companion_only_record_reaches_the_leaf_its_text_earns() {
+    for text in CONTINUATIONS {
+        assert_eq!(
+            user_record_companion(text).classify(&ClassifyCtx::top_level()),
+            vec![Class::EnforceRetry],
+            "{text}"
+        );
+    }
+    // A second family through the same door: the bundled skill body.
+    let skill = user_record_companion(
+        "# Workflow authoring reference\n\nA workflow structures work across many agents.",
+    );
+    assert_eq!(
+        skill.classify(&ClassifyCtx::top_level()),
+        vec![Class::ContextSkill]
+    );
+    // A companion matching NO template is still the residue - widening the guard admits
+    // the record to the table, it does not invent a leaf for it.
+    let none = user_record_companion("carry on from where you stopped");
+    assert!(none.classify(&ClassifyCtx::top_level()).is_empty());
+    // And the protection the guard exists for is intact: a person writes NEITHER stamp,
+    // so their message quoting a template keeps their own leaf and opens their turn.
+    let person = user_record(CONTINUATIONS[1], false);
+    assert_eq!(
+        person.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
+    );
+    assert!(person.opens_turn());
+}
+
+/// A record carrying the COMPANION stamp and no meta flag, built the way the two stamping
+/// paths build it: by spreading a record that had no meta flag of its own.
+fn user_record_companion(content: &str) -> Record {
+    parse(
+        &serde_json::json!({
+            "type": "user",
+            "turnCompanion": true,
+            "message": {"role": "user", "content": content},
+        })
+        .to_string(),
+    )
+}

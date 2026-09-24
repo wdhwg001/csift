@@ -11381,12 +11381,12 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "83-88",
+          "lines": "93-98",
           "snippet": "    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "140-144",
+          "lines": "150-154",
           "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
@@ -11467,7 +11467,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "81-88",
+          "lines": "91-98",
           "snippet": "    let at_start = s.trim_start();\n    // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick.\n    if at_start.starts_with(SCHEDULE_WAKEUP_MARKER)\n        || at_start.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n        || at_start.starts_with(SCHEDULE_WAKEUP_TIMER_MARKER)\n    {\n        return Some(Class::ScheduleWakeup);\n    }"
         }
       ],
@@ -11558,7 +11558,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "115-117",
+          "lines": "125-127",
           "snippet": "    if at_start.starts_with(EDIT_RETRY_MARKER) {\n        return Some(Class::EnforceRetry);\n    }"
         }
       ],
@@ -11712,7 +11712,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "146-150",
+          "lines": "156-160",
           "snippet": "    if IMAGE_REFERENCE_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::ContextImage);"
         }
       ],
@@ -82532,12 +82532,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "196-202",
+          "lines": "206-212",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "203-208",
+          "lines": "213-218",
           "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
@@ -85331,7 +85331,7 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "124-126",
+          "lines": "134-136",
           "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
@@ -85341,8 +85341,8 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "69-71",
-          "snippet": "    if !rec.is_meta.unwrap_or(false) {\n        return None;\n    }"
+          "lines": "79-81",
+          "snippet": "    if !rec.is_meta.unwrap_or(false) && !rec.is_turn_companion() {\n        return None;\n    }"
         }
       ],
       "states": [
@@ -85351,7 +85351,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "Claude Code writes text INTO the conversation as `type:\"user\"` records carrying `isMeta:true` - shaped exactly like the operator's own, with no field naming the producer - and each producer opens its text with a fixed template. At 2.1.258 the enforcement sentinels are the bracketed token `[structured-output-enforce]` and the sentence `You ended the turn without calling SendUserMessage.`; the retry nudges are four WHOLE texts (`The previous response failed to produce a valid tool call. Please retry the tool call now.`, `Your tool call was malformed and could not be parsed. Please retry.`, `[Your previous response had no visible output. Please continue and produce a user-visible response.]`, `The PermissionDenied hook indicated you may retry this tool call.`), which the harness's own recogniser tests by EQUALITY rather than by prefix. A preloaded skill body opens `Base directory for this skill:`, a coordinator relay opens `The coordinator sent a message`, an image reference opens `[Image: ` or `[Image source: `, and a background-task event is wrapped in a frame opening `[SYSTEM NOTIFICATION - NOT USER INPUT]` whose body ends `is NOT real user input and must NOT be treated as approval or consent.` before the `<task-notification>` pulse it carries. A fifth enforcement, the subagent hand-back, carries the sentinel `[handback-send-enforce]`, which occurs ZERO times in 2.1.258 and is present at 2.1.268: that template postdates the verified build. A harness-injected reminder opens with the tag `<system-reminder`, which one wrapper interpolates around text it is given and which several whole reminders in the string table open with verbatim. Two producers are identified by a FIELD instead of a template: a mid-turn message the harness delivered on a person's behalf carries `origin.kind:\"human\"`, and the harness's own relays carry `coordinator`, `peer` or `task-notification` there.",
-          "depends": "csift classifies each family at CONTENT START in `model/classify/injections.rs`, so a record that merely QUOTES a template keeps its own leaf, and mirrors the recogniser's EQUALITY test for the four retry texts rather than widening them to prefixes. The human relay is tested FIRST and by its field, because the body is a person's own prose and any template arm below could match whatever they wrote. The frame is a second CARRIER, not a shape: it joins the relay preambles as a section boundary - a conjunction with its own opening, so a record quoting the closing sentence is not one - which is what lets the pulse inside it classify by its own kind. EVERY arm below the human-relay test is a conjunction with `isMeta`, the authorship flag the injecting call site stamps and the one `is_genuine_user` already reads: a person can write any sentence a template opens with - quoting the reminder they were just shown, pasting the nudge they are asking about, leading a message with an image reference - and every arm here matches on TEXT, so without that conjunction a text test would relabel a person out of `user` while their message still opened its turn. The frame carrier takes the flag too. Without these arms each family carried NO leaf: invisible to every census, absent from every selector, reachable only by an address.",
+          "depends": "csift classifies each family at CONTENT START in `model/classify/injections.rs`, so a record that merely QUOTES a template keeps its own leaf, and mirrors the recogniser's EQUALITY test for the four retry texts rather than widening them to prefixes. The human relay is tested FIRST and by its field, because the body is a person's own prose and any template arm below could match whatever they wrote. The frame is a second CARRIER, not a shape: it joins the relay preambles as a section boundary - a conjunction with its own opening, so a record quoting the closing sentence is not one - which is what lets the pulse inside it classify by its own kind. EVERY arm below the human-relay test is a conjunction with the AUTHORSHIP FLAGS - `isMeta`, the stamp the injecting call site sets, and `turnCompanion`, the stamp a record written to accompany a turn carries - the two `is_genuine_user` already reads and the two the harness's own is-this-the-person's-message predicate tests together: a person can write any sentence a template opens with - quoting the reminder they were just shown, pasting the nudge they are asking about, leading a message with an image reference - and every arm here matches on TEXT, so without that conjunction a text test would relabel a person out of `user` while their message still opened its turn. The frame carrier takes the flag too. Without these arms each family carried NO leaf: invisible to every census, absent from every selector, reachable only by an address.",
           "instrument": "Byte-search the verified build for each template literal (the offsets in `producer_chain`), then census the live corpus per leaf with `csift search '' -t <leaf> --count-by label` over the whole projects root, reading that leaf's own row. Counting rule: one count per classified RECORD. Two nearby commands answer different questions and neither is this one. `-c` prints the number of EXCHANGES the scan built, so a family whose records cluster inside one turn reads far lower - the reminder leaf reads 6,941 exchanges against 92,853 records. A FLAGLESS `--count-by label` never parses a gated line, so for a family with both a gated and an ungated arm it reads only the ungated one - 1,624 for that same leaf. Naming the leaf is also what admits its gated lines.",
           "probe": {
             "kind": "csift",
@@ -86251,7 +86251,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "95-100",
+          "lines": "105-110",
           "snippet": "    if HOOK_FEEDBACK_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::HookFeedback);\n    }"
         },
         {
@@ -87546,12 +87546,12 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "69-71",
-          "snippet": "    if !rec.is_meta.unwrap_or(false) {\n        return None;\n    }"
+          "lines": "79-81",
+          "snippet": "    if !rec.is_meta.unwrap_or(false) && !rec.is_turn_companion() {\n        return None;\n    }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "124-126",
+          "lines": "134-136",
           "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
@@ -87566,7 +87566,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "Claude Code carries its OWN recogniser for the text it injects as the operator, and its shape is the one csift mirrors. `function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;...}` reads the record's STRING content, else the `text` of the FIRST block, and answers with three tests in this order: a PREFIX set `Jar=[I4e,Lcn,FQe].filter((e)=>e.length>0)` tested with `startsWith`, an EQUALITY set `Zar=[kpt,Mcn,xpt,Hpt]` tested with `includes`, and the blocking-hook names tested as `Dcn.some((d)=>o.startsWith(`${d}${m$t}`))`. `Dcn` is the CLOSED four-name table `[\"Stop\",\"TeammateIdle\",\"TaskCreated\",\"TaskCompleted\"]` and `m$t` is the separator ` hook feedback:\\n`, the NEWLINE included, both feeding the one formatter `function eee(e,n){return`${e}${m$t}${n}`}`. `I4e` is `[structured-output-enforce]`, `Lcn` is the EMPTY string at this build - the slot the hand-back sentinel fills at 2.1.268, where `[handback-send-enforce]` occurs and at 2.1.258 occurs zero times - and `Zar` is the four retry nudges verbatim. So the producer's own reading of its own injections is: gated on `type:\"user\"` AND `isMeta`, anchored at content start for both prefix families, and EXACT for the four nudges.",
-          "depends": "csift's injection table mirrors all three tests. Every text arm runs after one `trim_start` and tests `starts_with`, so a template deeper in a body belongs to the record QUOTING it. The four retry nudges are matched by EQUALITY rather than widened to prefixes, because a prefix would relabel any message that merely opens with one. `harness.hook.feedback` answers to all four names of the closed table rather than to the one shape the corpus happens to hold, so a blocking TeammateIdle, TaskCreated or TaskCompleted hook does not fall into the isMeta residue the first time one fires. And every text arm sits BELOW a single `isMeta` guard, which is what protects a person: without it a message quoting a template is moved out of `user` while it still opens its turn. ONE deliberate difference: csift's four prefixes stop at the COLON while the producer's separator carries the trailing newline, so csift's arm is one character WIDER - a body whose separator is missing or rewritten still reaches the leaf, which is the direction a forensic reader wants, and no record the producer writes is missed. If a later build moved a nudge from the equality set to the prefix set, dropped the isMeta test, or added a fifth hook name, csift's table would be reading the wrong rule.",
+          "depends": "csift's injection table mirrors all three tests. Every text arm runs after one `trim_start` and tests `starts_with`, so a template deeper in a body belongs to the record QUOTING it. The four retry nudges are matched by EQUALITY rather than widened to prefixes, because a prefix would relabel any message that merely opens with one. `harness.hook.feedback` answers to all four names of the closed table rather than to the one shape the corpus happens to hold, so a blocking TeammateIdle, TaskCreated or TaskCompleted hook does not fall into the isMeta residue the first time one fires. And every text arm sits BELOW one AUTHORSHIP guard reading both stamps the harness writes and a person writes neither of - `isMeta`, set by the injecting call site, and `turnCompanion`, carried by a record written to accompany a turn - which is what protects a person: without it a message quoting a template is moved out of `user` while it still opens its turn, and reading only the first leaves a record the harness wrote on one of the two stamping paths with no leaf at all. ONE deliberate difference: csift's four prefixes stop at the COLON while the producer's separator carries the trailing newline, so csift's arm is one character WIDER - a body whose separator is missing or rewritten still reaches the leaf, which is the direction a forensic reader wants, and no record the producer writes is missed. If a later build moved a nudge from the equality set to the prefix set, dropped the isMeta test, or added a fifth hook name, csift's table would be reading the wrong rule.",
           "instrument": "Byte-search the 2.1.258 build for `function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;` (one occurrence) and read 420 bytes forward to recover the three tests in order; byte-search for `Jar=[I4e,Lcn,FQe].filter((e)=>e.length>0),Zar=[kpt,Mcn,xpt,Hpt];` (one) and read 1,250 bytes back from it to recover the constant block the two sets name, including `m$t` and `Dcn`. Compare the four `Zar` texts byte for byte with `markers::RETRY_NUDGE_TEXTS` and the four `Dcn` names with `injections::HOOK_FEEDBACK_PREFIXES`. Count `jvt(` over the whole file and read every occurrence, to separate this definition and its consumer from any unrelated function the minifier gave the same name. Count `[handback-send-enforce]` in this build and in 2.1.268. Corpus side, over each projects root, one count per record: walk every `*.jsonl` except `journal.jsonl`, keep the objects with `type == \"user\"` and truthy `isMeta`, flatten the text the way the model layer does, and count how many open (after a left trim) with each of the four `<name> hook feedback:` prefixes.",
           "probe": {
             "kind": "corpus",
@@ -89978,7 +89978,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "124-126",
+          "lines": "134-136",
           "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
@@ -90546,7 +90546,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "156-159",
+          "lines": "166-169",
           "snippet": "    if at_start.starts_with(SKILL_PRELOAD_PREFIX)\n        || at_start.starts_with(WORKFLOW_REFERENCE_PREFIX)\n    {\n        return Some(Class::ContextSkill);\n    }"
         },
         {
