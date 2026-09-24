@@ -375,9 +375,12 @@ surface change bumps the PATCH.
   joins `NEVER_CONVERTS`, reads `not delivered` whatever its leaf default says, takes
   `harness.context.task` beside `thinking_stripped`, and falls to the verbatim payload,
   which is the only place its numbers are. The HUMAN column on all three rows is read off
-  the transcript render's own hide set, which names each of the payload types, rather than
-  inferred from the leaf - including `thinking_stripped`, whose column said unstated while
-  the same list answered for it.
+  the transcript render's own hide set rather than inferred from the leaf, and that list
+  is per build: the verified build's hide set names `mcp_instructions_delta` and neither
+  of the two thinking payloads - it cannot, since neither name occurs anywhere in that
+  build - while the 2.1.278 hide set names all three. So the column on the two thinking
+  rows is a reading of the build that knows the types, which is also the correction to
+  `thinking_stripped`, whose column said unstated while a hide set answered for it.
 - **A bundled skill body that ships no files reaches `harness.context.skill`.** The
   `Base directory for this skill:` line the leaf keys on is written by ONE wrapper in the
   registrar, and only for a registration that names FILES: it materialises the directory

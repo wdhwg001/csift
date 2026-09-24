@@ -16,7 +16,10 @@
 //! and one more, `hook_success`, converts only on the few records that carry a rendered
 //! body; that is a per-RECORD verdict and lives in `Record::delivery_override`, not in
 //! this column. The HUMAN column is read off the render's own hide set where that list
-//! names the type, and is `(unstated)` where it does not.
+//! names the type, and is `(unstated)` where it does not. THAT LIST IS PER BUILD and it
+//! grows: a row whose type only a build ABOVE the verified one names says so at the row,
+//! because a reader checking the column against the verified build would find nothing
+//! there and take the answer for a guess.
 
 use super::*;
 
@@ -398,7 +401,9 @@ pub(crate) const ROWS: &[Entry] = &[
     ),
     e(
         // The render's hide set names this payload type, so the `Never` here and on the
-        // row below are read off that list rather than inferred from the leaf.
+        // row below are read off that list rather than inferred from the leaf - in the
+        // 2.1.278 build, which is the build that knows either type at all: the verified
+        // build's own hide set names neither, and neither name occurs anywhere in it.
         Shape::AttachmentType("thinking_stripped"),
         Some(Class::ContextTask),
         Gate::Attachments,
