@@ -764,6 +764,21 @@ surface change bumps the PATCH.
   seen no other csift. The dates that remain belong to the object: a Claude Code model
   literal, and a `--since` example.
 
+- **A manual quotes the brand its OWN command prints, because the subagent brand is four
+  strings.** One fact - this row is a subagent transcript, and its bare id is not a
+  re-feedable target - is spelled four ways across the seven surfaces that print it: `list`
+  writes `SUBAGENT  <hex>  ·  parent SESSION <uuid>`, two spaces after the word and two
+  around the separator; `files`, `recover`, `stats` and `verbatim` write one space after
+  the word and two around the separator; `show` writes one of each; and `image` suffixes
+  its row `  SUBAGENT <hex> · parent <uuid>`, with no `SESSION` at all. So `SKILL.md`'s
+  `list` row and SPEC's `image` row quote different strings and both are right, and a
+  manual that copied its sibling's would send a reader looking for bytes that surface never
+  writes. `SKILL.md` states the `body` field's full condition beside it: `body` is non-null
+  exactly where the excerpt cap was lifted, which is `search --no-truncate` and a
+  `show --line`/`--uuid` address, while `show --turn` is a WINDOW over the turn numbering
+  rather than an address, so its rows render through the ordinary excerpt budget and carry
+  a null `body`.
+
 ### Fixed
 
 - **The two textless thinking leaves rendered a body they do not have.** An
