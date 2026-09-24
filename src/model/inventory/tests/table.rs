@@ -5,13 +5,13 @@
 use super::*;
 
 /// The hand-kept per-axis row counts: 22 top-level types, 11 system subtypes, 50
-/// attachment payload types, 8 content block types, 17 isMeta template families.
+/// attachment payload types, 8 content block types, 20 isMeta template families.
 const COUNTS: [(&str, usize); 5] = [
     ("top-level type", 22),
     ("system subtype", 11),
     ("attachment type", 50),
     ("block type", 8),
-    ("isMeta template", 17),
+    ("isMeta template", 20),
 ];
 
 fn kind_of(s: Shape) -> &'static str {

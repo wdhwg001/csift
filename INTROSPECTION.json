@@ -11371,7 +11371,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "354-357",
+          "lines": "408-411",
           "snippet": "pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - the driver's first body sentence, which opens the\n/// delivered text on the builds whose driver template carries no header.\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
@@ -11386,7 +11386,7 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "137-141",
+          "lines": "140-144",
           "snippet": "    if at_start.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX)\n        || at_start.starts_with(AUTONOMOUS_CHECK_MARKER)\n    {\n        return Some(Class::ScheduleTick);\n    }"
         }
       ],
@@ -11707,12 +11707,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "359-363",
+          "lines": "413-417",
           "snippet": "/// An `isMeta` image REFERENCE record (`harness.context.image`): the harness's stand-in\n/// for a pasted or attached image, naming the source path or the dimensions. The builder\n/// writes one of two openings, so both are matched; the shorter one is a\n/// prefix of neither, and both anchor at content start.\npub const IMAGE_REFERENCE_PREFIXES: &[&str] = &[\"[Image: \", \"[Image source: \"];"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "143-147",
+          "lines": "146-150",
           "snippet": "    if IMAGE_REFERENCE_PREFIXES\n        .iter()\n        .any(|p| at_start.starts_with(p))\n    {\n        return Some(Class::ContextImage);"
         }
       ],
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2472",
+          "lines": "2475",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -82532,12 +82532,12 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "190-196",
+          "lines": "193-199",
           "snippet": "    pub fn is_scheduled_fire_prompt(&self, ctx: &ClassifyCtx) -> bool {\n        if !self.is_type(\"user\") || !self.is_meta.unwrap_or(false) {\n            return false;\n        }\n        if self.origin.is_some() {\n            return false;\n        }"
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "197-202",
+          "lines": "200-205",
           "snippet": "        if !ctx\n            .schedule_fires\n            .is_some_and(|ix| ix.is_fire_parent(self.parent_uuid.as_deref()))\n        {\n            return false;\n        }"
         },
         {
@@ -85331,13 +85331,18 @@
       "code": [
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "118-121",
-          "snippet": "    // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the\n    // four texts, because Claude Code's own recogniser tests them that way - these are\n    // whole messages, not prefixes of a longer body.\n    if RETRY_NUDGE_TEXTS.contains(&at_start) {"
+          "lines": "124-126",
+          "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "301-306",
-          "snippet": "pub const RETRY_NUDGE_TEXTS: &[&str] = &[\n    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\",\n];"
+          "lines": "324-327",
+          "snippet": "    \"The previous response failed to produce a valid tool call. Please retry the tool call now.\",\n    \"Your tool call was malformed and could not be parsed. Please retry.\",\n    \"[Your previous response had no visible output. Please continue and produce a user-visible response.]\",\n    \"The PermissionDenied hook indicated you may retry this tool call.\","
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "69-71",
+          "snippet": "    if !rec.is_meta.unwrap_or(false) {\n        return None;\n    }"
         }
       ],
       "states": [
@@ -85441,7 +85446,7 @@
       "code": [
         {
           "path": "src/model/inventory/templates.rs",
-          "lines": "119-123",
+          "lines": "151-155",
           "snippet": "        Shape::IsMetaFamily(\"coordinator-relay\"),\n        Some(Class::CommInbox),\n        Gate::Default,\n        true,\n        Human::Never,"
         },
         {
@@ -86200,7 +86205,7 @@
         },
         {
           "path": "src/model/tests/classify_harness.rs",
-          "lines": "462-464",
+          "lines": "535-537",
           "snippet": "let mine = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{}}]}}\"#,\n    );"
         }
       ],
@@ -87546,8 +87551,8 @@
         },
         {
           "path": "src/model/classify/injections.rs",
-          "lines": "121-123",
-          "snippet": "    if RETRY_NUDGE_TEXTS.contains(&at_start) {\n        return Some(Class::EnforceRetry);\n    }"
+          "lines": "124-126",
+          "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
         },
         {
           "path": "src/model/classify/tests/injections.rs",
@@ -89159,7 +89164,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3468"
+          "lines": "3471"
         }
       ],
       "states": [
@@ -89825,6 +89830,255 @@
             "rule": "One observation per boundary record for the census; one per transcript path for the budget comparison, each command pinned to that one file.",
             "note": "The earlier check said budget 3 and budget `all` produced byte-identical streams. They do not: 24 of 32 pairs differ by the echoed `crossing_budget`. The claim's own sentence is corrected to the fact the comparison actually supports - that no transcript in the set has a boundary a budget of 3 would have stopped at. The default is the measured value: its open leg closes on the cost reading above."
           }
+        }
+      ]
+    },
+    {
+      "id": "CLS-069",
+      "area": "classification",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "334",
+          "snippet": "/// The CLASSIFIER-STOP continuation's plain form - see [`TURN_CONTINUATION_TEXTS`]."
+        },
+        {
+          "path": "src/model/markers.rs",
+          "lines": "355-360",
+          "snippet": "pub fn is_turn_continuation(text: &str) -> bool {\n    TURN_CONTINUATION_TEXTS.contains(&text)\n        || text\n            .strip_prefix(CLASSIFIER_STOP_TEXT)\n            .is_some_and(|tail| tail == CLASSIFIER_STOP_INTERRUPTED_TAIL)\n}"
+        },
+        {
+          "path": "src/model/inventory/templates.rs",
+          "lines": "122-126",
+          "snippet": "        Shape::IsMetaFamily(\"classifier-stop\"),\n        Some(Class::EnforceRetry),\n        Gate::Default,\n        true,\n        Human::Never,"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.278",
+          "from_basis": "first_seen",
+          "from_after_verified": "The classifier-stop continuation this claim states first appears at 2.1.278; every literal of the mechanism counts zero in the verified build and zero in the build below it, so the verified build writes no such record and each hop names the build it was read in.",
+          "to": null,
+          "behavior": "A response the API stops with `stop_reason:\"refusal\"` can be CONTINUED once on the same model, and the continuation is three kinds of record appended in one order. FIRST, one `tool_result` per call that had not returned, each carrying one of two fixed texts - `Not run: the response that made this tool call was stopped by a safety classifier.` for a call that had not started, `Interrupted: the response that made this tool call was stopped by a safety classifier while the call was running; it may have partially or fully completed.` for one that had. SECOND, a `type:\"system\"` `subtype:\"informational\"` record whose factory takes the level as its second argument and is called with `\"notice\"`, sets `isMeta:false` and writes no `parentUuid`; its content interpolates the model's display name ahead of `'s safeguards stopped the response above` and closes `continuing once with that noted`. THIRD, a `type:\"user\"` record carrying `isMeta:true` and `turnCompanion:true` whose STRING content is one of two WHOLE templates: the plain form, which the build stores as `Your response above was stopped by a safety classifier \\u2014 this is not a tool or API error. ` concatenated with `The rest of it was withheld, and tool calls in it that had not finished did not run. Do not produce that content again, even reworded.`, and that form concatenated with ` Exception: a tool call whose result reads \"Interrupted\" was already running when the response was stopped; it may have partially or fully completed.`, which the writer picks when at least one call had started. The user record's factory is passed neither `promptSource` nor `promptId`; the persist path adds `promptId` and a `parentUuid` naming the NOTICE, because a `type:\"system\"` record is a chain node and is therefore the running tail when the user record is appended. The continuation is gated by a BOOLEAN set the moment it is issued, so a second one inside one turn is impossible; by a query-source test that admits a main or subagent source and no other; and by three suppressors - a deferred tool, an explicit prevent-continuation flag, and a tool that did not decline to end the turn. Both templates are interned in the same constant block as the four redo nudges and collected into one array with them and with three older continuations, and that array's consumer is the harness's own is-this-an-isMeta-record-I-wrote predicate, which tests membership by EQUALITY.",
+          "depends": "csift gives the user record the leaf `harness.enforce.retry`, matched by WHOLE-MESSAGE equality under the isMeta guard every template arm sits below, and the leaf's domain is the producer's own array so that no member of it is left in the residue. The interrupted form is tested as the plain form plus its fixed tail rather than as a second whole literal, because the producer builds it that way and a second copy of the shared sentence would go stale on its own. The other two records need no new rule: the notice takes `harness.system.notice` from its subtype and the refused assistant turn classifies on its own blocks, so a refusal whose only block is a thinking block is `agent.thinking.summary` and the refusal itself is a FACT on that unit rather than a leaf. Without the arm the user record carried NO leaf at all: nothing on any scan, and `? unmodeled: user/isMeta` under an address.",
+          "instrument": "Byte-search each build for the plain template as the build stores it, `Your response above was stopped by a safety classifier \\u2014 this is not a tool or API error. `, for the interrupted form's tail ` Exception: a tool call whose result reads \"Interrupted\"`, and for the recogniser's array `rt=[Bvt,Tcr,jvt,Wvt,HRn,kcr,Gvt,zvt,Vvt]`; counting rule: one non-overlapping match walked forward from offset zero, over the whole file, per build. Then census a projects root for the RECORD: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object and count the `type:\"user\"` lines whose `message.content` - a bare string, or the newline-join of its content array's `text` blocks - EQUALS the decoded template, the escape read as the em dash it names. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; count the `type:\"user\"` lines carrying `isMeta:true` whose `message.content` (a bare string, or the newline-join of its content array's `text` blocks) equals the decoded classifier-stop template, and separately those equal to that template plus its interrupted tail.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "the refusal predicate on the response path",
+              "offset": 185648803,
+              "build": "2.1.278",
+              "excerpt": "function Ns(e){return e?.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.message.stop_reason===\"refusal\"}",
+              "note": "reads the refusal off the assistant record the failure factory minted, which is what the branch below tests the loop's last message with."
+            },
+            {
+              "role": "gate",
+              "name": "the once condition and the query-source restriction",
+              "offset": 185648689,
+              "build": "2.1.278",
+              "excerpt": "function Sc(e,n){try{return!n&&Xs(e)!==\"auxiliary\"&&(a.CLAUDE_CODE_OCHRE_KITE||P(Gh,!1))}catch(r){return d(r),!1}}",
+              "note": "the second argument IS the once flag, so a truthy one closes the gate; the source test admits a main or subagent source only."
+            },
+            {
+              "role": "gate",
+              "name": "the branch that builds the continuation",
+              "offset": 185723696,
+              "build": "2.1.278",
+              "excerpt": "if(er&&Ns(Hr)&&Hr===jn){",
+              "note": "the gate re-armed at the top of the iteration, the refusal predicate, and the requirement that the refusal record IS the loop's last message."
+            },
+            {
+              "role": "gate",
+              "name": "the once flag set at issue",
+              "offset": 185724215,
+              "build": "2.1.278",
+              "excerpt": "if(wt){Fe=!0,yield*wt.notRun,yield wt.notice,yield wt.nudge,xe=",
+              "note": "the flag is a boolean rather than a count, and the three records are yielded in this order: the unreturned results, the notice, the user record."
+            },
+            {
+              "role": "writer",
+              "name": "the notice record",
+              "offset": 185649863,
+              "build": "2.1.278",
+              "excerpt": "return{notRun:L,notice:c0(`${ni(g)}'s safeguards stopped the response above \\xB7 continuing once with that noted`,\"notic",
+              "note": "the level is the factory's second argument and is the literal `notice` here."
+            },
+            {
+              "role": "writer",
+              "name": "the user record",
+              "offset": 185649987,
+              "build": "2.1.278",
+              "excerpt": "nudge:w({content:F>0?kcr:HRn,isMeta:!0,turnCompanion:!0,now:C.now,uuidFn:C.uuid}",
+              "note": "the two flags are set here and the template is chosen on the count of calls that had started; neither promptSource nor promptId is passed."
+            },
+            {
+              "role": "writer",
+              "name": "the plain template",
+              "offset": 173015628,
+              "build": "2.1.278",
+              "excerpt": "HRn=\"Your response above was stopped by a safety classifier \\u2014 this is not a tool or API error. \"+\"The rest of it was withheld, and tool calls in it that had not finished did not run. Do not produce that content again, even reworded.\"",
+              "note": "two source segments concatenated, so the whole template occurs nowhere in the build as one run."
+            },
+            {
+              "role": "writer",
+              "name": "the interrupted template",
+              "offset": 173015867,
+              "build": "2.1.278",
+              "excerpt": "kcr=HRn+' Exception: a tool call whose result reads \"Interrupted\" was already running when the response was stopped; it may have partially or fully completed.'",
+              "note": "built from the plain form plus a tail, which is why csift tests it the same way."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "the array the harness's own predicate tests",
+              "offset": 173016661,
+              "build": "2.1.278",
+              "excerpt": "rt=[Bvt,Tcr,jvt,Wvt,HRn,kcr,Gvt,zvt,Vvt]",
+              "verdict": "nine members: the four redo nudges, the two classifier-stop forms, and the three older continuations."
+            },
+            {
+              "site": "that array's consumer",
+              "offset": 173016702,
+              "build": "2.1.278",
+              "excerpt": "function ORn(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;",
+              "verdict": "the is-this-an-isMeta-record-I-wrote predicate, which tests the bracketed sentinels by prefix, the array by membership, and the hook-feedback openings by prefix."
+            }
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "one non-overlapping byte count per literal per build over 2.1.258, 2.1.268 and 2.1.278, plus the record census over one projects root described above.",
+            "observed": "the plain template's first segment counts 0, 0 and 1; the interrupted form's tail counts 0, 0 and 2; the recogniser's array counts 0, 0 and 1. Over one projects root of 10,325 files and 2,036,501 parsed lines, 3 lines whole-root and 2 with the measuring tree removed carry the plain template as their whole content, and 0 carry the interrupted form; over a frozen snapshot root of 10,299 files and 2,312,350 parsed lines, 0 carry either.",
+            "rule": "one non-overlapping match walked forward from offset zero per build for the literals; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the two records beside the user record need no arm: the notice is decided by its subtype and the refused assistant turn by its own blocks."
+          },
+          "residue": [
+            "the exact build that first writes the mechanism is bounded and not named: every literal counts zero at 2.1.268 and non-zero at 2.1.278, and the builds between them are not cached. A cached build in that interval would name it."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLS-070",
+      "area": "classification",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "329",
+          "snippet": "    \"Output token limit hit. Resume directly \\u{2014} no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.\","
+        },
+        {
+          "path": "src/model/classify/injections.rs",
+          "lines": "124-126",
+          "snippet": "    if is_turn_continuation(at_start) {\n        return Some(Class::EnforceRetry);\n    }"
+        },
+        {
+          "path": "src/model/inventory/templates.rs",
+          "lines": "130-134",
+          "snippet": "        Shape::IsMetaFamily(\"output-limit\"),\n        Some(Class::EnforceRetry),\n        Gate::Default,\n        true,\n        Human::Never,"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.258",
+          "from_basis": "first_seen",
+          "to": null,
+          "behavior": "THREE of the harness's turn continuations predate the classifier-stop pair and are written INLINE at their own branches rather than interned beside the redo nudges. When a response is cut off at the output-token cap - the assistant record's `apiError` reads `max_output_tokens` - the client re-enters its loop with a `type:\"user\"` record carrying `isMeta:true` and `turnCompanion:true` whose whole content the build stores as `Output token limit hit. Resume directly \\u2014 no apology, no recap of what you were doing. ` concatenated with `Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.`, and a loop transition reading `max_output_tokens_recovery`. When a response is truncated mid-stream - the record carries `isApiErrorMessage` with `truncatedAfterOutput` - it writes one of TWO texts chosen by QUERY SOURCE: a subagent source gets `Your response above was cut off mid-stream and only your next message is delivered. ` concatenated with `Write the complete response again from the start \\u2014 no apology, no mention of the cut-off.`, and any other source gets `Your response above was cut off mid-stream. Resume directly from where it stops \\u2014 no apology, no recap. ` concatenated with `If none of it survived, answer the request from the start.`. Both branches carry the same recovery-attempt budget, a constant whose value is 3. At 2.1.258 the harness's own is-this-an-isMeta-record-I-wrote predicate tests an array of FOUR texts by equality and none of these three is a member; at 2.1.278 the same array holds NINE and all three are members, their texts unchanged.",
+          "depends": "csift gives all three `harness.enforce.retry`, by whole-message equality under the isMeta guard, so a record one of these branches wrote carries the leaf whichever build wrote it: the TEXT is what identifies the producer, while the harness's own array is its bookkeeping rather than a mark on the record. Reading the array as the domain instead would have left records written by a build below the hoist in the residue while the identical text written by a build above it carried a leaf. Matching them as PREFIXES would claim any longer body that opens with one, which is what the content-start law refuses for every template arm.",
+          "instrument": "Byte-search each cached build for the three heads as the build stores them - `Output token limit hit. Resume directly \\u2014`, `Your response above was cut off mid-stream. Resume directly from where it stops \\u2014`, and `Your response above was cut off mid-stream and only your next message is delivered. ` - counting rule: one non-overlapping match walked forward from offset zero, over the whole file, per build; a floor is the lowest cached build carrying the literal and the highest cached build below it that lacks it, and the builds between them are not cached. Then census a projects root for the RECORD: over every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, keep every non-blank line that parses as a JSON object and count the `type:\"user\"` lines carrying `isMeta:true` whose `message.content` - a bare string, or the newline-join of its content array's `text` blocks - EQUALS one of the three decoded texts. Counting rule: one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory; keep every non-blank line that parses as a JSON object; count the `type:\"user\"` lines carrying `isMeta:true` whose `message.content` (a bare string, or the newline-join of its content array's `text` blocks) equals the output-token-limit text, the main-lane cut-off text, or the subagent cut-off text.",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one row per line. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed."
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "the output-token-cap detector",
+              "offset": 164691857,
+              "excerpt": "function NHn(e){return e?.type===\"assistant\"&&e.apiError===\"max_output_tokens\"}",
+              "note": "the whole test is the assistant record's own apiError value."
+            },
+            {
+              "role": "trigger",
+              "name": "the mid-stream truncation detector",
+              "offset": 164691936,
+              "excerpt": "function LHn(e,n,r){return e?.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.truncatedAfterOutput===!0&&",
+              "note": "reads the two flags the failure factory sets, and the remainder of the condition restricts it by query source."
+            },
+            {
+              "role": "gate",
+              "name": "the recovery-attempt budget",
+              "offset": 164691847,
+              "excerpt": "var DHn=3;",
+              "note": "the constant both branches compare their attempt count against before writing anything."
+            },
+            {
+              "role": "writer",
+              "name": "the output-token-limit record",
+              "offset": 164739945,
+              "excerpt": "xe({content:\"Output token limit hit. Resume directly \\u2014 no apology, no recap of what you were doing. \"+\"Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.\",isMeta:!0,turnCompanion:!0,now:fe.now,uuidFn:fe.uuid})",
+              "note": "the text is written inline at the branch, with the two flags, rather than read from a named constant."
+            },
+            {
+              "role": "writer",
+              "name": "the two mid-stream cut-off records",
+              "offset": 164740735,
+              "excerpt": "xe({content:Aa(C)===\"subagent\"?\"Your response above was cut off mid-stream and only your next message is delivered. \"+\"Write the complete response again from the start \\u2014 no apology, no mention of the cut-off.\":\"Your response above was cut off mid-stream. Resume directly from where it stops \\u2014 no apology, no recap. \"+\"If none of it survived, answer the request from the start.\",isMeta:!0,turnCompanion:!0,now:fe.now,uuidFn:fe.uuid})",
+              "note": "one ternary on the query source picks the text, so the two are never both written for one cut-off."
+            }
+          ],
+          "enumeration": [
+            {
+              "site": "the array the harness's own predicate tests, in the verified build",
+              "offset": 161464590,
+              "excerpt": "Zar=[kpt,Mcn,xpt,Hpt]",
+              "verdict": "exactly four members, all of them redo nudges; none of the three continuation texts is one."
+            },
+            {
+              "site": "that array's consumer, in the verified build",
+              "offset": 161464612,
+              "excerpt": "function jvt(e){if(e.type!==\"user\"||e.isMeta!==!0)return!1;",
+              "verdict": "the only reader of the array, and the reason the three are absent from it is bookkeeping rather than a difference in what the records look like."
+            },
+            {
+              "site": "the same array at 2.1.278",
+              "offset": 173016661,
+              "build": "2.1.278",
+              "excerpt": "rt=[Bvt,Tcr,jvt,Wvt,HRn,kcr,Gvt,zvt,Vvt]",
+              "verdict": "nine members; the three are hoisted into named constants and joined to it, their texts unchanged."
+            }
+          ],
+          "writer_literal_floor": {
+            "literal": "Your response above was cut off mid-stream and only your next message is delivered. ",
+            "lowest_present": "2.1.258",
+            "highest_absent": "2.1.252",
+            "ladder": "one non-overlapping byte count of the literal per cached build over 65 version-named builds, platform-suffixed directories excluded. The other two heads carry lower floors on the same ladder - the output-token-limit head lowest present 2.1.100 and highest absent 2.1.23, the main-lane cut-off head lowest present 2.1.246 and highest absent 2.1.245 - so the range this state opens at is the LATEST of the three, and a literal dates itself rather than the behaviour."
+          },
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "the floor ladder above over 65 cached version-named builds, plus the record census over one projects root and over a frozen snapshot root.",
+            "observed": "the output-token-limit head and the main-lane cut-off head each count 1 in 2.1.258, 1 in 2.1.268 and 1 in 2.1.278; the subagent cut-off head, whose stored form carries no escape and so also sits in the string table, counts 2 in each. Over one projects root of 10,325 files and 2,036,501 parsed lines, 1 line whole-root and 0 with the measuring tree removed carry the SUBAGENT cut-off text as their whole content, and 0 carry either of the other two; over a frozen snapshot root of 10,299 files and 2,312,350 parsed lines, 0 carry any of the three.",
+            "rule": "one non-overlapping match walked forward from offset zero per build for the literals; one row per line for the census, over the file set the instrument names. A live projects root is appended to while it is walked, and the walk writes into it, so every count over one is an instant's reading and is given twice: whole-root, and with the measuring tree removed.",
+            "note": "the three texts are identical across the three builds read; what moved between them is the harness's own array, which gained them as members."
+          },
+          "residue": [
+            "the two cut-off texts are chosen by query source, so a corpus carries whichever form its lanes produced; a root with no subagent truncation carries only the main-lane text and says nothing about the other."
+          ]
         }
       ]
     }

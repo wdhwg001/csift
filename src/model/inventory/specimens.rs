@@ -133,6 +133,21 @@ pub(crate) const TEMPLATE_SPECIMENS: &[(&str, &str)] = &[
         "enforce-retry",
         r#"{"type":"user","uuid":"td","isMeta":true,"message":{"role":"user","content":"Your tool call was malformed and could not be parsed. Please retry."}}"#,
     ),
+    // The three continuation shapes. Each line carries its template VERBATIM, em dash
+    // included: the texts are matched by whole-message equality, so a specimen shortened
+    // to its opening would assert nothing the arm does.
+    (
+        "classifier-stop",
+        "{\"type\":\"user\",\"uuid\":\"tg\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"Your response above was stopped by a safety classifier \u{2014} this is not a tool or API error. The rest of it was withheld, and tool calls in it that had not finished did not run. Do not produce that content again, even reworded.\"}}",
+    ),
+    (
+        "output-limit",
+        "{\"type\":\"user\",\"uuid\":\"th\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"Output token limit hit. Resume directly \u{2014} no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.\"}}",
+    ),
+    (
+        "stream-cutoff",
+        "{\"type\":\"user\",\"uuid\":\"ti\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"Your response above was cut off mid-stream. Resume directly from where it stops \u{2014} no apology, no recap. If none of it survived, answer the request from the start.\"}}",
+    ),
     (
         "coordinator-relay",
         r#"{"type":"user","uuid":"te","isMeta":true,"origin":{"kind":"coordinator"},"message":{"role":"user","content":"The coordinator sent a message while you were working:\n\nland the fix"}}"#,

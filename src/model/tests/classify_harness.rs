@@ -195,6 +195,79 @@ fn classify_ismeta_image_record_takes_the_context_image_leaf() {
     );
 }
 
+/// The harness's NINE turn continuations, written out here as the producer writes them
+/// rather than read from the constant under test: a test that iterated the crate's own
+/// list would still pass with that list emptied.
+const CONTINUATIONS: &[&str] = &[
+    "The previous response failed to produce a valid tool call. Please retry the tool call now.",
+    "Your tool call was malformed and could not be parsed. Please retry.",
+    "[Your previous response had no visible output. Please continue and produce a user-visible response.]",
+    "The PermissionDenied hook indicated you may retry this tool call.",
+    "Your response above was stopped by a safety classifier \u{2014} this is not a tool or API error. The rest of it was withheld, and tool calls in it that had not finished did not run. Do not produce that content again, even reworded.",
+    "Your response above was stopped by a safety classifier \u{2014} this is not a tool or API error. The rest of it was withheld, and tool calls in it that had not finished did not run. Do not produce that content again, even reworded. Exception: a tool call whose result reads \"Interrupted\" was already running when the response was stopped; it may have partially or fully completed.",
+    "Output token limit hit. Resume directly \u{2014} no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.",
+    "Your response above was cut off mid-stream. Resume directly from where it stops \u{2014} no apology, no recap. If none of it survived, answer the request from the start.",
+    "Your response above was cut off mid-stream and only your next message is delivered. Write the complete response again from the start \u{2014} no apology, no mention of the cut-off.",
+];
+
+fn user_record(content: &str, is_meta: bool) -> Record {
+    let mut line = serde_json::json!({
+        "type": "user",
+        "message": {"role": "user", "content": content},
+    });
+    if is_meta {
+        line["isMeta"] = serde_json::Value::Bool(true);
+    }
+    parse(&line.to_string())
+}
+
+#[test]
+fn every_turn_continuation_is_enforce_retry_and_the_same_words_typed_are_the_person() {
+    for text in CONTINUATIONS {
+        assert_eq!(
+            user_record(text, true).classify(&ClassifyCtx::top_level()),
+            vec![Class::EnforceRetry],
+            "{text}"
+        );
+        // The authorship flag is the whole guard: a person QUOTING a continuation -
+        // asking why the harness sent it - keeps `user.message` and opens their turn.
+        let typed = user_record(text, false);
+        assert_eq!(
+            typed.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserMessage],
+            "{text}"
+        );
+        assert!(typed.opens_turn(), "a typed message opens its turn: {text}");
+        assert!(
+            !user_record(text, true).opens_turn(),
+            "a continuation opens no turn: {text}"
+        );
+    }
+}
+
+#[test]
+fn a_message_that_merely_opens_with_a_continuation_is_not_one() {
+    // WHOLE-message equality, never a prefix: the harness's own recogniser tests its
+    // list that way, and these are complete bodies. A longer body opening with one is a
+    // record quoting it.
+    let longer = format!("{} And then explain why.", CONTINUATIONS[1]);
+    assert!(
+        user_record(&longer, true)
+            .classify(&ClassifyCtx::top_level())
+            .is_empty(),
+        "a longer body carries no leaf"
+    );
+    // The interrupted classifier-stop form is the plain one plus a fixed tail, so the
+    // plain one plus ANY other tail is not a continuation either.
+    let wrong_tail = format!("{} Exception: something else.", CONTINUATIONS[4]);
+    assert!(
+        user_record(&wrong_tail, true)
+            .classify(&ClassifyCtx::top_level())
+            .is_empty(),
+        "the tail is matched by equality, not by its opening word"
+    );
+}
+
 // -- a notification carrying a <result> is ALSO an inbound report (`child ⇨ parent`) --
 
 #[test]

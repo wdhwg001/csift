@@ -25,9 +25,14 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (harness.enforce, harness
      the operator's own message. Every arm matches at CONTENT START after one left trim \
      and every arm needs the `isMeta` flag, so a person who QUOTES a template keeps \
      `user.message`. `.hook.feedback` answers to all four names one formatter writes \
-     (Stop, TeammateIdle, TaskCreated, TaskCompleted); `.enforce.retry` covers both the \
-     four whole-text redo nudges and the edit-failed notice `The last Edit failed \
-     because the target file was modified`; `.command.caveat` is the slash-command \
+     (Stop, TeammateIdle, TaskCreated, TaskCompleted); `.enforce.retry` is the harness \
+     CONTINUING a turn the model did not finish, over NINE whole messages matched by \
+     exact equality - the four redo nudges, the two classifier-stop forms opening `Your \
+     response above was stopped by a safety classifier`, the output-limit resume opening \
+     `Output token limit hit. Resume directly`, and the two cut-off forms opening `Your \
+     response above was cut off mid-stream` - plus the edit-failed notice `The last Edit \
+     failed because the target file was modified` at content start; five of the nine \
+     texts carry an em dash, so a text retyped with an ASCII hyphen matches no record; `.command.caveat` is the slash-command \
      executor's `<local-command-caveat>` wrapper, not a hook's. THREE records here are \
      not the harness talking to itself. A person's message the harness relayed into a \
      running lane (`origin.kind` `human`) is `user.message` with the marker `[relayed]` \

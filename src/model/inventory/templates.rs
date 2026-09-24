@@ -1,4 +1,4 @@
-//! Axis 5: the isMeta-USER TEMPLATE families - 15 named templates, the human relay, and
+//! Axis 5: the isMeta-USER TEMPLATE families - 18 named templates, the human relay, and
 //! the residue arm.
 //!
 //! These are the shapes with no field to key on: the harness writes text into the
@@ -105,7 +105,39 @@ pub(crate) const ROWS: &[Entry] = &[
         Human::Never,
     ),
     e(
+        // The FOUR redo nudges plus the edit-failed notice. The three rows below carry
+        // the same leaf and are separate shapes because the producer writes them on
+        // different EVENTS, from different branches, with their own texts - which is what
+        // a shape row records. What they share is the leaf's whole domain: the harness
+        // continuing a turn the model did not finish, on its own instruction.
         Shape::IsMetaFamily("enforce-retry"),
+        Some(Class::EnforceRetry),
+        Gate::Default,
+        true,
+        Human::Never,
+    ),
+    e(
+        // The safety classifier stopped the response mid-turn. TWO texts, the second the
+        // first plus a sentence about a call that was already running.
+        Shape::IsMetaFamily("classifier-stop"),
+        Some(Class::EnforceRetry),
+        Gate::Default,
+        true,
+        Human::Never,
+    ),
+    e(
+        // The response hit the output-token cap and is told to resume mid-thought.
+        Shape::IsMetaFamily("output-limit"),
+        Some(Class::EnforceRetry),
+        Gate::Default,
+        true,
+        Human::Never,
+    ),
+    e(
+        // The stream died with the response incomplete. TWO texts, chosen by LANE: a
+        // main lane resumes from where the text stops, a subagent lane writes the whole
+        // answer again because only its next message is delivered.
+        Shape::IsMetaFamily("stream-cutoff"),
         Some(Class::EnforceRetry),
         Gate::Default,
         true,

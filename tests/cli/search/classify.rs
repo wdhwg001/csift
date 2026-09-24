@@ -323,3 +323,4 @@ fn an_assistant_turn_with_text_and_an_image_is_one_hit() {
 }
 
 mod comm;
+mod continuation;

@@ -293,17 +293,71 @@ pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
 /// records two projects roots hold - and the arm above claims each of those.
 pub const EDIT_RETRY_MARKER: &str = "The last Edit failed because the target file was modified";
 
-/// The harness's other REDO NUDGES (`harness.enforce.retry`), each an exact content
-/// string rather than a prefix: Claude Code's own recogniser tests them with an equality
-/// over an array of four, so csift mirrors that rather than widening to a prefix match.
-/// Read verbatim from the constant block the harness's own recogniser consumes,
-/// which is why these are WHOLE texts and are matched by equality.
-pub const RETRY_NUDGE_TEXTS: &[&str] = &[
+/// The harness's TURN CONTINUATIONS (`harness.enforce.retry`): the whole messages it
+/// writes into a turn the model did not finish, telling it how to carry on. NINE texts,
+/// eight of them whole literals here and the ninth built from one of those eight by
+/// [`is_turn_continuation`], which is the predicate every caller asks.
+///
+/// ONE constant block in the harness holds all nine and ONE array collects them; that
+/// array's single consumer is the harness's own "is this an isMeta record I wrote"
+/// predicate, which tests membership by EQUALITY. So these are WHOLE texts matched by
+/// equality here too, never prefixes: each is the complete body of its record, and a
+/// prefix match would claim any longer message that happens to open with one.
+///
+/// The nine split into four events, which is also how the shape inventory rows them:
+///
+/// - FOUR REDO NUDGES - the response produced no usable tool call, so re-issue it.
+/// - THE CLASSIFIER STOP - a safety classifier stopped the response mid-turn; the turn
+///   continues once on the same model and the model must not reproduce the stopped
+///   content. Two forms: the plain one, and the plain one plus a sentence about a call
+///   that was already running when the stop landed, which the writer picks when at least
+///   one call had started. The second is built by concatenation from the first, so the
+///   two share their whole opening and only equality tells them apart.
+/// - THE OUTPUT-TOKEN LIMIT - the response hit the output cap, so resume mid-thought.
+/// - THE MID-STREAM CUT-OFF - the stream died with the response incomplete. Two forms,
+///   chosen by LANE: a main lane is told to resume from where the text stops, a subagent
+///   lane that only its next message is delivered and to write the whole answer again.
+///
+/// Five of the nine carry the em dash the harness writes; a literal edited to an ASCII
+/// hyphen matches no record at all.
+pub const TURN_CONTINUATION_TEXTS: &[&str] = &[
     "The previous response failed to produce a valid tool call. Please retry the tool call now.",
     "Your tool call was malformed and could not be parsed. Please retry.",
     "[Your previous response had no visible output. Please continue and produce a user-visible response.]",
     "The PermissionDenied hook indicated you may retry this tool call.",
+    CLASSIFIER_STOP_TEXT,
+    "Output token limit hit. Resume directly \u{2014} no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.",
+    "Your response above was cut off mid-stream. Resume directly from where it stops \u{2014} no apology, no recap. If none of it survived, answer the request from the start.",
+    "Your response above was cut off mid-stream and only your next message is delivered. Write the complete response again from the start \u{2014} no apology, no mention of the cut-off.",
 ];
+
+/// The CLASSIFIER-STOP continuation's plain form - see [`TURN_CONTINUATION_TEXTS`].
+const CLASSIFIER_STOP_TEXT: &str = "Your response above was stopped by a safety classifier \u{2014} this is not a tool or API error. The rest of it was withheld, and tool calls in it that had not finished did not run. Do not produce that content again, even reworded.";
+
+/// What the CLASSIFIER-STOP continuation APPENDS when a call was already running - see
+/// [`TURN_CONTINUATION_TEXTS`].
+///
+/// The ninth text is the plain form plus this tail, which is how the harness builds it:
+/// one constant, and the longer one concatenated from it. Stored as the TAIL rather than
+/// as a tenth whole literal for the same reason - a second full copy of the plain
+/// sentence would go stale on its own the first time either is corrected, and the copy
+/// that stopped matching would look exactly like the one that still does.
+const CLASSIFIER_STOP_INTERRUPTED_TAIL: &str = " Exception: a tool call whose result reads \"Interrupted\" was already running when the response was stopped; it may have partially or fully completed.";
+
+/// True when `text` is one of the harness's nine TURN CONTINUATIONS
+/// ([`TURN_CONTINUATION_TEXTS`]) - a WHOLE-message equality, never a prefix.
+///
+/// The ninth is the classifier stop's interrupted form, tested as its plain form plus
+/// [`CLASSIFIER_STOP_INTERRUPTED_TAIL`] so neither sentence is written twice. Tail
+/// EQUALITY, not a prefix test: a longer message merely opening with the pair is a record
+/// quoting the template rather than one of them.
+#[must_use]
+pub fn is_turn_continuation(text: &str) -> bool {
+    TURN_CONTINUATION_TEXTS.contains(&text)
+        || text
+            .strip_prefix(CLASSIFIER_STOP_TEXT)
+            .is_some_and(|tail| tail == CLASSIFIER_STOP_INTERRUPTED_TAIL)
+}
 
 /// The three OTHER enforcement sentinels, each the first token of its template's content
 /// (`harness.enforce.{structured-output, brief, handback}`). The structured-output and

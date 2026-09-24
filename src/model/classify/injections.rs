@@ -104,21 +104,24 @@ pub(crate) fn classify(rec: &Record, s: &str) -> Option<Class> {
     if at_start.starts_with(LOCAL_COMMAND_CAVEAT_PREFIX) {
         return Some(Class::CommandCaveat);
     }
-    // harness.enforce.retry: a redo nudge telling the model to re-issue a call. This
-    // arm is the edit-failed-retry notice, and it is anchored like every other template
-    // arm. The notice's own carrier is a failed tool's RESULT text, not a standalone
-    // isMeta prompt, so on this path an unanchored match can only reach a record whose
-    // body QUOTES it - which is the exact failure the content-start law names. Censused
-    // over two projects roots: of the isMeta user records carrying the notice anywhere,
-    // 0 of 1 and 0 of 2 carry it at content start, and every one of the three is a
-    // `Stop hook feedback:` body the arm above already claims.
+    // harness.enforce.retry: the harness continuing a turn the model did not finish, on
+    // its own instruction. This arm is the edit-failed-retry notice, and it is anchored
+    // like every other template arm. The notice's own carrier is a failed tool's RESULT
+    // text, not a standalone isMeta prompt, so on this path an unanchored match can only
+    // reach a record whose body QUOTES it - which is the exact failure the content-start
+    // law names. Censused over two projects roots: of the isMeta user records carrying
+    // the notice anywhere, 0 of 1 and 0 of 2 carry it at content start, and every one of
+    // the three is a `Stop hook feedback:` body the arm above already claims.
     if at_start.starts_with(EDIT_RETRY_MARKER) {
         return Some(Class::EnforceRetry);
     }
-    // harness.enforce.retry: the harness's other redo nudges. EXACT equality over the
-    // four texts, because Claude Code's own recogniser tests them that way - these are
-    // whole messages, not prefixes of a longer body.
-    if RETRY_NUDGE_TEXTS.contains(&at_start) {
+    // harness.enforce.retry: the harness's nine TURN CONTINUATIONS - the four redo
+    // nudges, the two classifier-stop forms, the output-token-limit resume and the two
+    // mid-stream cut-off forms. EXACT whole-message equality, because Claude Code's own
+    // recogniser tests its list that way and because these are complete bodies rather
+    // than openings. The leaf's domain is that producer's own list, so no member of it
+    // is left in the residue.
+    if is_turn_continuation(at_start) {
         return Some(Class::EnforceRetry);
     }
     // The three other ENFORCEMENT templates, each named by the sentinel its writer
