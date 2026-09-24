@@ -191,11 +191,22 @@ fn the_image_only_leaf_is_gated_on_the_authorship_flag() {
         out.stdout
     );
     // A DOCUMENT-only isMeta record is the other half of the same ruling: the arm names
-    // image blocks, so this one carries no leaf either rather than borrowing one.
+    // image blocks, so this one carries no leaf either rather than borrowing one. Its
+    // residue is named by the AUTHORSHIP flag rather than by the block, because who wrote
+    // a record is what a reader of a residue unit needs; the same record WITHOUT the flag
+    // is named by its block (the fetch-domain suite pins that half). The excerpt carries
+    // the flag verbatim, which is the pair the shape name and the excerpt make - it does
+    // NOT reliably carry the block type, because the per-value cut is 80 characters and a
+    // base64 source spends them.
     let doc = h.run(&["show", &at(SESS), "--line", "24"]);
     assert!(
-        doc.stdout.contains("? unmodeled: user/document"),
+        doc.stdout.contains("? unmodeled: user/isMeta"),
         "a document-only record carries no leaf by design:\n{}",
+        doc.stdout
+    );
+    assert!(
+        doc.stdout.contains("isMeta=true"),
+        "and the excerpt carries the flag the shape name reports:\n{}",
         doc.stdout
     );
 }

@@ -531,3 +531,64 @@ fn a_survival_target_with_no_physical_line_names_its_uuid() {
     assert_eq!(target.uuid.as_deref(), Some("u0"));
     assert_eq!(target.note.as_deref(), Some("not in this file"));
 }
+
+/// WHO WROTE a residue record outranks WHAT SHAPE it carries, on every combination of
+/// the two axes. Four content shapes crossed with the three authorship states, because
+/// the defect this pins was exactly one cell of that grid: the two paths that stamp a
+/// record `turnCompanion` write a text-BLOCK array, so asking the block first named the
+/// block on every companion residue they produce and named the flag on none of them.
+#[test]
+fn the_authorship_flags_name_a_residue_before_its_block_type() {
+    // (content as the record's `message.content`, what a FLAGLESS record is named by)
+    let shapes: &[(&str, Option<&str>)] = &[
+        (r#""a plain string""#, None),
+        (
+            r#"[{"type":"text","text":"a text block"}]"#,
+            Some("user/text"),
+        ),
+        (
+            r#"[{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"JVBER"}}]"#,
+            Some("user/document"),
+        ),
+        (
+            r#"[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBOR"}}]"#,
+            Some("user/image"),
+        ),
+    ];
+    for (content, bare) in shapes {
+        let line = |flags: &str| {
+            format!(
+                r#"{{"type":"user","uuid":"z1"{flags},"message":{{"role":"user","content":{content}}}}}"#
+            )
+        };
+        // The COMPANION stamp wins, with or without the meta flag beside it: it is the
+        // narrower statement about who wrote the record.
+        for flags in [
+            r#","turnCompanion":true"#,
+            r#","isMeta":true,"turnCompanion":true"#,
+        ] {
+            let l = line(flags);
+            assert_eq!(
+                unmodeled_shape(&rec(&l), Some(&l)).as_deref(),
+                Some("user/turnCompanion"),
+                "{content} with {flags}"
+            );
+        }
+        // The meta flag alone names itself.
+        let meta = line(r#","isMeta":true"#);
+        assert_eq!(
+            unmodeled_shape(&rec(&meta), Some(&meta)).as_deref(),
+            Some("user/isMeta"),
+            "{content} with isMeta"
+        );
+        // NEITHER flag: the block type is the answer, and a bare string has none - a
+        // record with no flag and no distinguishing block is a shape this helper names
+        // nothing for, which is the `None` the string row carries.
+        let none = line("");
+        assert_eq!(
+            unmodeled_shape(&rec(&none), Some(&none)).as_deref(),
+            *bare,
+            "{content} with no flag"
+        );
+    }
+}

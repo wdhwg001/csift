@@ -193,20 +193,26 @@ pub(crate) fn unmodeled_shape(rec: &Record, raw: Option<&str>) -> Option<String>
     // and, when it carries no distinguishing block, the authorship flag that makes it
     // the harness's own text rather than the operator's.
     if ty == "user" || ty == "assistant" {
-        if let Some(b) = distinguishing_block_type(raw) {
-            return Some(format!("{ty}/{b}"));
+        // THE AUTHORSHIP FLAGS DECIDE FIRST, and the block type only for a record
+        // carrying neither. WHO WROTE a record is what a reader of a residue unit needs:
+        // the content shape is on the line either way and the excerpt below prints it,
+        // while the flag is the one fact that separates the harness's own text from the
+        // operator's, and it is what every document about this shape names. Asking the
+        // BLOCK first hid it exactly where it mattered - the two paths that stamp a
+        // record `turnCompanion` write a text-BLOCK array, so every companion residue
+        // they produce read `user/text` and named no flag at all.
+        //
+        // `turnCompanion` leads `isMeta` because it is the MORE SPECIFIC fact: a record
+        // carrying it was written to accompany a turn, which is a narrower statement than
+        // being harness-written, and the records carrying both are the ones the companion
+        // word describes exactly.
+        if rec.is_turn_companion() {
+            return Some(format!("{ty}/turnCompanion"));
         }
-        // Either AUTHORSHIP flag names the shape, and `isMeta` leads because it is the
-        // one nearly every harness-written record carries. A record marked only
-        // `turnCompanion` is the other shape the harness writes - a command's expansion,
-        // or a message a tool returned beside its result - and naming the flag is what
-        // tells a reader which of the two they are looking at.
         if rec.is_meta.unwrap_or(false) {
             return Some(format!("{ty}/isMeta"));
         }
-        return rec
-            .is_turn_companion()
-            .then(|| format!("{ty}/turnCompanion"));
+        return distinguishing_block_type(raw).map(|b| format!("{ty}/{b}"));
     }
     // A record whose type IS modeled but whose own leaf is decided deeper: name the
     // deeper value, which is the part csift did not model.

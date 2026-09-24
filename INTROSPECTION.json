@@ -81832,7 +81832,7 @@
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "337-338",
+          "lines": "343-344",
           "snippet": "/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]"
         }
       ],
@@ -85849,12 +85849,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "257-258",
+          "lines": "263-264",
           "snippet": "/// What an elided member renders as, everywhere and always: nothing.\npub(crate) const ELIDED_PLACEHOLDER: &str = \"<elided>\";"
         },
         {
           "path": "src/commands/search/hit_facts.rs",
-          "lines": "290-303",
+          "lines": "296-309",
           "snippet": "fn elide_members(v: &serde_json::Value) -> serde_json::Value {\n    match v {\n        serde_json::Value::Object(map) => serde_json::Value::Object(\n            map.iter()\n                .map(|(k, val)| {\n                    let val = if ELIDED_MEMBERS.contains(&k.as_str()) {\n                        serde_json::json!(ELIDED_PLACEHOLDER)\n                    } else {\n                        elide_members(val)\n                    };\n                    (k.clone(), val)\n                })\n                .collect(),\n        ),"
         },
         {
