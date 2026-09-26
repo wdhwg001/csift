@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2488",
+          "lines": "2489",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -42522,6 +42522,11 @@
           "path": "src/model/classify/bookkeeping.rs",
           "lines": "53-63",
           "snippet": "    pub(crate) fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        Some(Class::UserQueued)\n    }"
+        },
+        {
+          "path": "src/commands/search/scan.rs",
+          "lines": "393",
+          "snippet": "                    (c == Class::UserQueued || c.category() == \"harness.bookkeeping\") && !reach(c)"
         }
       ],
       "states": [
@@ -42530,7 +42535,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "The input queue is dominated by automation rather than human text: of 9,190 content-bearing `queue-operation` lines the content-leading shape was `<task-notification>` 7,996, plain prose 1,141, a slash command 24 and `<agent-message from=\"...\">` about 29 - roughly 87% harness RIDERS, whose delivered twin already classifies as a harness notification or an inbound peer message.",
-          "depends": "csift labels only a human-typed queue line `user.queued`, refusing a rider by the same content-shape law that reparents the delivered user record; labelling every content-bearing queue line would inflate the apparent human queue traffic roughly sevenfold and duplicate records already labelled elsewhere.",
+          "depends": "csift labels only a human-typed queue line `user.queued`, refusing a rider by the same content-shape law that reparents the delivered user record; labelling every content-bearing queue line would inflate the apparent human queue traffic roughly sevenfold and duplicate records already labelled elsewhere. A rider carries whatever its `<task-notification>` summary says, so it can QUOTE a default-on needle's literal - the channel envelope's `csift-channel v1` above all - and that needle admitted it to a flagless scan, where it classified `harness.bookkeeping.queue` against the gate law. csift therefore takes a `user.queued` or `harness.bookkeeping.*` record back out of any scan that does not reach its own leaf, per record.",
           "instrument": "Extract content-bearing `queue-operation` lines and bucket them by the first non-whitespace token of `content`; counting rule = one bucket observation per content-bearing line (riders = a boundary-anchored notification or peer tag). Then `csift search '' <target> -t user.queued -c` must be far smaller than that denominator.",
           "probe": {
             "kind": "csift",
@@ -42545,7 +42550,9 @@
           "residue": [
             "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced in the 2.1.258 binary...): 9,275 content-bearing queue lines: <task-notification> 8,075 (87.0%), plain prose 1,146 (12.4%), <agent-message ...> 30, a bare slash command 24. Riders (task-notification + agent-message + teammate-message) = 8,105 = 87.4%. csift's corpus-wide `user.queued` census = 1,170 records, which equals 1,146 + 24 exactly - i.e. csift labels every non-rider content-bearing line and no rider. In one project directory taken alone the split was 685 riders / 62 human-shaped and csift's census for that directory was 62. The rider law is exact, not approximate: csift's independent census (1,170) equals the hand-computed non-rider count (1,170) to the record. 'roughly sevenfold' measures 7.9x. Counting rule: One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. csift census counts one record per labelled record.",
             "An earlier reading this pass kept rather than dropped: for each project directory separately: rg -NI --no-heading '\"type\":\"queue-operation\"' -g '*.jsonl' ~/.claude/projects/<PROJ> | python3 (bucket by the first non-whitespace token of `content`); then csift search '' -t user.queued --count-by label --max-count 0 (whole corpus) Counting rule: One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. csift census counts one record per labelled record.",
-            "An earlier reading this pass kept rather than dropped: attribution push: the producer leg traced in the 2.1.258 binary (trigger oWn - the backgrounded-shell exit handler (definition at offset 164973293), whose result.then calls Ddt (offset 164973935) @164973415; gate Ddt puts the <task-notification> XML on the SAME queue as a typed prompt, via Ra (enqueuePendingNotification) @164968580; gate Bn - the notification admission arm, which then calls the shared enqueue logger @162035411; writer o(op,content,reason) - the queue-operation line builder inside kun() @162031901), each excerpt re-read within 400 bytes of its offset; specimen leg: same corpus extraction as QT-002, bucketing the 9,447 content-bearing lines by the first non-whitespace token of `content`; then `csift search '' -t user.queued --count-by label --max-count 0` over the whole corpus (csift) Counting rule: three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. The csift census counts one record per labelled record."
+            "An earlier reading this pass kept rather than dropped: attribution push: the producer leg traced in the 2.1.258 binary (trigger oWn - the backgrounded-shell exit handler (definition at offset 164973293), whose result.then calls Ddt (offset 164973935) @164973415; gate Ddt puts the <task-notification> XML on the SAME queue as a typed prompt, via Ra (enqueuePendingNotification) @164968580; gate Bn - the notification admission arm, which then calls the shared enqueue logger @162035411; writer o(op,content,reason) - the queue-operation line builder inside kun() @162031901), each excerpt re-read within 400 bytes of its offset; specimen leg: same corpus extraction as QT-002, bucketing the 9,447 content-bearing lines by the first non-whitespace token of `content`; then `csift search '' -t user.queued --count-by label --max-count 0` over the whole corpus (csift) Counting rule: three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. The csift census counts one record per labelled record.",
+            "An earlier reading at this state: 9,447 content-bearing queue lines bucketed `<task-notification>` 8,242 (87.2%), plain prose 1,151 (12.2%), `<agent-message ...>` 30, bare slash command 24; riders (task-notification + agent-message + teammate-message) 8,272 = 87.6%; csift's `user.queued` census 1,175 records, exactly 1,151 + 24. Counting rule: one bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with `<task-notification`, `<agent-message` or `<teammate-message`. The census counts one record per labelled record.",
+            "The behavior's 9,190 content-bearing lines (7,996 `<task-notification>`) and this receipt's 18,306 (16,807) are two readings of the live root at two instants: the root grew between them, this receipt's file set includes the subagent sidecars, and the rider share reads about 87% and 91.8% respectively."
           ],
           "producer_chain": [
             {
@@ -42585,11 +42592,11 @@
           },
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "the producer leg traced in the 2.1.258 binary (trigger oWn - the backgrounded-shell exit handler (definition at offset 164973293), whose result.then calls Ddt (offset 164973935) @164973415; gate Ddt puts the <task-notification> XML on the SAME queue as a typed prompt, via Ra (enqueuePendingNotification) @164968580; gate Bn - the notification admission arm, which then calls the shared enqueue logger @162035411; writer o(op,content,reason) - the queue-operation line builder inside kun() @162031901), each excerpt re-read within 400 bytes of its offset; specimen leg: same corpus extraction as QT-002, bucketing the 9,447 content-bearing lines by the first non-whitespace token of `content`; then `csift search '' -t user.queued --count-by label --max-count 0` over the whole corpus (csift)",
-            "observed": "complete producer trace: trigger oWn - the backgrounded-shell exit handler (definition at offset 164973293), whose result.then calls Ddt (offset 164973935) @164973415; gate Ddt puts the <task-notification> XML on the SAME queue as a typed prompt, via Ra (enqueuePendingNotification) @164968580; gate Bn - the notification admission arm, which then calls the shared enqueue logger @162035411; writer o(op,content,reason) - the queue-operation line builder inside kun() @162031901. writer excerpt: function o(Br,br,Ts){let qi={type:\"queue-operation\",operation:Br,timestamp:new Date().toISOString(),sessionId:Q(),...br!==void 0&&{content:br},...Ts!==void 0&&{reason:Ts}};n(qi)}let d=[...e?.adopt??[]],f=O specimen: <task-notification> 8,242 (87.2%), plain prose 1,151 (12.2%), <agent-message ...> 30, bare slash command 24. Riders (task-notification + agent-message + teammate-message) = 8,272 = 87.6%. csift's user.queued census = 1,175 records, exactly 1,151 + 24 - it labels every non-rider content-bearing line",
-            "rule": "One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. The csift census counts one record per labelled record.",
-            "note": "The rider majority is a code path, not a tally: a completing background shell enqueues its <task-notification> through the same admission function and the same o(\"enqueue\",...) logger a typed prompt uses, so the queue log is dominated by whichever producer fires most."
+            "verdict": "refined",
+            "instrument": "python3 over every `*.jsonl` under the live projects root at `~/.claude/projects` (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory), parsing each `queue-operation` line, bucketing the content-bearing ones by the first non-whitespace token of `content`, and counting the ones whose raw line carries a default-on needle literal (`csift-channel v1`, `queued_command`, `structured_output`); `csift search \"\" --count-by label` over the root with no selector, on the build before the per-record gate and on the build carrying it; and `csift search \"\" -t user.queued --count-by label` over the root.",
+            "observed": "24,157 `queue-operation` lines, 18,306 content-bearing: `<task-notification>` 16,807 (91.8%), plain prose 1,413, `<agent-message ...>` 59, bare slash command 27. 99 riders, all `<task-notification>`, carry a default-needle literal: 13 `csift-channel v1`, 78 `queued_command`, 43 `structured_output`, overlapping. A flagless census reads 13 `harness.bookkeeping.queue` units on the build before the per-record gate - the 13 riders carrying the unquoted channel literal - and 0 on the build carrying it. `user.queued` under its own selector: 1,355 records over the resolved scope, duplicate transcript copies merged.",
+            "rule": "One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; a line counts under a needle when its raw bytes contain that literal; one observation per census record for the csift tallies.",
+            "note": "The quoted-needle admission was measured here first; the `queued_command` and `structured_output` needles are quoted value needles and match no escaped quote inside a rider's content, which is why only the 13 channel-literal riders reached a flagless scan."
           }
         }
       ]
@@ -50615,7 +50622,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "424-425",
+          "lines": "459-460",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -89200,7 +89207,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3512"
+          "lines": "3513"
         }
       ],
       "states": [

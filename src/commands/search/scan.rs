@@ -370,6 +370,41 @@ pub(crate) fn search_one_file(
         }
     }
 
+    // A DEFAULT-ON needle is a bare byte substring, so it also admits a NON-TRANSCRIPT line
+    // whose payload merely quotes it: a `queue-operation` rider carrying a
+    // `<task-notification>` that mentions the channel envelope, a `last-prompt` line whose
+    // prompt does. That line's own leaf is gated - `user.queued` and every
+    // `harness.bookkeeping.*` leaf is admitted only by a selector reaching it, or an address -
+    // so it survives only when THIS scan reaches ITS leaf, and otherwise leaves the record
+    // set exactly as the non-candidate arm would have left it: per record, like the
+    // attachment views above, because one queue line type carries both leaves. Only a line
+    // whose type is none of the four transcript types can carry either family, which keeps
+    // the check to a string compare on every other record.
+    if address.is_none() {
+        let mut demoted: Vec<crate::parse::SpineRow> = Vec::new();
+        records.retain(|k| {
+            let non_transcript = k
+                .rec
+                .r#type
+                .as_deref()
+                .is_some_and(|t| !matches!(t, "user" | "assistant" | "attachment" | "system"));
+            let unreached = non_transcript
+                && k.rec.promoted_class().is_some_and(|c| {
+                    (c == Class::UserQueued || c.category() == "harness.bookkeeping") && !reach(c)
+                });
+            // A `last-prompt` line is a chain input (the recorded leaf) and goes back as the
+            // spine row the byte walk lifts for it; every other bookkeeping type is no chain
+            // node and the walk lifts nothing for it, so it simply leaves the record set.
+            if unreached && crate::parse::SpineKind::from_type(k.rec.r#type.as_deref()).is_some() {
+                demoted.push(crate::parse::spine_from_record(k.line_no, &k.rec));
+            }
+            !unreached
+        });
+        if !demoted.is_empty() {
+            spine = merge_spine(std::mem::take(&mut spine), demoted);
+        }
+    }
+
     // Read the fired-prompt instants off the `system`/`scheduled_task_fire` lines the
     // gate above admitted, THEN put those lines back where a default scan had them. The join is
     // built first because the demote is what makes it unreachable afterwards.

@@ -412,3 +412,52 @@ fn a_view_leaf_reaches_its_records_without_opening_the_whole_attachment_gate() {
         );
     }
 }
+
+/// A DEFAULT-ON needle is a byte substring, so a non-transcript line that merely QUOTES one
+/// is admitted by it - a queue rider carrying a `<task-notification>` that mentions the
+/// channel envelope, the person's own queued text mentioning it, a `last-prompt` line whose
+/// prompt does. Each such line's leaf is still gated: a flagless scan emits none of them,
+/// and the selector naming each leaf emits exactly its own line.
+#[test]
+fn a_default_needle_quoted_in_a_non_transcript_line_opens_no_gate() {
+    let h = Home::new();
+    let lines = [
+        format!(
+            r#"{{"type":"user","uuid":"q1","timestamp":"2026-06-07T05:00:00.000Z","sessionId":"{SESS}","message":{{"role":"user","content":"zzquote kick off"}}}}"#
+        ),
+        format!(
+            r#"{{"type":"queue-operation","operation":"enqueue","timestamp":"2026-06-07T05:00:01.000Z","sessionId":"{SESS}","content":"<task-notification>\n<task-id>bzzq00001</task-id>\n<status>completed</status>\n<summary>zzquote a pulse that names [csift-channel v1 id=abc]</summary>\n</task-notification>"}}"#
+        ),
+        format!(
+            r#"{{"type":"queue-operation","operation":"enqueue","timestamp":"2026-06-07T05:00:02.000Z","sessionId":"{SESS}","content":"zzquote my own words about csift-channel v1"}}"#
+        ),
+        format!(
+            r#"{{"type":"last-prompt","sessionId":"{SESS}","lastPrompt":"zzquote read the csift-channel v1 header","leafUuid":"q1"}}"#
+        ),
+    ];
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &(lines.join("\n") + "\n"));
+    let flagless = census_keys(&h, &[]);
+    assert!(
+        !flagless
+            .iter()
+            .any(|k| k.starts_with("harness.bookkeeping.") || k == "user.queued"),
+        "a quoted needle opened a gated leaf on a flagless scan: {flagless:?}"
+    );
+    assert!(
+        flagless.contains(&"user.message".to_string()),
+        "{flagless:?}"
+    );
+    // The fixture holds ONE line per leaf, so naming a leaf and finding it is the count.
+    for leaf in [
+        "harness.bookkeeping.queue",
+        "user.queued",
+        "harness.bookkeeping.last-prompt",
+    ] {
+        let keys = census_keys(&h, &["-t", leaf]);
+        assert_eq!(
+            keys,
+            vec![leaf.to_string()],
+            "`-t {leaf}` emits its own line"
+        );
+    }
+}

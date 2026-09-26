@@ -1033,6 +1033,13 @@ surface change bumps the PATCH.
   headers use - a delta's top-level `timestamp` and a snapshot's nested
   `snapshot.timestamp`, the only instant that line carries - and the UTC string stays
   matchable in the unit's verbatim JSON body (claim QT-025).
+- **A queue rider that quoted the channel envelope reached a flagless scan.** The
+  csift-channel keep admits any line carrying `csift-channel v1`, and a `queue-operation`
+  rider carries whatever its `<task-notification>` summary says, so a pulse that mentioned
+  the envelope surfaced as `harness.bookkeeping.queue` with no `-t` at all - 13 units on
+  one projects root. A `user.queued` or `harness.bookkeeping.*` record now survives only a
+  scan that reaches its own leaf; `-t harness.bookkeeping.queue` (or the family glob)
+  still emits the line, and an address still renders it (claim QT-005).
 
 ### Performance
 
