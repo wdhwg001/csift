@@ -44,7 +44,8 @@ pub(crate) fn classify(line_type: &str) -> Option<Class> {
 
 impl Record {
     /// `user.queued` iff the queue line carries the HUMAN's text. The queue also
-    /// carries harness riders - a `<task-notification>` pulse or a peer message - whose
+    /// carries harness riders - a `<task-notification>` pulse, a peer message, or the
+    /// notice the harness writes when background agents are stopped from the UI - whose
     /// delivered twin already classifies `harness.notification.*` /
     /// `agent.communication.inbox`; the same content-shape law that reparents those
     /// user records applies, so a rider is never the human here. A rider and a
@@ -57,6 +58,13 @@ impl Record {
         }
         let at_boundary = text.trim_start();
         if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {
+            return None;
+        }
+        // The stopped-agents notice is handed to the same queue as a typed prompt, and the
+        // queue line keeps nothing that tells the two apart: its key set is the one a
+        // person's line carries. Its TEXT is a fixed harness template, which is what the
+        // delivered user record is refused by, so the queue copy is refused by it too.
+        if is_agents_stopped_notice(text) {
             return None;
         }
         Some(Class::UserQueued)

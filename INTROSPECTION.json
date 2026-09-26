@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2495",
+          "lines": "2496",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -42079,7 +42079,7 @@
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "53-57",
+          "lines": "54-58",
           "snippet": "    fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }"
         }
       ],
@@ -42520,8 +42520,8 @@
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "53-63",
-          "snippet": "    pub(crate) fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        Some(Class::UserQueued)\n    }"
+          "lines": "54-71",
+          "snippet": "    pub(crate) fn queued_class(&self) -> Option<Class> {\n        let text = self.content_str()?;\n        if text.trim().is_empty() {\n            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        // The stopped-agents notice is handed to the same queue as a typed prompt, and the\n        // queue line keeps nothing that tells the two apart: its key set is the one a\n        // person's line carries. Its TEXT is a fixed harness template, which is what the\n        // delivered user record is refused by, so the queue copy is refused by it too.\n        if is_agents_stopped_notice(text) {\n            return None;\n        }\n        Some(Class::UserQueued)\n    }"
         },
         {
           "path": "src/commands/search/scan.rs",
@@ -42535,7 +42535,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "The input queue is dominated by automation rather than human text: of 9,190 content-bearing `queue-operation` lines the content-leading shape was `<task-notification>` 7,996, plain prose 1,141, a slash command 24 and `<agent-message from=\"...\">` about 29 - roughly 87% harness RIDERS, whose delivered twin already classifies as a harness notification or an inbound peer message.",
-          "depends": "csift labels only a human-typed queue line `user.queued`, refusing a rider by the same content-shape law that reparents the delivered user record; labelling every content-bearing queue line would inflate the apparent human queue traffic roughly sevenfold and duplicate records already labelled elsewhere. A rider carries whatever its `<task-notification>` summary says, so it can QUOTE a default-on needle's literal - the channel envelope's `csift-channel v1` above all - and that needle admitted it to a flagless scan, where it classified `harness.bookkeeping.queue` against the gate law. csift therefore takes a `user.queued` or `harness.bookkeeping.*` record back out of any scan that does not reach its own leaf, per record.",
+          "depends": "csift labels only a human-typed queue line `user.queued`, refusing a rider by the same content-shape law that reparents the delivered user record; labelling every content-bearing queue line would inflate the apparent human queue traffic roughly sevenfold and duplicate records already labelled elsewhere. A rider carries whatever its `<task-notification>` summary says, so it can QUOTE a default-on needle's literal - the channel envelope's `csift-channel v1` above all - and that needle admitted it to a flagless scan, where it classified `harness.bookkeeping.queue` against the gate law. csift therefore takes a `user.queued` or `harness.bookkeeping.*` record back out of any scan that does not reach its own leaf, per record. The stopped-agents notice is a rider of the same kind: the harness hands it to the pending-notification queue (CLS-008 traces the enqueue), so a `queue-operation` line carries the template word for word while its key set is the one a person's line carries (QT-006). csift refuses it `user.queued` by the template predicate its delivered twin is refused by, and it takes `harness.bookkeeping.queue` like every other rider.",
           "instrument": "Extract content-bearing `queue-operation` lines and bucket them by the first non-whitespace token of `content`; counting rule = one bucket observation per content-bearing line (riders = a boundary-anchored notification or peer tag). Then `csift search '' <target> -t user.queued -c` must be far smaller than that denominator.",
           "probe": {
             "kind": "csift",
@@ -42552,7 +42552,8 @@
             "An earlier reading this pass kept rather than dropped: for each project directory separately: rg -NI --no-heading '\"type\":\"queue-operation\"' -g '*.jsonl' ~/.claude/projects/<PROJ> | python3 (bucket by the first non-whitespace token of `content`); then csift search '' -t user.queued --count-by label --max-count 0 (whole corpus) Counting rule: One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. csift census counts one record per labelled record.",
             "An earlier reading this pass kept rather than dropped: attribution push: the producer leg traced in the 2.1.258 binary (trigger oWn - the backgrounded-shell exit handler (definition at offset 164973293), whose result.then calls Ddt (offset 164973935) @164973415; gate Ddt puts the <task-notification> XML on the SAME queue as a typed prompt, via Ra (enqueuePendingNotification) @164968580; gate Bn - the notification admission arm, which then calls the shared enqueue logger @162035411; writer o(op,content,reason) - the queue-operation line builder inside kun() @162031901), each excerpt re-read within 400 bytes of its offset; specimen leg: same corpus extraction as QT-002, bucketing the 9,447 content-bearing lines by the first non-whitespace token of `content`; then `csift search '' -t user.queued --count-by label --max-count 0` over the whole corpus (csift) Counting rule: three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with <task-notification, <agent-message or <teammate-message. The csift census counts one record per labelled record.",
             "An earlier reading at this state: 9,447 content-bearing queue lines bucketed `<task-notification>` 8,242 (87.2%), plain prose 1,151 (12.2%), `<agent-message ...>` 30, bare slash command 24; riders (task-notification + agent-message + teammate-message) 8,272 = 87.6%; csift's `user.queued` census 1,175 records, exactly 1,151 + 24. Counting rule: one bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; 'rider' = content begins with `<task-notification`, `<agent-message` or `<teammate-message`. The census counts one record per labelled record.",
-            "The behavior's 9,190 content-bearing lines (7,996 `<task-notification>`) and this receipt's 18,306 (16,807) are two readings of the live root at two instants: the root grew between them, this receipt's file set includes the subagent sidecars, and the rider share reads about 87% and 91.8% respectively."
+            "The behavior's 9,190 content-bearing lines (7,996 `<task-notification>`) and this receipt's 18,306 (16,807) are two readings of the live root at two instants: the root grew between them, this receipt's file set includes the subagent sidecars, and the rider share reads about 87% and 91.8% respectively.",
+            "An earlier reading at this state, before the stopped-agents notice was read as a rider: 24,157 `queue-operation` lines, 18,306 content-bearing: `<task-notification>` 16,807 (91.8%), plain prose 1,413, `<agent-message ...>` 59, bare slash command 27. 99 riders, all `<task-notification>`, carry a default-needle literal: 13 `csift-channel v1`, 78 `queued_command`, 43 `structured_output`, overlapping. A flagless census reads 13 `harness.bookkeeping.queue` units on the build before the per-record gate - the 13 riders carrying the unquoted channel literal - and 0 on the build carrying it. `user.queued` under its own selector: 1,355 records over the resolved scope, duplicate transcript copies merged. Instrument: python3 over every `*.jsonl` under the live projects root at `~/.claude/projects` (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory), parsing each `queue-operation` line, bucketing the content-bearing ones by the first non-whitespace token of `content`, and counting the ones whose raw line carries a default-on needle literal (`csift-channel v1`, `queued_command`, `structured_output`); `csift search \"\" --count-by label` over the root with no selector, on the build before the per-record gate and on the build carrying it; and `csift search \"\" -t user.queued --count-by label` over the root. Counting rule: One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; a line counts under a needle when its raw bytes contain that literal; one observation per census record for the csift tallies."
           ],
           "producer_chain": [
             {
@@ -42593,10 +42594,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "python3 over every `*.jsonl` under the live projects root at `~/.claude/projects` (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory), parsing each `queue-operation` line, bucketing the content-bearing ones by the first non-whitespace token of `content`, and counting the ones whose raw line carries a default-on needle literal (`csift-channel v1`, `queued_command`, `structured_output`); `csift search \"\" --count-by label` over the root with no selector, on the build before the per-record gate and on the build carrying it; and `csift search \"\" -t user.queued --count-by label` over the root.",
-            "observed": "24,157 `queue-operation` lines, 18,306 content-bearing: `<task-notification>` 16,807 (91.8%), plain prose 1,413, `<agent-message ...>` 59, bare slash command 27. 99 riders, all `<task-notification>`, carry a default-needle literal: 13 `csift-channel v1`, 78 `queued_command`, 43 `structured_output`, overlapping. A flagless census reads 13 `harness.bookkeeping.queue` units on the build before the per-record gate - the 13 riders carrying the unquoted channel literal - and 0 on the build carrying it. `user.queued` under its own selector: 1,355 records over the resolved scope, duplicate transcript copies merged.",
-            "rule": "One bucket observation per content-bearing queue line, bucketed by the first non-whitespace token; a line counts under a needle when its raw bytes contain that literal; one observation per census record for the csift tallies.",
-            "note": "The quoted-needle admission was measured here first; the `queued_command` and `structured_output` needles are quoted value needles and match no escaped quote inside a rider's content, which is why only the 13 channel-literal riders reached a flagless scan."
+            "instrument": "python3 over every `*.jsonl` under two projects roots - the live root at `~/.claude/projects` and a snapshot root - (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory), each read whole and again without the measuring session's tree, bucketing every content-bearing `queue-operation` line as `<task-notification>`, a peer framing, the stopped-agents notice (either template at content start), an interrupt marker, a local-command stdout, a slash wrapper, or other text; then `csift search 'stopped by the user' -t user.queued --count-by label` over each root, on the build before the notice was refused and on the build refusing it; and the key set of the notice's queue lines against a person's.",
+            "observed": "Live root whole: `<task-notification>` 16,873, peer 62, stopped-agents notice 14 (9 files), other text 1,423, and 0 interrupt markers, local-command stdouts or slash wrappers; without the measuring session's tree 10,407 / 56 / 10 / 1,372. Snapshot root: 10,422 / 128 / 23 (18 files) / 1,649, the same both ways. `user.queued` carrying the notice: 13 records on the live root (14 lines, one transcript present under two project directories and merged) and 22 on the snapshot root on the build before; 0 on both on the build refusing it. The notice's queue line and a person's both carry exactly {type, operation, timestamp, sessionId, content}.",
+            "rule": "One bucket observation per content-bearing queue line, bucketed by its content's leading shape; one observation per census record for the csift tallies, duplicate transcript copies merged.",
+            "note": "The notice was the one harness template still reaching `user.queued`: every other synthetic user marker occurs on no queue line of either root."
           }
         }
       ]
@@ -42607,7 +42608,7 @@
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "58-61",
+          "lines": "59-62",
           "snippet": "        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }"
         }
       ],
@@ -42776,8 +42777,8 @@
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "56-62",
-          "snippet": "            return None;\n        }\n        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        Some(Class::UserQueued)"
+          "lines": "59-70",
+          "snippet": "        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }\n        // The stopped-agents notice is handed to the same queue as a typed prompt, and the\n        // queue line keeps nothing that tells the two apart: its key set is the one a\n        // person's line carries. Its TEXT is a fixed harness template, which is what the\n        // delivered user record is refused by, so the queue copy is refused by it too.\n        if is_agents_stopped_notice(text) {\n            return None;\n        }\n        Some(Class::UserQueued)"
         }
       ],
       "states": [
@@ -44931,7 +44932,7 @@
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "69-75",
+          "lines": "77-83",
           "snippet": "    pub fn promoted_class(&self) -> Option<Class> {\n        match self.r#type.as_deref()? {\n            \"queue-operation\" => self.queued_class().or(Some(Class::BookkeepingQueue)),\n            \"system\" => system::classify(self.subtype.as_deref()?),\n            other => classify(other),\n        }\n    }"
         },
         {
@@ -48086,7 +48087,7 @@
         },
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "65-69",
+          "lines": "73-77",
           "snippet": "    /// The single leaf a NON-MESSAGE line carries: the human's queued text, else the\n    /// bookkeeping leaf of its own line type, else the system leaf of its subtype.\n    /// `None` for a message record and for every line type that stays unmodeled.\n    #[must_use]\n    pub fn promoted_class(&self) -> Option<Class> {"
         }
       ],
@@ -48360,7 +48361,7 @@
       "code": [
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "80-85",
+          "lines": "88-93",
           "snippet": "    pub fn content_str(&self) -> Option<&str> {\n        match self.content.as_ref()? {\n            serde_json::Value::String(s) => Some(s.as_str()),\n            _ => None,\n        }\n    }"
         },
         {
@@ -80513,7 +80514,7 @@
         },
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "58-61",
+          "lines": "59-62",
           "snippet": "        let at_boundary = text.trim_start();\n        if at_boundary.starts_with(TASK_NOTIFICATION_PREFIX) || is_peer_message(text) {\n            return None;\n        }"
         }
       ],
@@ -83017,7 +83018,7 @@
         },
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "114-116",
+          "lines": "122-124",
           "snippet": "    pub(crate) fn checkpoint_close_ms(\n        line: &serde_json::Map<String, serde_json::Value>,\n    ) -> Option<i64> {"
         }
       ],
@@ -85658,7 +85659,7 @@
         },
         {
           "path": "src/model/classify/bookkeeping.rs",
-          "lines": "71",
+          "lines": "79",
           "snippet": "\"queue-operation\" => self.queued_class().or(Some(Class::BookkeepingQueue)),"
         }
       ],
@@ -89207,7 +89208,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3519"
+          "lines": "3520"
         }
       ],
       "states": [

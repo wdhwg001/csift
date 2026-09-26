@@ -1074,6 +1074,13 @@ surface change bumps the PATCH.
   `--from`. The prediction is decided partly from the relation between sender and
   receiver, so `whoami --to` now takes `--from` in `csift send`'s grammar (only with
   `--to`), and a subagent that names itself gets the answer a send from that lane gets.
+- **The stopped-agents notice on the input queue read as the person's text.** Claude
+  Code queues the `N background agents were stopped by the user: ...` notice the way it
+  queues a typed prompt, and csift labelled that queue line `user.queued` (13 records on
+  one live root, 22 on a snapshot) while its delivered twin was already
+  `harness.notification.subagent`. The line keeps no key a person's lacks, so the
+  template itself refuses it, the predicate the delivered record is refused by; it
+  takes `harness.bookkeeping.queue` like every other rider (claim QT-005).
 
 ### Performance
 

@@ -41,6 +41,22 @@ fn queue_riders_and_blanks_are_the_bookkeeping_leaf() {
         r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n<summary>done</summary>\n</task-notification>"}"#,
     );
     assert_eq!(l, vec![Class::BookkeepingQueue], "{l:?}");
+    // Nor is the notice the harness queues when background agents are stopped from the
+    // UI, in either template: its delivered twin is `harness.notification.subagent`.
+    for notice in [
+        r#"2 background agents were stopped by the user: \"Census the r...\", \"Chart the s...\"."#,
+        r#"Background agent \"Census the reef\" was stopped by the user."#,
+    ] {
+        let l = labels(&format!(
+            r#"{{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"{notice}"}}"#
+        ));
+        assert_eq!(l, vec![Class::BookkeepingQueue], "{notice}: {l:?}");
+    }
+    // A person who types the phrase mid-sentence is still the person.
+    let l = labels(
+        r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"why were 2 background agents stopped by the user?"}"#,
+    );
+    assert_eq!(l, vec![Class::UserQueued], "{l:?}");
     // Nor is a queued peer message.
     let l = labels(
         r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"<teammate-message teammate_id=\"lead\">go</teammate-message>"}"#,

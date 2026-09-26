@@ -405,3 +405,50 @@ fn zero_match_diagnosis_names_the_gate() {
 // this one, and both read the promoted fixture above through `use super::*`.
 mod bookkeeping;
 mod system;
+
+#[test]
+fn the_stopped_agents_notice_on_the_queue_is_a_rider_not_the_person() {
+    // Claude Code hands the stopped-agents notice to the input queue exactly as it hands a
+    // typed prompt, so the queue line and its delivered user record both carry the template.
+    // The user record is `harness.notification.subagent`; the queue line is a rider, so it
+    // takes the queue's bookkeeping leaf and never the person's `user.queued`.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"survey the harbor"}}"#, "\n",
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-06-07T05:10:00.000Z","sessionId":"s","content":"2 background agents were stopped by the user: \"Census the r...\", \"Chart the s...\"."}"#, "\n",
+            r#"{"type":"user","uuid":"k1","parentUuid":"u1","timestamp":"2026-06-07T05:10:00.200Z","message":{"role":"user","content":"2 background agents were stopped by the user: \"Census the r...\", \"Chart the s...\"."}}"#, "\n",
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-06-07T05:11:00.000Z","sessionId":"s","content":"and why were they stopped by the user?"}"#, "\n",
+        ),
+    );
+    let census = h.run(&[
+        "search",
+        "stopped by the user",
+        &at(SESS),
+        "--count-by",
+        "label",
+        "-t",
+        "user.queued",
+        "-t",
+        "harness.bookkeeping.queue",
+        "-t",
+        "harness.notification.subagent",
+    ]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    for want in [
+        "1  user.queued",
+        "1  harness.bookkeeping.queue",
+        "1  harness.notification.subagent",
+    ] {
+        assert!(census.stdout.contains(want), "{want}:\n{}", census.stdout);
+    }
+    let person = h.run(&["search", "stopped", &at(SESS), "-t", "user.queued"]);
+    assert!(person.success, "stderr: {}", person.stderr);
+    assert!(
+        person.stdout.contains("and why were they stopped")
+            && !person.stdout.contains("2 background agents"),
+        "only the person's queued text is user.queued:\n{}",
+        person.stdout
+    );
+}
