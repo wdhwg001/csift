@@ -31,7 +31,8 @@ use super::*;
                    CLIPPED, within a char budget (live-tail peek is `show --turn`)\n  \
           image    list + extract the inline images a session carries (pastes/screenshots)\n  \
           status   one-shot LIVE verdict on a session: running / waiting-children /\n           \
-                   waiting-hitl / idle-eot / stale-dead / unknown, with the evidence named\n  \
+                   waiting-hitl / idle-background-open / idle-eot / stale-dead /\n           \
+                   unknown, with the evidence named\n  \
           wait     block until a session condition fires (stop / hitl / auq / notification /\n           \
                    tool: / write: / verdict:), exit 124 on --timeout\n  \
           send     queue a message for ONE lane on the csift channel (a user-installed\n           \

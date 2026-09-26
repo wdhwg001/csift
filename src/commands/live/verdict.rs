@@ -1,35 +1,45 @@
-//! The six-verdict join: registry -> tail -> pid, sidecars covering HITL.
+//! The seven-verdict join: registry -> tail -> pid, sidecars covering HITL.
 
 use super::*;
 
-/// The closed verdict set. Wire slugs are the kebab forms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Verdict {
-    Running,
-    WaitingChildren,
-    WaitingHitl,
+/// Declares the closed verdict set ONCE: the enum, each variant's wire slug and the
+/// test-only [`Verdict::ALL`] all come from the one list below, so a variant cannot exist
+/// without its slug or be missing from the set the manuals are held to.
+macro_rules! verdicts {
+    ($( $(#[$doc:meta])* $variant:ident => $slug:literal, )+) => {
+        /// The closed verdict set. Wire slugs are the kebab forms.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub(crate) enum Verdict {
+            $( $(#[$doc])* $variant, )+
+        }
+
+        impl Verdict {
+            #[must_use]
+            pub(crate) fn slug(self) -> &'static str {
+                match self {
+                    $( Verdict::$variant => $slug, )+
+                }
+            }
+
+            /// EVERY verdict, in declaration order. `cfg(test)` because the help tests
+            /// are its only reader: production reaches a verdict through the join.
+            #[cfg(test)]
+            pub(crate) const ALL: &'static [Verdict] = &[ $( Verdict::$variant, )+ ];
+        }
+    };
+}
+
+verdicts! {
+    Running => "running",
+    WaitingChildren => "waiting-children",
+    WaitingHitl => "waiting-hitl",
     /// The turn ended (a clean end_turn) but N background task(s) the lens counts have
     /// not returned - neither running nor stopped: by design (a dev server, a watcher)
     /// or not, csift cannot tell. Never satisfies `--until stop`.
-    IdleBackgroundOpen,
-    IdleEot,
-    StaleDead,
-    Unknown,
-}
-
-impl Verdict {
-    #[must_use]
-    pub(crate) fn slug(self) -> &'static str {
-        match self {
-            Verdict::Running => "running",
-            Verdict::WaitingChildren => "waiting-children",
-            Verdict::WaitingHitl => "waiting-hitl",
-            Verdict::IdleBackgroundOpen => "idle-background-open",
-            Verdict::IdleEot => "idle-eot",
-            Verdict::StaleDead => "stale-dead",
-            Verdict::Unknown => "unknown",
-        }
-    }
+    IdleBackgroundOpen => "idle-background-open",
+    IdleEot => "idle-eot",
+    StaleDead => "stale-dead",
+    Unknown => "unknown",
 }
 
 /// One evidence row: which surface said what, and how old that statement is.

@@ -259,7 +259,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "403-412",
+          "lines": "413-422",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         }
       ],
@@ -3177,12 +3177,12 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "11-14",
-          "snippet": "    /// The turn ended (a clean end_turn) but N background task(s) the lens counts have\n    /// not returned - neither running nor stopped: by design (a dev server, a watcher)\n    /// or not, csift cannot tell. Never satisfies `--until stop`.\n    IdleBackgroundOpen,"
+          "lines": "36-39",
+          "snippet": "    /// The turn ended (a clean end_turn) but N background task(s) the lens counts have\n    /// not returned - neither running nor stopped: by design (a dev server, a watcher)\n    /// or not, csift cannot tell. Never satisfies `--until stop`.\n    IdleBackgroundOpen => \"idle-background-open\","
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "403-412",
+          "lines": "413-422",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         },
         {
@@ -3263,7 +3263,7 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "403-412",
+          "lines": "413-422",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         }
       ],
@@ -3730,7 +3730,7 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "399-412",
+          "lines": "409-422",
           "snippet": "    } else if running_shape {\n        Verdict::Running\n    } else if children.live_count > 0 {\n        Verdict::WaitingChildren\n    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         },
         {
@@ -3740,7 +3740,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "353-358",
+          "lines": "363-368",
           "snippet": "    let eot_shape = main_tail.unreturned_use.is_none()\n        && (main_tail\n            .last_stop_reason\n            .as_deref()\n            .is_some_and(|s| s == \"end_turn\")\n            || registry_shell);"
         }
       ],
@@ -16712,12 +16712,12 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "257-268",
+          "lines": "267-278",
           "snippet": "            ),\n        };\n        evidence.push(Evidence {\n            surface: \"pid\",\n            value: v,\n            age_secs: None,\n        });\n        if let Some(n) = note {\n            notes.push(n);\n        }\n    }\n    match &main_tail.unreturned_use {"
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "296-303",
+          "lines": "306-313",
           "snippet": "                    String::new()\n                }\n            ),\n            age_secs: None,\n        });\n    }\n    for p in pending_elicitations {\n        evidence.push(Evidence {"
         }
       ],
@@ -17508,7 +17508,7 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "349-352",
+          "lines": "359-362",
           "snippet": "    // never a running shape. `busy` is the only registry running signal.\n    let registry_status = registry.and_then(|r| r.status.as_deref());\n    let registry_shell = registry_status == Some(\"shell\");\n    let running_shape = main_tail.unreturned_use.is_some() || registry_status == Some(\"busy\");"
         }
       ],
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2484",
+          "lines": "2485",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -27609,7 +27609,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "332-342",
+          "lines": "342-352",
           "snippet": "    // Two HITL legs beside the sidecar: the registry's `waiting` status (the binary sets\n    // it whenever a dialog blocks the session: a question, a permission prompt, a plan\n    // approval, a sandbox/worker request), and an unreturned AskUserQuestion/ExitPlanMode\n    // at the tail. Whether a pending dialog's record reaches disk is a TIMING outcome of\n    // the persistence frontier (the binary has no question-count branch and the frontier\n    // is unchanged across builds): measured live, a multi-question ask was on disk while\n    // its dialog was open and a single-question ask was not, so the sidecar stays the\n    // instrument for the shape that stays buffered (ledger ELI-009).\n    let registry_waiting = registry\n        .and_then(|r| r.status.as_deref())\n        .is_some_and(|s| s == \"waiting\");"
         }
       ],
@@ -27723,12 +27723,12 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "347-352",
+          "lines": "357-362",
           "snippet": "    // The registry's `shell` status is IDLE WITH A BACKGROUND SHELL RUNNING (the binary\n    // computes `idle` and then relabels it `shell` while a local_bash task is open) -\n    // never a running shape. `busy` is the only registry running signal.\n    let registry_status = registry.and_then(|r| r.status.as_deref());\n    let registry_shell = registry_status == Some(\"shell\");\n    let running_shape = main_tail.unreturned_use.is_some() || registry_status == Some(\"busy\");"
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "353-358",
+          "lines": "363-368",
           "snippet": "    let eot_shape = main_tail.unreturned_use.is_none()\n        && (main_tail\n            .last_stop_reason\n            .as_deref()\n            .is_some_and(|s| s == \"end_turn\")\n            || registry_shell);"
         }
       ],
@@ -27839,7 +27839,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "216-218",
+          "lines": "226-228",
           "snippet": "            age_secs: r\n                .status_updated_at_ms\n                .map(|ms| (jiff::Timestamp::now().as_millisecond() - ms).max(0) / 1000),"
         }
       ],
@@ -28083,7 +28083,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "220-225",
+          "lines": "230-235",
           "snippet": "    } else if is_subagent_target {\n        notes.push(\n            \"the registry covers top-level interactive sessions only - a subagent has no \\\n             row; verdict from tail + children evidence\"\n                .to_string(),\n        );"
         }
       ],
@@ -29147,7 +29147,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "331",
+          "lines": "341",
           "snippet": "    let dead = matches!(liveness, Some(PidLiveness::Dead | PidLiveness::Reused));"
         }
       ],
@@ -31184,7 +31184,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "403-412",
+          "lines": "413-422",
           "snippet": "    } else if eot_shape && background.open_counted() > 0 {\n        notes.push(\n            \"the turn ended, but background task(s) have not returned - by design (a dev \\\n             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker, and Claude Code reconciles only at \\\n             the next session start. `--background-since` / `--ignore-background` narrow \\\n             what counts; kill a dead one with the tool or the shell\"\n                .to_string(),\n        );\n        Verdict::IdleBackgroundOpen"
         }
       ],
@@ -33549,7 +33549,7 @@
       "code": [
         {
           "path": "src/cli/root.rs",
-          "lines": "210-212",
+          "lines": "211-213",
           "snippet": "          Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\\n  \\\n        Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\\n  \\\n        it; csift can only read what survives.\\n\\n\\"
         },
         {
@@ -34558,12 +34558,12 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "129-133",
+          "lines": "139-143",
           "snippet": "/// Join the surfaces into one verdict. Precedence (each step names its evidence):\n/// dead process > blocked-on-human > tool-in-flight > live children > open background\n/// task under the lens > clean EoT > unknown. Never guesses: a shape the rules cannot\n/// rank is `unknown` with the disagreement in the evidence rows.\npub(crate) fn assess_full("
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "415-425",
+          "lines": "425-435",
           "snippet": "    } else if main_tail.records_seen == 0 {\n        notes.push(\"no records readable at the tail\".to_string());\n        Verdict::Unknown\n    } else {\n        notes.push(format!(\n            \"tail shape unranked: no pending call, last stop_reason {} - not an end_turn, \\\n             not provably running\",\n            main_tail.last_stop_reason.as_deref().unwrap_or(\"(none)\")\n        ));\n        Verdict::Unknown\n    }"
         }
       ],
@@ -43251,8 +43251,8 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "11-14",
-          "snippet": "    /// The turn ended (a clean end_turn) but N background task(s) the lens counts have\n    /// not returned - neither running nor stopped: by design (a dev server, a watcher)\n    /// or not, csift cannot tell. Never satisfies `--until stop`.\n    IdleBackgroundOpen,"
+          "lines": "36-39",
+          "snippet": "    /// The turn ended (a clean end_turn) but N background task(s) the lens counts have\n    /// not returned - neither running nor stopped: by design (a dev server, a watcher)\n    /// or not, csift cannot tell. Never satisfies `--until stop`.\n    IdleBackgroundOpen => \"idle-background-open\","
         }
       ],
       "states": [
@@ -43482,7 +43482,7 @@
       "code": [
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "353-358",
+          "lines": "363-368",
           "snippet": "    let eot_shape = main_tail.unreturned_use.is_none()\n        && (main_tail\n            .last_stop_reason\n            .as_deref()\n            .is_some_and(|s| s == \"end_turn\")\n            || registry_shell);"
         }
       ],
@@ -69961,7 +69961,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "246-253",
+          "lines": "256-263",
           "snippet": "            PidLiveness::ForeignDomain(d) => (\n                format!(\"row from another pid domain ({d})\"),\n                Some(\n                    \"the registry row was written in another pid domain (another machine \\\n                     or OS): its pid means nothing here - stale-dead is undecidable\"\n                        .to_string(),\n                ),\n            ),"
         }
       ],
@@ -70347,7 +70347,7 @@
         },
         {
           "path": "src/commands/live/verdict.rs",
-          "lines": "254-257",
+          "lines": "264-267",
           "snippet": "            PidLiveness::Unavailable => (\n                \"probe unavailable on this host\".to_string(),\n                Some(\"pid liveness cannot be checked here - stale-dead is undecidable\".to_string()),\n            ),"
         }
       ],
@@ -83178,7 +83178,7 @@
         {
           "path": "src/commands/live/verdict.rs",
           "snippet": "    pub(crate) fn attach_checkpoint(&mut self, cp: Option<CheckpointTail>) {",
-          "lines": "81"
+          "lines": "91"
         }
       ],
       "states": [
@@ -89194,7 +89194,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3508"
+          "lines": "3509"
         }
       ],
       "states": [

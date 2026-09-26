@@ -448,7 +448,7 @@ commands/live.rs + live/
                    #   reply excerpts), activity (the wait census), tasks (the harness task list),
                    #   registry (sessions/<pid>.json
                    #   + ps pid probe), tail (bounded tail state machine), children
-                   #   (subagent tails + incremental journal), verdict (six-verdict join),
+                   #   (subagent tails + incremental journal), verdict (seven-verdict join),
                    #   conditions (--until grammar), status, wait (poll loop), render
 commands/live/channel/
                    # the CHANNEL. Data layer: types (message + closed enums + ids +

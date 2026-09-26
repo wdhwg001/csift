@@ -1008,6 +1008,11 @@ surface change bumps the PATCH.
   it through its own value needle (a session carrying two structured answers counts 2 under
   the leaf in a plain `--count-by label`), so the tree now says `[scan/needle]`. A test
   holds every leaf whose inventory rows all carry the default-needle gate to that word.
+- **The root help listed six `status` verdicts.** Its `status` entry named running,
+  waiting-children, waiting-hitl, idle-eot, stale-dead and unknown, and left out
+  `idle-background-open`, the verdict for a turn that ended with background tasks still
+  open, which `status --help` and the verdict enum both carry. The entry names all seven,
+  and a test holds it and the `status --help` verdict paragraph to the enum's own set.
 
 ### Performance
 
