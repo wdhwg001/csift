@@ -988,6 +988,20 @@ surface change bumps the PATCH.
   same sessions, and the dashed spelling is accepted from the first dash on (claim
   PATH-016). Uniqueness is unchanged: two ids sharing the digits are still an error naming
   both.
+- **A cost checkpoint said it could not find the two numbers it carries.** The
+  `harness.bookkeeping.cost` fact read `startTime` as a string holding an ISO instant, and
+  the harness writes it as a number: the session start in epoch milliseconds, which its
+  own schema for the line declares `number().nonnegative().finite()`. So every
+  `cost-state` unit rendered `[checkpoint closes unknown (needs startTime and
+  totalDuration)]` with JSON `checkpoint_closes_at: null`, 96 of 96 lines on one projects
+  root, while `--raw` showed both keys on every one. The fact now reads the pair through
+  the same function `list`'s `/clear` join uses, so the instant a unit shows is the one
+  the join compares. The label prints it as local text,
+  `[checkpoint closes 2026-08-31 18:58:32.913 AEST(UTC+10)]`, and `checkpoint_closes_at`
+  carries the UTC instant. A value that is not a non-negative number reads as absent, the
+  line the harness's own readers refuse, and the empty label now says so: `(needs
+  startTime and totalDuration as numbers)`. The `search --help` sample head showed
+  `startTime` as an ISO string and shows epoch milliseconds now (claims QT-042, QT-043).
 
 ### Performance
 

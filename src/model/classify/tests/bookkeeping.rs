@@ -126,3 +126,36 @@ fn u64_field_is_tolerant() {
     assert_eq!(Record::u64_field(Some(&v("\"42\""))), None);
     assert_eq!(Record::u64_field(None), None);
 }
+
+/// A `cost-state` checkpoint closes at `startTime + totalDuration`, both JSON NUMBERS - the
+/// type the harness's builder writes and its schema declares. A value of another type, a
+/// negative one or a missing half reads as absent, which is the line the harness's own
+/// readers refuse; an ISO string was the reading that made every real line read absent.
+#[test]
+fn checkpoint_close_reads_two_numbers_and_nothing_else() {
+    let obj =
+        |s: &str| serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(s).unwrap();
+    let close = |s: &str| Record::checkpoint_close_ms(&obj(s));
+    assert_eq!(
+        close(r#"{"startTime":1767225600000,"totalDuration":3600000}"#),
+        Some(1_767_229_200_000)
+    );
+    assert_eq!(
+        close(r#"{"startTime":1767225600000.0,"totalDuration":0}"#),
+        Some(1_767_225_600_000),
+        "a whole-number float is the same instant"
+    );
+    assert_eq!(
+        close(r#"{"startTime":"2026-01-01T00:00:00.000Z","totalDuration":3600000}"#),
+        None
+    );
+    assert_eq!(
+        close(r#"{"startTime":"1767225600000","totalDuration":1}"#),
+        None
+    );
+    assert_eq!(close(r#"{"startTime":-1,"totalDuration":1}"#), None);
+    assert_eq!(close(r#"{"startTime":1,"totalDuration":-1}"#), None);
+    assert_eq!(close(r#"{"startTime":1767225600000}"#), None);
+    assert_eq!(close(r#"{"totalDuration":3600000}"#), None);
+    assert_eq!(close(r#"{"startTime":0,"totalDuration":0}"#), Some(0));
+}

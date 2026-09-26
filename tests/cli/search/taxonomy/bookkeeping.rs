@@ -58,7 +58,7 @@ fn family_home() -> Home {
             r#"{{"type":"file-history-delta","sessionId":"{SESS}","messageId":"{LEAF}","trackingPath":"/Users/dev/proj/a.rs","backup":{{"backupFileName":"a.rs@v4","version":4}},"timestamp":"2026-01-01T00:00:05.000Z"}}"#
         ),
         format!(
-            r#"{{"type":"cost-state","sessionId":"{SESS}","totalCostUSD":1.5,"totalDuration":3600000,"startTime":"2026-01-01T00:00:00.000Z","modelUsage":{{"probe":{{"in":10}}}},"hasUnknownModelCost":false}}"#
+            r#"{{"type":"cost-state","sessionId":"{SESS}","totalCostUSD":1.5,"totalDuration":3600000,"startTime":1767225600000,"modelUsage":{{"probe":{{"in":10}}}},"hasUnknownModelCost":false}}"#
         ),
         format!(
             r#"{{"type":"fork-context-ref","sessionId":"{SESS}","agentId":"a1b2c3d4e5f60718","parentSessionId":"99999999-8888-4777-8666-555555555555","parentLastUuid":"{CUT}","contextLength":1200}}"#
@@ -156,7 +156,7 @@ fn show_renders_one_head_per_line_type() {
         "[frame-link title=Frame artifactCount=2]",
         "[artifact-comment-monitor v=1 accountUuid=eeeeeeee artifacts=slug-one, slug-two]",
         "[artifact-autoreact-ledger v=1 artifacts=slug-three]",
-        "[cost-state totalCostUSD=1.5 totalDuration=3600000 startTime=2026-01-01T00:00:00.000Z]",
+        "[cost-state totalCostUSD=1.5 totalDuration=3600000 startTime=1767225600000]",
         "[fork-context-ref agentId=a1b2c3d4e5f60718 parentSessionId=99999999-8888-4777-8666-555555555555 parentLastUuid=88888888 contextLength=1200]",
         "[continued-in continuedInSessionId=77777777-6666-4555-8444-333333333333]",
         "[queue-operation operation=remove reason=absorbed_mid_turn]",
@@ -239,14 +239,16 @@ fn a_head_never_costs_the_body_its_matchability() {
 #[test]
 fn the_five_provenance_relations_render() {
     let h = family_home();
-    let text = h.run(&["show", &at(SESS), "--line", "2..21"]);
+    // The checkpoint's instant is TEXT, so it renders in the local zone; pinning the zone
+    // makes the expected string exact on any host.
+    let text = h.run_with_env(&["show", &at(SESS), "--line", "2..21"], &[("TZ", "UTC")]);
     assert!(text.success, "stderr {}", text.stderr);
     for expect in [
         "[for: leaf L1]",
         "[for: versions L1]",
         "[for: forked_from @99999999-8888-4777-8666-555555555555 88888888 (not in this file)]",
         "[for: continued_in @77777777-6666-4555-8444-333333333333]",
-        "[checkpoint closes 2026-01-01T01:00:00Z]",
+        "[checkpoint closes 2026-01-01 01:00:00.000 UTC(UTC+0)]",
     ] {
         assert!(
             text.stdout.contains(expect),
@@ -381,7 +383,7 @@ fn a_missing_key_renders_the_relation_as_an_honest_empty() {
     for expect in [
         "[for: leaf unknown (the record carries no such key)]",
         "[for: continued_in unknown (the record carries no such key)]",
-        "[checkpoint closes unknown (needs startTime and totalDuration)]",
+        "[checkpoint closes unknown (needs startTime and totalDuration as numbers)]",
     ] {
         assert!(
             out.stdout.contains(expect),

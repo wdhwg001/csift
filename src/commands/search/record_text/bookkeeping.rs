@@ -239,9 +239,17 @@ impl Fact {
         Some(match self {
             #[cfg(test)]
             Fact::Probe(head) => (*head).to_string(),
-            Fact::Checkpoint(Some(at)) => format!("[checkpoint closes {at}]"),
+            // TEXT carries the instant as local text, the form every text instant takes;
+            // JSON keeps the UTC one (`json` below).
+            Fact::Checkpoint(Some(at)) => {
+                format!(
+                    "[checkpoint closes {}]",
+                    crate::timez::format_local_compact(Some(at))
+                )
+            }
             Fact::Checkpoint(None) => {
-                "[checkpoint closes unknown (needs startTime and totalDuration)]".to_string()
+                "[checkpoint closes unknown (needs startTime and totalDuration as numbers)]"
+                    .to_string()
             }
         })
     }
@@ -357,18 +365,17 @@ fn edge(line_type: &str, raw: Option<&str>, ctx: &ClassifyCtx) -> Option<HitFact
 }
 
 /// The `/clear` join key a `cost-state` line carries: `startTime + totalDuration`, the
-/// instant the session this checkpoint belongs to stopped accumulating, rendered as the
-/// ISO instant `list` compares a clear-minted sibling's wrapper timestamp against.
+/// instant the session this checkpoint belongs to stopped accumulating, as the UTC ISO
+/// instant `list` compares a clear-minted sibling's wrapper timestamp against. The sum is
+/// [`Record::checkpoint_close_ms`], the join's own reading of the two NUMBERS.
 ///
-/// `None` when either number is missing or the instant is unparseable - the honest empty,
-/// which [`Fact::Checkpoint`] then renders rather than dropping.
+/// `None` when either number is missing or not one - the honest empty, which
+/// [`Fact::Checkpoint`] then renders rather than dropping.
 ///
 /// The instant is built with `jiff` here rather than through `crate::timez`, which renders
 /// a raw timestamp STRING into local text and has no epoch-milliseconds-to-UTC-instant
 /// form; adding one is a change to a shared base module, and this is the only caller.
 fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
-    let start = obj.get("startTime")?.as_str()?;
-    let duration = Record::u64_field(obj.get("totalDuration"))?;
-    let close = crate::timez::epoch_ms(start)?.checked_add(i64::try_from(duration).ok()?)?;
+    let close = Record::checkpoint_close_ms(obj)?;
     Some(jiff::Timestamp::from_millisecond(close).ok()?.to_string())
 }

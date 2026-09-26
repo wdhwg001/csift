@@ -95,4 +95,32 @@ impl Record {
         let f = v.as_f64()?;
         (f.is_finite() && f >= 0.0 && f.fract() == 0.0).then_some(f as u64)
     }
+
+    /// The instant a `cost-state` checkpoint closes, in epoch milliseconds: `startTime`
+    /// plus `totalDuration`, read off the line's own top-level object.
+    ///
+    /// Both are JSON NUMBERS. The harness's builder takes `startTime` from the cost
+    /// ledger's session start and `totalDuration` from its clock, and its schema for the
+    /// line declares every numeric key `number().nonnegative().finite()`; its own readers
+    /// refuse a line that fails that schema. So a value of any other type - a string
+    /// above all, which an ISO reading would accept - or a negative one reads as absent
+    /// here too, and the caller renders the honest empty.
+    ///
+    /// The ONE reading of the pair: `list`'s `/clear` join and the
+    /// `harness.bookkeeping.cost` fact both call it, so the join key a reader sees on a
+    /// unit is the one the join compared.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn checkpoint_close_ms(
+        line: &serde_json::Map<String, serde_json::Value>,
+    ) -> Option<i64> {
+        let num = |key: &str| {
+            line.get(key)?
+                .as_f64()
+                .filter(|n| n.is_finite() && *n >= 0.0)
+        };
+        // `as` drops a fractional millisecond, which the schema admits and the builder never
+        // writes (both clocks are whole milliseconds).
+        Some((num("startTime")? + num("totalDuration")?) as i64)
+    }
 }

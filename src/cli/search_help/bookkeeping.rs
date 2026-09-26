@@ -22,7 +22,7 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      matchable and not only the few a head names.\n\n  \
      SIXTEEN of the eighteen non-transcript line types build that head from their own \
      bytes, and it opens with the line's own `type` value - `[cost-state \
-     totalCostUSD=1.5 totalDuration=42 startTime=2026-01-01T00:00:00Z]` - so the types \
+     totalCostUSD=1.5 totalDuration=42 startTime=1767225600000]` - so the types \
      that share one leaf (mode/permission-mode, ai-title/agent-name, the three artifact \
      ledgers) stay apart in the output even though their label does not tell them \
      apart. The other two are `file-history-snapshot` and `file-history-delta`, one \

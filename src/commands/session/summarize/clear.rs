@@ -191,13 +191,13 @@ fn nearest_checkpoint_close(sib: &Path, t_wrapper: i64) -> Option<(i64, i64)> {
 
 /// `startTime + totalDuration` of one `cost-state` line, in epoch ms. The schema is
 /// twelve keys with no `uuid`, no `timestamp` and no `message{}`, so the two numbers
-/// ARE the line's only instants; a line of any other type yields `None`.
+/// ARE the line's only instants; a line of any other type yields `None`. The pair is
+/// read by [`crate::model::Record::checkpoint_close_ms`], the reading the search fact
+/// shares.
 pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {
     let v: serde_json::Value = serde_json::from_slice(line).ok()?;
     if v.get("type").and_then(serde_json::Value::as_str) != Some("cost-state") {
         return None;
     }
-    let num = |k: &str| v.get(k).and_then(serde_json::Value::as_f64);
-    #[allow(clippy::cast_possible_truncation)]
-    Some((num("startTime")? + num("totalDuration")?) as i64)
+    crate::model::Record::checkpoint_close_ms(v.as_object()?)
 }

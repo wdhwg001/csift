@@ -23,7 +23,7 @@ fn book_args(pattern: &str) -> SearchArgs {
 /// three separate fields, so the pattern below exists in no run of the raw bytes.
 #[test]
 fn a_fabricated_bookkeeping_head_survives_the_whole_file_gate() {
-    let line = r#"{"type":"cost-state","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","totalCostUSD":1.5,"totalDuration":3600000,"startTime":"2026-01-01T00:00:00.000Z"}"#;
+    let line = r#"{"type":"cost-state","sessionId":"0a1b2c3d-0000-0000-0000-000000000000","totalCostUSD":1.5,"totalDuration":3600000,"startTime":1767225600000}"#;
     let pattern = "totalCostUSD=1.5 totalDuration=3600000";
     assert!(
         !line.contains(pattern),
@@ -152,13 +152,48 @@ fn facts_carry_the_marker_and_the_line_type_s_relation() {
     let (edges, markers) = zones(r#"{"type":"mode","mode":"default"}"#);
     assert_eq!(markers, vec!["[not delivered]".to_string()]);
     assert!(edges.is_empty(), "{edges:?}");
-    // The checkpoint is the SUM: one hour after the start instant.
+    // The checkpoint is the SUM of two NUMBERS - `startTime` in epoch milliseconds, as the
+    // harness writes it - one hour after the start instant, in local text.
+    let (edges, _) =
+        zones(r#"{"type":"cost-state","startTime":1767225600000,"totalDuration":3600000}"#);
+    assert_eq!(
+        edges,
+        vec![format!(
+            "[checkpoint closes {}]",
+            crate::timez::format_local_compact(Some("2026-01-01T01:00:00Z"))
+        )]
+    );
+    // A `startTime` STRING is not the harness's shape, so it is not read as an instant.
     let (edges, _) = zones(
         r#"{"type":"cost-state","startTime":"2026-01-01T00:00:00.000Z","totalDuration":3600000}"#,
     );
     assert_eq!(
         edges,
-        vec!["[checkpoint closes 2026-01-01T01:00:00Z]".to_string()]
+        vec![
+            "[checkpoint closes unknown (needs startTime and totalDuration as numbers)]"
+                .to_string()
+        ]
+    );
+}
+
+/// The JSON half of the checkpoint keeps the UTC instant, whatever the local zone.
+#[test]
+fn the_checkpoint_json_carries_the_utc_instant() {
+    let line = r#"{"type":"cost-state","startTime":1767225600000,"totalDuration":3600000}"#;
+    let record = rec(line);
+    let (facts, _) = family::facts(
+        &record,
+        Some(line),
+        &Section::record(record.promoted_class()),
+        &ClassifyCtx::top_level(),
+    );
+    let json: Vec<(&str, serde_json::Value)> = facts.iter().flat_map(HitFact::json).collect();
+    assert_eq!(
+        json[0],
+        (
+            "checkpoint_closes_at",
+            serde_json::json!("2026-01-01T01:00:00Z")
+        )
     );
 }
 

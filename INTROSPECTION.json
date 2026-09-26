@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2482",
+          "lines": "2483",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -82990,7 +82990,7 @@
         {
           "path": "src/commands/session/summarize/clear.rs",
           "snippet": "pub(crate) fn checkpoint_close_ms(line: &[u8]) -> Option<i64> {",
-          "lines": "195"
+          "lines": "197"
         },
         {
           "path": "src/commands/session/tests.rs",
@@ -82999,8 +82999,13 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "369",
+          "lines": "378",
           "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
+        },
+        {
+          "path": "src/model/classify/bookkeeping.rs",
+          "lines": "114-116",
+          "snippet": "    pub(crate) fn checkpoint_close_ms(\n        line: &serde_json::Map<String, serde_json::Value>,\n    ) -> Option<i64> {"
         }
       ],
       "states": [
@@ -83008,8 +83013,8 @@
           "from": "2.1.217",
           "from_basis": "first_seen",
           "to": null,
-          "behavior": "A `cost-state` line is the cost ledger's checkpoint and carries exactly twelve keys: `type`, `sessionId`, `totalCostUSD`, `totalAPIDuration`, `totalAPIDurationWithoutRetries`, `totalToolDuration`, `totalLinesAdded`, `totalLinesRemoved`, `totalDuration`, `startTime`, `modelUsage` and `hasUnknownModelCost`. There is no `uuid`, no `timestamp`, no `parentUuid` and no `message`, so the line is not a conversation record and carries no instant of its own beyond the two numbers: `startTime` is the session's start in epoch milliseconds and `totalDuration` its wall duration, so their SUM is the instant the ledger closed. One builder mints the object (`ddn`), gated on the ledger still belonging to the current session, and hands it to the transcript recorder; a zod schema declares the same twelve fields, with `hasUnknownModelCost` the only optional one, and two readers validate against that schema before trusting a line.",
-          "depends": "csift reads `startTime + totalDuration` off such a line and nothing else: it is the only instant the line carries, and it is what the `/clear` join compares against the wrapper's timestamp. The missing `uuid` and `timestamp` are why a checkpoint is addressed by LINE and never by uuid, and why the line is not a chain node. If the schema gained an instant field or renamed either number, the join would go silent rather than wrong, because csift requires both numbers and rejects a line of any other type. The same sum now also rides an emitted unit of `harness.bookkeeping.cost` as the instant the checkpoint closed, so a reader of one line sees the join key without computing it; the joined session stays `list`'s answer, because running the join from this side means reading every sibling transcript in the project directory and a `cost-state` line carries no path.",
+          "behavior": "A `cost-state` line is the cost ledger's checkpoint and carries exactly twelve keys: `type`, `sessionId`, `totalCostUSD`, `totalAPIDuration`, `totalAPIDurationWithoutRetries`, `totalToolDuration`, `totalLinesAdded`, `totalLinesRemoved`, `totalDuration`, `startTime`, `modelUsage` and `hasUnknownModelCost`. There is no `uuid`, no `timestamp`, no `parentUuid` and no `message`, so the line is not a conversation record and carries no instant of its own beyond the two numbers: `startTime` is the session's start in epoch milliseconds and `totalDuration` its wall duration, so their SUM is the instant the ledger closed. One builder mints the object (`ddn`), gated on the ledger still belonging to the current session, and hands it to the transcript recorder; a zod schema declares the same twelve fields, with `hasUnknownModelCost` the only optional one, and two readers validate against that schema before trusting a line. Both numbers are JSON NUMBERS in whole milliseconds: the ledger class starts its clock as `#r=Date.now()`, reports `startTime` as `this.#i??this.#r` (a restored start, else that clock) and `totalDuration` as `Math.max(0,Date.now()-this.#r)`, and the schema declares every numeric key of the line through one `let e=w.number().nonnegative().finite()`. Measured over one live projects root: 96 of 96 `cost-state` lines carry both as JSON integers and 0 carry either as a string.",
+          "depends": "csift reads `startTime + totalDuration` off such a line and nothing else: it is the only instant the line carries, and it is what the `/clear` join compares against the wrapper's timestamp. The missing `uuid` and `timestamp` are why a checkpoint is addressed by LINE and never by uuid, and why the line is not a chain node. ONE function reads the pair, `Record::checkpoint_close_ms`, and both consumers call it: the `/clear` join, and the `harness.bookkeeping.cost` fact that shows the same sum on an emitted unit, so a reader of one line sees the key the join compared. Both values must be non-negative finite JSON numbers and anything else reads as absent, which is the line the harness's own readers refuse; a reader that parsed `startTime` as an ISO string read absent on every real line. If the schema gained an instant field or renamed either number, the join would go silent rather than wrong, because csift requires both numbers and rejects a line of any other type. The joined session stays `list`'s answer, because running the join from this side means reading every sibling transcript in the project directory and a `cost-state` line carries no path.",
           "instrument": "Census every transcript under the projects root for lines whose top-level `type` is `cost-state`, collecting the sorted key tuple of each; report the number of transcripts carrying one, the number of lines, and every distinct key set. Cross-read the shipped binary at the schema literal `w.literal(\"cost-state\")` and at the builder head `function ddn(){if(!GPn())return;return{type:\"cost-state\"` and compare the field lists.",
           "probe": {
             "kind": "corpus",
@@ -83022,7 +83027,8 @@
           "attribution": "end-to-end",
           "open_legs": [],
           "residue": [
-            "An earlier reading, superseded by the receipt now standing on this state (Censused the `cost-state` key set over two projects roots and rendered a synthetic `cost-state` line...): 9,519 transcripts scanned, 14 carry a cost-state line, 44 lines in total, and all 44 share ONE key tuple of twelve: hasUnknownModelCost, modelUsage, sessionId, startTime, totalAPIDuration, totalAPIDurationWithoutRetries, totalCostUSD, totalDuration, totalLinesAdded, totalLinesRemoved, totalToolDuration, type. Counting rule: A line counts when its parsed top-level `type` equals `cost-state`; the key tuple is the sorted list of its top-level keys, so an absent optional field would form a second tuple."
+            "An earlier reading, superseded by the receipt now standing on this state (Censused the `cost-state` key set over two projects roots and rendered a synthetic `cost-state` line...): 9,519 transcripts scanned, 14 carry a cost-state line, 44 lines in total, and all 44 share ONE key tuple of twelve: hasUnknownModelCost, modelUsage, sessionId, startTime, totalAPIDuration, totalAPIDurationWithoutRetries, totalCostUSD, totalDuration, totalLinesAdded, totalLinesRemoved, totalToolDuration, type. Counting rule: A line counts when its parsed top-level `type` equals `cost-state`; the key tuple is the sorted list of its top-level keys, so an absent optional field would form a second tuple.",
+            "An earlier reading at this state, over two projects roots: root A carries 44 `cost-state` lines and root B 35, and every one of the 79 carries `startTime`, `totalDuration` and `totalCostUSD`; none carries `uuid`, `timestamp` or `message`. Counting rule: a key counts as present when it is a top-level key of the line."
           ],
           "producer_chain": [
             {
@@ -83059,15 +83065,36 @@
               "offset": 161465630,
               "excerpt": "return w.object({type:w.literal(\"cost-state\"),sessionId:w.string(),totalCostUSD:e,totalAPIDuration:e,totalAPIDurationWithoutRetries:e,totalToolDuration:e,totalLinesAdded:e,totalLinesRemoved:e,totalDuration:e,startTime:e",
               "note": "declares the same twelve fields; hasUnknownModelCost is the only optional one"
+            },
+            {
+              "role": "gate",
+              "name": "the schema's numeric type",
+              "offset": 161465575,
+              "excerpt": "var qge=m(()=>{let e=w.number().nonnegative().finite();",
+              "note": "The one type every numeric key of the line is declared with, `startTime` and `totalDuration` among them; the readers validate a line against this schema before trusting it."
+            },
+            {
+              "role": "writer",
+              "name": "the ledger clock",
+              "offset": 156749442,
+              "excerpt": "class re{#e=0;#t=0;#n=0;#o=0;#r=Date.now();#i=void 0;",
+              "note": "The start instant is `Date.now()`, whole epoch milliseconds."
+            },
+            {
+              "role": "writer",
+              "name": "the two getters the builder reads",
+              "offset": 156749689,
+              "excerpt": "totalDuration(){return Math.max(0,Date.now()-this.#r)}sessionStartTime(){return this.#i??this.#r}",
+              "note": "Both values are numbers of milliseconds; the builder stamps them as `totalDuration:CW(),startTime:Yke()`."
             }
           ],
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "Censused the `cost-state` key set over two projects roots and rendered a synthetic `cost-state` line through `csift show --line --format json`.",
-            "observed": "Root A carries 44 `cost-state` lines and root B 35, and every one of the 79 carries `startTime`, `totalDuration` and `totalCostUSD`; none carries `uuid`, `timestamp` or `message`. A line whose `startTime` is 2026-01-01T00:00:00.000Z and whose `totalDuration` is 3600000 renders `[checkpoint closes 2026-01-01T01:00:00Z]` and carries `checkpoint_closes_at` with that instant.",
-            "rule": "A key counts as present when it is a top-level key of the line; the rendered instant is the epoch-millisecond sum of the two numbers formatted as a UTC instant.",
-            "note": ""
+            "instrument": "python3 over every `*.jsonl` under the live projects root at `~/.claude/projects` (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory), parsing each line carrying the literal `\"cost-state\"` and tallying its sorted top-level key set and the JSON type of its `startTime` and `totalDuration`; python3 byte-comparing the schema's numeric declaration, the ledger clock, its two getters and the builder's `totalDuration:CW(),startTime:Yke(),` against $CSIFT_LEDGER_BINARY (the 2.1.258 build) and counting each; `csift search \"\" -t harness.bookkeeping.cost --max-count 0 --format json` over that root, tallying `checkpoint_closes_at` per hit by JSON type, on the build that read `startTime` as a string and on the build carrying the shared numeric reading; and `csift list --max-count 0 --format json` over the root on both builds, tallying rows whose `cleared_from` is not null.",
+            "observed": "10,790 files, 55 carrying a checkpoint, 96 `cost-state` lines, all 96 with the one twelve-key set and none carrying `uuid`, `timestamp` or `message`; `startTime` a JSON integer on 96 of 96 and a string on 0, `totalDuration` an integer on 96 of 96. With the measuring session's own tree excluded: 9,399 files, 53 carriers, 89 of 89 lines with both integers. The schema declaration (161465575), the ledger clock (156749442), the two getters (156749689) and the builder's two fields (162360023) are byte-exact and occur once each. The emitted fact: `checkpoint_closes_at` null on 96 of 96 hits on the build that read a string, a UTC instant string on 96 of 96 on the build carrying the shared reading. `cleared_from` non-null on 4 `list` rows on both builds.",
+            "rule": "One observation per `cost-state` line (a parsed line whose top-level `type` is `cost-state`) for the census; one per excerpt for the byte comparison; one per emitted `harness.bookkeeping.cost` hit for the fact tally; one per `list` session row for the join tally.",
+            "note": "The bookkeeping fact parsed `startTime` as an ISO string, the shape of a self-written fixture that no real line carries; it reads the two numbers through the join's own function now, and the fixtures carry the numeric shape."
           }
         }
       ]
@@ -83159,7 +83186,7 @@
           "from": "2.1.217",
           "from_basis": "first_seen",
           "to": null,
-          "behavior": "A `cost-state` line is a repeatable CHECKPOINT, not a close marker. The literal occurs seven times in the 2.1.258 executable and every one is read: an interned name-table entry, the zod schema, the single builder, two per-type policy tables (the dedup policy `last-wins` and the append policy `always`) and two readers that validate against the schema before trusting a line. There is exactly ONE writer, and it is reached from five entry points: the registered session-cost saver (which `/clear` runs, and which a background handover and an in-app resume run too), a background spawn, a resume or in-app fork, the shutdown-gated teardown effect, and the exit re-stamp provider, which registers the builder itself so a drain at exit appends whatever it returns. Three of those are MID-FILE and repeatable, and an exit writes TWO lines with the session-metadata re-append between them. On disk the population matches: most checkpoints are not the last line of their file, and where two are adjacent the lines between them are the metadata block the exit path re-appends.",
+          "behavior": "A `cost-state` line is a repeatable CHECKPOINT, not a close marker. The literal occurs seven times in the 2.1.258 executable and every one is read: an interned name-table entry, the zod schema, the single builder, two per-type policy tables (the dedup policy `last-wins` and the append policy `always`) and two readers that validate against the schema before trusting a line. There is exactly ONE writer, and it is reached from five entry points: the registered session-cost saver (which `/clear` runs, and which a background handover and an in-app resume run too), a background spawn, a resume or in-app fork, the shutdown-gated teardown effect, and the exit re-stamp provider, which registers the builder itself so a drain at exit appends whatever it returns. Three of those are MID-FILE and repeatable, and an exit writes TWO lines with the session-metadata re-append between them. On disk the population matches: a large share of checkpoints are not the last line of their file (48 of 96 on one live projects root), and where two are close the lines between them are the metadata block the exit path re-appends, or nothing at all.",
           "depends": "This is why csift reports a tail checkpoint as EVIDENCE and refuses to make it a verdict: finding one at the end says the harness stopped appending after writing it, and nothing about whether the process is alive - that stays the registry row's answer, and the seven-verdict set stays closed so a consumer matching on it keeps matching. It is also why a mid-file checkpoint is reported as nothing at all, and why the `/clear` join reads EVERY checkpoint line of a sibling rather than only its last.",
           "instrument": "Byte-search the shipped binary for the bare literal `cost-state`, read every occurrence and classify it; then word-boundary grep the builder and the recorder entry and read every call site. On disk, census every transcript under the projects root for lines whose parsed top-level `type` is `cost-state`, counting the transcripts, the lines, and how many are NOT the file's last non-blank line; for every ADJACENT pair of checkpoints in one file, report the top-level `type` of each line between them. The counting rule is one row per checkpoint LINE.",
           "probe": {
@@ -83278,12 +83305,15 @@
           ],
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "Read all seven `cost-state` occurrences and all five writer entry points in the 2.1.258 build; censused every checkpoint line and every adjacent checkpoint pair over every transcript under the projects root.",
-            "observed": "Seven occurrences, classified 1 name-table, 1 schema, 1 builder, 2 policy tables, 2 readers. Five entry points reach the one writer. On disk: 9,519 transcripts scanned, 14 carry a checkpoint, 44 lines, and 35 of the 44 are NOT their file's last non-blank line. 30 adjacent pairs; the commonest gap is a single `last-prompt` line (10 pairs), then 1 to 6 session-metadata lines (`last-prompt`, `ai-title`, `mode`, `permission-mode`, `atis-latch`, `bridge-session`), with 2 pairs adjacent and 5 separated by whole turns.",
-            "rule": "Binary occurrences are byte substrings of the bare literal over the whole executable. A checkpoint line counts when its parsed top-level `type` is `cost-state`; `not last` compares its index against the file's last non-blank line; a pair is two checkpoints with no third between them.",
-            "note": ""
-          }
+            "verdict": "refined",
+            "instrument": "python3 over every `*.jsonl` under the live projects root at `~/.claude/projects` (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory): parse every line of each file carrying the literal `\"cost-state\"`, count the checkpoint lines and those not on the file's last non-blank line, and for each adjacent pair of checkpoints tally the top-level types of the lines between them; a byte count of the literal `cost-state` over $CSIFT_LEDGER_BINARY (the 2.1.258 build); `csift search \"\" -t harness.bookkeeping.cost --max-count 0 --format json` over that root, tallying `checkpoint_closes_at` per hit by JSON type, on the build that read `startTime` as a string and on the build carrying the shared numeric reading.",
+            "observed": "10,792 files, 55 carrying a checkpoint, 96 checkpoint lines, 48 of the 96 NOT their file's last non-blank line. 41 adjacent pairs: 5 with nothing between them, 12 separated by whole turns, and 24 by session-metadata lines alone, the commonest gap a single `last-prompt` line (13 pairs). The literal occurs 7 times in the build. The emitted fact: `checkpoint_closes_at` null on 96 of 96 `harness.bookkeeping.cost` hits on the build that read `startTime` as a string, and a UTC instant string on 96 of 96 on the build carrying the shared numeric reading.",
+            "rule": "One observation per checkpoint LINE (a parsed line whose top-level `type` is `cost-state`); `not last` compares its index against the file's last non-blank line; a pair is two checkpoints with no third between them; binary occurrences are byte substrings of the bare literal over the whole executable; one observation per emitted hit for the fact tally.",
+            "note": "Every checkpoint rendered `[checkpoint closes unknown (needs startTime and totalDuration)]` while carrying both numbers, because the bookkeeping fact read `startTime` as a string; the fact now reads the pair through the `/clear` join's own function (QT-042)."
+          },
+          "residue": [
+            "An earlier reading at this state, over the transcripts of one projects root: 9,519 transcripts scanned, 14 carry a checkpoint, 44 lines, and 35 of the 44 are NOT their file's last non-blank line; 30 adjacent pairs, the commonest gap a single `last-prompt` line (10 pairs), then 1 to 6 session-metadata lines (`last-prompt`, `ai-title`, `mode`, `permission-mode`, `atis-latch`, `bridge-session`), with 2 pairs adjacent and 5 separated by whole turns. Counting rule: one row per checkpoint LINE; a pair is two checkpoints with no third between them."
+          ]
         }
       ]
     },
@@ -86830,7 +86860,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "340-346",
+          "lines": "348-354",
           "snippet": "        \"fork-context-ref\" => super::for_edge(\n            EdgeKind::ForkedFrom,\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -87023,7 +87053,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "348-354",
+          "lines": "356-362",
           "snippet": "        \"continued-in\" => super::for_edge(\n            EdgeKind::ContinuedIn,\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -89164,7 +89194,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3506"
+          "lines": "3507"
         }
       ],
       "states": [
