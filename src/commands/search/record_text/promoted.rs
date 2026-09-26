@@ -126,7 +126,7 @@ fn snapshot_record_text(rec: &Record) -> Option<String> {
         let path = rec.tracking_path.as_deref()?;
         let backup = rec.backup.as_ref();
         let version = ver(backup.and_then(|b| b.get("version")));
-        let at = rec.timestamp.as_deref().unwrap_or("?");
+        let at = head_instant(rec.timestamp.as_deref());
         let name = backup
             .and_then(|b| b.get("backupFileName"))
             .and_then(serde_json::Value::as_str)
@@ -137,10 +137,7 @@ fn snapshot_record_text(rec: &Record) -> Option<String> {
         ));
     }
     let snap = rec.snapshot.as_ref()?;
-    let at = snap
-        .get("timestamp")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?");
+    let at = head_instant(snap.get("timestamp").and_then(serde_json::Value::as_str));
     let mut entries: Vec<String> = snap
         .get("trackedFileBackups")
         .and_then(serde_json::Value::as_object)
@@ -155,6 +152,18 @@ fn snapshot_record_text(rec: &Record) -> Option<String> {
         "[file-history snapshot at {at}: {}]",
         entries.join(", ")
     ))
+}
+
+/// A file-history head's instant as TEXT: the canonical local form with milliseconds, the
+/// one the `search` and `show` headers print above it, so a head never carries a zone its
+/// header does not. The UTC string stays matchable in the unit's verbatim JSON body, and a
+/// delta's own instant also rides the hit's `ts_utc`/`ts_local`. `?` when the line names
+/// no instant.
+fn head_instant(raw: Option<&str>) -> String {
+    raw.map_or_else(
+        || "?".to_string(),
+        |ts| crate::timez::format_local_compact(Some(ts)),
+    )
 }
 
 /// The shared duration formatter (`crate::text::fmt_ms`), re-exported so the unit

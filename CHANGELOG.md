@@ -1018,6 +1018,13 @@ surface change bumps the PATCH.
   exclusive flags, `--list-backups` among them. The head now counts SIX - the default
   restore and the five flags - and lists `--list-backups` with the others; a test reads
   the count and the listed flags off the clap `mode` group.
+- **A file-history head printed its instant in UTC.** The `harness.bookkeeping.file-history`
+  head read `[file-history snapshot at 2026-09-01T05:49:11.520Z: ...]`, the one text
+  instant csift left in UTC, on every one of the 7,694 such units one projects root
+  carries. Both forms now print local text in the millisecond form the search and show
+  headers use - a delta's top-level `timestamp` and a snapshot's nested
+  `snapshot.timestamp`, the only instant that line carries - and the UTC string stays
+  matchable in the unit's verbatim JSON body (claim QT-025).
 
 ### Performance
 

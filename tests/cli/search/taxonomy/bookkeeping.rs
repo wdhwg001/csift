@@ -140,7 +140,9 @@ fn every_bookkeeping_leaf_is_reachable_and_counted() {
 #[test]
 fn show_renders_one_head_per_line_type() {
     let h = family_home();
-    let out = h.run(&["show", &at(SESS), "--line", "2..21"]);
+    // The file-history heads print their instant as local TEXT; the zone is pinned so the
+    // expected strings are exact on any host.
+    let out = h.run_with_env(&["show", &at(SESS), "--line", "2..21"], &[("TZ", "UTC")]);
     assert!(out.success, "stderr {}", out.stderr);
     for expect in [
         // Read off the source line, in the writer's own key order.
@@ -163,8 +165,8 @@ fn show_renders_one_head_per_line_type() {
         "[queue-operation operation=dequeue]",
         // The two that keep the record-modeled head: it names the tracked PATH and its
         // version, which a raw key walk could only print as the nested snapshot object.
-        "[file-history snapshot at 2026-01-01T00:00:04.000Z: /Users/dev/proj/a.rs@v3]",
-        "[file-history delta at 2026-01-01T00:00:05.000Z: /Users/dev/proj/a.rs@v4 backup=a.rs@v4]",
+        "[file-history snapshot at 2026-01-01 00:00:04.000 UTC(UTC+0): /Users/dev/proj/a.rs@v3]",
+        "[file-history delta at 2026-01-01 00:00:05.000 UTC(UTC+0): /Users/dev/proj/a.rs@v4 backup=a.rs@v4]",
     ] {
         assert!(
             out.stdout.contains(expect),

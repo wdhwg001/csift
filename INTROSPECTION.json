@@ -13404,7 +13404,7 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "169",
+          "lines": "178",
           "snippet": "/// It also names the harness's own SURVIVOR fields, each printed only when present, so a"
         },
         {
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2486",
+          "lines": "2487",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -19968,8 +19968,8 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "138-143",
-          "snippet": "    }\n    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
+          "lines": "138-140",
+          "snippet": "    }\n    let snap = rec.snapshot.as_ref()?;\n    let at = head_instant(snap.get(\"timestamp\").and_then(serde_json::Value::as_str));"
         }
       ],
       "states": [
@@ -20236,7 +20236,7 @@
         {
           "path": "src/commands/search/record_text/promoted.rs",
           "lines": "125-129",
-          "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");"
+          "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = head_instant(rec.timestamp.as_deref());"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
@@ -44821,12 +44821,17 @@
         {
           "path": "src/commands/search/record_text/promoted.rs",
           "lines": "125-137",
-          "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let name = backup\n            .and_then(|b| b.get(\"backupFileName\"))\n            .and_then(serde_json::Value::as_str)\n            .map(|n| format!(\" backup={n}\"))\n            .unwrap_or_default();\n        return Some(format!(\n            \"[file-history delta at {at}: {path}@v{version}{name}]\"\n        ));"
+          "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = head_instant(rec.timestamp.as_deref());\n        let name = backup\n            .and_then(|b| b.get(\"backupFileName\"))\n            .and_then(serde_json::Value::as_str)\n            .map(|n| format!(\" backup={n}\"))\n            .unwrap_or_default();\n        return Some(format!(\n            \"[file-history delta at {at}: {path}@v{version}{name}]\"\n        ));"
         },
         {
           "path": "src/commands/recover/events.rs",
           "lines": "197-202",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path) {\n                    events.push(FileEvent {\n                        line_no,"
+        },
+        {
+          "path": "src/commands/search/record_text/promoted.rs",
+          "lines": "162-167",
+          "snippet": "fn head_instant(raw: Option<&str>) -> String {\n    raw.map_or_else(\n        || \"?\".to_string(),\n        |ts| crate::timez::format_local_compact(Some(ts)),\n    )\n}"
         }
       ],
       "states": [
@@ -44834,8 +44839,8 @@
           "from": "2.1.258",
           "from_basis": "located",
           "to": null,
-          "behavior": "file-history-delta is a distinct line type from file-history-snapshot: it is written per tracked file per write, carries a top-level timestamp (which the snapshot form does not - the snapshot's instant is nested at snapshot.timestamp) and holds messageId, snapshotMessageId, trackingPath and a backup object. Only version and backupTime are non-null on every delta; backupFileName is present but NULL on 1,454 of 1,985 and realParentDir is absent on 934 of 1,985.",
-          "depends": "csift renders both forms under the gated leaf `harness.bookkeeping.file-history` with the tracked paths and versions as matchable text, and the byte prefilter admits them on the shared `\"file-history-` type prefix. `recover` consumes BOTH forms: its candidate needle is the same shared prefix and the delta's `trackingPath` + `backup.version` become a `HistorySnapshotMarker` for the target exactly as a snapshot entry does, so the external-write interval is bounded at the finer per-write grain rather than only at the per-prompt one.",
+          "behavior": "file-history-delta is a distinct line type from file-history-snapshot: it is written per tracked file per write, carries a top-level timestamp (which the snapshot form does not - the snapshot's instant is nested at snapshot.timestamp) and holds messageId, snapshotMessageId, trackingPath and a backup object. Only version and backupTime are non-null on every delta; backupFileName is present but NULL on 1,454 of 1,985 and realParentDir is absent on 934 of 1,985. Both instants are UTC ISO strings ending in `Z`: over one live projects root, 5,184 of 5,184 snapshot lines carry `snapshot.timestamp` in that form and none a top-level `timestamp`, and 3,052 of 3,052 delta lines carry a top-level `timestamp` in it.",
+          "depends": "csift renders both forms under the gated leaf `harness.bookkeeping.file-history` with the tracked paths and versions as matchable text, and the byte prefilter admits them on the shared `\"file-history-` type prefix. `recover` consumes BOTH forms: its candidate needle is the same shared prefix and the delta's `trackingPath` + `backup.version` become a `HistorySnapshotMarker` for the target exactly as a snapshot entry does, so the external-write interval is bounded at the finer per-write grain rather than only at the per-prompt one. Both heads print their instant as local TEXT in the millisecond form the `search` and `show` headers use - the snapshot's nested one, the only instant that line carries, and the delta's top-level one - so a head never shows a zone its exchange header does not; the UTC string stays matchable in the unit's verbatim JSON body, and a delta's instant also rides the hit's `ts_utc`/`ts_local`.",
           "instrument": "`csift search 'file-history-' <target> -t harness.bookkeeping.file-history --max-count 4`; expected: both snapshot and delta excerpts. Counting rule = one record per write for the delta form, one per prompt for the snapshot form.",
           "probe": {
             "kind": "csift",
@@ -44849,7 +44854,8 @@
           "open_legs": [],
           "residue": [
             "An earlier reading, superseded by the receipt now standing on this state (Counted the transcripts carrying `file-history-delta` lines in the live corpus, then read the delta arm...): 4,062 snapshot lines and 1,985 delta lines corpus-wide. The two shapes are disjoint: snapshot key-set is {type, messageId, snapshot, isSnapshotUpdate} with a top-level timestamp on 0 of 4,062; delta key-set is {type, messageId, snapshotMessageId, trackingPath, backup, timestamp} with a top-level timestamp on 1,985 of 1,985. The snapshot's own instant is nested at snapshot.timestamp (4,062 of 4,062) alongside snapshot.trackedFileBackups (an object, empty on 158 of 4,062). Inside the delta backup object: version non-null 1,985/1,985, backupTime non-null 1,985/1,985, backupFileName present on 1,985 but NULL on 1,454 (non-null on 531), realParentDir absent on 934 (present and non-null on 1,051). Delta counting: 1,985 deltas over 1,553 distinct messageIds (1,121 messages with 1 delta, 432 with 2) and 1,337 distinct trackingPath values; newest delta timestamp, so the form is live at 2.1.258. csift renders both under harness.meta.snapshot in one query - '[file-history snapshot at <ts>: ]' and '[file-history delta at <ts>: <path>@v1]' rows in the same result - and a delta whose backupFileName is a string renders the documented '... @v1 backup=<name>' suffix. rg over src/recover/ finds no reference to file-history-delta or trackingPath. One observation per matching jsonl line for line and key counts; for backup sub-keys, three disjoint buckets per record (non-null / present-but-null / absent). Consequence of the backupFileName nulls, worth a doc line: the delta excerpt documented at src/search/record_text.rs:184 as '[file-history delta at <ts>: <path>@vN backup=<name>]' omits the backup= suffix on 73% of real deltas, because snapshot_record_text (src/search/record_text.rs:276-280) correctly drops a null through and_then(as_str). (1) rg -NI --no-heading -H '\"type\":\"file-history-snapshot\"|\"type\":\"file-history-delta\"' ~/.claude/projects -g '*.jsonl' | python3 -c 'per-type key-set counters, backup sub-key non-null vs null vs absent counts, deltas per messageId, distinct trackingPath'  (2) csift search '' <transcript> -t harness.meta.snapshot --max-count 40  (3) csift show <transcript> --line <a delta line with a non-null backupFileName>  (4) rg -n 'file-history-delta|trackingPath' src/recover/ Counting rule: Deltas per messageId is one observation per delta record grouped by its messageId.",
-            "An earlier reading, superseded by the receipt now standing on this state (Counted the transcripts carrying `file-history-delta` lines in the live corpus, then read the delta arm...): complete producer trace: trigger async function vTe (the tracking entry) @162371113; trigger the per-prompt snapshot trigger @181586295; gate reducer lV case track @162368322; writer async function L7n @166123148; writer insertFileHistorySnapshot / insertFileHistoryDelta @166106053; writer async function XQt (the backup entry builder) @162378288. writer excerpt: async function L7n(e,n,r,o,d){await Fi().insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)}async function yxr(e,n){await Fi().insertAtt specimen: 4,111 file-history-snapshot lines and 2,047 file-history-delta lines. Top-level timestamp on 0 of 4,111 snapshots and 2,047 of 2,047 deltas. Delta backup sub-keys: version non-null 2,047/2,047, backupTime non-null 2,047/2,047, backupFileName null 1,499 and non-null 54; attribution push: the producer leg traced in the 2.1.258 binary (trigger async function vTe (the tracking entry) @162371113; trigger the per-prompt snapshot trigger @181586295; gate reducer lV case track @162368322; writer async function L7n @166123148; writer insertFileHistorySnapshot / insertFileHistoryDelta @166106053; writer async function XQt (the backup entry builder) @162378288), each excerpt re-read within 400 bytes of its offset; specimen leg: (1) rg -NI over the corpus for both file-history types piped to python: count lines per type, count lines carrying a top-level message key, count lines carrying a top-level timestamp, and bucket each delta backup sub-key into non-null / present-but-null / absent; Counting rule: three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); one observation per matching jsonl line for the type, message and timestamp counts; for backup sub-keys, three disjoint buckets per delta record (non-null / present-but-null / absent)."
+            "An earlier reading, superseded by the receipt now standing on this state (Counted the transcripts carrying `file-history-delta` lines in the live corpus, then read the delta arm...): complete producer trace: trigger async function vTe (the tracking entry) @162371113; trigger the per-prompt snapshot trigger @181586295; gate reducer lV case track @162368322; writer async function L7n @166123148; writer insertFileHistorySnapshot / insertFileHistoryDelta @166106053; writer async function XQt (the backup entry builder) @162378288. writer excerpt: async function L7n(e,n,r,o,d){await Fi().insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)}async function yxr(e,n){await Fi().insertAtt specimen: 4,111 file-history-snapshot lines and 2,047 file-history-delta lines. Top-level timestamp on 0 of 4,111 snapshots and 2,047 of 2,047 deltas. Delta backup sub-keys: version non-null 2,047/2,047, backupTime non-null 2,047/2,047, backupFileName null 1,499 and non-null 54; attribution push: the producer leg traced in the 2.1.258 binary (trigger async function vTe (the tracking entry) @162371113; trigger the per-prompt snapshot trigger @181586295; gate reducer lV case track @162368322; writer async function L7n @166123148; writer insertFileHistorySnapshot / insertFileHistoryDelta @166106053; writer async function XQt (the backup entry builder) @162378288), each excerpt re-read within 400 bytes of its offset; specimen leg: (1) rg -NI over the corpus for both file-history types piped to python: count lines per type, count lines carrying a top-level message key, count lines carrying a top-level timestamp, and bucket each delta backup sub-key into non-null / present-but-null / absent; Counting rule: three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); one observation per matching jsonl line for the type, message and timestamp counts; for backup sub-keys, three disjoint buckets per delta record (non-null / present-but-null / absent).",
+            "An earlier reading at this state: 21 of 75 top-level transcripts carry at least one `file-history-delta` line, and the delta arm yields a `HistorySnapshotMarker` for the target path with the delta's own `version` and top-level `timestamp` (read through `csift recover --coverage` on a synthetic delta). Counting rule: one transcript per file containing the literal `\"type\":\"file-history-delta\"`; one marker per delta line whose `trackingPath` matches the target by full path or basename suffix."
           ],
           "producer_chain": [
             {
@@ -44904,10 +44910,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "Counted the transcripts carrying `file-history-delta` lines in the live corpus, then read the delta arm csift now runs (`trackingPath` + `backup` -> HistorySnapshotMarker) against a synthetic delta fixture through `csift recover --coverage`.",
-            "observed": "21 of 75 top-level transcripts carry at least one `file-history-delta` line; the delta arm yields a marker for the target path with the delta's own `version` and top-level `timestamp`.",
-            "rule": "One transcript per file containing the literal `\"type\":\"file-history-delta\"`; one marker per delta line whose `trackingPath` matches the target by full path or basename suffix.",
-            "note": "The sentence saying the delta form is not yet consumed by recover no longer holds: it is."
+            "instrument": "python3 over every `*.jsonl` under the live projects root at `~/.claude/projects` (top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel/` directory), parsing each line carrying the literal `\"file-history-` and tallying, per type, whether `snapshot.timestamp` (a snapshot) or the top-level `timestamp` (a delta) is a string ending in `Z`, and whether a snapshot carries a top-level `timestamp`; `csift search \"\" -t harness.bookkeeping.file-history --max-count 0 --format json` over that root, tallying each hit's head instant as UTC (ending `Z:`) or local, on the build before the local render and on the build carrying it.",
+            "observed": "5,184 snapshot lines, 5,184 with a `Z`-terminated `snapshot.timestamp`, 0 with a top-level `timestamp`; 3,052 delta lines, 3,052 with a `Z`-terminated top-level `timestamp`. The csift tally over the root (duplicate transcript copies merged): 7,694 units, 5,074 snapshot and 2,620 delta; build before the local render: 7,694 of 7,694 heads carry the UTC instant; build carrying it: 0 carry it, and 7,694 carry the local form with its `<TZAB>(UTC+offset)` marker.",
+            "rule": "One observation per parsed line whose top-level `type` is `file-history-snapshot` or `file-history-delta` for the census; one per emitted `harness.bookkeeping.file-history` unit for the csift tally, read off the head's `at <instant>:` span.",
+            "note": "The head printed the raw UTC string, the one text instant csift left in UTC; it renders local now through the headers' own formatter."
           }
         }
       ]
@@ -45516,7 +45522,7 @@
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "179-181",
+          "lines": "188-190",
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();"
         },
         {
@@ -50074,8 +50080,8 @@
       "code": [
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "139-143",
-          "snippet": "    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
+          "lines": "139-140",
+          "snippet": "    let snap = rec.snapshot.as_ref()?;\n    let at = head_instant(snap.get(\"timestamp\").and_then(serde_json::Value::as_str));"
         }
       ],
       "states": [
@@ -81735,7 +81741,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/promoted.rs",
-          "lines": "182-189",
+          "lines": "191-198",
           "snippet": "    for key in [\n        \"trigger\",\n        \"preTokens\",\n        \"postTokens\",\n        \"durationMs\",\n        \"messagesSummarized\",\n        \"cumulativeDroppedTokens\",\n    ] {"
         },
         {
@@ -89194,7 +89200,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3510"
+          "lines": "3511"
         }
       ],
       "states": [

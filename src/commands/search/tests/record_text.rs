@@ -93,16 +93,32 @@ fn snapshot_and_delta_excerpts_name_paths_and_versions() {
     let snap = rec(
         r#"{"type":"file-history-snapshot","messageId":"m","snapshot":{"messageId":"m","trackedFileBackups":{"/z/b.md":{"version":1},"/a/f.txt":{"version":3,"backupFileName":"f.txt@v3"}},"timestamp":"2026-06-07T05:00:00.000Z"},"isSnapshotUpdate":true}"#,
     );
+    // The head's instant is TEXT, so it is local; the UTC string stays in the line's body.
+    let local = |raw: &str| crate::timez::format_local_compact(Some(raw));
     assert_eq!(
-        promoted_record_text(&snap).as_deref(),
-        Some("[file-history snapshot at 2026-06-07T05:00:00.000Z: /a/f.txt@v3, /z/b.md@v1]")
+        promoted_record_text(&snap),
+        Some(format!(
+            "[file-history snapshot at {}: /a/f.txt@v3, /z/b.md@v1]",
+            local("2026-06-07T05:00:00.000Z")
+        ))
     );
     let delta = rec(
         r#"{"type":"file-history-delta","messageId":"m","trackingPath":"/a/f.txt","backup":{"backupFileName":"f.txt@v4","version":4},"timestamp":"2026-06-07T05:01:00.000Z"}"#,
     );
     assert_eq!(
-        promoted_record_text(&delta).as_deref(),
-        Some("[file-history delta at 2026-06-07T05:01:00.000Z: /a/f.txt@v4 backup=f.txt@v4]")
+        promoted_record_text(&delta),
+        Some(format!(
+            "[file-history delta at {}: /a/f.txt@v4 backup=f.txt@v4]",
+            local("2026-06-07T05:01:00.000Z")
+        ))
+    );
+    // A snapshot naming no instant says so rather than inventing one.
+    let undated = rec(
+        r#"{"type":"file-history-snapshot","messageId":"m","snapshot":{"messageId":"m","trackedFileBackups":{"/a/f.txt":{"version":2}}}}"#,
+    );
+    assert_eq!(
+        promoted_record_text(&undated).as_deref(),
+        Some("[file-history snapshot at ?: /a/f.txt@v2]")
     );
     // A snapshot line with no snapshot object has nothing to render.
     let none = rec(r#"{"type":"file-history-snapshot","messageId":"m"}"#);
@@ -328,7 +344,14 @@ fn a_bookkeeping_line_renders_its_head_over_its_own_bytes() {
         .expect("head and body, newline between");
     assert_eq!(
         head,
-        "[file-history delta at 2026-06-07T05:01:00.000Z: /a/f.txt@v4 backup=f.txt@v4]"
+        format!(
+            "[file-history delta at {}: /a/f.txt@v4 backup=f.txt@v4]",
+            crate::timez::format_local_compact(Some("2026-06-07T05:01:00.000Z"))
+        )
+    );
+    assert!(
+        !head.contains("05:01:00.000Z") && body.contains("2026-06-07T05:01:00.000Z"),
+        "the head prints local text and the UTC string stays in the body"
     );
     assert_eq!(body, line, "the body is the line, byte for byte");
     assert!(

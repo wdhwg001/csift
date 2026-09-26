@@ -107,15 +107,20 @@ fn explicit_selectors_reach_each_promoted_leaf() {
         "{}",
         glob.stdout
     );
-    let meta = h.run(&[
-        "search",
-        "",
-        &at(SESS),
-        "-t",
-        "harness.turn.*",
-        "-t",
-        "harness.bookkeeping.file-history",
-    ]);
+    // A file-history head's instant is TEXT, so it renders in the local zone; pinning the
+    // zone makes the expected string exact on any host.
+    let meta = h.run_with_env(
+        &[
+            "search",
+            "",
+            &at(SESS),
+            "-t",
+            "harness.turn.*",
+            "-t",
+            "harness.bookkeeping.file-history",
+        ],
+        &[("TZ", "UTC")],
+    );
     assert!(meta.success, "stderr: {}", meta.stderr);
     for (leaf, text) in [
         (
@@ -126,11 +131,11 @@ fn explicit_selectors_reach_each_promoted_leaf() {
         ("harness.turn.recap", "Survey finished; the reef pass is charted."),
         (
             "harness.bookkeeping.file-history",
-            "[file-history snapshot at 2026-06-07T05:00:00.500Z: /proj/notes.md@v3]",
+            "[file-history snapshot at 2026-06-07 05:00:00.500 UTC(UTC+0): /proj/notes.md@v3]",
         ),
         (
             "harness.bookkeeping.file-history",
-            "[file-history delta at 2026-06-07T05:00:30.000Z: /proj/notes.md@v4 backup=notes.md@v4]",
+            "[file-history delta at 2026-06-07 05:00:30.000 UTC(UTC+0): /proj/notes.md@v4 backup=notes.md@v4]",
         ),
     ] {
         assert!(
