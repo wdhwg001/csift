@@ -221,8 +221,11 @@ fn a_banner_is_part_of_the_stream_it_heads_not_an_exception_to_it() {
             "{what}: a banner is part of the stream it heads - a write that cannot land is \
              reported like any other, not aborted inside `println!`. stderr: {err}"
         );
+        // The wording after the prefix is the host's own (`Broken pipe (os error 32)` on
+        // unix; Windows spells the same error kind `The pipe is being closed`), so the
+        // assertion reads csift's voice, exactly as the buffered-stream test above does.
         assert!(
-            err.contains("csift: error: Broken pipe"),
+            err.contains("csift: error:"),
             "{what}: the failure reaches main's one Err arm: {err}"
         );
         assert!(
