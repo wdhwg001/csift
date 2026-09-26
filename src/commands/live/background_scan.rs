@@ -384,11 +384,13 @@ pub(crate) fn ingest_carriers(rec: &Record, carriers: &mut Vec<Carrier>, notes: 
         let head = text.trim_start();
         let n = head.bytes().take_while(u8::is_ascii_digit).count();
         let count = if n == 0 { "1" } else { &head[..n] };
-        let ts = rec.timestamp.as_deref().unwrap_or("?");
+        // The canonical local text form at SECOND precision, which is also the dedup
+        // key's precision: the queue line and its user record land a fraction of a second
+        // apart and name the same event.
         let note = format!(
             "{count} background agent(s) were stopped by the user at {} - the notice names \
              no id, so csift cannot mark which agents it stopped",
-            ts.get(..19).unwrap_or(ts)
+            crate::timez::format_timestamp(rec.timestamp.as_deref())
         );
         if !notes.contains(&note) {
             notes.push(note);

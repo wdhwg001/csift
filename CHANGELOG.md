@@ -1064,6 +1064,11 @@ surface change bumps the PATCH.
   and `show --help`'s key list names the seven, plus the five draft-distance keys
   (`superseding_line`, `superseding_uuid`, `diff_chars`, `diff_pct`, `diff_exact`) the
   row already carried and the list never named.
+- **`status`'s stopped-agents note printed a raw UTC instant.** `N background agent(s)
+  were stopped by the user at 2026-06-07T05:10:00` was the one text instant on the
+  surface not in the canonical local form. It renders through the shared timestamp
+  helper now (`2026-06-07 15:10:00 AEST(UTC+10)` in that zone), at the second
+  precision the note's de-duplication already keyed on.
 
 ### Performance
 

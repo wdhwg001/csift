@@ -136,8 +136,18 @@ fn async_agent_launches_and_the_stopped_notice() {
     let r = report(&t, &BackgroundLens::default());
     assert!(r.tasks[0].is_open());
     assert_eq!(r.notes.len(), 1, "{:?}", r.notes);
-    assert!(r.notes[0]
-        .starts_with("2 background agent(s) were stopped by the user at 2026-06-07T05:10:00"));
+    // The instant is the canonical LOCAL form, never the record's raw UTC string: the
+    // text surface carries no UTC copy anywhere else, and a reader converting one by hand
+    // is the arithmetic the local form exists to spare.
+    let at = crate::timez::format_timestamp(Some("2026-06-07T05:10:00.000Z"));
+    assert!(
+        r.notes[0].starts_with(&format!(
+            "2 background agent(s) were stopped by the user at {at} - "
+        )),
+        "{:?}",
+        r.notes
+    );
+    assert!(!r.notes[0].contains("2026-06-07T05:10"), "{:?}", r.notes);
 }
 
 #[test]

@@ -1187,12 +1187,12 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "398-409",
+          "lines": "400-411",
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "452-464",
+          "lines": "454-466",
           "snippet": "/// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.\n/// The latest carrier wins (an agent notifies again after a resume).\npub(crate) fn resolve_carriers(\n    tasks: &mut BTreeMap<String, BgTask>,\n    carriers: &[Carrier],\n    notes: &mut Vec<String>,\n) {\n    let mut by_id: BTreeMap<String, String> = BTreeMap::new();\n    for (tuid, t) in tasks.iter() {\n        if let Some(id) = &t.id {\n            by_id.insert(id.clone(), tuid.clone());\n        }\n    }"
         }
       ],
@@ -1779,7 +1779,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "418-429",
+          "lines": "420-431",
           "snippet": "pub(crate) fn carrier_text(rec: &Record) -> Option<String> {\n    if rec.is_type(\"queue-operation\") {\n        rec.content_str().map(str::to_string)\n    } else if rec.attachment_type().as_deref() == Some(\"queued_command\") {\n        rec.attachment_value()\n            .and_then(|v| v.get(\"prompt\")?.as_str().map(str::to_string))\n    } else if let Some(Content::Text(s)) = rec.message.as_ref().and_then(|m| m.content.as_ref()) {\n        Some(s.clone())\n    } else {\n        None\n    }\n}"
         }
       ],
@@ -2006,7 +2006,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "435-450",
+          "lines": "437-452",
           "snippet": "pub(crate) fn delivered_pulse_labels(rec: &Record) -> Vec<String> {\n    if rec.is_type(\"queue-operation\") && rec.operation.as_deref() != Some(\"enqueue\") {\n        return Vec::new();\n    }\n    let Some(text) = carrier_text(rec) else {\n        return Vec::new();\n    };\n    text.split(TASK_NOTIFICATION_PREFIX)\n        .skip(1)\n        .map(|section| {\n            crate::model::automation_label_for_section(&format!(\n                \"{TASK_NOTIFICATION_PREFIX}{section}\"\n            ))\n        })\n        .collect()\n}"
         },
         {
@@ -2163,7 +2163,7 @@
       "code": [
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "482-495",
+          "lines": "484-497",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         },
         {
@@ -2249,7 +2249,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "482-495",
+          "lines": "484-497",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         }
       ],
@@ -2429,7 +2429,7 @@
       "code": [
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "452-454",
+          "lines": "454-456",
           "snippet": "/// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.\n/// The latest carrier wins (an agent notifies again after a resume).\npub(crate) fn resolve_carriers("
         }
       ],
@@ -2559,7 +2559,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "398-409",
+          "lines": "400-411",
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
@@ -2569,7 +2569,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "503-509",
+          "lines": "505-511",
           "snippet": "    if orphaned > 0 {\n        notes.push(format!(\n            \"{orphaned} task(s) were reconciled as stopped by Claude Code at a later session \\\n             start (its orphan summary: no completion record; a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker)\"\n        ));\n    }"
         },
         {
@@ -2699,12 +2699,12 @@
       "code": [
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "398-409",
+          "lines": "400-411",
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "482-495",
+          "lines": "484-497",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         }
       ],
@@ -3085,8 +3085,8 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "381-397",
-          "snippet": "    if crate::model::is_agents_stopped_notice(&text) {\n        // The notice rides both a queue enqueue line and the user record: one note per\n        // (count, second). It names no id, so csift cannot say WHICH agents it stopped.\n        let head = text.trim_start();\n        let n = head.bytes().take_while(u8::is_ascii_digit).count();\n        let count = if n == 0 { \"1\" } else { &head[..n] };\n        let ts = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let note = format!(\n            \"{count} background agent(s) were stopped by the user at {} - the notice names \\\n             no id, so csift cannot mark which agents it stopped\",\n            ts.get(..19).unwrap_or(ts)\n        );\n        if !notes.contains(&note) {\n            notes.push(note);\n        }\n        return;\n    }"
+          "lines": "381-399",
+          "snippet": "    if crate::model::is_agents_stopped_notice(&text) {\n        // The notice rides both a queue enqueue line and the user record: one note per\n        // (count, second). It names no id, so csift cannot say WHICH agents it stopped.\n        let head = text.trim_start();\n        let n = head.bytes().take_while(u8::is_ascii_digit).count();\n        let count = if n == 0 { \"1\" } else { &head[..n] };\n        // The canonical local text form at SECOND precision, which is also the dedup\n        // key's precision: the queue line and its user record land a fraction of a second\n        // apart and name the same event.\n        let note = format!(\n            \"{count} background agent(s) were stopped by the user at {} - the notice names \\\n             no id, so csift cannot mark which agents it stopped\",\n            crate::timez::format_timestamp(rec.timestamp.as_deref())\n        );\n        if !notes.contains(&note) {\n            notes.push(note);\n        }\n        return;\n    }"
         }
       ],
       "states": [
@@ -3396,7 +3396,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "513-526",
+          "lines": "515-528",
           "snippet": "pub(crate) fn stat_output(t: &mut BgTask) {\n    let Some(p) = t.output_file.as_deref() else {\n        return;\n    };\n    let Ok(meta) = std::fs::metadata(p) else {\n        return;\n    };\n    t.output_bytes = Some(meta.len());\n    if let Ok(modified) = meta.modified() {\n        if let Ok(age) = std::time::SystemTime::now().duration_since(modified) {\n            t.output_age_secs = Some(i64::try_from(age.as_secs()).unwrap_or(i64::MAX));\n        }\n    }\n}"
         }
       ],
@@ -10624,7 +10624,7 @@
         },
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "388-390",
+          "lines": "390-392",
           "snippet": "        let note = format!(\n            \"{count} background agent(s) were stopped by the user at {} - the notice names \\\n             no id, so csift cannot mark which agents it stopped\","
         }
       ],
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2493",
+          "lines": "2494",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -42855,7 +42855,7 @@
       "code": [
         {
           "path": "src/commands/live/background_scan.rs",
-          "lines": "418-429",
+          "lines": "420-431",
           "snippet": "pub(crate) fn carrier_text(rec: &Record) -> Option<String> {\n    if rec.is_type(\"queue-operation\") {\n        rec.content_str().map(str::to_string)\n    } else if rec.attachment_type().as_deref() == Some(\"queued_command\") {\n        rec.attachment_value()\n            .and_then(|v| v.get(\"prompt\")?.as_str().map(str::to_string))\n    } else if let Some(Content::Text(s)) = rec.message.as_ref().and_then(|m| m.content.as_ref()) {\n        Some(s.clone())\n    } else {\n        None\n    }\n}"
         },
         {
@@ -89207,7 +89207,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3517"
+          "lines": "3518"
         }
       ],
       "states": [
