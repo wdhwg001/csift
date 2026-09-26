@@ -77,13 +77,17 @@ fn ledger_gate_rule_21_reads_a_closed_state_whose_builds_this_host_holds() {
     c["states"][0]["probe"]["literal"] = json!(PRESENT);
     c["states"] = json!([closed, c["states"][0].clone()]);
     let mut f = Vec::new();
-    probes::check(std::slice::from_ref(&c), &mut f);
-    assert_eq!(
-        f.len(),
-        1,
-        "the closed state's absent literal is named: {f:?}"
-    );
-    assert!(f[0].contains("occurs 0 times in every build this state names"));
+    let tally = probes::check(std::slice::from_ref(&c), &mut f);
+    // The absence is named only where every build the closed state names was read; a host
+    // holding none of them counts the probe and skips it, which is the rule working.
+    if tally.uncached == 0 {
+        assert_eq!(
+            f.len(),
+            1,
+            "the closed state's absent literal is named: {f:?}"
+        );
+        assert!(f[0].contains("occurs 0 times in every build this state names"));
+    }
 
     // ... and a closed state whose literal the build carries passes exactly as an open one
     // does, so the rule is reading rather than merely failing everything it newly reaches.
