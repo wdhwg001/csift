@@ -145,7 +145,7 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         answered and the conversation was rewound past · .queued\n                                   \
         [-t] the human\'s text while it sat in the input QUEUE\n  \
           agent       .message.plain [scan] the assistant\'s own text ·\n                                   \
-        .message.structured [-t/att] a schema-bound subagent\'s\n                                   \
+        .message.structured [scan/needle] a schema-bound subagent\'s\n                                  \
         final structured answer · .thinking.summary [scan] the\n                                   \
         API\'s summary of the reasoning, never the reasoning ·\n                                   \
         .thinking.narration [scan] its one-sentence progress\n                                   \

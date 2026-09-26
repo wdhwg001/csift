@@ -383,6 +383,59 @@ fn the_search_help_leaf_list_is_the_class_set() {
     );
 }
 
+/// A leaf a DEFAULT scan reaches only through its own value needle wears the tree's
+/// `[scan/needle]` word, read off the shape inventory rather than listed here.
+///
+/// `agent.message.structured` rides one shape, a `structured_output` attachment whose row
+/// is `Gate::DefaultNeedle`, and the tree tagged it `[-t/att]` - the word for a leaf only a
+/// selector or `--attachments` admits - while a flagless `--count-by label` counted it. The
+/// set is every leaf whose shape rows ALL carry that gate, so a leaf with a role-line shape
+/// beside a needle (the person's steer is also an ordinary `user.message`) stays `[scan]`,
+/// and the structured answer is the positive control a sweep that finds nothing would miss.
+#[test]
+fn the_leaf_tree_tags_a_needle_only_leaf_scan_needle() {
+    use crate::model::{rows, Class, Gate};
+
+    let body = SEARCH_AFTER_HELP.as_str();
+    let start = body
+        .find("  user        .message")
+        .expect("the leaf list opens with the user role");
+    let end = body[start..]
+        .find("A RENDERED DRAFT")
+        .expect("the leaf list is followed by the draft paragraph")
+        + start;
+    let region: String = body[start..end]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let needle_only: Vec<Class> = Class::ALL
+        .iter()
+        .copied()
+        .filter(|c| {
+            let gates: Vec<Gate> = rows()
+                .filter(|r| r.leaf == Some(*c))
+                .map(|r| r.gate)
+                .collect();
+            !gates.is_empty() && gates.iter().all(|g| *g == Gate::DefaultNeedle)
+        })
+        .collect();
+    assert!(
+        needle_only.contains(&Class::AgentMessageStructured),
+        "positive control: the structured answer rides only a default-needle shape"
+    );
+    for class in needle_only {
+        let (_, rest) = class.path().split_once('.').expect("a leaf path");
+        let tagged = format!(".{rest} [scan/needle]");
+        assert!(
+            region.contains(&tagged),
+            "`search --help`'s leaf tree must tag `{}` `[scan/needle]` - a flagless scan \
+             reaches it through its own needle",
+            class.path()
+        );
+    }
+}
+
 /// The PROVENANCE edge is ONE key and one row, owned by no family.
 ///
 /// Four families build edges and every one of them folds into the same array through

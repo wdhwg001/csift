@@ -1002,6 +1002,12 @@ surface change bumps the PATCH.
   line the harness's own readers refuse, and the empty label now says so: `(needs
   startTime and totalDuration as numbers)`. The `search --help` sample head showed
   `startTime` as an ISO string and shows epoch milliseconds now (claims QT-042, QT-043).
+- **`search --help` tagged the structured answer as a gated leaf.** The leaf tree gave
+  `agent.message.structured` the gate word `[-t/att]`, which the page's own legend reserves
+  for an attachment leaf only a selector or `--attachments` admits. A flagless scan reaches
+  it through its own value needle (a session carrying two structured answers counts 2 under
+  the leaf in a plain `--count-by label`), so the tree now says `[scan/needle]`. A test
+  holds every leaf whose inventory rows all carry the default-needle gate to that word.
 
 ### Performance
 
