@@ -139,10 +139,6 @@ pub(crate) fn render_json(
     for ex in exchanges {
         for h in &ex.hits {
             units += 1;
-            let (from, to) = match &h.direction {
-                Some((f, t)) => (json!(f), json!(t)),
-                None => (serde_json::Value::Null, serde_json::Value::Null),
-            };
             // On a draft row, the superseding message's address and the distance
             // between the two texts; null on every other row.
             let (sup_line, sup_uuid, diff_chars, diff_pct, diff_exact) = match &ex.draft_diff {
@@ -161,59 +157,32 @@ pub(crate) fn render_json(
                     serde_json::Value::Null,
                 ),
             };
-            let mut row = json!({
-                "kind": "record",
-                "session_id": session_id,
-                "is_subagent": is_subagent,
-                "parent_session_id": parent_session_id,
-                // A superseded draft has NO turn index (outside numbering) - null,
-                // never a fabricated number; the flag names why.
-                "turn_index": ex.turn_index,
-                "superseded_draft": ex.superseded_draft,
-                // The SURVIVAL AXIS verdict, per record.
-                "survival": h.survival.as_str(),
-                "abandoned_root_line": ex.abandoned_root_line,
-                "replay_copy_of": h.replay_copy_of,
-                "superseding_line": sup_line,
-                "superseding_uuid": sup_uuid,
-                "diff_chars": diff_chars,
-                "diff_pct": diff_pct,
-                "diff_exact": diff_exact,
-                // A merged elicitation-sidecar record has no physical line (null).
-                "line": if h.from_sidecar { serde_json::Value::Null } else { json!(h.line) },
-                "uuid": h.uuid,
-                "label": h.class.map(crate::model::Class::path),
-                "labels": h.labels,
-                "tool_name": h.tool_name,
-                "from": from,
-                "to": to,
-                "pairing": crate::commands::search::pairing_json(h.pair),
-                "tool_use_id": h.tool_use_id,
-                // The queue facts a `queue-operation` line carries, on the surface a
-                // reader reaches by running a hit's own `refetch` command: a `user.queued`
-                // hit named its event and its removal reason under `search` and answered
-                // null here for the same record, which is the one thing a refetch must not
-                // do. Null on every other line type, as it is there.
-                "queue_operation": h.queue_operation,
-                "queue_reason": h.queue_reason,
-                "source": if h.from_sidecar { json!("elicitation-sidecar") } else { serde_json::Value::Null },
-                "ts_utc": h.timestamp_utc,
-                "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
-                "text": h.excerpt,
-                // The same record text with its newlines intact (`text` collapses them to
-                // spaces). Non-null under a `--line`/`--uuid` address, which lifts the
-                // excerpt cap; NULL under `--turn`, which does not - there `text` is a
-                // capped fragment and the body would be a fragment too.
-                "body": h.body,
-                "image_ids": h.image_ids,
-                // The compaction facts of a boundary/summary record; null elsewhere.
-                "mode": crate::commands::search::compaction_mode_json(h),
-                "compact_metadata": crate::commands::search::compact_metadata_json(h),
-                // The provenance ROOT, the same shape a `search` hit carries: which
-                // message this record corresponds to. A refetch must answer what the hit it
-                // was copied from answered.
-                "for_root": crate::commands::search::for_root_json(&h.for_root),
-            });
+            // Every key a `search` hit for this record carries, from the ONE builder both
+            // surfaces call: this row is what that hit's `refetch` prints, so it has to
+            // answer everything the hit answered.
+            let mut row = crate::commands::search::record_row_json(h, ex.abandoned_root_line);
+            if let Some(map) = row.as_object_mut() {
+                for (key, value) in [
+                    ("kind", json!("record")),
+                    ("session_id", json!(session_id)),
+                    ("is_subagent", json!(is_subagent)),
+                    ("parent_session_id", json!(parent_session_id)),
+                    // A superseded draft has NO turn index (outside numbering) - null,
+                    // never a fabricated number; the flag names why.
+                    ("turn_index", json!(ex.turn_index)),
+                    ("superseded_draft", json!(ex.superseded_draft)),
+                    ("superseding_line", sup_line),
+                    ("superseding_uuid", sup_uuid),
+                    ("diff_chars", diff_chars),
+                    ("diff_pct", diff_pct),
+                    ("diff_exact", diff_exact),
+                    // The record's text, capped under `--turn` and whole under an address;
+                    // `body` beside it keeps the newlines `text` collapses.
+                    ("text", json!(h.excerpt)),
+                ] {
+                    map.insert(key.to_string(), value);
+                }
+            }
             // The EXTENSION POINT, same law as `search`'s hit rows: every `HitFact`
             // projects its own key(s), so a fact a family adds reaches `show` with no
             // edit here. Appended after the fixed keys, only when the hit carries a

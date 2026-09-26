@@ -56,10 +56,26 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Shared, "tool_use_id"),
     k(Family::Shared, "queue_operation"),
     k(Family::Shared, "queue_reason"),
+    // The per-record facts a `search` hit carried and this row did not, until both were
+    // built by one projector: a row here is what a hit's `refetch` prints.
+    k(Family::Shared, "delivered"),
+    k(Family::Shared, "is_error"),
+    k(Family::Shared, "denial_kind"),
+    k(Family::Shared, "task_ids:[…]"),
+    k(Family::Shared, "orphan_kind"),
+    k(Family::Shared, "resume_paired"),
+    k(Family::Shared, "scheduled_at"),
     k(Family::Shared, "source (\"elicitation-sidecar\" | null)"),
     k(Family::Shared, "survival (live | pre-cut | abandoned)"),
     k(Family::Shared, "abandoned_root_line"),
     k(Family::Shared, "replay_copy_of"),
+    // A draft row's distance from the message that replaced it, and that message's
+    // address; null on every other row. The row carried them before the list named them.
+    k(Family::Shared, "superseding_line"),
+    k(Family::Shared, "superseding_uuid"),
+    k(Family::Shared, "diff_chars"),
+    k(Family::Shared, "diff_pct"),
+    k(Family::Shared, "diff_exact"),
     k(Family::Shared, "ts_utc"),
     k(Family::Shared, "ts_local"),
     k(Family::Shared, "text"),

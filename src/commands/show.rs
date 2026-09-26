@@ -26,7 +26,7 @@ use crate::commands::search::{
 use crate::model::CrossingBudget;
 use crate::parse::{mmap_bytes, scan_lines_bytes};
 use crate::path::{self, SubagentScope};
-use crate::timez::{format_local_compact, local_iso};
+use crate::timez::format_local_compact;
 
 mod addr;
 mod branch;

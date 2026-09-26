@@ -233,6 +233,66 @@ fn orphan_reconciliation_pulse_renders_every_task_id_and_its_kind() {
         "the hit row carries every real id + the kind as data:\n{}",
         js.stdout
     );
+    // The hit's own `refetch` lands on a `show` row, and that row answers every key the hit
+    // answered: both are built by one projector, so nothing the hit carried can be absent
+    // or different there. The hit's match excerpt and its two refetch commands are its own.
+    let hit_rows: Vec<serde_json::Value> = js
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|v| v["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    assert_eq!(hit_rows.len(), 1, "{}", js.stdout);
+    let hit = &hit_rows[0];
+    let fetched = h.run(&["show", at(sess).as_str(), "--line", "1", "--format", "json"]);
+    assert!(fetched.success, "stderr: {}", fetched.stderr);
+    let row: serde_json::Value = fetched
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["kind"] == "record")
+        .expect("one record row");
+    assert_eq!(
+        row["task_ids"],
+        serde_json::json!(["bzz111111", "bzz222222", "bzz333333"])
+    );
+    assert_eq!(row["orphan_kind"], "shell");
+    let own = ["excerpt", "refetch", "refetch_uuid"];
+    for (key, value) in hit.as_object().expect("a hit is an object") {
+        if own.contains(&key.as_str()) {
+            continue;
+        }
+        // `body` is non-null only where the excerpt cap was lifted, and an address lifts it
+        // while this scan does not; it is the one key whose VALUE differs by construction.
+        if key == "body" {
+            assert!(row.get(key).is_some(), "the show row lacks `{key}`");
+            continue;
+        }
+        assert_eq!(
+            row.get(key),
+            Some(value),
+            "the show row answers `{key}` differently from the hit it was refetched from"
+        );
+    }
+    // And `show --help`'s key list names every key the row carries: a consumer reads that
+    // list to know which keys exist.
+    let help = h.run(&["show", "--help"]).stdout;
+    for key in row.as_object().expect("a row is an object").keys() {
+        let named = [
+            format!("{{{key},"),
+            format!(" {key},"),
+            format!(" {key}:"),
+            format!(" {key} ("),
+            format!(" {key}}}"),
+        ]
+        .iter()
+        .any(|form| help.contains(form.as_str()));
+        assert!(
+            named || key == "kind",
+            "`show --help` does not name `{key}`"
+        );
+    }
 }
 
 #[test]

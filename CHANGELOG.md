@@ -1056,6 +1056,14 @@ surface change bumps the PATCH.
   auq` and `csift wait @<uuid> --until tool:Read:handover` omitted `--timeout`, which
   `wait` requires, so both were errors when pasted. They carry `--timeout 600`, and a
   test holds every `csift wait` example on the page to the required flag.
+- **A `show` record row lacked seven keys the `search` hit for the same record
+  carries.** A notification pulse fetched by its hit's own `refetch` came back without
+  `task_ids` and `orphan_kind`, and every row lacked `delivered`, `is_error`,
+  `denial_kind`, `resume_paired` and `scheduled_at`. Both surfaces now build their
+  shared keys through one projector, so a refetch answers every key the hit answered,
+  and `show --help`'s key list names the seven, plus the five draft-distance keys
+  (`superseding_line`, `superseding_uuid`, `diff_chars`, `diff_pct`, `diff_exact`) the
+  row already carried and the list never named.
 
 ### Performance
 

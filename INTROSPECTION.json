@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2492",
+          "lines": "2493",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -89207,7 +89207,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3516"
+          "lines": "3517"
         }
       ],
       "states": [

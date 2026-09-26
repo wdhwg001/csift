@@ -93,24 +93,23 @@ pub(crate) fn compact_metadata_json(h: &Hit) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
-pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
-    let session_id: &str = &ex.session_id;
+/// The keys a `search` hit and a `show` record row BOTH carry, built in ONE place.
+///
+/// A `show` row is what a hit's own `refetch` command prints, so a key the hit carries and
+/// the row does not is a question the refetch cannot answer. Two projectors each typing
+/// their own list is how that happened: `task_ids` and `orphan_kind` on a notification
+/// pulse, and five more beside them (`delivered`, `is_error`, `denial_kind`,
+/// `resume_paired`, `scheduled_at`), rode the hit and were absent from the row for the same
+/// record. Each surface adds only its OWN keys on top of this object - `search` the id trio,
+/// its match-centered `excerpt` and the refetch commands; `show` its `kind`, the id trio,
+/// the turn slot, the draft distance and its capped `text`.
+pub(crate) fn record_row_json(h: &Hit, abandoned_root_line: Option<usize>) -> serde_json::Value {
     // Comm direction: `from`/`to` only for an `agent.communication.*` hit, else null.
     let (from, to) = match &h.direction {
         Some((f, t)) => (serde_json::json!(f), serde_json::json!(t)),
         None => (serde_json::Value::Null, serde_json::Value::Null),
     };
-    // Tool pairing: the `▹` join state of an agent.tool.use/result hit, else null.
-    let pairing = pairing_json(h.pair);
-    let mut obj = serde_json::json!({
-        // The id trio rides EVERY hit row too: bare `.hits[]` flattening is the single most
-        // natural jq idiom against the most-piped command, and with the trio only on the
-        // exchange row that idiom yields silent nulls. jq cannot fail loud on a missing key,
-        // so the data matches the natural access pattern instead. (The exchange row keeps its
-        // copy; `refetch` stays the preferred single-hit path.)
-        "session_id": ex.session_id,
-        "is_subagent": ex.is_subagent,
-        "parent_session_id": ex.parent_session_id,
+    serde_json::json!({
         // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
         "label": h.class.map(Class::path),
         "labels": h.labels,
@@ -118,12 +117,12 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // overridden per record by Claude Code's own request-assembler drop predicate.
         // `labels` is not the delivery verdict, which is why this rides beside it.
         "delivered": h.delivered(),
-        "excerpt": h.excerpt,
         // The same section text the excerpt windows into, with its newlines intact -
         // `excerpt` is a match-centered fragment and collapses every newline to a space,
         // so a consumer reading it as the body lost every paragraph and table row.
-        // Non-null ONLY under `--no-truncate`: the default stream stays one fragment per
-        // hit rather than a fragment plus a full copy of the record.
+        // Non-null ONLY where the excerpt cap was lifted (`search --no-truncate`, a `show`
+        // `--line`/`--uuid` address): the default stream stays one fragment per hit rather
+        // than a fragment plus a full copy of the record.
         "body": h.body,
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
@@ -134,7 +133,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // Tool-pairing (section 7): the use<->result join state; null on a non-tool hit, which the
         // two USER-FACING duals are - the pairing verdict keys on the leaf and
         // `user.answer` / `user.rejection` have always been outside its domain.
-        "pairing": pairing,
+        "pairing": pairing_json(h.pair),
         "is_error": h.is_error,
         "denial_kind": h.denial_kind,
         // The API's own id for the call this unit is about: the block's id on a tool unit,
@@ -143,7 +142,8 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // non-null there while `pairing`, `tool_name` and `is_error` stay null - those
         // three are the tool VIEW of the record, and the dual is the person's.
         "tool_use_id": h.tool_use_id,
-        // The queue facts (a `user.queued` hit); null on every other hit.
+        // The queue facts a `queue-operation` line carries (a `user.queued` hit names its
+        // event and its removal reason); null on every other line type.
         "queue_operation": h.queue_operation,
         "queue_reason": h.queue_reason,
         // Every REAL task id this `harness.notification.*` pulse closes (empty array on every
@@ -160,7 +160,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // chain rule reconstructs, which branch head it hangs off when it is not, and
         // whether the line is an earlier copy of a record a later line carries.
         "survival": h.survival.as_str(),
-        "abandoned_root_line": ex.abandoned_root_line,
+        "abandoned_root_line": abandoned_root_line,
         "replay_copy_of": h.replay_copy_of,
         // The compaction facts; null on every non-compaction hit. `mode` names the gesture
         // (a plain compact, or one of the two `/rewind` summarize directions) and rides BOTH
@@ -174,21 +174,41 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "scheduled_at": h.scheduled_at,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
-        // `source:"elicitation-sidecar"` marks the provenance (section 3.10); a native hit omits `source`.
+        // `source:"elicitation-sidecar"` marks the provenance (section 3.10).
         "line": if h.from_sidecar { serde_json::Value::Null } else { serde_json::json!(h.line) },
         "uuid": h.uuid,
         "source": if h.from_sidecar { serde_json::json!("elicitation-sidecar") } else { serde_json::Value::Null },
         // Extractable image ids (`#N`/`L<line>i<n>`) the record carries; empty array when none.
         "image_ids": h.image_ids,
-        // The ready-to-run `csift show` command for this record - already addressed at the
-        // RIGHT transcript (this row's session_id; a parent uuid + a subagent line number
-        // fetches the wrong record).
-        "refetch": refetch_json(session_id, h),
-        "refetch_uuid": refetch_uuid_json(session_id, h),
         // The provenance ROOT: which message this unit corresponds to. The `for` EDGES
-        // ride the same object through `attach_facts` below, under the one `for` key.
+        // ride the same object through `attach_facts`, under the one `for` key.
         "for_root": for_root_json(&h.for_root),
-    });
+    })
+}
+
+pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
+    let session_id: &str = &ex.session_id;
+    let mut obj = record_row_json(h, ex.abandoned_root_line);
+    if let Some(map) = obj.as_object_mut() {
+        for (key, value) in [
+            // The id trio rides EVERY hit row too: bare `.hits[]` flattening is the single
+            // most natural jq idiom against the most-piped command, and with the trio only
+            // on the exchange row that idiom yields silent nulls. jq cannot fail loud on a
+            // missing key, so the data matches the natural access pattern instead. (The
+            // exchange row keeps its copy; `refetch` stays the preferred single-hit path.)
+            ("session_id", serde_json::json!(ex.session_id)),
+            ("is_subagent", serde_json::json!(ex.is_subagent)),
+            ("parent_session_id", serde_json::json!(ex.parent_session_id)),
+            ("excerpt", serde_json::json!(h.excerpt)),
+            // The ready-to-run `csift show` command for this record - already addressed at
+            // the RIGHT transcript (this row's session_id; a parent uuid + a subagent line
+            // number fetches the wrong record).
+            ("refetch", refetch_json(session_id, h)),
+            ("refetch_uuid", refetch_uuid_json(session_id, h)),
+        ] {
+            map.insert(key.to_string(), value);
+        }
+    }
     // The EXTENSION POINT: every `HitFact` projects its own key(s), so a family adds a
     // variant and the wire shape follows with no edit here. Appended after the fixed
     // keys and only when the hit carries a fact, so the default stream is unchanged.
