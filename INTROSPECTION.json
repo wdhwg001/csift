@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2496",
+          "lines": "2497",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -28078,7 +28078,7 @@
         },
         {
           "path": "src/commands/live/status.rs",
-          "lines": "63-66",
+          "lines": "82-85",
           "snippet": "    let owner_id =\n        crate::subagent::parent_session_id_from_path(main).unwrap_or_else(|| session_id.clone());\n\n    let registry = registry_row_for(&owner_id)?;"
         },
         {
@@ -89208,7 +89208,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3520"
+          "lines": "3521"
         }
       ],
       "states": [

@@ -19,6 +19,25 @@ pub(crate) fn resolve_live_target(target: &[PathBuf], want_subagents: bool) -> R
         scope,
         crate::path::Caller::Other,
     )?;
+    // ONE session, counted by id rather than by file: a project path resolves to every
+    // session in its directory, and taking the first by sort order answered for a session the
+    // caller never named. Two copies of one session id are one session (the resolver has
+    // already said so on stderr), so the count is over distinct ids.
+    let sessions: std::collections::BTreeSet<String> = files
+        .iter()
+        .filter(|p| !crate::subagent::is_subagent_path(p))
+        .map(|p| crate::subagent::session_id_from_path(p))
+        .collect();
+    if sessions.len() > 1 {
+        bail!(
+            "status/wait watch exactly ONE session per call; '{}' resolves to {} sessions. \
+             Name one: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | `@main` | a `*.jsonl` \
+             path (`csift list {}` lists them)",
+            one.display(),
+            sessions.len(),
+            one.display()
+        );
+    }
     // The MAIN transcript anchors the watch; children are discovered from it. A
     // subagent target anchors on its own transcript.
     let main = files

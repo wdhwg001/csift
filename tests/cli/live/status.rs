@@ -504,3 +504,37 @@ fn the_last_section_walks_past_the_resume_repair_pair() {
         out.stdout
     );
 }
+
+#[test]
+fn a_target_naming_several_sessions_is_refused_by_both_live_commands() {
+    // A project path resolves to every session in its directory. status and wait answer for
+    // ONE session, so they refuse the scope rather than answer for whichever sorts first.
+    let h = Home::new();
+    live_eot_main(&h);
+    let other = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    h.write(
+        &format!("{LIVE_ENC}/{other}.jsonl"),
+        r#"{"type":"user","uuid":"o1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"another session"}}"#,
+    );
+    let dir = h.projects().join(LIVE_ENC);
+    let dir = dir.to_str().expect("utf-8 fixture path");
+    let status = h.run(&["status", dir]);
+    assert!(!status.success, "stdout: {}", status.stdout);
+    assert!(
+        status.stderr.contains("exactly ONE session")
+            && status.stderr.contains("resolves to 2 sessions"),
+        "{}",
+        status.stderr
+    );
+    assert!(status.stderr.contains("`@<uuid>`"), "{}", status.stderr);
+    let wait = h.run(&["wait", dir, "--until", "stop", "--timeout", "1"]);
+    assert!(!wait.success, "stdout: {}", wait.stdout);
+    assert!(
+        wait.stderr.contains("resolves to 2 sessions"),
+        "{}",
+        wait.stderr
+    );
+    // A session named inside that same directory still resolves alone.
+    let one = h.run(&["status", &at(LIVE_SESS)]);
+    assert!(one.success, "stderr: {}", one.stderr);
+}

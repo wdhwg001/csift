@@ -1081,6 +1081,12 @@ surface change bumps the PATCH.
   `harness.notification.subagent`. The line keeps no key a person's lacks, so the
   template itself refuses it, the predicate the delivered record is refused by; it
   takes `harness.bookkeeping.queue` like every other rider (claim QT-005).
+- **`status` and `wait` answered a multi-session target for one session it picked.**
+  `csift status <project path>` resolved every session in the directory and reported
+  the first by sort order, with nothing saying so (on one live project directory, 23
+  sessions and a verdict for an idle one nobody named). Both commands now refuse a
+  target that resolves to more than one session id, naming the count and the target
+  grammar; copies of one session id still count as one.
 
 ### Performance
 
