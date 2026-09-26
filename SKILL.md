@@ -19,7 +19,7 @@ description: >-
 
 ## 1. Surface, and the one staleness rule
 
-Surface: **v0.12.3** (must == `csift --version`).
+Surface: **v0.13.0** (must == `csift --version`).
 
 That line is the ONLY staleness detector you have, so use it twice. **At first use after any compaction or context restore**, run `csift --version`: if it differs from the Surface line above, the copy of this file in your context is a stale in-context echo and the installed `SKILL.md` is the one that matches the binary — Read it before anything else. **And whenever an invocation you were CONFIDENT about errors**, same diagnosis: you are remembering an older surface from a prefill, a summary, or habit. Re-read this file; never fall back to hand-parsing the jsonl, which is the failure this whole tool exists to prevent (§3).
 
