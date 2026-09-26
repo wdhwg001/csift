@@ -96,6 +96,7 @@ fn a_dashed_prefix_names_what_its_digits_name() {
     let dirs = sessions(&tree);
     for (dashed, dashless) in [
         ("0a1b2c3d-4", "0a1b2c3d4"),
+        ("0a1b2c3d-4e", "0a1b2c3d4e"),
         ("0a1b2c3d-4e5", "0a1b2c3d4e5"),
         ("0a1b2c3d-5e5f", "0a1b2c3d5e5f"),
     ] {
@@ -133,4 +134,65 @@ fn the_digit_comparison_drops_dashes_on_both_sides_and_nothing_else() {
     assert!(!id_has_prefix("abcdef0123456789", "abcdef02"));
     // Case is compared as written: the harness mints lowercase.
     assert!(!id_has_prefix(A, "0A1B"));
+}
+
+/// A subagent of session A whose bare hex id shares no leading digits with any session.
+const AGENT: &str = "b5c6d7e8f9a0b1c2d";
+
+/// The three sessions plus one subagent transcript under A's sidecar.
+fn sessions_and_agent(tree: &Tree) -> Vec<ProjectDir> {
+    let dirs = sessions(tree);
+    tree.write(
+        &format!("{ENC}/{A}/subagents/agent-{AGENT}.jsonl"),
+        "{\"type\":\"user\",\"isSidechain\":true,\"message\":{\"role\":\"user\",\"content\":\"y\"}}\n",
+    );
+    dirs
+}
+
+/// The prefix domain is the UNION of session uuids and agent ids: a 4-11 digit run that
+/// starts an agent id resolves to that agent, and no session file is kept for it.
+#[test]
+fn a_short_prefix_of_an_agent_id_resolves_the_agent() {
+    let tree = Tree::new();
+    let dirs = sessions_and_agent(&tree);
+    let prefixes = vec![AGENT[..8].to_string()];
+    let (top, hits, agent_hits) = scan_top_level(&dirs, &[], &prefixes);
+    let mut agents = Vec::new();
+    resolve_prefix_uniqueness(&prefixes, &hits, &agent_hits, &mut agents).expect("unique");
+    assert_eq!(agents, vec![AGENT.to_string()]);
+    assert!(
+        top.is_empty(),
+        "no session starts with the agent's digits: {top:?}"
+    );
+}
+
+/// A dash-less run of 12 or more hex is an AGENT id and never a session prefix: the grammar
+/// hands it to the agent path, which takes an exact id or the ONE agent id it starts, and
+/// whose miss names the rule - a session prefix that long keeps its dashes.
+#[test]
+fn a_dashless_run_of_twelve_or_more_names_an_agent_and_never_a_session() {
+    let tree = Tree::new();
+    let dirs = sessions_and_agent(&tree);
+    assert!(!is_uuid_prefix("0a1b2c3d4e5f"));
+    assert!(is_subagent_id("0a1b2c3d4e5f"));
+    // The first 12 digits of session A name no agent, and a session is not searched.
+    let err = resolve_agent_subtree(&dirs, "0a1b2c3d4e5f", SubagentScope::TopLevelOnly)
+        .expect_err("a session prefix spelled without dashes is not an agent")
+        .to_string();
+    assert!(
+        err.contains("never a session") && err.contains("keeps its dashes"),
+        "{err}"
+    );
+    // The same digits spelled with the layout's dash ARE a session prefix.
+    assert!(is_uuid_prefix("0a1b2c3d-4e5f"));
+    // 12 to 16 leading digits of an agent id resolve that agent.
+    for n in [12, 16] {
+        let found = resolve_agent_subtree(&dirs, &AGENT[..n], SubagentScope::TopLevelOnly)
+            .expect("an agent-id prefix resolves");
+        assert_eq!(found.len(), 1, "{n}: {found:?}");
+        assert!(
+            found[0].ends_with(format!("agent-{AGENT}.jsonl")),
+            "{n}: {found:?}"
+        );
+    }
 }

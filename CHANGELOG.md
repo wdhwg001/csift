@@ -988,6 +988,14 @@ surface change bumps the PATCH.
   same sessions, and the dashed spelling is accepted from the first dash on (claim
   PATH-016). Uniqueness is unchanged: two ids sharing the digits are still an error naming
   both.
+- **The four edge shapes of the `@` hex grammar are decided, and each miss names the
+  rule.** A dashed prefix past 11 characters and a dash followed by one or two hex both
+  resolve by their digits. A dash-less run of 12 or more hex is an AGENT id - that agent,
+  or the one agent id it starts - and never a session, so a session prefix that long keeps
+  its dashes; the agent miss now says so. An agent-id prefix resolves (4 to 11 digits
+  through the shared prefix match, 12 to 16 through the agent fallback), and the
+  unrecognized-target error lists `@<id-prefix>` and `@<agent-id>` with what each
+  resolves.
 - **A cost checkpoint said it could not find the two numbers it carries.** The
   `harness.bookkeeping.cost` fact read `startTime` as a string holding an ISO instant, and
   the harness writes it as a number: the session start in epoch milliseconds, which its

@@ -39,7 +39,11 @@ fn a_uuid_prefix_resolves_by_its_digits_at_every_length() {
     let h = populated_home();
     let digits = SESS.replace('-', "");
     let dashless: Vec<String> = [4, 8, 9, 11].map(|n| digits[..n].to_string()).to_vec();
-    let dashed = [SESS[..10].to_string(), SESS[..13].to_string()];
+    let dashed = [
+        SESS[..10].to_string(),
+        SESS[..11].to_string(),
+        SESS[..13].to_string(),
+    ];
     for tok in dashless.iter().chain(dashed.iter()) {
         let out = h.run(&["list", &at(tok), "--no-subagents", "--format", "json"]);
         assert!(out.success, "@{tok}: {}", out.stderr);
@@ -47,6 +51,15 @@ fn a_uuid_prefix_resolves_by_its_digits_at_every_length() {
         assert_eq!(rows.len(), 1, "@{tok} names one session: {}", out.stdout);
         assert_eq!(rows[0]["session_id"], SESS, "@{tok}");
     }
+    // Twelve or more dash-less digits are an AGENT id by the grammar, never a session
+    // prefix, and the miss says so; the same digits with the layout's dash resolve.
+    let twelve = h.run(&["list", &at(&digits[..12])]);
+    assert!(!twelve.success, "{}", twelve.stdout);
+    assert!(
+        twelve.stderr.contains("never a session") && twelve.stderr.contains("keeps its dashes"),
+        "{}",
+        twelve.stderr
+    );
     // Digits no session carries: the named miss, at a length the literal rule never reached.
     let miss = h.run(&["list", &at(format!("{}f", &digits[..8]))]);
     assert!(!miss.success, "{}", miss.stdout);

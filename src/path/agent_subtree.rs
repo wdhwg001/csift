@@ -88,8 +88,10 @@ pub(crate) fn resolve_agent_subtree(
         }
     }
     bail!(
-        "no subagent `{hex}` found under the resolved target(s). List ids with \
-         `csift agents <session>`, then pass one as `@<agent-hex>`."
+        "no subagent `{hex}` found under the resolved target(s). A dash-less run of 12 or \
+         more hex names an AGENT - that agent id, or the ONE agent id it starts - and never \
+         a session: a session prefix that long keeps its dashes (`@1a2b3c4d-5e6f`). List \
+         ids with `csift agents <session>`, then pass one as `@<agent-hex>`."
     )
 }
 

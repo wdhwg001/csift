@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2487",
+          "lines": "2488",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -38851,12 +38851,12 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "422-427",
+          "lines": "424-429",
           "snippet": "/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved\n/// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only\n/// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the\n/// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does\n/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix\n/// keep decision."
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "444-450",
+          "lines": "446-452",
           "snippet": "    if let Some(want) = &pd.target_cwd {\n        if let Some(stored) = read_first_cwd(&p) {\n            if !cwd_equivalent(&stored, want) {\n                return;\n            }\n        }\n    }"
         }
       ],
@@ -39144,7 +39144,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "525-534",
+          "lines": "527-536",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
@@ -89200,7 +89200,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3511"
+          "lines": "3512"
         }
       ],
       "states": [
@@ -89721,8 +89721,13 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "470",
+          "lines": "472",
           "snippet": "        .find(|pfx| id_has_prefix(&stem, pfx))"
+        },
+        {
+          "path": "src/path/agent_subtree.rs",
+          "lines": "91",
+          "snippet": "        \"no subagent `{hex}` found under the resolved target(s). A dash-less run of 12 or \\"
         }
       ],
       "states": [
@@ -89730,8 +89735,8 @@
           "from": "2.1.258",
           "from_basis": "located",
           "to": null,
-          "behavior": "Every session id Claude Code names a top-level transcript after, on the minting paths this state traces, is written in the dashed `8-4-4-4-12` layout, and the transcript file is `${Q()}.jsonl` (PATH-012). At startup the session object takes `id:Okt()??z5()`: `z5` is `randomUUID` imported from `crypto`, and `Okt` is the remote-session override, which turns `CLAUDE_CODE_REMOTE_SESSION_ID` into a name-based uuid through `sZ`, a template literal that places the dashes after digits 8, 12, 16 and 20. `/clear` re-mints through the same `z5`. A bare resume argument becomes the session id only through `Vn`, whose regex `bn` enforces the layout and not the case (`/i`). So the dashes sit at fixed positions and carry no information: a basename minus its dashes is its 32 digits in order. Measured over one live projects root: 188 of 188 top-level transcript basenames are the lowercase layout.",
-          "depends": "csift's `@<uuid-prefix>` compares a token's hex digits against every candidate id with the dashes dropped on both sides (`id_has_prefix`), and admits the dashed spelling only as a literal prefix of the layout (a dash exactly at positions 8, 13, 18 and 23). That is what makes a dash-less prefix of 9 to 11 digits reach the digits past the first dash; compared literally it held its ninth digit against the dash and resolved nothing. If a basename ever carried its dashes elsewhere, a dash-less prefix would still resolve it by digits while the dashed spelling, checked against the fixed template, would be refused for that file. The comparison is case-sensitive: every minting path read here is lowercase, and only a supplied id, which `bn` admits in either case, could put uppercase in a basename.",
+          "behavior": "Every session id Claude Code names a top-level transcript after, on the minting paths this state traces, is written in the dashed `8-4-4-4-12` layout, and the transcript file is `${Q()}.jsonl` (PATH-012). At startup the session object takes `id:Okt()??z5()`: `z5` is `randomUUID` imported from `crypto`, and `Okt` is the remote-session override, which turns `CLAUDE_CODE_REMOTE_SESSION_ID` into a name-based uuid through `sZ`, a template literal that places the dashes after digits 8, 12, 16 and 20. `/clear` re-mints through the same `z5`. A bare resume argument becomes the session id only through `Vn`, whose regex `bn` enforces the layout and not the case (`/i`). So the dashes sit at fixed positions and carry no information: a basename minus its dashes is its 32 digits in order. Measured over one live projects root: 188 of 188 top-level transcript basenames are the lowercase layout. An AGENT transcript id is minted by `Oh`: `a` plus 8 random bytes as 16 lowercase hex, 17 characters, or `a<name>-<16 hex>` for a named teammate. Over the same root's subagent sidecars: 10,440 agent transcripts carry the `a` + 16 hex shape, 170 the teammate shape, 0 any other.",
+          "depends": "csift's `@<uuid-prefix>` compares a token's hex digits against every candidate id with the dashes dropped on both sides (`id_has_prefix`), and admits the dashed spelling only as a literal prefix of the layout (a dash exactly at positions 8, 13, 18 and 23). That is what makes a dash-less prefix of 9 to 11 digits reach the digits past the first dash; compared literally it held its ninth digit against the dash and resolved nothing. If a basename ever carried its dashes elsewhere, a dash-less prefix would still resolve it by digits while the dashed spelling, checked against the fixed template, would be refused for that file. The comparison is case-sensitive: every minting path read here is lowercase, and only a supplied id, which `bn` admits in either case, could put uppercase in a basename. The same shapes decide the grammar's four edges. A dashed prefix past 11 characters, and a dash followed by one or two hex, resolve by their digits. A dash-less run of 12 or more hex is an AGENT id - that agent, or the ONE agent id it starts - and never a session: an agent id is `a` + 16 hex, so 12 leading digits of it and 12 leading digits of a session uuid cannot be told apart by shape, and a session prefix that long keeps its dashes. An agent-id prefix resolves across the union the prefix grammar reads (4 to 11 digits through the shared match, 12 to 16 through the agent path's fallback), and every miss names that grammar.",
           "instrument": "python3 over the top-level `*.jsonl` of the live projects root (`~/.claude/projects/<ENCODED>/<name>.jsonl`, subagent lanes excluded by the glob depth), matching each basename minus `.jsonl` against the lowercase `8-4-4-4-12` hex pattern and against the same pattern case-folded, one observation per file. python3 byte-comparing each producer_chain excerpt against the build named by `verified_claude_code` at its offset and counting its occurrences in the whole build. `csift stats @<prefix> --no-subagents` against one top-level session of that root at 4, 8, 9 and 11 dash-less digits, at the dashed 10- and 13-character spellings, and at 9 digits no session carries, on the build before this rule and on the build carrying it.",
           "probe": {
             "kind": "corpus",
@@ -89801,14 +89806,21 @@
               "offset": 159262439,
               "excerpt": "function El(){let t=Hy()??fl(ye());return o(t,`${Q()}.jsonl`)}",
               "note": "The basename is the session id verbatim, so the id's layout is the basename's."
+            },
+            {
+              "role": "writer",
+              "name": "Oh, the agent id minter",
+              "offset": 156730495,
+              "excerpt": "function Oh(e){if(e&&!Qe.test(e))e=e.replace(/[^\\w-]/g,\"\").slice(0,63);let t=yn(8).toString(\"hex\");return e?`a${e}-${t}`:`a${t}`}",
+              "note": "An agent id is `a` + 16 hex from 8 random bytes, or `a<name>-<16 hex>` with a name; the name is stripped to `[\\w-]` and cut at 63."
             }
           ],
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "holds",
-            "instrument": "python3 over the top-level `*.jsonl` of the live projects root at `~/.claude/projects`, matching each basename against the lowercase and the case-folded `8-4-4-4-12` patterns; python3 byte-comparing the eight producer_chain excerpts against $CSIFT_LEDGER_BINARY (the 2.1.258 build) and counting each one's occurrences; `csift stats @<prefix> --no-subagents` against one top-level session of that root at 4, 8, 9 and 11 dash-less digits, at the dashed 10- and 13-character spellings and at 9 digits no session carries, on the build before the digit rule and on the build carrying it.",
-            "observed": "188 top-level transcripts on the live root at its instant (185 distinct basenames, 3 on disk under two project directories): 188 of 188 the lowercase layout, 0 in another case, 0 of another shape; 187 of 187 with the measuring session's own transcript excluded. All eight excerpts byte-exact at their offsets and each occurring exactly once in the build. Build before the rule: 4 and 8 digits resolve the session, 9 and 11 digits fail with `no session or agent id starts with`, the dashed 10-character spelling fails with `is not a recognized @-target`, the dashed 13-character one resolves. Build carrying the rule: all six resolve that one session, and the 9 digits no session carries fail with the named miss.",
-            "rule": "One observation per top-level transcript file for the census; one observation per excerpt for the byte comparison; one observation per csift invocation, read as resolved (a `SESSION` row for the one session) or failed (the error line).",
+            "instrument": "python3 over the top-level `*.jsonl` of the live projects root at `~/.claude/projects`, matching each basename against the lowercase and the case-folded `8-4-4-4-12` patterns; python3 byte-comparing the eight producer_chain excerpts against $CSIFT_LEDGER_BINARY (the 2.1.258 build) and counting each one's occurrences; `csift stats @<prefix> --no-subagents` against one top-level session of that root at 4, 8, 9 and 11 dash-less digits, at the dashed 10- and 13-character spellings and at 9 digits no session carries, on the build before the digit rule and on the build carrying it. python3 over the same root's `<uuid>/subagents/**/agent-*.jsonl`, matching each stem minus `agent-` against `a` + 16 lowercase hex and against `a<name>-<16 hex>`; `csift stats @<t> --no-subagents` at the dashed 19-, 10- and 11-character spellings of a session, its first 12 digits dash-less, and the first 8, 12 and 16 digits of one of its agent ids, on both builds.",
+            "observed": "188 top-level transcripts on the live root at its instant (185 distinct basenames, 3 on disk under two project directories): 188 of 188 the lowercase layout, 0 in another case, 0 of another shape; 187 of 187 with the measuring session's own transcript excluded. All eight excerpts byte-exact at their offsets and each occurring exactly once in the build. Build before the rule: 4 and 8 digits resolve the session, 9 and 11 digits fail with `no session or agent id starts with`, the dashed 10-character spelling fails with `is not a recognized @-target`, the dashed 13-character one resolves. Build carrying the rule: all six resolve that one session, and the 9 digits no session carries fail with the named miss. Agent ids: 10,440 of the `a` + 16 hex shape, 170 of the teammate shape, 0 other; the minter `Oh` byte-exact at 156730495, once. The edge shapes, build before the rule against the build carrying it: dashed 19 characters resolves on both; dashed 10 and 11 characters (a dash plus one and two hex) fail with `is not a recognized @-target` before and resolve after; 12 dash-less digits of the session fail on both, the miss after naming the rule (`never a session`); the agent id's first 8, 12 and 16 digits resolve its one transcript on both.",
+            "rule": "One observation per top-level transcript file for the census; one observation per excerpt for the byte comparison; one observation per csift invocation, read as resolved (a `SESSION` row for the one session) or failed (the error line). One observation per agent transcript file for the agent-id census.",
             "note": "A dash-less prefix past the first segment was admitted by the grammar and compared literally against the dashed basename; it is compared by its digits now, and the dashed spelling is admitted from the first dash on."
           }
         }

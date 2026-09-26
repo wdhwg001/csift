@@ -287,18 +287,20 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     let hexish = !id.is_empty() && id.bytes().all(|b| b.is_ascii_hexdigit());
                     if hexish && id.len() < 4 {
                         bail!(
-                            "`@{id}` is too short for a session-uuid prefix — a prefix \
-                             needs 4-11 leading (dashless) hex chars; add more characters \
-                             (`csift list` shows the full uuids)"
+                            "`@{id}` is too short for an id prefix — a prefix needs 4-11 \
+                             leading (dashless) hex chars; add more characters (`csift \
+                             list` shows the full uuids, `csift agents` the agent ids)"
                         );
                     }
                     bail!(
                         "`@{id}` is not a recognized @-target — expected `@<uuid>` | \
-                         `@<uuid-prefix>` (4-11 dashless leading hex) | `@<agent-id>` \
-                         (what `csift agents` prints) | `@<name>@<team>` (a teammate's \
-                         routing form) | `@main` | `@trap:<marker>` | `@-Users-…` / \
-                         `@C--Users-…` (an encoded project dir). A project PATH is \
-                         targeted without `@`."
+                         `@<id-prefix>` (4-11 dashless hex, or a uuid's dashed layout \
+                         from its first dash on: the ONE session or agent id whose digits \
+                         it starts) | `@<agent-id>` (12+ dashless hex or a teammate id: \
+                         that agent, or the ONE agent id it starts - what `csift agents` \
+                         prints) | `@<name>@<team>` (a teammate's routing form) | `@main` \
+                         | `@trap:<marker>` | `@-Users-…` / `@C--Users-…` (an encoded \
+                         project dir). A project PATH is targeted without `@`."
                     );
                 }
             }
