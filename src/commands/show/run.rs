@@ -274,14 +274,8 @@ pub(crate) fn run_rendered(
     }
     if !misses.is_empty() {
         bail!(
-            "no such record(s): {} — an address renders EVERY parseable line of the \
-             transcript: message lines (superseded drafts included), attachment lines, \
-             system lines of every subtype, and the non-record bookkeeping lines \
-             (last-prompt, mode, queue-operation, file-history, cost-state, …). A shape \
-             csift models no leaf for renders as `? unmodeled: <shape>` rather than a \
-             miss, so this address named a line the file does not have, or a line that \
-             is not a JSON object at all — `--raw` reads a torn line",
-            misses.join(", ")
+            "{}",
+            crate::commands::search::address_miss(&misses.join(", "))
         );
     }
 

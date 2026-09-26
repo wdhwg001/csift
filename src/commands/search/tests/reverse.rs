@@ -75,3 +75,76 @@ fn the_addressed_record_is_in_the_set() {
         "an address that names nothing closes over nothing"
     );
 }
+
+/// Whether a transcript HOLDS the addressed record is read off its bytes with `show`'s
+/// test: a line number names a line the file has that is a JSON object, a uuid names a
+/// line carrying it as its own `uuid`. Every branch of that test, pinned.
+#[test]
+fn an_address_names_a_record_by_the_bytes_the_file_holds() {
+    let file = concat!(
+        r#"{"type":"user","uuid":"q1","message":{"role":"user","content":"x"}}"#,
+        "\n",
+        "\n",
+        "a torn line with no braces\n",
+        "[1, 2, 3]\n",
+        r#"{"type":"mode","mode":"default"}"#,
+        "\n",
+    )
+    .as_bytes();
+    let line = |n: usize| names_a_record(file, &ForAddr::Line(n));
+    assert!(line(1), "a record line");
+    assert!(!line(2), "a blank line is no record");
+    assert!(!line(3), "a torn line is no JSON object");
+    assert!(!line(4), "a JSON array is no record");
+    assert!(
+        line(5),
+        "a bookkeeping line is addressable, as `show` addresses it"
+    );
+    assert!(!line(6), "past the last line");
+    assert!(!line(99), "far past the last line");
+    let uuid = |u: &str| names_a_record(file, &ForAddr::Uuid(u.to_string()));
+    assert!(uuid("q1"));
+    assert!(
+        !uuid("q"),
+        "a uuid names a whole value, not a prefix of one"
+    );
+    assert!(!uuid("nosuch"));
+    // A final line with no trailing newline is still a line.
+    assert!(names_a_record(br#"{"a":1}"#, &ForAddr::Line(1)));
+    // Invalid UTF-8 inside a string is decoded the way the scan decodes it, never counted
+    // against the line.
+    let mut bad = br#"{"type":"user","uuid":"b1","message":{"role":"user","content":"x"#.to_vec();
+    bad.push(0xff);
+    bad.extend_from_slice(br#""}}"#);
+    assert!(names_a_record(&bad, &ForAddr::Line(1)));
+    // An empty file holds nothing.
+    assert!(!names_a_record(b"", &ForAddr::Line(1)));
+}
+
+/// The miss wording is one builder, so `show` and `search --for` cannot drift apart.
+#[test]
+fn the_address_miss_names_the_address_and_the_rule() {
+    let m = address_miss("L42");
+    assert!(
+        m.starts_with("no such record(s): L42 \u{2014} an address renders EVERY"),
+        "{m}"
+    );
+    assert!(m.ends_with("`--raw` reads a torn line"), "{m}");
+}
+
+/// A `--for` run fails only when NO transcript names the address; one that does anywhere in
+/// the scope is enough, and a run with no address is never asked.
+#[test]
+fn a_for_run_fails_only_when_no_transcript_names_the_address() {
+    let addr = ForAddr::Line(3);
+    assert!(require_addressed(Some(&addr), [false, true, false].into_iter()).is_ok());
+    let err = require_addressed(Some(&addr), [false, false].into_iter())
+        .expect_err("no transcript names L3")
+        .to_string();
+    assert!(err.starts_with("no such record(s): L3 "), "{err}");
+    assert!(
+        require_addressed(Some(&addr), std::iter::empty()).is_err(),
+        "an empty scope names nothing"
+    );
+    assert!(require_addressed(None, std::iter::empty()).is_ok());
+}

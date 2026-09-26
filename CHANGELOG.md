@@ -1045,6 +1045,13 @@ surface change bumps the PATCH.
   lacked the hyphen-value allowance, so clap read `-1y` as an unknown short flag and
   exited 2 (`unexpected argument '-1' found`) while `--since=-1y` worked. Both flags take
   it now. `--turn` already did and `--max-count` reads a negative number by design.
+- **`--for` on an address that names no record read as an empty closure.**
+  `search --for L99999999` exited 0 with `for_of {records:0}` and the ordinary
+  zero-match note, so "nothing is for this line" and "this line does not exist" read
+  alike. An address that names no record in any transcript of the scope now fails as
+  `show` does, in the same words (`no such record(s): L99999999 - ...`); the test reads
+  the file's own bytes, so it does not depend on the pattern or the prefilter. A real
+  address whose closure matches nothing stays a definitive absence, exit 0.
 
 ### Performance
 

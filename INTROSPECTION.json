@@ -12278,7 +12278,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "135-139",
+          "lines": "137-141",
           "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,"
         },
         {
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2490",
+          "lines": "2491",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -42525,7 +42525,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "393",
+          "lines": "397",
           "snippet": "                    (c == Class::UserQueued || c.category() == \"harness.bookkeeping\") && !reach(c)"
         }
       ],
@@ -45613,8 +45613,8 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "275-277",
-          "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
+          "lines": "275-278",
+          "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         },
         {
           "path": "src/parse/spine.rs",
@@ -50622,7 +50622,7 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "459-460",
+          "lines": "463-464",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -59451,8 +59451,8 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "275-277",
-          "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an address renders EVERY parseable line of the \\"
+          "lines": "275-278",
+          "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         }
       ],
       "states": [
@@ -73367,7 +73367,7 @@
       "code": [
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "125-127",
+          "lines": "127-129",
           "snippet": "    // keeps its own flag). An addressed fetch is already admitted by the two attachment gates\n    // above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
@@ -89207,7 +89207,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3514"
+          "lines": "3515"
         }
       ],
       "states": [

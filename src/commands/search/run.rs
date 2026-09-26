@@ -254,6 +254,12 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         for_addr: for_addr.as_ref().map(ForAddr::as_str),
         ..SearchOutcome::default()
     };
+    // An address naming no record in ANY transcript of the scope is `show`'s miss, not an
+    // empty closure.
+    require_addressed(
+        for_addr.as_ref(),
+        per_file.iter().map(|fr| fr.names_for_addr),
+    )?;
     let mut all: Vec<Exchange> = Vec::new();
     for fr in per_file {
         outcome.skipped_lines += fr.skipped_lines;
@@ -582,4 +588,7 @@ pub(crate) struct FileResult {
     /// What the SURVIVAL AXIS found in this transcript - all zero on the early-return
     /// paths (no chain was built, so nothing is claimed).
     pub(crate) chain: ChainCounts,
+    /// Whether this transcript holds the record a `--for` address names (`false` with no
+    /// address). Read off the bytes, so a gated or empty-matching file still answers it.
+    pub(crate) names_for_addr: bool,
 }

@@ -82,6 +82,69 @@ impl ForAddr {
     }
 }
 
+/// Does ONE transcript hold the record `addr` names? The test `show` applies to an address,
+/// read off the file's own BYTES so that neither this scan's prefilter nor its whole-file
+/// gate decides it: a line number names a line the file has that is a JSON object, and a
+/// uuid names a line carrying it as its own `uuid`. A closure that finds nothing is an
+/// answer; an address that names nothing is a mistake, and the two must not read alike.
+pub(crate) fn names_a_record(bytes: &[u8], addr: &ForAddr) -> bool {
+    match addr {
+        ForAddr::Line(n) => nth_line(bytes, *n).is_some_and(is_json_object),
+        ForAddr::Uuid(u) => {
+            memchr::memmem::find(bytes, format!("\"uuid\":\"{u}\"").as_bytes()).is_some()
+        }
+    }
+}
+
+/// The `n`th (1-based) newline-delimited line, `None` past the end of the file.
+fn nth_line(bytes: &[u8], n: usize) -> Option<&[u8]> {
+    let mut start = 0usize;
+    for _ in 1..n {
+        start += memchr::memchr(b'\n', bytes.get(start..)?)? + 1;
+    }
+    let rest = bytes.get(start..).filter(|r| !r.is_empty())?;
+    Some(&rest[..memchr::memchr(b'\n', rest).unwrap_or(rest.len())])
+}
+
+/// A JSON object, read the way the scan reads a line: invalid UTF-8 is decoded lossily
+/// rather than counted against the line (AGENTS section 4, encoding is not malformity).
+fn is_json_object(line: &[u8]) -> bool {
+    let object =
+        |b: &[u8]| serde_json::from_slice::<serde_json::Value>(b).is_ok_and(|v| v.is_object());
+    object(line)
+        || (std::str::from_utf8(line).is_err() && object(String::from_utf8_lossy(line).as_bytes()))
+}
+
+/// Fail a `--for` run whose address names no record in ANY transcript of the scope, with
+/// `show`'s own miss. `named` is each transcript's [`names_a_record`] answer, and an empty
+/// scope names nothing either. A closure that reached nothing from a REAL address is an
+/// answer and never comes here.
+pub(crate) fn require_addressed(
+    addr: Option<&ForAddr>,
+    mut named: impl Iterator<Item = bool>,
+) -> Result<()> {
+    if let Some(addr) = addr {
+        if !named.any(|n| n) {
+            bail!("{}", address_miss(&addr.as_str()));
+        }
+    }
+    Ok(())
+}
+
+/// The miss `show` and `search --for` both report for an address naming no record: the
+/// same words, because it is the same mistake on both surfaces.
+pub(crate) fn address_miss(misses: &str) -> String {
+    format!(
+        "no such record(s): {misses} \u{2014} an address renders EVERY parseable line of the \
+         transcript: message lines (superseded drafts included), attachment lines, system \
+         lines of every subtype, and the non-record bookkeeping lines (last-prompt, mode, \
+         queue-operation, file-history, cost-state, \u{2026}). A shape csift models no leaf for \
+         renders as `? unmodeled: <shape>` rather than a miss, so this address named a line \
+         the file does not have, or a line that is not a JSON object at all \u{2014} `--raw` \
+         reads a torn line"
+    )
+}
+
 /// The transitive closure of "is for the addressed record", as the set of LINES to emit.
 ///
 /// THREE ways a row joins, and each is one of the provenance relations read structurally

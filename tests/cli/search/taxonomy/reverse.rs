@@ -179,18 +179,42 @@ fn an_ordinary_search_reports_no_closure() {
     );
 }
 
-/// An address that names no record is an EMPTY set and exit 0 - a definitive absence like
-/// any other zero-match search, with the reverse query echoed among the active filters so
-/// the reader can tell "the closure reached nothing" from "the pattern matched nothing".
+/// An address that names no record is a MISTAKE, and `--for` reports it as `show` does: exit
+/// non-zero, `no such record(s)`, in the same words. A line past the end of the file and a
+/// uuid no line carries are both that mistake.
 #[test]
-fn an_address_that_names_nothing_is_a_definitive_absence() {
+fn an_address_that_names_no_record_is_the_show_miss() {
+    let h = home();
+    for addr in ["L999", "not-a-record-uuid"] {
+        let out = h.run(&["search", "", &format!("@{SESS}"), "--for", addr]);
+        assert!(!out.success, "--for {addr} must fail: {}", out.stdout);
+        assert!(
+            out.stderr.contains(&format!("no such record(s): {addr}")),
+            "the miss names the address: {}",
+            out.stderr
+        );
+        let show = h.run(&["show", &format!("@{SESS}"), "--line", "999"]);
+        let wording = |t: &str| t.split_once(" \u{2014} ").map(|(_, w)| w.to_string());
+        assert_eq!(
+            wording(&out.stderr),
+            wording(&show.stderr),
+            "`--for` and `show` explain the miss in the same words"
+        );
+    }
+}
+
+/// An address that DOES name a record, with nothing in scope matching the pattern, is the
+/// ordinary definitive absence: exit 0, the reverse query echoed among the active filters,
+/// so "the closure reached nothing" still reads apart from "the address named nothing".
+#[test]
+fn a_real_address_with_nothing_matching_is_a_definitive_absence() {
     let h = home();
     let out = h.run(&[
         "search",
-        "",
+        "zzrev-matches-no-record",
         &format!("@{SESS}"),
         "--for",
-        "L999",
+        "L7",
         "--format",
         "json",
     ]);
@@ -206,7 +230,7 @@ fn an_address_that_names_nothing_is_a_definitive_absence() {
         sum["active_filters"]
             .as_str()
             .unwrap_or_default()
-            .contains("--for L999"),
+            .contains("--for L7"),
         "the reverse query is echoed among the active filters: {sum}"
     );
 }

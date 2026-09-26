@@ -85,9 +85,11 @@ pub(crate) fn search_one_file(
             skipped_lines: 0,
             turn_count: 0,
             chain: ChainCounts::new(cross),
+            names_for_addr: false,
         });
     };
     let bytes: &[u8] = &mmap;
+    let names_for_addr = for_addr.is_some_and(|a| names_a_record(bytes, a));
 
     // A GIANT transcript's per-turn match phase fans out even under a broad scan: such a
     // file is the straggler the rest of the pool ends up waiting on (only a handful of
@@ -245,6 +247,7 @@ pub(crate) fn search_one_file(
                     skipped_lines: gate_skipped,
                     turn_count: 0,
                     chain: ChainCounts::new(cross),
+                    names_for_addr,
                 });
             }
             let (pending, pending_skipped) =
@@ -255,6 +258,7 @@ pub(crate) fn search_one_file(
                     skipped_lines: gate_skipped + pending_skipped,
                     turn_count: 0,
                     chain: ChainCounts::new(cross),
+                    names_for_addr,
                 });
             }
         }
@@ -513,5 +517,6 @@ pub(crate) fn search_one_file(
         skipped_lines: skipped,
         turn_count,
         chain: chain_counts,
+        names_for_addr,
     })
 }
