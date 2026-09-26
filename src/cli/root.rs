@@ -133,7 +133,11 @@ use super::*;
         JSON header (`duplicate_transcripts`, `duplicate_records_dropped`), beside the\n               \
         copies it did NOT merge (`divergent_transcripts`) and the ones it could not read\n               \
         (`unreadable_transcripts`). `show` still refuses an address that resolves\n               \
-        to two files: target a `*.jsonl` path to read one copy.\n  \
+        to two files: target a `*.jsonl` path to read one copy - a path reads the file it\n               \
+        names, never another copy of its id, and names the others on stderr. One agent id\n               \
+        can also sit at BOTH sidecar locations of one session, the built-in one and a\n               \
+        workflow run's (its conversation continued there): the same rule reads and names\n               \
+        both.\n  \
           Caps         No silent truncation, ever: every cap prints what was dropped and how\n               \
         to get the rest. `list` caps an unscoped run at 50 rows; `show` caps at 200 record\n               \
         units and prints the exact continuation command; `--max-count 0` = uncapped, always.\n  \

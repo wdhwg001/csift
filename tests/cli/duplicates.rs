@@ -9,6 +9,7 @@ use crate::harness::*;
 
 mod agent_targets;
 mod spanning;
+mod two_shapes;
 
 /// The project-directory name a rename leaves behind - it matches no record's cwd. It is
 /// deliberately NOT a substring of `ENC`: an assertion that a path "contains" one of the two

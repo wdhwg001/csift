@@ -115,7 +115,7 @@ pub(crate) fn resolve_single_transcript(target: &std::path::Path) -> Result<Path
                     .map(path::DuplicateGroup::subject)
                     .collect();
                 format!(
-                    "These are copies of ONE {} under different project directories, so no \
+                    "These are copies of ONE {} at different paths on disk, so no \
                      `@<id>` separates them - name a path: {}",
                     subjects.join(" and one "),
                     every.join(" | ")

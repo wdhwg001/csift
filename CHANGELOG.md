@@ -1087,6 +1087,15 @@ surface change bumps the PATCH.
   sessions and a verdict for an idle one nobody named). Both commands now refuse a
   target that resolves to more than one session id, naming the count and the target
   grammar; copies of one session id still count as one.
+- **One agent id at both sidecar locations of one session was read in halves.** A workflow
+  agent whose conversation continued past its run has a second transcript at the built-in
+  `subagents/agent-<id>.jsonl` beside its `subagents/workflows/<run>/` one (a continuation,
+  not a copy). `@<id>` read one half with nothing said, a `*.jsonl` path naming the built-in
+  file read the workflow file instead, and the note `list` printed for the pair called it
+  two project directories. Every route now takes one rule: `@<id>` reads both halves, a
+  path reads the file it names and names the other on stderr, and the note says the pair
+  sits under one session's sidecar at the built-in and the workflow locations (claim
+  PATH-017; PATH-014 refined). `show @<id>` still refuses the pair and names both paths.
 
 ### Performance
 

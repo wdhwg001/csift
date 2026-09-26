@@ -65,6 +65,7 @@ pub fn resolve_session_files_reported(
         session_ids,
         session_prefixes,
         mut agent_hexes,
+        agent_paths,
         routing_teammates,
         project_paths,
         explicit_dirs,
@@ -96,7 +97,7 @@ pub fn resolve_session_files_reported(
     // -- SESSION path: the top-level `<uuid>.jsonl` session files (+ subagents per scope).
     // Skipped for an AGENT-ONLY invocation (no session target), so `@<agent-hex>` alone does
     // not list every session - only the agent subtree below runs.
-    let session_path_active = session_target || agent_hexes.is_empty();
+    let session_path_active = session_target || (agent_hexes.is_empty() && agent_paths.is_empty());
     if session_path_active {
         let (top_level, prefix_hits, prefix_agent_hits) =
             scan_top_level(&dirs, &session_ids, &session_prefixes);
@@ -149,6 +150,16 @@ pub fn resolve_session_files_reported(
         // with whatever the session path gathered for the same transcript.
         files.extend(resolve_agent_subtree(&dirs, hex, scope)?);
     }
+    // -- NAMED agent transcripts: the file itself, never another transcript of its id. Its
+    // basename is kept out of the union merge below, which would otherwise keep the LONGEST
+    // copy and drop the very file the path named.
+    let mut named: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for file in &agent_paths {
+        files.extend(resolve_named_agent(&dirs, file, scope)?);
+        if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
+            named.insert(stem.to_string());
+        }
+    }
 
     // ONE merge over the whole UNION, and the reason is the invocation that names a session
     // and one of its agents at once (`list @<uuid> @<agent-hex>`). Two paths reached the
@@ -168,8 +179,9 @@ pub fn resolve_session_files_reported(
     // NOTHING keeps every member in the set, so this pass would otherwise compare the same
     // two transcripts byte for byte a second time and announce the group twice. One group is
     // one comparison, one note and one row in the header count.
-    let decided: std::collections::BTreeSet<String> =
+    let mut decided: std::collections::BTreeSet<String> =
         duplicates.iter().map(|g| g.session_id.clone()).collect();
+    decided.extend(named);
     let (mut files, groups) = dedup_copies_skipping(files, &decided);
     emit_duplicate_notes(&groups);
     duplicates.extend(groups);
@@ -195,6 +207,8 @@ struct Targets {
     /// AGENT targets (`@<agent-hex>` / `@trap:<marker>`->agent / a subagent `*.jsonl`): each
     /// resolves to that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
     agent_hexes: Vec<String>,
+    /// SUBAGENT `*.jsonl` paths, kept as PATHS: the file named is the file read.
+    agent_paths: Vec<PathBuf>,
     /// Teammate ROUTING targets (`@<Name>@<Team>`) as `(name, team)`. Kept apart from
     /// `agent_hexes` because the transcript id they name is on disk, not in the token.
     routing_teammates: Vec<(String, String)>,
@@ -212,6 +226,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
     let mut session_ids: Vec<String> = Vec::new();
     let mut session_prefixes: Vec<String> = Vec::new();
     let mut agent_hexes: Vec<String> = Vec::new();
+    let mut agent_paths: Vec<PathBuf> = Vec::new();
     let mut routing_teammates: Vec<(String, String)> = Vec::new();
     let mut project_paths: Vec<std::path::PathBuf> = Vec::new();
     let mut explicit_dirs: Vec<ProjectDir> = Vec::new();
@@ -336,7 +351,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
             let (dir, sid) = session_file_target(file)?;
             explicit_dirs.push(dir);
             if is_sub {
-                agent_hexes.push(crate::subagent::session_id_from_path(file));
+                agent_paths.push(file.to_path_buf());
             } else {
                 session_ids.push(sid);
                 session_target = true;
@@ -369,6 +384,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         session_ids,
         session_prefixes,
         agent_hexes,
+        agent_paths,
         routing_teammates,
         project_paths,
         explicit_dirs,

@@ -20,6 +20,11 @@
 
 use super::*;
 
+// The WORDS a disclosure uses - pure strings, no print - apart from the merge that decides
+// what they describe.
+mod notes;
+pub use notes::*;
+
 /// How the copies of one session id relate, byte for byte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DuplicateRelation {
@@ -364,88 +369,6 @@ fn line_count(bytes: &[u8]) -> usize {
 pub fn emit_duplicate_notes(groups: &[DuplicateGroup]) {
     for g in groups {
         eprintln!("csift: note: {}", duplicate_note(g));
-    }
-}
-
-/// `one`/`many` by count - the disclosure names small numbers of copies and lines, so a
-/// bare `{n} lines` reads as a machine's output on the one count a reader meets most.
-fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
-    if n == 1 {
-        one
-    } else {
-        many
-    }
-}
-
-/// The one wording of a duplicate disclosure, shared by the stderr note and the text
-/// footers so the two can never drift.
-#[must_use]
-pub fn duplicate_note(g: &DuplicateGroup) -> String {
-    let n = g.members.len();
-    let subject = g.subject();
-    match g.relation {
-        DuplicateRelation::Unknown => {
-            let unreadable: Vec<String> = g
-                .members
-                .iter()
-                .filter_map(|m| {
-                    m.error
-                        .as_ref()
-                        .map(|e| format!("{}: {e}", m.path.display()))
-                })
-                .collect();
-            format!(
-                "{subject} is on disk under {n} project directories and csift could not \
-                 read {} of them ({}) - with no bytes to compare, csift merges nothing, so \
-                 every copy stays in scope and every count below includes all of them. Fix \
-                 that copy's permissions, or target a `*.jsonl` path to read one alone.",
-                unreadable.len(),
-                unreadable.join("; ")
-            )
-        }
-        DuplicateRelation::Divergent => {
-            let counts: Vec<String> = g
-                .members
-                .iter()
-                .map(|m| {
-                    format!(
-                        "{} {} at {}",
-                        m.lines,
-                        plural(m.lines, "line", "lines"),
-                        m.path.display()
-                    )
-                })
-                .collect();
-            format!(
-                "{subject} is on disk under {n} project directories whose contents DIFFER \
-                 ({}) - csift merges neither, so both stay in scope and every count below \
-                 includes both. A turn number minted from one copy does not address the \
-                 other; target a `*.jsonl` path to read one alone.",
-                counts.join(" vs ")
-            )
-        }
-        rel => {
-            let dropped: Vec<String> = g.dropped.iter().map(|p| p.display().to_string()).collect();
-            let how = if rel == DuplicateRelation::Identical {
-                "byte-identical copies"
-            } else {
-                "one a strict byte PREFIX of the other - a copy taken while the session was \
-                 still being written"
-            };
-            format!(
-                "{subject} is on disk under {n} project directories ({how}); keeping {} \
-                 ({} {}) and dropping {} {} ({} {}) at {}. Target that path directly to read \
-                 the dropped copy instead.",
-                g.kept.display(),
-                g.members[0].lines,
-                plural(g.members[0].lines, "line", "lines"),
-                g.dropped.len(),
-                plural(g.dropped.len(), "copy", "copies"),
-                g.dropped_lines(),
-                plural(g.dropped_lines(), "line", "lines"),
-                dropped.join(", ")
-            )
-        }
     }
 }
 

@@ -100,27 +100,73 @@ pub(crate) fn resolve_agent_subtree(
 /// `None` when this session does not own the agent, which is the common answer.
 fn agent_files_under(top: &Path, hex: &str, scope: SubagentScope) -> Result<Option<Vec<PathBuf>>> {
     let subs = crate::subagent::subagent_transcript_files(top)?;
-    // agent_id (bare hex) -> its transcript path, for this session.
-    let by_id: std::collections::HashMap<String, PathBuf> = subs
-        .iter()
-        .map(|p| (crate::subagent::session_id_from_path(p), p.clone()))
-        .collect();
+    // agent_id (bare hex) -> EVERY transcript carrying it in this session. One id can sit at
+    // BOTH sidecar locations - a workflow's `subagents/workflows/<run>/agent-<id>.jsonl` and
+    // the built-in `subagents/agent-<id>.jsonl` - when the agent's conversation goes on past
+    // its workflow run and the continuation is written at the built-in path (PATH-017). A map
+    // holding one path per id kept whichever the walk yielded last and dropped the other half
+    // with nothing said; the union merge decides the two together instead, like any copies.
+    let mut by_id: std::collections::HashMap<String, Vec<PathBuf>> =
+        std::collections::HashMap::new();
+    for p in &subs {
+        by_id
+            .entry(crate::subagent::session_id_from_path(p))
+            .or_default()
+            .push(p.clone());
+    }
     let Some(own) = by_id.get(hex) else {
         return Ok(None);
     };
     // The descendants come from the agent->agent topology (`parent_agent_id`); on flat real
     // data an agent has none, so the result is just the agent itself - correct, and it
     // nests automatically once CC nests subagents.
-    let mut out = vec![own.clone()];
+    let mut out = own.clone();
     if !matches!(scope, SubagentScope::TopLevelOnly) {
         let nodes = crate::subagent::build_topology(top, false)?;
         for d in subtree_agent_ids(&nodes, hex) {
-            if let Some(p) = by_id.get(&d) {
-                out.push(p.clone());
+            if let Some(paths) = by_id.get(&d) {
+                out.extend(paths.iter().cloned());
             }
         }
     }
     Ok(Some(out))
+}
+
+/// A `*.jsonl` target under `subagents/`: THE FILE IT NAMES, plus its descendants when the
+/// scope spans them - never another transcript of the same agent id.
+///
+/// A path is the one target that can tell two transcripts of one id apart, which is why every
+/// disclosure about copies ends by pointing at it. Routed through the agent id alone, it was
+/// swapped: `stats <the 41-line built-in file>` read the 469-line workflow file of the same
+/// id. The other transcripts of the id in scope are named on stderr, because the reader asked
+/// for one file and the disk holds more.
+pub(crate) fn resolve_named_agent(
+    dirs: &[ProjectDir],
+    file: &Path,
+    scope: SubagentScope,
+) -> Result<Vec<PathBuf>> {
+    let hex = crate::subagent::session_id_from_path(file);
+    let every = resolve_agent_subtree(dirs, &hex, scope)?;
+    let name = file.file_name();
+    let (copies, rest): (Vec<PathBuf>, Vec<PathBuf>) =
+        every.into_iter().partition(|p| p.file_name() == name);
+    let others: Vec<PathBuf> = copies.into_iter().filter(|p| !same_file(p, file)).collect();
+    if !others.is_empty() {
+        eprintln!("csift: note: {}", named_copy_note(file, &others));
+    }
+    let mut out = vec![file.to_path_buf()];
+    out.extend(rest);
+    Ok(out)
+}
+
+/// One file named two ways - the absolutized target against a path the directory walk built
+/// - compares equal once both are canonical.
+fn same_file(a: &Path, b: &Path) -> bool {
+    a == b
+        || matches!(
+            (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+            (Ok(x), Ok(y)) if x == y
+        )
 }
 
 /// The bare-hex agent ids in `nodes` that DESCEND from `root` (children, grandchildren, ...) via
