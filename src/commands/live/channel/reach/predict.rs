@@ -126,9 +126,11 @@ pub(crate) fn send_context(
     }
 }
 
-/// `csift whoami --to @<target>`: predict, print, write nothing.
-pub(crate) fn run_reach_to(target: &str, format: OutputFormat) -> Result<()> {
-    let caller = caller::classify(None)?;
+/// `csift whoami --to @<target> [--from <sender>]`: predict, print, write nothing. The
+/// sender is classified exactly as `csift send` classifies it, so the prediction and the send
+/// decide from the same relation.
+pub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputFormat) -> Result<()> {
+    let caller = caller::classify(from)?;
     let path = resolve_one(target)?;
     let receiver = caller::probe_receiver(&path)?;
     let merged = settings::merged(

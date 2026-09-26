@@ -88,7 +88,7 @@ pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
         return channel::run_peers(args.format);
     }
     if let Some(to) = args.to.as_deref() {
-        return channel::run_reach_to(to, args.format);
+        return channel::run_reach_to(to, args.from.as_deref(), args.format);
     }
     match args.self_target.as_deref() {
         None | Some("@main") => run_whoami_env(args),

@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2494",
+          "lines": "2495",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -78473,8 +78473,8 @@
       "code": [
         {
           "path": "src/commands/live/channel/reach/predict.rs",
-          "lines": "129-143",
-          "snippet": "/// `csift whoami --to @<target>`: predict, print, write nothing.\npub(crate) fn run_reach_to(target: &str, format: OutputFormat) -> Result<()> {\n    let caller = caller::classify(None)?;\n    let path = resolve_one(target)?;\n    let receiver = caller::probe_receiver(&path)?;\n    let merged = settings::merged(\n        &crate::path::claude_home()?,\n        receiver.cwd.as_deref().map(Path::new),\n    );\n    let slots = ReachSlots::read(&merged);\n    let armed = armed_slots(&receiver);\n    let relation = relation_of(&caller, &receiver);\n    let t = receiver_target(&receiver);\n    let ctx = send_context(&caller, &t, &merged, &slots, armed.len(), relation);\n    let decision = policy::decide(&ctx);"
+          "lines": "129-145",
+          "snippet": "/// `csift whoami --to @<target> [--from <sender>]`: predict, print, write nothing. The\n/// sender is classified exactly as `csift send` classifies it, so the prediction and the send\n/// decide from the same relation.\npub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputFormat) -> Result<()> {\n    let caller = caller::classify(from)?;\n    let path = resolve_one(target)?;\n    let receiver = caller::probe_receiver(&path)?;\n    let merged = settings::merged(\n        &crate::path::claude_home()?,\n        receiver.cwd.as_deref().map(Path::new),\n    );\n    let slots = ReachSlots::read(&merged);\n    let armed = armed_slots(&receiver);\n    let relation = relation_of(&caller, &receiver);\n    let t = receiver_target(&receiver);\n    let ctx = send_context(&caller, &t, &merged, &slots, armed.len(), relation);\n    let decision = policy::decide(&ctx);"
         }
       ],
       "states": [
@@ -89207,7 +89207,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3518"
+          "lines": "3519"
         }
       ],
       "states": [

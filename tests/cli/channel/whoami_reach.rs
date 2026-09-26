@@ -156,3 +156,67 @@ fn to_a_headless_receiver_is_unpredictable_however_many_slots_are_configured() {
         out.stdout
     );
 }
+
+#[test]
+fn the_prediction_takes_the_sender_its_lane_note_names() {
+    // The lane-unknown note tells a lane caller to pass `--from @<your lane id>`, so the
+    // command printing it has to take the flag: the relation between sender and receiver is
+    // one of the facts the prediction is decided from.
+    let h = home();
+    let env = [("CLAUDE_CODE_SESSION_ID", SESS)];
+    let assumed = h.run_with_env(&["whoami", "--to", &at(DONE_TEAMMATE)], &env);
+    assert!(assumed.success, "stderr: {}", assumed.stderr);
+    assert!(
+        assumed.stderr.contains("pass --from @<your lane id>"),
+        "{}",
+        assumed.stderr
+    );
+    assert!(
+        assumed
+            .stdout
+            .contains(&format!("  caller      lane {SESS}")),
+        "{}",
+        assumed.stdout
+    );
+    // Named, the sender is the lane given and nothing is assumed.
+    let named = h.run_with_env(
+        &[
+            "whoami",
+            "--to",
+            &at(DONE_TEAMMATE),
+            "--from",
+            &at(DONE_TEAMMATE),
+        ],
+        &env,
+    );
+    assert!(named.success, "stderr: {}", named.stderr);
+    assert!(
+        named
+            .stdout
+            .contains(&format!("  caller      lane {DONE_TEAMMATE}")),
+        "{}",
+        named.stdout
+    );
+    assert!(!named.stderr.contains("lane unknown"), "{}", named.stderr);
+    // `@main` is exact too: the same session, named rather than assumed.
+    let main = h.run_with_env(
+        &["whoami", "--to", &at(DONE_TEAMMATE), "--from", "@main"],
+        &env,
+    );
+    assert!(main.success, "stderr: {}", main.stderr);
+    assert!(!main.stderr.contains("lane unknown"), "{}", main.stderr);
+    // The grammar is `send`'s: inside Claude Code a bare label would misattribute a lane.
+    let label = h.run_with_env(
+        &["whoami", "--to", &at(DONE_TEAMMATE), "--from", "ops"],
+        &env,
+    );
+    assert!(!label.success);
+    assert!(
+        label.stderr.contains("the sender is a LANE"),
+        "{}",
+        label.stderr
+    );
+    // A sender is a question about a prediction, so it rides `--to` and nothing else.
+    let alone = h.run_with_env(&["whoami", "--from", "@main"], &env);
+    assert!(!alone.success, "--from without --to names no prediction");
+}

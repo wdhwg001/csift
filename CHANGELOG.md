@@ -1069,6 +1069,11 @@ surface change bumps the PATCH.
   surface not in the canonical local form. It renders through the shared timestamp
   helper now (`2026-06-07 15:10:00 AEST(UTC+10)` in that zone), at the second
   precision the note's de-duplication already keyed on.
+- **`whoami --to` told a lane caller to pass a flag it did not take.** Its stderr note
+  said `pass --from @<your lane id> for an exact sender`, and `whoami` rejected
+  `--from`. The prediction is decided partly from the relation between sender and
+  receiver, so `whoami --to` now takes `--from` in `csift send`'s grammar (only with
+  `--to`), and a subagent that names itself gets the answer a send from that lane gets.
 
 ### Performance
 

@@ -567,6 +567,16 @@ pub struct WhoamiArgs {
     #[arg(long = "to", value_name = "TARGET", conflicts_with_all = ["peers", "self_target"])]
     pub to: Option<String>,
 
+    /// The SENDER the `--to` prediction is made for, in `csift send --from`'s grammar: inside
+    /// Claude Code `@<lane>` (`@main`, or the `a...` id `csift agents` prints); outside it a
+    /// free label. Without it a caller inside Claude Code is ASSUMED to be the top-level
+    /// session, because the environment names that session in every lane - and the relation
+    /// between sender and receiver is one of the facts the prediction is decided from, so a
+    /// subagent passes its own id (`csift whoami @trap:<marker>` recovers it) for the answer
+    /// a send from that lane would get. Only with `--to`.
+    #[arg(long, value_name = "LANE|LABEL", requires = "to")]
+    pub from: Option<String>,
+
     /// List every LIVE lane under the projects root as `id kind state` and nothing else. A
     /// description, an agent type or a name read as a role is exactly the material one lane
     /// would use to claim standing over another, so the census publishes none of it: it answers
