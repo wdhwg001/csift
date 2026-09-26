@@ -302,3 +302,34 @@ fn normalize_value_flag_before_double_dash_does_not_consume_terminator() {
     // --since left unpaired; everything after `--` passes through verbatim.
     assert_eq!(out, vec!["csift", "search", "--since", "--", "-weird"]);
 }
+
+/// `search`'s WHEN flags take a leading-`-` value in BOTH spellings, as every other WHEN
+/// flag does: the grammar tolerates `-1y`, and the space form was a clap usage error on
+/// `search` alone.
+#[test]
+fn search_when_flags_take_a_leading_dash_value_in_both_spellings() {
+    for argv in [
+        vec!["csift", "search", "x", "--since", "-1y", "--until", "-1s"],
+        vec!["csift", "search", "x", "--since=-1y", "--until=-1s"],
+        vec![
+            "csift",
+            "search",
+            "x",
+            "@0a1b2c3d",
+            "--since",
+            "-1y",
+            "--until",
+            "-1s",
+        ],
+    ] {
+        let cli = parse(&argv).unwrap_or_else(|e| panic!("{argv:?} must parse: {e}"));
+        match cli.command {
+            Command::Search(a) => {
+                assert_eq!(a.since.as_deref(), Some("-1y"), "{argv:?}");
+                assert_eq!(a.until.as_deref(), Some("-1s"), "{argv:?}");
+                assert_eq!(a.pattern, "x", "{argv:?}");
+            }
+            _ => panic!("expected search"),
+        }
+    }
+}

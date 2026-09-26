@@ -1040,6 +1040,11 @@ surface change bumps the PATCH.
   one projects root. A `user.queued` or `harness.bookkeeping.*` record now survives only a
   scan that reaches its own leaf; `-t harness.bookkeeping.queue` (or the family glob)
   still emits the line, and an address still renders it (claim QT-005).
+- **`search --since -1y` was a usage error.** The WHEN grammar tolerates a leading `-`
+  and every other WHEN flag took the space form, but `search`'s `--since` and `--until`
+  lacked the hyphen-value allowance, so clap read `-1y` as an unknown short flag and
+  exited 2 (`unexpected argument '-1' found`) while `--since=-1y` worked. Both flags take
+  it now. `--turn` already did and `--max-count` reads a negative number by design.
 
 ### Performance
 
