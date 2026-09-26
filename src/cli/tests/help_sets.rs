@@ -49,3 +49,59 @@ fn the_root_help_names_every_status_verdict() {
         );
     }
 }
+
+/// `recover --help` counts its modes the way the parser does: the default restore plus one
+/// per flag of the `mode` group, and it lists every one of those flags under the count.
+///
+/// The head said FIVE and listed the default plus four flags while the page's own MODE
+/// section named five exclusive flags. The group is read off the clap command, so a sixth
+/// flag joining it moves this check rather than a number typed into the page.
+#[test]
+fn the_recover_head_counts_and_lists_its_mode_group() {
+    use clap::CommandFactory;
+
+    let mut cli = crate::cli::Cli::command();
+    // Building resolves the IMPLICIT group each `group = "mode"` argument names.
+    cli.build();
+    let recover = cli
+        .find_subcommand_mut("recover")
+        .expect("the recover subcommand");
+    let flags: Vec<String> = {
+        let group = recover
+            .get_groups()
+            .find(|g| g.get_id() == "mode")
+            .expect("recover declares its exclusive modes as the `mode` group");
+        group
+            .get_args()
+            .map(|id| {
+                let arg = recover
+                    .get_arguments()
+                    .find(|a| a.get_id() == id)
+                    .expect("a group member is an argument");
+                format!("--{}", arg.get_long().expect("every mode is a long flag"))
+            })
+            .collect()
+    };
+    assert!(flags.contains(&"--list-backups".to_string()), "{flags:?}");
+    let words = [
+        "ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT",
+    ];
+    let modes = flags.len() + 1; // the default restore takes no flag
+    let help = recover.render_long_help().to_string();
+    let head = format!("{} MUTUALLY-EXCLUSIVE MODES", words[modes]);
+    let start = help
+        .find(&head)
+        .unwrap_or_else(|| panic!("`recover --help` must open its mode list with `{head}`"));
+    let end = help[start..]
+        .find("The TARGET selects")
+        .expect("the mode list is followed by the target paragraph")
+        + start;
+    let list = &help[start..end];
+    for flag in &flags {
+        assert!(
+            list.lines()
+                .any(|l| l.trim_start().starts_with(flag.as_str())),
+            "`recover --help`'s mode list has no line for `{flag}`:\n{list}"
+        );
+    }
+}

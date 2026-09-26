@@ -11,7 +11,8 @@ use super::*;
         file's CONTENT line-by-line from the transcript's Reads / Writes / Edits, in \
         transcript order, with every output line carrying the JSONL LINE NUMBER so an \
         LLM can `Read` the raw jsonl directly.\n\n\
-        FIVE MUTUALLY-EXCLUSIVE MODES (exactly one; default = restore):\n  \
+        SIX MUTUALLY-EXCLUSIVE MODES (exactly one): the default RESTORE, which takes no \
+        flag, and the five flags of the mode group:\n  \
           (default, no mode flag) RESTORE the file's FINAL content as RAW restorable \
         bytes: what you'd `> file` to put it back. Restore SUCCEEDS only when the \
         session saw the WHOLE file (a full Read, or it authored the file outright); it \
@@ -43,7 +44,11 @@ use super::*;
         the partial-tolerant sibling of the default restore (final state, holes shown).\n  \
           --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
-        counts (reads / edits / writes / bash / external-edits).\n\n\
+        counts (reads / edits / writes / bash / external-edits).\n  \
+          --list-backups  list Claude Code's OWN file-history checkpoint store for \
+        `--file` (one row per stored checkpoint: backup instant, bytes, @vN, store path) \
+        without scanning a transcript. A listing only: its content is never merged into \
+        a reconstruction.\n\n\
         The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\

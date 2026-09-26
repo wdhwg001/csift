@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2485",
+          "lines": "2486",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20763,7 +20763,7 @@
         },
         {
           "path": "src/cli/files_recover_args/recover.rs",
-          "lines": "147-155",
+          "lines": "152-160",
           "snippet": "        FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\\n  \\\n          A Bash result's `staleReadFileStateHint` is Claude Code itself reporting \\\n        that the command modified files in its read set, BY NAME (paths relative to \\\n        the shell cwd, resolved before matching): an authoritative HARD \\\n        `hint_modified` boundary, and the one signal that attributes a formatter-class \\\n        rewrite to concrete files. A successful Edit flagged `staleRecovered` means \\\n        the disk had drifted since the last read but the edit still applied: an \\\n        authoritative `stale_recovered` annotation (nothing invalidated, other \\\n        changes exist outside the stream). An `edited_text_file` external-edit \\"
         }
       ],
@@ -89194,7 +89194,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3509"
+          "lines": "3510"
         }
       ],
       "states": [

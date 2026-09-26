@@ -1013,6 +1013,11 @@ surface change bumps the PATCH.
   `idle-background-open`, the verdict for a turn that ended with background tasks still
   open, which `status --help` and the verdict enum both carry. The entry names all seven,
   and a test holds it and the `status --help` verdict paragraph to the enum's own set.
+- **`recover --help` said FIVE modes and the parser holds six.** The head listed the default
+  restore plus four flags while the MODE section of the same page names five mutually
+  exclusive flags, `--list-backups` among them. The head now counts SIX - the default
+  restore and the five flags - and lists `--list-backups` with the others; a test reads
+  the count and the listed flags off the clap `mode` group.
 
 ### Performance
 
