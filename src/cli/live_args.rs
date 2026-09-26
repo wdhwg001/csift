@@ -246,8 +246,8 @@ impl StatusArgs {
         any other non-zero = error.",
     after_help = "EXAMPLES\n  \
           csift wait @<uuid> --until stop --timeout 300      # block until truly stopped (or 5m)\n  \
-          csift wait @main --until auq                       # fire when a question lands\n  \
-          csift wait @<uuid> --until tool:Read:handover      # …until it reads that file\n  \
+          csift wait @main --until auq --timeout 600         # fire when a question lands\n  \
+          csift wait @<uuid> --until tool:Read:handover --timeout 600  # …until it reads that file\n  \
           csift wait @<uuid> --until stop --until hitl --timeout 600 --format json | jq .fired\n  \
           csift wait @<uuid> --until stop --timeout 900 --background-since now --ignore-background 'npm run dev'\n\n\
         JSON SCHEMA (per --format json)\n  \

@@ -1052,6 +1052,10 @@ surface change bumps the PATCH.
   `show` does, in the same words (`no such record(s): L99999999 - ...`); the test reads
   the file's own bytes, so it does not depend on the pattern or the prefilter. A real
   address whose closure matches nothing stays a definitive absence, exit 0.
+- **Two `wait --help` examples could not run as written.** `csift wait @main --until
+  auq` and `csift wait @<uuid> --until tool:Read:handover` omitted `--timeout`, which
+  `wait` requires, so both were errors when pasted. They carry `--timeout 600`, and a
+  test holds every `csift wait` example on the page to the required flag.
 
 ### Performance
 

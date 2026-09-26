@@ -436,6 +436,35 @@ fn the_leaf_tree_tags_a_needle_only_leaf_scan_needle() {
     }
 }
 
+/// Every `csift wait` EXAMPLE carries `--timeout`, because the binary requires one: a wait
+/// with no bound can never end on a background task designed never to return, so an
+/// example without it is a usage error when run as written. Two of the page's examples were.
+#[test]
+fn every_wait_example_carries_the_required_timeout() {
+    use clap::CommandFactory;
+
+    let help = crate::cli::Cli::command()
+        .find_subcommand_mut("wait")
+        .expect("the wait subcommand")
+        .render_long_help()
+        .to_string();
+    let examples: Vec<&str> = help
+        .lines()
+        .map(str::trim_start)
+        .filter(|l| l.starts_with("csift wait "))
+        .collect();
+    assert!(
+        examples.len() >= 3,
+        "the page's examples were found: {examples:?}"
+    );
+    for ex in examples {
+        assert!(
+            ex.contains("--timeout"),
+            "`csift wait --help` example runs as a usage error without `--timeout`: {ex}"
+        );
+    }
+}
+
 /// The PROVENANCE edge is ONE key and one row, owned by no family.
 ///
 /// Four families build edges and every one of them folds into the same array through
