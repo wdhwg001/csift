@@ -264,8 +264,9 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                         routing_teammates.push((name.to_string(), team.to_string()));
                     }
                 }
-                // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
-                // never a full uuid (32+dashes) or an agent hex (>=12) - resolve it uniquely.
+                // A short dashless hex run (4..=11) or a literal prefix of the uuid layout is a
+                // uuid PREFIX, never a full uuid (32+dashes) or an agent hex (>=12) - resolve
+                // it uniquely, by its digits.
                 _ if is_uuid_prefix(id) => {
                     session_prefixes.push(id.to_string());
                     session_target = true;
@@ -374,13 +375,17 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
 }
 
 /// Per-prefix hit sets, keyed by the prefix token.
-type PrefixHits = std::collections::BTreeMap<String, std::collections::BTreeSet<String>>;
+pub(super) type PrefixHits = std::collections::BTreeMap<String, std::collections::BTreeSet<String>>;
 
 /// Enumerate top-level `<uuid>.jsonl` files under `dirs`, honoring the id/prefix filter and
 /// the SPEC 2.1 cwd collision guard, and collect the prefix-match hits over the UNION domain
 /// (top-level uuids + subagent agent ids - `search` emits an id-prefix header token for
 /// subagent exchanges too, and every emitted token must round-trip as an `@` target).
-fn scan_top_level(
+///
+/// `pub(super)` with [`resolve_prefix_uniqueness`] so the prefix rule is unit-testable over
+/// a scratch directory: the whole resolver reads the process-global projects root, which a
+/// unit test cannot relocate.
+pub(super) fn scan_top_level(
     dirs: &[ProjectDir],
     session_ids: &[String],
     session_prefixes: &[String],
@@ -448,7 +453,7 @@ fn admit_entry(
             for sp in subs {
                 let sid = crate::subagent::session_id_from_path(&sp);
                 for pfx in session_prefixes {
-                    if sid.starts_with(pfx.as_str()) {
+                    if id_has_prefix(&sid, pfx) {
                         prefix_agent_hits
                             .entry(pfx.clone())
                             .or_default()
@@ -458,10 +463,11 @@ fn admit_entry(
             }
         }
     }
-    // An exact id OR a uuid-PREFIX (`@1a2b3c4d...`) keeps the file.
+    // An exact id OR a uuid-PREFIX (`@1a2b3c4d...`) keeps the file. The prefix is compared
+    // by its digits, dashes dropped on both sides (`id_has_prefix`).
     let matched_prefix = session_prefixes
         .iter()
-        .find(|pfx| stem.starts_with(pfx.as_str()))
+        .find(|pfx| id_has_prefix(&stem, pfx))
         .cloned();
     if have_filter {
         let by_id = session_ids.iter().any(|sid| sid == &stem);
@@ -478,7 +484,7 @@ fn admit_entry(
 /// A PREFIX must resolve to EXACTLY ONE id across the union domain - else error (never
 /// silently pick). A unique SUBAGENT match dispatches exactly like a full `@<agent-id>`
 /// target; the top-level scan kept no file for it, so only the agent path emits.
-fn resolve_prefix_uniqueness(
+pub(super) fn resolve_prefix_uniqueness(
     session_prefixes: &[String],
     prefix_hits: &PrefixHits,
     prefix_agent_hits: &PrefixHits,

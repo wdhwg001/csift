@@ -30,6 +30,33 @@ fn pinned_id_matching_nothing_bails_never_silent_empty() {
     );
 }
 
+/// A uuid prefix means its hex DIGITS. A dash-less token past the first segment was accepted
+/// by the grammar and then compared literally against a dashed uuid, so `@0a1b2c3d4` - the
+/// first nine digits of the fixture session - matched nothing; and `@0a1b2c3d-4`, a literal
+/// prefix of the uuid layout, was refused by the grammar while `@0a1b2c3d-4e5f` resolved.
+#[test]
+fn a_uuid_prefix_resolves_by_its_digits_at_every_length() {
+    let h = populated_home();
+    let digits = SESS.replace('-', "");
+    let dashless: Vec<String> = [4, 8, 9, 11].map(|n| digits[..n].to_string()).to_vec();
+    let dashed = [SESS[..10].to_string(), SESS[..13].to_string()];
+    for tok in dashless.iter().chain(dashed.iter()) {
+        let out = h.run(&["list", &at(tok), "--no-subagents", "--format", "json"]);
+        assert!(out.success, "@{tok}: {}", out.stderr);
+        let rows = json_rows(&out.stdout, "session");
+        assert_eq!(rows.len(), 1, "@{tok} names one session: {}", out.stdout);
+        assert_eq!(rows[0]["session_id"], SESS, "@{tok}");
+    }
+    // Digits no session carries: the named miss, at a length the literal rule never reached.
+    let miss = h.run(&["list", &at(format!("{}f", &digits[..8]))]);
+    assert!(!miss.success, "{}", miss.stdout);
+    assert!(
+        miss.stderr.contains("no session or agent id starts with"),
+        "{}",
+        miss.stderr
+    );
+}
+
 #[test]
 fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
     // Two DIFFERENT cwds that encode to the SAME projects dir (section 2.1 lossy collision):

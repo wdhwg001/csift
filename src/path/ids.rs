@@ -98,21 +98,40 @@ pub(crate) fn split_teammate_routing_id(s: &str) -> Option<(&str, &str)> {
 /// - the short dash-less run (`@1a2b3c4d`, 4..=11 hex) - long enough to be near-collision-free
 ///   (a uuid's first segment is 8 hex = 4 billion), short enough that it is unambiguously
 ///   NEITHER a full uuid (32 hex + dashes) NOR an agent hex (>=12);
-/// - a longer LITERAL prefix of the canonical `8-4-4-4-12` layout (`@1a2b3c4d-5e6f`, 12..=35
-///   chars, a dash exactly at each template position) - the collision-lengthened header token
-///   `search` emits when two in-scope transcript ids share their first 8 chars.
+/// - a LITERAL prefix of the canonical `8-4-4-4-12` layout that reaches its first dash
+///   (`@1a2b3c4d-5`, 9..=35 chars, a dash exactly at each template position it reaches) -
+///   among them the collision-lengthened header token `search` emits when two in-scope
+///   transcript ids share their first 8 chars.
 ///
-/// The caller prefix-matches either form against the enumerated ids and errors if it is not
+/// Both forms mean their hex DIGITS: [`id_has_prefix`] drops the dashes on both sides before
+/// it compares, so `@1a2b3c4d-5` and `@1a2b3c4d5` name the same sessions. That is the whole
+/// rule, and it is what makes a dash-less run past the first segment reach anything at all -
+/// a literal comparison held `1a2b3c4d5` against `1a2b3c4d-5e6f-...`, which no uuid
+/// satisfies. The caller matches against the enumerated ids and errors if the match is not
 /// unique. (A dash-less run of >=12 hex is claimed as an agent id BEFORE this predicate runs.)
 pub(crate) fn is_uuid_prefix(s: &str) -> bool {
-    if (4..=11).contains(&s.len()) {
-        return s.bytes().all(|b| b.is_ascii_hexdigit());
+    if !s.contains('-') {
+        return (4..=11).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_hexdigit());
     }
-    if (12..36).contains(&s.len()) {
-        return s.bytes().enumerate().all(|(i, b)| match i {
+    (9..36).contains(&s.len())
+        && s.bytes().enumerate().all(|(i, b)| match i {
             8 | 13 | 18 | 23 => b == b'-',
             _ => b.is_ascii_hexdigit(),
-        });
-    }
-    false
+        })
+}
+
+/// True when `id`, read with its dashes dropped, starts with the digits of `prefix`, read the
+/// same way - the one comparison a [`is_uuid_prefix`] token makes against a candidate id.
+///
+/// A session uuid carries its dashes at fixed positions, so dropping them on both sides is
+/// what lets a dash-less token longer than the first segment reach the digits past the first
+/// dash. The union domain holds agent ids too, and they take the same rule: a bare hex id has
+/// no dash, so for it this is the plain comparison, and a teammate id loses its dashes like
+/// any other id rather than being read by a second rule.
+pub(crate) fn id_has_prefix(id: &str, prefix: &str) -> bool {
+    let mut digits = id.bytes().filter(|&b| b != b'-');
+    prefix
+        .bytes()
+        .filter(|&b| b != b'-')
+        .all(|p| digits.next() == Some(p))
 }

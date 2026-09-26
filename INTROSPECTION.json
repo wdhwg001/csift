@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2481",
+          "lines": "2482",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -38851,12 +38851,12 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "417-422",
+          "lines": "422-427",
           "snippet": "/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved\n/// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only\n/// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the\n/// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does\n/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix\n/// keep decision."
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "439-445",
+          "lines": "444-450",
           "snippet": "    if let Some(want) = &pd.target_cwd {\n        if let Some(stored) = read_first_cwd(&p) {\n            if !cwd_equivalent(&stored, want) {\n                return;\n            }\n        }\n    }"
         }
       ],
@@ -39144,7 +39144,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "519-528",
+          "lines": "525-534",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
@@ -68463,7 +68463,7 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "273-277",
+          "lines": "274-278",
           "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` -> an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
@@ -89164,7 +89164,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3505"
+          "lines": "3506"
         }
       ],
       "states": [
@@ -89665,6 +89665,115 @@
             "observed": "Root one: 52 uuid sidecar directories, 7 with no transcript beside them, 0 carrying a subagents/ subtree, 0 agent-*.jsonl, direct children tool-results 5 and workflows 2. Root two: 116 uuid sidecar directories, 48 with no transcript beside them, 0 carrying a subagents/ subtree, 0 agent-*.jsonl, direct children workflows 16 and tool-results 5. Extra directories whose uuid also has a sidecar elsewhere: 2 + 16 = 18, and 18 of 18 have a basename equal to the encoding of a cwd in that session's own transcript; the 18 hold 81 files, all with extension .js, under `workflows/scripts/`, with 0 *.jsonl among them. All four producer_chain excerpts byte-exact at their offsets and occurring exactly once in the build.",
             "rule": "One observation per uuid-shaped directory sitting directly under an encoded project directory; a directory counts as transcript-less when the sibling `<name>.jsonl` does not exist; file tallies are one observation per file at any depth below such a directory, excluding `.DS_Store`; a directory counts as cwd-matched when its basename equals the encoder applied to at least one distinct `cwd` string in the session's transcript.",
             "note": "The split exists and is harmless to csift: what sits under the other project directory is workflow SCRIPTS, not transcripts, so the transcript-anchored walk loses nothing. The claim is recorded so a later reader does not widen discovery on the strength of the directory name."
+          }
+        }
+      ]
+    },
+    {
+      "id": "PATH-016",
+      "area": "path-encoding",
+      "code": [
+        {
+          "path": "src/path/ids.rs",
+          "lines": "131-137",
+          "snippet": "pub(crate) fn id_has_prefix(id: &str, prefix: &str) -> bool {\n    let mut digits = id.bytes().filter(|&b| b != b'-');\n    prefix\n        .bytes()\n        .filter(|&b| b != b'-')\n        .all(|p| digits.next() == Some(p))\n}"
+        },
+        {
+          "path": "src/path/ids.rs",
+          "lines": "116-120",
+          "snippet": "    (9..36).contains(&s.len())\n        && s.bytes().enumerate().all(|(i, b)| match i {\n            8 | 13 | 18 | 23 => b == b'-',\n            _ => b.is_ascii_hexdigit(),\n        })"
+        },
+        {
+          "path": "src/path/resolver.rs",
+          "lines": "470",
+          "snippet": "        .find(|pfx| id_has_prefix(&stem, pfx))"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.258",
+          "from_basis": "located",
+          "to": null,
+          "behavior": "Every session id Claude Code names a top-level transcript after, on the minting paths this state traces, is written in the dashed `8-4-4-4-12` layout, and the transcript file is `${Q()}.jsonl` (PATH-012). At startup the session object takes `id:Okt()??z5()`: `z5` is `randomUUID` imported from `crypto`, and `Okt` is the remote-session override, which turns `CLAUDE_CODE_REMOTE_SESSION_ID` into a name-based uuid through `sZ`, a template literal that places the dashes after digits 8, 12, 16 and 20. `/clear` re-mints through the same `z5`. A bare resume argument becomes the session id only through `Vn`, whose regex `bn` enforces the layout and not the case (`/i`). So the dashes sit at fixed positions and carry no information: a basename minus its dashes is its 32 digits in order. Measured over one live projects root: 188 of 188 top-level transcript basenames are the lowercase layout.",
+          "depends": "csift's `@<uuid-prefix>` compares a token's hex digits against every candidate id with the dashes dropped on both sides (`id_has_prefix`), and admits the dashed spelling only as a literal prefix of the layout (a dash exactly at positions 8, 13, 18 and 23). That is what makes a dash-less prefix of 9 to 11 digits reach the digits past the first dash; compared literally it held its ninth digit against the dash and resolved nothing. If a basename ever carried its dashes elsewhere, a dash-less prefix would still resolve it by digits while the dashed spelling, checked against the fixed template, would be refused for that file. The comparison is case-sensitive: every minting path read here is lowercase, and only a supplied id, which `bn` admits in either case, could put uppercase in a basename.",
+          "instrument": "python3 over the top-level `*.jsonl` of the live projects root (`~/.claude/projects/<ENCODED>/<name>.jsonl`, subagent lanes excluded by the glob depth), matching each basename minus `.jsonl` against the lowercase `8-4-4-4-12` hex pattern and against the same pattern case-folded, one observation per file. python3 byte-comparing each producer_chain excerpt against the build named by `verified_claude_code` at its offset and counting its occurrences in the whole build. `csift stats @<prefix> --no-subagents` against one top-level session of that root at 4, 8, 9 and 11 dash-less digits, at the dashed 10- and 13-character spellings, and at 9 digits no session carries, on the build before this rule and on the build carrying it.",
+          "probe": {
+            "kind": "corpus",
+            "command": "python3 over the top-level `*.jsonl` of the live projects root (`~/.claude/projects/<ENCODED>/<name>.jsonl`, subagent lanes excluded by the glob depth), matching each basename minus `.jsonl` against the lowercase `8-4-4-4-12` hex pattern and against the same pattern case-folded, one observation per file.",
+            "scope": "the top-level `<ENCODED>/<name>.jsonl` transcripts of one projects root, subagent lanes excluded",
+            "rule": "one observation per top-level transcript file; it counts as the layout when its basename minus `.jsonl` matches the lowercase `8-4-4-4-12` hex pattern."
+          },
+          "producer_trace": "partial",
+          "specimen": "observed",
+          "attribution": "specimen-only",
+          "open_legs": [
+            "An enumeration of every assignment to the session object's `id` in the 2.1.258 build (the initializer `dn`, the `/clear` regeneration, and every resume or fork path that adopts an id, the `.jsonl` arm of the resume parser `$In` among them, which mints through `Cn`, not read) closes whether a path other than the ones traced can name a transcript in another layout."
+          ],
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "dn, the session object initializer",
+              "offset": 156787331,
+              "excerpt": "function dn(e=uLn()){return v7t({host:ln(),id:Okt()??z5(),project:{originalCwd:e,projectRoot:e,cwd:e}})}",
+              "note": "The id a new session starts with: the remote override when one is set, else a fresh `z5()`."
+            },
+            {
+              "role": "gate",
+              "name": "Okt, the remote-session override",
+              "offset": 156730707,
+              "excerpt": "function Okt(){let e=process.env.CLAUDE_CODE_REMOTE_SESSION_ID?.trim();return e?sZ(e,Y):null}",
+              "note": "The one branch that replaces `z5` at startup, and it hands the supplied value to `sZ` rather than using it as the id."
+            },
+            {
+              "role": "gate",
+              "name": "bn and Vn, the layout check on a supplied id",
+              "offset": 156730057,
+              "excerpt": "var bn=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+              "note": "`Vn` returns a string only when `bn` matches it. The `/i` flag admits either case, so this gate fixes the dash positions and not the case."
+            },
+            {
+              "role": "gate",
+              "name": "$In, the resume argument parser",
+              "offset": 156730800,
+              "excerpt": "function $In(e){if(e.toLowerCase().endsWith(\".jsonl\"))return{sessionId:Cn(),ingressUrl:null,isUrl:!1,jsonlFile:e,isJsonlFile:!0};if(Vn(e))return{sessionId:e,ingressUrl:null,isUrl:!1,jsonlFile:null,isJsonlFile:!1};",
+              "note": "A bare argument is taken as the session id only through `Vn`; a URL goes to `Okt()??sZ(...)`; the `.jsonl` arm mints through `Cn`, which this state does not read."
+            },
+            {
+              "role": "writer",
+              "name": "the randomUUID import behind z5",
+              "offset": 156729541,
+              "excerpt": "import{randomUUID as z5}from\"crypto\";",
+              "note": "The ordinary mint: the runtime's canonical lowercase v4 uuid."
+            },
+            {
+              "role": "writer",
+              "name": "sZ, the name-based uuid",
+              "offset": 156730130,
+              "excerpt": "function sZ(e,t){let o=Buffer.from(t.replace(/-/g,\"\"),\"hex\"),r=vn(\"sha1\").update(o).update(Buffer.from(e,\"utf8\")).digest();r[6]=r[6]&15|80,r[8]=r[8]&63|128;let i=r.subarray(0,16).toString(\"hex\");return`${i.slice(0,8)}-${i.slice(8,12)}-${i.slice(12,16)}-${i.slice(16,20)}-${i.slice(20,32)}`}",
+              "note": "Lowercase hex from `toString(\"hex\")`, with the four dashes written by the template at the canonical positions."
+            },
+            {
+              "role": "writer",
+              "name": "the /clear regeneration",
+              "offset": 156788404,
+              "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,...e.setCurrentAsParent&&{parentId:o}}),cn(t,\"clear\",i),t.id}",
+              "note": "A cleared session's new id is another `z5()`."
+            },
+            {
+              "role": "writer",
+              "name": "El, the transcript file name",
+              "offset": 159262439,
+              "excerpt": "function El(){let t=Hy()??fl(ye());return o(t,`${Q()}.jsonl`)}",
+              "note": "The basename is the session id verbatim, so the id's layout is the basename's."
+            }
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "python3 over the top-level `*.jsonl` of the live projects root at `~/.claude/projects`, matching each basename against the lowercase and the case-folded `8-4-4-4-12` patterns; python3 byte-comparing the eight producer_chain excerpts against $CSIFT_LEDGER_BINARY (the 2.1.258 build) and counting each one's occurrences; `csift stats @<prefix> --no-subagents` against one top-level session of that root at 4, 8, 9 and 11 dash-less digits, at the dashed 10- and 13-character spellings and at 9 digits no session carries, on the build before the digit rule and on the build carrying it.",
+            "observed": "188 top-level transcripts on the live root at its instant (185 distinct basenames, 3 on disk under two project directories): 188 of 188 the lowercase layout, 0 in another case, 0 of another shape; 187 of 187 with the measuring session's own transcript excluded. All eight excerpts byte-exact at their offsets and each occurring exactly once in the build. Build before the rule: 4 and 8 digits resolve the session, 9 and 11 digits fail with `no session or agent id starts with`, the dashed 10-character spelling fails with `is not a recognized @-target`, the dashed 13-character one resolves. Build carrying the rule: all six resolve that one session, and the 9 digits no session carries fail with the named miss.",
+            "rule": "One observation per top-level transcript file for the census; one observation per excerpt for the byte comparison; one observation per csift invocation, read as resolved (a `SESSION` row for the one session) or failed (the error line).",
+            "note": "A dash-less prefix past the first segment was admitted by the grammar and compared literally against the dashed basename; it is compared by its digits now, and the dashed spelling is admitted from the first dash on."
           }
         }
       ]

@@ -978,6 +978,17 @@ surface change bumps the PATCH.
   is the one exposed key read by a PREDICATE rather than projected as a fact, because what a
   reader acts on is the leaf and the turn boundary it changes.
 
+- **A uuid prefix longer than the first segment resolved nothing.** The grammar promised a
+  dash-less prefix of 4 to 11 hex, and the resolver compared it literally against the dashed
+  basename, so `@<first 9 hex>` held its ninth digit against the dash at position 8 and
+  failed with "no session or agent id starts with" while `@<first 8 hex>` resolved. The
+  dashed spelling had the mirror gap: a literal prefix of the uuid layout resolved from 12
+  characters up and was "not a recognized @-target" at 9 to 11. A prefix is now compared by
+  its hex digits, the dashes dropped on both sides, so `@1a2b3c4d5` and `@1a2b3c4d-5` name the
+  same sessions, and the dashed spelling is accepted from the first dash on (claim
+  PATH-016). Uniqueness is unchanged: two ids sharing the digits are still an error naming
+  both.
+
 ### Performance
 
 - **The render was the other serial half of a search.** Everything the scan does in parallel

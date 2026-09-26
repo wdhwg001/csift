@@ -6,6 +6,7 @@ mod agent_copies;
 mod dedup;
 mod encode;
 mod ids;
+mod prefix;
 mod roots;
 mod settings;
 mod settings_scopes;
