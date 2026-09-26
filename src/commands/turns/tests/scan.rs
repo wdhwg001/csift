@@ -104,7 +104,7 @@ fn shared_uuid_validator_distinguishes_uuid_from_bare_hex() {
     assert!(crate::path::is_session_uuid(
         "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     ));
-    assert!(!crate::path::is_session_uuid("a00ea52f023afd9ce"));
+    assert!(!crate::path::is_session_uuid("a00b1b2b3b4b5b6b7"));
     // Wrong group shape / non-hex -> not a uuid.
     assert!(!crate::path::is_session_uuid("0a1b2c3d-4e5f-4a6b-8c7d"));
     assert!(!crate::path::is_session_uuid(
@@ -136,8 +136,8 @@ fn scope_summary_counts_top_level_and_subagents() {
     // One top-level uuid + two bare-hex subagents, all rendering.
     let sessions = vec![
         scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"),
-        scan_named("a00ea52f023afd9ce"),
-        scan_named("a01086fb826e1ab0e"),
+        scan_named("a00b1b2b3b4b5b6b7"),
+        scan_named("a01c1c2c3c4c5c6c7"),
     ];
     let plans: Vec<SessionPlan> = sessions
         .iter()
@@ -158,7 +158,7 @@ fn scope_summary_reports_true_scope_not_rendered() {
     // silently rewriting "scope".
     let mut empty = scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d");
     empty.turns.clear(); // its plan will be empty (nothing fits)
-    let rendered_sub = scan_named("a00ea52f023afd9ce");
+    let rendered_sub = scan_named("a00b1b2b3b4b5b6b7");
     let sessions = vec![empty, rendered_sub];
     let plans: Vec<SessionPlan> = sessions
         .iter()

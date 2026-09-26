@@ -4,13 +4,13 @@ use crate::harness::*;
 
 #[test]
 fn dashed_teammate_name_id_round_trips_as_target() {
-    // A teammate NAME may carry dashes (real data: teammate "P1-engine" -> agent id
-    // `aP1-engine-9cf2f06d6235ca64`). The id `csift agents` prints must round-trip as an
+    // A teammate NAME may carry dashes (a shape that occurs: teammate "P1-engine" -> agent id
+    // `aP1-engine-1a2b3c4d5e6f7a8b`). The id `csift agents` prints must round-trip as an
     // `@<agent-id>` target: an entry gate keyed on bare hex alone drops it into the
     // project-dir branch, where it fails.
     let enc = "-Users-testuser-Projects-dashmate";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
-    let id = "aP1-engine-9cf2f06d6235ca64";
+    let id = "aP1-engine-1a2b3c4d5e6f7a8b";
     let h = Home::new();
     h.write(
         &format!("{enc}/{sess}.jsonl"),
@@ -22,7 +22,7 @@ fn dashed_teammate_name_id_round_trips_as_target() {
     h.write(
         &format!("{enc}/{sess}/subagents/agent-{id}.jsonl"),
         concat!(
-            r#"{"type":"user","isSidechain":true,"agentId":"aP1-engine-9cf2f06d6235ca64","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"teammate: probe the dashy widget"}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"aP1-engine-1a2b3c4d5e6f7a8b","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"teammate: probe the dashy widget"}}"#, "\n",
             r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"probed"}]}}"#, "\n",
         ),
     );

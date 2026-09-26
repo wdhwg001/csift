@@ -18,8 +18,8 @@ fn is_uuid_recognizes_canonical_form() {
 
 #[test]
 fn is_bare_subagent_hex_recognizes_agent_ids() {
-    assert!(is_bare_subagent_hex("ae24045bd6d4bdaff"));
-    assert!(is_bare_subagent_hex("a585e25a580c59e7a"));
+    assert!(is_bare_subagent_hex("a1234567890abcdef"));
+    assert!(is_bare_subagent_hex("a9e8d7c6b5a4f3e2d"));
     // Too short, dashed (uuid), or a word -> not a bare subagent hex.
     assert!(!is_bare_subagent_hex("abc123")); // < 12
     assert!(!is_bare_subagent_hex(
@@ -35,12 +35,12 @@ fn is_teammate_agent_id_recognizes_name_embedded_ids() {
     assert!(is_teammate_agent_id("aVSRepro-68a2a1661c9390c1"));
     assert!(is_teammate_agent_id("aVSSpeedField-d5dab904cc98a239"));
     assert!(is_teammate_agent_id("aVSMultiRegion-06fb13dd400b53a5"));
-    // A teammate NAME may itself carry dashes (real data: teammate "P1-engine") - the
+    // A teammate NAME may itself carry dashes (a shape that occurs: teammate "P1-engine") - the
     // head is dash-tolerant so the id `csift agents` prints still round-trips.
-    assert!(is_teammate_agent_id("aP1-engine-9cf2f06d6235ca64"));
+    assert!(is_teammate_agent_id("aP1-engine-1a2b3c4d5e6f7a8b"));
     // A bare hex (built-in/workflow) has no dash -> NOT teammate-shaped (it routes via
     // is_bare_subagent_hex instead).
-    assert!(!is_teammate_agent_id("ae24045bd6d4bdaff"));
+    assert!(!is_teammate_agent_id("a1234567890abcdef"));
     // A uuid is rejected: the explicit is_uuid guard (an `a`-led uuid would otherwise
     // pass the dash-tolerant head with its exactly-12-hex final segment).
     assert!(!is_teammate_agent_id(
@@ -59,9 +59,9 @@ fn is_teammate_agent_id_recognizes_name_embedded_ids() {
 #[test]
 fn is_subagent_id_accepts_both_bare_hex_and_teammate() {
     // The unified gate the @-grammar routes through.
-    assert!(is_subagent_id("ae24045bd6d4bdaff")); // built-in/workflow bare hex
+    assert!(is_subagent_id("a1234567890abcdef")); // built-in/workflow bare hex
     assert!(is_subagent_id("aVSRepro-68a2a1661c9390c1")); // teammate
-    assert!(is_subagent_id("aP1-engine-9cf2f06d6235ca64")); // teammate with dashed name
+    assert!(is_subagent_id("aP1-engine-1a2b3c4d5e6f7a8b")); // teammate with dashed name
     assert!(!is_subagent_id("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")); // uuid
     assert!(!is_subagent_id("a93b39f8-1681-4535-88eb-5b8ecce0abcd")); // a-led uuid
     assert!(!is_subagent_id("-Users-testuser-Projects-foo")); // encoded dir
@@ -73,9 +73,9 @@ fn pins_single_session_covers_at_tokens_and_jsonl() {
     assert!(pins_single_session("@main"));
     assert!(pins_single_session("@trap:CrimsonWillowFen5180"));
     assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
-    assert!(pins_single_session("@ae24045bd6d4bdaff"));
+    assert!(pins_single_session("@a1234567890abcdef"));
     assert!(pins_single_session("@aVSRepro-68a2a1661c9390c1")); // teammate id pins one
-    assert!(pins_single_session("@aP1-engine-9cf2f06d6235ca64")); // dashed-name teammate
+    assert!(pins_single_session("@aP1-engine-1a2b3c4d5e6f7a8b")); // dashed-name teammate
     assert!(pins_single_session("@1a2b3c4d")); // uuid-prefix
     assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
     // A bare uuid (no `@`), an encoded token, a plain path, `.` -> NOT a session pin.

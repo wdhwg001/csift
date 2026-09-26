@@ -124,7 +124,7 @@ fn classify_teammate_spawn_ack_is_tool_result_only_not_inbox() {
     // immediate {status:"teammate_spawned"} ACK that shares the spawn tool_use_id (so the
     // lookup WOULD resolve it), but it is NOT the child's return -> agent.tool.result ONLY.
     let r = parse(
-        r#"{"type":"user","toolUseResult":{"status":"teammate_spawned","name":"P1-engine","agent_id":"aP1-engine-9cf2","agent_type":"executor"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"teammate spawned"}]}}"#,
+        r#"{"type":"user","toolUseResult":{"status":"teammate_spawned","name":"P1-engine","agent_id":"aP1-engine-1a2b","agent_type":"executor"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"teammate spawned"}]}}"#,
     );
     let ctx = ClassifyCtx {
         owner_id: Some("parent"),

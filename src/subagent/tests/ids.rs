@@ -32,9 +32,9 @@ fn session_id_from_path_is_canonical_bare_hex() {
     // top-level uuid passes through; a stem-less path yields an empty string.
     assert_eq!(
         session_id_from_path(Path::new(
-            "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/agent-a585e25a580c59e7a.jsonl"
+            "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/agent-a9e8d7c6b5a4f3e2d.jsonl"
         )),
-        "a585e25a580c59e7a"
+        "a9e8d7c6b5a4f3e2d"
     );
     assert_eq!(
         session_id_from_path(Path::new(
@@ -49,7 +49,7 @@ fn session_id_from_path_is_canonical_bare_hex() {
 #[test]
 fn parent_session_id_and_is_subagent_from_path() {
     let sub = Path::new(
-        "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/agent-a585e25a580c59e7a.jsonl",
+        "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/agent-a9e8d7c6b5a4f3e2d.jsonl",
     );
     let wf = Path::new(
         "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/workflows/wf_abc/agent-aaa.jsonl",

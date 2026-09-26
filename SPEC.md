@@ -1920,7 +1920,7 @@ classification.
 >   `--since`/`--until` (activity-span intersection); **`stats`** gains the turn window (v0.5 `--turn`)
 >   (and its positional accepts encoded `-Users-…` dirs — an `allow_hyphen_values`
 >   omission fixed).
-> - **Teammate ids with dashed NAMES round-trip** (`aP1-engine-9cf2…`): the
+> - **Teammate ids with dashed NAMES round-trip** (`aP1-engine-1a2b…`): the
 >   `is_teammate_agent_id` head accepts `[A-Za-z0-9-]` with an explicit `!is_uuid` guard.
 
 > **v0.2 BREAKING-CHANGE LEDGER (authoritative — supersedes any conflicting older text

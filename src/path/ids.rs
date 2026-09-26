@@ -36,8 +36,8 @@ pub fn is_bare_subagent_hex(s: &str) -> bool {
 /// canonical agent id EMBEDS the teammate name, e.g. `aVSRepro-68a2a1661c9390c1` - a leading
 /// `a`, the name, then `-<hex>` of 12+ chars. Unlike a built-in/workflow agent (a bare hex run) it
 /// carries a dash + uppercase, so [`is_bare_subagent_hex`] rejects it. The NAME itself may
-/// carry dashes (a real `aP1-engine-9cf2f06d6235ca64` was minted from the teammate name
-/// `P1-engine`), so the head accepts `[A-Za-z0-9-]`; the explicit `!is_uuid` guard keeps an
+/// carry dashes (`aP1-engine-1a2b3c4d5e6f7a8b` is the shape a teammate named `P1-engine`
+/// gets), so the head accepts `[A-Za-z0-9-]`; the explicit `!is_uuid` guard keeps an
 /// `a`-led session uuid out - its final segment is exactly 12 hex, which the dash-tolerant
 /// head would otherwise admit. An encoded project dir can never collide (those start with
 /// `-`, the leading-slash sanitisation). Recognised here so the id `csift agents` prints
