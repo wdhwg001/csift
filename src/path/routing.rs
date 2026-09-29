@@ -30,7 +30,8 @@ pub(crate) fn resolve_teammate_routing(
         [one] => Ok(one.clone()),
         [] => bail!(
             "no teammate `{name}@{team}` under the resolved target(s) — `@<name>@<team>` is a \
-             teammate's ROUTING form (what the official SendMessage addresses): a name, `@`, \
+             teammate's ROUTING form (the id TaskStop resolves; SendMessage takes the bare \
+             name): a name, `@`, \
              its team, both matched EXACTLY (case included). List the teammates in scope with \
              `csift agents <session> --shape teammate` and read the `routing:` field, or \
              target the transcript id `a<Name>-<hex>` directly."

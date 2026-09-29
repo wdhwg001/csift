@@ -78,18 +78,35 @@ fn agents_routing_target_behaves_exactly_like_the_transcript_id() {
     );
 }
 
+/// The hint's three lines as `agents` prints them. SendMessage refuses any `to` carrying `@`
+/// (claim SUB-035), so the routing id is a TaskStop address and never a SendMessage one.
+const HINT_LINES: [&str; 3] = [
+    "note: teammate rows are in-process Agent subagents — steer one with SendMessage addressed by its bare NAME (the `(@name)` shown, without the `@`), and terminate it with `message:{\"type\":\"shutdown_request\"}`.",
+    "      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier builds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a teammate has no separate OS process (it shares the orchestrator PID — `pkill` won't help).",
+    "      SendMessage refuses any `to` carrying `@`, so the routing id Name@Team (the `routing:` field above) is what TaskStop takes and never a SendMessage `to`; SendMessage also takes a<Name>-<hex>, the id the hook payload and the transcript file carry, and resumes a stopped teammate by it; the routing id can collide (two same-named teammates share it), the transcript id never does.",
+];
+
+/// The JSON twin, `control_hint` on every teammate row.
+const HINT_JSON: &str = "in-process teammate: SendMessage to its bare `name` to steer (it refuses a `to` carrying `@`, so never `routing_id`), or to `agent_id`, which also resumes it when it is not running; message {type:\"shutdown_request\"} terminates; TaskStop by `name` or `routing_id` (Name@Team) also stops it from Claude Code 2.1.198 (never by the `agent_id` transcript id); shares the orchestrator PID (no separate process to kill). The two ids are minted apart: `routing_id` collides when two teammates share a name, while `agent_id` (a<Name>-<hex>), the id the hook payload and the transcript file carry, never does.";
+
 #[test]
 fn agents_teammate_hint_states_the_two_id_rule() {
     // The hint exists because the wrong id in the wrong tool is the observed failure: say
-    // which tool takes which form, and which of the two can collide.
+    // which tool takes which form, and which of the two can collide. Pinned whole, so a
+    // line that drifts back to naming the routing id as SendMessage's address fails here.
     let h = teammate_home(Some("harbor"));
     let text = h.run(&["agents", &at(SESS_R)]);
     assert!(text.success, "stderr: {}", text.stderr);
+    for line in HINT_LINES {
+        assert!(
+            text.stdout.lines().any(|l| l == line),
+            "the teammate hint lacks the line {line:?}: {}",
+            text.stdout
+        );
+    }
     assert!(
-        text.stdout.contains("routing id Name@Team")
-            && text.stdout.contains("a<Name>-<hex>")
-            && text.stdout.contains("collide"),
-        "the teammate hint must state the two-id rule: {}",
+        !text.stdout.contains("SendMessage needs the routing id"),
+        "{}",
         text.stdout
     );
 
@@ -98,11 +115,7 @@ fn agents_teammate_hint_states_the_two_id_rule() {
         .into_iter()
         .find(|n| n.get("shape").and_then(|k| k.as_str()) == Some("teammate"))
         .expect("a teammate row in agents JSON");
-    let hint = node["control_hint"].as_str().unwrap_or("");
-    assert!(
-        hint.contains("routing_id") && hint.contains("agent_id"),
-        "the JSON hint must name both id fields: {hint}"
-    );
+    assert_eq!(node["control_hint"], HINT_JSON, "{node}");
 }
 
 #[test]

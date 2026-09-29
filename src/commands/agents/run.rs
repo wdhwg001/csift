@@ -295,18 +295,19 @@ pub(crate) fn any_teammate(nodes: &[SubagentNode]) -> bool {
 
 /// Control-mechanism hint for teammates (`in_process_teammate`), surfaced in `agents` text
 /// output whenever the scope holds >=1 teammate. csift is the LLM's only window into a session's
-/// teammates, so it is the natural place to point at the CORRECT control tool - a real session
-/// burned ~30 min trying to `TaskStop` / `pkill` a runaway teammate (feeding it the name, the
-/// `Name@team` form, AND the exact `aName-<hash>` agentId csift prints) before discovering the
-/// mechanism - on a build where TaskStop rejected every teammate form. From Claude Code 2.1.198
-/// TaskStop's resolver ALSO matches a teammate by its name and by the `name@team` identity
-/// (the teammate-aware resolver is absent in 2.1.197 and present in 2.1.198; ledger SUB-020);
-/// the `aName-<hex>` transcript id csift prints is never a task id on any build. Stated from
-/// the verified `SendMessage` contract (address by NAME; `message:{type:"shutdown_request"}`
-/// terminates) and the binary's TaskStop resolver, not a guess. Read-only csift cannot act -
-/// it only names the tools that can.
-pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = "note: teammate rows are in-process Agent subagents — address one BY NAME (the `(@name)` shown) \
-via SendMessage to steer it, and `message:{\"type\":\"shutdown_request\"}` to terminate it.";
+/// teammates, so it is the natural place to point at the CORRECT control tool and at the id
+/// each tool takes - a real session burned ~30 min trying to `TaskStop` / `pkill` a runaway
+/// teammate (feeding it the name, the `Name@team` form, AND the exact `aName-<hash>` agentId
+/// csift prints) on a build where TaskStop rejected every teammate form. The two tools resolve
+/// different id forms. SendMessage takes the BARE name as `to` and refuses any `to` carrying
+/// `@`, so the `Name@team` routing form is never a SendMessage address; its agent-id arm also
+/// takes the `aName-<hex>` transcript id, delivering to the running teammate or resuming a
+/// stopped one (ledger SUB-035). TaskStop resolves the name and the `name@team` identity from
+/// Claude Code 2.1.198 (absent in 2.1.197; ledger SUB-020) and never the transcript id.
+/// `message:{type:"shutdown_request"}` terminates. Read-only csift cannot act - it only names
+/// the tools that can.
+pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = "note: teammate rows are in-process Agent subagents — steer one with SendMessage addressed by its bare NAME \
+(the `(@name)` shown, without the `@`), and terminate it with `message:{\"type\":\"shutdown_request\"}`.";
 pub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =
     "      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \
 builds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \
@@ -314,22 +315,25 @@ teammate has no separate OS process (it shares the orchestrator PID — `pkill` 
 
 /// The two-id rule, stated where the wrong id is about to be pasted into the wrong tool. A
 /// teammate's routing id and its transcript id are minted apart at spawn, so neither can be
-/// derived from the other, and only the routing form can collide - which is why csift keys
+/// derived from the other; SendMessage refuses the routing id (any `to` carrying `@`) and
+/// takes the transcript id, and only the routing form can collide - which is why csift keys
 /// its own targeting on the transcript id and prints both forms on the node line.
 pub(crate) const TEAMMATE_CONTROL_HINT_L3: &str =
-    "      the official SendMessage needs the routing id Name@Team (the `routing:` field above); the \
-hook payload and the transcript file carry a<Name>-<hex>; the routing id can collide (two same-named \
-teammates share it), the transcript id never does.";
+    "      SendMessage refuses any `to` carrying `@`, so the routing id Name@Team (the `routing:` field \
+above) is what TaskStop takes and never a SendMessage `to`; SendMessage also takes a<Name>-<hex>, the id \
+the hook payload and the transcript file carry, and resumes a stopped teammate by it; the routing id \
+can collide (two same-named teammates share it), the transcript id never does.";
 
 /// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2`/`_L3` - emitted as a
 /// teammate node's `control_hint` field so a `--format json` consumer gets the same pointer.
 pub(crate) const TEAMMATE_CONTROL_HINT_JSON: &str =
-    "in-process teammate: SendMessage to `name` to steer; \
-message {type:\"shutdown_request\"} terminates; TaskStop by `name` or `name@team` also stops it \
-from Claude Code 2.1.198 (never by the aName-<hex> transcript id); shares the \
-orchestrator PID (no separate process to kill). Two ids, minted apart: SendMessage takes the \
-routing id `routing_id` (Name@Team, collides when two teammates share a name), while the hook \
-payload and the transcript file carry `agent_id` (a<Name>-<hex>, never ambiguous).";
+    "in-process teammate: SendMessage to its bare `name` to steer (it refuses a `to` carrying \
+`@`, so never `routing_id`), or to `agent_id`, which also resumes it when it is not running; \
+message {type:\"shutdown_request\"} terminates; TaskStop by `name` or `routing_id` (Name@Team) \
+also stops it from Claude Code 2.1.198 (never by the `agent_id` transcript id); shares the \
+orchestrator PID (no separate process to kill). The two ids are minted apart: `routing_id` \
+collides when two teammates share a name, while `agent_id` (a<Name>-<hex>), the id the hook \
+payload and the transcript file carry, never does.";
 
 pub(crate) fn axis_label(axis: AgentTimeAxis) -> &'static str {
     match axis {

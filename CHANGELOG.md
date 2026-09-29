@@ -1406,6 +1406,14 @@ surface change bumps the PATCH.
   and the `--out` extract stream. Both now go through the span builder, counting the resolved
   transcript set before any filter narrows the images, so an image header reads the same
   three numbers `list` gives the same scope.
+- **The teammate hint told a reader SendMessage takes the routing id.** Its third line said
+  the official SendMessage needs `Name@Team`, and the JSON `control_hint` said SendMessage
+  takes `routing_id`, while SendMessage's input validation refuses any `to` carrying `@`
+  (`to must be a bare teammate name`). The hint now says what each tool takes: SendMessage
+  the bare name, or the `a<Name>-<hex>` transcript id, which also resumes a teammate that is
+  not running; TaskStop the name or `Name@Team`. `agents --help`, the root help's
+  `@<Name>@<Team>` sentence and the no-match error of that target said the same wrong
+  thing and now say the same true one (claim SUB-035).
 
 ### Performance
 

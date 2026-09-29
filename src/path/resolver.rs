@@ -268,9 +268,10 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     session_target = true;
                 }
                 _ if is_subagent_id(id) => agent_hexes.push(id.to_string()),
-                // `@<Name>@<Team>` - a teammate's ROUTING form (the id the official SendMessage
-                // takes). It is the ONE shape carrying an interior `@`, so it is claimed before
-                // the encoded-dir arm (a name may lead with `-`), and resolved once the dirs are.
+                // `@<Name>@<Team>` - a teammate's ROUTING form (the id TaskStop resolves;
+                // SendMessage refuses it). It is the ONE shape carrying an interior `@`, so it
+                // is claimed before the encoded-dir arm (a name may lead with `-`), and
+                // resolved once the dirs are.
                 _ if is_teammate_routing_id(id) => {
                     if let Some((name, team)) = split_teammate_routing_id(id) {
                         routing_teammates.push((name.to_string(), team.to_string()));

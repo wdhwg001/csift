@@ -66,12 +66,13 @@ pub fn is_subagent_id(s: &str) -> bool {
     is_bare_subagent_hex(s) || is_teammate_agent_id(s)
 }
 
-/// True for the teammate ROUTING form `<Name>@<Team>` - the id the official SendMessage
-/// addresses (Claude Code mints it as `identity.agentId` by interpolating the requested name
-/// and the raw team name). A teammate therefore carries TWO ids, minted apart at spawn:
-/// this routing form and the `a<Name>-<16hex>` TRANSCRIPT form ([`is_teammate_agent_id`],
-/// `identity.resumableAgentId`, the jsonl stem) - neither is derivable from the other.
-/// Recognised as an `@`-target so the id the official tool wants is also a csift target.
+/// True for the teammate ROUTING form `<Name>@<Team>` - the id Claude Code mints as
+/// `identity.agentId` by interpolating the requested name and the raw team name, reports in
+/// the spawn ack and resolves in TaskStop (SendMessage refuses any `to` carrying `@`). A
+/// teammate therefore carries TWO ids, minted apart at spawn: this routing form and the
+/// `a<Name>-<16hex>` TRANSCRIPT form ([`is_teammate_agent_id`], `identity.resumableAgentId`,
+/// the jsonl stem) - neither is derivable from the other. Recognised as an `@`-target so the
+/// id the harness reports is also a csift target.
 pub(crate) fn is_teammate_routing_id(s: &str) -> bool {
     split_teammate_routing_id(s).is_some()
 }

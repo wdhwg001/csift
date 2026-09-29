@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2541",
+          "lines": "2542",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -33561,7 +33561,7 @@
       "code": [
         {
           "path": "src/cli/root.rs",
-          "lines": "226-228",
+          "lines": "227-229",
           "snippet": "          Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\\n  \\\n        Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\\n  \\\n        it; csift can only read what survives.\\n\\n\\"
         },
         {
@@ -38878,12 +38878,12 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "437-442",
+          "lines": "438-443",
           "snippet": "/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved\n/// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only\n/// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the\n/// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does\n/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix\n/// keep decision."
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "459-465",
+          "lines": "460-466",
           "snippet": "    if let Some(want) = &pd.target_cwd {\n        if let Some(stored) = read_first_cwd(&p) {\n            if !cwd_equivalent(&stored, want) {\n                return;\n            }\n        }\n    }"
         }
       ],
@@ -39171,7 +39171,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "540-549",
+          "lines": "541-550",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
@@ -62782,8 +62782,8 @@
       "code": [
         {
           "path": "src/commands/agents/run.rs",
-          "lines": "308-313",
-          "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = \"note: teammate rows are in-process Agent subagents \u2014 address one BY NAME (the `(@name)` shown) \\\nvia SendMessage to steer it, and `message:{\\\"type\\\":\\\"shutdown_request\\\"}` to terminate it.\";\npub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =\n    \"      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \\\nbuilds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \\\nteammate has no separate OS process (it shares the orchestrator PID \u2014 `pkill` won't help).\";"
+          "lines": "309-314",
+          "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = \"note: teammate rows are in-process Agent subagents \u2014 steer one with SendMessage addressed by its bare NAME \\\n(the `(@name)` shown, without the `@`), and terminate it with `message:{\\\"type\\\":\\\"shutdown_request\\\"}`.\";\npub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =\n    \"      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \\\nbuilds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \\\nteammate has no separate OS process (it shares the orchestrator PID \u2014 `pkill` won't help).\";"
         }
       ],
       "states": [
@@ -62792,7 +62792,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A teammate is an in-process Agent subagent and, at 2.1.258, a first-class task-registry entry that TaskStop resolves BY NAME. TaskStop's validateInput (164111973) calls taskRegistry.get(task_id) and, on a miss, the resolver m$e (164103813), whose arms match a teammate task by identity.agentId - the `name@team` string yx builds (158795040), compared exactly by tY (164102949) - by identity.agentName (g0n, 164103088), by a normalized-name comparison, by the background-agent name registry, and last by a fuzzy suggestion. The teammate predicate yd (163712076) tests type===\"in_process_teammate\"; the InProcessTeammateTask killer (164100037) is a member of the killer dispatch map (164102655); and the tool's own prompt states the path: 'To stop an agent-team teammate, pass its agent ID (\"name@team\") or bare teammate name as task_id' (159894213). Resolution and liveness are separate branches of that gate: only when the exact get AND every resolver arm miss does validateInput return Elt (164106959), which renders `No task found with ID: <id>` and then appends 'Did you mean:', 'Running teammates:' and 'Running named agents:' lists, so a live teammate is NAMED inside the error itself; a task that DID resolve but is not running takes the other branch, `Task <id> is not running (status: <status>)`. Either message reaches disk as a `<tool_use_error>` tool_result with is_error true (164440920). The one id form that is not a resolver key is the transcript agent id a<Name>-<16hex>: the in-process spawn ack (176295280) carries teammate_id and agent_id as the `name@team` form instead, and a task's own registry id is a kind-prefix character plus eight base36 characters, `t` for in_process_teammate (prefix map 160696651). Name resolution has a floor: the strings 'To stop an agent-team teammate', 'Running teammates: ' and 'Multiple teammates match' each occur 0 times in cached native builds 2.1.191, 2.1.193, 2.1.195, 2.1.196 and 2.1.197, and 2 times in every cached build from 2.1.198 through 2.1.259 and in 2.1.258, so teammate resolution by name lands at 2.1.198. Corpus, one observation per TaskStop tool_use block joined to its tool_result by tool_use_id, journal and elicitation sidecars excluded: 103 calls - 83 addressed by a nine-character task id, 16 by a bare a+16-hex agent id, 2 by the `name@team` form, 1 by a bare teammate name and 1 by an a<Name>-<16hex> id - answered by 98 successes and 5 non-successes. All three teammate forms are exercised at record version 2.1.258: the bare teammate name answered `Successfully stopped task: <id> (<description>)` with toolUseResult task_type in_process_teammate, echoing the task's own t-prefixed registry id rather than the name passed in; the `name@team` form answered `Task <id> is not running (status: killed)` twice, the resolved-but-not-running branch, once the bare-name call had already stopped that teammate; the a<Name>-<16hex> id answered `No task found with ID: <id>` with no 'Running teammates' suffix, the template's marker that no teammate was live at that instant. The other 2 non-successes are nine-character ids at record version 2.1.220, one not found and one `is not running (status: completed)`; all 16 bare a+16-hex calls succeeded with toolUseResult task_type local_agent. On the process side, 165 of 165 objects carrying an is_splitpane key on disk are false with tmux_session_name, tmux_window_name and tmux_pane_id all the literal `in-process`, over 155 distinct teammate ids, every one a `name@team` string - never an orchestrator pane id - while a SECOND spawn path (176289472) returns is_splitpane true with a real pane, so 'no separate OS process' is a property of the in-process path rather than of teammates as such. The SendMessage control path is declared on both sides - shutdown_request is a member of the sent-side type union (175740075) and the nine-key inbound payload registry carries shutdown_request, shutdown_approved, shutdown_rejected and teammate_terminated (160174026) - and the corpus records the handshake completing: 38 SendMessage tool_use blocks carry input.message.type shutdown_request, and inbound peer sections whose body parses as JSON with a type key split 345 idle_notification, 49 task_assignment, 36 shutdown_request, 25 shutdown_approved and 25 teammate_terminated. 166 teammate-shaped lane files (agent-a<Name>-<16hex>.jsonl) exist under the projects root.",
-          "depends": "csift is read-only, so naming the correct control tool is the whole remedy: `agents` prints a fact-led two-line hint as a text footer whenever a teammate is in scope, and the same pointer as each teammate node's JSON control_hint, because a CORRECT teammate id reads as a wrong id when the wrong tool refuses it. Both halves ship correctly: TEAMMATE_CONTROL_HINT_L1/_L2 and TEAMMATE_CONTROL_HINT_JSON (src/commands/agents/run.rs) tell the caller to address the teammate BY NAME through SendMessage to steer it and `message:{\"type\":\"shutdown_request\"}` to terminate it; that TaskStop also stops it by `name` or `name@team` from Claude Code 2.1.198, earlier builds finding no form; and that the `aName-<hex>` id csift itself prints is a transcript id, never a task id - the fact worth telling a caller, since csift is the tool that hands them that string. The pkill clause is scoped by construction: a row becomes a teammate only when its meta carries taskKind `in_process_teammate` (src/subagent/meta.rs), which is exactly the spawn path that shares the orchestrator PID, so the split-pane spawn never reaches the hint. The same wording lives in AGENTS.md section 3.7 and SPEC section 6.5, and the hint is --help-adjacent output, hence a versioned surface.",
+          "depends": "csift is read-only, so naming the correct control tool is the whole remedy: `agents` prints a fact-led two-line hint as a text footer whenever a teammate is in scope, and the same pointer as each teammate node's JSON control_hint, because a CORRECT teammate id reads as a wrong id when the wrong tool refuses it. Both halves ship correctly: TEAMMATE_CONTROL_HINT_L1/_L2 and TEAMMATE_CONTROL_HINT_JSON (src/commands/agents/run.rs) tell the caller to steer the teammate through SendMessage by its bare name - never `name@team`, which SendMessage refuses (SUB-035) - and to terminate it with `message:{\"type\":\"shutdown_request\"}`; that TaskStop also stops it by `name` or `name@team` from Claude Code 2.1.198, earlier builds finding no form; and that the `aName-<hex>` id csift itself prints is a transcript id, never a task id - the fact worth telling a caller, since csift is the tool that hands them that string. The pkill clause is scoped by construction: a row becomes a teammate only when its meta carries taskKind `in_process_teammate` (src/subagent/meta.rs), which is exactly the spawn path that shares the orchestrator PID, so the split-pane spawn never reaches the hint. The same wording lives in AGENTS.md section 3.7 and SPEC section 6.5, and the hint is --help-adjacent output, hence a versioned surface.",
           "instrument": "Binary: read TaskStop's validateInput at 164111973 and the resolver m$e at 164103813 in the shipped executable, list the resolver arms and the gate's two rejection branches (Elt for a total miss, `is not running` for a resolved task), and read the task-id kind-prefix map at 160696651. Dating: byte-count 'To stop an agent-team teammate', 'Running teammates: ' and 'Multiple teammates match' in every cached native build, one count per build, and take the lowest build carrying them. Corpus: walk every jsonl under the projects root excluding journal and elicitation sidecars, join each tool_result to the tool_use that names it, and bucket TaskStop calls by the shape of input.task_id and by the head of the answer text plus toolUseResult.task_type; count objects carrying an is_splitpane key, SendMessage blocks whose input.message.type is shutdown_request, peer sections whose body parses as JSON with a type key, and lane files matching agent-a<Name>-<16hex>.jsonl. Live: with a teammate running, call TaskStop with its bare name, with its `name@team` id and with the a<Name>-<16hex> id `csift agents` prints, and read each answer; `csift agents @<id> --shape teammate --format json | jq -r .control_hint` must carry the same pointer.",
           "probe": {
             "kind": "csift",
@@ -64729,6 +64729,112 @@
             "observed": "whole root: 11,054 subagent transcripts; after a tool_result record the next record is an assistant record 320,270 times and another user record 20,632 times (the rest of a parallel batch of results); the gap to the assistant record is p50 5.0 s, p90 16.7 s, p99 75.5 s, p99.9 303.6 s, at most 5,600.8 s. With the measuring session's own tree excluded: 9,655 transcripts, 211,189 assistant successors and 19,415 user successors, gap p50 4.9 s, p90 16.6 s, p99 87.3 s, p99.9 345.8 s. Over the whole root, the installed binary and this build run back to back over 10,947 agent rows disagree on 150, every one completed -> running: in all 150 the newest meaningful record is a returned tool_result, 127 of them followed by an interrupt marker, and none has a record younger than 5.5 hours, so each is a lane that stopped mid-turn. Kne, which inserts one stream item's messages into the transcript and is called per item by the agent runner, reads byte-exact at its offset. On that session's 1,401 lanes, reading the tail alone `agents` called 55 lanes running, 42 of them workflow lanes, against 1 lane `status` lists live; with the run rule shared, 13, none a workflow lane - the 12 beside the live one are built-in lanes whose tail is mid-turn and older than the 300-second generating window, which `status` settles by age and `agents` reads as running, the split this claim states. Over the whole root the previous build and this one read the same 10,992 agent rows and disagree on 224, every one a workflow lane that read `completed` with a completion instant and now reads its run's word with none: 120 `failed` by their journal's `failed` line (70 of them in runs whose manifest reads `completed`), 101 `killed` and 3 `failed` by an ended run's manifest with no closing line for the agent; with the measuring session's own tree excluded, 106 of 9,589 (21, 82 and 3). The census of every workflow lane transcript agrees: 7,366 + 365 + 202 lanes whose journal carries `result` (in runs whose manifest reads `completed`, `killed` and `failed`) and 608 in completed runs with no closing line stay `completed`. A fixture of seven one-lane runs, each lane ending its turn cleanly but one frozen at a call, reads the same split on this build and `completed` on all seven on the previous one.",
             "rule": "one observation per user record carrying a tool_result block in a subagent transcript, paired with the next user or assistant record in file order; a gap is that successor's timestamp minus the tool_result record's, in seconds. For the status comparison, one observation per agent row, joined on `path`. One observation per lane for the agents-and-status comparison. For the run-word comparison, one observation per agent row joined on `path`, and one per workflow lane transcript for the census, keyed by (manifest status or none, journal closing line or none).",
             "note": "The gap distribution is the length of time `agents` misread a working lane before the verdict moved to the newest record; its p99.9 sits at the 300 s recency window `status` uses, which is why the two surfaces agree on every lane that is actually moving. The depends is rewritten to the run's word: a lane its run killed, or its journal failed, is no longer `completed`."
+          }
+        }
+      ]
+    },
+    {
+      "id": "SUB-035",
+      "area": "subagents",
+      "code": [
+        {
+          "path": "src/commands/agents/run.rs",
+          "lines": "321-325",
+          "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L3: &str =\n    \"      SendMessage refuses any `to` carrying `@`, so the routing id Name@Team (the `routing:` field \\\nabove) is what TaskStop takes and never a SendMessage `to`; SendMessage also takes a<Name>-<hex>, the id \\\nthe hook payload and the transcript file carry, and resumes a stopped teammate by it; the routing id \\\ncan collide (two same-named teammates share it), the transcript id never does.\";"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.258",
+          "from_basis": "verified",
+          "to": null,
+          "behavior": "SendMessage addresses an in-process teammate by its bare NAME and refuses the `Name@team` routing form. Its validateInput (175761329) returns `to must be a bare teammate name \u2014 there is only one team per session` for ANY `to` carrying `@`, before the recipient is resolved at all. The call path (175770351) resolves `to` through V3e, whose first arm (175705323) matches a bare name exactly against the team context's members and returns their mailbox, and which hands an agent-id-shaped `to` - one the lane-id validator Sn accepts, tested by Bb (156730017) - to G (175714369). G reads the task keyed by that id; a teammate's task is registered under a `t`-prefixed task id (SUB-020), so an `a<Name>-<16hex>` teammate id finds none and reads `agent-evicted`. That arm delivers to the RUNNING in-process teammate whose `identity.resumableAgentId` is the id, or whose name and team match the agent's meta (175785198), and otherwise resumes the teammate by the id with the message as its next prompt (175785503). The input schema describes the field as `Recipient: a name from ... a teammate name, \"main\", or a background agent's agentId` (175740847). The refusal literal occurs in every cached native build from 2.1.100 through 2.1.278 and in none of 1.0.60, 2.0.0, 2.0.30 and 2.1.23. Over every SendMessage tool_use block under one projects root at one instant, the measuring session's tree included, joined to its tool_result in the same file (journal, elicitation and csift-channel files excluded): 1,108 blocks in 179 files - 402 bare teammate names, all 402 answered without error; 403 bare a+16-hex agent ids, 401 of them without error; 270 `team-lead`; 30 `main`; 3 `uds:` addresses; and none carrying `@`. With the measuring session's tree excluded: 897 blocks in 168 files, 394 bare names, none carrying `@`.",
+          "depends": "`agents` names the tool each teammate id reaches. The control hint (src/commands/agents/run.rs: the three text lines and the JSON control_hint) tells a caller to steer a teammate with SendMessage by its bare name, or by the a<Name>-<hex> transcript id, which also resumes a teammate that is not running, and never by `Name@team`, which only TaskStop takes (SUB-020); `agents --help`, the root help's `@<Name>@<Team>` sentence and that target's no-match error say the same. If SendMessage stopped refusing `@`, the routing form would become a second SendMessage address and the hint's refusal clause would be false; if its agent-id arm stopped matching resumableAgentId, the transcript-id clause would be.",
+          "instrument": "Binary: in the shipped 2.1.258 executable read SendMessage's validateInput at 175761329, the call path's recipient resolution at 175770351, the resolver V3e's name arm at 175705323, Bb at 156730017, G at 175714369, the agent-evicted delivery and resume at 175785198 and 175785503, and the input schema's description of `to` at 175740847. Dating: grep -c -a -F 'to must be a bare teammate name' over every cached native build, one count per build. Corpus: for every *.jsonl under the projects root holding a SendMessage tool_use (journal.jsonl, elicitations.jsonl and anything under csift-channel/ excluded), join each block to the tool_result carrying its id in the same file and bucket it by the shape of input.to (carrying `@`, bare a+16-hex, a<Name>-<16hex>, main, team-lead, uds:, bridge:, otherwise a bare name) and by its answer (the bare-name refusal text, another is_error result, no error, no result); run it once whole-root and once with the measuring session's tree excluded. Counting rule: one observation per SendMessage tool_use block.",
+          "probe": {
+            "kind": "corpus",
+            "command": "For every SendMessage tool_use block under the projects root, join it to the tool_result carrying its id in the same file and bucket it by the shape of input.to (carrying @, bare a+16-hex, a<Name>-<16hex>, main, team-lead, uds:, bridge:, otherwise a bare name) and by its answer (the bare-name refusal text, another is_error result, no error, no result).",
+            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one observation per SendMessage tool_use block, joined to the tool_result carrying its id in the same file."
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "open_legs": [],
+          "residue": [
+            "No SendMessage block on this root carries `@` in its `to` or an a<Name>-<16hex> teammate id, so the refusal's answer and the transcript-id delivery and resume arms are read in the build only; a live trial with a running teammate, sending to `Name@team`, to the bare name and to the a<Name>-<16hex> id, would observe all three answers."
+          ],
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "SendMessage call(): the recipient resolution through V3e",
+              "offset": 175770351,
+              "excerpt": "let n=W??await V3e(s.session,e.to,e.message,s.getAppState(),s.storageV5,s.credentials);",
+              "note": "the call path resolves input.to through V3e once validateInput has passed it"
+            },
+            {
+              "role": "gate",
+              "name": "SendMessage validateInput: the refusal of any to carrying @",
+              "offset": 175761329,
+              "excerpt": "if(e.to.includes(\"@\"))return{result:!1,message:\"to must be a bare teammate name \\u2014 there is only one team per session\",errorCode:9};",
+              "note": "unconditional on the recipient kind: a Name@team routing form never reaches the resolver"
+            },
+            {
+              "role": "writer",
+              "name": "V3e: the bare-name arm matching the team context's members",
+              "offset": 175705323,
+              "excerpt": "let f=s.teamContext?.teammates??{},k=Object.entries(f).find(([,h])=>h.name===n),w=Bb(n)??Bb(a),m=k||w?void 0:s.agentNameRegistry.get(n),I=w??m;if(I)return G(s,I,n);if(k)return{kind:\"mailbox\",recipientName:n,memberAgentId:k[0],memberIdentitySource:\"team-context\"};",
+              "note": "a bare teammate name resolves to its mailbox; an agent-id-shaped to is taken by Bb first"
+            },
+            {
+              "role": "gate",
+              "name": "Bb: the lane-id validator routes an agent-id-shaped to to the agent arm",
+              "offset": 156730017,
+              "excerpt": "function Bb(e){return Sn.test(e)?e:null}",
+              "note": "Sn is ^a(?:[\\w-]{1,63}-)?[0-9a-f]{16}$, so both the a+16-hex and the a<Name>-<16hex> teammate forms pass"
+            },
+            {
+              "role": "gate",
+              "name": "G: an id no task is keyed by reads agent-evicted",
+              "offset": 175714369,
+              "excerpt": "function G(e,n,o){let s=e.tasks[n];if(fr(s)&&!b6t(s)){if(s.status===\"running\")return{kind:\"agent-live\",agentId:n,agentName:o};if(s.stoppedByUser)return{kind:\"agent-stopped-by-user\",agentName:o};return{kind:\"agent-stopped\",agentId:n,status:s.status,agentName:o}}return{kind:\"agent-evicted\",agentId:n,agentName:o}}",
+              "note": "a teammate's task is keyed by its t-prefixed task id (SUB-020), so its transcript id finds no task entry"
+            },
+            {
+              "role": "writer",
+              "name": "the agent-evicted arm: delivery to the running teammate that id names",
+              "offset": 175785198,
+              "excerpt": "for(let C of Object.values(s.getAppState().tasks))if(yd(C)&&C.status===\"running\"&&(C.identity.resumableAgentId===h||C.identity.agentName===D&&C.identity.teamName===v)){R.resolve(C.id);let V=await ts(C,e.message,e.summary,s,n.agentName,H);",
+              "note": "a running in-process teammate whose resumableAgentId is the id takes the message in its mailbox"
+            },
+            {
+              "role": "writer",
+              "name": "the agent-evicted arm: resume of a teammate that is not running",
+              "offset": 175785503,
+              "excerpt": "let L=await He({resumableAgentId:h,prompt:e.message,senderName:N,meta:A,fallbackName:n.agentName,toolUseContext:s});",
+              "note": "otherwise the teammate is resumed by that id with the message as its next prompt"
+            },
+            {
+              "role": "writer",
+              "name": "the input schema's description of to",
+              "offset": 175740847,
+              "excerpt": "Recipient: a name from ${Gs} (append its \" [ref]\" only when a listing or an error shows one), a teammate name, \"main\", or a background agent's agentId",
+              "note": "the documented forms: a listed name, a teammate name, main, an agent id - no routing form"
+            }
+          ],
+          "writer_literal_floor": {
+            "literal": "to must be a bare teammate name",
+            "lowest_present": "2.1.100",
+            "highest_absent": "2.1.23",
+            "ladder": "0 in 1.0.60, 2.0.0, 2.0.30 and 2.1.23; present in 2.1.100, 2.1.124, 2.1.139, 2.1.150, 2.1.160, 2.1.176, 2.1.191, 2.1.197, 2.1.198, 2.1.208, 2.1.220, 2.1.228, 2.1.240, 2.1.252, 2.1.258, 2.1.259, 2.1.261, 2.1.268 and 2.1.278"
+          },
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "The eight hops read at their offsets in the shipped 2.1.258 executable; the refusal literal counted with grep -c -a -F in 23 cached native builds; the SendMessage census walked every *.jsonl under the projects root that holds a SendMessage tool_use, once whole-root and once with the measuring session's tree excluded.",
+            "observed": "validateInput refuses any to carrying @ with the bare-name message; V3e's first arm returns a mailbox for an exact member name; Bb hands an a<Name>-<16hex> id to G, which reads agent-evicted, and that arm delivers to the running teammate whose resumableAgentId is the id or resumes it. Refusal literal: 0 in 1.0.60, 2.0.0, 2.0.30, 2.1.23; present in all 19 cached builds from 2.1.100 through 2.1.278. Census whole-root: 1,108 blocks in 179 files - bare name 402 (402 without error), bare a+16-hex 403 (401 without error, 2 other errors), team-lead 270 (226 without error, 14 other errors, 30 no result), main 30, uds 3, carrying @ 0, a<Name>-<16hex> 0. Excluded: 897 blocks in 168 files - bare name 394 (all without error), bare a+16-hex 206, team-lead 270, main 26, uds 1, carrying @ 0.",
+            "rule": "one observation per SendMessage tool_use block, joined to the tool_result carrying its id in the same file; one count per cached build for the literal.",
+            "note": "The routing form is TaskStop's (SUB-020) and SendMessage refuses it; the hint, the two help pages and the no-match error now say so."
           }
         }
       ]
@@ -68609,7 +68715,7 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "286-290",
+          "lines": "287-291",
           "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` -> an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
@@ -71464,8 +71570,8 @@
       "code": [
         {
           "path": "src/path/ids.rs",
-          "lines": "69-77",
-          "snippet": "/// True for the teammate ROUTING form `<Name>@<Team>` - the id the official SendMessage\n/// addresses (Claude Code mints it as `identity.agentId` by interpolating the requested name\n/// and the raw team name). A teammate therefore carries TWO ids, minted apart at spawn:\n/// this routing form and the `a<Name>-<16hex>` TRANSCRIPT form ([`is_teammate_agent_id`],\n/// `identity.resumableAgentId`, the jsonl stem) - neither is derivable from the other.\n/// Recognised as an `@`-target so the id the official tool wants is also a csift target.\npub(crate) fn is_teammate_routing_id(s: &str) -> bool {\n    split_teammate_routing_id(s).is_some()\n}"
+          "lines": "69-78",
+          "snippet": "/// True for the teammate ROUTING form `<Name>@<Team>` - the id Claude Code mints as\n/// `identity.agentId` by interpolating the requested name and the raw team name, reports in\n/// the spawn ack and resolves in TaskStop (SendMessage refuses any `to` carrying `@`). A\n/// teammate therefore carries TWO ids, minted apart at spawn: this routing form and the\n/// `a<Name>-<16hex>` TRANSCRIPT form ([`is_teammate_agent_id`], `identity.resumableAgentId`,\n/// the jsonl stem) - neither is derivable from the other. Recognised as an `@`-target so the\n/// id the harness reports is also a csift target.\npub(crate) fn is_teammate_routing_id(s: &str) -> bool {\n    split_teammate_routing_id(s).is_some()\n}"
         },
         {
           "path": "src/subagent/routing.rs",
@@ -71561,7 +71667,7 @@
         },
         {
           "path": "src/path/routing.rs",
-          "lines": "38-45",
+          "lines": "39-46",
           "snippet": "        many => bail!(\n            \"`@{name}@{team}` is AMBIGUOUS: {} teammates in scope share that routing id ({}). \\\n             The routing form CAN collide (two same-named teammates in one team share it); the \\\n             transcript id never does \u2014 target one of those directly.\",\n            many.len(),\n            many.join(\", \")\n        ),\n    }"
         }
       ],
@@ -89377,7 +89483,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3572"
+          "lines": "3573"
         }
       ],
       "states": [
@@ -89894,17 +90000,17 @@
       "code": [
         {
           "path": "src/path/ids.rs",
-          "lines": "131-137",
+          "lines": "132-138",
           "snippet": "pub(crate) fn id_has_prefix(id: &str, prefix: &str) -> bool {\n    let mut digits = id.bytes().filter(|&b| b != b'-');\n    prefix\n        .bytes()\n        .filter(|&b| b != b'-')\n        .all(|p| digits.next() == Some(p))\n}"
         },
         {
           "path": "src/path/ids.rs",
-          "lines": "116-120",
+          "lines": "117-121",
           "snippet": "    (9..36).contains(&s.len())\n        && s.bytes().enumerate().all(|(i, b)| match i {\n            8 | 13 | 18 | 23 => b == b'-',\n            _ => b.is_ascii_hexdigit(),\n        })"
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "485",
+          "lines": "486",
           "snippet": "        .find(|pfx| id_has_prefix(&stem, pfx))"
         },
         {

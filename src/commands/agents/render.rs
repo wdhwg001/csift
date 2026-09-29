@@ -199,8 +199,8 @@ fn node_head(n: &SubagentNode, ind: &str) -> String {
         head.push_str(&format!("  [{why}]"));
     }
     // A teammate answers to TWO ids: the transcript id leading this line and the ROUTING form
-    // the official SendMessage takes. Print both together so neither has to be guessed - they
-    // are minted apart at spawn, so one cannot be derived from the other.
+    // TaskStop resolves (SendMessage refuses it). Print both together so neither has to be
+    // guessed - they are minted apart at spawn, so one cannot be derived from the other.
     if n.kind == SubagentKind::Teammate {
         if let Some(rid) = crate::subagent::routing_id(n.name.as_deref(), n.team_name.as_deref()) {
             head.push_str(&format!("  routing: {rid}"));

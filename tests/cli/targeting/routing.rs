@@ -48,9 +48,9 @@ fn relay_home(twin: bool) -> Home {
 
 #[test]
 fn routing_form_targets_the_teammate_transcript() {
-    // `@Name@Team` is the id the official SendMessage takes; csift accepts it as a target and
-    // resolves it to the transcript form, so a caller holding only the routing id can read the
-    // lane it addresses.
+    // `@Name@Team` is the id TaskStop resolves and the harness reports; csift accepts it as a
+    // target and resolves it to the transcript form, so a caller holding only the routing id
+    // can read the lane it addresses.
     let h = relay_home(false);
     let s = h.run(&["search", "ROUTINGPROBE", "@Relay@harbor"]);
     assert!(s.success, "search @Relay@harbor: {}", s.stderr);
