@@ -20,7 +20,8 @@
 pub(crate) const SECTION: &str =
     "\n\nEXPOSED KEYS (facts a record states about the call behind it)\n  \
      A record carries keys about the CALL it came from, and they belong to no leaf - so \
-     they ride every hit as JSON, and five of them also render a tag in the label zone. \
+     they ride every hit as JSON, and the ones below that name a tag also render it in the \
+     label zone. \
      `attribution` {agent, skill, plugin, mcp_server, mcp_tool} names what the request ran \
      under, and the label zone takes the SPECIFIC half only - `[via skill <name>]`, else \
      `[via plugin <name>]`, else `[via mcp <server or tool>]` - because the agent name is \
@@ -34,6 +35,13 @@ pub(crate) const SECTION: &str =
      mid-stream]`, each half only when the record names it - a quota naming only its reset \
      instant renders the bare word `quota` - and a record naming none of them carries no \
      object at all, so the tag can name no floor word. \
+     `stop_reason` and `stop_details` {type, category, explanation, \
+     fallback_has_prefill_claim} ride a record whose `message.stop_details` names at least \
+     one member - the API's own account of why it stopped the response, which reads \
+     `refusal` on every record observed - and render `[api <type>: <category>]`, or \
+     `[api <type>]` with no category. The tag is display-only - a pattern scan matches a \
+     unit's text, never its label zone - so the selector and the key are the way to these \
+     records. \
      `pdf_pages` {first, last, count, path} rides the `agent.tool.result` of a Read that \
      carried a `pages` parameter and renders `[pdf pages A-B of <basename>]`: which pages \
      of which document the result holds, read off `toolUseResult.firstPage` plus the \

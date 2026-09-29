@@ -1228,6 +1228,21 @@ surface change bumps the PATCH.
   names the two envelope exceptions and lists each user-named output with what it writes
   and whether it replaces an existing file; a test derives the output flags from the clap
   tree and requires the page to name each.
+- **`search --help` described a scan wider than the one it runs, and named the wrong gate
+  on three leaves.** "With no `-t`, every label is searched" skipped the gated leaves (the
+  whole `harness.bookkeeping` category, the gated attachment, system and turn leaves); the
+  page now says a flagless scan reaches the leaves the tree tags `[scan]` or
+  `[scan/needle]` and that a gated leaf needs `-t` (or `--attachments`). The tree tagged
+  `harness.hook.context` `[-t]` while `--attachments` admits it, and the csift-channel
+  delivery `[scan]` beside a sentence calling it a needle leaf. The `-t` flag named three
+  of the 28 leaves a bare face skips and gave `system`/`local_command` as its delivery
+  example, whose leaf the model receives anyway; it now names all 28 by group and uses a
+  rendered `hook_success`. The EXPOSED KEYS section said five keys render a tag (six do)
+  and never named `stop_reason` / `stop_details`; the attachment section kept a sentence
+  saying the mid-turn steer reads `[payload]`; and `harness.context.skill` is now described
+  as any injected skill body, not only a subagent's preloaded one. Tests derive every
+  leaf's gate word from the candidate gate's own leaf sets, every skipped leaf from the
+  visibility table and every key from the keys family's projector.
 
 ### Performance
 

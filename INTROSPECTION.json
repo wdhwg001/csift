@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2518",
+          "lines": "2519",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -32199,7 +32199,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "401-406",
+          "lines": "409-414",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -45542,7 +45542,7 @@
         },
         {
           "path": "src/cli/search_help/intro.rs",
-          "lines": "209-211",
+          "lines": "216-218",
           "snippet": "        28 of the 73 leaves are outside a bare role or category - the two scan-layer user\\n  \\\n        leaves, `user.queued` and all 13 bookkeeping leaves (non-transcript lines with no\\n  \\\n        message field), the two textless thinking leaves, the message-less system records\\n  \\"
         }
       ],
@@ -49278,7 +49278,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "401-406",
+          "lines": "409-414",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49695,7 +49695,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "255-257",
+          "lines": "263-265",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -80496,8 +80496,8 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "127-129",
-          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE"
+          "lines": "128-130",
+          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) or CATEGORY selects the leaves the model RECEIVES - on the first of THREE"
         }
       ],
       "states": [
@@ -89307,7 +89307,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3550"
+          "lines": "3551"
         }
       ],
       "states": [

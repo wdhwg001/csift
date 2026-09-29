@@ -25,7 +25,8 @@ use super::*;
         harness.{notification,compaction,command,interrupt,schedule,resume,hook,context,enforce,\
         turn,system,bookkeeping}; `csift search --help` lists every leaf under each. A bare ROLE \
         or CATEGORY selects only the leaves the model RECEIVES; a GLOB (`-t 'user.*'`) or an \
-        exact LEAF reaches every record. With none given, EVERY label is eligible. `-T`/\
+        exact LEAF reaches every record. With none given, every leaf a default scan reaches is \
+        eligible; a gated leaf still needs its own `-t` (see the leaf tree). `-T`/\
         `--label-not` EXCLUDES with the same grammar (the rg -t/-T duality): the effective set \
         is (-t selectors, or ALL) minus (-T selectors), and ONLY a -T that cancels your -t is a \
         hard error. `harness.bookkeeping` is the one category whose whole face is invisible: \
@@ -126,22 +127,29 @@ pub struct SearchArgs {
 
     /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
     /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE
-    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE
-    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation does
-    /// not reach, `harness.compaction.boundary`, which carries no message at all, and
-    /// the six gated leaves); a GLOB (`-t 'user.*'`) selects every
-    /// leaf under the prefix, visibility ignored; an intermediate prefix or exact leaf
-    /// (`-t agent.tool`, `-t user.unsent`) selects its full set. Axis 1 is that leaf default;
-    /// the other two decide per RECORD. DELIVERY: Claude Code's request assembler re-mints a
-    /// `system`/`local_command` record (a slash command's own echo and stdout) as a user
-    /// message, so `-t harness` shows it although its leaf is invisible, and it drops an
-    /// `isVirtual` record and the `<synthetic>` API-error placeholder, so `-t agent` hides
-    /// those although `agent.message` is visible. SURVIVAL: a record Claude Code's own
+    /// (`-t user`) or CATEGORY selects the leaves the model RECEIVES - on the first of THREE
+    /// axes below, every leaf but the model-invisible ones, which are the scan-layer
+    /// `user.unsent` and `user.rewound` (the surviving conversation does not reach them),
+    /// `user.queued` and the whole `harness.bookkeeping` category (lines with no message),
+    /// the textless `agent.thinking.omitted` and `agent.thinking.redacted`, the
+    /// message-less system records (`harness.compaction.boundary`,
+    /// `harness.schedule.event`, the three `harness.turn` closers and every
+    /// `harness.system` kind but `.command`) and `harness.hook.outcome`; a GLOB (`-t
+    /// 'user.*'`) selects every leaf under the prefix, visibility ignored; an intermediate
+    /// prefix or exact leaf (`-t agent.tool`, `-t user.unsent`) selects its full set. Axis 1
+    /// is that leaf default; the other two decide per RECORD. DELIVERY: Claude Code's
+    /// converter turns a `hook_success` attachment that carries a top-level `rendered` into
+    /// text the model receives, so `-t harness` shows it although `harness.hook.outcome` is
+    /// invisible; its request assembler drops an `isVirtual` record and the `<synthetic>`
+    /// API-error placeholder, and its converter drops a never-converted attachment payload,
+    /// so a bare face hides those although their leaves are visible (`agent.message.structured`
+    /// alone keeps its face - the model wrote it). SURVIVAL: a record Claude Code's own
     /// conversation chain does not reach - a recalled draft, a turn the operator rewound
     /// past, anything under one - is not in the conversation either, so a bare role skips it
     /// while a glob or an exact leaf reaches it, marked `[abandoned]`/`[rewound]`. An invalid
-    /// selector is a HARD error listing the valid set; with none given, every label is
-    /// eligible. (No back-compat: the retired flat `thinking`/`tool`/`tool-response`
+    /// selector is a HARD error listing the valid set; with none given, every leaf a default
+    /// scan reaches is eligible and a gated leaf still needs its own `-t` (the leaf tree's
+    /// GATE words). (No back-compat: the retired flat `thinking`/`tool`/`tool-response`
     /// spellings hard-error and name their successors.)
     #[arg(
         short = 't',

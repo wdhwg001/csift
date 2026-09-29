@@ -24,9 +24,7 @@ pub(crate) const SECTION: &str =
      conversion for a human turn: which copy the model got depends on the turn it was \
      replayed into, which the record does not say, so the body stays the ordinary one and \
      the unit adds `[human-turn render differs]` (JSON `human_turn_render_differs`) rather \
-     than choosing. ONE view is rendered by another path and reads `[payload]` whatever \
-     the record carries - the person's mid-turn steer, whose `user.message` unit resolves \
-     as an opener before this family is asked.\n  \
+     than choosing.\n  \
      Each unit also names ITSELF: `[hook <event> <name>]` for injected context, `[hook \
      <event> <name> exit <code> <ms>ms]` for a hook run (`[hook <payload type>]` for the \
      other six outcome types), `[context <payload type>]` for the context leaves, \

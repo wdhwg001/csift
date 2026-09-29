@@ -102,7 +102,11 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         it like any text, e.g. `csift search 'background-command' -t harness.notification`. The \
         `<kind>` prefix distinguishes a machine opener from a genuine human message.\n\n\
         EMPTY RESULTS ARE AN ANSWER, NOT A FAILURE\n  \
-          With NO `-t`/`--label`, EVERY label is searched. A ZERO-match result is a DEFINITIVE \
+          With NO `-t`/`--label`, a scan reaches every leaf the tree below tags [scan] or \
+        [scan/needle]. A GATED leaf - tagged [-t] or [-t/att]: the whole `harness.bookkeeping` \
+        category and the gated attachment, system and turn leaves - is reached only by naming \
+        it with `-t` (or, for [-t/att], by `--attachments`), and the zero-match note lists the \
+        gated leaves an absence does not cover. A ZERO-match result is a DEFINITIVE \
         absence (exit 0), never an error, and it SELF-DIAGNOSES on stderr: it echoes the active \
         filters and, when a `-t`/`-T` was on, an active probe NAMES the label(s) the pattern DOES \
         occur under (so an empty `-t user.message` that hid tool-name hits under `agent.tool.use` \
@@ -117,8 +121,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         (`user`), or any of those plus `.*`. A bare ROLE or CATEGORY selects only the\n  \
         leaves the model RECEIVES - the coarse \"show me the conversation\" ask; a GLOB or\n  \
         an exact LEAF reaches every record under all three narrowing axes below. No -t\n  \
-        means every label. `-T` excludes with the same grammar, and ONLY a -T that cancels\n  \
-        your -t is an error (a selector typo is a parse error naming the valid set).\n  \
+        means every leaf a default scan reaches (the GATE words below). `-T` excludes with\n  \
+        the same grammar, and ONLY a -T that cancels your -t is an error (a selector\n  \
+        typo is a parse error naming the valid set).\n  \
           `harness.bookkeeping` is the one category whose whole face is invisible: the\n  \
         bare form is ACCEPTED, matches nothing by the law, and says so on stderr with the\n  \
         remedy (`-t harness.bookkeeping.*`); JSON carries `empty_visible_face`.\n  \
@@ -126,7 +131,7 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         `harness.meta.*` path, the flat `thinking`/`tool`/`tool-response`, and\n  \
         `harness.schedule.continuation`. `--additional-context` is retired too - the leaf\n  \
         it gated has a name, `-t harness.hook.context`. There is no alias anywhere.\n  \
-          GATE words below: [scan] a role-bearing line a default scan already parses ·\n  \
+          GATE words below: [scan] a line a default scan already parses ·\n  \
         [-t] you must name the leaf, its category or a glob reaching it · [-t/att]\n  \
         either that or the wide `--attachments` flag, which admits every attachment line ·\n  \
         [scan/needle] an attachment leaf a DEFAULT scan reaches through its own value\n  \
@@ -145,20 +150,20 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         answered and the conversation was rewound past · .queued\n                                   \
         [-t] the human\'s text while it sat in the input QUEUE\n  \
           agent       .message.plain [scan] the assistant\'s own text ·\n                                   \
-        .message.structured [scan/needle] a schema-bound subagent\'s\n                                  \
+        .message.structured [scan/needle] a schema-bound subagent\'s\n                                   \
         final structured answer · .thinking.summary [scan] the\n                                   \
         API\'s summary of the reasoning, never the reasoning ·\n                                   \
         .thinking.narration [scan] its one-sentence progress\n                                   \
         update between tool calls · .thinking.omitted [scan] a\n                                   \
         thinking block the API returned with NO summary text ·\n                                   \
         .thinking.redacted [scan] its safety-redacted ciphertext ·\n                                   \
-        .tool.use · .tool.result [scan] tool traffic, paired by\n                                   \
+        .tool.{use,result} [scan] tool traffic, paired by\n                                   \
         tool_use_id (the `▹` join) ·\n                                   \
         .communication.{inbox,sent,signal} [scan] peer messages,\n                                   \
         rendered `from ⇨ to` - a COORDINATOR relay reads\n                                   \
         `coordinator ⇨ self`, the literal word, because its\n                                   \
         origin object names a kind and no sender ·\n                                   \
-        .communication.channel [scan] a\n                                   \
+        .communication.channel [scan/needle] a\n                                   \
         csift-channel delivery, rendered VERBATIM from its\n                                   \
         `[csift-channel v1 …]` envelope - one of the three\n                                   \
         [scan/needle] attachment leaves\n  \
@@ -179,7 +184,7 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         driver tick · .resume.prompt [scan] the loader\'s repair\n                                   \
         prompt · .resume.placeholder [scan] the stand-in reply it\n                                   \
         splices after one ([paired]/[unpaired]) ·\n                                   \
-        .hook.context [-t] context a hook injected ·\n                                   \
+        .hook.context [-t/att] context a hook injected ·\n                                   \
         .hook.outcome [-t/att] a hook RUN\'s own record ·\n                                   \
         .hook.feedback [scan] a blocking hook\'s feedback, over the four \n                                   \
         names one formatter writes (Stop, TeammateIdle, TaskCreated, \n                                   \
@@ -187,7 +192,9 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         .context.{reminder,listing,prompt,file,mode,ide,task}\n                                   \
         [-t/att] what the harness attached to the turn ·\n                                   \
         .context.{image,skill} [scan] its isMeta image references\n                                   \
-        and a subagent\'s preloaded skill body ·\n                                   \
+        and a skill body the harness injected - preloaded into\n                                   \
+        a subagent\'s opening, or expanded into any transcript\n                                   \
+        where the skill was invoked ·\n                                   \
         .enforce.{structured-output,brief,handback,retry} [scan]\n                                   \
         the redo nudges the harness sends back to the model ·\n                                   \
         .turn.{duration,stop-hooks,recap} [-t] the end-of-turn\n                                   \
