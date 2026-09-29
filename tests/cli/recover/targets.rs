@@ -133,3 +133,70 @@ fn a_manifest_line_naming_several_files_is_reported_ambiguous_and_not_written() 
         "a1\na2\n"
     );
 }
+
+/// What decides ambiguity is every file the scope NAMES, not only the ones with a replayable
+/// event: a subagent that merely read `/p/b/lib.rs` makes `lib.rs` name two files, in the
+/// batch as in the single-file mode. And a transcript whose events name the target only by a
+/// relative path still counts for the replay - it names no candidate, so nothing is refused.
+#[test]
+fn a_read_only_match_counts_for_ambiguity_and_a_relative_path_still_replays() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"write two files"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"w1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tw1","name":"Write","input":{"file_path":"/p/a/lib.rs","content":"a1\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:01.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tw1","content":"File created successfully at: /p/a/lib.rs"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"w2","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tw2","name":"Write","input":{"file_path":"notes/todo.md","content":"t1\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r2","timestamp":"2026-06-07T05:00:02.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tw2","content":"File created successfully at: notes/todo.md"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-a1000000000000009.jsonl"),
+        concat!(
+            r#"{"type":"assistant","isSidechain":true,"agentId":"a1000000000000009","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tr1","name":"Read","input":{"file_path":"/p/b/lib.rs"}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"a1000000000000009","timestamp":"2026-06-07T05:00:03.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tr1","content":"b1"}]}}"#, "\n",
+        ),
+    );
+    let single = h.run(&["recover", at(SESS).as_str(), "--file", "lib.rs"]);
+    assert!(!single.success, "{}", single.stdout);
+    assert!(
+        single.stderr.contains("names 2 distinct files in scope"),
+        "{}",
+        single.stderr
+    );
+
+    let run_batch = |lines: &str, dir: &str| {
+        let manifest = h.root.join(format!("{dir}.txt"));
+        std::fs::write(&manifest, lines).unwrap();
+        let out_dir = h.root.join(dir);
+        let out = h.run(&[
+            "recover",
+            at(SESS).as_str(),
+            "--files-from",
+            manifest.to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+        ]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        let report = std::fs::read_to_string(out_dir.join("recovery-report.tsv")).unwrap();
+        (out, report)
+    };
+    let (out, report) = run_batch("lib.rs\nnotes/todo.md\n", "mixed");
+    assert!(
+        report.contains("ambiguous\t0\t0\t0\t0\t0\tlib.rs\t\n"),
+        "{report}"
+    );
+    assert!(
+        report.contains("complete\t1\t1\t0\t0\t0\tnotes/todo.md\t"),
+        "{report}"
+    );
+    assert!(out.stdout.contains("· 1 ambiguous"), "{}", out.stdout);
+    // A run with nothing ambiguous says nothing about it.
+    let (clean, report) = run_batch("/p/a/lib.rs\n", "clean");
+    assert!(
+        report.contains("complete\t1\t1\t0\t0\t0\t/p/a/lib.rs\t"),
+        "{report}"
+    );
+    assert!(!clean.stdout.contains("ambiguous"), "{}", clean.stdout);
+}
