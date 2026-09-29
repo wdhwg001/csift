@@ -96,16 +96,6 @@ fn run_facts(main_jsonl: &Path) -> Result<HashMap<String, RunFacts>> {
     Ok(runs)
 }
 
-/// The run directory a WORKFLOW lane sits in (`subagents/workflows/<run>/agent-<id>.jsonl`), or
-/// `None` for a built-in lane.
-fn workflow_run_of(lane: &Path) -> Option<&str> {
-    let run = lane.parent()?;
-    let workflows = run.parent()?;
-    (workflows.file_name()? == "workflows" && workflows.parent()?.file_name()? == "subagents")
-        .then(|| run.file_name()?.to_str())
-        .flatten()
-}
-
 /// The verdict the lane's own workflow run gives, before its tail is read: an ended run or a
 /// journal line closing this agent settles it. `None` leaves the lane to its tail.
 fn settled_by_run(lane_id: &str, run: Option<&RunFacts>) -> Option<String> {
@@ -131,10 +121,15 @@ pub(crate) fn children_report(
 ) -> Result<ChildrenReport> {
     let mut report = ChildrenReport::default();
     let runs = run_facts(main_jsonl)?;
-    let subs = crate::subagent::subagent_transcript_files(main_jsonl).unwrap_or_default();
-    for sub in &subs {
+    // The DISCOVERED lanes, because discovery already knows which run a workflow lane came
+    // from (`workflow_id`, the run directory it was found in) and that a built-in lane has
+    // none. Re-deriving the run from the lane's path tested directory NAMES, which a project
+    // directory that is itself named like a sidecar component can satisfy.
+    let subs = crate::subagent::discover_subagents(main_jsonl).unwrap_or_default();
+    for lane in &subs {
+        let sub = &lane.path;
         let sid = crate::subagent::session_id_from_path(sub);
-        let by_run = settled_by_run(&sid, workflow_run_of(sub).and_then(|r| runs.get(r)));
+        let by_run = settled_by_run(&sid, lane.workflow_id.as_deref().and_then(|r| runs.get(r)));
         let (state, detail) = if returned.contains(&sid) {
             (
                 "settled",

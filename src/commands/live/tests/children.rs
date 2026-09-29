@@ -73,3 +73,36 @@ fn a_failed_line_closes_the_agent_like_a_result() {
     );
     assert_eq!(report.live_count, 0);
 }
+
+/// Which run a lane belongs to is where discovery FOUND it, never a reading of directory names:
+/// a built-in lane in a session whose project directory is itself named `subagents`, beside an
+/// ended run that is also named `subagents`, is no lane of that run and stays in flight.
+#[test]
+fn a_built_in_lane_is_settled_by_no_run_whatever_its_directories_are_named() {
+    let root = crate::testfs::Scratch::dir("live-run-names");
+    let project = root.join("subagents");
+    let main = project.join("s1.jsonl");
+    let sidecar = project.join("s1/subagents");
+    std::fs::create_dir_all(sidecar.join("workflows/subagents")).unwrap();
+    std::fs::write(&main, "").unwrap();
+    let now = jiff::Timestamp::now().to_string();
+    std::fs::write(
+        sidecar.join("agent-a0123456789abcdef.jsonl"),
+        format!(
+            r#"{{"type":"assistant","timestamp":"{now}","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t1","name":"Bash","input":{{}}}}]}}}}"#
+        ) + "\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("workflows/subagents/journal.jsonl"), "").unwrap();
+    let manifests = project.join("s1/workflows");
+    std::fs::create_dir_all(&manifests).unwrap();
+    std::fs::write(
+        manifests.join("subagents.json"),
+        r#"{"runId":"subagents","status":"completed"}"#,
+    )
+    .unwrap();
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
+    assert_eq!(report.children.len(), 1, "{report:?}");
+    assert_eq!(report.children[0].state, "in-flight", "{report:?}");
+    assert_eq!(report.live_count, 1, "{report:?}");
+}

@@ -4733,8 +4733,8 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "128-134",
-          "snippet": "pub(crate) fn children_report(\n    main_jsonl: &Path,\n    returned: &std::collections::HashSet<String>,\n) -> Result<ChildrenReport> {\n    let mut report = ChildrenReport::default();\n    let runs = run_facts(main_jsonl)?;\n    let subs = crate::subagent::subagent_transcript_files(main_jsonl).unwrap_or_default();"
+          "lines": "118-123",
+          "snippet": "pub(crate) fn children_report(\n    main_jsonl: &Path,\n    returned: &std::collections::HashSet<String>,\n) -> Result<ChildrenReport> {\n    let mut report = ChildrenReport::default();\n    let runs = run_facts(main_jsonl)?;"
         }
       ],
       "states": [
@@ -30042,7 +30042,7 @@
         },
         {
           "path": "src/commands/live/children.rs",
-          "lines": "186-188",
+          "lines": "181-183",
           "snippet": "        } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n            && shape.last_stop_reason.as_deref() != Some(\"end_turn\")\n        {"
         }
       ],
@@ -30113,7 +30113,7 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "186-192",
+          "lines": "181-187",
           "snippet": "        } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n            && shape.last_stop_reason.as_deref() != Some(\"end_turn\")\n        {\n            // A paired tail with a fresh record and no end_turn = mid-generation (the\n            // model is thinking/writing between tool calls; stop_reason alone would\n            // mark 73% of DEAD lanes live, so recency is the load-bearing conjunct).\n            ("
         }
       ],
@@ -30726,7 +30726,7 @@
         },
         {
           "path": "src/commands/live/children.rs",
-          "lines": "158-160",
+          "lines": "153-155",
           "snippet": "    // Workflow journals: started - closed per run that has NOT ended (incremental, so an\n    // imbalance there is a LIVE signal). An ended run contributes nothing: an agent killed with\n    // its run never writes a closing line, so its imbalance is permanent and says nothing live."
         },
         {
@@ -61639,7 +61639,7 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "161-165",
+          "lines": "156-160",
           "snippet": "    report.journal_in_flight = runs\n        .values()\n        .filter(|r| r.ended.is_none())\n        .map(|r| r.started.saturating_sub(r.closing))\n        .sum();"
         },
         {
@@ -64674,7 +64674,7 @@
         },
         {
           "path": "src/commands/live/children.rs",
-          "lines": "186-187",
+          "lines": "181-182",
           "snippet": "    } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n        && shape.last_stop_reason.as_deref() != Some(\"end_turn\")"
         }
       ],
