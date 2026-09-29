@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2529",
+          "lines": "2530",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -44142,7 +44142,7 @@
       "code": [
         {
           "path": "src/cli/search_args/gates.rs",
-          "lines": "137-139",
+          "lines": "138-140",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -79976,7 +79976,7 @@
         },
         {
           "path": "src/cli/search_args/gates.rs",
-          "lines": "160-165",
+          "lines": "161-166",
           "snippet": "    pub fn scans_system_lines(&self) -> bool {\n        system_line_leaves()\n            .into_iter()\n            .any(|c| self.reaches_gated(c))\n            || self.bare_harness_role()\n    }"
         }
       ],
@@ -85718,7 +85718,7 @@
         },
         {
           "path": "src/model/inventory/attachments.rs",
-          "lines": "373-378",
+          "lines": "374-379",
           "snippet": "Shape::AttachmentType(\"goal_status\"),\n        Some(Class::ContextTask),\n        Gate::Attachments,\n        // The conversion table drops it (`goal_status:()=>[]`), so the model never\n        // receives one even though `harness.context.task` is otherwise visible.\n        false,"
         }
       ],
@@ -89357,7 +89357,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3561"
+          "lines": "3562"
         }
       ],
       "states": [
@@ -90840,7 +90840,7 @@
         },
         {
           "path": "src/model/inventory/attachments.rs",
-          "lines": "182-186",
+          "lines": "183-187",
           "snippet": "        Shape::AttachmentType(\"mcp_instructions_delta\"),\n        Some(Class::ContextListing),\n        Gate::Attachments,\n        true,\n        Human::Never,"
         }
       ],
@@ -90935,7 +90935,7 @@
         },
         {
           "path": "src/model/inventory/attachments.rs",
-          "lines": "423-427",
+          "lines": "424-428",
           "snippet": "        Shape::AttachmentType(\"thinking_drop\"),\n        Some(Class::ContextTask),\n        Gate::Attachments,\n        false,\n        Human::Never,"
         }
       ],

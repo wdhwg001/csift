@@ -25,11 +25,12 @@ use super::*;
 
 /// One row per attachment payload `type`, grouped by leaf in the map's own order.
 pub(crate) const ROWS: &[Entry] = &[
-    // harness.hook.context: the injected text the model reads.
+    // harness.hook.context: the injected text the model reads. An attachment like the
+    // rest, so `--attachments` admits it beside a selector reaching the leaf.
     e(
         Shape::AttachmentType("hook_additional_context"),
         Some(Class::HookContext),
-        Gate::Selector,
+        Gate::Attachments,
         true,
         Human::Never,
     ),

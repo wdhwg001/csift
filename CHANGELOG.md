@@ -1306,6 +1306,14 @@ surface change bumps the PATCH.
   counted in code units and every cut falls between whole characters: that body renders
   two parts of 9,199 and 3,335 units, and `send` counts the parts the same way. Bodies of
   ASCII and BMP text chunk exactly as before.
+- **A zero-match search called `harness.hook.context` reachable only by `-t`.** Its
+  inventory row still carried the selector-only gate from before `--attachments` covered
+  it, so the note listing the leaves a run never scanned named it even on an
+  `--attachments` run that had parsed its line, and a run that named the leaf printed no
+  note although the 23 other selector-only leaves went unscanned. The row now carries the
+  attachment gate the scan applies: the note lists 23 leaves, never the hook context, and
+  `-t harness.hook.context` alone prints it with `gated_leaves_unreached: true`. The
+  SPEC inventory table's row reads `-t or --attachments`.
 
 ### Performance
 

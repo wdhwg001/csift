@@ -14,8 +14,9 @@ use super::*;
 /// ([`SearchArgs::reaches_gated`]) or a `show` address. DERIVED from the shape
 /// inventory's `Gate::Selector` rows, so a shape that becomes gated (or stops being)
 /// moves this set with it and the honest-empties note can never name a stale leaf.
-/// `harness.hook.context` is here too: `--additional-context` is retired, so the leaf it
-/// gated is reached by naming it.
+/// No attachment leaf belongs here: `--attachments` admits every attachment line, so a
+/// leaf listed here that an attachment carries would be named selector-only by that note
+/// on the very scan that parsed it ([`attachment_leaves`] is that set).
 #[must_use]
 pub fn gated_leaves() -> Vec<Class> {
     let mut out: Vec<Class> = Vec::new();

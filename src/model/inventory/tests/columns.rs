@@ -102,6 +102,44 @@ fn the_default_needle_gate_names_exactly_the_default_on_needles() {
     );
 }
 
+/// No attachment payload is gated on a selector alone. `--attachments` keeps EVERY
+/// attachment line, so an attachment row reads `Attachments`, or `DefaultNeedle` where a
+/// flagless scan reaches it through its own needle. A `Selector` row here put its leaf in
+/// `cli::gated_leaves`, and the zero-match note then named it as reached only by a `-t` on
+/// the very `--attachments` scan that had parsed its line.
+///
+/// Both halves: the column, row by row, and the two derived sets, which is where a
+/// reader meets the error.
+#[test]
+fn no_attachment_payload_is_gated_on_a_selector_alone() {
+    let mut checked = 0usize;
+    for r in rows().filter(|r| matches!(r.shape, Shape::AttachmentType(_))) {
+        checked += 1;
+        assert!(
+            matches!(r.gate, Gate::Attachments | Gate::DefaultNeedle),
+            "{} reads {:?}, while --attachments admits every attachment line",
+            r.disk(),
+            r.gate
+        );
+    }
+    assert_eq!(checked, 52, "the walk must visit every attachment row");
+    let attachment = crate::cli::attachment_leaves();
+    assert!(
+        attachment.contains(&Class::HookContext),
+        "the coarse attachment keep carries the hook-context leaf"
+    );
+    let both: Vec<&str> = crate::cli::gated_leaves()
+        .into_iter()
+        .filter(|c| attachment.contains(c))
+        .map(Class::path)
+        .collect();
+    assert!(
+        both.is_empty(),
+        "leaves the zero-match note would call selector-only although --attachments \
+         reaches them: {both:?}"
+    );
+}
+
 #[test]
 fn a_row_with_no_leaf_is_reachable_only_by_an_address() {
     for r in rows() {

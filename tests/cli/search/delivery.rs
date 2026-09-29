@@ -229,6 +229,61 @@ fn the_gated_leaves_note_follows_what_the_scan_actually_parsed() {
     assert_eq!(summary["gated_leaves_unreached"], true, "{}", uj.stdout);
 }
 
+/// The note names only leaves a `-t` alone reaches. A hook's injected context is an
+/// attachment, which `--attachments` parses, so no run may call it selector-only - and a
+/// run that names it reached no OTHER gated leaf, so the note stands there.
+#[test]
+fn the_gated_leaves_note_never_names_the_hook_context_leaf() {
+    const HSESS: &str = "6d5c4b3a-2e1f-4a0b-9c8d-7e6f5a4b3c2d";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{HSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"h1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","attachment":{"type":"hook_additional_context","hookName":"SessionStart","hookEvent":"SessionStart","content":["lagoon context injected"]}}"#, "\n",
+        ),
+    );
+    let reached = h.run(&["search", "injected", &at(HSESS), "--attachments", "-c"]);
+    assert_eq!(reached.stdout.trim(), "1", "--attachments parses the line");
+    for q in [
+        vec!["search", "zzznotpresent", &at(HSESS)],
+        vec!["search", "zzznotpresent", &at(HSESS), "--attachments"],
+    ] {
+        let out = h.run(&q);
+        assert!(
+            out.stderr.contains("the gated leaves (")
+                && !out.stderr.contains("harness.hook.context"),
+            "{q:?}:\n{}",
+            out.stderr
+        );
+    }
+    let named = h.run(&[
+        "search",
+        "zzznotpresent",
+        &at(HSESS),
+        "-t",
+        "harness.hook.context",
+    ]);
+    assert!(
+        named.stderr.contains("the gated leaves (")
+            && named.stderr.contains("harness.bookkeeping.queue"),
+        "naming the hook context reaches no gated leaf:\n{}",
+        named.stderr
+    );
+    let nj = h.run(&[
+        "search",
+        "zzznotpresent",
+        &at(HSESS),
+        "-t",
+        "harness.hook.context",
+        "--format",
+        "json",
+    ]);
+    let summary: serde_json::Value = serde_json::from_str(nj.stdout.lines().last().unwrap_or(""))
+        .expect("the trailing summary line");
+    assert_eq!(summary["gated_leaves_unreached"], true, "{}", nj.stdout);
+}
+
 #[test]
 fn the_label_census_counts_what_the_bare_role_would_surface() {
     let h = delivery_home();
