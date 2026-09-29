@@ -251,7 +251,8 @@ pub struct AgentsArgs {
     #[arg(long = "order-by", value_enum, default_value_t = AgentTimeAxis::Trigger)]
     pub order_by: AgentTimeAxis,
 
-    /// Grab ONE subagent by its bare-hex id: prints its full node incl. the returned
+    /// Grab ONE subagent by its id, bare or `@`-prefixed like every other id position (the
+    /// `agent_id` column): prints its full node incl. the returned
     /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
     /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--order-by` and `--shape`
     /// (a known id resolves regardless of when it ran or its shape), and just the matched

@@ -1154,6 +1154,10 @@ surface change bumps the PATCH.
   were as silent, while the ordinary render framed the same absence on stderr as definitive
   and, under a label filter, named the labels the pattern does occur under. Every mode now
   prints that diagnosis on stderr; stdout is unchanged.
+- **`agents --agent` refused the `@` sigil.** `csift agents @<uuid> --agent @<agent-id>`
+  failed with `no subagent matched id` while every other id position takes the sigil and
+  the error's own remedy prints ids beside `@<uuid>`. The flag now takes the id bare or
+  `@`-prefixed and both grab the same node; `agents --help` says so.
 
 ### Performance
 

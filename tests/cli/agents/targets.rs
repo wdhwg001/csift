@@ -102,3 +102,35 @@ fn agents_path_with_no_sessions_and_no_session_flag_is_empty_not_error() {
         out.stdout
     );
 }
+
+/// `--agent` takes an id with or without the `@` sigil every other id position takes, and
+/// both spellings grab the same node. The sigil form was refused as `no subagent matched id
+/// `@...``, while the refusal's own remedy printed ids beside `@<uuid>`.
+#[test]
+fn agents_agent_accepts_the_at_sigil_like_every_id_position() {
+    let h = populated_home();
+    let bare = h.run(&[
+        "agents",
+        at(SESS).as_str(),
+        "--agent",
+        "aaa111",
+        "--format",
+        "json",
+    ]);
+    let sigil = h.run(&[
+        "agents",
+        at(SESS).as_str(),
+        "--agent",
+        "@aaa111",
+        "--format",
+        "json",
+    ]);
+    assert!(bare.success, "stderr: {}", bare.stderr);
+    assert!(sigil.success, "the @ form resolves: {}", sigil.stderr);
+    assert_eq!(
+        json_rows(&sigil.stdout, "agent"),
+        json_rows(&bare.stdout, "agent"),
+        "both spellings grab the same node"
+    );
+    assert_eq!(json_rows(&sigil.stdout, "agent").len(), 1);
+}

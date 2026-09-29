@@ -86,7 +86,11 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // its shape), and a no-match is a hard error with discovery guidance - never the
     // ambiguous `no subagents found` (which a zero-subagent session also prints). The grab
     // renders a single node (a tree of one), not the whole workflow tree.
-    if let Some(want_id) = args.agent.as_deref() {
+    if let Some(given) = args.agent.as_deref() {
+        // Every other id position in csift takes the `@` sigil, and this error's own remedy
+        // prints ids beside `@<uuid>`, so the sigil is stripped rather than matched: an id
+        // carries no `@` of its own on any shape (bare hex, `a<Name>-<16 hex>`).
+        let want_id = given.trim().strip_prefix('@').unwrap_or(given.trim());
         nodes.retain(|n| n.agent_id == want_id);
         if nodes.is_empty() {
             bail!(
