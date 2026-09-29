@@ -287,3 +287,43 @@ fn a_gated_file_adds_its_sidecar_malformed_lines_to_its_own() {
         out.stdout
     );
 }
+
+/// The terminal modes print the same zero-match diagnosis the ordinary render prints: `-c`
+/// printed `0`, `-l` nothing, `--count-by` an empty census and `--raw` no lines, each with no
+/// word on stderr. Stdout keeps its own shape; only stderr gains the frame.
+#[test]
+fn every_output_mode_carries_the_zero_match_diagnosis() {
+    let h = populated_home();
+    let target = at(SESS);
+    let modes: [&[&str]; 5] = [&[], &["-c"], &["-l"], &["--count-by", "label"], &["--raw"]];
+    for mode in modes {
+        let mut argv = vec!["search", "zzqq-absent-zzqq", target.as_str()];
+        argv.extend_from_slice(mode);
+        let out = h.run(&argv);
+        assert!(out.success, "{mode:?}: {}", out.stderr);
+        assert!(
+            out.stderr.contains("DEFINITIVE absence"),
+            "{mode:?}: {}",
+            out.stderr
+        );
+    }
+    let count = h.run(&["search", "zzqq-absent-zzqq", target.as_str(), "-c"]);
+    assert_eq!(count.stdout.trim(), "0", "stdout stays the bare count");
+    // Under a label filter the probe runs in the terminal modes too and names what the
+    // filter excluded.
+    let probe = h.run(&[
+        "search",
+        "low-edge",
+        "--no-subagents",
+        "-t",
+        "user.message",
+        "-c",
+    ]);
+    assert!(probe.success, "{}", probe.stderr);
+    assert_eq!(probe.stdout.trim(), "0");
+    assert!(
+        probe.stderr.contains("DOES occur") && probe.stderr.contains("agent.tool.result"),
+        "{}",
+        probe.stderr
+    );
+}

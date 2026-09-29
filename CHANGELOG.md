@@ -1149,6 +1149,11 @@ surface change bumps the PATCH.
   whitespace-only target at parse time (exit 2) with the target grammar in the message; an
   empty `$(...)` substitution is the usual source, and the message says so. `search ""` as
   the PATTERN is unchanged.
+- **The three terminal modes said nothing about a zero-match search.** `csift search
+  zzqqnothing @<id> -c` printed `0` and no diagnosis, and `-l`, `--count-by` and `--raw`
+  were as silent, while the ordinary render framed the same absence on stderr as definitive
+  and, under a label filter, named the labels the pattern does occur under. Every mode now
+  prints that diagnosis on stderr; stdout is unchanged.
 
 ### Performance
 

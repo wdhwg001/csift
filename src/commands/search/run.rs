@@ -292,6 +292,22 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     }
     outcome.exchanges = all;
 
+    // The zero-match self-diagnosis runs BEFORE the terminal modes below return: a count of
+    // `0`, an empty id stream, an empty census or no raw lines is the same absence the
+    // ordinary render explains, and without its stderr lines each reads as a failure.
+    let diagnosis = diagnose_zero_match(
+        args,
+        &outcome,
+        &session_files,
+        &matcher,
+        turn_range,
+        &time_window,
+        &spawn_map,
+        inner_parallel,
+        for_addr.as_ref(),
+        cross,
+    )?;
+
     // `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
     // `--max-count`), the ripgrep `-c` idiom - no per-exchange output.
     if args.count_only {
@@ -450,19 +466,6 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         }
         return Ok(());
     }
-
-    let diagnosis = diagnose_zero_match(
-        args,
-        &outcome,
-        &session_files,
-        &matcher,
-        turn_range,
-        &time_window,
-        &spawn_map,
-        inner_parallel,
-        for_addr.as_ref(),
-        cross,
-    )?;
 
     match args.format {
         OutputFormat::Text => render_text(&outcome, args)?,
