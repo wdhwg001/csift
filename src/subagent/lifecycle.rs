@@ -70,8 +70,13 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
         completed_utc.is_none() || !newest_decided
     })?;
 
-    let journal_done = journal_reports_completion(subagent, journals);
-    // Clear the frozen signal when it would be meaningless: a journal-completed (workflow) agent is
+    // A workflow lane's own RUN decides first, by the rule `status` reads: its run's manifest (the
+    // run ended) or a journal line closing the agent (`result` or `failed`). A lane the harness
+    // stopped after its answer keeps an unreturned call at its tail for good, so reading the tail
+    // alone called it running while `status` counted it settled.
+    let journal_done = journal_reports_completion(subagent, journals)
+        || journals.settled_by_run(subagent).is_some();
+    // Clear the frozen signal when it would be meaningless: a run-settled (workflow) agent is
     // trusted done regardless of a tail tool_use; and a transcript with NO timestamps has
     // undetermined timing (status Unknown), so we cannot claim "frozen" vs merely unreadable.
     if journal_done || started_utc.is_none() {

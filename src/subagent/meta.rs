@@ -130,7 +130,8 @@ pub struct JournalCache {
     pub(crate) by_path: HashMap<PathBuf, JournalData>,
 }
 
-/// The per-agent `result`-event facts one journal carries.
+/// What one workflow RUN's own files say about its agents: the journal's per-agent events
+/// and the run manifest.
 #[derive(Debug, Default)]
 pub(crate) struct JournalData {
     /// agentId -> the FIRST `result` event's payload for that agent: `Some(text)` when the
@@ -138,48 +139,98 @@ pub(crate) struct JournalData {
     /// is never lost), `None` when it does not (a completion signal with no payload).
     /// Key PRESENCE == "the journal reports this agent completed".
     pub(crate) results: HashMap<String, Option<String>>,
+    /// Agent ids a `result` OR a `failed` line closes. Both are terminal (claim TAIL-008), so
+    /// either settles that agent's lane.
+    pub(crate) closed: std::collections::HashSet<String>,
+    /// `started` lines, and `result` / `failed` lines: their difference is the run's agents in
+    /// flight while the run has no manifest.
+    pub(crate) started: usize,
+    pub(crate) closing: usize,
+    /// The run MANIFEST's status, when `<sidecar>/workflows/<run>.json` exists. The harness
+    /// writes that file only once the run has ENDED (claim TAIL-009), so it settles every
+    /// agent of the run whatever a lane's tail shows: a lane the harness stopped after its
+    /// structured answer keeps an unreturned call at its tail for good.
+    pub(crate) ended: Option<String>,
 }
 
 impl JournalCache {
     /// Read + parse each DISTINCT journal among these subagents once. Malformed journal
     /// lines are skipped exactly as the former per-agent scans skipped them.
     pub fn build(subs: &[Subagent]) -> Self {
-        let mut by_path: HashMap<PathBuf, JournalData> = HashMap::new();
+        let mut cache = Self::default();
         for sub in subs {
-            let Some(journal) = Self::journal_path(sub) else {
-                continue;
-            };
-            if by_path.contains_key(&journal) {
-                continue;
+            if let Some(journal) = Self::journal_path(sub) {
+                cache.add_run(journal);
             }
-            let Ok(bytes) = std::fs::read(&journal) else {
-                continue; // unreadable/absent -> no entry, never a failed build
-            };
-            let mut data = JournalData::default();
-            for line in bytes.split(|&b| b == b'\n') {
-                if line.is_empty() {
-                    continue;
-                }
-                let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
-                    continue;
-                };
-                if v.get("type").and_then(serde_json::Value::as_str) != Some("result") {
-                    continue;
-                }
-                let Some(agent) = v.get("agentId").and_then(serde_json::Value::as_str) else {
-                    continue;
-                };
-                let payload = match v.get("result") {
-                    Some(serde_json::Value::String(s)) => Some(s.clone()),
-                    Some(other) => Some(other.to_string()),
-                    None => None,
-                };
-                // FIRST event per agent wins - the former scans returned on first match.
-                data.results.entry(agent.to_string()).or_insert(payload);
-            }
-            by_path.insert(journal, data);
         }
-        Self { by_path }
+        cache
+    }
+
+    /// Add every workflow run under `main_jsonl`'s sidecar that no discovered lane led to: a
+    /// run whose journal has started an agent before its transcript reached the disk is still
+    /// a run with agents in flight.
+    pub(crate) fn add_session_runs(&mut self, main_jsonl: &Path) {
+        let root = main_jsonl
+            .with_extension("")
+            .join("subagents")
+            .join("workflows");
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                self.add_run(entry.path().join("journal.jsonl"));
+            }
+        }
+    }
+
+    /// Read one run's journal and manifest once. A run with neither readable has no entry,
+    /// the same "no journal => no signal" a missing file always meant.
+    fn add_run(&mut self, journal: PathBuf) {
+        if self.by_path.contains_key(&journal) {
+            return;
+        }
+        let mut data = JournalData::default();
+        let readable = std::fs::read(&journal).is_ok_and(|bytes| {
+            for line in bytes.split(|&b| b == b'\n') {
+                read_journal_line(line, &mut data);
+            }
+            true
+        });
+        data.ended = run_manifest(&journal).map(|bytes| {
+            serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .and_then(|v| v.get("status")?.as_str().map(str::to_string))
+                .unwrap_or_else(|| "unreadable".to_string())
+        });
+        if readable || data.ended.is_some() {
+            self.by_path.insert(journal, data);
+        }
+    }
+
+    /// The verdict a workflow lane's own RUN gives before its tail is read: an ended run (its
+    /// manifest exists) or a journal line closing this agent settles it; `None` leaves the lane
+    /// to its tail. ONE rule, read by `status`'s child census and by `agents`' lifecycle, so the
+    /// two surfaces agree on which lanes are live.
+    pub(crate) fn settled_by_run(&self, subagent: &Subagent) -> Option<String> {
+        let run = self.events_for(subagent)?;
+        if let Some(status) = &run.ended {
+            return Some(format!("its workflow run ended (manifest status {status})"));
+        }
+        run.closed
+            .contains(&subagent.agent_id)
+            .then(|| "the workflow journal closes this agent (result or failed)".to_string())
+    }
+
+    /// Workflow agents a run's journal has started and not closed, across every run with no
+    /// manifest yet. An ended run contributes nothing: an agent killed with its run never
+    /// writes a closing line, so its imbalance is permanent and says nothing live.
+    pub(crate) fn journal_in_flight(&self) -> usize {
+        self.by_path
+            .values()
+            .filter(|r| r.ended.is_none())
+            .map(|r| r.started.saturating_sub(r.closing))
+            .sum()
     }
 
     /// The journal path a workflow subagent's events live in (`None` for a built-in /
@@ -193,4 +244,49 @@ impl JournalCache {
     pub(crate) fn events_for(&self, subagent: &Subagent) -> Option<&JournalData> {
         self.by_path.get(&Self::journal_path(subagent)?)
     }
+}
+
+/// Fold one journal line into its run's facts. A line that is not an object with a `type` is
+/// skipped, as every journal reader skips it.
+fn read_journal_line(line: &[u8], data: &mut JournalData) {
+    if line.is_empty() {
+        return;
+    }
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
+        return;
+    };
+    let kind = v.get("type").and_then(serde_json::Value::as_str);
+    let agent = v.get("agentId").and_then(serde_json::Value::as_str);
+    match kind {
+        Some("started") => data.started += 1,
+        Some("result" | "failed") => {
+            data.closing += 1;
+            if let Some(agent) = agent {
+                data.closed.insert(agent.to_string());
+            }
+        }
+        _ => {}
+    }
+    if kind != Some("result") {
+        return;
+    }
+    let Some(agent) = agent else {
+        return;
+    };
+    let payload = match v.get("result") {
+        Some(serde_json::Value::String(s)) => Some(s.clone()),
+        Some(other) => Some(other.to_string()),
+        None => None,
+    };
+    // FIRST event per agent wins - the former scans returned on first match.
+    data.results.entry(agent.to_string()).or_insert(payload);
+}
+
+/// The run manifest beside a run's journal: `<sidecar>/subagents/workflows/<run>/journal.jsonl`
+/// -> `<sidecar>/workflows/<run>.json`, read when it exists.
+fn run_manifest(journal: &Path) -> Option<Vec<u8>> {
+    let run = journal.parent()?;
+    let name = run.file_name()?.to_str()?;
+    let sidecar = run.parent()?.parent()?.parent()?;
+    std::fs::read(sidecar.join("workflows").join(format!("{name}.json"))).ok()
 }

@@ -3,6 +3,7 @@
 mod background;
 mod checkpoint;
 mod entrances;
+mod run_settle;
 mod status;
 mod tasks;
 mod wait;

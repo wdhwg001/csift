@@ -34,8 +34,10 @@ pub enum AgentKindFilter {
         session, or a project PATH/encoded-dir to cover every session under it (each \
         session's subagents are grouped under it). Start/completion come from the \
         subagent transcript's first/last record timestamp; status is `completed` when \
-        a workflow journal carries a `result` event for the agent (or the transcript's \
-        NEWEST meaningful record is an assistant text ending its turn), else \
+        a workflow lane's own RUN settles it - the run's manifest exists (the run ended) \
+        or its journal closes the agent with a `result` or `failed` event, the rule \
+        `status` reads - or when the transcript's NEWEST meaningful record is an \
+        assistant text ending its turn, else \
         `running`/`unknown` - a returned tool_result at the tail is a lane mid-turn, and \
         reads `running` with no completion instant.\n\n\
         `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
@@ -60,9 +62,10 @@ pub enum AgentKindFilter {
             • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl     (OMC workflows)\n    \
             • teammate      subagents/agent-a<Name>-<hex>.jsonl              (in_process_teammate; meta taskKind)\n  \
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
-        status, never listed). Status is `completed` when a workflow journal carries a \
-        `result` event (or the transcript's newest meaningful record is an assistant text \
-        ending its turn), else `running`/`unknown`. \
+        status, never listed). Status is `completed` when a workflow lane's run settles it \
+        (its manifest exists, or its journal closes the agent with `result` or `failed`) or \
+        the transcript's newest meaningful record is an assistant text ending its turn, else \
+        `running`/`unknown`. \
         The TEXT output is ALWAYS the parent→child topology tree (workflow runs as parents \
         of their agents; a nested sub-subagent under its spawning agent); JSON carries the \
         SAME topology as flat pre-ordered rows. `--agent <hex>` grabs ONE subagent \
