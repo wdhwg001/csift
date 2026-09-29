@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2542",
+          "lines": "2543",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -64741,6 +64741,11 @@
           "path": "src/commands/agents/run.rs",
           "lines": "321-325",
           "snippet": "pub(crate) const TEAMMATE_CONTROL_HINT_L3: &str =\n    \"      SendMessage refuses any `to` carrying `@`, so the routing id Name@Team (the `routing:` field \\\nabove) is what TaskStop takes and never a SendMessage `to`; SendMessage also takes a<Name>-<hex>, the id \\\nthe hook payload and the transcript file carry, and resumes a stopped teammate by it; the routing id \\\ncan collide (two same-named teammates share it), the transcript id never does.\";"
+        },
+        {
+          "path": "src/commands/live/channel/policy.rs",
+          "lines": "386-393",
+          "snippet": "/// The `to` value for an agent receiver: its TRANSCRIPT-form lane id. SendMessage refuses any\n/// `to` carrying `@`, so a teammate's `Name@Team` routing form is never a legal value; its\n/// agent-id arm takes `a[Name-]<16 hex>` - a teammate's id reaches the running teammate whose\n/// `resumableAgentId` it is, or resumes it (claim SUB-035) - and an unnamed subagent's id\n/// reaches that lane. Never a session uuid - that arm does not exist.\nfn official_to(ctx: &SendContext) -> &str {\n    &ctx.lane\n}"
         }
       ],
       "states": [
@@ -64749,7 +64754,7 @@
           "from_basis": "verified",
           "to": null,
           "behavior": "SendMessage addresses an in-process teammate by its bare NAME and refuses the `Name@team` routing form. Its validateInput (175761329) returns `to must be a bare teammate name \u2014 there is only one team per session` for ANY `to` carrying `@`, before the recipient is resolved at all. The call path (175770351) resolves `to` through V3e, whose first arm (175705323) matches a bare name exactly against the team context's members and returns their mailbox, and which hands an agent-id-shaped `to` - one the lane-id validator Sn accepts, tested by Bb (156730017) - to G (175714369). G reads the task keyed by that id; a teammate's task is registered under a `t`-prefixed task id (SUB-020), so an `a<Name>-<16hex>` teammate id finds none and reads `agent-evicted`. That arm delivers to the RUNNING in-process teammate whose `identity.resumableAgentId` is the id, or whose name and team match the agent's meta (175785198), and otherwise resumes the teammate by the id with the message as its next prompt (175785503). The input schema describes the field as `Recipient: a name from ... a teammate name, \"main\", or a background agent's agentId` (175740847). The refusal literal occurs in every cached native build from 2.1.100 through 2.1.278 and in none of 1.0.60, 2.0.0, 2.0.30 and 2.1.23. Over every SendMessage tool_use block under one projects root at one instant, the measuring session's tree included, joined to its tool_result in the same file (journal, elicitation and csift-channel files excluded): 1,108 blocks in 179 files - 402 bare teammate names, all 402 answered without error; 403 bare a+16-hex agent ids, 401 of them without error; 270 `team-lead`; 30 `main`; 3 `uds:` addresses; and none carrying `@`. With the measuring session's tree excluded: 897 blocks in 168 files, 394 bare names, none carrying `@`.",
-          "depends": "`agents` names the tool each teammate id reaches. The control hint (src/commands/agents/run.rs: the three text lines and the JSON control_hint) tells a caller to steer a teammate with SendMessage by its bare name, or by the a<Name>-<hex> transcript id, which also resumes a teammate that is not running, and never by `Name@team`, which only TaskStop takes (SUB-020); `agents --help`, the root help's `@<Name>@<Team>` sentence and that target's no-match error say the same. If SendMessage stopped refusing `@`, the routing form would become a second SendMessage address and the hint's refusal clause would be false; if its agent-id arm stopped matching resumableAgentId, the transcript-id clause would be.",
+          "depends": "`agents` names the tool each teammate id reaches. The control hint (src/commands/agents/run.rs: the three text lines and the JSON control_hint) tells a caller to steer a teammate with SendMessage by its bare name, or by the a<Name>-<hex> transcript id, which also resumes a teammate that is not running, and never by `Name@team`, which only TaskStop takes (SUB-020); `agents --help`, the root help's `@<Name>@<Team>` sentence and that target's no-match error say the same. If SendMessage stopped refusing `@`, the routing form would become a second SendMessage address and the hint's refusal clause would be false; if its agent-id arm stopped matching resumableAgentId, the transcript-id clause would be. `send` and `whoami --to` print the delegated call with the same rule (policy::official_to): the receiver's transcript-form id for every agent receiver, never the routing form SendMessage refuses.",
           "instrument": "Binary: in the shipped 2.1.258 executable read SendMessage's validateInput at 175761329, the call path's recipient resolution at 175770351, the resolver V3e's name arm at 175705323, Bb at 156730017, G at 175714369, the agent-evicted delivery and resume at 175785198 and 175785503, and the input schema's description of `to` at 175740847. Dating: grep -c -a -F 'to must be a bare teammate name' over every cached native build, one count per build. Corpus: for every *.jsonl under the projects root holding a SendMessage tool_use (journal.jsonl, elicitations.jsonl and anything under csift-channel/ excluded), join each block to the tool_result carrying its id in the same file and bucket it by the shape of input.to (carrying `@`, bare a+16-hex, a<Name>-<16hex>, main, team-lead, uds:, bridge:, otherwise a bare name) and by its answer (the bare-name refusal text, another is_error result, no error, no result); run it once whole-root and once with the measuring session's tree excluded. Counting rule: one observation per SendMessage tool_use block.",
           "probe": {
             "kind": "corpus",
@@ -73236,7 +73241,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/types.rs",
-          "lines": "305-310",
+          "lines": "306-311",
           "snippet": "pub(crate) enum Vehicle {\n    /// The hook's stdout JSON (`hookSpecificOutput.additionalContext`), exit 0.\n    AdditionalContext,\n    /// Stop / SubagentStop stderr with exit 2, which also blocks the turn from ending.\n    Exit2,\n}"
         }
       ],
@@ -77133,7 +77138,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "234-238",
+          "lines": "231-235",
           "snippet": "    match ctx.receiver_kind {\n        ReceiverKind::WorkflowLane => workflow_row(ctx),\n        ReceiverKind::TopLevel => top_level_row(ctx),\n        ReceiverKind::Teammate | ReceiverKind::UnnamedSubagent => agent_row(ctx),\n    }"
         }
       ],
@@ -77282,7 +77287,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "413-419",
+          "lines": "412-418",
           "snippet": "    Decision {\n        channel: CH_RESUME,\n        verdict: Verdict::Ok,\n        prediction: \"this respawns the lane with its prior messages replayed; on Claude Code \\\n                     below 2.1.260 its completion notification goes to the main conversation, \\\n                     not to you.\"\n            .to_string(),"
         }
       ],
@@ -77353,7 +77358,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "424-427",
+          "lines": "423-426",
           "snippet": "            \"with background tasks disabled, or against the built-in web-fetch agent, the \\\n             resume runs INLINE: no completion notification is enqueued at all and the report \\\n             comes back inside the tool result instead\"\n                .to_string(),"
         }
       ],
@@ -77427,7 +77432,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "249-253",
+          "lines": "246-250",
           "snippet": "        return refused(\n            \"a completed workflow lane has no re-entry point: an official resume by its id \\\n             resolves to a transcript path the lane never wrote to, and no hook fires in a \\\n             lane that has ended\",\n        );"
         }
       ],
@@ -77501,8 +77506,8 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "389-394",
-          "snippet": "/// The `to` value for an agent receiver: a teammate's routing form when it has one (the form\n/// the official tool documents), otherwise the transcript-form lane id, which the official id\n/// arm also accepts. Never a session uuid - that arm does not exist.\nfn official_to(ctx: &SendContext) -> &str {\n    ctx.routing_id.as_deref().unwrap_or(&ctx.lane)\n}"
+          "lines": "386-393",
+          "snippet": "/// The `to` value for an agent receiver: its TRANSCRIPT-form lane id. SendMessage refuses any\n/// `to` carrying `@`, so a teammate's `Name@Team` routing form is never a legal value; its\n/// agent-id arm takes `a[Name-]<16 hex>` - a teammate's id reaches the running teammate whose\n/// `resumableAgentId` it is, or resumes it (claim SUB-035) - and an unnamed subagent's id\n/// reaches that lane. Never a session uuid - that arm does not exist.\nfn official_to(ctx: &SendContext) -> &str {\n    &ctx.lane\n}"
         }
       ],
       "states": [
@@ -77511,7 +77516,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A teammate resume reuses the SAME resumable agent id: the resume entry at 175730956 replays the prior messages, the roster rejoin at 175733002 re-adds the row, the id is reused through an override at 176260921, and the ack reports how many messages were replayed.",
-          "depends": "csift addresses a teammate resume by the id form the official tool takes - the routing form when the meta carries one, otherwise the transcript-form id - and never invents a new lane id for the respawned teammate. The queue written before the resume is still the queue of the same lane afterwards.",
+          "depends": "csift addresses a teammate resume by its transcript-form id - the id the resume entry is addressed by, and the only teammate form SendMessage's `to` accepts, since it refuses any `to` carrying `@` (SUB-035) - and never invents a new lane id for the respawned teammate. The queue written before the resume is still the queue of the same lane afterwards.",
           "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
           "probe": {
             "kind": "bytes",
@@ -77575,7 +77580,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "377-382",
+          "lines": "374-379",
           "snippet": "            risks: vec![\n                \"the official queue returns that a task record EXISTS, never that the message \\\n                 was delivered; the target must be addressed by its `a...` id, and the send \\\n                 is attributed to the session rather than to the calling lane\"\n                    .to_string(),\n            ],"
         }
       ],
@@ -77649,7 +77654,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "413-419",
+          "lines": "412-418",
           "snippet": "    Decision {\n        channel: CH_RESUME,\n        verdict: Verdict::Ok,\n        prediction: \"this respawns the lane with its prior messages replayed; on Claude Code \\\n                     below 2.1.260 its completion notification goes to the main conversation, \\\n                     not to you.\"\n            .to_string(),"
         }
       ],
@@ -77725,7 +77730,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "420-423",
+          "lines": "419-422",
           "snippet": "        risks: vec![\n            \"a resume is an action, not a delivery: the lane is respawned, and a concurrent \\\n             resume of the same lane throws rather than queueing\"\n                .to_string(),"
         }
       ],
@@ -77793,7 +77798,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "227-233",
+          "lines": "224-230",
           "snippet": "    if ctx.receiver_state == ReceiverState::StoppedByUser {\n        return refused(\n            \"the receiver lane was stopped by the user - the harness refuses a resume for this \\\n             state and instructs a sender to treat the work as cancelled, so csift queues \\\n             nothing it could never deliver\",\n        );\n    }"
         }
       ],
@@ -78131,7 +78136,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/send.rs",
-          "lines": "269-272",
+          "lines": "270-273",
           "snippet": "/// How the sender stands to the receiver. The envelope prints it and adds the peer caution for\n/// the four values that make the sender a peer, so a receiver never reads a sibling's message\n/// as an instruction from its parent.\npub(crate) fn relation_of(caller: &Caller, receiver: &Receiver) -> Relation {"
         }
       ],
@@ -78207,7 +78212,7 @@
         },
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "172-179",
+          "lines": "169-176",
           "snippet": "    /// True when the receiver is new enough for any official path. An UNKNOWN version is\n    /// treated as below the floor: the floor is a fact to be shown, not assumed.\n    pub(crate) fn official_possible(&self) -> bool {\n        self.receiver_version\n            .as_deref()\n            .and_then(parse_version)\n            .is_some_and(|v| v >= OFFICIAL_FLOOR)\n    }"
         }
       ],
@@ -78712,7 +78717,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/reach/predict.rs",
-          "lines": "129-145",
+          "lines": "125-141",
           "snippet": "/// `csift whoami --to @<target> [--from <sender>]`: predict, print, write nothing. The\n/// sender is classified exactly as `csift send` classifies it, so the prediction and the send\n/// decide from the same relation.\npub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputFormat) -> Result<()> {\n    let caller = caller::classify(from)?;\n    let path = resolve_one(target)?;\n    let receiver = caller::probe_receiver(&path)?;\n    let merged = settings::merged(\n        &crate::path::claude_home()?,\n        receiver.cwd.as_deref().map(Path::new),\n    );\n    let slots = ReachSlots::read(&merged);\n    let armed = armed_slots(&receiver);\n    let relation = relation_of(&caller, &receiver);\n    let t = receiver_target(&receiver);\n    let ctx = send_context(&caller, &t, &merged, &slots, armed.len(), relation);\n    let decision = policy::decide(&ctx);"
         }
       ],
@@ -79469,7 +79474,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "293-298",
+          "lines": "290-295",
           "snippet": "            risks: vec![\n                \"the official inbound message can be HELD for approval when the receiver's \\\n                 permission mode is bypass-class, and it is enqueued at the receiver's MAIN \\\n                 lane - a reply cannot come back to a subagent\"\n                    .to_string(),\n            ],"
         }
       ],
@@ -79624,7 +79629,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/policy.rs",
-          "lines": "276-281",
+          "lines": "273-278",
           "snippet": "            risks: vec![\n                \"the registry row's entrypoint is `sdk-cli`: a headless receiver has no \\\n                 approval surface for an inbound message and may end before any hook point \\\n                 is reached\"\n                    .to_string(),\n            ],"
         }
       ],
@@ -89483,7 +89488,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3573"
+          "lines": "3574"
         }
       ],
       "states": [

@@ -21,8 +21,8 @@ pub(crate) fn emit_lane_sections(r: &LaneRef, format: OutputFormat) -> Result<(u
 fn render_sections_text(s: &Sections) {
     println!("self     {}", s.me.lane);
     if let Some(routing) = &s.me.routing_id {
-        // Both forms, always: the routing id is what the official send takes and it can
-        // collide; the transcript id names the file and never does.
+        // Both forms, always: the routing id is what TaskStop takes and it can collide; the
+        // transcript id names the file, is what SendMessage takes, and never collides.
         println!("  routing  {routing}");
     }
     println!("  kind     {}", self_kind_line(s));

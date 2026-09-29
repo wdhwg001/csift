@@ -81,8 +81,8 @@ fn a_teammate_target_prints_both_forms_its_parent_and_the_topology() {
     let h = home(false);
     let out = h.run(&["whoami", &at(TEAMMATE)]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // Both id forms: the routing id is what the official send takes and it can collide; the
-    // transcript id names the file and never does.
+    // Both id forms: the routing id is what TaskStop takes and it can collide; the transcript
+    // id names the file, is what SendMessage takes, and never collides.
     assert!(
         out.stdout.contains(&format!("self     {TEAMMATE}")),
         "{}",
@@ -474,7 +474,7 @@ fn a_colliding_routing_form_lists_both_transcript_ids_through_whoami() {
 #[test]
 fn the_reach_lines_name_the_target_the_caller_and_the_slots_that_have_run() {
     // Four identities in one answer, and each of them is the whole point of its line: the
-    // target in BOTH forms (the routing id is what an official send takes), the caller the
+    // target in BOTH forms (the transcript id is what the official call takes), the caller the
     // prediction was made for, the slots that have really run in that lane, and the exact
     // command that would turn the prediction into a send.
     let h = home(false);

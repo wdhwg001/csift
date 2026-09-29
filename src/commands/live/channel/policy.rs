@@ -90,7 +90,7 @@ impl ReceiverState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OfficialCall {
     pub(crate) tool: &'static str,
-    /// The `to` value, in the routing or `a...` form. `None` when the official grammar has
+    /// The `to` value, the receiver's `a...` transcript id. `None` when the official grammar has
     /// no arm csift can fill from disk (a peer top-level session: there is no bare-uuid arm).
     pub(crate) to: Option<String>,
     /// The line the receipt prints.
@@ -137,12 +137,9 @@ pub(crate) struct SendContext {
     /// The registry row's entrypoint is `sdk-cli`: a headless `-p` receiver.
     pub(crate) headless: bool,
     pub(crate) socket_present: bool,
-    /// The receiver's TRANSCRIPT-form lane id. Legal as an official `to` in its own right
-    /// (the official id arm accepts `a[Name-]<16 hex>`), and the fallback whenever a teammate
-    /// carries no routing form.
+    /// The receiver's TRANSCRIPT-form lane id, and the official `to` for every agent receiver
+    /// (the official id arm accepts `a[Name-]<16 hex>`; a teammate's routing form is refused).
     pub(crate) lane: String,
-    /// The teammate routing form `Name@Team`, when the receiver has one.
-    pub(crate) routing_id: Option<String>,
     pub(crate) mode: Mode,
     /// True when the CALLER will actually write the queue (a `csift send`); false for a
     /// `whoami --to` prediction, which writes nothing. It changes only the TENSE of the csift
@@ -386,11 +383,13 @@ fn agent_row(ctx: &SendContext) -> Decision {
     }
 }
 
-/// The `to` value for an agent receiver: a teammate's routing form when it has one (the form
-/// the official tool documents), otherwise the transcript-form lane id, which the official id
-/// arm also accepts. Never a session uuid - that arm does not exist.
+/// The `to` value for an agent receiver: its TRANSCRIPT-form lane id. SendMessage refuses any
+/// `to` carrying `@`, so a teammate's `Name@Team` routing form is never a legal value; its
+/// agent-id arm takes `a[Name-]<16 hex>` - a teammate's id reaches the running teammate whose
+/// `resumableAgentId` it is, or resumes it (claim SUB-035) - and an unnamed subagent's id
+/// reaches that lane. Never a session uuid - that arm does not exist.
 fn official_to(ctx: &SendContext) -> &str {
-    ctx.routing_id.as_deref().unwrap_or(&ctx.lane)
+    &ctx.lane
 }
 
 /// A completed teammate or unnamed subagent. Sending to one is not a delivery: the official

@@ -21,8 +21,8 @@ use super::{message_path, outbox_path, Message, Mode, Verdict};
 pub(crate) struct OfficialRef {
     pub(crate) delegated: bool,
     pub(crate) tool: Option<String>,
-    /// The `to` value the official tool needs, which is NOT always the lane id: a
-    /// teammate is addressed by its routing form `Name@Team`.
+    /// The `to` value the official call was printed with: the receiver's transcript-form
+    /// lane id (SendMessage refuses a `to` carrying `@`, so never a teammate's routing form).
     pub(crate) to_form: Option<String>,
 }
 

@@ -26,7 +26,6 @@ fn ctx() -> SendContext {
         headless: false,
         socket_present: false,
         lane: AGENT.to_string(),
-        routing_id: None,
         mode: Mode::Steer,
         // The baseline is a real send; the prediction-only form is varied where it matters.
         queues: true,
@@ -47,7 +46,6 @@ fn teammate() -> SendContext {
     SendContext {
         receiver_kind: ReceiverKind::Teammate,
         lane: TEAMMATE.to_string(),
-        routing_id: Some("Relay@harbor".to_string()),
         ..ctx()
     }
 }
@@ -65,9 +63,12 @@ fn running_teammate_with_the_teams_gate_enabled_delegates_the_mailbox() {
         "an official delegation still queues on the channel"
     );
     let official = d.official.expect("the mailbox row delegates");
-    assert_eq!(official.to.as_deref(), Some("Relay@harbor"));
+    // SendMessage refuses a `to` carrying `@`, so the call carries the transcript id.
+    assert_eq!(official.to.as_deref(), Some(TEAMMATE));
     assert!(
-        official.call.contains("SendMessage(to: \"Relay@harbor\""),
+        official
+            .call
+            .contains(&format!("SendMessage(to: \"{TEAMMATE}\"")),
         "the receipt prints the exact call: {}",
         official.call
     );

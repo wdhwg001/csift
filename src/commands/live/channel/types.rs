@@ -196,8 +196,9 @@ impl MessageFrom {
 }
 
 /// Which id form the sender addressed the receiver by. The transcript form is unique
-/// (random hex); the routing form `Name@Team` is not (two same-named teammates in one
-/// team share it), so it is kept beside the transcript form, never instead of it.
+/// (random hex) and is what the official call carries; the routing form `Name@Team` is not
+/// unique (two same-named teammates in one team share it) and SendMessage refuses it, so it
+/// is kept beside the transcript form, never instead of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TargetForm {
     Transcript,

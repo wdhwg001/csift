@@ -57,7 +57,7 @@ fn the_outbox_writes_one_line_per_send_with_the_delegated_official_call() {
     delegated.official = OfficialRef {
         delegated: true,
         tool: Some("SendMessage".to_string()),
-        to_form: Some("Relay@beacon".to_string()),
+        to_form: Some("aRelay-0123456789abcdef".to_string()),
     };
     append_outbox(&fx.root, &delegated).unwrap();
 
@@ -73,7 +73,7 @@ fn the_outbox_writes_one_line_per_send_with_the_delegated_official_call() {
     assert_eq!(second["channel"], "official-mailbox");
     assert_eq!(second["official"]["delegated"], true);
     assert_eq!(second["official"]["tool"], "SendMessage");
-    assert_eq!(second["official"]["to_form"], "Relay@beacon");
+    assert_eq!(second["official"]["to_form"], "aRelay-0123456789abcdef");
 }
 
 #[test]

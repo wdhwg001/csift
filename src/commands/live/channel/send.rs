@@ -3,7 +3,8 @@
 //!
 //! The command does four things and refuses to pretend about any of them. It resolves the
 //! target to EXACTLY one transcript through the shared `@`-grammar (a routing form is
-//! translated to the transcript form and the routing id kept for the official call). It reads
+//! translated to the transcript form, which is also the official call's `to`, and the routing
+//! id is kept beside it on the receipt). It reads
 //! the receiver's state, configuration and runtime arming off disk. It runs the policy table
 //! ([`super::policy`]) for one verdict. And it writes three files csift owns: the message
 //! source and the receiver's inbox line, plus the sender's outbox line.
@@ -364,7 +365,6 @@ fn context(
         headless: receiver.headless,
         socket_present: receiver.socket_present,
         lane: receiver.lane.clone(),
-        routing_id: receiver.routing_id.clone(),
         mode: Mode::parse(args.mode.as_str()).unwrap_or(Mode::Steer),
         // A send really writes the queue, so its prediction speaks in the past tense.
         queues: true,

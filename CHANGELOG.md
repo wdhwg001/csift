@@ -1414,6 +1414,15 @@ surface change bumps the PATCH.
   not running; TaskStop the name or `Name@Team`. `agents --help`, the root help's
   `@<Name>@<Team>` sentence and the no-match error of that target said the same wrong
   thing and now say the same true one (claim SUB-035).
+- **`send` printed a SendMessage call that SendMessage refuses.** For a teammate receiver the
+  delegated call read `SendMessage(to: "Name@Team", ...)`, the routing form, and SendMessage's
+  input validation refuses any `to` carrying `@`. `send` and `whoami --to` now print the
+  receiver's transcript id, `SendMessage(to: "a<Name>-<hex>", ...)`, the form they already
+  printed for every other agent lane: SendMessage's agent-id arm delivers it to the running
+  teammate whose resumable id it is, or resumes that teammate, which is what the resume row
+  delegates. The receiver line still names the routing form beside the lane, and the
+  outbox's `official.to_form` records the id the call was printed with (claims SUB-035,
+  MSG-037).
 
 ### Performance
 

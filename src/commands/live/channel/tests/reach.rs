@@ -83,8 +83,8 @@ fn lane_facts_name_a_teammate_in_both_forms() {
         .join("subagents")
         .join(format!("agent-{TEAMMATE}.jsonl"));
     let facts = lane_facts(&lane).unwrap();
-    // The transcript form is the id; the routing form is the one the official send takes, and
-    // a teammate must print BOTH because only the first is unique.
+    // The transcript form is the id SendMessage takes; the routing form is the one TaskStop
+    // takes, and a teammate must print BOTH because only the first is unique.
     assert_eq!(facts.lane, TEAMMATE);
     assert_eq!(facts.routing_id.as_deref(), Some("Relay@harbor"));
     assert_eq!(facts.kind, ReceiverKind::Teammate);

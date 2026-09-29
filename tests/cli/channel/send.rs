@@ -374,7 +374,7 @@ fn a_teammate_addressed_by_its_routing_form_queues_under_its_transcript_id() {
 }
 
 #[test]
-fn a_teammate_with_the_teams_gate_enabled_delegates_the_mailbox_by_routing_id() {
+fn a_teammate_with_the_teams_gate_enabled_delegates_the_mailbox_by_transcript_id() {
     let h = home(2, false);
     h.write_claude(
         "settings.json",
@@ -391,7 +391,20 @@ fn a_teammate_with_the_teams_gate_enabled_delegates_the_mailbox_by_routing_id() 
         "{}",
         out.stdout
     );
-    assert!(out.stdout.contains("SendMessage(to: \"Relay@harbor\""));
+    // SendMessage refuses a `to` carrying `@`: the call names the transcript id, and the
+    // routing form stays on the receiver line only.
+    assert!(
+        out.stdout
+            .contains(&format!("SendMessage(to: \"{TEAMMATE}\"")),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("SendMessage(to: \"Relay@harbor\""));
+    assert!(
+        out.stdout.contains("(routing Relay@harbor)"),
+        "{}",
+        out.stdout
+    );
     assert!(out
         .stdout
         .contains("teams: enabled via settings env (user)"));
