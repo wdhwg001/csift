@@ -379,8 +379,10 @@ pub(crate) fn build_document_body(
 }
 
 /// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode
-/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy
-/// document is NOT 3x over-counted the way a byte budget would). A line longer than the
+/// scalars, so a CJK-heavy document is NOT 3x over-counted the way a byte budget would).
+/// Claude Code's 10,000 additionalContext cap counts UTF-16 code units instead (claim
+/// MISC-012): the two agree on BMP text, and an astral character is one scalar here and two
+/// units there, which is the headroom the `--window` help asks for. A line longer than the
 /// window on its own is hard-split on a char boundary so NO emitted chunk ever exceeds
 /// `window`. Concatenating the chunks in order reproduces `text` exactly (`split_inclusive`
 /// keeps the newlines), so the slices reassemble losslessly across hook invocations.

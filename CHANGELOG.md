@@ -1281,6 +1281,11 @@ surface change bumps the PATCH.
   cost model reads the same line the renderer prints. Three lines of the golden baseline
   moved: two `[1 tool calls]` markers and the header's chars-used total, which counts
   them.
+- **`verbatim --help` said Claude Code's hook-context cap counts Unicode scalars.** It
+  counts UTF-16 code units: the same number for BMP text, CJK included, but an emoji or a
+  CJK ext-B character is one scalar and two code units, so a `--window` sized at the cap
+  can cross it. The `--slice` and `--window` help now name the two units apart and ask for
+  more headroom on a document carrying astral characters.
 
 ### Performance
 

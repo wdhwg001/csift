@@ -363,22 +363,25 @@ pub struct VerbatimArgs {
     /// `--out` writes) into ≤`--window`-CHARACTER chunks and print ONLY the Nth chunk (1-based)
     /// to stdout, with NO operational chrome (scope banner / SESSION header / footer). Built for
     /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH
-    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +
-    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice
-    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +
-    /// budget ⇒ identical chunk boundaries), so N independent hooks can each request their own
-    /// slice; the lock/ordering lives in the hook shell. An out-of-range N prints nothing (exit
-    /// 0); surplus hooks simply inject nothing. Text format only; not combinable with `--out`.
+    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a
+    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook
+    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same
+    /// session + budget ⇒ identical chunk boundaries), so N independent hooks can each request
+    /// their own slice; the lock/ordering lives in the hook shell. An out-of-range N prints
+    /// nothing (exit 0); surplus hooks simply inject nothing. Text format only; not combinable
+    /// with `--out`.
     #[arg(long, value_name = "N")]
     pub slice: Option<usize>,
 
-    /// Chunk size for `--slice`, in CHARACTERS (Unicode scalars: the unit Claude Code's
-    /// 10,000-char `additionalContext` cap counts, so a CJK-heavy document is NOT 3×
-    /// over-counted the way a byte budget would). Default 10000 = the cap; pass a little under
-    /// (e.g. `--window 9000`) to leave headroom for any wrapper text the hook adds around the
-    /// chunk. Lines are packed greedily up to the window at LINE boundaries; a single line
-    /// longer than the window is hard-split on a char boundary so no chunk ever exceeds it.
-    /// Ignored without `--slice`.
+    /// Chunk size for `--slice`, in CHARACTERS (Unicode scalars, so a CJK-heavy document is
+    /// NOT 3× over-counted the way a byte budget would). Claude Code's 10,000
+    /// `additionalContext` cap counts UTF-16 code units: the same number for BMP text, CJK
+    /// included, but an emoji or a CJK ext-B character counts 1 toward the window and 2
+    /// toward the cap. Default 10000 = the cap; pass a little under (e.g. `--window 9000`) to
+    /// leave headroom for any wrapper text the hook adds around the chunk, and more for a
+    /// document carrying astral characters. Lines are packed greedily up to the window at
+    /// LINE boundaries; a single line longer than the window is hard-split on a char boundary
+    /// so no chunk ever exceeds it. Ignored without `--slice`.
     #[arg(long, value_name = "N", default_value_t = 10000)]
     pub window: usize,
 

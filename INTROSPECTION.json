@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2525",
+          "lines": "2526",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -19830,7 +19830,7 @@
         {
           "path": "src/cli/verbatim_args.rs",
           "lines": "365-368",
-          "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
+          "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a\n    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook\n    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same"
         },
         {
           "path": "src/commands/turns/render.rs",
@@ -33642,12 +33642,12 @@
         {
           "path": "src/cli/verbatim_args.rs",
           "lines": "365-368",
-          "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +\n    /// short preview, i.e. the body is effectively LOST to the model), so one hook per slice\n    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +"
+          "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a\n    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook\n    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same"
         },
         {
           "path": "src/commands/turns/render.rs",
           "lines": "381-383",
-          "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy\n/// document is NOT 3x over-counted the way a byte budget would). A line longer than the"
+          "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars, so a CJK-heavy document is NOT 3x over-counted the way a byte budget would).\n/// Claude Code's 10,000 additionalContext cap counts UTF-16 code units instead (claim"
         }
       ],
       "states": [
@@ -33656,7 +33656,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A hook's additionalContext is never silently shortened at the 10,000 mark: the local hook runner hands the field to a persist helper whose only branch is `if(e.length<=o)return e`, with o defaulting to the constant NQn=1e4 (constant at byte 160361523, branch at 165809812, reached from the runner's drain arm at 165871780). Over-cap text is written to a sibling file and REPLACED by a pointer plus a short preview built at 160364489 ('Output too large (<size>). Full output saved to: <path>' then 'Preview (first N):' then the preview), so the body is effectively lost to the model; if the persist itself fails the fallback is the first o characters plus '[Hook <field> truncated at <o> chars - persist-to-disk failed: ...]'. The cap is counted in JavaScript String.length, i.e. UTF-16 code units, not Unicode scalars: identical for BMP text (all CJK this claim cares about), but an astral character (emoji, CJK ext-B) counts 2. A SECOND, smaller budget exists - additionalContext 8,000 characters over at most 200 lines, the table Ujr at 161891320 - but it is NOT on the local hook path. That table has exactly one reader in the whole binary, the truncator W3 at 161891739, whose additionalContext wrapper NU (161891957) is called only from the hookSpecificOutput sanitizer switch jjr (161892098), whose only call site is inside the answer sanitizer mMe (161894352), whose four call sites are all REMOTE answer routes: two inside the served/cloud driver C4t (161909504 and 161909675, C4t itself called once, at 161950398, in the cloud path), the device-hook forwarder (161927261) and the cloud-template runner (188661956). That switch covers TEN events - PreToolUse, UserPromptSubmit, PostToolUse, UserPromptExpansion, PostToolUseFailure, PostToolBatch, Stop, SubagentStop, SubagentStart and PermissionDenied - of which NINE route additionalContext through the 8,000-character / 200-line truncator (PreToolUse calls W3 directly, the other eight through NU), while the PermissionDenied arm returns {hookEventName:'PermissionDenied'} alone and carries no additionalContext at all; the default arm (161893558) DROPS an unlisted event's hookSpecificOutput as unsupported, so on those routes SessionStart loses the field outright rather than meeting a larger cap. The LOCAL runner interprets a hook's stdout with cge (defined once, five call sites, all inside the local runner; its SessionStart arm at 165815139 assigns additionalContext straight off hookSpecificOutput), which applies no length treatment at all - so on the local path the 10,000-unit persist threshold is the only wall, for every event, SessionStart and PreToolUse alike. The corpus shows that wall being met on the local path: 131 attachment records of type hook_additional_context carry the pointer-and-preview replacement, and their own hookEvent field splits them SessionStart 120, PreToolUse 10, PostToolUse 1 - SessionStart reaching a 10,000-unit threshold rather than being dropped or capped at 8,000. Every persisted hook-output file under the projects tree (166 of them, all carrying the additionalContext field suffix) is over the threshold: minimum 10,029 Unicode scalars (10,029 UTF-16 code units), maximum 54,900 scalars (54,903 units), none at or below 10,000 in either unit - the minimum bounds the threshold from above, the constant and its comparison from below.",
-          "depends": "`csift verbatim --slice N --window N` packs the reconstruction into chunks of at most `window` CHARACTERS (`slice_into_windows`, src/commands/turns/render.rs), and concatenating the slices in order reproduces the document exactly, so one SessionStart hook per slice keeps every injected chunk under the wall; a character budget is the right unit, since a byte budget would over-count a CJK-heavy document roughly threefold. The unit leaves one disclosed mismatch: csift counts Unicode SCALARS while the cap counts UTF-16 code units, so a slice sized exactly at the window that contains astral characters (emoji, CJK ext-B) can still cross the wall - leave headroom. csift's own doc comments (src/cli/verbatim_args.rs:285-288, src/commands/turns/render.rs:290-292) say 'CHARACTERS (Unicode scalars)', which is exact for BMP text only. The recipe targets SessionStart hooks on the local path, where 10,000 units is the operative wall for every event; the 8,000-character budget belongs to the remote answer routes and never applies to it.",
+          "depends": "`csift verbatim --slice N --window N` packs the reconstruction into chunks of at most `window` CHARACTERS (`slice_into_windows`, src/commands/turns/render.rs), and concatenating the slices in order reproduces the document exactly, so one SessionStart hook per slice keeps every injected chunk under the wall; a character budget is the right unit, since a byte budget would over-count a CJK-heavy document roughly threefold. The unit leaves one disclosed mismatch: csift counts Unicode SCALARS while the cap counts UTF-16 code units, so a slice sized exactly at the window that contains astral characters (emoji, CJK ext-B) can still cross the wall - leave headroom. csift's `--slice` / `--window` help (src/cli/verbatim_args.rs) and the packer's own doc (`slice_into_windows`, src/commands/turns/render.rs) name both units: the window counts scalars, the cap counts code units, the two agree on BMP text, and a document carrying astral characters needs more headroom. The recipe targets SessionStart hooks on the local path, where 10,000 units is the operative wall for every event; the 8,000-character budget belongs to the remote answer routes and never applies to it.",
           "instrument": "Two corpus passes plus an optional live one. (1) Count the jsonl lines whose attachment.type is hook_additional_context and whose attachment.content carries 'Full output saved to:', bucketed by that record's attachment.hookEvent; counting rule one observation per line, content joined with a space when it is a string array. (2) Measure every persisted hook-output file under the projects tree (the tool-results/hook-*.txt shape) in both Unicode scalars and UTF-16 code units and compare against 10,000; counting rule one observation per file. (3) Live: install a SessionStart hook emitting more than 10,000 characters of additionalContext and read the resulting attachment with `csift search '' <target> -t harness.hook.context` - it holds a path and a preview, not the body; inject a CJK block of 9,999 scalars to show the unit is code units, not bytes.",
           "probe": {
             "kind": "csift",
@@ -89307,7 +89307,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3557"
+          "lines": "3558"
         }
       ],
       "states": [

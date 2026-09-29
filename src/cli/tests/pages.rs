@@ -78,3 +78,20 @@ fn the_plan_reverse_help_names_both_binding_laws() {
         );
     }
 }
+
+/// `verbatim --help` names the unit Claude Code's hook-context cap counts - UTF-16 code
+/// units - apart from the unit `--window` counts, Unicode scalars (claim MISC-012). It said
+/// the cap counts scalars, which is exact for BMP text only: an astral character is one
+/// scalar and two code units, so a window sized at the cap can cross it.
+#[test]
+fn the_verbatim_window_help_names_the_cap_unit_apart_from_its_own() {
+    let help = page("verbatim");
+    let window = paragraph(&help, "--window <N>");
+    assert!(
+        window.contains("UTF-16 code units") && window.contains("Unicode scalars"),
+        "{window}"
+    );
+    assert!(!window.contains("the unit Claude Code's"), "{window}");
+    let slice = paragraph(&help, "--slice <N>");
+    assert!(!slice.contains("10,000 CHARACTERS"), "{slice}");
+}
