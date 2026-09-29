@@ -11,7 +11,10 @@
 //!    headroom under that for the harness's own framing and counts the header, the
 //!    preamble and the closing lines, not just the body, in the harness's own unit: an
 //!    astral character (an emoji, a CJK extension-B ideograph) is one character and two
-//!    units, so a body of them counted in characters overshoots the cap by up to half.
+//!    units, so a chunk of them packed to 9200 CHARACTERS carries up to twice 9200 units,
+//!    1.84 times the cap. Measured: the first part of a 20000-emoji body, so packed, was
+//!    9200 characters and 18019 units, 1.80 times the cap - the ASCII framing counted once
+//!    and every emoji twice.
 //! 2. NON-COLLISION. The receiver has to tell a csift chunk apart from the harness's own
 //!    relay framings. The detector is the literal [`CHANNEL_MARKER`] at the START of the
 //!    content string; none of the six harness framings opens with it, which the unit
