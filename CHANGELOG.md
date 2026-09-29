@@ -1314,6 +1314,12 @@ surface change bumps the PATCH.
   attachment gate the scan applies: the note lists 23 leaves, never the hook context, and
   `-t harness.hook.context` alone prints it with `gated_leaves_unreached: true`. The
   SPEC inventory table's row reads `-t or --attachments`.
+- **An excerpt clipped by one character said `… (+1 chars)`.** The explicit elision
+  marker every excerpt ends with - `search`'s head and match-centered forms, `list`'s
+  previews, `show --turn`, `agents --returned-message`, the bookkeeping heads - now names
+  one character in the singular, `… (+1 char)`, through the same count-and-noun rule the
+  `verbatim` markers take. Both marker builders go through one function, so the forms
+  cannot drift apart again.
 
 ### Performance
 

@@ -316,14 +316,9 @@ pub(crate) fn superseded_cost(msg: &AgentMsg, by_line: usize) -> usize {
     superseded_line(msg, by_line).chars().count() + NEWLINE_COST
 }
 
-/// Pluralize a noun by count: `1 thing` / `N things`.
-pub(crate) fn plural(n: usize, noun: &str) -> String {
-    if n == 1 {
-        format!("1 {noun}")
-    } else {
-        format!("{n} {noun}s")
-    }
-}
+/// The count-and-noun rule every verbatim marker takes, shared with the excerpt marker
+/// so the two can never disagree about `1 char` (`text::plural`).
+pub(crate) use crate::text::plural;
 
 /// The PREVIEW of one collapsed message, or `None` when its body is under
 /// [`COLLAPSED_PREVIEW_MIN_CHARS`] (a short body is exactly the declaration the fold exists to

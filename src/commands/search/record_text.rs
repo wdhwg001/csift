@@ -469,7 +469,7 @@ pub(crate) fn match_excerpt(
     }
     out.push_str(&body);
     if after > 0 {
-        out.push_str(&format!("… (+{after} chars)"));
+        out.push_str(&crate::text::elision_marker(after));
     }
     // The window form is only reached when `total > max`, so a `max`-char window necessarily
     // dropped surrounding content - this is always a truncated fragment.

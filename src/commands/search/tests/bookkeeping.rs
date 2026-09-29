@@ -84,7 +84,7 @@ fn the_two_value_rules_decide_every_head_value() {
     let line = format!(r#"{{"type":"ai-title","aiTitle":"{long}"}}"#);
     assert_eq!(
         family::head(Some(&line)).as_deref(),
-        Some(format!("[ai-title aiTitle={}… (+1 chars)]", "x".repeat(80)).as_str()),
+        Some(format!("[ai-title aiTitle={}… (+1 char)]", "x".repeat(80)).as_str()),
     );
 }
 

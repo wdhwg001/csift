@@ -21,8 +21,28 @@ mod out;
 
 pub(crate) use out::*;
 
-/// Truncate `s` to at most `max` CHARACTERS, marking any elision with an explicit
-/// `… (+N chars)` suffix (N = dropped char count). Counts CHARACTERS, never bytes, so
+/// A count and its noun, the noun agreeing with the count: `1 char`, `2 chars`. The ONE
+/// rule every count csift prints beside a noun of this kind goes through, so no marker
+/// reads `1 chars` while another reads `1 char`.
+#[must_use]
+pub(crate) fn plural(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
+}
+
+/// The explicit elision marker `… (+N chars)` for `dropped` characters (`… (+1 char)` at
+/// one). Every content excerpt that clips its tail prints this one string, the
+/// head-anchored form below and `search`'s match-centered window alike.
+#[must_use]
+pub(crate) fn elision_marker(dropped: usize) -> String {
+    format!("… (+{})", plural(dropped, "char"))
+}
+
+/// Truncate `s` to at most `max` CHARACTERS, marking any elision with the explicit
+/// [`elision_marker`] (N = dropped char count). Counts CHARACTERS, never bytes, so
 /// multi-byte UTF-8 (CJK / emoji) truncates on a codepoint boundary. NEVER silent: a string
 /// longer than `max` always carries the count. A string within `max` is returned unchanged.
 #[must_use]
@@ -32,7 +52,7 @@ pub fn truncate_excerpt(s: &str, max: usize) -> String {
         return s.to_string();
     }
     let kept: String = s.chars().take(max).collect();
-    format!("{kept}… (+{} chars)", total - max)
+    format!("{kept}{}", elision_marker(total - max))
 }
 
 /// Collapse internal whitespace runs to single spaces, then [`truncate_excerpt`] to `max`.
@@ -394,6 +414,16 @@ mod tests {
         // A different cap (the search/recover 400) still marks the count.
         let s2 = "y".repeat(410);
         assert!(truncate_excerpt(&s2, 400).ends_with("… (+10 chars)"));
+    }
+
+    #[test]
+    fn one_dropped_character_is_named_in_the_singular() {
+        assert_eq!(truncate_excerpt("abcd", 3), "abc… (+1 char)");
+        assert_eq!(truncate_excerpt("abcde", 3), "abc… (+2 chars)");
+        assert_eq!(elision_marker(1), "… (+1 char)");
+        assert_eq!(elision_marker(0), "… (+0 chars)");
+        assert_eq!(plural(1, "tool call"), "1 tool call");
+        assert_eq!(plural(3, "tool call"), "3 tool calls");
     }
 
     #[test]
