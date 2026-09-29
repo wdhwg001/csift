@@ -14342,7 +14342,7 @@
         },
         {
           "path": "src/commands/turns/cost.rs",
-          "lines": "99",
+          "lines": "106",
           "snippet": "pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {"
         }
       ],
@@ -15296,7 +15296,7 @@
           "from_basis": "verified",
           "to": null,
           "behavior": "A compaction does NOT rewrite the transcript: Claude Code APPENDS a `type:\"system\"` `subtype:\"compact_boundary\"` record and then, on the very next line, a `type:\"user\"` `isCompactSummary:true` `isVisibleInTranscriptOnly:true` record, so every pre-compaction line number stays valid and the pre-compaction records stay in the same file below the boundary. One driver body mints both records (164834125) and returns them as `{boundaryMarker:xt,summaryMessages:Tn,...}` (164836207), and the two batch builders fix the order by putting the boundary marker at index 0 and spreading the summary messages immediately after, ahead of kept messages, attachments and hook results (164830919). The write is an append, but not through the function this claim once named: the compaction batch travels insertMessageChain (166104431) -> appendEntry (166106795), which routes on a per-record-type policy switch (166107634) into this.enqueueWrite -> drainQueuesOnce (166085868) -> appendToFile (166085203) -> iWe (166117719). iWe has THREE write forms and every one of them appends: a storage-v5 backend append `r.append(C,Qts(n),...)` (166118269) returning `backend` or `backend-torn` (166118467); an O_RDWR|O_APPEND handle opened in tns (166118748, the flag pair at 166118797), reached only from the `o===!0` onlyIfExists arm (166118501); and appendFile with `{mode:384}` (166118603, retried at 166118675 after a mkdir in the catch). None truncates or rewrites, and each record is one line through the serializer `JSON.stringify(e)+newline` (156850249). appendEntryToFileAsync is the minified JE (166155592, exported under that readable name at 174412339), a SIBLING entry into the same iWe primitive (its call at 166155916) used for non-chain entries such as a custom title or an ended-by-model stamp. Measured over the projects root: 8313 files walked, 236 boundary records and 236 summary records across the 23 transcripts that carry one, and the summary sits at boundary+1 in 236 of 236. One in-place rewriter does exist and would renumber lines - performCompactTranscript writes a `<file>.compact.tmp.<hex>` and renames it over the transcript (166098797) - but it is local file GC, not conversation compaction: it is gated on a `localGcEnabled` class field that defaults false (166076591), whose single setter (166077435) is reached only through the module wrapper zmn (166067565), called once as `zmn(mc())` on the sdkUrl resume-hydrate path (179355990) behind `mc()` = CLAUDE_CODE_TRANSCRIPT_LOCAL_GC ?? a feature flag defaulting false (179052954).",
-          "depends": "The whole `Lnnnn` addressing contract rests on it: `verbatim` reconstructs the clipped turns out of the SAME file (its crossed-summary banner names the summary's own line and says the turns below predate it), a `csift show --line` refetch printed before a compaction still resolves the identical record afterwards, and `image`'s stable id `L<line>i<n>` is stable for exactly this reason. If compaction rewrote or renumbered the file, every stored line address in a prior answer would go stale. The guarantee is per file: a session forked or cloned at a compaction is minted as a SEPARATE transcript (csift's `clone_of` probe), so a stored address stays valid in the file it was read from and says nothing about the clone - and a session that enabled the local-GC rewriter would break the contract for its own file.",
+          "depends": "The whole `Lnnnn` addressing contract rests on it: `verbatim` reconstructs the clipped turns out of the SAME file (its crossed-summary banner names the summary's own line and says the turns above it end before that line and the turns below after it), a `csift show --line` refetch printed before a compaction still resolves the identical record afterwards, and `image`'s stable id `L<line>i<n>` is stable for exactly this reason. If compaction rewrote or renumbered the file, every stored line address in a prior answer would go stale. The guarantee is per file: a session forked or cloned at a compaction is minted as a SEPARATE transcript (csift's `clone_of` probe), so a stored address stays valid in the file it was read from and says nothing about the clone - and a session that enabled the local-GC rewriter would break the contract for its own file.",
           "instrument": "Note a pre-compaction record's `Lnnnn` from any csift surface, let the session compact, then re-run `csift show @<id> --line <that same line> --format json`: it must return the identical record (same `uuid`). Then `csift search '' @<id> -t harness.compaction.boundary --format json | jq -r '.hits[].line'` must be greater than every pre-compaction line, and the summary's line must be exactly one greater than the boundary's. NOTE the jq path: search JSON nests matches inside `{\"hits\":[...]}` exchange rows, so a top-level `.line` selects nothing. Counting rule: one boundary record plus one immediately following summary record appended per compaction event; line numbers are 1-based and per file.",
           "probe": {
             "kind": "csift",
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2544",
+          "lines": "2545",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -89488,7 +89488,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3575"
+          "lines": "3576"
         }
       ],
       "states": [

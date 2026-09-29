@@ -1432,6 +1432,15 @@ surface change bumps the PATCH.
   each candidate and the count; the absolute path, or a longer suffix that names exactly
   one, works as before. A `--files-from` line takes the same rule: its report row reads
   `ambiguous`, nothing is written for it, and the summary line counts it.
+- **`verbatim`'s compaction banner said the turns below it predate the summary.** The
+  banner sits where the walk, going down the file, passes from turns that end before the
+  summary's line to turns that end after it, so the turns below mostly FOLLOW the summary:
+  on a fixture whose summary is L5, the banner sat between L2 and L3 and every line below it
+  but the L3 opener came after L5. It now reads `══ compaction boundary · summary at L5 ·
+  (turns above end before it, turns below end after it) ══`. A turn below can still open
+  before the summary when the compaction lands mid-turn, so the banner names where turns
+  end and makes no claim about when they began. The golden reconstruction moves on its
+  three banners and the header's `chars used`, which counts them.
 
 ### Performance
 

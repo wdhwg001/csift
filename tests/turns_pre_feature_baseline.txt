@@ -1,6 +1,6 @@
 SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
   budget 40000 chars · round-trip-fraction 0.50 · spanned 3 of 3 compaction boundaries in scope
-  selected 13 user + 12 assistant units across 13 turns · 4899 / 40000 chars used
+  selected 13 user + 12 assistant units across 13 turns · 4986 / 40000 chars used
   ────────────────────────────────────────────────────────────
 ▽ L1  USER  (2026-06-07 00:00:01 UTC(UTC+0))
 the very first ask about the café budget walk logic
@@ -16,7 +16,7 @@ second reply
 third ask about the carry boundary
 △ L8  ASSISTANT  (2026-06-07 00:00:08 UTC(UTC+0))
 third reply
-══ compaction boundary · summary at L9 · (turns below predate it) ══
+══ compaction boundary · summary at L9 · (turns above end before it, turns below end after it) ══
 ▽ L10  USER  (2026-06-07 00:00:09 UTC(UTC+0))
 fourth ask after the first compaction boundary
   [1 tool call]
@@ -31,7 +31,7 @@ fifth reply
 sixth ask about détours
 △ L17  ASSISTANT  (2026-06-07 00:00:16 UTC(UTC+0))
 sixth reply
-══ compaction boundary · summary at L18 · (turns below predate it) ══
+══ compaction boundary · summary at L18 · (turns above end before it, turns below end after it) ══
 ▽ L19  USER  (2026-06-07 00:00:17 UTC(UTC+0))
 seventh ask post second boundary
   [2 tool calls]
@@ -46,7 +46,7 @@ eighth reply
 ninth ask wrap it up
 △ L26  ASSISTANT  (2026-06-07 00:00:24 UTC(UTC+0))
 ninth reply
-══ compaction boundary · summary at L27 · (turns below predate it) ══
+══ compaction boundary · summary at L27 · (turns above end before it, turns below end after it) ══
 ▽ L28  USER  (2026-06-07 00:00:25 UTC(UTC+0))
 kick off the long debugging chain
   [9 tool calls]

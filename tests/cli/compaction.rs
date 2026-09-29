@@ -264,9 +264,10 @@ fn verbatim_banners_the_mode_and_still_reconstructs_across_the_cut() {
     // The legacy transcript's banner is untouched (no mode segment at all).
     let legacy = h.run(&["verbatim", at(LEGACY).as_str(), "--budget", "4000"]);
     assert!(
-        legacy
-            .stdout
-            .contains("compaction boundary · summary at L3 · (turns below predate it)"),
+        legacy.stdout.contains(
+            "compaction boundary · summary at L3 · (turns above end before it, turns below \
+                 end after it)"
+        ),
         "an ordinary compaction's banner is byte-stable:\n{}",
         legacy.stdout
     );

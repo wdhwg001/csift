@@ -499,3 +499,58 @@ fn turns_scan_skips_non_candidate_lines() {
         out.stdout
     );
 }
+
+/// The compaction banner sits between the turns that END before the summary's line and the
+/// turns that end after it. A turn whose opener predates the summary and whose reply lands
+/// after it (a compaction mid-turn) ends after it, so it renders BELOW the banner - which is
+/// why the banner names where turns end and makes no claim about when they began.
+#[test]
+fn the_compaction_banner_names_where_the_turns_beside_it_end() {
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-0000000c4501";
+    let lines = [
+        r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first ask ends before the cut"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"first reply"}]}}"#,
+        r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"second ask opens before the cut"}}"#,
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"u2","timestamp":"2026-06-07T05:00:03.000Z","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preTokens":1000}}"#,
+        r#"{"type":"user","uuid":"s1","parentUuid":"b1","timestamp":"2026-06-07T05:00:04.000Z","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued. Summary: two asks."}}"#,
+        r#"{"type":"assistant","uuid":"a2","parentUuid":"s1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"second reply lands after the cut"}]}}"#,
+        r#"{"type":"user","uuid":"u3","parentUuid":"a2","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"user","content":"third ask after the cut"}}"#,
+        r#"{"type":"assistant","uuid":"a3","parentUuid":"u3","timestamp":"2026-06-07T05:00:07.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"third reply"}]}}"#,
+    ];
+    h.write(&format!("{ENC}/{sess}.jsonl"), &(lines.join("\n") + "\n"));
+    let out = h.run(&["verbatim", at(sess).as_str(), "--budget", "40000"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let banner =
+        "══ compaction boundary · summary at L5 · (turns above end before it, turns below \
+                  end after it) ══";
+    assert_eq!(out.stdout.matches(banner).count(), 1, "{}", out.stdout);
+    let at_ = |needle: &str| {
+        out.stdout
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle:?} missing:\n{}", out.stdout))
+    };
+    assert!(
+        at_("first ask ends before the cut") < at_(banner),
+        "{}",
+        out.stdout
+    );
+    // The mid-turn shape: its opener (L3) predates the summary (L5), its reply (L6) does not,
+    // and the turn renders below the banner.
+    assert!(
+        at_(banner) < at_("second ask opens before the cut"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        at_(banner) < at_("second reply lands after the cut"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        at_(banner) < at_("third ask after the cut"),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("predate"), "{}", out.stdout);
+}

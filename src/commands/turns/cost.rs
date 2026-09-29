@@ -96,6 +96,13 @@ pub(crate) fn image_marker_cost(ids: &[String]) -> usize {
 /// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing
 /// newline). The renderer and the budget reservation both call this so the reserved
 /// banner length is byte-for-byte what is emitted.
+///
+/// What the banner says about the turns beside it is what places them. The walk renders
+/// turns in file order and emits a banner where `compactions_before` - the summaries
+/// strictly past a turn's LAST content line - drops, so every turn above ends before the
+/// summary's line and every turn below ends after it. A turn below can still OPEN before
+/// the summary (its reply runs past it, a compaction that lands mid-turn), so the banner
+/// names where turns end and makes no claim about when they began.
 pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {
     // A `/rewind` summarize is a compaction like any other for reconstruction, so the mode
     // only ANNOTATES the banner - and only when it is one of the two summarize gestures, so
@@ -108,7 +115,8 @@ pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) 
         _ => String::new(),
     };
     format!(
-        "{0} compaction boundary · summary at L{1}{2} · (turns below predate it) {0}",
+        "{0} compaction boundary · summary at L{1}{2} · (turns above end before it, turns below \
+         end after it) {0}",
         "══", line_no, tag
     )
 }
