@@ -4,10 +4,13 @@
 //! meta), and workflow RESULT files are terminal-only - but `journal.jsonl` inside each
 //! `wf_*` dir is written INCREMENTALLY (`{type:"started",agentId}` at spawn,
 //! `{type:"result",agentId}` at return), so `started - result` = workflow agents in
-//! flight right now. A non-workflow child's liveness comes from its own transcript tail
+//! flight right now, counting `{type:"failed"}` as a close too, and only while the run's
+//! terminal-only manifest is absent. A non-workflow child's liveness comes from its own transcript tail
 //! (an unreturned tool call) plus recent growth (child transcripts grow only from the
 //! child's own message flow - notifications land in MAIN only, so recency is a real
 //! signal here, unlike the main lane's F9 trap).
+
+use std::collections::{HashMap, HashSet};
 
 use super::*;
 
@@ -37,59 +40,110 @@ pub(crate) struct ChildrenReport {
     pub(crate) live_count: usize,
 }
 
+/// What one workflow run's own files say about its agents, read once per run.
+#[derive(Debug, Default)]
+struct RunFacts {
+    /// The run MANIFEST's status, when `<sidecar>/workflows/<run>.json` exists. The harness
+    /// writes that file only once the run has ENDED (claim TAIL-009), so it settles every agent
+    /// of the run whatever a lane's tail shows: a lane the harness stopped after its structured
+    /// answer keeps an unreturned call at its tail for good.
+    ended: Option<String>,
+    /// Agent ids the journal CLOSES: a `result` at return, or a `failed` when the agent errored.
+    /// Both are terminal lines (claim TAIL-008), so either settles that agent's lane.
+    closed: HashSet<String>,
+    started: usize,
+    closing: usize,
+}
+
+/// Read every workflow run of `main_jsonl`'s sidecar: its journal and its manifest, keyed by the
+/// run directory's name (`wf_<id>`), which is also the manifest's stem.
+fn run_facts(main_jsonl: &Path) -> Result<HashMap<String, RunFacts>> {
+    let sidecar = main_jsonl.with_extension("");
+    let sub_root = sidecar.join("subagents").join("workflows");
+    let mut runs = HashMap::new();
+    if !sub_root.is_dir() {
+        return Ok(runs);
+    }
+    for wf in std::fs::read_dir(&sub_root)? {
+        let wf = wf?;
+        let name = wf.file_name().to_string_lossy().into_owned();
+        let mut facts = RunFacts::default();
+        if let Ok(raw) = std::fs::read_to_string(wf.path().join("journal.jsonl")) {
+            for line in raw.lines() {
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+                    continue;
+                };
+                match v.get("type").and_then(serde_json::Value::as_str) {
+                    Some("started") => facts.started += 1,
+                    Some("result" | "failed") => {
+                        facts.closing += 1;
+                        if let Some(id) = v.get("agentId").and_then(serde_json::Value::as_str) {
+                            facts.closed.insert(id.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Ok(bytes) = std::fs::read(sidecar.join("workflows").join(format!("{name}.json"))) {
+            let status = serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .and_then(|v| v.get("status")?.as_str().map(str::to_string));
+            facts.ended = Some(status.unwrap_or_else(|| "unreadable".to_string()));
+        }
+        runs.insert(name, facts);
+    }
+    Ok(runs)
+}
+
+/// The run directory a WORKFLOW lane sits in (`subagents/workflows/<run>/agent-<id>.jsonl`), or
+/// `None` for a built-in lane.
+fn workflow_run_of(lane: &Path) -> Option<&str> {
+    let run = lane.parent()?;
+    let workflows = run.parent()?;
+    (workflows.file_name()? == "workflows" && workflows.parent()?.file_name()? == "subagents")
+        .then(|| run.file_name()?.to_str())
+        .flatten()
+}
+
+/// The verdict the lane's own workflow run gives, before its tail is read: an ended run or a
+/// journal line closing this agent settles it. `None` leaves the lane to its tail.
+fn settled_by_run(lane_id: &str, run: Option<&RunFacts>) -> Option<String> {
+    let run = run?;
+    if let Some(status) = &run.ended {
+        return Some(format!("its workflow run ended (manifest status {status})"));
+    }
+    run.closed
+        .contains(lane_id)
+        .then(|| "the workflow journal closes this agent (result or failed)".to_string())
+}
+
 /// Inspect every child lane of `main_jsonl`. `returned` names the agent ids whose
 /// completion notification already landed in the main transcript (an async agent's
 /// `<task-notification>`): such a lane is SETTLED whatever its tail looks like - the
 /// harness's own word outranks the recency heuristic (a lane that finished seconds
 /// ago still carries a fresh non-end_turn tail and would read `generating` for up to
-/// 300s otherwise).
+/// 300s otherwise). A WORKFLOW lane is settled the same way by its run's own files - the
+/// manifest an ended run writes, or a journal line closing the agent - before its tail is read.
 pub(crate) fn children_report(
     main_jsonl: &Path,
     returned: &std::collections::HashSet<String>,
 ) -> Result<ChildrenReport> {
     let mut report = ChildrenReport::default();
+    let runs = run_facts(main_jsonl)?;
     let subs = crate::subagent::subagent_transcript_files(main_jsonl).unwrap_or_default();
     for sub in &subs {
         let sid = crate::subagent::session_id_from_path(sub);
-        let shape = tail_shape(sub)?;
-        // The RECORD-tail instant is the semantic fact (mtime can lag or lead it).
-        let tail_age = shape.last_ts_utc.as_deref().and_then(|t| age_secs(Some(t)));
+        let by_run = settled_by_run(&sid, workflow_run_of(sub).and_then(|r| runs.get(r)));
         let (state, detail) = if returned.contains(&sid) {
             (
                 "settled",
                 "completion notification received in the main transcript".to_string(),
             )
-        } else if let Some((tool, ts)) = &shape.unreturned_use {
-            (
-                "in-flight",
-                format!(
-                    "unreturned {tool} call{}",
-                    age_secs(ts.as_deref())
-                        .map(|a| format!(" ({a}s ago)"))
-                        .unwrap_or_default()
-                ),
-            )
-        } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)
-            && shape.last_stop_reason.as_deref() != Some("end_turn")
-        {
-            // A paired tail with a fresh record and no end_turn = mid-generation (the
-            // model is thinking/writing between tool calls; stop_reason alone would
-            // mark 73% of DEAD lanes live, so recency is the load-bearing conjunct).
-            (
-                "generating",
-                format!(
-                    "last record {}s ago, no end_turn yet",
-                    tail_age.unwrap_or(0)
-                ),
-            )
+        } else if let Some(why) = by_run {
+            ("settled", why)
         } else {
-            (
-                "settled",
-                tail_age.map_or_else(
-                    || "no timestamped tail".to_string(),
-                    |a| format!("last record {a}s ago"),
-                ),
-            )
+            tail_state(sub)?
         };
         if state != "settled" {
             report.live_count += 1;
@@ -101,39 +155,54 @@ pub(crate) fn children_report(
         });
     }
 
-    // Workflow journals: started - result per wf dir (incremental, so an imbalance is a
-    // LIVE signal - a terminal dump would always balance).
-    let sub_root = main_jsonl
-        .with_extension("")
-        .join("subagents")
-        .join("workflows");
-    if sub_root.is_dir() {
-        for wf in std::fs::read_dir(&sub_root)? {
-            let wf = wf?;
-            let journal = wf.path().join("journal.jsonl");
-            if !journal.is_file() {
-                continue;
-            }
-            let Ok(raw) = std::fs::read_to_string(&journal) else {
-                continue;
-            };
-            let mut started = 0usize;
-            let mut resulted = 0usize;
-            for line in raw.lines() {
-                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
-                    continue;
-                };
-                match v.get("type").and_then(serde_json::Value::as_str) {
-                    Some("started") => started += 1,
-                    Some("result") => resulted += 1,
-                    _ => {}
-                }
-            }
-            report.journal_in_flight += started.saturating_sub(resulted);
-        }
-    }
-    if report.journal_in_flight > 0 {
-        report.live_count += report.journal_in_flight;
-    }
+    // Workflow journals: started - closed per run that has NOT ended (incremental, so an
+    // imbalance there is a LIVE signal). An ended run contributes nothing: an agent killed with
+    // its run never writes a closing line, so its imbalance is permanent and says nothing live.
+    report.journal_in_flight = runs
+        .values()
+        .filter(|r| r.ended.is_none())
+        .map(|r| r.started.saturating_sub(r.closing))
+        .sum();
+    report.live_count += report.journal_in_flight;
     Ok(report)
+}
+
+/// A lane's state read off its own transcript tail: `in-flight` on an unreturned call,
+/// `generating` on a fresh tail whose last assistant record is not an end_turn, else `settled`.
+fn tail_state(sub: &Path) -> Result<(&'static str, String)> {
+    let shape = tail_shape(sub)?;
+    // The RECORD-tail instant is the semantic fact (mtime can lag or lead it).
+    let tail_age = shape.last_ts_utc.as_deref().and_then(|t| age_secs(Some(t)));
+    Ok(if let Some((tool, ts)) = &shape.unreturned_use {
+        (
+            "in-flight",
+            format!(
+                "unreturned {tool} call{}",
+                age_secs(ts.as_deref())
+                    .map(|a| format!(" ({a}s ago)"))
+                    .unwrap_or_default()
+            ),
+        )
+    } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)
+        && shape.last_stop_reason.as_deref() != Some("end_turn")
+    {
+        // A paired tail with a fresh record and no end_turn = mid-generation (the
+        // model is thinking/writing between tool calls; stop_reason alone would
+        // mark 73% of DEAD lanes live, so recency is the load-bearing conjunct).
+        (
+            "generating",
+            format!(
+                "last record {}s ago, no end_turn yet",
+                tail_age.unwrap_or(0)
+            ),
+        )
+    } else {
+        (
+            "settled",
+            tail_age.map_or_else(
+                || "no timestamped tail".to_string(),
+                |a| format!("last record {a}s ago"),
+            ),
+        )
+    })
 }

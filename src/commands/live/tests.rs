@@ -5,6 +5,7 @@ use super::*;
 mod background;
 mod background_scan;
 mod checkpoint;
+mod children;
 mod conditions;
 mod surfaces;
 mod verdict;

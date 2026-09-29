@@ -1175,6 +1175,14 @@ surface change bumps the PATCH.
   root 150 of 10,947 lanes move from `completed` to `running`, every one stopped mid-turn
   hours ago (127 by an interrupt); `running` is documented as "still running, or
   interrupted" (claim SUB-034). `agents --help` states the rule.
+- **`status` counted a finished workflow's agents as in flight forever.** On a session
+  whose 31 workflow runs had all ended, `status` read `1399 lane(s), 145 live (144 workflow
+  agent(s) in flight)`: it summed `started` minus `result` over every journal, and an agent
+  that failed writes `failed` instead, while one killed with its run writes neither. The
+  in-flight count now covers only runs with no manifest yet (the harness writes a run's
+  manifest once it ends) and counts `failed` as a close, and a workflow lane is settled by
+  its ended run or its journal's closing line before its tail is read; the same session
+  reads `1399 lane(s), 1 live` (claim TAIL-008).
 
 ### Performance
 
