@@ -33,10 +33,13 @@ pub enum AgentKindFilter {
         The TARGET selects the parent session: pass `@<uuid>` for one \
         session, or a project PATH/encoded-dir to cover every session under it (each \
         session's subagents are grouped under it). Start/completion come from the \
-        subagent transcript's first/last record timestamp; status is `completed` when \
-        a workflow lane's own RUN settles it - the run's manifest exists (the run ended) \
-        or its journal closes the agent with a `result` or `failed` event, the rule \
-        `status` reads - or when the transcript's NEWEST meaningful record is an \
+        subagent transcript's first/last record timestamp. A workflow lane's own RUN \
+        decides its status first, by the rule `status` reads: the agent's journal line \
+        (`result` is `completed`, `failed` is `failed`), else the manifest an ended run \
+        writes (`completed`, or its status verbatim - `killed`, `failed`, an open set); a \
+        lane its run ended without completing carries no completion instant, and its row \
+        names why in brackets (JSON `settled_by`), in the words `status` uses. Any other \
+        lane is `completed` when the transcript's NEWEST meaningful record is an \
         assistant text ending its turn, else \
         `running`/`unknown` - a returned tool_result at the tail is a lane mid-turn, and \
         reads `running` with no completion instant.\n\n\
@@ -62,10 +65,11 @@ pub enum AgentKindFilter {
             • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl     (OMC workflows)\n    \
             • teammate      subagents/agent-a<Name>-<hex>.jsonl              (in_process_teammate; meta taskKind)\n  \
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
-        status, never listed). Status is `completed` when a workflow lane's run settles it \
-        (its manifest exists, or its journal closes the agent with `result` or `failed`) or \
-        the transcript's newest meaningful record is an assistant text ending its turn, else \
-        `running`/`unknown`. \
+        status, never listed). A workflow lane's run decides first - its journal line \
+        (`result` completed, `failed` failed), else its ended run's manifest status \
+        (`completed`, or the word verbatim, e.g. `killed`) - and any other lane is \
+        `completed` when the transcript's newest meaningful record is an assistant text \
+        ending its turn, else `running`/`unknown`. \
         The TEXT output is ALWAYS the parent→child topology tree (workflow runs as parents \
         of their agents; a nested sub-subagent under its spawning agent); JSON carries the \
         SAME topology as flat pre-ordered rows. `--agent <hex>` grabs ONE subagent \
@@ -106,7 +110,8 @@ pub enum AgentKindFilter {
         (a RUN row's `status` is the run MANIFEST's own `status` VERBATIM - \
         `<session>/workflows/<run>.json`, which the runtime writes once the run ends: an \
         OPEN set, not a csift enum; observed values include `completed`, `killed` and \
-        `failed`, distinct from an AGENT row's csift-computed `status`); \
+        `failed`, distinct from an AGENT row's `status`, which takes the run's word only \
+        for a lane its run ended without completing); \
         every agent its OWN {kind:\"agent\", …} row in tree PRE-ORDER (a parent row precedes \
         its children; rebuild nesting from parent_agent_id + depth; there is no \
         children[] array in JSON, the tree renders in TEXT mode); a closing \
@@ -119,7 +124,7 @@ pub enum AgentKindFilter {
         shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \
         workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
         started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
-        depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
+        depth, status, settled_by, pending_tool_use_id, pending_tool_name, pending_classification, \
         pending_reason, pending_checker, \
         pending_since_utc/_local, skipped_lines, fork_parent_last_uuid, \
         fork_context_length} (+ control_hint and routing_id on a teammate row, and only \

@@ -23,7 +23,7 @@ use crate::cli::{AgentKindFilter, AgentTimeAxis, AgentsArgs, OutputFormat};
 use crate::path;
 use crate::subagent::{
     build_topology, discover_workflow_runs, duration_label, PendingClassification, SubagentKind,
-    SubagentNode, WorkflowRun,
+    SubagentNode, SubagentStatus, WorkflowRun,
 };
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};

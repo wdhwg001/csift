@@ -27,6 +27,7 @@ fn node(
         returned_message: None,
         returned_message_source: None,
         status: SubagentStatus::Completed,
+        settled_by: None,
         pending_tool_use_id: None,
         pending_tool_name: None,
         pending_classification: None,

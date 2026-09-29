@@ -306,27 +306,12 @@ fn lifecycle_tail_terminal_flag_short_circuits_on_later_record() {
 
 #[test]
 fn resolve_status_all_arms() {
-    // Direct unit coverage of every resolve_status branch.
-    assert_eq!(
-        resolve_status(true, true, false, true),
-        SubagentStatus::Completed
-    ); // journal
-    assert_eq!(
-        resolve_status(true, false, true, true),
-        SubagentStatus::Completed
-    ); // terminal msg
-    assert_eq!(
-        resolve_status(true, false, false, true),
-        SubagentStatus::Running
-    ); // saw + start
-    assert_eq!(
-        resolve_status(false, false, false, false),
-        SubagentStatus::Unknown
-    ); // nothing
-    assert_eq!(
-        resolve_status(true, false, false, false),
-        SubagentStatus::Unknown
-    ); // saw but no start
+    // Direct unit coverage of every resolve_status branch (the tail's verdict; a workflow
+    // lane's run is read before it, in `lifecycle`).
+    assert_eq!(resolve_status(true, true, true), SubagentStatus::Completed); // terminal msg
+    assert_eq!(resolve_status(true, false, true), SubagentStatus::Running); // saw + start
+    assert_eq!(resolve_status(false, false, false), SubagentStatus::Unknown); // nothing
+    assert_eq!(resolve_status(true, false, false), SubagentStatus::Unknown); // saw but no start
 }
 
 #[test]
@@ -495,5 +480,108 @@ fn a_returned_tool_result_at_the_tail_is_mid_turn_and_an_end_turn_text_is_done()
         .unwrap();
         assert_eq!(lc.status, want, "{what}");
         assert!(lc.pending.is_none(), "{what}: nothing is unreturned");
+    }
+}
+
+/// A workflow lane takes its RUN's word before its tail: the agent's own journal line first
+/// (`result` completed, `failed` failed, whatever the run did afterwards), else the manifest an
+/// ended run writes (`completed`, or its status verbatim). Every lane but the last ends its
+/// turn cleanly, so its tail alone would read completed; the last is frozen at a call.
+#[test]
+fn a_workflow_lane_takes_its_runs_word_before_its_tail() {
+    let clean = concat!(
+        "{\"type\":\"user\",\"isSidechain\":true,\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+        "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}\n",
+    );
+    let frozen = concat!(
+        "{\"type\":\"user\",\"isSidechain\":true,\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+        "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"Read\",\"input\":{}}]}}\n",
+    );
+    let ended = |w: &str| SubagentStatus::Ended(w.to_string());
+    let by_manifest = |w: &str| Some(format!("its workflow run ended (manifest status {w})"));
+    let by_line = |l: &str| Some(format!("the workflow journal closes this agent ({l})"));
+    let cases = [
+        (
+            Some("killed"),
+            None,
+            clean,
+            ended("killed"),
+            by_manifest("killed"),
+        ),
+        (
+            None,
+            Some("failed"),
+            clean,
+            ended("failed"),
+            by_line("failed"),
+        ),
+        (
+            Some("completed"),
+            None,
+            clean,
+            SubagentStatus::Completed,
+            by_manifest("completed"),
+        ),
+        (
+            None,
+            Some("result"),
+            clean,
+            SubagentStatus::Completed,
+            by_line("result"),
+        ),
+        (
+            Some("killed"),
+            Some("result"),
+            clean,
+            SubagentStatus::Completed,
+            by_line("result"),
+        ),
+        (
+            Some("completed"),
+            Some("failed"),
+            clean,
+            ended("failed"),
+            by_line("failed"),
+        ),
+        (
+            Some("killed"),
+            None,
+            frozen,
+            ended("killed"),
+            by_manifest("killed"),
+        ),
+        (None, None, clean, SubagentStatus::Completed, None),
+    ];
+    for (manifest, line, tail, want, why) in cases {
+        let fx = Fixture::new();
+        let enc = "-Users-runword";
+        let session = fx.write(
+            &format!("{enc}/{SESS}.jsonl"),
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
+        );
+        let run = format!("{enc}/{SESS}/subagents/workflows/wf_r");
+        fx.write(&format!("{run}/agent-a0000000000000001.jsonl"), tail);
+        let mut journal = "{\"type\":\"started\",\"agentId\":\"a0000000000000001\"}\n".to_string();
+        if let Some(l) = line {
+            journal.push_str(&format!(
+                "{{\"type\":\"{l}\",\"agentId\":\"a0000000000000001\",\"result\":\"ok\"}}\n"
+            ));
+        }
+        fx.write(&format!("{run}/journal.jsonl"), &journal);
+        if let Some(m) = manifest {
+            fx.write(
+                &format!("{enc}/{SESS}/workflows/wf_r.json"),
+                &format!("{{\"status\":\"{m}\"}}"),
+            );
+        }
+        let subs = discover_subagents(&session).unwrap();
+        let lc = lifecycle(&subs[0], &JournalCache::build(&subs)).unwrap();
+        let what = format!("manifest {manifest:?}, line {line:?}");
+        assert_eq!(lc.status, want, "{what}");
+        assert_eq!(lc.settled_by, why, "{what}");
+        assert!(
+            lc.pending.is_none(),
+            "{what}: a run-settled lane is not frozen"
+        );
     }
 }

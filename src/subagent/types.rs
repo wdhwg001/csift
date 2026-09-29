@@ -94,6 +94,10 @@ pub struct SubagentLifecycle {
     pub completed_utc: Option<String>,
     /// Resolved status (see [`SubagentStatus`]).
     pub status: SubagentStatus,
+    /// Why the lane's workflow RUN decided `status`, in the words `status` gives a settled
+    /// lane; `None` when the tail decided it (every built-in and teammate lane, and a
+    /// workflow lane its run has not settled).
+    pub settled_by: Option<String>,
     /// The FROZEN-lane signal: `Some` when the newest meaningful record is an unreturned tool_use
     /// (the lane is blocked AT it, never "completed"). Drives the status override + the agents
     /// `pending_*` fields. `None` for a normally-running/completed lane.
@@ -108,24 +112,32 @@ pub struct SubagentLifecycle {
 }
 
 /// Determinable subagent run status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubagentStatus {
-    /// A workflow journal carries a `result` event for this agent, OR the transcript
-    /// terminates with an assistant end-of-turn message (a clean finish).
+    /// The lane's workflow run says it completed (the journal's `result` line, or a manifest
+    /// reading `completed` with no closing line), OR the transcript terminates with an
+    /// assistant end-of-turn message (a clean finish).
     Completed,
     /// The transcript exists but shows no completion signal - likely still running,
-    /// or interrupted. We do not over-claim "failed"; this is the honest middle.
+    /// or interrupted. csift does not invent "failed" for a lane nothing on disk ends;
+    /// this is the honest middle.
     Running,
+    /// A workflow lane its own RUN ended without completing it, in the run's own word: the
+    /// journal's `failed` line reads `failed`, and an ended run with no closing line for the
+    /// agent reads its manifest's status verbatim (`killed`, `failed`, an open set). Never
+    /// `completed` and never carrying a completion instant.
+    Ended(String),
     /// No timestamps / empty transcript - status cannot be determined.
     Unknown,
 }
 
 impl SubagentStatus {
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(&self) -> &str {
         match self {
             SubagentStatus::Completed => "completed",
             SubagentStatus::Running => "running",
+            SubagentStatus::Ended(word) => word,
             SubagentStatus::Unknown => "unknown",
         }
     }

@@ -198,6 +198,9 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "last_activity_local": n.last_activity_utc.as_deref().and_then(local_iso),
         "duration": duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()),
         "status": n.status.label(),
+        // Why the lane's workflow RUN decided `status` (its journal line or its manifest), in
+        // the words `status` gives a settled lane; null when the tail decided it.
+        "settled_by": n.settled_by,
         "pending_tool_use_id": n.pending_tool_use_id,
         "pending_tool_name": n.pending_tool_name,
         "pending_classification": n.pending_classification.map(PendingClassification::label),

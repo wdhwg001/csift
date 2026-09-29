@@ -68,8 +68,8 @@ pub(crate) fn children_report(
                 "settled",
                 "completion notification received in the main transcript".to_string(),
             )
-        } else if let Some(why) = by_run {
-            ("settled", why)
+        } else if let Some(settle) = by_run {
+            ("settled", settle.reason)
         } else {
             tail_state(sub)?
         };

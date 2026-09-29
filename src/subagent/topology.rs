@@ -53,6 +53,9 @@ pub struct SubagentNode {
     pub returned_message: Option<String>,
     pub returned_message_source: Option<ReturnedMsgSource>,
     pub status: SubagentStatus,
+    /// Why the lane's workflow RUN decided `status` (the journal line or the manifest), in
+    /// the words `status` gives a settled lane; `None` when the tail decided it.
+    pub settled_by: Option<String>,
     /// FROZEN-lane disambiguation (all `None` for a normal lane). When the newest meaningful
     /// record is an unreturned tool_use, `status` is `Running` and these carry: the pending
     /// tool_use id/name, its [`PendingClassification`] (escalation-blocked vs awaiting-execution),
@@ -431,7 +434,8 @@ pub(crate) fn node_for(
         last_activity_utc: lc.completed_utc.clone(),
         returned_message,
         returned_message_source,
-        status: lc.status,
+        status: lc.status.clone(),
+        settled_by: lc.settled_by.clone(),
         fork_parent_last_uuid: lc.fork_parent_last_uuid.clone(),
         fork_context_length: lc.fork_context_length,
         pending_tool_use_id: pending.tool_use_id,

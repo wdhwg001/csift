@@ -182,6 +182,33 @@ pub(crate) fn print_workflow_run<W: std::io::Write>(w: &mut W, run: &WorkflowRun
     Ok(())
 }
 
+/// A node's first line: its id, shape, run, agent type and status, with the reason a run
+/// ended the lane and a teammate's routing id where they apply.
+fn node_head(n: &SubagentNode, ind: &str) -> String {
+    let mut head = format!("{ind}{}  {}", n.agent_id, n.kind.label());
+    if let Some(wf) = &n.workflow_id {
+        head.push_str(&format!("  ({wf})"));
+    }
+    if let Some(t) = &n.agent_type {
+        head.push_str(&format!("  [{t}]"));
+    }
+    head.push_str(&format!("  {}", n.status.label()));
+    // A lane its run ended without completing names why beside the run's word, in the words
+    // `status` gives it: `killed` alone does not say whether the journal or the manifest spoke.
+    if let (SubagentStatus::Ended(_), Some(why)) = (&n.status, &n.settled_by) {
+        head.push_str(&format!("  [{why}]"));
+    }
+    // A teammate answers to TWO ids: the transcript id leading this line and the ROUTING form
+    // the official SendMessage takes. Print both together so neither has to be guessed - they
+    // are minted apart at spawn, so one cannot be derived from the other.
+    if n.kind == SubagentKind::Teammate {
+        if let Some(rid) = crate::subagent::routing_id(n.name.as_deref(), n.team_name.as_deref()) {
+            head.push_str(&format!("  routing: {rid}"));
+        }
+    }
+    head
+}
+
 /// Print one node's text block, indented `depth` levels (2 spaces per level).
 pub(crate) fn print_node_block<W: std::io::Write>(
     w: &mut W,
@@ -191,24 +218,7 @@ pub(crate) fn print_node_block<W: std::io::Write>(
 ) -> Result<()> {
     let ind = "  ".repeat(depth);
     let ind2 = "  ".repeat(depth + 1);
-
-    let mut head = format!("{ind}{}  {}", n.agent_id, n.kind.label());
-    if let Some(wf) = &n.workflow_id {
-        head.push_str(&format!("  ({wf})"));
-    }
-    if let Some(t) = &n.agent_type {
-        head.push_str(&format!("  [{t}]"));
-    }
-    head.push_str(&format!("  {}", n.status.label()));
-    // A teammate answers to TWO ids: the transcript id leading this line and the ROUTING form
-    // the official SendMessage takes. Print both together so neither has to be guessed - they
-    // are minted apart at spawn, so one cannot be derived from the other.
-    if n.kind == SubagentKind::Teammate {
-        if let Some(rid) = crate::subagent::routing_id(n.name.as_deref(), n.team_name.as_deref()) {
-            head.push_str(&format!("  routing: {rid}"));
-        }
-    }
-    writeln!(w, "{head}")?;
+    writeln!(w, "{}", node_head(n, &ind))?;
 
     // TWO lanes can share every id they have: a copied project directory carries the whole
     // sidecar, so a divergent session pair keeps two copies of each agent transcript. The

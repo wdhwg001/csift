@@ -142,6 +142,9 @@ pub(crate) struct JournalData {
     /// Agent ids a `result` OR a `failed` line closes. Both are terminal (claim TAIL-008), so
     /// either settles that agent's lane.
     pub(crate) closed: std::collections::HashSet<String>,
+    /// Agent ids a `failed` line closes: the agent errored, so its lane ended `failed`
+    /// whatever its run did afterwards.
+    pub(crate) failed: std::collections::HashSet<String>,
     /// `started` lines, and `result` / `failed` lines: their difference is the run's agents in
     /// flight while the run has no manifest.
     pub(crate) started: usize,
@@ -154,6 +157,30 @@ pub(crate) struct JournalData {
     /// agent of the run whatever a lane's tail shows: a lane the harness stopped after its
     /// structured answer keeps an unreturned call at its tail for good.
     pub(crate) ended: Option<String>,
+}
+
+/// How a workflow lane's run settled it ([`JournalCache::settled_by_run`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RunSettle {
+    /// The run's own word for how this agent ended: `completed`, `failed`, or the manifest's
+    /// status verbatim.
+    pub(crate) outcome: String,
+    /// Why, in the words `status` gives a settled lane and `agents` prints beside the status.
+    pub(crate) reason: String,
+}
+
+impl RunSettle {
+    fn closed_by(outcome: &str, line: &str) -> Self {
+        Self {
+            outcome: outcome.to_string(),
+            reason: format!("the workflow journal closes this agent ({line})"),
+        }
+    }
+
+    /// True when the run says the agent completed.
+    pub(crate) fn completed(&self) -> bool {
+        self.outcome == "completed"
+    }
 }
 
 impl JournalCache {
@@ -211,18 +238,27 @@ impl JournalCache {
         }
     }
 
-    /// The verdict a workflow lane's own RUN gives before its tail is read: an ended run (its
-    /// manifest exists) or a journal line closing this agent settles it; `None` leaves the lane
-    /// to its tail. ONE rule, read by `status`'s child census and by `agents`' lifecycle, so the
-    /// two surfaces agree on which lanes are live.
-    pub(crate) fn settled_by_run(&self, subagent: &Subagent) -> Option<String> {
+    /// The verdict a workflow lane's own RUN gives before its tail is read, and why. The
+    /// agent's OWN closing line decides first - `result` is `completed`, `failed` is `failed` -
+    /// because an agent that returned before its run was killed did complete, and one that
+    /// errored in a run that completed did not. With no closing line an ENDED run (its
+    /// manifest exists) decides: its status verbatim, `completed` or any other word, since an
+    /// agent its run ended without a closing line did not finish on its own. `None` leaves the
+    /// lane to its tail. ONE rule, read by `status`'s child census and by `agents`'
+    /// lifecycle, so the two surfaces agree on which lanes are live and `agents` never calls
+    /// a killed lane `completed`.
+    pub(crate) fn settled_by_run(&self, subagent: &Subagent) -> Option<RunSettle> {
         let run = self.events_for(subagent)?;
-        if let Some(status) = &run.ended {
-            return Some(format!("its workflow run ended (manifest status {status})"));
+        if journal_reports_completion(subagent, self) {
+            return Some(RunSettle::closed_by("completed", "result"));
         }
-        run.closed
-            .contains(&subagent.agent_id)
-            .then(|| "the workflow journal closes this agent (result or failed)".to_string())
+        if run.failed.contains(&subagent.agent_id) {
+            return Some(RunSettle::closed_by("failed", "failed"));
+        }
+        run.ended.as_ref().map(|status| RunSettle {
+            outcome: status.clone(),
+            reason: format!("its workflow run ended (manifest status {status})"),
+        })
     }
 
     /// Workflow agents a run's journal has started and not closed, across every run with no
@@ -280,6 +316,9 @@ fn read_journal_line(line: &[u8], data: &mut JournalData) {
             data.closing += 1;
             if let Some(agent) = agent {
                 data.closed.insert(agent.to_string());
+                if kind == Some("failed") {
+                    data.failed.insert(agent.to_string());
+                }
             }
         }
         _ => {}

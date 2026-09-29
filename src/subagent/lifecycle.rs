@@ -70,30 +70,27 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
         completed_utc.is_none() || !newest_decided
     })?;
 
-    // A workflow lane's own RUN decides first, by the rule `status` reads: its run's manifest (the
-    // run ended) or a journal line closing the agent (`result` or `failed`). A lane the harness
-    // stopped after its answer keeps an unreturned call at its tail for good, so reading the tail
-    // alone called it running while `status` counted it settled.
-    let journal_done = journal_reports_completion(subagent, journals)
-        || journals.settled_by_run(subagent).is_some();
-    // Clear the frozen signal when it would be meaningless: a run-settled (workflow) agent is
-    // trusted done regardless of a tail tool_use; and a transcript with NO timestamps has
-    // undetermined timing (status Unknown), so we cannot claim "frozen" vs merely unreadable.
-    if journal_done || started_utc.is_none() {
+    // A workflow lane's own RUN decides first, by the rule `status` reads
+    // (`JournalCache::settled_by_run`): the agent's closing journal line, else the manifest an
+    // ended run writes. A lane the harness stopped after its answer keeps an unreturned call at
+    // its tail for good, so reading the tail alone called it running while `status` counted it
+    // settled; and a lane its run killed, or its journal failed, is not `completed` whatever its
+    // tail shows, so it takes the run's own word.
+    let by_run = journals.settled_by_run(subagent);
+    // Clear the frozen signal when it would be meaningless: a run-settled (workflow) agent has
+    // ended regardless of a tail tool_use; and a transcript with NO timestamps has undetermined
+    // timing (status Unknown), so we cannot claim "frozen" vs merely unreadable.
+    if by_run.is_some() || started_utc.is_none() {
         pending = None;
     }
     // A genuinely frozen lane is NEVER "completed": override the terminal-text walk-back, which
     // would otherwise find an EARLIER end-of-turn (the assistant's text before the frozen
     // tool_use) and mis-report the stuck lane as done.
-    let status = if pending.is_some() {
-        SubagentStatus::Running
-    } else {
-        resolve_status(
-            saw_any,
-            journal_done,
-            terminal_agent_msg,
-            started_utc.is_some(),
-        )
+    let status = match &by_run {
+        Some(settle) if settle.completed() => SubagentStatus::Completed,
+        Some(settle) => SubagentStatus::Ended(settle.outcome.clone()),
+        None if pending.is_some() => SubagentStatus::Running,
+        None => resolve_status(saw_any, terminal_agent_msg, started_utc.is_some()),
     };
 
     Ok(SubagentLifecycle {
@@ -102,6 +99,7 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
         started_utc,
         completed_utc,
         status,
+        settled_by: by_run.map(|settle| settle.reason),
         pending,
         skipped_lines: head_skipped + tail_skipped,
         fork_parent_last_uuid,
@@ -184,18 +182,17 @@ pub(crate) fn record_is_meaningful(rec: &Record) -> bool {
             .is_some_and(|bs| bs.iter().any(|b| matches!(b, Block::ToolResult { .. })))
 }
 
-/// Status resolution rule (honest, never over-claiming "failed"):
-/// - journal `result` event present => `Completed` (the authoritative workflow signal);
-/// - else the NEWEST meaningful record is an assistant text ending its turn => `Completed`;
+/// Status resolution from the TAIL, for a lane its workflow run has not settled (the run's
+/// verdict is read first, in [`lifecycle`]):
+/// - the NEWEST meaningful record is an assistant text ending its turn => `Completed`;
 /// - else if we saw records but no completion signal => `Running`;
 /// - else (no records / no start) => `Unknown`.
 pub(crate) fn resolve_status(
     saw_any: bool,
-    journal_done: bool,
     terminal_agent_msg: bool,
     has_start: bool,
 ) -> SubagentStatus {
-    if journal_done || terminal_agent_msg {
+    if terminal_agent_msg {
         SubagentStatus::Completed
     } else if saw_any && has_start {
         SubagentStatus::Running

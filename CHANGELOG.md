@@ -1211,9 +1211,19 @@ surface change bumps the PATCH.
   its ended run or its journal's closing line before its tail is read; the same session
   reads `1399 lane(s), 1 live` (claim TAIL-008). An open agent whose own lane is already
   live by its tail is counted once, not again through its journal's `started` line. `agents` reads the same rule before a
-  lane's tail, so such a lane reads `completed` there too: on that session it had called 42
-  workflow lanes `running` that `status` settled, and now calls none; `agents --help`
-  states the rule.
+  lane's tail: on that session it had called 42 workflow lanes `running` that `status`
+  settled, and now calls none; `agents --help` states the rule.
+- **`agents` called a lane its run killed, or its journal failed, `completed`.** A workflow
+  lane settled by its run read `completed` with a completion instant whatever the run said:
+  a lane of a run whose manifest reads `killed`, and a lane its journal closes with
+  `failed`, looked exactly like a lane that returned. The run's word now decides: the
+  agent's journal line first (`result` completed, `failed` failed), else the ended run's
+  manifest status verbatim, so such a lane reads `killed` or `failed`, carries no
+  `completed_utc` or `duration`, and names why - JSON `settled_by`, and the same words in
+  brackets on the text row, as `status` words a settled lane. A lane that returned before
+  its run was killed still reads `completed`. On the live root 224 of 10,992 lanes move:
+  120 to `failed` by their journal line, 101 to `killed` and 3 to `failed` by their run's
+  manifest (claim SUB-034).
 - **`files` joined an unexpanded shell variable onto the cwd.** A script writing
   `$FIX/.claude/.../$parent.jsonl` from an unquoted heredoc was reported as `cwd-joined`
   with the path `<cwd>/$FIX/.claude/.../$parent.jsonl`, a file that never existed. An

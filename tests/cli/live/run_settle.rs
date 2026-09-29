@@ -1,5 +1,7 @@
-//! A workflow lane is settled by its run's own files - the manifest an ended run writes, or a
-//! journal line closing the agent - and `status` and `agents` read that one rule alike.
+//! A workflow lane is settled by its run's own files - a journal line closing the agent, or the
+//! manifest an ended run writes - and `status` and `agents` read that one rule alike; `agents`
+//! also takes the run's WORD, so a lane its run killed or its journal failed never reads
+//! `completed`.
 
 use crate::harness::*;
 
@@ -64,9 +66,9 @@ pub(super) fn rows(stdout: &str, kind: &str) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// `agents` reads a lane's run before its tail, as `status` does: the ended run's lane and the
-/// lane its journal failed read `completed`, the open run's frozen lane reads `running`, and
-/// the lanes `agents` calls running are exactly the lanes `status` lists live.
+/// `agents` reads a lane's run before its tail, as `status` does: the killed run's lane reads
+/// `killed` and the lane its journal failed reads `failed`, the open run's frozen lane reads
+/// `running`, and the lanes `agents` calls running are exactly the lanes `status` lists live.
 #[test]
 fn agents_and_status_settle_a_workflow_lane_by_the_same_run_rule() {
     let h = fleet_home();
@@ -79,8 +81,8 @@ fn agents_and_status_settle_a_workflow_lane_by_the_same_run_rule() {
             .map(|r| r["status"].as_str().unwrap_or_default().to_string())
             .unwrap_or_default()
     };
-    assert_eq!(status_of("a000000000000000a"), "completed");
-    assert_eq!(status_of("a000000000000000b"), "completed");
+    assert_eq!(status_of("a000000000000000a"), "killed");
+    assert_eq!(status_of("a000000000000000b"), "failed");
     assert_eq!(status_of("a000000000000000c"), "running");
     let running: Vec<String> = rows(&agents.stdout, "agent")
         .into_iter()
@@ -116,4 +118,100 @@ fn agents_and_status_settle_a_workflow_lane_by_the_same_run_rule() {
         "{}",
         status.stdout
     );
+}
+
+/// Four ways a run settles a lane whose tail ended its turn cleanly - so the tail alone reads
+/// `completed` on all four. The run's word decides: a `killed` manifest and a journal `failed`
+/// line are not completions (the run's word, no completion instant, `settled_by` and the same
+/// words in brackets on the text row), while a `completed` manifest and a journal `result`
+/// are. The reasons are the ones `status` gives a settled lane.
+#[test]
+fn a_lane_its_run_ended_takes_the_runs_word_and_no_completion_instant() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"run the fleet"}}"#,
+    );
+    let clean = concat!(
+        r#"{"type":"user","uuid":"f1","isSidechain":true,"timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"go"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"f2","parentUuid":"f1","isSidechain":true,"timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#,
+        "\n",
+    );
+    // (run, agent, manifest status, journal closing line)
+    let runs = [
+        ("wf_K", "a00000000000000k1", Some("killed"), None),
+        ("wf_F", "a00000000000000f1", None, Some("failed")),
+        ("wf_C", "a00000000000000c1", Some("completed"), None),
+        ("wf_R", "a00000000000000r1", None, Some("result")),
+    ];
+    for (run, id, manifest, line) in runs {
+        let wf = |rel: &str| format!("{ENC}/{SESS}/subagents/workflows/{run}/{rel}");
+        h.write(&wf(&format!("agent-{id}.jsonl")), clean);
+        h.write(
+            &wf(&format!("agent-{id}.meta.json")),
+            r#"{"agentType":"workflow-subagent"}"#,
+        );
+        let mut journal = format!("{{\"type\":\"started\",\"agentId\":\"{id}\"}}\n");
+        if let Some(l) = line {
+            journal.push_str(&format!("{{\"type\":\"{l}\",\"agentId\":\"{id}\"}}\n"));
+        }
+        h.write(&wf("journal.jsonl"), &journal);
+        if let Some(m) = manifest {
+            h.write(
+                &format!("{ENC}/{SESS}/workflows/{run}.json"),
+                &format!("{{\"runId\":\"{run}\",\"status\":\"{m}\"}}"),
+            );
+        }
+    }
+    let json = h.run(&["agents", &at(SESS), "--format", "json"]);
+    assert!(json.success, "{}", json.stderr);
+    let row = |id: &str| {
+        rows(&json.stdout, "agent")
+            .into_iter()
+            .find(|r| r["agent_id"] == id)
+            .unwrap_or_else(|| panic!("no row for {id}:\n{}", json.stdout))
+    };
+    let manifest = |w: &str| format!("its workflow run ended (manifest status {w})");
+    let journal = |l: &str| format!("the workflow journal closes this agent ({l})");
+    for (id, status, why, done) in [
+        ("a00000000000000k1", "killed", manifest("killed"), false),
+        ("a00000000000000f1", "failed", journal("failed"), false),
+        (
+            "a00000000000000c1",
+            "completed",
+            manifest("completed"),
+            true,
+        ),
+        ("a00000000000000r1", "completed", journal("result"), true),
+    ] {
+        let r = row(id);
+        assert_eq!(r["status"], status, "{r}");
+        assert_eq!(r["settled_by"], why.as_str(), "{r}");
+        assert_eq!(r["completed_utc"].is_string(), done, "{r}");
+        assert_eq!(r["duration"].is_string(), done, "{r}");
+        assert!(r["last_activity_utc"].is_string(), "{r}");
+    }
+    let text = h.run(&["agents", &at(SESS)]);
+    assert!(text.success, "{}", text.stderr);
+    let line_of = |id: &str| {
+        text.stdout
+            .lines()
+            .find(|l| l.contains(id))
+            .unwrap_or_default()
+            .to_string()
+    };
+    assert!(
+        line_of("a00000000000000k1").ends_with(&format!("killed  [{}]", manifest("killed"))),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        line_of("a00000000000000f1").ends_with(&format!("failed  [{}]", journal("failed"))),
+        "{}",
+        text.stdout
+    );
+    for id in ["a00000000000000c1", "a00000000000000r1"] {
+        assert!(line_of(id).ends_with("completed"), "{}", text.stdout);
+    }
 }
