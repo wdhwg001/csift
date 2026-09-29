@@ -103,4 +103,17 @@ fn agents_and_status_settle_a_workflow_lane_by_the_same_run_rule() {
         .collect();
     assert_eq!(running, live, "{}", status.stdout);
     assert_eq!(verdict["settled_children"], 2, "{}", status.stdout);
+    // The open run's lane is live by its tail AND started in its journal: one live lane.
+    let children_line = verdict["evidence"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|e| e["surface"] == "children")
+        .expect("the children evidence");
+    assert_eq!(
+        children_line["value"], "3 lane(s), 1 live",
+        "{}",
+        status.stdout
+    );
 }

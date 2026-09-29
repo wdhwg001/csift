@@ -1199,7 +1199,8 @@ surface change bumps the PATCH.
   in-flight count now covers only runs with no manifest yet (the harness writes a run's
   manifest once it ends) and counts `failed` as a close, and a workflow lane is settled by
   its ended run or its journal's closing line before its tail is read; the same session
-  reads `1399 lane(s), 1 live` (claim TAIL-008). `agents` reads the same rule before a
+  reads `1399 lane(s), 1 live` (claim TAIL-008). An open agent whose own lane is already
+  live by its tail is counted once, not again through its journal's `started` line. `agents` reads the same rule before a
   lane's tail, so such a lane reads `completed` there too: on that session it had called 42
   workflow lanes `running` that `status` settled, and now calls none; `agents --help`
   states the rule.

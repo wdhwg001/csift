@@ -146,6 +146,9 @@ pub(crate) struct JournalData {
     /// flight while the run has no manifest.
     pub(crate) started: usize,
     pub(crate) closing: usize,
+    /// Agent ids a `started` line names, so an agent the census already counted as a live
+    /// lane is not counted a second time through its journal.
+    pub(crate) started_ids: std::collections::HashSet<String>,
     /// The run MANIFEST's status, when `<sidecar>/workflows/<run>.json` exists. The harness
     /// writes that file only once the run has ENDED (claim TAIL-009), so it settles every
     /// agent of the run whatever a lane's tail shows: a lane the harness stopped after its
@@ -224,12 +227,21 @@ impl JournalCache {
 
     /// Workflow agents a run's journal has started and not closed, across every run with no
     /// manifest yet. An ended run contributes nothing: an agent killed with its run never
-    /// writes a closing line, so its imbalance is permanent and says nothing live.
-    pub(crate) fn journal_in_flight(&self) -> usize {
+    /// writes a closing line, so its imbalance is permanent and says nothing live. `live` names
+    /// the lanes the census already counts live by their own tail: an open agent among them is
+    /// ONE live lane, not a lane and a journal agent, so it is left out here.
+    pub(crate) fn journal_in_flight(&self, live: &std::collections::HashSet<String>) -> usize {
         self.by_path
             .values()
             .filter(|r| r.ended.is_none())
-            .map(|r| r.started.saturating_sub(r.closing))
+            .map(|r| {
+                let counted = r
+                    .started_ids
+                    .iter()
+                    .filter(|id| !r.closed.contains(*id) && live.contains(*id))
+                    .count();
+                r.started.saturating_sub(r.closing).saturating_sub(counted)
+            })
             .sum()
     }
 
@@ -258,7 +270,12 @@ fn read_journal_line(line: &[u8], data: &mut JournalData) {
     let kind = v.get("type").and_then(serde_json::Value::as_str);
     let agent = v.get("agentId").and_then(serde_json::Value::as_str);
     match kind {
-        Some("started") => data.started += 1,
+        Some("started") => {
+            data.started += 1;
+            if let Some(agent) = agent {
+                data.started_ids.insert(agent.to_string());
+            }
+        }
         Some("result" | "failed") => {
             data.closing += 1;
             if let Some(agent) = agent {

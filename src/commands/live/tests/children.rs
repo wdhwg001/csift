@@ -30,15 +30,26 @@ fn run_home(journal: &str, manifest: Option<&str>) -> (crate::testfs::Scratch, s
 
 const STARTED: &str = "{\"type\":\"started\",\"agentId\":\"a0123456789abcdef\"}\n";
 
-/// Without a manifest the run is live: the lane is in flight by its tail and the journal's
-/// open agent counts.
+/// Without a manifest the run is live: the lane is in flight by its tail, and the journal's
+/// open agent IS that lane, so it is one live lane rather than a lane and a journal agent.
 #[test]
 fn a_run_with_no_manifest_leaves_its_lane_to_the_tail() {
     let (_root, main) = run_home(STARTED, None);
     let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
     assert_eq!(report.children[0].state, "in-flight", "{report:?}");
-    assert_eq!(report.journal_in_flight, 1);
-    assert_eq!(report.live_count, 2);
+    assert_eq!(report.journal_in_flight, 0);
+    assert_eq!(report.live_count, 1);
+}
+
+/// An agent the journal started whose transcript has not reached the disk is in flight by the
+/// journal alone, and counts there beside the lane that is live by its tail.
+#[test]
+fn a_started_agent_with_no_lane_yet_counts_through_the_journal() {
+    let journal = format!("{STARTED}{{\"type\":\"started\",\"agentId\":\"a1111111111111111\"}}\n");
+    let (_root, main) = run_home(&journal, None);
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
+    assert_eq!(report.journal_in_flight, 1, "{report:?}");
+    assert_eq!(report.live_count, 2, "{report:?}");
 }
 
 /// The manifest exists only once the run has ended, so it settles the lane whatever its tail

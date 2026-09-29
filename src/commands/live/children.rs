@@ -33,7 +33,8 @@ pub(crate) struct ChildState {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ChildrenReport {
     pub(crate) children: Vec<ChildState>,
-    /// Workflow agents started minus returned across this session's journals.
+    /// Workflow agents a journal has started and not closed, across this session's runs with no
+    /// manifest yet, less those already counted as a live lane.
     pub(crate) journal_in_flight: usize,
     pub(crate) live_count: usize,
 }
@@ -83,8 +84,15 @@ pub(crate) fn children_report(
     }
 
     // Workflow journals: started - closed per run that has NOT ended (incremental, so an
-    // imbalance there is a LIVE signal).
-    report.journal_in_flight = journals.journal_in_flight();
+    // imbalance there is a LIVE signal), less the open agents already counted live by their
+    // own lane above - one agent is one live lane, whichever surfaces show it.
+    let live: std::collections::HashSet<String> = report
+        .children
+        .iter()
+        .filter(|c| c.state != "settled")
+        .map(|c| c.session_id.clone())
+        .collect();
+    report.journal_in_flight = journals.journal_in_flight(&live);
     report.live_count += report.journal_in_flight;
     Ok(report)
 }
