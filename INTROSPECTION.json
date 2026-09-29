@@ -82776,9 +82776,9 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "walked every `*.jsonl` under both projects roots for the frame literal, bucketed the carrying lines by top-level `type`, and separately counted the records the residue is about: `type:\"user\"` with `isMeta` true whose flattened text opens with the frame after a left trim",
-            "observed": "first root: 18 lines carry the literal - 9 `user`, 7 `assistant`, 2 `attachment` - and 0 are isMeta user prompts opening with it. Second root: 0 lines and 0 prompts. Every carrying line belongs to a transcript in which the literal was searched for, which is why the line count grew between two runs of the same instrument while the prompt count stayed at 0",
-            "rule": "One count per raw line for the literal, one count per record for the prompts, matching the frame as a prefix of the left-trimmed flattened text rather than anywhere in the line",
+            "instrument": "walked every `*.jsonl` under both projects roots for the frame literal, bucketed the carrying lines by top-level `type`, and separately counted the records the residue is about: `type:\"user\"` with `isMeta` true whose flattened text opens with the frame after a left trim Then over the whole root `csift search '' -t harness.schedule --format json`, hits counted by leaf with and without `scheduled_at` and a `fires` edge.",
+            "observed": "first root: 18 lines carry the literal - 9 `user`, 7 `assistant`, 2 `attachment` - and 0 are isMeta user prompts opening with it. Second root: 0 lines and 0 prompts. Every carrying line belongs to a transcript in which the literal was searched for, which is why the line count grew between two runs of the same instrument while the prompt count stayed at 0 Every prompt a fire record submitted carries the fire's instant and a `fires` edge read off its parent link: 463 `harness.schedule.fire` hits, 2 `harness.schedule.tick` and 1 `harness.schedule.wakeup`, all 466 with both - the tick and wakeup being prompts whose resolved text opens with a loop marker, the parent link naming their fire record as it names a plain fired prompt's.",
+            "rule": "One count per raw line for the literal, one count per record for the prompts, matching the frame as a prefix of the left-trimmed flattened text rather than anywhere in the line One observation per emitted hit for the leaf census.",
             "note": "the residue's old count was of lines carrying the literal, which an instrument that searches for the literal adds to; the population the residue is about is counted instead, and the self-pollution is stated so the next reader does not re-derive a rising number"
           }
         }
@@ -90060,7 +90060,7 @@
             "instrument": "python3 census of `<uuid>/subagents/**/agent-*.jsonl` basenames at two or more paths inside one sidecar, over the live `~/.claude/projects` root and a snapshot root, whole and without the measuring session's tree; byte relation, shared uuids, continuation test and version stamps per pair; the builder excerpt compared at its offset in the 2.1.258 build.",
             "observed": "Live root, whole and without the measuring session's tree alike: 2 agent ids in 1 session sidecar sit at two paths, each pair one `subagents/workflows/<run>/agent-<id>.jsonl` beside one `subagents/agent-<id>.jsonl`; both pairs DIVERGE byte for byte (a differing byte before the shorter file ends), share no record uuid, and the later-starting file's first parented record names a uuid the other carries - a continuation, 469 + 41 and 398 + 43 lines. Snapshot root: 0. Every record in both pairs is stamped version 2.1.280. The builder excerpt occurs once in the 2.1.258 build, at its offset.",
             "rule": "One observation per (session sidecar, agent id) whose basename occurs at two or more paths inside that one sidecar.",
-            "note": "Found through a resolver that read one half for `@<id>` and the other half for a `*.jsonl` path naming the first."
+            "note": "A resolver keyed on one path per agent id read one half for `@<id>` and the other half for a `*.jsonl` path naming the first; both routes now read by the rule the depends field states."
           }
         }
       ]
