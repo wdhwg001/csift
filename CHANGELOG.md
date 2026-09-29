@@ -869,6 +869,13 @@ surface change bumps the PATCH.
   rewrite it required moved no byte of the release binary's strings or help pages: 2,027
   comment lines carried such a character, 1,653 outside any quotation, and the tip carries 0
   violations. `AGENTS.md` section 8 states the rule with its derivation.
+- **`recover --help` states the content-anchor rule for reads and writes apart.** It said
+  every anchor demands a single simple command and that pipes and chains stay in the
+  boundary lanes, which holds for a READ anchor only: a compound command's stdout names no
+  one file. A WRITE anchor is per segment, so a heredoc write followed by a command that
+  runs the file anchors - a clean two-segment chain like that restores the file whole and
+  counts one `bash-write-anchor` - provided the whole command's result is clean and no
+  other segment touches the same path. The page now says both.
 
 ### Fixed
 

@@ -95,3 +95,29 @@ fn the_verbatim_window_help_names_the_cap_unit_apart_from_its_own() {
     let slice = paragraph(&help, "--slice <N>");
     assert!(!slice.contains("10,000 CHARACTERS"), "{slice}");
 }
+
+/// `recover --help` states the content-anchor rule per side, as `bash_anchors` and its
+/// caller decide it: a READ anchor is one simple command, because a compound command's
+/// stdout names no one file, while a WRITE anchor is per segment of a compound command and
+/// is held to a clean result. The page said every anchor demands a single simple command
+/// and that chains stay in the boundary lanes, which the write-then-run shape contradicts.
+#[test]
+fn the_recover_page_states_the_read_and_the_write_anchor_rules_apart() {
+    use crate::bash::mutations::bash_anchors;
+    let help = page("recover");
+    let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        !flat.contains("Every anchor demands a SINGLE simple command"),
+        "{flat}"
+    );
+    assert!(flat.contains("A READ anchor demands a SINGLE simple command"));
+    assert!(flat.contains("A WRITE anchor is per SEGMENT"));
+    // The code the two sentences describe: a chained heredoc write anchors (and marks the
+    // command compound, which is what makes the caller demand the clean result), a piped
+    // read does not, and the same read alone does.
+    let write = bash_anchors("cat > notes.txt <<'EOF'\nalpha\nEOF\nwc -l notes.txt");
+    assert_eq!(write.writes.len(), 1, "{write:?}");
+    assert!(write.multi_segment, "{write:?}");
+    assert!(bash_anchors("cat notes.txt | head -n 1").read.is_none());
+    assert!(bash_anchors("cat notes.txt").read.is_some());
+}

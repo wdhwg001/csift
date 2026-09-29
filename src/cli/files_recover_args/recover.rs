@@ -103,10 +103,15 @@ use super::*;
         `truncate -s 0`; and on the READ side `cat <file>`, `head -n N <file>`, and \
         `sed -n 'A,Bp' <file>`, whose stdout is the file window when the result echo \
         is clean (empty stderr, not interrupted, not externalized, exit ok). Every \
-        anchor demands a SINGLE simple command with a literal operand resolved \
-        against the recording shell's cwd; pipes, chains, substitutions, variable \
-        targets, interpreter heredocs (a script is not file content), and ssh-fed \
-        heredocs (a REMOTE filesystem) all stay in the boundary lanes. An admitted \
+        anchor needs literal operands resolved against the recording shell's cwd, in \
+        a segment free of substitutions and subshells. A READ anchor demands a SINGLE \
+        simple command: the stdout of a pipe or a chain is a concatenation nothing \
+        attributes to one file. A WRITE anchor is per SEGMENT: each admissible write \
+        inside a pipe or a `;`/`&&`/newline chain anchors (the write-then-run shape), \
+        provided the whole command's result is clean (no error, empty stderr, not \
+        interrupted) and no other segment touches the same path. Variable targets, \
+        interpreter heredocs (a script is not file content) and ssh-fed heredocs (a \
+        REMOTE filesystem) stay in the boundary lanes. An admitted \
         write anchor supersedes its own heuristic bash-mutation boundary. A \
         byte-known `>>` append is PLACED only onto a complete newline-terminated \
         buffer; anywhere else it is disclosed as a `bash_append_unplaced` boundary \
