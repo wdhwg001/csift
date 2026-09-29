@@ -3,13 +3,15 @@
 //!
 //! Two constraints shape it.
 //!
-//! 1. BUDGET. A hook's `additionalContext` over 10000 characters is written to disk by
-//!    the harness and replaced inline by a pointer plus a 2000-character preview, so an
-//!    over-budget envelope loses its header from the model's view. The threshold is
-//!    applied per hook output, not to a joined total, so one slot has 10000 characters
-//!    of inline room; [`CHUNK_BUDGET`] leaves headroom under that for the harness's own
-//!    framing and counts the header, the preamble and the closing lines, not just the
-//!    body.
+//! 1. BUDGET. A hook's `additionalContext` over 10000 UTF-16 code units (JavaScript
+//!    `String.length`, claim MISC-012) is written to disk by the harness and replaced
+//!    inline by a pointer plus a 2000-character preview, so an over-budget envelope loses
+//!    its header from the model's view. The threshold is applied per hook output, not to
+//!    a joined total, so one slot has 10000 units of inline room; [`CHUNK_BUDGET`] leaves
+//!    headroom under that for the harness's own framing and counts the header, the
+//!    preamble and the closing lines, not just the body, in the harness's own unit: an
+//!    astral character (an emoji, a CJK extension-B ideograph) is one character and two
+//!    units, so a body of them counted in characters overshoots the cap by up to half.
 //! 2. NON-COLLISION. The receiver has to tell a csift chunk apart from the harness's own
 //!    relay framings. The detector is the literal [`CHANNEL_MARKER`] at the START of the
 //!    content string; none of the six harness framings opens with it, which the unit
@@ -26,7 +28,8 @@ use super::{Message, Mode, Relation, SenderKind};
 /// The detector. A content string that starts with this is a csift channel chunk.
 pub(crate) const CHANNEL_MARKER: &str = "[csift-channel v1 ";
 
-/// Characters per emitted chunk, header and framing included.
+/// UTF-16 code units per emitted chunk, header and framing included - the unit the
+/// harness's 10000 cap counts.
 pub(crate) const CHUNK_BUDGET: usize = 9200;
 
 const PREAMBLE: &str = "This message is not from your user and not from the harness. It was sent by the lane named above through csift.";
@@ -56,17 +59,25 @@ pub(crate) fn is_channel_chunk(content: &str) -> bool {
 }
 
 /// Render one message into the ordered chunks a delivery emits, each within `budget`
-/// characters INCLUDING its framing.
+/// UTF-16 code units INCLUDING its framing.
 ///
-/// Chunking counts and slices CHARACTERS, so a multi-byte body is never cut inside a
-/// UTF-8 sequence. The part count is a fixpoint: the header prints `part=k/N`, so a
-/// wider `N` costs body room and can itself force another part; the loop re-packs until
-/// the printed count equals the produced count.
+/// Chunking COUNTS UTF-16 code units, the harness's own measure, and CUTS only between
+/// whole characters, so an astral character (two units) is never split and a multi-byte
+/// body is never cut inside a UTF-8 sequence. The part count is a fixpoint: the header
+/// prints `part=k/N`, so a wider `N` costs body room and can itself force another part;
+/// the loop re-packs until the printed count equals the produced count.
 pub(crate) fn render(msg: &Message, budget: usize) -> Result<Vec<String>> {
     let body: Vec<char> = msg.body.chars().collect();
+    // `ends[i]` = the units in `body[..i]`, so a run's cost is one subtraction.
+    let ends: Vec<usize> = std::iter::once(0)
+        .chain(body.iter().scan(0usize, |acc, c| {
+            *acc += c.len_utf16();
+            Some(*acc)
+        }))
+        .collect();
     let mut parts = 1u32;
     for _ in 0..16 {
-        let packed = pack(msg, &body, budget, parts)?;
+        let packed = pack(msg, &body, &ends, budget, parts)?;
         let produced = u32::try_from(packed.len()).unwrap_or(u32::MAX);
         if produced == parts {
             return Ok(packed);
@@ -79,21 +90,33 @@ pub(crate) fn render(msg: &Message, budget: usize) -> Result<Vec<String>> {
     )
 }
 
-/// Pack the body into chunks whose headers all print `parts` as the total.
-fn pack(msg: &Message, body: &[char], budget: usize, parts: u32) -> Result<Vec<String>> {
+/// The length the harness's cap measures: JavaScript `String.length`, UTF-16 code units.
+fn units(s: &str) -> usize {
+    s.encode_utf16().count()
+}
+
+/// Pack the body into chunks whose headers all print `parts` as the total. `ends` is the
+/// body's running unit count (`ends[i]` = units in `body[..i]`).
+fn pack(
+    msg: &Message,
+    body: &[char],
+    ends: &[usize],
+    budget: usize,
+    parts: u32,
+) -> Result<Vec<String>> {
     let tail = tail_text(msg);
-    let tail_len = tail.chars().count();
+    let tail_len = units(&tail);
     let mut out: Vec<String> = Vec::new();
     let mut idx = 0usize;
     let mut k = 1u32;
     loop {
         let head = head_text(msg, k, parts);
-        let head_len = head.chars().count();
-        let remaining = body.len() - idx;
+        let head_len = units(&head);
+        let remaining = ends[body.len()] - ends[idx];
         let Some(cap_final) = budget.checked_sub(head_len + tail_len) else {
             bail!(
-                "channel envelope framing ({} chars) does not fit the {budget}-char chunk budget \
-                 for message {}",
+                "channel envelope framing ({} UTF-16 units) does not fit the {budget}-unit chunk \
+                 budget for message {}",
                 head_len + tail_len,
                 msg.id
             );
@@ -107,22 +130,27 @@ fn pack(msg: &Message, body: &[char], budget: usize, parts: u32) -> Result<Vec<S
         }
         let Some(cap) = budget.checked_sub(head_len) else {
             bail!(
-                "channel envelope header ({head_len} chars) does not fit the {budget}-char chunk \
-                 budget for message {}",
+                "channel envelope header ({head_len} UTF-16 units) does not fit the \
+                 {budget}-unit chunk budget for message {}",
                 msg.id
             );
         };
-        if cap == 0 {
+        // The longest run of WHOLE characters from `idx` that fits: the last `end` whose
+        // running count stays within the cap. An astral character the cap would halve
+        // waits for the next part.
+        let limit = ends[idx] + cap;
+        let end = ends.partition_point(|&u| u <= limit) - 1;
+        if end == idx {
             bail!(
-                "channel envelope header fills the whole {budget}-char chunk budget for message {}",
+                "channel envelope header leaves no room in the {budget}-unit chunk budget for \
+                 the next character of message {}",
                 msg.id
             );
         }
-        let take = cap.min(remaining);
         let mut chunk = head;
-        chunk.extend(body[idx..idx + take].iter());
+        chunk.extend(body[idx..end].iter());
         out.push(chunk);
-        idx += take;
+        idx = end;
         k = k.saturating_add(1);
     }
 }

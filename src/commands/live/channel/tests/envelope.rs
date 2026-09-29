@@ -1,7 +1,13 @@
-//! The rendered envelope: exact framing, the per-slot budget, char-boundary chunking,
-//! and the detector against the harness's own six framings.
+//! The rendered envelope: exact framing, the per-slot budget in the harness's own unit,
+//! whole-character chunking, and the detector against the harness's own six framings.
 
 use super::*;
+
+/// UTF-16 code units, the unit the harness's 10000 `additionalContext` cap counts (claim
+/// MISC-012) and the one the chunk budget is stated in.
+fn units(s: &str) -> usize {
+    s.encode_utf16().count()
+}
 
 /// Pull the body back out of a rendered chunk, so a multi-part render can be checked
 /// for lossless reassembly.
@@ -81,10 +87,10 @@ fn every_chunk_stays_inside_the_budget_and_the_body_reassembles() {
     assert!(chunks.len() > 1, "a 36000-char body needs several parts");
     let mut rebuilt = String::new();
     for (i, chunk) in chunks.iter().enumerate() {
-        let len = chunk.chars().count();
+        let len = units(chunk);
         assert!(
             len <= CHUNK_BUDGET,
-            "chunk {} is {len} chars, over the {CHUNK_BUDGET} budget",
+            "chunk {} is {len} units, over the {CHUNK_BUDGET} budget",
             i + 1
         );
         let header = parse_header(chunk).expect("every chunk carries a parseable header");
@@ -121,11 +127,74 @@ fn a_multibyte_body_is_never_cut_inside_a_character() {
     assert!(chunks.len() > 1);
     let mut rebuilt = String::new();
     for chunk in &chunks {
-        assert!(chunk.chars().count() <= CHUNK_BUDGET);
+        assert!(units(chunk) <= CHUNK_BUDGET);
         rebuilt.push_str(&body_of(chunk));
     }
     assert_eq!(rebuilt, body);
     assert_eq!(rebuilt.chars().count(), body.chars().count());
+}
+
+#[test]
+fn an_astral_body_is_packed_in_the_caps_unit_and_never_split() {
+    // Every character of this body is two UTF-16 units, so a packer counting characters
+    // put about twice the cap's unit into one part. An odd budget leaves every
+    // continuation part one unit of room the next character cannot use: the boundary has
+    // to fall BETWEEN two characters, the part one unit short, never over. A part that
+    // took the whole remainder (it fit the part but not beside the closing lines, which
+    // then ride a part of their own) is short by design and is not held to that.
+    let body = "\u{1F680}".repeat(20000);
+    assert_eq!(units(&body), 2 * body.chars().count());
+    for budget in [CHUNK_BUDGET, CHUNK_BUDGET - 1] {
+        let chunks = render(&message(&body), budget).unwrap();
+        assert!(chunks.len() > 2, "40000 units need several parts");
+        let mut rebuilt = String::new();
+        let mut one_short = 0usize;
+        for (i, chunk) in chunks.iter().enumerate() {
+            let len = units(chunk);
+            assert!(
+                len <= budget,
+                "part {} is {len} units, over {budget}",
+                i + 1
+            );
+            let more_body_follows = chunks.get(i + 1).is_some_and(|c| !body_of(c).is_empty());
+            if more_body_follows {
+                assert!(len + 1 >= budget, "part {} packed only {len} units", i + 1);
+                one_short += usize::from(len + 1 == budget);
+            }
+            rebuilt.push_str(&body_of(chunk));
+        }
+        assert_eq!(
+            rebuilt, body,
+            "the body did not survive chunking at {budget}"
+        );
+        if budget % 2 == 1 {
+            assert!(
+                one_short > 0,
+                "an odd budget must end some part one unit short of a whole character"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_cjk_body_is_packed_in_the_caps_unit() {
+    // Two BMP ideographs (one unit each) and one extension-B ideograph (two units): 7500
+    // characters, 10000 units. Counted in characters the body and its framing fit one
+    // part under the budget, and the part the harness receives is over its cap.
+    let body = "\u{6f22}\u{5b57}\u{20000}".repeat(2500);
+    assert_eq!((body.chars().count(), units(&body)), (7500, 10000));
+    let chunks = render(&message(&body), CHUNK_BUDGET).unwrap();
+    assert_eq!(
+        chunks.len(),
+        2,
+        "10000 units and the framing need two parts"
+    );
+    let mut rebuilt = String::new();
+    for chunk in &chunks {
+        assert!(units(chunk) <= CHUNK_BUDGET);
+        rebuilt.push_str(&body_of(chunk));
+    }
+    assert_eq!(rebuilt, body);
 }
 
 #[test]
@@ -137,7 +206,7 @@ fn the_part_count_is_a_fixpoint_over_its_own_printed_width() {
     let body = "a".repeat(3200);
     let chunks = render(&message(&body), budget).unwrap();
     for chunk in &chunks {
-        assert!(chunk.chars().count() <= budget);
+        assert!(units(chunk) <= budget);
         let header = parse_header(chunk).unwrap();
         assert_eq!(
             header.parts as usize,

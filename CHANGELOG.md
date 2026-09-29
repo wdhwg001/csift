@@ -1298,6 +1298,14 @@ surface change bumps the PATCH.
   subagent transcript; `binding_source` stays `slug-only`. The reverse lookup of the
   session's plan now finds the session alone, and each of the two subagent plan files on
   disk whose transcript survives now resolves to that subagent.
+- **A channel message of emoji or rare CJK could arrive as a file pointer.** The chunker
+  kept each chunk within 9,200 characters, while the harness spills an `additionalContext`
+  over 10,000 UTF-16 code units to disk and shows the model a pointer and a preview without
+  the envelope header. An emoji or a CJK extension-B ideograph is one character and two
+  units, so a body of 6,000 emoji rendered one chunk of 12,486 units. The budget is now
+  counted in code units and every cut falls between whole characters: that body renders
+  two parts of 9,199 and 3,335 units, and `send` counts the parts the same way. Bodies of
+  ASCII and BMP text chunk exactly as before.
 
 ### Performance
 

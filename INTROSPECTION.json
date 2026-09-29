@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2528",
+          "lines": "2529",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -33648,6 +33648,16 @@
           "path": "src/commands/turns/render.rs",
           "lines": "381-383",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars, so a CJK-heavy document is NOT 3x over-counted the way a byte budget would).\n/// Claude Code's 10,000 additionalContext cap counts UTF-16 code units instead (claim"
+        },
+        {
+          "path": "src/commands/live/channel/envelope.rs",
+          "lines": "31-33",
+          "snippet": "/// UTF-16 code units per emitted chunk, header and framing included - the unit the\n/// harness's 10000 cap counts.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
+        },
+        {
+          "path": "src/commands/live/channel/envelope.rs",
+          "lines": "93-96",
+          "snippet": "/// The length the harness's cap measures: JavaScript `String.length`, UTF-16 code units.\nfn units(s: &str) -> usize {\n    s.encode_utf16().count()\n}"
         }
       ],
       "states": [
@@ -33656,7 +33666,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A hook's additionalContext is never silently shortened at the 10,000 mark: the local hook runner hands the field to a persist helper whose only branch is `if(e.length<=o)return e`, with o defaulting to the constant NQn=1e4 (constant at byte 160361523, branch at 165809812, reached from the runner's drain arm at 165871780). Over-cap text is written to a sibling file and REPLACED by a pointer plus a short preview built at 160364489 ('Output too large (<size>). Full output saved to: <path>' then 'Preview (first N):' then the preview), so the body is effectively lost to the model; if the persist itself fails the fallback is the first o characters plus '[Hook <field> truncated at <o> chars - persist-to-disk failed: ...]'. The cap is counted in JavaScript String.length, i.e. UTF-16 code units, not Unicode scalars: identical for BMP text (all CJK this claim cares about), but an astral character (emoji, CJK ext-B) counts 2. A SECOND, smaller budget exists - additionalContext 8,000 characters over at most 200 lines, the table Ujr at 161891320 - but it is NOT on the local hook path. That table has exactly one reader in the whole binary, the truncator W3 at 161891739, whose additionalContext wrapper NU (161891957) is called only from the hookSpecificOutput sanitizer switch jjr (161892098), whose only call site is inside the answer sanitizer mMe (161894352), whose four call sites are all REMOTE answer routes: two inside the served/cloud driver C4t (161909504 and 161909675, C4t itself called once, at 161950398, in the cloud path), the device-hook forwarder (161927261) and the cloud-template runner (188661956). That switch covers TEN events - PreToolUse, UserPromptSubmit, PostToolUse, UserPromptExpansion, PostToolUseFailure, PostToolBatch, Stop, SubagentStop, SubagentStart and PermissionDenied - of which NINE route additionalContext through the 8,000-character / 200-line truncator (PreToolUse calls W3 directly, the other eight through NU), while the PermissionDenied arm returns {hookEventName:'PermissionDenied'} alone and carries no additionalContext at all; the default arm (161893558) DROPS an unlisted event's hookSpecificOutput as unsupported, so on those routes SessionStart loses the field outright rather than meeting a larger cap. The LOCAL runner interprets a hook's stdout with cge (defined once, five call sites, all inside the local runner; its SessionStart arm at 165815139 assigns additionalContext straight off hookSpecificOutput), which applies no length treatment at all - so on the local path the 10,000-unit persist threshold is the only wall, for every event, SessionStart and PreToolUse alike. The corpus shows that wall being met on the local path: 131 attachment records of type hook_additional_context carry the pointer-and-preview replacement, and their own hookEvent field splits them SessionStart 120, PreToolUse 10, PostToolUse 1 - SessionStart reaching a 10,000-unit threshold rather than being dropped or capped at 8,000. Every persisted hook-output file under the projects tree (166 of them, all carrying the additionalContext field suffix) is over the threshold: minimum 10,029 Unicode scalars (10,029 UTF-16 code units), maximum 54,900 scalars (54,903 units), none at or below 10,000 in either unit - the minimum bounds the threshold from above, the constant and its comparison from below.",
-          "depends": "`csift verbatim --slice N --window N` packs the reconstruction into chunks of at most `window` CHARACTERS (`slice_into_windows`, src/commands/turns/render.rs), and concatenating the slices in order reproduces the document exactly, so one SessionStart hook per slice keeps every injected chunk under the wall; a character budget is the right unit, since a byte budget would over-count a CJK-heavy document roughly threefold. The unit leaves one disclosed mismatch: csift counts Unicode SCALARS while the cap counts UTF-16 code units, so a slice sized exactly at the window that contains astral characters (emoji, CJK ext-B) can still cross the wall - leave headroom. csift's `--slice` / `--window` help (src/cli/verbatim_args.rs) and the packer's own doc (`slice_into_windows`, src/commands/turns/render.rs) name both units: the window counts scalars, the cap counts code units, the two agree on BMP text, and a document carrying astral characters needs more headroom. The recipe targets SessionStart hooks on the local path, where 10,000 units is the operative wall for every event; the 8,000-character budget belongs to the remote answer routes and never applies to it.",
+          "depends": "`csift verbatim --slice N --window N` packs the reconstruction into chunks of at most `window` CHARACTERS (`slice_into_windows`, src/commands/turns/render.rs), and concatenating the slices in order reproduces the document exactly, so one SessionStart hook per slice keeps every injected chunk under the wall; a character budget is the right unit, since a byte budget would over-count a CJK-heavy document roughly threefold. The unit leaves one disclosed mismatch: csift counts Unicode SCALARS while the cap counts UTF-16 code units, so a slice sized exactly at the window that contains astral characters (emoji, CJK ext-B) can still cross the wall - leave headroom. csift's `--slice` / `--window` help (src/cli/verbatim_args.rs) and the packer's own doc (`slice_into_windows`, src/commands/turns/render.rs) name both units: the window counts scalars, the cap counts code units, the two agree on BMP text, and a document carrying astral characters needs more headroom. The recipe targets SessionStart hooks on the local path, where 10,000 units is the operative wall for every event; the 8,000-character budget belongs to the remote answer routes and never applies to it. The csift-channel envelope rides the same field on the same local path, so its chunker (`envelope::render`, src/commands/live/channel/envelope.rs) states `CHUNK_BUDGET` = 9,200 in the cap's own unit: it counts UTF-16 code units and cuts only between whole characters, because a chunk over the cap is replaced by a pointer and a preview that no longer carry the envelope header, and a character count lets a body of astral characters overshoot by up to half.",
           "instrument": "Two corpus passes plus an optional live one. (1) Count the jsonl lines whose attachment.type is hook_additional_context and whose attachment.content carries 'Full output saved to:', bucketed by that record's attachment.hookEvent; counting rule one observation per line, content joined with a space when it is a string array. (2) Measure every persisted hook-output file under the projects tree (the tool-results/hook-*.txt shape) in both Unicode scalars and UTF-16 code units and compare against 10,000; counting rule one observation per file. (3) Live: install a SessionStart hook emitting more than 10,000 characters of additionalContext and read the resulting attachment with `csift search '' <target> -t harness.hook.context` - it holds a path and a preview, not the body; inject a CJK block of 9,999 scalars to show the unit is code units, not bytes.",
           "probe": {
             "kind": "csift",
@@ -33763,9 +33773,9 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "finish of the claim against its traced chain; Two whole-corpus passes: (1) every jsonl line under the projects root whose attachment.type is hook_additional_context and whose content carries 'Full output saved to:', bucketed by attachment.hookEvent and by attachment key set; (2) every persisted hook-output file under the projects tree measured in Unicode scalars and in UTF-16 code units.",
-            "observed": "131 records, hookEvent SessionStart 120, PreToolUse 10, PostToolUse 1; all 131 carry exactly the keys content, hookEvent, hookName, toolUseID, type. 166 persisted files, all with the additionalContext field suffix, minimum 10,029 scalars (10,029 UTF-16 units), maximum 54,900 scalars (54,903 units), 0 at or below 10,000 in either unit. | The 8,000-character table has exactly one reader in the binary (W3 at 161891739) whose consumer chain NU -> jjr -> mMe ends in four remote call sites, so no local producer exists to find; and 131 hook_additional_context attachments on disk carry the pointer-and-preview replacement with 120 of them stamped SessionStart",
-            "rule": "One observation per jsonl line for the attachment census, content joined with a space when it is a string array; one observation per file for the persisted-file census, length measured twice so the two units can be told apart.",
+            "instrument": "finish of the claim against its traced chain; Two whole-corpus passes: (1) every jsonl line under the projects root whose attachment.type is hook_additional_context and whose content carries 'Full output saved to:', bucketed by attachment.hookEvent and by attachment key set; (2) every persisted hook-output file under the projects tree measured in Unicode scalars and in UTF-16 code units. The gate hop re-read at @165809812 for its measure; then one queued csift-channel message in a scratch Claude home, `csift deliver --slot k` run for each slot and every emitted additionalContext measured in Unicode scalars and in UTF-16 code units, under the chunker's scalar count and under its code-unit count.",
+            "observed": "131 records, hookEvent SessionStart 120, PreToolUse 10, PostToolUse 1; all 131 carry exactly the keys content, hookEvent, hookName, toolUseID, type. 166 persisted files, all with the additionalContext field suffix, minimum 10,029 scalars (10,029 UTF-16 units), maximum 54,900 scalars (54,903 units), 0 at or below 10,000 in either unit. | The 8,000-character table has exactly one reader in the binary (W3 at 161891739) whose consumer chain NU -> jjr -> mMe ends in four remote call sites, so no local producer exists to find; and 131 hook_additional_context attachments on disk carry the pointer-and-preview replacement with 120 of them stamped SessionStart The comparison at @165809812 is `e.length`, JavaScript String.length. Counted in scalars, a body of 6,000 emoji (12,000 units) rendered ONE chunk of 6,486 scalars and 12,486 units, and a 7,500-character CJK body of two BMP ideographs to one extension-B ideograph (10,000 units) one chunk of 7,986 scalars and 10,486 units - both over the cap; counted in units, the first renders two parts of 9,199 and 3,335 units (the first a unit short, where an emoji would have straddled the boundary) and the second two of 9,200 and 1,334, while a 14,000-character ASCII body renders the same two parts of 9,200 and 5,334 under both counts.",
+            "rule": "One observation per jsonl line for the attachment census, content joined with a space when it is a string array; one observation per file for the persisted-file census, length measured twice so the two units can be told apart. One observation per emitted chunk for the channel measurement, length taken in both units.",
             "note": "The open producer hop is answered by exhausting the second cap's readers instead of finding one on the hook path: the 8,000-character table has exactly one reader in the binary, W3 at 161891739, and its consumer chain is NU -> jjr -> mMe, whose four call sites are the served/cloud driver, the device-hook forwarder and the cloud-template runner. There is no local consumer to find, and the claim text already places the table off the local path, so the correction is a gain in precision rather than a change of conclusion. Reading the switch to its end adds two facts the old text did not carry: nine of the ten events route additionalContext through the truncator while the PermissionDenied arm returns only {hookEventName}, carrying no additionalContext at all. The live half of the old instrument is superseded by the corpus: 131 hook_additional_context attachments carry the pointer-and-preview replacement and their hookEvent field splits SessionStart 120, PreToolUse 10, PostToolUse 1, which is the end-to-end observation the live trial was meant to produce - SessionStart meeting the 10,000-unit wall on the local path, neither dropped nor capped at 8,000. No csift code relied on the refined sentences."
           }
         }
@@ -72857,12 +72867,12 @@
       "code": [
         {
           "path": "src/commands/live/channel/envelope.rs",
-          "lines": "26-27",
+          "lines": "28-29",
           "snippet": "/// The detector. A content string that starts with this is a csift channel chunk.\npub(crate) const CHANNEL_MARKER: &str = \"[csift-channel v1 \";"
         },
         {
           "path": "src/commands/live/channel/envelope.rs",
-          "lines": "135-136",
+          "lines": "163-164",
           "snippet": "let mut s = format!(\n        \"{CHANNEL_MARKER}id={} part=1/{parts} mode={} from={} from-session={} relation={} to={}]\\n\","
         }
       ],
@@ -72933,13 +72943,13 @@
       "code": [
         {
           "path": "src/commands/live/channel/envelope.rs",
-          "lines": "29-30",
-          "snippet": "/// Characters per emitted chunk, header and framing included.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
+          "lines": "31-33",
+          "snippet": "/// UTF-16 code units per emitted chunk, header and framing included - the unit the\n/// harness's 10000 cap counts.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
         },
         {
           "path": "src/commands/live/channel/envelope.rs",
-          "lines": "69-72",
-          "snippet": "let packed = pack(msg, &body, budget, parts)?;\n        let produced = u32::try_from(packed.len()).unwrap_or(u32::MAX);\n        if produced == parts {\n            return Ok(packed);"
+          "lines": "80-83",
+          "snippet": "let packed = pack(msg, &body, &ends, budget, parts)?;\n        let produced = u32::try_from(packed.len()).unwrap_or(u32::MAX);\n        if produced == parts {\n            return Ok(packed);"
         }
       ],
       "states": [
@@ -72947,8 +72957,8 @@
           "from": "2.1.258",
           "from_basis": "located",
           "to": null,
-          "behavior": "In Claude Code 2.1.258 a hook's additionalContext, systemMessage, initialUserMessage and a command hook's stdout all pass through one helper at 165809812 whose default threshold NQn is 1e4, declared at 160361523 inside the constants bank that starts at 160361461 and holds the sibling output budgets. At or below 10000 characters the string is returned unchanged. Above it the text is written to disk and the return value is a persisted-output block carrying the absolute path plus a preview budgeted at 2000 characters (formatter 160364489, preview budget 160363527); the 10000-character slice plus an explicit truncation note appears only on the branch where the write fails. The threshold is therefore a persist-to-disk boundary, not a truncating cap. The constant and the helper are unchanged in 2.1.260 at 157427418 and 165481000.",
-          "depends": "csift renders one chunk per slot within envelope::CHUNK_BUDGET = 9200 characters, framing included, so a delivery stays inside the inline threshold with headroom. The headroom is the point: a chunk over the threshold is not lost, but its header is replaced by a pointer, and a header that reaches the model only as a file path defeats the whole envelope - the receiver could no longer tell who sent the message or read the id it would have to reply to. Chunking counts characters rather than bytes for the same reason, since the threshold the harness applies is a character length.",
+          "behavior": "In Claude Code 2.1.258 a hook's additionalContext, systemMessage, initialUserMessage and a command hook's stdout all pass through one helper at 165809812 whose default threshold NQn is 1e4, declared at 160361523 inside the constants bank that starts at 160361461 and holds the sibling output budgets. At or below 10000 the string is returned unchanged, the length compared being `e.length`, JavaScript String.length, so the threshold counts UTF-16 code units (an astral character counts two). Above it the text is written to disk and the return value is a persisted-output block carrying the absolute path plus a preview budgeted at 2000 characters (formatter 160364489, preview budget 160363527); the 10000-character slice plus an explicit truncation note appears only on the branch where the write fails. The threshold is therefore a persist-to-disk boundary, not a truncating cap. The constant and the helper are unchanged in 2.1.260 at 157427418 and 165481000.",
+          "depends": "csift renders one chunk per slot within envelope::CHUNK_BUDGET = 9200 UTF-16 code units, framing included, so a delivery stays inside the inline threshold with headroom. The headroom is the point: a chunk over the threshold is not lost, but its header is replaced by a pointer, and a header that reaches the model only as a file path defeats the whole envelope - the receiver could no longer tell who sent the message or read the id it would have to reply to. Chunking counts UTF-16 code units for the same reason, since the threshold is the helper's `e.length`, JavaScript String.length, and it cuts only between whole characters: a byte count over-counts any non-ASCII text, and a character count under-counts an astral character (an emoji, a CJK extension-B ideograph), which is one character and two units, so a body of them rendered chunks over the threshold.",
           "instrument": "Read the constants bank at 160361461 and the helper at 165809812 in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; the helper's own branch shows the return-unchanged path, the persist path and the truncate-on-failure path. Then a live capture: install a hook returning more than 10000 characters of additionalContext and read the receiving transcript for a persisted-output block with an absolute path and a 2000-character preview.",
           "probe": {
             "kind": "bytes",
@@ -73013,7 +73023,7 @@
             "claude_code": "2.1.258",
             "verdict": "refined",
             "instrument": "Read the shared hook-string helper, its at-or-below branch, the declared threshold among the sibling output budgets, the persisted-output formatter, the preview budget and the write-failure fallback in the Claude Code 2.1.258 executable at their offsets.",
-            "observed": "The default threshold is 1e4 in a bank of sibling budgets. At or below it the string returns unchanged. Above it the value becomes a persisted-output block naming an absolute path with a preview budgeted at 2000 characters. The 10000-character slice and its truncation note appear only on the branch where the persist-to-disk write failed, so the threshold is a persist boundary.",
+            "observed": "The default threshold is 1e4 in a bank of sibling budgets. At or below it the string returns unchanged. Above it the value becomes a persisted-output block naming an absolute path with a preview budgeted at 2000 characters. The 10000-character slice and its truncation note appear only on the branch where the persist-to-disk write failed, so the threshold is a persist boundary. The at-or-below branch compares `e.length`, JavaScript String.length: the threshold is 10000 UTF-16 code units, one per BMP character and two per astral one.",
             "rule": "Constants are declared values in the named build; branches are read from the helper body.",
             "note": "The formatter and the preview budget carried as bare offsets are now verbatim hops, which closes the producer leg; the live capture stays open. Two hop corrections: the constants-bank anchor at 160361461, a byte-exact anchor in the prior chain, is restored as a gate hop rather than left as a bare offset in prose, and the instrument now names that offset instead of 160361600; the helper hop is re-roled writer -> trigger, since it is the entry every hook string passes through and the bytes that replace an over-threshold string are written by the formatter. The hop whose excerpt is the early return is named for what that excerpt shows."
           }
@@ -73191,8 +73201,8 @@
         },
         {
           "path": "src/commands/live/channel/envelope.rs",
-          "lines": "29-30",
-          "snippet": "/// Characters per emitted chunk, header and framing included.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
+          "lines": "31-33",
+          "snippet": "/// UTF-16 code units per emitted chunk, header and framing included - the unit the\n/// harness's 10000 cap counts.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
         }
       ],
       "states": [
@@ -79193,7 +79203,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/envelope.rs",
-          "lines": "201-210",
+          "lines": "229-238",
           "snippet": "        match key {\n            \"id\" => id = Some(value.to_string()),\n            \"part\" => part_spec = Some(value.to_string()),\n            \"mode\" => mode = Mode::parse(value),\n            \"from\" => from = Some(value.to_string()),\n            \"from-session\" => from_session = Some(value.to_string()),\n            \"relation\" => relation = Relation::parse(value),\n            \"to\" => to = Some(value.to_string()),\n            _ => {}\n        }"
         }
       ],
@@ -89347,7 +89357,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3560"
+          "lines": "3561"
         }
       ],
       "states": [

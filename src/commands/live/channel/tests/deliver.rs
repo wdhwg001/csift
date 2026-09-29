@@ -136,7 +136,7 @@ fn a_body_over_the_chunk_budget_splits_into_ordered_parts() {
     for (i, chunk) in firing.chunks.iter().enumerate() {
         assert_eq!(chunk.part, u32::try_from(i + 1).unwrap());
         assert_eq!(chunk.parts, parts);
-        assert!(chunk.text.chars().count() <= CHUNK_BUDGET);
+        assert!(chunk.text.encode_utf16().count() <= CHUNK_BUDGET);
     }
     let header = parse_header(&firing.chunks[0].text).unwrap();
     assert_eq!((header.part, header.parts), (1, parts));
