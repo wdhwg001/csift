@@ -290,12 +290,16 @@ pub(crate) fn collect_record_hits(
     // schedule fired, whichever of the pair the hit is.
     let scheduled_at = if labels.contains(&Class::ScheduleEvent) {
         rec.scheduled_fire_instant().map(str::to_string)
-    } else {
-        // Any record the fire record is the PARENT of: the join is the link, never the leaf,
+    } else if labels.iter().any(|c| c.is_scheduler_submission()) {
+        // A prompt the fire record SUBMITTED, read off the parent link rather than the leaf,
         // so a fired prompt whose armed text earns the wakeup or tick leaf carries it too.
+        // Only such a prompt: the running tail parents any next append to the fire record,
+        // and a pulse arriving there did not fire.
         ctx.schedule_fires
             .and_then(|ix| ix.instant_for(rec.parent_uuid.as_deref()))
             .map(str::to_string)
+    } else {
+        None
     };
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);

@@ -181,4 +181,18 @@ impl Class {
                 | Class::BookkeepingQueue
         )
     }
+
+    /// The three leaves a scheduler SUBMISSION carries: the prompt a fire record submits is
+    /// `harness.schedule.fire`, or `.wakeup` / `.tick` when its resolved text opens with a
+    /// loop marker (claims CLS-031, CLS-032). The fire instant and the `fires` edge are facts
+    /// of such a prompt's parent link. Any OTHER record whose parent happens to be a fire
+    /// record - Claude Code parents every append to the running tail (claim CLS-049), so a
+    /// `<task-notification>` arriving next is one - is no submission and carries neither.
+    #[must_use]
+    pub fn is_scheduler_submission(self) -> bool {
+        matches!(
+            self,
+            Class::ScheduleFire | Class::ScheduleWakeup | Class::ScheduleTick
+        )
+    }
 }

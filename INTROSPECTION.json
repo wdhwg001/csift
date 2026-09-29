@@ -50781,7 +50781,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "391-395",
+          "lines": "395-399",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -82795,8 +82795,13 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "296-298",
+          "lines": "298-300",
           "snippet": "        ctx.schedule_fires\n            .and_then(|ix| ix.instant_for(rec.parent_uuid.as_deref()))\n            .map(str::to_string)"
+        },
+        {
+          "path": "src/model/taxonomy/facets.rs",
+          "lines": "192-197",
+          "snippet": "    pub fn is_scheduler_submission(self) -> bool {\n        matches!(\n            self,\n            Class::ScheduleFire | Class::ScheduleWakeup | Class::ScheduleTick\n        )\n    }"
         }
       ],
       "states": [
@@ -82805,7 +82810,7 @@
           "from_basis": "first_seen",
           "to": null,
           "behavior": "The text a fire delivers is the ARMED text, verbatim. Exactly one rewrite sits on the path: the loop-sentinel resolution, whose two entry points each read `resolve(e,t) ?? resolveFile(e,t) ?? t` - the autonomous resolver returns null for a non-sentinel, the loop-file resolver returns null for a non-sentinel, and the final fallthrough is the prompt itself. The enqueue has exactly two call sites, one per entry point, and both pass that result straight in as the submission's value. So no prefix, header, wrapper or sentinel is added to an ordinary armed prompt, and a fired prompt is textually indistinguishable from what the operator typed when arming it. Measured over every transcript under one projects root: of 171 records of the fire shape, 170 carry text byte-identical to the `queue-operation` rider one line above them, and only 3 open with any loop marker - the sentinel fires, which are exactly the ones the resolver DID rewrite.",
-          "depends": "This is why `harness.schedule.fire` keys on the record's fields and never on its text, and why the arm sits LAST among the harness marker arms: there is no marker to match, and the armed text may legitimately open with any of them. It is also why the leaf is worth having at all - a fired prompt matched nothing, so it was excluded as an unmodeled isMeta pseudo-turn and absent from every census. If a later build started prefixing fired prompts, the marker arms above would claim them and this arm would quietly empty, which the corpus count in the instrument would show. The same rewrite is why the INSTANT and the `fires` edge are read off the parent link and never off the leaf: a sentinel fire's resolved text opens with a loop marker, so it takes the wakeup or tick leaf, and it is still the prompt its fire record submitted. csift builds the fire index whenever the selection reaches any of the three schedule prompt leaves, stamps `scheduled_at` on every record a fire record is the parent of, and gives a wakeup or tick under one the `fires` edge; keyed on the fire leaf, those prompts read `scheduled_at: null` and carried only the engine's `parent` edge.",
+          "depends": "This is why `harness.schedule.fire` keys on the record's fields and never on its text, and why the arm sits LAST among the harness marker arms: there is no marker to match, and the armed text may legitimately open with any of them. It is also why the leaf is worth having at all - a fired prompt matched nothing, so it was excluded as an unmodeled isMeta pseudo-turn and absent from every census. If a later build started prefixing fired prompts, the marker arms above would claim them and this arm would quietly empty, which the corpus count in the instrument would show. The same rewrite is why the INSTANT and the `fires` edge are read off the parent link and never off the leaf: a sentinel fire's resolved text opens with a loop marker, so it takes the wakeup or tick leaf, and it is still the prompt its fire record submitted. csift builds the fire index whenever the selection reaches any of the three schedule prompt leaves, stamps `scheduled_at` on a record carrying one of them whose parent is a fire record, and gives a wakeup or tick under one the `fires` edge; any OTHER child of a fire record carries neither, because Claude Code parents every append to the running tail (CLS-049) and a `<task-notification>` arriving next did not fire; keyed on the fire leaf, those prompts read `scheduled_at: null` and carried only the engine's `parent` edge.",
           "instrument": "Over the projects root, take every `type:\"user\"` record with `isMeta` true, `promptSource == \"system\"` and no `origin`, and compare its joined message text with the `content` of the nearest preceding `type:\"queue-operation\"` line carrying one; separately count how many of those records open (after a leading-whitespace trim) with `# Autonomous loop check`, `# Autonomous loop tick`, `You're being invoked on a timer`, `Run the autonomous check` or `<<autonomous-loop-dynamic>>`. Counting rule: one per raw record.",
           "probe": {
             "kind": "corpus",
@@ -82887,9 +82892,9 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "`csift search '' -t harness.schedule.fire -t harness.schedule.wakeup -t harness.schedule.tick --format json` over the live projects root with the installed binary and with this build, counting hits by label, by a non-null `scheduled_at` and by a `fires` edge; the hits whose label is wakeup or tick were each checked to have a `system`/`scheduled_task_fire` record as parent. Producer leg: the recorded hops re-read at their offsets in the 2.1.258 binary (trigger the two enqueue call sites @187388564; gate the resolver's null-coalescing fallthrough @176705652; writer the submission object that carries the value @187388265)",
-            "observed": "whole root, installed binary: 463 `harness.schedule.fire` hits, all 463 with an instant and a `fires` edge; 2 `harness.schedule.tick` and 1 `harness.schedule.wakeup` hit, all 3 parented to a fire record and all 3 with neither. This build: the same 463, and the 3 marker-led fires now carry both. The recorded hops read byte-exact at their offsets.",
-            "rule": "one observation per emitted hit under the three schedule prompt leaves",
+            "instrument": "`csift search '' -t harness.schedule.fire -t harness.schedule.wakeup -t harness.schedule.tick --format json` over the live projects root with the installed binary and with this build, counting hits by label, by a non-null `scheduled_at` and by a `fires` edge; the hits whose label is wakeup or tick were each checked to have a `system`/`scheduled_task_fire` record as parent. Producer leg: the recorded hops re-read at their offsets in the 2.1.258 binary (trigger the two enqueue call sites @187388564; gate the resolver's null-coalescing fallthrough @176705652; writer the submission object that carries the value @187388265) Then over the whole root `csift search '' -t harness.notification -t agent.communication.inbox -t harness.schedule --format json`, hits carrying `scheduled_at` counted by label.",
+            "observed": "whole root, installed binary: 463 `harness.schedule.fire` hits, all 463 with an instant and a `fires` edge; 2 `harness.schedule.tick` and 1 `harness.schedule.wakeup` hit, all 3 parented to a fire record and all 3 with neither. This build: the same 463, and the 3 marker-led fires now carry both. The recorded hops read byte-exact at their offsets. Keyed on the parent link alone, 468 hits carried an instant: 466 on the scheduler leaves and 2 on the two views of one `<task-notification>` the running tail parented to a fire record; keyed on the submission leaves, 466, all on scheduler leaves.",
+            "rule": "one observation per emitted hit under the three schedule prompt leaves One observation per emitted hit for the leaf census.",
             "note": "The armed-text rule holds as stated; its consequence for the marker-led fires now reaches the instant and the edge."
           },
           "residue": [

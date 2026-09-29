@@ -1215,9 +1215,12 @@ surface change bumps the PATCH.
   `scheduled_at: null` with only a `parent` edge, although a `scheduled_task_fire` record is
   their parent exactly as it is a plain fired prompt's (3 such prompts on one root). The
   instant and the `fires` edge are now read off the parent link for every leaf a fired
-  prompt can carry, the fire index is built whenever a selection reaches one of those
-  leaves, and the label zone prints `[scheduled fire <when>]` on them; a tick with no fire
-  record above it carries neither (claim CLS-032).
+  prompt can carry (fire, wakeup, tick), the fire index is built whenever a selection
+  reaches one of those leaves, and the label zone prints `[scheduled fire <when>]` on them;
+  a tick with no fire record above it carries neither, and so does any OTHER record whose
+  parent is a fire record - Claude Code parents each append to the running tail, so a
+  background agent's `<task-notification>` arriving next is one, and it did not fire
+  (claim CLS-032).
 - **The `history-suppression` head printed a raw UTC instant.** `csift search ''
   <session> -t harness.bookkeeping.suppression` showed `ts=2026-09-03T00:23:01.606Z`, the
   last text instant in the bookkeeping family not in csift's local form. A head value that

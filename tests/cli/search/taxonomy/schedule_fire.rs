@@ -478,3 +478,64 @@ fn a_wakeup_or_tick_under_a_fire_record_carries_the_instant_and_the_fires_edge()
         .unwrap_or_default();
     assert!(!kinds.contains(&"fires"), "{hit}");
 }
+
+/// Claude Code parents every append to the running tail, so a background agent's
+/// `<task-notification>` arriving right after a fire record is that record's child too. It
+/// did not fire: the instant and the `fires` edge belong to the scheduler's own submissions,
+/// and the pulse's inbox view keeps its direction in text as in JSON.
+#[test]
+fn a_pulse_under_a_fire_record_carries_no_fire_facts_and_keeps_its_direction() {
+    const PSESS: &str = "8b7c6d5e-4f3a-4b2c-8d1e-0f9a8b7c6d5e";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{PSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"arm the cron"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"armed"}]}}"#, "\n",
+            r#"{"type":"system","subtype":"scheduled_task_fire","uuid":"f1","parentUuid":"a1","timestamp":"2026-06-07T05:28:00.100Z","isMeta":false,"cron":"*/1 * * * *","taskId":"task-1","content":"Running scheduled task (Jun 7 5:28am)"}"#, "\n",
+            r#"{"type":"user","uuid":"p1","parentUuid":"f1","timestamp":"2026-06-07T05:28:00.200Z","isMeta":true,"promptSource":"system","message":{"role":"user","content":"zzfired check the reef"}}"#, "\n",
+            r#"{"type":"user","uuid":"n1","parentUuid":"f1","timestamp":"2026-06-07T05:28:01.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>bgjob</task-id>\n<tool-use-id>toolu_bg</tool-use-id>\n<status>completed</status>\n<summary>Agent \"zzpulse survey\" completed</summary>\n<result>zzpulse the survey is done</result>\n</task-notification>"}}"#, "\n",
+        ),
+    );
+    let text = h.run(&["search", "zzpulse", &at(PSESS)]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    assert!(!text.stdout.contains("[scheduled fire"), "{}", text.stdout);
+    let inbox = text
+        .stdout
+        .lines()
+        .find(|l| l.contains("agent.communication.inbox"))
+        .unwrap_or_else(|| panic!("an inbox unit:\n{}", text.stdout));
+    assert!(inbox.contains("\u{21e8} self"), "{inbox}");
+    let json = h.run(&["search", "zzpulse", &at(PSESS), "--format", "json"]);
+    let hits: Vec<serde_json::Value> = json
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|v| v["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    assert_eq!(hits.len(), 2, "{}", json.stdout);
+    for hit in &hits {
+        assert!(hit["scheduled_at"].is_null(), "{hit}");
+        let edges = hit["for"].as_array().cloned().unwrap_or_default();
+        assert!(!edges.iter().any(|e| e["kind"] == "fires"), "{hit}");
+    }
+    let inbox = hits
+        .iter()
+        .find(|h| h["label"] == "agent.communication.inbox")
+        .expect("the inbox hit");
+    assert_eq!(inbox["to"], "self", "{inbox}");
+    // The prompt the fire record submitted still carries both.
+    let fired = h.run(&["search", "zzfired", &at(PSESS), "--format", "json"]);
+    let prompt = fired
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|v| v["hits"].as_array().cloned().unwrap_or_default())
+        .find(|h| h["label"] == "harness.schedule.fire")
+        .unwrap_or_else(|| panic!("the fired prompt:\n{}", fired.stdout));
+    assert_eq!(prompt["scheduled_at"], "Jun 7 5:28am", "{prompt}");
+    let edges = prompt["for"].as_array().cloned().unwrap_or_default();
+    assert!(edges.iter().any(|e| e["kind"] == "fires"), "{prompt}");
+}

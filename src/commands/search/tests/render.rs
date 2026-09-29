@@ -91,6 +91,25 @@ fn render_label_decorates_pairing_and_direction() {
         render_label(&comm),
         "agent.communication.inbox  VSMultiRegion ⇨ self"
     );
+    // A fire instant belongs to the scheduler's own submissions: on any other view it never
+    // takes the label zone, so a comm view keeps its direction whatever the hit carries.
+    let comm_with_instant = Hit {
+        scheduled_at: Some("Jun 7 5:28am".into()),
+        ..comm.clone()
+    };
+    assert_eq!(
+        render_label(&comm_with_instant),
+        "agent.communication.inbox  VSMultiRegion ⇨ self"
+    );
+    let tick = Hit {
+        class: Some(Class::ScheduleTick),
+        direction: None,
+        ..comm_with_instant.clone()
+    };
+    assert_eq!(
+        render_label(&tick),
+        "harness.schedule.tick [scheduled fire Jun 7 5:28am]"
+    );
 }
 
 #[test]
