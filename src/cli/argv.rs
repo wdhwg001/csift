@@ -32,7 +32,15 @@ pub fn parse_argv() -> Cli {
 /// `-` token is still accepted (it is a genuine encoded target). The [`normalize_argv`]
 /// pre-pass has already routed DECLARED flags away, so a `--`-token reaching here is by
 /// construction undeclared.
+///
+/// An EMPTY or all-whitespace token is refused too. It names no target of any shape, and
+/// read as a path it is the empty relative path, which the resolver encodes as the current
+/// directory: `csift search x ""` searched every session of the cwd's project. An empty
+/// `$(...)` substitution is how such a token usually arrives, so the message says that.
 pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
+    if s.trim().is_empty() {
+        return Err(EMPTY_TARGET.to_string());
+    }
     if s.starts_with("--") {
         return Err(format!(
             "unexpected argument '{s}' — not a project target; did you mistype a flag? \
@@ -41,6 +49,12 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
     }
     Ok(PathBuf::from(s))
 }
+
+/// The refusal for an empty target token, naming the grammar a target is read in.
+pub(crate) const EMPTY_TARGET: &str = "an EMPTY target names nothing (a `$(...)` substitution \
+     that printed nothing is the usual source). A target is a project path or `.`, an encoded \
+     project dir (`-Users-...`), `@<uuid>`, `@<uuid-prefix>`, `@<agent-id>`, `@<Name>@<Team>`, \
+     `@main`, `@trap:<marker>`, or a `*.jsonl` path";
 
 /// Reorder argv so declared flags (and the value of value-taking ones) precede the
 /// leading-`-` project-target positionals, defeating clap's greedy `allow_hyphen_values`

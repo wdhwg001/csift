@@ -100,3 +100,17 @@ fn removed_session_flag_no_longer_parses() {
         "a bare --session token must not parse"
     );
 }
+
+/// An empty or all-whitespace token is no target of any shape; the refusal names the grammar
+/// instead of letting the empty relative path resolve to the current directory.
+#[test]
+fn parse_project_target_refuses_an_empty_token_naming_the_grammar() {
+    for token in ["", " ", "\t"] {
+        let err = parse_project_target(token).unwrap_err();
+        assert!(err.contains("EMPTY target"), "{token:?}: {err}");
+        assert!(
+            err.contains("@<uuid>") && err.contains("@trap:<marker>"),
+            "{err}"
+        );
+    }
+}

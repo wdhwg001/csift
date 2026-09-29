@@ -1143,6 +1143,12 @@ surface change bumps the PATCH.
   else. `whoami`, every `@main` resolution, `plan` with no target, `msg` and `ack` now read
   the variables through one reader that refuses such a value, naming the variable, the value
   and the `@<uuid>` remedy; an unset or blank variable still reads as not set.
+- **An empty target token scoped to the current directory.** `csift search zzqq ""` searched
+  every session of the cwd's project (1,722 of them at the re-measure) and exited 0: the empty token was read
+  as the empty relative path. Every target-taking command now refuses an empty or
+  whitespace-only target at parse time (exit 2) with the target grammar in the message; an
+  empty `$(...)` substitution is the usual source, and the message says so. `search ""` as
+  the PATTERN is unchanged.
 
 ### Performance
 
