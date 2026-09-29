@@ -72,7 +72,7 @@ pub fn summarize_session(path: &Path, want_lineage: bool) -> Result<SessionSumma
                 }
             }
             // First user message = a genuine human turn, an answered AskUserQuestion, or a
-            // tool-use rejection-with-message (sections 4.1/4.4/4.2.4). No PlanIndex in this
+            // tool-use rejection-with-message (sections 4.1/4.4/4.2.4). No CallIndex in this
             // single-record head scan, so a rejection surfaces its typed instruction without
             // the `[plan: …]` pointer (the pointer is a turns/search affordance). A
             // `<task-notification>` / inbound `<teammate-message>` renders its clean label /

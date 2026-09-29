@@ -92,7 +92,7 @@ impl Record {
         }
 
         // Subagent transcript opener (the spawn-prompt seed): `parent ⇨ self`.
-        if ctx.is_subagent && ctx.is_transcript_opener && self.opens_turn() {
+        if ctx.is_subagent && ctx.is_transcript_opener && self.opens_turn(ctx.calls) {
             let from = ctx.parent_id.unwrap_or("parent").to_string();
             return Some((from, owner()));
         }

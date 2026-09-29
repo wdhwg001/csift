@@ -79,7 +79,7 @@ use rayon::prelude::*;
 
 use crate::cli::{OutputFormat, VerbatimArgs};
 use crate::model::{
-    normalize_line, Block, ChainView, Content, CrossingBudget, PlanIndex, Record, SummarizeMode,
+    normalize_line, Block, ChainView, Content, CrossingBudget, Record, SummarizeMode,
 };
 use crate::parse::mmap_bytes;
 use crate::path;

@@ -61,7 +61,11 @@ impl Matcher {
         {
             return true;
         }
-        if let Some(t) = rec.auq_exchange() {
+        // No transcript is at hand here, so the answer is rendered as if the result it rides
+        // answered an AskUserQuestion call: the emission pairs the marker with the call, and
+        // a gate that proves a record cannot match must see every text the emission could
+        // produce ([`CallIndex::assume_asks`]).
+        if let Some(t) = rec.auq_exchange(Some(&crate::model::CallIndex::assume_asks())) {
             if self.locate(&t).is_some() {
                 return true;
             }

@@ -124,7 +124,7 @@ fn a_rewound_turn_carries_its_own_leaf_and_takes_its_subtree_with_it() {
     // Two grouping entry points, and the difference is deliberate. Given the chain built
     // from the WHOLE record set, the rewound branch belongs to no numbered turn at all.
     assert_eq!(
-        group_turn_indices_chained(&r, |x| ChainNode::Full(x), &c),
+        group_turn_indices_chained(&r, &c),
         vec![vec![0, 1], vec![6, 7]]
     );
     // The chain-free entry point cannot know whether its caller's record set is whole, so

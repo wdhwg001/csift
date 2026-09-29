@@ -254,6 +254,12 @@ pub struct Chain {
     pub drafts: usize,
     /// Lines carrying a uuid a LATER line also carries (a compaction re-anchor's copies).
     pub replay_copies: usize,
+    /// [`Record::opens_turn`] per record under this transcript's own call index -
+    /// the answer the build already needed for its branches, kept so the turn grouper
+    /// reads the same one.
+    opens_turn: Vec<bool>,
+    /// The transcript's user-facing calls ([`CallIndex`]), built by this chain's own pass.
+    calls: CallIndex,
 }
 
 impl Chain {
@@ -360,10 +366,26 @@ impl Chain {
 
     /// Does this record open a turn as far as the chain is concerned? A replay copy never
     /// does (the survivor already did) and neither does an abandoned record (it belongs to
-    /// no numbered turn). The caller still applies [`Record::opens_turn`].
+    /// no numbered turn). The caller still applies [`Chain::opens_turn`].
     #[must_use]
     pub fn opens(&self, i: usize) -> bool {
         self.survival(i).selectable() && !self.replay_of.contains_key(&i)
+    }
+
+    /// Does this record OPEN a turn by its own shape ([`Record::opens_turn`] under
+    /// [`Chain::calls`])? The chain computed it once for its branches; the grouper and
+    /// every surface that asks it again read this answer, so none of them pairs an
+    /// AskUserQuestion marker differently. An index past the end reads `false`.
+    #[must_use]
+    pub fn opens_turn(&self, i: usize) -> bool {
+        self.opens_turn.get(i).copied().unwrap_or(false)
+    }
+
+    /// The transcript's user-facing call index, built from the full records the chain
+    /// was handed: the ExitPlanMode plan pointers and the AskUserQuestion call ids.
+    #[must_use]
+    pub fn calls(&self) -> &CallIndex {
+        &self.calls
     }
 
     /// The single leaf an abandoned opener carries at the SCAN layer (`user.unsent` /

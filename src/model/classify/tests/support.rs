@@ -173,7 +173,7 @@ fn hook_additional_context_text_shapes_and_classify() {
     );
     let ctx = ClassifyCtx::top_level();
     assert_eq!(arr.classify(&ctx), vec![Class::HookContext]);
-    assert!(!arr.opens_turn());
+    assert!(!arr.opens_turn(None));
 
     // Bare-string content is tolerated (trimmed); a different attachment type is None.
     let s: Record = serde_json::from_str(
@@ -204,7 +204,7 @@ fn attachment_type_and_payload_text_extraction() {
     assert!(text.contains("edited_text_file") && text.contains("fn x() {}"));
     let ctx = ClassifyCtx::top_level();
     assert_eq!(rec.classify(&ctx), vec![Class::ContextFile]);
-    assert!(!rec.opens_turn());
+    assert!(!rec.opens_turn(None));
     // A hook payload keeps the harness.hook.context leaf but still censuses by type.
     let hook: Record = serde_json::from_str(
         r#"{"type":"attachment","attachment":{"type":"hook_additional_context","content":["ctx"]}}"#,

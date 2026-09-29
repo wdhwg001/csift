@@ -111,7 +111,7 @@ fn teammate_message_not_genuine_user_but_opens_turn_bare() {
         "a teammate message must NOT count as a genuine human turn (GOLD §1)"
     );
     assert!(
-        r.opens_turn(),
+        r.opens_turn(None),
         "but it MUST still delimit a turn (opens_turn fires)"
     );
     assert!(r.is_teammate_message_record());
@@ -125,7 +125,7 @@ fn teammate_message_not_genuine_user_peer_form() {
         r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"g4g5-probe\">verdicts below</teammate-message>"}}"#,
     );
     assert!(!r.is_genuine_user());
-    assert!(r.opens_turn());
+    assert!(r.opens_turn(None));
     // The opener body is preserved (not blanked) so turns/search don't regress.
     let body = r.reconstructed_user_text(None).expect("teammate body");
     assert!(body.contains("verdicts below"), "got: {body}");
@@ -170,7 +170,7 @@ fn teammate_message_as_text_block_is_not_genuine_user() {
         r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<teammate-message teammate_id=\"x\">hi</teammate-message>"}]}}"#,
     );
     assert!(!r.is_genuine_user());
-    assert!(r.opens_turn());
+    assert!(r.opens_turn(None));
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn embedded_teammate_tag_mid_prose_stays_user_message() {
         r.is_genuine_user(),
         "a quoted tag mid-prose is still genuine user"
     );
-    assert!(r.opens_turn());
+    assert!(r.opens_turn(None));
     assert!(!r.is_peer_message_record());
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
@@ -243,7 +243,7 @@ fn agent_message_non_meta_excluded_opens_turn_inbox() {
         !r.is_genuine_user(),
         "an agent-message peer form must not count as a genuine human turn"
     );
-    assert!(r.opens_turn(), "but it MUST still delimit a turn");
+    assert!(r.opens_turn(None), "but it MUST still delimit a turn");
     assert!(r.is_peer_message_record());
     assert!(
         !r.is_teammate_message_record(),
@@ -279,7 +279,10 @@ fn cross_session_message_is_the_third_peer_framing() {
         "<cross-session-message from=\"uds:/Users/dev/relay.sock\">hi</cross-session-message>"
     ));
     assert!(!r.is_genuine_user(), "a peer is never the operator");
-    assert!(r.opens_turn(), "but a delivered message still opens a turn");
+    assert!(
+        r.opens_turn(None),
+        "but a delivered message still opens a turn"
+    );
     assert!(r.is_peer_message_record());
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),

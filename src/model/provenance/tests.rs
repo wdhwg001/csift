@@ -185,7 +185,10 @@ fn no_sidecar_shape_opens_a_turn_so_a_root_always_has_a_line() {
     ] {
         let r: crate::model::Record = serde_json::from_str(line).expect("fixture parses");
         assert!(r.is_elicitation_marker(), "the fixture is a marker: {line}");
-        assert!(!r.opens_turn(), "a sidecar record opens no turn: {line}");
+        assert!(
+            !r.opens_turn(None),
+            "a sidecar record opens no turn: {line}"
+        );
     }
     let r = RootLink::under(12, Some("u-1".to_string()), Some(1));
     assert_eq!(r.line, Some(12), "the address a reader can fetch");

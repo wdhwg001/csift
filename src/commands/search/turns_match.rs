@@ -61,10 +61,11 @@ pub(crate) fn reconstruct_and_match(
     let survivor_lines: HashMap<usize, usize> = (0..rows.len())
         .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))
         .collect();
-    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.node(), &chain);
-    // ExitPlanMode plan pointers for this session (section 4.2.4) - a rejection-with-message
-    // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
-    let plan_index = PlanIndex::from_records(rows.iter().filter_map(|r| r.kept()).map(|k| &k.rec));
+    let index_turns = crate::model::group_turn_indices_chained(rows, &chain);
+    // The user-facing calls of this session, from the chain's own pass: the ExitPlanMode
+    // plan pointers a rejection-with-message hit surfaces as `[plan: <path>]` (section 4.2.4),
+    // and the AskUserQuestion calls a marker-only answer must name to be one.
+    let calls = chain.calls();
     let filter = args.label_filter();
     // Pair each `compact_boundary` with the compaction SUMMARY that follows it, so a
     // boundary hit can name the gesture that minted it. One pass, empty on a transcript that
@@ -89,7 +90,7 @@ pub(crate) fn reconstruct_and_match(
     // - a scan that did not ask pays nothing - and applied as a per-record gate beside the
     // `-t`/time/pattern filters rather than as an address, so the excerpt cap stays at its
     // default and no unmodeled unit is emitted: `--for` is a scan, not an address.
-    let for_lines = for_addr.map(|addr| for_closure(rows, addr));
+    let for_lines = for_addr.map(|addr| for_closure(rows, addr, calls));
     // Cross-record classify context: owner identity, subagent-ness, parent id, the first
     // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is
     // HOISTED: `run_search` builds one `DiscoveredSpawns` per DISTINCT discovery-root up
@@ -105,7 +106,7 @@ pub(crate) fn reconstruct_and_match(
     } else {
         rows.iter()
             .filter_map(|r| r.kept())
-            .find(|k| k.rec.opens_turn())
+            .find(|k| k.rec.opens_turn(Some(calls)))
             .map(|k| k.line_no)
     };
     let resume_prompts = resume_prompt_uuids(rows);
@@ -120,6 +121,7 @@ pub(crate) fn reconstruct_and_match(
         schedule_fires,
         lines: &row_lines,
         tool_lines: &tools.prov,
+        calls,
         rows,
         wants_engine_edges: engine_edges,
     };
@@ -176,7 +178,7 @@ pub(crate) fn reconstruct_and_match(
             time_window,
             args.resolve_persisted,
             excerpt_max,
-            &plan_index,
+            calls,
             &tools,
             address,
             for_lines.as_ref(),
@@ -196,7 +198,7 @@ pub(crate) fn reconstruct_and_match(
                 &hit_idxs,
                 args.resolve_persisted,
                 excerpt_max,
-                &plan_index,
+                calls,
                 &tools,
                 &env,
                 &mut roots,
@@ -248,7 +250,7 @@ pub(crate) fn reconstruct_and_match(
             .and_then(|i| chain.abandoned_root(i))
             .map(|r| rows[r].line_no());
         let draft_diff = if abandoned && want_diff {
-            head.and_then(|i| draft_diff_for(rows, i, &chain, &plan_index))
+            head.and_then(|i| draft_diff_for(rows, i, &chain, calls))
         } else {
             None
         };
@@ -345,15 +347,15 @@ fn draft_diff_for(
     rows: &[Row<'_>],
     draft_idx: usize,
     chain: &crate::model::Chain,
-    plan_index: &PlanIndex,
+    calls: &CallIndex,
 ) -> Option<DraftDiff> {
     let sent = rows.get(chain.superseding(draft_idx)?)?.kept()?;
     let draft_text = rows
         .get(draft_idx)?
         .kept()?
         .rec
-        .reconstructed_user_text(Some(plan_index))?;
-    let sent_text = sent.rec.reconstructed_user_text(Some(plan_index))?;
+        .reconstructed_user_text(Some(calls))?;
+    let sent_text = sent.rec.reconstructed_user_text(Some(calls))?;
     let d = crate::chardiff::char_diff(&draft_text, &sent_text);
     let sent_chars = sent_text.chars().count();
     // No denominator when the sent message is empty: the share is undefined, and a
@@ -515,6 +517,10 @@ pub(crate) struct ClassifyEnv<'a> {
     /// CALL resolves to an address instead of reporting a line it could not find. It is
     /// the map the one tool walk already produced; nothing here builds a second one.
     pub(crate) tool_lines: &'a crate::model::ProvIndex,
+    /// The transcript's user-facing calls, from the chain's own pass
+    /// ([`crate::model::Chain::calls`]): the label a marker-only AskUserQuestion answer takes
+    /// reads the SAME index the turn boundary did.
+    pub(crate) calls: &'a CallIndex,
     /// The file's own merged ROW list - the index space every [`crate::model::Chain`]
     /// answer is addressed by. The four SURVIVAL relations name a record the chain found by
     /// INDEX rather than by uuid, and only the rows can turn an index into the line and the
@@ -544,6 +550,7 @@ impl ClassifyEnv<'_> {
             schedule_fires: Some(self.schedule_fires),
             lines: Some(self.lines),
             tool_lines: Some(self.tool_lines),
+            calls: Some(self.calls),
         }
     }
 }

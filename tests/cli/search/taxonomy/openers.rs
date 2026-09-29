@@ -205,3 +205,84 @@ fn a_freeform_askuserquestion_response_is_a_user_answer() {
     let head = h.run(&["search", "AskUserQuestion · 1 question", &at(sess), "-c"]);
     assert_eq!(head.stdout.trim(), "1", "{}", head.stdout);
 }
+
+#[test]
+fn an_answer_marker_opens_a_turn_only_on_the_askuserquestion_result() {
+    // A shell run over the harness binary prints the answer template, so its tool_result
+    // OPENS with `Your questions have been answered:` and carries no toolUseResult - the
+    // same two facts as a marker-only AskUserQuestion answer. The call it answers is what
+    // separates them: the Bash result stays an `agent.tool.result` inside the first turn,
+    // and the result answering the AskUserQuestion call is the person's answer and opens
+    // the second. Every surface that numbers turns reads the one call index, so they agree.
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-answers";
+    let sess = "5a5b5c5d-1111-4222-8333-944455566677";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"find the answer template"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"strings claude | grep answered"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"Your questions have been answered: \n=null&&zqxquoted.length>=1"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"r1","timestamp":"2026-06-07T05:00:03.000Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"Pick","header":"P","options":[{"label":"zqxAnswered"}]}]}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r2","parentUuid":"a2","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"Pick\"=\"zqxAnswered\". You can now continue with these answers in mind."}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","parentUuid":"r2","timestamp":"2026-06-07T05:00:05.000Z","message":{"id":"m3","role":"assistant","content":[{"type":"text","text":"noted"}]}}"#, "\n",
+        ),
+    );
+    let at = at(sess);
+
+    // ONE answer, on line 5, opening turn 1.
+    let answers = h.run(&["search", "", &at, "-t", "user.answer", "--format", "json"]);
+    assert!(answers.success, "stderr: {}", answers.stderr);
+    let exchanges = json_rows(&answers.stdout, "exchange");
+    let found: Vec<(u64, u64)> = exchanges
+        .iter()
+        .flat_map(|e| {
+            let t = e["turn_index"].as_u64().unwrap_or(u64::MAX);
+            e["hits"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(move |hit| (t, hit["line"].as_u64().unwrap_or(0)))
+        })
+        .collect();
+    assert_eq!(found, vec![(1, 5)], "{}", answers.stdout);
+
+    // The shell result keeps its own leaf and sits in turn 0.
+    let shell = h.run(&["search", "zqxquoted", &at, "--format", "json"]);
+    let rows = json_rows(&shell.stdout, "exchange");
+    assert_eq!(rows.len(), 1, "{}", shell.stdout);
+    assert_eq!(rows[0]["turn_index"], 0, "{}", shell.stdout);
+    assert_eq!(
+        rows[0]["hits"][0]["labels"],
+        serde_json::json!(["agent.tool.result"]),
+        "{}",
+        shell.stdout
+    );
+    let shown = h.run(&["show", &at, "--line", "3", "--format", "json"]);
+    let rec = &json_rows(&shown.stdout, "record")[0];
+    assert_eq!(rec["label"], "agent.tool.result", "{}", shown.stdout);
+    assert_eq!(rec["turn_index"], 0, "{}", shown.stdout);
+
+    // Two turns on every surface that numbers them.
+    let census = h.run(&["search", "", &at, "--count-by", "turn"]);
+    let keys: Vec<&str> = census
+        .stdout
+        .lines()
+        .filter_map(|l| l.split_whitespace().nth(1))
+        .collect();
+    assert_eq!(keys, vec!["t0", "t1"], "{}", census.stdout);
+    let stats = h.run(&["stats", &at, "--format", "json"]);
+    assert_eq!(
+        json_rows(&stats.stdout, "session")[0]["turns"],
+        2,
+        "{}",
+        stats.stdout
+    );
+    let verbatim = h.run(&["verbatim", &at, "--format", "json"]);
+    let openers: Vec<u64> = json_rows(&verbatim.stdout, "turn")
+        .iter()
+        .filter(|u| u["role"] == "user")
+        .filter_map(|u| u["line"].as_u64())
+        .collect();
+    assert_eq!(openers, vec![1, 5], "{}", verbatim.stdout);
+}

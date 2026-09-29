@@ -18,9 +18,10 @@ pub(crate) fn build(
     sidecar: &[Record],
 ) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
     let turns = view.turns();
-    // ExitPlanMode plan pointers for this session, so a rejection-with-message turn
-    // opener can surface `[plan: <path>]` (section 4.2.4). Cheap; empty in a no-plan session.
-    let plan_index = PlanIndex::from_records(records.iter().map(|(_, r)| r));
+    // The user-facing calls of this session, from the chain's own pass: the ExitPlanMode
+    // plan pointers a rejection-with-message opener surfaces as `[plan: <path>]` (section
+    // 4.2.4), and the AskUserQuestion calls a marker-only answer must name to open a turn.
+    let calls = view.calls();
 
     // Summary line numbers in file order (for compactions_before + boundary banners).
     let mut summaries: Vec<SummaryInfo> = Vec::new();
@@ -92,7 +93,7 @@ pub(crate) fn build(
             // so the FIRST such record is the opener; keep the earliest. The rendered
             // body is the unified reconstruction (Q+options+answer for an AUQ; the typed
             // instruction + a `[plan: …]` pointer for a rejection).
-            if user.is_none() && rec.opens_turn() {
+            if user.is_none() && rec.opens_turn(Some(calls)) {
                 // An automation trigger (`<task-notification>`) opens a turn like a human
                 // message, but its body must render as the parsed `[workflow <id> ...]
                 // <summary>` ATTRIBUTION label - never the raw `<task-id>`/`<output-file>`
@@ -111,7 +112,7 @@ pub(crate) fn build(
                     let mut u = make_unit(line_no, Role::User, &ic.body, rec, survival);
                     u.inbound = Some(ic);
                     user = Some(u);
-                } else if let Some(text) = rec.reconstructed_user_text(Some(&plan_index)) {
+                } else if let Some(text) = rec.reconstructed_user_text(Some(calls)) {
                     user = Some(make_unit(line_no, Role::User, &text, rec, survival));
                 }
             }

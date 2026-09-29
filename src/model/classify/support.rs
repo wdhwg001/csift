@@ -354,6 +354,12 @@ pub struct ClassifyCtx<'a> {
     /// about a call that is three lines up. `None` => that fallback answers `None`, which
     /// is the pre-index behaviour and what a caller with no row space gets.
     pub tool_lines: Option<&'a ProvIndex>,
+    /// This transcript's user-facing calls ([`CallIndex`], the conversation chain's own):
+    /// an AskUserQuestion carrier with no `toolUseResult` reads `user.answer` only when the
+    /// result opening with the answer marker names one of its AskUserQuestion calls. `None`
+    /// => the structured signals alone decide, which is what a caller holding no transcript
+    /// gets.
+    pub calls: Option<&'a CallIndex>,
 }
 
 #[allow(dead_code)]
@@ -375,6 +381,7 @@ impl<'a> ClassifyCtx<'a> {
             schedule_fires: None,
             lines: None,
             tool_lines: None,
+            calls: None,
         }
     }
 

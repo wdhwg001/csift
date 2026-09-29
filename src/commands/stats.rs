@@ -241,7 +241,7 @@ fn stats_one_file(
             .and_then(|r| r.timestamp())
             .map(str::to_string),
     );
-    let groups = group_turn_indices_chained(&rows, |r| *r, &chain);
+    let groups = group_turn_indices_chained(&rows, &chain);
 
     // `--turn`: per-record membership on the FULL transcript's LIVE turn order, computed
     // BEFORE the time filter so indices stay stable, then intersected (AND) with it.

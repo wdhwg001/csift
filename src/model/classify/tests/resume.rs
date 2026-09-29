@@ -45,11 +45,11 @@ fn neither_half_opens_a_turn() {
     // resumed session's human-turn count is therefore unchanged by the repair.
     let prompt = parse(PROMPT);
     assert!(!prompt.is_genuine_user());
-    assert!(!prompt.opens_turn());
+    assert!(!prompt.opens_turn(None));
     assert!(prompt.reconstructed_user_text(None).is_none());
     let placeholder = parse(PLACEHOLDER);
     assert!(!placeholder.is_genuine_user());
-    assert!(!placeholder.opens_turn());
+    assert!(!placeholder.opens_turn(None));
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn a_human_message_that_starts_with_the_sentence_stays_the_human() {
         vec![Class::UserMessage]
     );
     assert!(typed.is_genuine_user());
-    assert!(typed.opens_turn());
+    assert!(typed.opens_turn(None));
 }
 
 #[test]

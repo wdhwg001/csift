@@ -1,41 +1,92 @@
-//! PlanIndex + turn grouping (opens_turn segmentation) + content flattening.
+//! CallIndex + turn grouping (opens_turn segmentation) + content flattening.
 
 use super::*;
 
-/// An index of ExitPlanMode `tool_use_id -> planFilePath` built from a session's records
-/// (section 4.2.4). A tool-use rejection-with-message ([`Record::plan_rejection_message`])
-/// resolves the rejected `tool_use_id` through this index to surface a `[plan: <path>]`
-/// pointer so a consuming LLM can go Read the plan. Built once per session via
-/// [`PlanIndex::from_records`]; cheap (one `BTreeMap` of the few ExitPlanMode calls).
+/// The two USER-FACING calls of one transcript, indexed by their `tool_use` id: every
+/// ExitPlanMode call's `planFilePath` (section 4.2.4) and every AskUserQuestion call.
+///
+/// Both are what a record carrying the person's words answers. A tool-use
+/// rejection-with-message ([`Record::plan_rejection_message`]) resolves the rejected id
+/// through the plan half to surface a `[plan: <path>]` pointer, so a consuming LLM can go
+/// Read the plan. The ask half is what the AskUserQuestion MARKER fallback pairs with
+/// ([`Record::is_auq_answer_boundary`]): a carrier with no `toolUseResult` answers
+/// only when the `tool_result` that opens with the marker names an AskUserQuestion call of
+/// this transcript. A tool result's content is whatever the tool printed, so a shell run
+/// over the harness's own binary or over a transcript opens with the marker too, and
+/// without the join it read as the person's answer and opened a turn.
+///
+/// Built ONCE per transcript, by the conversation chain's own pass over the records it
+/// holds ([`Chain::calls`]); every surface that numbers turns reads that one index, so the
+/// turn boundary, the label and the rendered opener cannot disagree about a carrier.
+/// Cheap: one map of the few ExitPlanMode calls and one set of the few AskUserQuestion ids.
 #[derive(Debug, Clone, Default)]
-pub struct PlanIndex {
+pub struct CallIndex {
     by_id: std::collections::BTreeMap<String, String>,
+    asks: std::collections::HashSet<String>,
+    /// Read every `tool_result` as answering an AskUserQuestion call. The SUPERSET reading
+    /// a byte prefilter needs ([`CallIndex::assume_asks`]) and nothing else: a gate that
+    /// proves a record cannot match must see every text the render COULD produce.
+    every_ask: bool,
 }
 
-impl PlanIndex {
-    /// Build the index from a session's records: every ExitPlanMode tool_use's
-    /// `id -> planFilePath` (see [`Record::exit_plan_pointers`]). A block with no
-    /// `planFilePath` is skipped (an empty path is not a useful pointer).
+impl CallIndex {
+    /// Build the index from a transcript's records: every ExitPlanMode tool_use's
+    /// `id -> planFilePath` (see [`Record::exit_plan_pointers`]) and every AskUserQuestion
+    /// tool_use's id. A plan block with no `planFilePath` is skipped (an empty path is not a
+    /// useful pointer); an AskUserQuestion block is kept whatever its input says.
     #[must_use]
     pub fn from_records<'a, I>(records: I) -> Self
     where
         I: IntoIterator<Item = &'a Record>,
     {
-        let mut by_id = std::collections::BTreeMap::new();
+        let mut out = Self::default();
         for rec in records {
             for (id, path) in rec.exit_plan_pointers() {
                 if !path.is_empty() {
-                    by_id.insert(id, path);
+                    out.by_id.insert(id, path);
+                }
+            }
+            for b in rec.blocks().unwrap_or_default() {
+                if let Block::ToolUse {
+                    id: Some(id),
+                    name: Some(name),
+                    ..
+                } = b
+                {
+                    if name == "AskUserQuestion" {
+                        out.asks.insert(id.clone());
+                    }
                 }
             }
         }
-        Self { by_id }
+        out
+    }
+
+    /// The index a byte PREFILTER renders with: no plan pointers, and every `tool_result`
+    /// read as answering an AskUserQuestion call. A prefilter re-renders ONE line with no
+    /// transcript around it, so it cannot know which call a result answers - and the
+    /// whole-file gate may only prune a file when no render of it could match, so it takes
+    /// the widest answer rather than the pairing the emission will apply.
+    #[must_use]
+    pub(crate) fn assume_asks() -> Self {
+        Self {
+            every_ask: true,
+            ..Self::default()
+        }
     }
 
     /// The plan file path an ExitPlanMode tool_use with `id` pointed to, if known.
     #[must_use]
     pub fn plan_path(&self, id: &str) -> Option<&str> {
         self.by_id.get(id).map(String::as_str)
+    }
+
+    /// Does a `tool_result`'s `tool_use_id` name an AskUserQuestion call of this
+    /// transcript? A result naming no id names no call, except under the prefilter's
+    /// superset reading, which answers yes for every result.
+    #[must_use]
+    pub fn names_ask(&self, tool_use_id: Option<&str>) -> bool {
+        self.every_ask || tool_use_id.is_some_and(|id| self.asks.contains(id))
     }
 }
 
@@ -123,30 +174,20 @@ pub fn group_turn_indices_deduped<T>(
     let skip: std::collections::HashSet<usize> = (0..records.len())
         .filter(|&i| chain.kind(i).is_some())
         .collect();
-    group_turn_indices_core(
-        records,
-        |i, x| node(x).opens_turn() && chain.opens(i),
-        &skip,
-    )
+    group_turn_indices_core(records, |i, _| chain.opens_turn(i) && chain.opens(i), &skip)
 }
 
 /// [`group_turn_indices_deduped`] with the chain already built - the path `search` takes,
 /// because its scan splices the structural spine rows of the lines its prefilter drops
-/// into the chain's view and must not pay for a second build.
+/// into the chain's view and must not pay for a second build. `records` must be the list
+/// the chain was built over: every answer - which record opens a turn, which survives -
+/// is the chain's, read by index.
 #[must_use]
-pub fn group_turn_indices_chained<T>(
-    records: &[T],
-    node: impl Fn(&T) -> ChainNode<'_>,
-    chain: &Chain,
-) -> Vec<Vec<usize>> {
+pub fn group_turn_indices_chained<T>(records: &[T], chain: &Chain) -> Vec<Vec<usize>> {
     let skip: std::collections::HashSet<usize> = (0..records.len())
         .filter(|&i| !chain.survival(i).selectable())
         .collect();
-    group_turn_indices_core(
-        records,
-        |i, x| node(x).opens_turn() && chain.opens(i),
-        &skip,
-    )
+    group_turn_indices_core(records, |i, _| chain.opens_turn(i) && chain.opens(i), &skip)
 }
 
 /// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index

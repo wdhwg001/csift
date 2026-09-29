@@ -125,9 +125,12 @@ fn every_turn_continuation_is_enforce_retry_and_the_same_words_typed_are_the_per
             vec![Class::UserMessage],
             "{text}"
         );
-        assert!(typed.opens_turn(), "a typed message opens its turn: {text}");
         assert!(
-            !user_record(text, true).opens_turn(),
+            typed.opens_turn(None),
+            "a typed message opens its turn: {text}"
+        );
+        assert!(
+            !user_record(text, true).opens_turn(None),
             "a continuation opens no turn: {text}"
         );
     }
@@ -187,7 +190,7 @@ fn a_bundled_skill_body_with_no_directory_line_still_takes_the_skill_leaf() {
         typed.classify(&ClassifyCtx::top_level()),
         vec![Class::UserMessage]
     );
-    assert!(typed.opens_turn());
+    assert!(typed.opens_turn(None));
     // And a body that merely MENTIONS the head mid-prose is not one either.
     let quoting = user_record("the skill opens # Workflow authoring reference", true);
     assert!(quoting.classify(&ClassifyCtx::top_level()).is_empty());
@@ -224,7 +227,7 @@ fn a_companion_only_record_reaches_the_leaf_its_text_earns() {
         person.classify(&ClassifyCtx::top_level()),
         vec![Class::UserMessage]
     );
-    assert!(person.opens_turn());
+    assert!(person.opens_turn(None));
 }
 
 /// A record carrying the COMPANION stamp and no meta flag, built the way the two stamping

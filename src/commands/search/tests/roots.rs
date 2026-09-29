@@ -49,7 +49,7 @@ fn the_opener_is_the_record_that_opens_the_turn_not_the_first_one() {
     ];
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
     let turn = turn_of(&rows);
-    let roots = TurnRoots::build(&turn);
+    let roots = TurnRoots::build(&turn, &crate::model::CallIndex::default());
 
     let lead = roots.link(&turn, 0);
     assert_eq!(lead.note, Some(crate::model::ROOT_NO_OPENER));
@@ -78,7 +78,7 @@ fn a_record_the_chain_does_not_carry_keeps_the_address_and_no_distance() {
     let kept = [kept_at(OPENER, 1), kept_at(orphan, 2)];
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
     let turn = turn_of(&rows);
-    let roots = TurnRoots::build(&turn);
+    let roots = TurnRoots::build(&turn, &crate::model::CallIndex::default());
 
     let link = roots.link(&turn, 1);
     assert_eq!(link.line, Some(1), "the grouping still states the opener");
@@ -105,7 +105,7 @@ fn a_link_that_does_not_move_up_the_turn_yields_no_distance() {
     ];
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
     let turn = turn_of(&rows);
-    let roots = TurnRoots::build(&turn);
+    let roots = TurnRoots::build(&turn, &crate::model::CallIndex::default());
 
     assert_eq!(roots.link(&turn, 1).hops, None, "a self-parent is a cycle");
     assert_eq!(
@@ -127,7 +127,7 @@ fn a_group_with_no_opener_names_none_for_every_position() {
     let kept = [kept_at(LEAD, 1), kept_at(REPLY, 2)];
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
     let turn = turn_of(&rows);
-    let roots = TurnRoots::build(&turn);
+    let roots = TurnRoots::build(&turn, &crate::model::CallIndex::default());
     for pos in 0..2 {
         let link = roots.link(&turn, pos);
         assert_eq!(link.note, Some(crate::model::ROOT_NO_OPENER), "pos {pos}");
@@ -194,9 +194,12 @@ fn the_shared_table_answers_what_a_fresh_one_does() {
 
     let mut cell = TurnRootsCell::default();
     let shared: Vec<crate::model::RootLink> = (0..rows.len())
-        .map(|i| cell.get(&turn).link(&turn, i))
+        .map(|i| {
+            cell.get(&turn, &crate::model::CallIndex::default())
+                .link(&turn, i)
+        })
         .collect();
-    let fresh = TurnRoots::build(&turn);
+    let fresh = TurnRoots::build(&turn, &crate::model::CallIndex::default());
     let independent: Vec<crate::model::RootLink> =
         (0..rows.len()).map(|i| fresh.link(&turn, i)).collect();
     assert_eq!(shared, independent);

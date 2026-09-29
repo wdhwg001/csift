@@ -194,8 +194,14 @@ pub(crate) fn address_miss(misses: &str) -> String {
 /// records parented to the address included. The gated record itself still emits only
 /// under its own gate, because a spine row carries no message and nothing can render it -
 /// so `--for L12` answers with what hangs off L12, and `--for L12 --attachments` answers
-/// with L12 and what hangs off it.
-pub(crate) fn for_closure(rows: &[Row<'_>], addr: &ForAddr) -> BTreeSet<usize> {
+/// with L12 and what hangs off it. `user_calls` is the transcript's user-facing call index,
+/// which decides - as it does for the turn grouper - which record opens a turn and so
+/// stops the parent arm.
+pub(crate) fn for_closure(
+    rows: &[Row<'_>],
+    addr: &ForAddr,
+    user_calls: &CallIndex,
+) -> BTreeSet<usize> {
     let mut lines: BTreeSet<usize> = BTreeSet::new();
     let mut uuids: HashSet<&str> = HashSet::new();
     let mut calls: HashSet<&str> = HashSet::new();
@@ -213,7 +219,7 @@ pub(crate) fn for_closure(rows: &[Row<'_>], addr: &ForAddr) -> BTreeSet<usize> {
             }
             continue;
         };
-        if !seed && !joins(kept, &uuids, &calls) {
+        if !seed && !joins(kept, &uuids, &calls, user_calls) {
             continue;
         }
         if kept.line_no > 0 {
@@ -259,8 +265,13 @@ fn is_member_spine(row: Row<'_>, uuids: &HashSet<&str>) -> bool {
 /// only through a relation it actually states, which is how a `<task-notification>`
 /// reporting on a call inside the set still comes back while the person's next question
 /// does not.
-fn joins(kept: &Kept, uuids: &HashSet<&str>, calls: &HashSet<&str>) -> bool {
-    if !kept.rec.opens_turn()
+fn joins(
+    kept: &Kept,
+    uuids: &HashSet<&str>,
+    calls: &HashSet<&str>,
+    user_calls: &CallIndex,
+) -> bool {
+    if !kept.rec.opens_turn(Some(user_calls))
         && kept
             .rec
             .parent_uuid

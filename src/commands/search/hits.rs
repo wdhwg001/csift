@@ -22,7 +22,7 @@ pub(crate) fn collect_turn_hits(
     time_window: &TimeWindow,
     resolve_persisted: bool,
     excerpt_max: usize,
-    plan_index: &PlanIndex,
+    calls: &CallIndex,
     tools: &ToolIndex,
     address: Option<&AddressSet>,
     for_lines: Option<&BTreeSet<usize>>,
@@ -85,7 +85,7 @@ pub(crate) fn collect_turn_hits(
             matcher,
             resolve_persisted,
             excerpt_max,
-            plan_index,
+            calls,
             &tools.names,
             &env.ctx_for(kept),
             &mut hits,
@@ -119,7 +119,13 @@ pub(crate) fn collect_turn_hits(
             env.wants_engine_edges.then_some(env.rows),
         );
         if hits.len() > before {
-            backfill_provenance(&mut hits[before..], turn, i, roots.get(turn), env);
+            backfill_provenance(
+                &mut hits[before..],
+                turn,
+                i,
+                roots.get(turn, env.calls),
+                env,
+            );
             hit_idxs.push(i);
         }
     }
@@ -140,7 +146,7 @@ pub(crate) fn collect_turn_siblings(
     hit_idxs: &[usize],
     resolve_persisted: bool,
     excerpt_max: usize,
-    plan_index: &PlanIndex,
+    calls: &CallIndex,
     tools: &ToolIndex,
     env: &ClassifyEnv<'_>,
     // The SAME cell the matched pass filled: a sibling's root answer comes from the turn,
@@ -166,14 +172,20 @@ pub(crate) fn collect_turn_siblings(
             &pure,
             resolve_persisted,
             excerpt_max,
-            plan_index,
+            calls,
             &tools.names,
             &env.ctx_for(kept),
             &mut sibs,
         );
         backfill_address(&mut sibs[before..], kept);
         if sibs.len() > before {
-            backfill_provenance(&mut sibs[before..], turn, i, roots.get(turn), env);
+            backfill_provenance(
+                &mut sibs[before..],
+                turn,
+                i,
+                roots.get(turn, env.calls),
+                env,
+            );
         }
     }
     // FIXED policy (see [`sibling_cap`]): message classes always render; chattier
@@ -220,7 +232,7 @@ pub(crate) fn collect_record_hits(
     matcher: &Matcher,
     resolve_persisted: bool,
     excerpt_max: usize,
-    plan_index: &PlanIndex,
+    calls: &CallIndex,
     tool_names: &HashMap<String, String>,
     ctx: &ClassifyCtx,
     hits: &mut Vec<Hit>,
@@ -398,9 +410,7 @@ pub(crate) fn collect_record_hits(
         rec.record_text_sections(ctx)
     };
     if sections.is_empty() {
-        if let Some((class, text)) =
-            record_text_emission(rec, raw, &labels, filter, plan_index, ctx)
-        {
+        if let Some((class, text)) = record_text_emission(rec, raw, &labels, filter, calls, ctx) {
             let dir = if is_comm_class(class) {
                 direction.clone()
             } else {
@@ -451,7 +461,7 @@ pub(crate) fn collect_record_hits(
         None
     };
     if let Some(class) = user_dual {
-        if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
+        if let Some(text) = rec.reconstructed_user_text(Some(calls)) {
             // The carrier NAMES the call it answers, so the dual carries that id like any
             // other result-side unit: it is what makes the `result_of` provenance edge
             // point at the AskUserQuestion the person answered, or at the tool_use they

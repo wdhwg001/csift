@@ -17,7 +17,7 @@ fn collect_hits_thinking_category() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -42,7 +42,7 @@ fn collect_hits_agent_text_only_from_assistant() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -66,7 +66,7 @@ fn collect_hits_tool_use_matches_name_and_input() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -93,7 +93,7 @@ fn collect_hits_mcp_elicitation_system_marker() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -126,7 +126,7 @@ fn collect_hits_auq_marker_does_not_double_emit() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -141,6 +141,12 @@ fn collect_hits_auq_marker_does_not_double_emit() {
 
 #[test]
 fn collect_hits_auq_answer_under_user() {
+    // A marker-only carrier answers the AskUserQuestion call its result names, so the
+    // transcript's call index names that call - the join the label is decided on.
+    let asked = rec(
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"x","name":"AskUserQuestion","input":{}}]}}"#,
+    );
+    let calls = CallIndex::from_records([&asked]);
     let r = rec(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"chosen\". You can now continue."}]}}"#,
     );
@@ -154,9 +160,12 @@ fn collect_hits_auq_answer_under_user() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &calls,
         &HashMap::new(),
-        &ClassifyCtx::top_level(),
+        &ClassifyCtx {
+            calls: Some(&calls),
+            ..ClassifyCtx::top_level()
+        },
         &mut hits,
     );
     assert_eq!(hits.len(), 1);
@@ -179,7 +188,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -195,7 +204,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits2,
@@ -316,7 +325,7 @@ fn auq_answer_under_user_present_but_pattern_does_not_match() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -357,7 +366,7 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         &tw,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &ToolIndex::default(),
         None,
         None,
@@ -397,7 +406,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         &tw,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &ToolIndex::default(),
         None,
         None,
@@ -417,7 +426,7 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         &tw2,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &ToolIndex::default(),
         None,
         None,
@@ -445,7 +454,7 @@ fn collect_record_hits_resolve_persisted_with_no_pointer_keeps_inline() {
         &m,
         true,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -475,7 +484,7 @@ fn agent_text_block_only_from_assistant_not_user_text_block() {
         &m,
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,
@@ -522,7 +531,7 @@ fn redacted_thinking_respects_the_label_filter() {
         &Matcher::pure(),
         false,
         400,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,

@@ -98,7 +98,7 @@ fn interrupt_marker_plain_is_not_genuine_user() {
         !r.is_genuine_user(),
         "interrupt marker must not open a turn"
     );
-    assert!(!r.opens_turn());
+    assert!(!r.opens_turn(None));
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn interrupt_marker_for_tool_use_is_not_genuine_user() {
         r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#,
     );
     assert!(!r.is_genuine_user());
-    assert!(!r.opens_turn());
+    assert!(!r.opens_turn(None));
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn local_command_stdout_is_not_genuine_user() {
         r#"{"type":"user","message":{"role":"user","content":"<local-command-stdout>✓ Updated oh-my-claudecode.</local-command-stdout>"}}"#,
     );
     assert!(!r.is_genuine_user());
-    assert!(!r.opens_turn());
+    assert!(!r.opens_turn(None));
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn command_name_wrapper_is_not_genuine_user() {
         !r.is_genuine_user(),
         "slash-command wrapper must not open a turn"
     );
-    assert!(!r.opens_turn());
+    assert!(!r.opens_turn(None));
     // Empty args -> no recoverable prose.
     assert!(r.slash_command_args().is_none());
 }
@@ -229,11 +229,11 @@ fn command_name_wrapper_with_multibyte_args_is_codepoint_safe() {
 fn opens_turn_matches_genuine_user() {
     // A plain genuine user opens a turn; a plain tool_result carrier does not.
     let genuine = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
-    assert!(genuine.opens_turn());
+    assert!(genuine.opens_turn(None));
     let carrier = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
     );
-    assert!(!carrier.opens_turn());
+    assert!(!carrier.opens_turn(None));
 }
 
 #[test]
@@ -415,7 +415,10 @@ fn a_turn_companion_record_is_neither_the_person_nor_a_turn_opener() {
             !r.is_genuine_user(),
             "a companion is not the person (isMeta {meta})"
         );
-        assert!(!r.opens_turn(), "a companion opens no turn (isMeta {meta})");
+        assert!(
+            !r.opens_turn(None),
+            "a companion opens no turn (isMeta {meta})"
+        );
         assert!(
             r.classify(&ClassifyCtx::top_level()).is_empty(),
             "a companion matching no template carries no leaf (isMeta {meta}): {:?}",
@@ -428,7 +431,7 @@ fn a_turn_companion_record_is_neither_the_person_nor_a_turn_opener() {
         r#"{"type":"user","uuid":"tc-2","message":{"role":"user","content":"carry on from where you stopped"}}"#,
     );
     assert!(typed.is_genuine_user());
-    assert!(typed.opens_turn());
+    assert!(typed.opens_turn(None));
     assert_eq!(
         typed.classify(&ClassifyCtx::top_level()),
         vec![Class::UserMessage]
@@ -440,7 +443,7 @@ fn a_turn_companion_record_is_neither_the_person_nor_a_turn_opener() {
         r#"{"type":"user","uuid":"tc-3","turnCompanion":false,"message":{"role":"user","content":"carry on from where you stopped"}}"#,
     );
     assert!(falsey.is_genuine_user());
-    assert!(falsey.opens_turn());
+    assert!(falsey.opens_turn(None));
 }
 
 /// The turn NUMBERING around a companion is unmoved: it folds into the turn it sits in,
@@ -455,7 +458,7 @@ fn a_turn_companion_folds_into_the_turn_it_sits_in() {
         r#"{"type":"user","uuid":"g4","parentUuid":"g3","message":{"role":"user","content":"second ask"}}"#,
     ];
     let recs: Vec<Record> = lines.iter().map(|l| parse(l)).collect();
-    let opens: Vec<bool> = recs.iter().map(Record::opens_turn).collect();
+    let opens: Vec<bool> = recs.iter().map(|r| r.opens_turn(None)).collect();
     assert_eq!(
         opens,
         vec![true, false, false, false, true],

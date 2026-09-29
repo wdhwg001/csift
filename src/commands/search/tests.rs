@@ -42,6 +42,7 @@ fn test_env() -> ClassifyEnv<'static> {
     static NO_FIRES: std::sync::OnceLock<crate::model::ScheduleFireIndex> =
         std::sync::OnceLock::new();
     static NO_TOOLS: std::sync::OnceLock<crate::model::ProvIndex> = std::sync::OnceLock::new();
+    static NO_CALLS: std::sync::OnceLock<crate::model::CallIndex> = std::sync::OnceLock::new();
     ClassifyEnv {
         owner_id: "0a1b2c3d-0000-0000-0000-000000000000",
         is_subagent: false,
@@ -56,6 +57,9 @@ fn test_env() -> ClassifyEnv<'static> {
         lines: &NoLines,
         // An EMPTY tool index, for the same reason: no call in these fixtures is looked up.
         tool_lines: NO_TOOLS.get_or_init(crate::model::ProvIndex::default),
+        // No user-facing call either: a marker-only answer in these fixtures reads as the
+        // tool result it rides, the answer a caller holding no call index gets.
+        calls: NO_CALLS.get_or_init(crate::model::CallIndex::default),
         // No row space either: these fixtures build hits directly rather than scanning a
         // file, so the survival relations have no index to resolve against.
         rows: &[],

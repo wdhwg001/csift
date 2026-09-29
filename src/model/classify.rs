@@ -406,7 +406,7 @@ impl Record {
             // label (`user.answer`/`user.rejection`) leads its carrier; a subagent return
             // leads with its `agent.tool.result` base then the `...inbox` comm view. These
             // dual-label shapes are mutually exclusive, so an if/else chain is deterministic.
-            if self.is_auq_answer_boundary() {
+            if self.is_auq_answer_boundary(ctx.calls) {
                 push_unique(out, Class::UserAnswer);
                 push_unique(out, Class::AgentToolResult);
             } else if self.is_plan_rejection_boundary() {

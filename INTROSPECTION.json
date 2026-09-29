@@ -11918,7 +11918,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "507-515",
+          "lines": "523-531",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -12001,7 +12001,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "477-480",
+          "lines": "493-496",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -12096,7 +12096,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "493-498",
+          "lines": "509-514",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -12975,7 +12975,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "196-198",
+          "lines": "200-202",
           "snippet": "    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
@@ -13618,7 +13618,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "189-194",
+          "lines": "193-198",
           "snippet": "    if args\n        .label_filter()\n        .selected(Class::CompactionBoundary.path())\n    {\n        verifiable.push(b\"compact_boundary\");\n    }"
         }
       ],
@@ -14141,7 +14141,7 @@
       "code": [
         {
           "path": "src/commands/turns/build.rs",
-          "lines": "284-290",
+          "lines": "285-291",
           "snippet": "/// Extract dedup fingerprints from a summary body: the section 6 \"All user messages\" bullets\n/// and the section 9 verbatim last-assistant quote (the only verbatim turns a summary holds).\n/// Each fingerprint is `normalize_line(text).to_lowercase()` truncated to the first\n/// [`DEDUP_PREFIX`] chars. Conservative: when the structured sections are not found,\n/// every `- ` bullet line in the body is fingerprinted (a superset - still strict per\n/// line). Robust to summaries that omit the exact headers.\npub(crate) fn summary_fingerprints(body: &str) -> Vec<String> {"
         },
         {
@@ -15397,17 +15397,17 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "49-53",
+          "lines": "53-57",
           "snippet": "                    let header = q.get(\"header\").and_then(serde_json::Value::as_str);\n                    let question = q\n                        .get(\"question\")\n                        .and_then(serde_json::Value::as_str)\n                        .unwrap_or_default();"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "63-70",
+          "lines": "67-74",
           "snippet": "                                    let label =\n                                        o.get(\"label\").and_then(serde_json::Value::as_str)?;\n                                    let desc = o\n                                        .get(\"description\")\n                                        .and_then(serde_json::Value::as_str)\n                                        .filter(|s| !s.is_empty())\n                                        .map(str::to_string);\n                                    Some((label.to_string(), desc))"
         },
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "226",
+          "lines": "250",
           "snippet": "\"questions\":[{\"header\":\"Routing\",\"multiSelect\":false,\"options\":[{\"description\":\"the inbound path\",\"label\":\"Route A\"},{\"description\":\"the outbound path\",\"label\":\"Route B\"}],\"question\":\"which route for the queue?\"}]"
         }
       ],
@@ -15508,17 +15508,17 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "26-31",
+          "lines": "30-35",
           "snippet": "        let tur = self.tool_use_result_value();\n        let answers = tur\n            .as_ref()\n            .and_then(|t| t.get(\"answers\"))\n            .and_then(serde_json::Value::as_object)\n            .filter(|m| !m.is_empty());"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "37-43",
+          "lines": "41-47",
           "snippet": "            // `annotations` map (section 4.4) - per-question `{notes?, preview?}`; when the answer\n            // is the `\"(notes only)\"` placeholder the user's ENTIRE real message lives here.\n            let annotations = tur\n                .as_ref()\n                .and_then(|t| t.get(\"annotations\"))\n                .and_then(serde_json::Value::as_object)\n                .filter(|m| !m.is_empty());"
         },
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "226",
+          "lines": "250",
           "snippet": "\"answers\":{\"which route for the queue?\":\"(notes only)\"},\"annotations\":{\"which route for the queue?\":{\"notes\":"
         }
       ],
@@ -15618,13 +15618,13 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "359-363",
+          "lines": "368-372",
           "snippet": "    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled...` / `<tool_use_error>...` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "382-392",
-          "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (the `The user responded:` branch writes the text\n        // there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
+          "lines": "397-408",
+          "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (the `The user responded:` branch writes the text\n        // there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker, on a\n        // result that answers an AskUserQuestion call of this transcript.\n        calls.is_some_and(|c| self.is_auq_answer(c))"
         }
       ],
       "states": [
@@ -15730,7 +15730,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "181",
+          "lines": "185",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
@@ -15740,7 +15740,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "174-183",
+          "lines": "178-187",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -15886,17 +15886,17 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "37-43",
+          "lines": "41-47",
           "snippet": "            // `annotations` map (section 4.4) - per-question `{notes?, preview?}`; when the answer\n            // is the `\"(notes only)\"` placeholder the user's ENTIRE real message lives here.\n            let annotations = tur\n                .as_ref()\n                .and_then(|t| t.get(\"annotations\"))\n                .and_then(serde_json::Value::as_object)\n                .filter(|m| !m.is_empty());"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "80-88",
+          "lines": "84-92",
           "snippet": "                    // Free-text notes the user attached to THIS answer. When the answer is\n                    // the `\"(notes only)\"` placeholder, the notes ARE the user's message -\n                    // dropping them silently swallowed the whole turn (the common path,\n                    // since the user routinely answers AUQs with typed prose, not a click).\n                    let note = annotations\n                        .and_then(|a| a.get(question))\n                        .and_then(|v| v.get(\"notes\"))\n                        .and_then(serde_json::Value::as_str)\n                        .filter(|s| !s.is_empty());"
         },
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "226",
+          "lines": "250",
           "snippet": "\"answers\":{\"which route for the queue?\":\"(notes only)\"},\"annotations\":{\"which route for the queue?\":{\"notes\":\"never conflate the two \u2014 Route A is inbound only, Route B is outbound only\"}}},\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"q1\",\"content\":\"User has answered your questions: \\\"which route for the queue?\\\"=\\\"(notes only)\\\". You can now continue.\"}]}}\"#,"
         }
       ],
@@ -15989,12 +15989,12 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "44-48",
+          "lines": "48-52",
           "snippet": "            let mut out = String::new();\n            let n = questions.map_or(answers.len(), Vec::len);\n            out.push_str(&format!(\"[AskUserQuestion \u00b7 {n} question{}]\", plural(n)));\n            if let Some(qs) = questions {\n                for (i, q) in qs.iter().enumerate() {"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "89-93",
+          "lines": "93-97",
           "snippet": "                    out.push_str(&format!(\"\\nQ{} \", i + 1));\n                    if let Some(h) = header {\n                        out.push_str(&format!(\"({}): \", normalize_line(h)));\n                    }\n                    out.push_str(&normalize_line(question));"
         }
       ],
@@ -16146,13 +16146,13 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "373-381",
+          "lines": "388-396",
           "snippet": "        let mut has_non_errored_tool_result = false;\n        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "20-22",
-          "snippet": "        if !self.is_auq_answer_boundary() {\n            return None;\n        }"
+          "lines": "24-26",
+          "snippet": "        if !self.is_auq_answer_boundary(calls) {\n            return None;\n        }"
         }
       ],
       "states": [
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2546",
+          "lines": "2547",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -19284,7 +19284,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "506-512",
+          "lines": "522-528",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -33968,7 +33968,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "181",
+          "lines": "185",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         }
       ],
@@ -37757,7 +37757,7 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "380-382",
+          "lines": "382-384",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -40747,8 +40747,8 @@
       "code": [
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "363-373",
-          "snippet": "#[test]\nfn plan_approval_is_not_a_boundary() {\n    // The approval path is the harness greenlight (no typed message, no is_error) -\n    // must NOT become a turn boundary.\n    let r = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t\",\"content\":\"User has approved your plan. You can now start coding. Your plan has been saved to: /Users/testuser/.claude/plans/elegant-scribbling-dream.md\"}]}}\"#,\n    );\n    assert!(!r.is_plan_rejection_boundary());\n    assert!(!r.is_auq_answer_boundary());\n    assert!(!r.opens_turn());\n}"
+          "lines": "445-455",
+          "snippet": "#[test]\nfn plan_approval_is_not_a_boundary() {\n    // The approval path is the harness greenlight (no typed message, no is_error) -\n    // must NOT become a turn boundary.\n    let r = parse(\n        r#\"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t\",\"content\":\"User has approved your plan. You can now start coding. Your plan has been saved to: /Users/testuser/.claude/plans/elegant-scribbling-dream.md\"}]}}\"#,\n    );\n    assert!(!r.is_plan_rejection_boundary());\n    assert!(!r.is_auq_answer_boundary(None));\n    assert!(!r.opens_turn(None));\n}"
         }
       ],
       "states": [
@@ -40870,18 +40870,18 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "272-282",
-          "snippet": "    /// - an answered AskUserQuestion -> the full Q+options+answer unit\n    ///   ([`Record::auq_exchange`]);\n    /// - a tool-use rejection-with-message -> the user's typed instruction, optionally\n    ///   suffixed with a `[plan: <path>]` pointer when `plan_index` resolves the rejected\n    ///   `tool_use_id` to an ExitPlanMode plan (section 4.2.4). `plan_index` may be `None` (no\n    ///   plan resolution attempted), in which case the rejection text is returned alone.\n    ///\n    /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout\n    /// (delegates to the codepoint-safe accessors).\n    #[must_use]\n    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {"
+          "lines": "283-294",
+          "snippet": "    /// - an answered AskUserQuestion -> the full Q+options+answer unit\n    ///   ([`Record::auq_exchange`]);\n    /// - a tool-use rejection-with-message -> the user's typed instruction, optionally\n    ///   suffixed with a `[plan: <path>]` pointer when `calls` resolves the rejected\n    ///   `tool_use_id` to an ExitPlanMode plan (section 4.2.4). `calls` may be `None` (no\n    ///   transcript at hand), in which case the rejection text is returned alone and an\n    ///   AskUserQuestion answer renders only from its structured signals.\n    ///\n    /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout\n    /// (delegates to the codepoint-safe accessors).\n    #[must_use]\n    pub fn reconstructed_user_text(&self, calls: Option<&CallIndex>) -> Option<String> {"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "5-9",
-          "snippet": "/// An index of ExitPlanMode `tool_use_id -> planFilePath` built from a session's records\n/// (section 4.2.4). A tool-use rejection-with-message ([`Record::plan_rejection_message`])\n/// resolves the rejected `tool_use_id` through this index to surface a `[plan: <path>]`\n/// pointer so a consuming LLM can go Read the plan. Built once per session via\n/// [`PlanIndex::from_records`]; cheap (one `BTreeMap` of the few ExitPlanMode calls)."
+          "lines": "5-10",
+          "snippet": "/// The two USER-FACING calls of one transcript, indexed by their `tool_use` id: every\n/// ExitPlanMode call's `planFilePath` (section 4.2.4) and every AskUserQuestion call.\n///\n/// Both are what a record carrying the person's words answers. A tool-use\n/// rejection-with-message ([`Record::plan_rejection_message`]) resolves the rejected id\n/// through the plan half to surface a `[plan: <path>]` pointer, so a consuming LLM can go"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "327-332",
-          "snippet": "    /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as\n    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`PlanIndex`] is built\n    /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields\n    /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty\n    /// for any record carrying no ExitPlanMode tool_use.\n    #[must_use]"
+          "lines": "339-344",
+          "snippet": "    /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as\n    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`CallIndex`] is built\n    /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields\n    /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty\n    /// for any record carrying no ExitPlanMode tool_use.\n    #[must_use]"
         }
       ],
       "states": [
@@ -43004,7 +43004,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "199-201",
+          "lines": "203-205",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
@@ -44601,7 +44601,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "199-206",
+          "lines": "203-210",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
@@ -44709,8 +44709,8 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "260-266",
-          "snippet": "    #[must_use]\n    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
+          "lines": "271-277",
+          "snippet": "    #[must_use]\n    pub fn opens_turn(&self, calls: Option<&CallIndex>) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary(calls)\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         },
         {
           "path": "src/commands/search/scan/gates.rs",
@@ -48511,7 +48511,7 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "403-406",
+          "lines": "415-418",
           "snippet": "        let Content::Blocks(blocks) = content else {\n            // Assistant content is always a block array in CC 2.1.x; a bare string\n            // would be a genuine surprise - surface it rather than silently drop.\n            if let Content::Text(s) = content {"
         }
       ],
@@ -49043,12 +49043,12 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "359-366",
+          "lines": "371-378",
           "snippet": "    /// The persisted-output file path for this carrier (section 4.6), preferring the\n    /// structured `toolUseResult.persistedOutputPath` (exact - no regex) and falling\n    /// back to scraping the inline `Full output saved to: <path>` marker from a\n    /// `tool_result` block. Returns `None` when there is no persisted pointer.\n    #[must_use]\n    pub fn persisted_output_path(&self) -> Option<String> {\n        // Structured field first (SPEC section 4.6 resolution rule).\n        if let Some(probe) = self.tur_probe() {"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "246-253",
+          "lines": "287-294",
           "snippet": "/// Scrape the inline persisted-output pointer (section 4.6 fallback): the line\n/// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.\n/// Returns the trimmed path, or `None` if the marker is absent.\npub(crate) fn scrape_persisted_path(text: &str) -> Option<String> {\n    const MARKER: &str = \"Full output saved to:\";\n    let idx = text.find(MARKER)?;\n    let rest = &text[idx + MARKER.len()..];\n    // The path runs to end-of-line."
         },
         {
@@ -49154,7 +49154,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "477-481",
+          "lines": "493-497",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -49318,17 +49318,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "499-506",
+          "lines": "515-522",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[...],...}` - the context a SessionStart /\n    /// UserPromptSubmit / ... hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "507-514",
+          "lines": "523-530",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "519-523",
+          "lines": "535-539",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -50685,8 +50685,8 @@
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "103-110",
-          "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
+          "lines": "104-111",
+          "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn(Some(calls)))\n            .map(|k| k.line_no)\n    };"
         },
         {
           "path": "src/commands/search/scan.rs",
@@ -50776,12 +50776,12 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "228-236",
+          "lines": "240-248",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/commands/search/turns_match.rs",
-          "lines": "303-313",
+          "lines": "305-315",
           "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
@@ -50791,7 +50791,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "395-399",
+          "lines": "407-411",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -51492,7 +51492,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "238-242",
+          "lines": "242-246",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -56872,7 +56872,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "188-194",
+          "lines": "194-200",
           "snippet": "            out.push(record_text::for_edge_at(\n                crate::model::EdgeKind::ResultOf,\n                Basis::Key,\n                Some(id),\n                None,\n                named_line,\n            ));"
         }
       ],
@@ -65147,8 +65147,8 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "282-297",
-          "snippet": "    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {\n        if let Some(text) = self.genuine_user_text() {\n            return Some(text);\n        }\n        if let Some(unit) = self.auq_exchange() {\n            return Some(normalize_line(&unit));\n        }\n        if let Some((rejected_id, msg)) = self.plan_rejection_message() {\n            let mut out = normalize_line(&msg);\n            if let (Some(idx), Some(id)) = (plan_index, rejected_id.as_deref()) {\n                if let Some(path) = idx.plan_path(id) {\n                    out.push_str(&format!(\" [plan: {path}]\"));\n                }\n            }\n            return Some(out);\n        }"
+          "lines": "294-309",
+          "snippet": "    pub fn reconstructed_user_text(&self, calls: Option<&CallIndex>) -> Option<String> {\n        if let Some(text) = self.genuine_user_text() {\n            return Some(text);\n        }\n        if let Some(unit) = self.auq_exchange(calls) {\n            return Some(normalize_line(&unit));\n        }\n        if let Some((rejected_id, msg)) = self.plan_rejection_message() {\n            let mut out = normalize_line(&msg);\n            if let (Some(idx), Some(id)) = (calls, rejected_id.as_deref()) {\n                if let Some(path) = idx.plan_path(id) {\n                    out.push_str(&format!(\" [plan: {path}]\"));\n                }\n            }\n            return Some(out);\n        }"
         },
         {
           "path": "src/model/predicates.rs",
@@ -65244,13 +65244,13 @@
       "code": [
         {
           "path": "src/model/exchange.rs",
-          "lines": "249-253",
+          "lines": "253-257",
           "snippet": "    /// The single boundary predicate (section 6.4): this record opens a new turn iff it is a\n    /// genuine human message, an ANSWERED AskUserQuestion (the answer is the user's\n    /// message), a tool-use rejection carrying a typed user instruction, OR an inbound\n    /// teammate/peer message. Every surface (turns / search / recover / files) keys turn\n    /// delimiting on THIS predicate so they never drift."
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "261-266",
-          "snippet": "    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
+          "lines": "272-277",
+          "snippet": "    pub fn opens_turn(&self, calls: Option<&CallIndex>) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary(calls)\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         }
       ],
       "states": [
@@ -66126,8 +66126,13 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "174-183",
+          "lines": "178-187",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
+        },
+        {
+          "path": "src/model/predicates.rs",
+          "lines": "344-357",
+          "snippet": "        blocks.iter().any(|b| match b {\n            Block::ToolResult {\n                tool_use_id,\n                content,\n                ..\n            } => {\n                calls.names_ask(tool_use_id.as_deref())\n                    && content\n                        .as_ref()\n                        .map(tool_result_content_text)\n                        .is_some_and(|t| is_auq_answer_text(&t))\n            }\n            _ => false,\n        })"
         }
       ],
       "states": [
@@ -66164,20 +66169,21 @@
           "from_basis": "located",
           "to": null,
           "behavior": "Claude Code 2.1.258 synthesizes the AskUserQuestion answer text written into the answering `tool_result` in ONE result mapper (164278128) whose body is a FOUR-ARM LADDER over FIVE templates (164278529), in this order: (1) `afkTimeoutMs` set yields the idle text `No response after <N>s - the user may be away from keyboard. ...` (164274496), optionally followed by `Before going idle the user had selected: <summary>.`; (2) a non-blank freeform `response` yields `The user responded: <text>`; (3) a non-empty answers summary yields `Your questions have been answered: <summary>. You can now continue with these answers in mind.` when every answer is one of the listed options, else `The user answered: <summary>. Read the answers carefully - they may request clarification, changes, or that you not proceed - and follow what they actually say.`; (4) otherwise `The user did not answer the questions.` Every arm assigns the text and one writer returns it as {type:\"tool_result\", content, tool_use_id} (164279300). Only arms 2 and 3 are answers. The summary is built from `answers` plus `annotations`, and the sentinel `(notes only)` (164274473) renders a line as `\"<question>\"=(no option selected)`. Each of the four templates the mapper assigns occurs exactly twice in the 2.1.258 executable, once in the packed constant table (75413708, 75413736, 75413840, 75414140) and once in the readable mapper (164278626, 164278993, 164279085, 164279260); the idle template's head `No response after ` follows the same pattern - interned in that table at 74944204 and read in the template function `eNn` at 164274519 - but a whole-executable count of that phrase returns 4, not 2, because the dialog's own idle banner is a SEPARATE interned string ` No response after ` carrying a leading space, and its two copies (the packed table and the banner's child list, each beginning one byte below 71647977 and 179911217) contain the phrase without being the template. Three of the four occurrences therefore sit outside the mapper and only two are the template's, so a bare grep for the phrase is neither a mapper-only nor a template-only count. No UTF-16 encoding of the phrase occurs anywhere in the executable: what is stored 16-bit beside the table entry at 74944204 is the template's TAIL, `s - the user may be away from keyboard. ...`, whose em dash is outside Latin-1 and widens that interned string, the same head-8-bit/tail-16-bit split the table shows for `The user answered: ` at 75413840. The historical `User has answered your questions` phrasing occurs zero times in the 2.1.257, 2.1.258, 2.1.259 and 2.1.260 executables; across the native builds it is present from 2.0.30 through 2.1.144 and gone from 2.1.145 on, the build where `Your questions have been answered` appears; 2.1.144 and 2.1.145 are adjacent entries in the 504-entry published version list, so that step is as tight as the list allows and it is this range's floor. The rest of the ladder arrives above it: `The user responded: ` and `The user did not answer the questions.` are absent at 2.1.152 and present from 2.1.160, with six published entries between those two readings and none of them cached, so that floor is a bracket rather than a step; the idle pair `No response after ` and `Before going idle the user had selected: ` is absent at 2.1.197 and present from 2.1.198; `The user answered: ` is absent at 2.1.215 and present from 2.1.216. So the ladder carries one template at the range floor, three from 2.1.160, the full four-arm shape from 2.1.198 and the fifth template from 2.1.216, and the byte offsets and corpus counts stated here are readings at 2.1.258. Corpus census over 8245 transcripts under the projects root (journal and elicitation-sidecar files excluded; one count per `tool_result` block whose `tool_use_id` joins an AskUserQuestion `tool_use` block in the same transcript): 137 carriers, all paired - 100 `Your questions have been answered`, 18 `The user answered:`, 3 idle-timeout, 10 denial carriers (`The user doesn't want to proceed with this tool use...`, is_error true, 8 of them carrying the clarify-exit feedback as the `To tell you how to proceed, the user said:` tail) and 6 `InputValidationError` carriers (is_error true); zero carriers of `User has answered your questions`, `The user responded:` or `The user did not answer the questions.`",
-          "depends": "csift's `AUQ_ANSWER_MARKERS` carries four phrasings (`User has answered your questions`, `Your questions have been answered`, `The user answered:`, `The user responded:`) and the search prefilter's verifiable synth-marker set carries the same four, so a marker-only carrier under any of them opens a turn and classifies `user.answer`; the unanswered branch (`The user did not answer the questions.`) and the idle-timeout branch (`No response after ...`) are deliberately excluded so neither opens one. The retired first marker is kept because it costs nothing and older transcripts still hold it - it is the emitted form of the builds from 2.0.30 through 2.1.144. The structured signal is primary: `is_auq_answer_boundary` requires a non-errored `tool_result` carrier and then takes a non-empty `toolUseResult.answers` map or a non-blank `response`, falling back to the marker text only when neither is present. Of the 137 AskUserQuestion carriers 121 carry a dict `toolUseResult` (71 answers only, 47 answers plus non-empty `annotations`, 3 `afkTimeoutMs` beside an empty answers map) and the other 16 are the denial and validation carriers, every one `is_error` true, so the gate admits exactly the 118 real answers and excludes both the 3 idle-timeout carriers and the 16 errored ones; 32 of the admitted carriers use the `(notes only)` sentinel, which csift renders from the same `toolUseResult`. The START-anchored `trim_start` + `starts_with` marker test carries the fallback and does real work, but it is not airtight: the retired phrasing alone occurs 1319 times across 159 transcripts, and corpus-wide csift labels 124 records `user.answer` - the 118 structured answers plus 6 shell `tool_result` carriers that begin with a marker (three with `User has answered your questions`, three with `Your questions have been answered`), each a grep-output table quoting the marker at content start, none carrying a `toolUseResult`, all in subagent transcripts. A `contains` test would false-positive on every one of those 1319 occurrences instead of on these 6.",
+          "depends": "csift's `AUQ_ANSWER_MARKERS` carries four phrasings (`User has answered your questions`, `Your questions have been answered`, `The user answered:`, `The user responded:`) and the search prefilter's verifiable synth-marker set carries the same four, so a marker-only carrier under any of them opens a turn and classifies `user.answer`; the unanswered branch (`The user did not answer the questions.`) and the idle-timeout branch (`No response after ...`) are deliberately excluded so neither opens one. The retired first marker is kept because it costs nothing and older transcripts still hold it - it is the emitted form of the builds from 2.0.30 through 2.1.144. The structured signal is primary: `is_auq_answer_boundary` requires a non-errored `tool_result` carrier and then takes a non-empty `toolUseResult.answers` map or a non-blank `response`, falling back to the marker text only when neither is present. Of the 137 AskUserQuestion carriers 121 carry a dict `toolUseResult` (71 answers only, 47 answers plus non-empty `annotations`, 3 `afkTimeoutMs` beside an empty answers map) and the other 16 are the denial and validation carriers, every one `is_error` true, so the gate admits exactly the 118 real answers and excludes both the 3 idle-timeout carriers and the 16 errored ones; 32 of the admitted carriers use the `(notes only)` sentinel, which csift renders from the same `toolUseResult`. The START-anchored `trim_start` + `starts_with` marker test is necessary and not sufficient: the retired phrasing alone occurs 1319 times across 159 transcripts, where a `contains` test would false-positive on every occurrence, and a `tool_result` still OPENS with a marker whenever the tool printed one - a shell run over the harness binary or a grep over these phrasings writes a carrier with no `toolUseResult` whose content starts with the answer text. So the fallback also requires the `tool_result` carrying the marker to name, by its `tool_use_id`, an AskUserQuestion `tool_use` of the same transcript - the join this claim's own census counts by - and a result naming no id names none. The join is csift's `CallIndex`, built ONCE per transcript by the conversation chain from the full records it holds and read by the turn boundary, the `user.answer` label and the rendered opener alike, so the three cannot disagree about a carrier; a surface holding no transcript (the `list` preview, the live tail) takes the structured signals alone, and the search prefilter renders as if every result answered an ask, the superset its whole-file gate needs. A shell carrier of that shape keeps `agent.tool.result` and opens no turn.",
           "instrument": "In the corpus: per transcript, map every AskUserQuestion `tool_use` id to the `tool_result` block naming it, bucket each result by which phrasing its flattened content starts with after `trim_start`, and cross that with the `toolUseResult` fields present (dict with a non-empty `answers`, dict with `afkTimeoutMs`, or a string); scope every *.jsonl under the projects root except `journal.jsonl` and `elicitations.jsonl`; one count per joined `tool_result` block. csift's side: `csift search '' -t user.answer --count-by label` corpus-wide, whose total is the structured answers plus any marker-only carrier. In the executable: `grep -abo` each template literal and read the mapper window at the readable copy; for the version floors, `grep -a -c` the same literals in each native build.",
           "probe": {
             "kind": "csift",
-            "command": "csift search '' -t user.answer --count-by label",
-            "scope": "every `*.jsonl` under one projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
-            "rule": "one count per joined `tool_result` block."
+            "command": "csift search '' -t user.answer --format json",
+            "scope": "every *.jsonl under the live projects root, top-level and `<uuid>/subagents/**`",
+            "rule": "one per `user.answer` record the search emits, joined to the `tool_use` its carrier names."
           },
           "producer_trace": "complete",
           "specimen": "observed",
           "attribution": "end-to-end",
           "open_legs": [],
           "residue": [
-            "Six shell `tool_result` carriers begin with an AUQ marker and carry no `toolUseResult`, so the marker fallback labels them `user.answer`; each is a grep-output table over these very phrasings, a self-referential shape rather than a Claude Code one.",
+            "Six shell `tool_result` carriers begin with an AUQ marker and carry no `toolUseResult`; each is a grep-output table over these very phrasings or a `strings` run over the harness binary, a self-referential shape rather than a Claude Code one, and the call join keeps every one of them `agent.tool.result`.",
+            "An earlier reading, superseded by the receipt now standing on this state (python3 over every *.jsonl under the projects root except `journal.jsonl` and `elicitations.jsonl`, 8245 transcripts, joining each AskUserQuestion `tool_use` to its `tool_result`...): 137 AskUserQuestion carriers, all paired: 100 `Your questions have been answered`, 18 `The user answered:`, 3 `No response after`, 10 denial carriers and 6 `InputValidationError` carriers (all 16 is_error true); zero carriers of the retired phrasing, of `The user responded:` or of the unanswered text. Field shapes: 71 answers only, 47 answers plus non-empty annotations, 3 afkTimeoutMs beside an empty answers map, 16 string-valued; 32 admitted carriers use the `(notes only)` sentinel. The retired phrasing occurs 1319 times across 159 transcripts; no record's message text starts with it and three `tool_result` blocks do. Counting rule: One count per `tool_result` block whose `tool_use_id` joins an AskUserQuestion `tool_use` block in the same transcript; the phrasing is taken after `trim_start`, as the code's own test does; occurrence counts are raw byte matches per transcript What that reading refined: The gate hop refutes the shape of the old sentence, not its substance: the answer text is not chosen by a three-branch conditional over three live phrasings but by a four-arm ladder over five templates, so the text states the ladder in the order the mapper evaluates it, names the idle arm and its optional remembered-selection tail, the freeform arm, the two answered forms and the unanswered fallback, and keeps the single writer at 164279300. Two further statements are corrected against a re-read. The claim that every live template occurs exactly twice holds for the four templates the mapper assigns but not for the idle text, whose opening words also sit at 71647977 and 179911217, so that sentence is narrowed. The depends sentence asserting that every occurrence of the retired phrasing is quoted inside other content is refuted by the corpus: six shell `tool_result` carriers begin with an AUQ marker and carry no `toolUseResult`, the marker fallback labels them `user.answer`, and csift's corpus-wide `user.answer` count is 124 rather than the 118 structured answers. Every number is restated from a census run under the stated rule, and the phrasing turnover is dated on the native builds: the retired form is present through 2.1.144 and gone from 2.1.145, the freeform form arrives by 2.1.160, the second answered form at 2.1.216.",
             "The idle template's head `No response after ` occurs 4 times in the 2.1.258 executable, at 71647977, 74944204, 164274519 and 179911217: two are the template itself (the packed constant table at 74944204 and the template function at 164274519) and two belong to the dialog's separate leading-space banner string ` No response after `, so three sit outside the mapper and the phrase is neither a mapper-only nor a template-only count.",
             "The corpus holds no carrier of the freeform `The user responded:` branch and none of the unanswered text; both are dated on the builds rather than by a specimen.",
             "An earlier reading this claim's text was corrected against: (b) the surviving site is a THREE-branch conditional, quoted verbatim from the binary: `Your questions have been answered: ${_}. You can now continue with these answers in mind.`:`The user answered: ${_}. Read the answers carefully \\u2014 they may request clarification, changes, or that you not proceed \\u2014 and follow what they actually say.`;else v=\"The user did not answer the questions.\" (c) on disk: 100 carriers START with 'Your questions have been answered', 16 START with 'The user answered: ', ZERO with 'User has answered your questions', ZERO with 'The user did not answer the questions'. (d) the pattern 'User has answered your questions' still matches 313 records corpus-wide but every one is a quotation inside prose, a tool result or an attachment - none is a carrier and none keys under user.answer. One per tool_result carrier whose rendered content STARTS with the phrasing (trim_start then starts_with, matching the code's own test); a mid-content quotation does not count, which is what separates the 313 pattern matches from the 0 real carriers. The live blast radius is currently nil because the marker test is only the FALLBACK - all 16 `The user answered:` carriers also carry the structured `toolUseResult.answers` object, so `is_auq_answer_boundary` still opens their turns and they still classify `user.answer` (see TURN-010). The exposure is latent and one-sided: any carrier that ever arrives WITHOUT `toolUseResult` under the new phrasing would silently stop opening a turn. Code sites src/model/markers.rs:3-9, 14-17 and 30-33 all match verbatim - the code is exactly as the claim describes it, which is precisely why the drift shows up as a missing marker rather than a wrong one. (b) strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o '.{0,60}Your questions have been answered.{0,420}'; (c) python3 over every top-level transcript: for each type=='user' record carrying a tool_result block, take the block's rendered content and count it when it STARTS WITH one of the candidate phrasings; (d) csift search '<phrasing>' --count-by label for each phrasing",
@@ -66243,10 +66249,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "python3 over every *.jsonl under the projects root except `journal.jsonl` and `elicitations.jsonl` (8245 transcripts): per transcript, join every AskUserQuestion `tool_use` id to the `tool_result` block naming it, bucket by the phrasing the flattened content starts with after `trim_start`, cross with the `toolUseResult` fields; separately, count occurrences of each marker and test whether any record text or `tool_result` content starts with one; then `csift search '' -t user.answer --count-by label` corpus-wide",
-            "observed": "137 AskUserQuestion carriers, all paired: 100 `Your questions have been answered`, 18 `The user answered:`, 3 `No response after`, 10 denial carriers and 6 `InputValidationError` carriers (all 16 is_error true); zero carriers of the retired phrasing, of `The user responded:` or of the unanswered text. Field shapes: 71 answers only, 47 answers plus non-empty annotations, 3 afkTimeoutMs beside an empty answers map, 16 string-valued; 32 admitted carriers use the `(notes only)` sentinel. The retired phrasing occurs 1319 times across 159 transcripts; no record's message text starts with it and three `tool_result` blocks do.",
-            "rule": "One count per `tool_result` block whose `tool_use_id` joins an AskUserQuestion `tool_use` block in the same transcript; the phrasing is taken after `trim_start`, as the code's own test does; occurrence counts are raw byte matches per transcript",
-            "note": "The gate hop refutes the shape of the old sentence, not its substance: the answer text is not chosen by a three-branch conditional over three live phrasings but by a four-arm ladder over five templates, so the text states the ladder in the order the mapper evaluates it, names the idle arm and its optional remembered-selection tail, the freeform arm, the two answered forms and the unanswered fallback, and keeps the single writer at 164279300. Two further statements are corrected against a re-read. The claim that every live template occurs exactly twice holds for the four templates the mapper assigns but not for the idle text, whose opening words also sit at 71647977 and 179911217, so that sentence is narrowed. The depends sentence asserting that every occurrence of the retired phrasing is quoted inside other content is refuted by the corpus: six shell `tool_result` carriers begin with an AUQ marker and carry no `toolUseResult`, the marker fallback labels them `user.answer`, and csift's corpus-wide `user.answer` count is 124 rather than the 118 structured answers. Every number is restated from a census run under the stated rule, and the phrasing turnover is dated on the native builds: the retired form is present through 2.1.144 and gone from 2.1.145, the freeform form arrives by 2.1.160, the second answered form at 2.1.216."
+            "instrument": "csift search '' -t user.answer --format json over every *.jsonl under the live projects root; per hit, the call its `result_of` edge names, read with csift show @<transcript> --line <that line> --raw | jq '.message.content[] | select(.type==\"tool_use\") | .name', and the carrier's own line through jq '.toolUseResult | type'; csift search 'Your questions have been answered' -t user.answer over the same root; csift stats @<transcript> on each transcript whose answer changed; every step once under the marker fallback without the call join and once with it",
+            "observed": "Whole live root at its instant, the measuring session's tree included. Without the join: 133 `user.answer` records in 27 transcripts - 127 carry a `toolUseResult` object and answer an AskUserQuestion call, 6 carry `toolUseResult` null and answer a Bash call, all 6 in subagent transcripts, each opening the second of its transcript's 2 turns; the phrase query returns 5 of those 6. With the join: 127 records in 21 transcripts, every one answering an AskUserQuestion call; the 6 read `agent.tool.result`, each of their transcripts reads 1 turn, and the phrase query returns 0. Excluding the measuring session's own tree (its top-level transcript holds 6 of the 127, its subagent transcripts all 6 shell carriers): 121 records in 20 transcripts both without the join and with it, and 0 shell carriers.",
+            "rule": "One per `user.answer` record `csift search` emits; the paired call is the `tool_use` block whose id the carrier's `tool_result` names, and a turn count is `stats`' `turns` for one transcript",
+            "note": "The marker fallback now pairs with the call: a `tool_result` opening with an answer marker answers only when its `tool_use_id` names an AskUserQuestion `tool_use` of the same transcript. The depends text states the join and where it is read; the residue line on the six shell carriers states that they keep their tool-result leaf. On this root every shell carrier of that shape sits inside the measuring session's own tree, so the excluded reading does not move."
           }
         }
       ]
@@ -66257,17 +66263,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "351-363",
+          "lines": "360-372",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (sections 4.4 / 6.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary.\n    ///\n    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled...` / `<tool_use_error>...` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "365-373",
-          "snippet": "    pub fn is_auq_answer_boundary(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
+          "lines": "380-388",
+          "snippet": "    pub fn is_auq_answer_boundary(&self, calls: Option<&CallIndex>) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "235-238",
+          "lines": "239-242",
           "snippet": "        self.blocks()?.iter().find_map(|b| match b {\n            Block::ToolResult { tool_use_id, .. } => tool_use_id.clone(),\n            _ => None,\n        })"
         }
       ],
@@ -66367,7 +66373,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "374-384",
+          "lines": "389-399",
           "snippet": "        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }\n        if !has_non_errored_tool_result {\n            return false;\n        }"
         }
       ],
@@ -66473,7 +66479,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "351-357",
+          "lines": "360-366",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (sections 4.4 / 6.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary."
         }
       ],
@@ -66681,17 +66687,17 @@
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "241-247",
+          "lines": "245-251",
           "snippet": "    /// True when this record is a tool-use rejection carrying a typed user instruction\n    /// (section 4.2.4) and so should open a turn. A rejection without a typed message is NOT a\n    /// boundary (see [`Record::plan_rejection_message`]).\n    #[must_use]\n    pub fn is_plan_rejection_boundary(&self) -> bool {\n        self.plan_rejection_message().is_some()\n    }"
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "237-238",
+          "lines": "241-242",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "232-234",
+          "lines": "236-238",
           "snippet": "        if let Some((Some(id), _)) = self.plan_rejection_message() {\n            return Some(id);\n        }"
         }
       ],
@@ -66897,13 +66903,13 @@
       "code": [
         {
           "path": "src/model/tests/boundaries.rs",
-          "lines": "364-366",
+          "lines": "446-448",
           "snippet": "fn plan_approval_is_not_a_boundary() {\n    // The approval path is the harness greenlight (no typed message, no is_error) -\n    // must NOT become a turn boundary."
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "261-266",
-          "snippet": "    pub fn opens_turn(&self) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary()\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
+          "lines": "272-277",
+          "snippet": "    pub fn opens_turn(&self, calls: Option<&CallIndex>) -> bool {\n        self.is_genuine_user()\n            || self.is_auq_answer_boundary(calls)\n            || self.is_plan_rejection_boundary()\n            || self.is_peer_message_record()\n    }"
         }
       ],
       "states": [
@@ -68263,23 +68269,23 @@
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "107-111",
+          "lines": "111-115",
           "snippet": "/// The blind-region rescue of the draft population: inside `PreCut`, an opener with a\n/// LATER opener sharing its `parentUuid` is still the recalled version.\nfn blind_region_openers(b: &Builder<'_>, out: &mut Chain, floor: usize) {\n    // The survivor is the LAST opener sharing a `parentUuid`, wherever it sits - a draft\n    // is usually recalled just below the floor and re-sent just above it, so restricting"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "113-123",
+          "lines": "117-127",
           "snippet": "    let mut last_by_parent: HashMap<&str, usize> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.opens[i] || out.replay_of.contains_key(&i) || !out.survival[i].selectable() {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            last_by_parent.insert(p, i);\n        }\n    }\n    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {"
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "122-132",
+          "lines": "126-136",
           "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "137-150",
-          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    node: impl Fn(&T) -> ChainNode<'_>,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(\n        records,\n        |i, x| node(x).opens_turn() && chain.opens(i),\n        &skip,\n    )\n}"
+          "lines": "186-191",
+          "snippet": "pub fn group_turn_indices_chained<T>(records: &[T], chain: &Chain) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(records, |i, _| chain.opens_turn(i) && chain.opens(i), &skip)\n}"
         }
       ],
       "states": [
@@ -68359,7 +68365,7 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "233-236",
+          "lines": "245-248",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -68517,7 +68523,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "122-132",
+          "lines": "126-136",
           "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         }
       ],
@@ -71153,12 +71159,12 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "397-403",
+          "lines": "413-419",
           "snippet": "    pub(crate) fn has_auq_response(&self) -> bool {\n        self.tur_probe()\n            .as_ref()\n            .and_then(|p| p.response.as_ref())\n            .and_then(serde_json::Value::as_str)\n            .is_some_and(|s| !s.trim().is_empty())\n    }"
         },
         {
           "path": "src/model/exchange.rs",
-          "lines": "129-151",
+          "lines": "133-155",
           "snippet": "        // is `toolUseResult.response` - render the questions asked, then the response.\n        let response = tur\n            .as_ref()\n            .and_then(|t| t.get(\"response\"))\n            .and_then(serde_json::Value::as_str)\n            .filter(|s| !s.trim().is_empty());\n        if let Some(resp) = response {\n            let questions = tur\n                .as_ref()\n                .and_then(|t| t.get(\"questions\"))\n                .and_then(serde_json::Value::as_array);\n            let n = questions.map_or(0, Vec::len);\n            let mut out = format!(\"[AskUserQuestion \u00b7 {n} question{}]\", plural(n));\n            for (i, q) in questions.into_iter().flatten().enumerate() {\n                let question = q\n                    .get(\"question\")\n                    .and_then(serde_json::Value::as_str)\n                    .unwrap_or_default();\n                out.push_str(&format!(\"\\nQ{} {}\", i + 1, normalize_line(question)));\n            }\n            out.push_str(&format!(\"\\nresponse: {}\", normalize_line(resp)));\n            return Some(out);\n        }"
         }
       ],
@@ -79714,7 +79720,7 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "233-242",
+          "lines": "239-248",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
@@ -79787,17 +79793,17 @@
       "code": [
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "228-236",
+          "lines": "240-248",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "380-382",
+          "lines": "402-404",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "264-266",
+          "lines": "270-272",
           "snippet": "        Some(crate::model::Kind::Draft { superseded_by }) => {\n            superseded_by.and_then(|s| edge(crate::model::EdgeKind::Supersedes, Basis::Position, s))\n        }"
         }
       ],
@@ -81060,17 +81066,17 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "202-213",
+          "lines": "208-219",
           "snippet": "pub(crate) fn chain_admits(r: ChainNode<'_>) -> bool {\n    if r.is_elicitation_marker() {\n        return false;\n    }\n    if r.uuid().is_none_or(str::is_empty) {\n        return false;\n    }\n    matches!(\n        r.kind(),\n        Some(\"user\" | \"assistant\" | \"attachment\" | \"system\")\n    )\n}"
         },
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "233-242",
+          "lines": "239-248",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "260-261",
+          "lines": "266-267",
           "snippet": "            .replay_of(idx)\n            .and_then(|s| edge(crate::model::EdgeKind::Replays, Basis::Key, s)),"
         }
       ],
@@ -81482,7 +81488,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "81-94",
+          "lines": "85-98",
           "snippet": "fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {\n    if !b.admit[i] || b.is_sidechain(i) {\n        // Outside the loader's model (a promoted non-record line, a sidechain lane, a\n        // merged elicitation marker): the axis says nothing about it.\n        return Survival::Live;\n    }\n    if b.on_chain[i] {\n        return Survival::Live;\n    }\n    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }\n}"
         }
       ],
@@ -81601,7 +81607,7 @@
       "code": [
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "172-185",
+          "lines": "176-189",
           "snippet": "fn assign_kinds(b: &Builder<'_>, out: &mut Chain, has_reply: &[bool]) {\n    let openers: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            matches!(out.survival(i), Survival::Abandoned { .. })\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n        })\n        .collect();\n    // The surviving opener per parent uuid, in ONE pass: a per-opener rescan would be\n    // O(records x abandoned openers), which on a session with hundreds of recalled drafts\n    // is the whole scan's cost over again.\n    let mut last_opener: HashMap<&str, usize> = HashMap::new();\n    for k in 0..b.len() {\n        if out.survival(k).selectable()"
         }
       ],
@@ -81696,12 +81702,12 @@
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "225-236",
+          "lines": "229-240",
           "snippet": "fn assistant_below(b: &Builder<'_>) -> Vec<bool> {\n    let mut out = vec![false; b.len()];\n    for i in (0..b.len()).rev() {\n        out[i] = b\n            .children_of(i)\n            .iter()\n            .any(|&c| out[c] || b.recs[c].kind() == Some(\"assistant\"));\n    }\n    out\n}\n\n/// The surviving opener that replaced an abandoned one: the chain's own child of the"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "267-269",
+          "lines": "273-275",
           "snippet": "        Some(crate::model::Kind::Rewound { resend }) => {\n            resend.and_then(|s| edge(crate::model::EdgeKind::Continues, Basis::Position, s))\n        }"
         }
       ],
@@ -81747,8 +81753,8 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "137-150",
-          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    node: impl Fn(&T) -> ChainNode<'_>,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(\n        records,\n        |i, x| node(x).opens_turn() && chain.opens(i),\n        &skip,\n    )\n}"
+          "lines": "186-191",
+          "snippet": "pub fn group_turn_indices_chained<T>(records: &[T], chain: &Chain) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(records, |i, _| chain.opens_turn(i) && chain.opens(i), &skip)\n}"
         }
       ],
       "states": [
@@ -81860,12 +81866,12 @@
         },
         {
           "path": "src/model/chain/branches.rs",
-          "lines": "90-93",
+          "lines": "94-97",
           "snippet": "    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "370",
+          "lines": "376",
           "snippet": "            rec.logical_parent_uuid.as_deref(),"
         }
       ],
@@ -82256,7 +82262,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "277-279",
+          "lines": "283-285",
           "snippet": "            .abandoned_root(idx)\n            .filter(|&root| root != idx)\n            .and_then(|root| edge(crate::model::EdgeKind::Branches, Basis::Position, root)),"
         }
       ],
@@ -82921,7 +82927,7 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "298-300",
+          "lines": "310-312",
           "snippet": "        ctx.schedule_fires\n            .and_then(|ix| ix.instant_for(rec.parent_uuid.as_deref()))\n            .map(str::to_string)"
         },
         {
@@ -86210,7 +86216,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "458-462",
+          "lines": "474-478",
           "snippet": "pub fn converted_text(&self) -> Option<&ConversionText> {\n        self.conversion_parsed\n            .get_or_init(|| {\n                let rendered = conversion_text(self.rendered.as_deref());\n                let human_turn = conversion_text(self.rendered_in_human_turn.as_deref());"
         },
         {
@@ -87729,12 +87735,12 @@
         },
         {
           "path": "src/commands/search/hits.rs",
-          "lines": "251",
+          "lines": "263",
           "snippet": "    let resume_paired = rec.resume_paired(ctx);"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "397-399",
+          "lines": "403-405",
           "snippet": "    if rec.resume_paired(&env.ctx_for(kept)) != Some(true) {\n        return None;\n    }"
         }
       ],
@@ -87967,7 +87973,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "435-436",
+          "lines": "441-442",
           "snippet": "fn reports_edge(rec: &Record, env: &ClassifyEnv<'_>) -> HitFact {\n    let Some(id) = rec.pulse_tool_use_id() else {"
         },
         {
@@ -87977,7 +87983,7 @@
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "210-216",
+          "lines": "216-222",
           "snippet": "    out.push(record_text::for_edge_at(\n        crate::model::EdgeKind::Parent,\n        Basis::Position,\n        Some(parent),\n        None,\n        line,\n    ));"
         }
       ],
@@ -89488,7 +89494,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3577"
+          "lines": "3578"
         }
       ],
       "states": [
@@ -90187,12 +90193,12 @@
       "code": [
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "358-359",
+          "lines": "364-365",
           "snippet": "    let (anchor, basis) = match segment(\"anchorUuid\").filter(|a| Some(*a) != rec.uuid.as_deref()) {\n        Some(a) => (Some(a), Basis::Key),"
         },
         {
           "path": "src/commands/search/hit_facts/provenance.rs",
-          "lines": "377",
+          "lines": "383",
           "snippet": "            .map(|u| edge(crate::model::EdgeKind::Preserves, Basis::Key, Some(u))),"
         }
       ],

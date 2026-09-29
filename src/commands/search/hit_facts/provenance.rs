@@ -55,8 +55,10 @@ thread_local! {
 }
 
 impl TurnRoots {
-    /// Fill the table in ONE forward pass over the turn's rows.
-    pub(crate) fn build(turn: &Turn<'_>) -> TurnRoots {
+    /// Fill the table in ONE forward pass over the turn's rows. `calls` is the transcript's
+    /// user-facing call index, the one the grouper opened this turn under, so the opener
+    /// found here is the record the turn was opened on.
+    pub(crate) fn build(turn: &Turn<'_>, calls: &CallIndex) -> TurnRoots {
         #[cfg(test)]
         TURN_ROOT_BUILDS.with(|n| n.set(n.get() + 1));
         // Spine rows are in the position map too: an attachment chain runs through lines the
@@ -70,7 +72,10 @@ impl TurnRoots {
             .enumerate()
             .filter_map(|(i, r)| r.uuid().map(|u| (u, i)))
             .collect();
-        let opener = turn.records.iter().position(|r| r.node().opens_turn());
+        let opener = turn
+            .records
+            .iter()
+            .position(|r| r.node().opens_turn(Some(calls)));
         let mut hops: Vec<Option<u32>> = vec![None; turn.records.len()];
         if let Some(o) = opener {
             hops[o] = Some(0);
@@ -136,8 +141,9 @@ pub(crate) struct TurnRootsCell {
 impl TurnRootsCell {
     /// The table, building it on first use. What the cell is FOR is counted at the build
     /// ([`TURN_ROOT_BUILDS`]), not here: a counter on this side would agree with itself.
-    pub(crate) fn get(&mut self, turn: &Turn<'_>) -> &TurnRoots {
-        self.table.get_or_insert_with(|| TurnRoots::build(turn))
+    pub(crate) fn get(&mut self, turn: &Turn<'_>, calls: &CallIndex) -> &TurnRoots {
+        self.table
+            .get_or_insert_with(|| TurnRoots::build(turn, calls))
     }
 }
 

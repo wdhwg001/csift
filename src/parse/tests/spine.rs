@@ -232,7 +232,7 @@ fn the_probe_reports_the_census_type_and_gates_the_spine_on_it() {
     let node = crate::model::ChainNode::Spine(&s);
     assert!(node.message_id().is_none());
     assert!(!node.has_tool_result());
-    assert!(!node.opens_turn());
+    assert!(!node.opens_turn(None));
 
     let (_, census, spine) = both(UNWANTED);
     assert_eq!(census, "file-history-snapshot", "censused all the same");
@@ -306,7 +306,7 @@ fn demoting_a_parsed_record_lands_on_the_same_row_as_walking_its_line() {
         let node = crate::model::ChainNode::Spine(&demoted);
         assert!(node.message_id().is_none());
         assert!(!node.has_tool_result());
-        assert!(!node.opens_turn(), "and it opens no turn");
+        assert!(!node.opens_turn(None), "and it opens no turn");
     }
     // The two shapes whose structural fields steer the walk keep them.
     let boundary = spine_from_record(

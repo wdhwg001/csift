@@ -15,7 +15,7 @@ fn automation_trigger_parses_task_notification() {
         r.is_genuine_user(),
         "a task-notification passes the genuine-user gate"
     );
-    assert!(r.opens_turn());
+    assert!(r.opens_turn(None));
     let t = r.automation_trigger().expect("classified as automation");
     assert_eq!(t.task_id.as_deref(), Some("wh1it9jlj"));
     assert_eq!(t.status.as_deref(), Some("completed"));

@@ -11,13 +11,17 @@ impl Record {
     /// `toolUseResult.questions[]` zipped with `toolUseResult.answers{}` + `.annotations{}`;
     /// falls back to the synthesized `tool_result` string (parsed for `"<q>"="<a>"`) when
     /// `toolUseResult` is absent. Returns `None` when this is not an answered AUQ carrier.
+    /// `calls` is the transcript's user-facing call index: the marker fallback renders only
+    /// for a result that answers an AskUserQuestion call in it (see
+    /// [`Record::is_auq_answer_boundary`]), and `None` renders the structured forms
+    /// alone.
     ///
     /// CODEPOINT-SAFE: works entirely on owned `String`/`&str` values pulled structurally
     /// from JSON; the only excerpting is whitespace normalization, never a byte-offset
     /// slice into a (possibly CJK) question/answer body.
     #[must_use]
-    pub fn auq_exchange(&self) -> Option<String> {
-        if !self.is_auq_answer_boundary() {
+    pub fn auq_exchange(&self, calls: Option<&CallIndex>) -> Option<String> {
+        if !self.is_auq_answer_boundary(calls) {
             return None;
         }
         // Structured path: questions[] (ordered) zipped with answers{question -> answer}.
@@ -252,15 +256,22 @@ impl Record {
     /// teammate/peer message. Every surface (turns / search / recover / files) keys turn
     /// delimiting on THIS predicate so they never drift.
     ///
+    /// `calls` is the transcript's user-facing call index ([`CallIndex`]): an
+    /// AskUserQuestion answer with no `toolUseResult` opens a turn only when the result
+    /// opening with the answer marker names an AskUserQuestion call in it. `None` - a caller
+    /// holding no transcript - opens on the structured answer signals alone. The
+    /// conversation chain computes this once per record under its own index
+    /// ([`Chain::opens_turn`]), and every turn-numbering surface reads that answer.
+    ///
     /// An inbound PEER message (`<teammate-message>` OR `<agent-message>`) is NOT
     /// [`Record::is_genuine_user`] - it is a peer, not the operator - yet it MUST still delimit a
     /// turn, which is why [`Record::is_peer_message_record`] has its own clause here. Leaning on
     /// the genuine-user arm for both jobs forces a choice between two wrong answers: counting the
     /// peer as the human, or folding a real delivered message into the turn above it.
     #[must_use]
-    pub fn opens_turn(&self) -> bool {
+    pub fn opens_turn(&self, calls: Option<&CallIndex>) -> bool {
         self.is_genuine_user()
-            || self.is_auq_answer_boundary()
+            || self.is_auq_answer_boundary(calls)
             || self.is_plan_rejection_boundary()
             || self.is_peer_message_record()
     }
@@ -272,23 +283,24 @@ impl Record {
     /// - an answered AskUserQuestion -> the full Q+options+answer unit
     ///   ([`Record::auq_exchange`]);
     /// - a tool-use rejection-with-message -> the user's typed instruction, optionally
-    ///   suffixed with a `[plan: <path>]` pointer when `plan_index` resolves the rejected
-    ///   `tool_use_id` to an ExitPlanMode plan (section 4.2.4). `plan_index` may be `None` (no
-    ///   plan resolution attempted), in which case the rejection text is returned alone.
+    ///   suffixed with a `[plan: <path>]` pointer when `calls` resolves the rejected
+    ///   `tool_use_id` to an ExitPlanMode plan (section 4.2.4). `calls` may be `None` (no
+    ///   transcript at hand), in which case the rejection text is returned alone and an
+    ///   AskUserQuestion answer renders only from its structured signals.
     ///
     /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout
     /// (delegates to the codepoint-safe accessors).
     #[must_use]
-    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {
+    pub fn reconstructed_user_text(&self, calls: Option<&CallIndex>) -> Option<String> {
         if let Some(text) = self.genuine_user_text() {
             return Some(text);
         }
-        if let Some(unit) = self.auq_exchange() {
+        if let Some(unit) = self.auq_exchange(calls) {
             return Some(normalize_line(&unit));
         }
         if let Some((rejected_id, msg)) = self.plan_rejection_message() {
             let mut out = normalize_line(&msg);
-            if let (Some(idx), Some(id)) = (plan_index, rejected_id.as_deref()) {
+            if let (Some(idx), Some(id)) = (calls, rejected_id.as_deref()) {
                 if let Some(path) = idx.plan_path(id) {
                     out.push_str(&format!(" [plan: {path}]"));
                 }
@@ -325,7 +337,7 @@ impl Record {
     }
 
     /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as
-    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`PlanIndex`] is built
+    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`CallIndex`] is built
     /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields
     /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty
     /// for any record carrying no ExitPlanMode tool_use.

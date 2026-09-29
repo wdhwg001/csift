@@ -252,7 +252,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         None,
         &labels,
         LabelFilter::all(),
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &ClassifyCtx::top_level(),
     )
     .expect("a channel delivery emits");
@@ -270,7 +270,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         None,
         &labels,
         hook_only,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &ClassifyCtx::top_level(),
     )
     .expect("hook view");

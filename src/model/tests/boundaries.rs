@@ -2,6 +2,18 @@
 
 use super::*;
 
+/// The call index of a transcript whose AskUserQuestion call is `ask` and whose other call
+/// is the shell command `other` - the join a marker-only answer is decided on.
+fn calls_with(ask: &str, other: &str) -> CallIndex {
+    let asked = parse(&format!(
+        r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"{ask}","name":"AskUserQuestion","input":{{}}}}]}}}}"#
+    ));
+    let ran = parse(&format!(
+        r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"{other}","name":"Bash","input":{{"command":"strings claude"}}}}]}}}}"#
+    ));
+    CallIndex::from_records([&asked, &ran])
+}
+
 #[test]
 fn auq_answer_carrier_detected() {
     // Real shape: a user-carrier whose tool_result content is the synthesized
@@ -9,12 +21,13 @@ fn auq_answer_carrier_detected() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"A\". You can now continue."}]}}"#,
     );
-    assert!(r.is_auq_answer());
+    let calls = calls_with("x", "b1");
+    assert!(r.is_auq_answer(&calls));
     // It is NOT a genuine user (it's a carrier) but IS an AUQ answer - and, per the
     // section 6.4 behavior change, it DOES open a turn (the answer is the user's message).
     assert!(!r.is_genuine_user());
-    assert!(r.is_auq_answer_boundary());
-    assert!(r.opens_turn());
+    assert!(r.is_auq_answer_boundary(Some(&calls)));
+    assert!(r.opens_turn(Some(&calls)));
 }
 
 #[test]
@@ -26,11 +39,15 @@ fn auq_answer_alternate_phrasing_detected() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"Your questions have been answered: \"Q\"=\"A\". You can now continue with these answers in mind."}]}}"#,
     );
-    assert!(r.is_auq_answer(), "alternate AUQ phrasing must be detected");
+    let calls = calls_with("x", "b1");
+    assert!(
+        r.is_auq_answer(&calls),
+        "alternate AUQ phrasing must be detected"
+    );
     assert!(!r.is_genuine_user());
     // The dominant phrasing is also a turn boundary (section 6.4).
-    assert!(r.is_auq_answer_boundary());
-    assert!(r.opens_turn());
+    assert!(r.is_auq_answer_boundary(Some(&calls)));
+    assert!(r.opens_turn(Some(&calls)));
 }
 
 #[test]
@@ -80,8 +97,10 @@ fn auq_answer_no_false_positive_on_file_quoting_marker() {
     let r = parse(
         r##"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"# SPEC.md (10000 chars)\n...the marker is \"User has answered your questions:\" which CC emits to synthesize the answer record. Lots more file content follows here."}]}}"##,
     );
-    assert!(!r.is_auq_answer());
-    assert!(!r.is_auq_answer_boundary());
+    // Not even the prefilter's widest reading, which takes every result for an answer,
+    // calls a mid-text quote one: the marker test itself is start-anchored.
+    assert!(!r.is_auq_answer(&CallIndex::assume_asks()));
+    assert!(!r.is_auq_answer_boundary(None));
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
         vec![Class::AgentToolResult]
@@ -96,10 +115,15 @@ fn auq_answer_genuine_marker_lead_still_classifies_as_user_answer() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Pick one\"=\"A\". You can now continue with the user's answers in mind."}]}}"#,
     );
-    assert!(r.is_auq_answer());
-    assert!(r.is_auq_answer_boundary());
+    let calls = calls_with("x", "b1");
+    assert!(r.is_auq_answer(&calls));
+    assert!(r.is_auq_answer_boundary(Some(&calls)));
+    let ctx = ClassifyCtx {
+        calls: Some(&calls),
+        ..ClassifyCtx::top_level()
+    };
     assert_eq!(
-        r.classify(&ClassifyCtx::top_level()),
+        r.classify(&ctx),
         vec![Class::UserAnswer, Class::AgentToolResult]
     );
 }
@@ -112,7 +136,7 @@ fn auq_answer_structured_path_independent_of_marker_text() {
     let r = parse(
         r#"{"type":"user","toolUseResult":{"answers":{"Pick one":"A"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"(answer recorded)"}]}}"#,
     );
-    assert!(r.is_auq_answer_boundary());
+    assert!(r.is_auq_answer_boundary(None));
     assert_eq!(
         r.classify(&ClassifyCtx::top_level()),
         vec![Class::UserAnswer, Class::AgentToolResult]
@@ -124,7 +148,7 @@ fn plain_tool_result_is_not_auq_answer() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"just a normal tool output"}]}}"#,
     );
-    assert!(!r.is_auq_answer());
+    assert!(!r.is_auq_answer(&CallIndex::assume_asks()));
 }
 
 #[test]
@@ -132,14 +156,14 @@ fn is_auq_answer_false_for_non_user() {
     let r = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}"#,
     );
-    assert!(!r.is_auq_answer());
+    assert!(!r.is_auq_answer(&CallIndex::assume_asks()));
 }
 
 #[test]
 fn is_auq_answer_false_when_no_blocks() {
     // user record with string content -> no blocks -> not an AUQ answer.
     let r = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
-    assert!(!r.is_auq_answer());
+    assert!(!r.is_auq_answer(&CallIndex::assume_asks()));
 }
 
 #[test]
@@ -149,7 +173,7 @@ fn is_auq_answer_skips_non_tool_result_blocks() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"plain user text, no AUQ marker"}]}}"#,
     );
-    assert!(!r.is_auq_answer());
+    assert!(!r.is_auq_answer(&CallIndex::assume_asks()));
 }
 
 // -- section 4.4 AskUserQuestion answer = a genuine-user TURN BOUNDARY (the sanctioned
@@ -163,10 +187,10 @@ fn auq_answer_with_structured_answers_is_a_boundary() {
     );
     // It is still NOT a "genuine user" (it rides on a carrier) but IS a boundary.
     assert!(!r.is_genuine_user());
-    assert!(r.is_auq_answer_boundary());
-    assert!(r.opens_turn());
+    assert!(r.is_auq_answer_boundary(None));
+    assert!(r.opens_turn(None));
     // The reconstructed exchange carries Q + options + the answer prose.
-    let unit = r.auq_exchange().expect("auq exchange");
+    let unit = r.auq_exchange(None).expect("auq exchange");
     assert!(unit.contains("AskUserQuestion · 1 question"));
     assert!(unit.contains("which?"));
     assert!(unit.contains("FIX"));
@@ -187,8 +211,8 @@ fn auq_answer_multibyte_is_codepoint_safe_boundary() {
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"question":"which option for step two? 🤖","header":"STEP TWO","options":[{"label":"option A (recommended)"}]}],"answers":{"which option for step two? 🤖":"🤖 option A is fine, the scope is broader than stated"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two? 🤖\"=\"🤖 option A is fine\"."}]}}"#,
     );
-    assert!(r.is_auq_answer_boundary());
-    let unit = r.auq_exchange().expect("multibyte auq exchange");
+    assert!(r.is_auq_answer_boundary(None));
+    let unit = r.auq_exchange(None).expect("multibyte auq exchange");
     assert!(unit.contains("🤖 option A is fine, the scope is broader than stated"));
     assert!(unit.contains("which option for step two? 🤖"));
     assert!(unit.contains("option A (recommended)"));
@@ -202,7 +226,7 @@ fn auq_exchange_surfaces_each_option_description() {
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"header":"EXIF tool","multiSelect":false,"options":[{"description":"standard route, ~10MB download, one-liner","label":"brew install exiftool (Recommended)"},{"description":"pure python, pip install piexif","label":"pip install piexif"}],"question":"which tool re-attaches EXIF?"}],"answers":{"which tool re-attaches EXIF?":"brew install exiftool (Recommended)"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which tool re-attaches EXIF?\"=\"brew install exiftool (Recommended)\". You can now continue."}]}}"#,
     );
-    let unit = r.auq_exchange().expect("auq exchange");
+    let unit = r.auq_exchange(None).expect("auq exchange");
     // Both labels AND both descriptions present, verbatim.
     assert!(unit.contains("brew install exiftool (Recommended)"));
     assert!(
@@ -225,7 +249,7 @@ fn auq_exchange_surfaces_notes_when_answer_is_notes_only() {
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"header":"Routing","multiSelect":false,"options":[{"description":"the inbound path","label":"Route A"},{"description":"the outbound path","label":"Route B"}],"question":"which route for the queue?"}],"answers":{"which route for the queue?":"(notes only)"},"annotations":{"which route for the queue?":{"notes":"never conflate the two — Route A is inbound only, Route B is outbound only"}}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which route for the queue?\"=\"(notes only)\". You can now continue."}]}}"#,
     );
-    let unit = r.auq_exchange().expect("auq exchange");
+    let unit = r.auq_exchange(None).expect("auq exchange");
     // The placeholder answer is shown, but the real message (the notes) is what the
     // user actually said - it MUST be present and searchable.
     assert!(
@@ -248,11 +272,69 @@ fn auq_answer_marker_only_fallback_is_a_boundary() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"q\"=\"chosen label\". You can now continue."}]}}"#,
     );
-    assert!(r.is_auq_answer_boundary());
-    assert!(r.opens_turn());
-    let unit = r.auq_exchange().expect("fallback exchange");
+    let calls = calls_with("q1", "b1");
+    assert!(r.is_auq_answer_boundary(Some(&calls)));
+    assert!(r.opens_turn(Some(&calls)));
+    let unit = r.auq_exchange(Some(&calls)).expect("fallback exchange");
     assert!(unit.contains("AskUserQuestion"));
     assert!(unit.contains("chosen label"));
+    assert_eq!(
+        r.reconstructed_user_text(Some(&calls)).as_deref(),
+        Some(unit.as_str())
+    );
+}
+
+#[test]
+fn a_marker_on_another_tools_result_is_no_answer() {
+    // A shell run over the harness binary prints the answer template, so its result
+    // OPENS with the marker - and it is the answer to a Bash call, not to an ask. It keeps
+    // its plain tool-result leaf, opens no turn and renders no exchange, while a result
+    // with the same text answering the AskUserQuestion call of the same transcript is one.
+    let calls = calls_with("q1", "b1");
+    let ran = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"Your questions have been answered: \n=null&&z.length>=1"}]}}"#,
+    );
+    assert!(!ran.is_auq_answer(&calls));
+    assert!(!ran.is_auq_answer_boundary(Some(&calls)));
+    assert!(!ran.opens_turn(Some(&calls)));
+    assert!(ran.auq_exchange(Some(&calls)).is_none());
+    assert!(ran.reconstructed_user_text(Some(&calls)).is_none());
+    let ctx = ClassifyCtx {
+        calls: Some(&calls),
+        ..ClassifyCtx::top_level()
+    };
+    assert_eq!(ran.classify(&ctx), vec![Class::AgentToolResult]);
+    let answered = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"q\"=\"a\"."}]}}"#,
+    );
+    assert!(answered.opens_turn(Some(&calls)));
+    assert_eq!(
+        answered.classify(&ctx),
+        vec![Class::UserAnswer, Class::AgentToolResult]
+    );
+}
+
+#[test]
+fn a_marker_only_answer_needs_the_transcript_to_name_its_call() {
+    // With no transcript at hand, which call a result answers is unknown, so the marker
+    // alone decides nothing: the structured signals are the whole answer. A structured
+    // carrier is unaffected either way.
+    let r = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"The user answered: \"q\"=\"a\". Read the answers carefully."}]}}"#,
+    );
+    assert!(!r.is_auq_answer_boundary(None));
+    assert!(!r.opens_turn(None));
+    assert!(r.auq_exchange(None).is_none());
+    assert_eq!(
+        r.classify(&ClassifyCtx::top_level()),
+        vec![Class::AgentToolResult]
+    );
+    // A result naming no call at all names no ask.
+    let no_id = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"The user answered: \"q\"=\"a\"."}]}}"#,
+    );
+    assert!(!no_id.is_auq_answer(&calls_with("q1", "b1")));
+    assert!(no_id.is_auq_answer(&CallIndex::assume_asks()));
 }
 
 #[test]
@@ -263,14 +345,14 @@ fn cancelled_auq_is_not_a_boundary() {
         r#"{"type":"user","toolUseResult":"User rejected tool use","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."}]}}"#,
     );
     assert!(
-        !r.is_auq_answer_boundary(),
+        !r.is_auq_answer_boundary(None),
         "cancelled AUQ is not a boundary"
     );
     assert!(
         !r.is_plan_rejection_boundary(),
         "no typed message → not a rejection boundary"
     );
-    assert!(!r.opens_turn());
+    assert!(!r.opens_turn(None));
 }
 
 #[test]
@@ -280,8 +362,8 @@ fn auq_validation_error_is_not_a_boundary() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","is_error":true,"content":"<tool_use_error>InputValidationError: AskUserQuestion failed…</tool_use_error>"}]}}"#,
     );
-    assert!(!r.is_auq_answer_boundary());
-    assert!(!r.opens_turn());
+    assert!(!r.is_auq_answer_boundary(None));
+    assert!(!r.opens_turn(None));
 }
 
 // -- section 4.2.4 ExitPlanMode / tool-use rejection WITH a typed message = a genuine-user
@@ -294,7 +376,7 @@ fn plan_rejection_with_typed_message_is_a_boundary() {
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLANREJECT01","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nplease run the smoke tests once and diff the output before calling it done."}]}}"#,
     );
     assert!(r.is_plan_rejection_boundary());
-    assert!(r.opens_turn());
+    assert!(r.opens_turn(None));
     let (id, msg) = r.plan_rejection_message().expect("rejection message");
     assert_eq!(id.as_deref(), Some("toolu_PLANREJECT01"));
     // The genuine message is ONLY the typed tail (whole), not the synthesized prefix.
@@ -335,7 +417,7 @@ fn an_auq_answer_names_the_ask_it_answers() {
     let r = parse(
         r#"{"type":"user","toolUseResult":{"answers":{"which lane?":"left"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_auq","content":"User has answered your questions: \"which lane?\"=\"left\". You can now continue."}]}}"#,
     );
-    assert!(r.is_auq_answer_boundary());
+    assert!(r.is_auq_answer_boundary(None));
     assert_eq!(r.answered_call_id().as_deref(), Some("toolu_auq"));
 }
 
@@ -357,7 +439,7 @@ fn plan_rejection_without_message_is_not_a_boundary() {
     );
     assert!(r.plan_rejection_message().is_none());
     assert!(!r.is_plan_rejection_boundary());
-    assert!(!r.opens_turn());
+    assert!(!r.opens_turn(None));
 }
 
 #[test]
@@ -368,21 +450,21 @@ fn plan_approval_is_not_a_boundary() {
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"User has approved your plan. You can now start coding. Your plan has been saved to: /Users/testuser/.claude/plans/elegant-scribbling-dream.md"}]}}"#,
     );
     assert!(!r.is_plan_rejection_boundary());
-    assert!(!r.is_auq_answer_boundary());
-    assert!(!r.opens_turn());
+    assert!(!r.is_auq_answer_boundary(None));
+    assert!(!r.opens_turn(None));
 }
 
 #[test]
 fn plan_rejection_surfaces_plan_pointer_via_index() {
     // The ExitPlanMode tool_use carries planFilePath; the rejection resolves it via
-    // the PlanIndex -> the reconstructed user text carries a `[plan: …]` pointer.
+    // the CallIndex -> the reconstructed user text carries a `[plan: …]` pointer.
     let tool_use = parse(
         r##"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN","name":"ExitPlanMode","input":{"plan":"# the plan body","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"##,
     );
     let rejection = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nadd a screenshot check first"}]}}"#,
     );
-    let index = PlanIndex::from_records([&tool_use]);
+    let index = CallIndex::from_records([&tool_use]);
     assert_eq!(
         index.plan_path("toolu_PLAN"),
         Some("/Users/testuser/.claude/plans/elegant-scribbling-dream.md")
@@ -404,7 +486,7 @@ fn plan_rejection_of_non_exit_plan_tool_has_no_pointer() {
     let rejection = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_EDIT","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nuse a different file path"}]}}"#,
     );
-    let index = PlanIndex::default(); // no ExitPlanMode indexed
+    let index = CallIndex::default(); // no ExitPlanMode indexed
     assert!(rejection.is_plan_rejection_boundary());
     let text = rejection.reconstructed_user_text(Some(&index)).unwrap();
     assert_eq!(text, "use a different file path");
@@ -433,7 +515,7 @@ fn plan_index_skips_pointer_without_path() {
     let r = parse(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"x"}}]}}"#,
     );
-    let index = PlanIndex::from_records([&r]);
+    let index = CallIndex::from_records([&r]);
     assert!(index.plan_path("p1").is_none());
 }
 
@@ -446,9 +528,9 @@ fn a_freeform_response_carrier_is_an_answer_boundary_and_renders_the_response() 
     let rec = crate::parse::parse_line(raw.as_bytes()).unwrap().unwrap();
     assert!(rec.has_auq_response());
     assert!(!rec.has_auq_answers());
-    assert!(rec.is_auq_answer_boundary());
-    assert!(rec.opens_turn());
-    let unit = rec.auq_exchange().unwrap();
+    assert!(rec.is_auq_answer_boundary(None));
+    assert!(rec.opens_turn(None));
+    let unit = rec.auq_exchange(None).unwrap();
     assert!(unit.starts_with("[AskUserQuestion · 1 question]"), "{unit}");
     assert!(unit.contains("Q1 Which harbor?"), "{unit}");
     assert!(
@@ -467,7 +549,7 @@ fn a_freeform_response_carrier_is_an_answer_boundary_and_renders_the_response() 
         );
     let rec = crate::parse::parse_line(blank.as_bytes()).unwrap().unwrap();
     assert!(!rec.has_auq_response());
-    assert!(!rec.is_auq_answer_boundary());
+    assert!(!rec.is_auq_answer_boundary(None));
 }
 
 #[test]
@@ -476,11 +558,11 @@ fn a_questionless_answer_map_still_renders_its_notes() {
     // still surfaces a non-empty note; an empty note string renders no note line.
     let raw = r#"{"type":"user","uuid":"r2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ask2","content":"The user answered: \"Which route?\"=\"south\" notes: via the coast"}]},"toolUseResult":{"answers":{"Which route?":"south"},"annotations":{"Which route?":{"notes":"via the coast"}}}}"#;
     let rec = crate::parse::parse_line(raw.as_bytes()).unwrap().unwrap();
-    let unit = rec.auq_exchange().unwrap();
+    let unit = rec.auq_exchange(None).unwrap();
     assert!(unit.contains("Q1: Which route?"), "{unit}");
     assert!(unit.contains("A1: south"), "{unit}");
     assert!(unit.contains("note: via the coast"), "{unit}");
     let blank = raw.replace(r#""notes":"via the coast""#, r#""notes":"""#);
     let rec = crate::parse::parse_line(blank.as_bytes()).unwrap().unwrap();
-    assert!(!rec.auq_exchange().unwrap().contains("note:"));
+    assert!(!rec.auq_exchange(None).unwrap().contains("note:"));
 }

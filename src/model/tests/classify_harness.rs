@@ -406,7 +406,7 @@ fn agents_stopped_notice_is_a_subagent_notification_not_the_human() {
             serde_json::to_string(text).unwrap()
         ));
         assert!(!rec.is_genuine_user(), "never the operator: {text}");
-        assert!(!rec.opens_turn(), "never a turn opener: {text}");
+        assert!(!rec.opens_turn(None), "never a turn opener: {text}");
         assert_eq!(
             rec.classify(&ClassifyCtx::top_level()),
             vec![Class::NotificationSubagent]

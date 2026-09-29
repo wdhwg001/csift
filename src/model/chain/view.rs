@@ -90,6 +90,8 @@ pub struct ChainView {
     /// own jsonl line and instant already resolved (the view holds the line map, its
     /// caller does not).
     crossing: CrossingReport,
+    /// The transcript's user-facing calls, from the chain's own pass ([`Chain::calls`]).
+    calls: CallIndex,
 }
 
 impl ChainView {
@@ -128,9 +130,9 @@ impl ChainView {
             }
         }
 
+        // The projector is the identity: `combined` already holds the ONE node shape.
         let chain = Chain::build_by(&combined, |r| *r, None, budget);
-        let index_turns = group_turn_indices_chained(&combined, |r| *r, &chain);
-        // (the projector is the identity: `combined` already holds the ONE node shape)
+        let index_turns = group_turn_indices_chained(&combined, &chain);
 
         let mut survival = vec![Survival::Live; n];
         let mut stamp = vec![TurnStamp::Live(0); n];
@@ -188,6 +190,7 @@ impl ChainView {
             branches: branch_by_root.into_iter().collect(),
             abandoned_openers,
             crossing,
+            calls: chain.calls().clone(),
         }
     }
 
@@ -260,5 +263,13 @@ impl ChainView {
     #[must_use]
     pub fn crossing(&self) -> &CrossingReport {
         &self.crossing
+    }
+
+    /// The transcript's user-facing call index ([`Chain::calls`]) - what a surface that
+    /// renders an opener pairs an AskUserQuestion marker with, so its text and the turn the
+    /// view numbered agree.
+    #[must_use]
+    pub fn calls(&self) -> &CallIndex {
+        &self.calls
     }
 }

@@ -45,6 +45,8 @@ pub(crate) fn finish<'a>(
         rewound_turns: 0,
         drafts: 0,
         replay_copies: b.replay_of.len(),
+        opens_turn: Vec::new(),
+        calls: CallIndex::default(),
     };
     let has_reply = assistant_below(&b);
     blind_region_openers(&b, &mut out, walked.floor);
@@ -71,6 +73,8 @@ pub(crate) fn finish<'a>(
         .filter(|k| matches!(k, Kind::Draft { .. }))
         .count();
     out.rewound_turns = out.kinds.len() - out.drafts;
+    out.opens_turn = b.opens;
+    out.calls = b.calls;
     (out, UuidIndex::from_map(b.map))
 }
 

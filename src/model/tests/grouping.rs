@@ -65,7 +65,7 @@ fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    let turns = group_turn_indices(&records, |r| r.opens_turn());
+    let turns = group_turn_indices(&records, |r| r.opens_turn(None));
     assert_eq!(
         turns,
         vec![vec![0, 1], vec![2, 3, 4], vec![5]],
@@ -275,7 +275,7 @@ fn deduped_grouping_matches_plain_when_no_drafts() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    let plain = group_turn_indices(&records, |r| r.opens_turn());
+    let plain = group_turn_indices(&records, |r| r.opens_turn(None));
     let deduped =
         group_turn_indices_deduped(&records, |r| ChainNode::Full(r), CrossingBudget::NONE);
     assert_eq!(plain, deduped);

@@ -1446,6 +1446,16 @@ surface change bumps the PATCH.
   fixed plural; both budget figures, and the header's reserved worst case, now go through
   the count-and-noun rule every other csift count takes: `budget 1 char is PER session →
   up to 1 char total`, and `budget 2 chars` as before.
+- **A shell result quoting the AskUserQuestion answer text no longer opens a turn.** The
+  answer's marker fallback, for a carrier with no `toolUseResult`, read the text alone, so
+  a `tool_result` whose content opened with `Your questions have been answered:` - a
+  `strings` run over the harness binary prints exactly that - labelled `user.answer` and
+  opened a turn. The fallback now answers only when that result's `tool_use_id` names an
+  AskUserQuestion call of the same transcript; such a shell result keeps
+  `agent.tool.result`, and every surface that numbers turns (`search`, `show`, `stats`,
+  `verbatim`, `files`, `recover`, `image`) counts one turn fewer on its transcript. A
+  surface that reads no whole transcript (the `list` preview, the live tail) renders an
+  answer from its structured fields only.
 
 ### Performance
 

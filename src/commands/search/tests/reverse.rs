@@ -46,7 +46,11 @@ fn a_record_with_no_physical_line_contributes_no_line() {
     let kept = vec![opener, merged, below];
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
 
-    let lines = for_closure(&rows, &ForAddr::Line(1));
+    let lines = for_closure(
+        &rows,
+        &ForAddr::Line(1),
+        &crate::model::CallIndex::default(),
+    );
     let got: Vec<usize> = lines.into_iter().collect();
     assert_eq!(
         got,
@@ -65,13 +69,22 @@ fn the_addressed_record_is_in_the_set() {
     )];
     let rows: Vec<Row<'_>> = kept.iter().map(Row::Rec).collect();
     assert_eq!(
-        for_closure(&rows, &ForAddr::Uuid("q1".to_string()))
-            .into_iter()
-            .collect::<Vec<_>>(),
+        for_closure(
+            &rows,
+            &ForAddr::Uuid("q1".to_string()),
+            &crate::model::CallIndex::default()
+        )
+        .into_iter()
+        .collect::<Vec<_>>(),
         vec![7]
     );
     assert!(
-        for_closure(&rows, &ForAddr::Uuid("nosuch".to_string())).is_empty(),
+        for_closure(
+            &rows,
+            &ForAddr::Uuid("nosuch".to_string()),
+            &crate::model::CallIndex::default()
+        )
+        .is_empty(),
         "an address that names nothing closes over nothing"
     );
 }

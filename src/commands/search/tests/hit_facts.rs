@@ -142,7 +142,7 @@ fn scanned(line: &str) -> Vec<Hit> {
         &Matcher::pure(),
         false,
         EXCERPT_MAX,
-        &PlanIndex::default(),
+        &CallIndex::default(),
         &HashMap::new(),
         &ClassifyCtx::top_level(),
         &mut hits,

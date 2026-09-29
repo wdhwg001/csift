@@ -132,10 +132,11 @@ impl<'a> ChainNode<'a> {
 
     /// Only a `type:"user"` record can open a turn (all four cases are user records), so
     /// the expensive predicate runs on those alone - and never on a spine row, which has
-    /// no `message` to open one with.
-    pub(crate) fn opens_turn(self) -> bool {
+    /// no `message` to open one with. `calls` is the transcript's user-facing call index
+    /// ([`Record::opens_turn`]).
+    pub(crate) fn opens_turn(self, calls: Option<&CallIndex>) -> bool {
         match self {
-            ChainNode::Full(r) => r.r#type.as_deref() == Some("user") && r.opens_turn(),
+            ChainNode::Full(r) => r.r#type.as_deref() == Some("user") && r.opens_turn(calls),
             ChainNode::Spine(_) => false,
         }
     }
@@ -187,8 +188,13 @@ pub(crate) struct Builder<'a> {
     pub(crate) ts_sorted: Option<Vec<(i64, usize)>>,
     /// [`Record::opens_turn`] per record, computed ONCE. Four stages ask it, and on a
     /// transcript with tens of thousands of records re-deriving it (it re-reads content,
-    /// peer sections and answer markers) costs more than the whole rest of the build.
+    /// peer sections and answer markers) costs more than the whole rest of the build. The
+    /// finished [`Chain`] keeps it, so the turn grouper reads the same answer.
     pub(crate) opens: Vec<bool>,
+    /// The transcript's user-facing calls ([`CallIndex`]), built from the full records this
+    /// builder holds - the one index every turn-numbering surface reads, because the
+    /// answer boundary's marker fallback pairs with it.
+    pub(crate) calls: CallIndex,
     /// Parent index -> children, in CSR form: `child_at[child_off[p]..child_off[p+1]]`.
     /// A `HashMap<usize, Vec<usize>>` here meant one heap allocation per parent.
     pub(crate) child_off: Vec<usize>,
@@ -248,7 +254,8 @@ impl<'a> Builder<'a> {
                 *target = last.last;
             }
         }
-        let opens = recs.iter().map(|r| r.opens_turn()).collect();
+        let calls = CallIndex::from_records(recs.iter().filter_map(|r| r.full()));
+        let opens = recs.iter().map(|r| r.opens_turn(Some(&calls))).collect();
         Builder {
             recs,
             admit,
@@ -261,6 +268,7 @@ impl<'a> Builder<'a> {
             chain_child: HashMap::new(),
             ts_sorted: None,
             opens,
+            calls,
             child_off: Vec::new(),
             child_at: Vec::new(),
         }

@@ -326,13 +326,15 @@ impl Record {
         }
     }
 
-    /// True when this is an AUQ-answer carrier: a `type:"user"` record carrying a
-    /// `tool_result` block whose textual content is a synthesized AUQ-answer string
-    /// (any marker in `AUQ_ANSWER_MARKERS`, section 4.4 - the three shipped phrasings; the
-    /// unanswered branch is never one). Such a record is surfaced under the
-    /// `user` category even though it rides on a carrier.
+    /// True when this is an AUQ-answer carrier by its TEXT: a `type:"user"` record carrying
+    /// a `tool_result` block whose content opens with a synthesized AUQ-answer string (any
+    /// marker in `AUQ_ANSWER_MARKERS`, section 4.4; the unanswered branch is never one) AND
+    /// whose `tool_use_id` names an AskUserQuestion call in `calls`. The marker alone is
+    /// not the fact: a tool result's content is whatever the tool printed, and a shell run
+    /// over the harness binary or a transcript opens with the same words, so the block
+    /// carrying them must be the answer to an ask.
     #[must_use]
-    pub fn is_auq_answer(&self) -> bool {
+    pub fn is_auq_answer(&self, calls: &CallIndex) -> bool {
         if !self.is_type("user") {
             return false;
         }
@@ -340,10 +342,17 @@ impl Record {
             return false;
         };
         blocks.iter().any(|b| match b {
-            Block::ToolResult { content, .. } => content
-                .as_ref()
-                .map(tool_result_content_text)
-                .is_some_and(|t| is_auq_answer_text(&t)),
+            Block::ToolResult {
+                tool_use_id,
+                content,
+                ..
+            } => {
+                calls.names_ask(tool_use_id.as_deref())
+                    && content
+                        .as_ref()
+                        .map(tool_result_content_text)
+                        .is_some_and(|t| is_auq_answer_text(&t))
+            }
             _ => false,
         })
     }
@@ -361,8 +370,14 @@ impl Record {
     /// typed user message. Verified on real data: all 81 answered carriers have
     /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the
     /// rejection/cancel carriers have none of the three.
+    ///
+    /// `calls` is the transcript's user-facing call index ([`CallIndex`]). The marker
+    /// fallback answers only for a `tool_result` that names an AskUserQuestion call in it
+    /// ([`Record::is_auq_answer`]); `None` - a caller holding no transcript - takes the
+    /// structured signals alone, because which call a result answers is a fact of the
+    /// transcript and not of the record.
     #[must_use]
-    pub fn is_auq_answer_boundary(&self) -> bool {
+    pub fn is_auq_answer_boundary(&self, calls: Option<&CallIndex>) -> bool {
         if !self.is_type("user") {
             return false;
         }
@@ -388,8 +403,9 @@ impl Record {
         if self.has_auq_answers() || self.has_auq_response() {
             return true;
         }
-        // Fallback (older records without `toolUseResult`): the synthesized marker.
-        self.is_auq_answer()
+        // Fallback (older records without `toolUseResult`): the synthesized marker, on a
+        // result that answers an AskUserQuestion call of this transcript.
+        calls.is_some_and(|c| self.is_auq_answer(c))
     }
 
     /// The freeform `toolUseResult.response` test: present AND non-blank. The

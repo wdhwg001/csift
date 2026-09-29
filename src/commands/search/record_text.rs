@@ -148,7 +148,7 @@ pub(crate) fn record_text_emission(
     raw: Option<&str>,
     labels: &[Class],
     filter: LabelFilter<'_>,
-    plan_index: &PlanIndex,
+    calls: &CallIndex,
     ctx: &ClassifyCtx,
 ) -> Option<(Class, String)> {
     for &c in labels {
@@ -162,7 +162,7 @@ pub(crate) fn record_text_emission(
             | Class::NotificationBackgroundCommand
             | Class::NotificationTask => rec.automation_label(),
             Class::UserMessage | Class::UserUnsent | Class::UserRewound | Class::CommInbox => rec
-                .reconstructed_user_text(Some(plan_index))
+                .reconstructed_user_text(Some(calls))
                 // TWO carriers reach this arm with no opener body to render, and the
                 // fallback is the RENDER SEAM for both - the one place a line's own family
                 // decides what it says.

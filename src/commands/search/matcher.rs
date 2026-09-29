@@ -52,7 +52,7 @@ pub struct Matcher {
     ///   (`record_text_sections` / `auq_exchange` / `record_raw_text`) and regex-check
     ///   them - so a big marker-heavy main session still gates without a whole-file parse.
     /// - `synth_conservative` - a rejection's `[plan: …]` pointer resolves through
-    ///   ANOTHER record (`PlanIndex`) and `--resolve-persisted` content lives in an
+    ///   ANOTHER record (`CallIndex`) and `--resolve-persisted` content lives in an
     ///   external file, so those lines force the full scan (rare).
     pub(crate) synth_verifiable: Vec<memmem::Finder<'static>>,
     pub(crate) synth_conservative: Vec<memmem::Finder<'static>>,
