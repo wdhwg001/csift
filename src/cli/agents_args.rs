@@ -71,8 +71,10 @@ pub enum AgentKindFilter {
         renders just that node (a tree of one), and \
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
         `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow | teammate), a DIFFERENT \
-        axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
-        by `verbatim`/`search -t user`; they overlap only on the token `workflow`.\n\n\
+        axis from the automation-trigger KIND a `<task-notification>` pulse carries \
+        (background-command / workflow / agent / monitor / task in its rendered label; the \
+        `-t harness.notification.<leaf>` selector spells `agent` as `subagent`); they \
+        overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
           csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagent tree\n  \
           csift agents .                                                   # every session under this project\n  \
@@ -98,9 +100,10 @@ pub enum AgentKindFilter {
         says why); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
         workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
         default_model, started_utc, started_local} row followed by its member agent rows \
-        (a RUN row's `status` is the workflow journal's own last status VERBATIM: an OPEN \
-        set, not a csift enum; observed values include `completed` and `killed`, distinct \
-        from an AGENT row's csift-computed `status`); \
+        (a RUN row's `status` is the run MANIFEST's own `status` VERBATIM - \
+        `<session>/workflows/<run>.json`, which the runtime writes once the run ends: an \
+        OPEN set, not a csift enum; observed values include `completed`, `killed` and \
+        `failed`, distinct from an AGENT row's csift-computed `status`); \
         every agent its OWN {kind:\"agent\", …} row in tree PRE-ORDER (a parent row precedes \
         its children; rebuild nesting from parent_agent_id + depth; there is no \
         children[] array in JSON, the tree renders in TEXT mode); a closing \

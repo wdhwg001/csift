@@ -9280,7 +9280,7 @@
       "code": [
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "123-126",
+          "lines": "126-129",
           "snippet": "        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \\\n        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \\\n        hours/days is overwhelmingly \\\"parent session ended, nobody is coming back\\\", not \\\n        in-flight work: weigh `pending_since_utc` against now yourself; \\"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2522",
+          "lines": "2523",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -62618,7 +62618,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "145",
+          "lines": "148",
           "snippet": "\\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\"
         },
         {
@@ -62628,7 +62628,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "144-150",
+          "lines": "147-153",
           "snippet": "        SEMANTICS: it answers \\\"what did the PARENT SESSION record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
         }
       ],
@@ -89307,7 +89307,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3554"
+          "lines": "3555"
         }
       ],
       "states": [

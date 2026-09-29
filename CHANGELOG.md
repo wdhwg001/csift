@@ -1261,6 +1261,12 @@ surface change bumps the PATCH.
   stops where Claude Code's loader does; the turns it reaches read `live`, and file order
   still replays the ones above the floor as `pre-cut`. The header token `search` prints is
   `<tok>·t<N>`. A test reads the default off the flag's own constant.
+- **`agents --help` put the notification pulses under `search -t user` and read a run's
+  status off the journal.** A `<task-notification>` pulse is `harness.notification.<kind>`,
+  never `user`, and its kind set includes `workflow`, the one token the page says the two
+  axes share. A RUN row's `status` is the run manifest's own field
+  (`<session>/workflows/<run>.json`, written once the run ends); the journal carries no
+  run status. The page now says both, and lists `failed` beside `completed` and `killed`.
 
 ### Performance
 

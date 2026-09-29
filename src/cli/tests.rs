@@ -19,5 +19,6 @@ mod help_sets;
 mod labelzone;
 mod leaf_tree;
 mod manuals;
+mod pages;
 mod selectors;
 mod targets;
