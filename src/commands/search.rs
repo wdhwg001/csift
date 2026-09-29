@@ -59,6 +59,7 @@ mod run;
 mod scan;
 mod turns_match;
 mod types;
+mod zero_match;
 
 pub(crate) use census::*;
 pub(crate) use hit_facts::*;
@@ -73,6 +74,7 @@ pub(crate) use run::*;
 pub(crate) use scan::*;
 pub(crate) use turns_match::*;
 pub(crate) use types::*;
+pub(crate) use zero_match::*;
 
 #[cfg(test)]
 mod tests;
