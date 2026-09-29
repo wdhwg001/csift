@@ -395,6 +395,11 @@ surface change bumps the PATCH.
   bodies share no head, and the records carry no field saying which command expanded them -
   the parent link names the command's own wrapper on three of the four measured records and
   an attachment on the fourth.
+- **`whoami --to` takes `--from`, the sender its prediction is made for.** The prediction
+  is decided partly from the relation between sender and receiver, and the stderr note
+  already told a lane caller to `pass --from @<your lane id> for an exact sender` while
+  `whoami` rejected the flag. `--from` takes `csift send`'s grammar and only goes with
+  `--to`, so a subagent that names itself gets the answer a send from that lane gets.
 
 ### Changed
 
@@ -1076,11 +1081,6 @@ surface change bumps the PATCH.
   surface not in the canonical local form. It renders through the shared timestamp
   helper now (`2026-06-07 15:10:00 AEST(UTC+10)` in that zone), at the second
   precision the note's de-duplication already keyed on.
-- **`whoami --to` told a lane caller to pass a flag it did not take.** Its stderr note
-  said `pass --from @<your lane id> for an exact sender`, and `whoami` rejected
-  `--from`. The prediction is decided partly from the relation between sender and
-  receiver, so `whoami --to` now takes `--from` in `csift send`'s grammar (only with
-  `--to`), and a subagent that names itself gets the answer a send from that lane gets.
 - **The stopped-agents notice on the input queue read as the person's text.** Claude
   Code queues the `N background agents were stopped by the user: ...` notice the way it
   queues a typed prompt, and csift labelled that queue line `user.queued` (13 records on
@@ -1134,7 +1134,8 @@ surface change bumps the PATCH.
   headed its stream `sessions_in_scope: 1` while `csift list . --max-count 1` read 1,713 for
   the same target: `stats` counted the rows it kept. The scope banner and the JSON header now
   count the whole resolved scope before the cap trims the rows, the rule `list` already kept,
-  so the two commands report one scope for one target (1,722 on both at the re-measure).
+  so the two commands report one scope for one target (after the change both read 1,722
+  for `.`).
 - **Smart-case read the letter in an escape as uppercase.** `\Sbash` searched
   case-sensitively (38 records on one transcript, the `(?-i)\Sbash` count) because the `S`
   of `\S` was taken for an uppercase letter, while `(?i)\Sbash` found 46. Smart-case now
@@ -1156,7 +1157,7 @@ surface change bumps the PATCH.
   note that it resolved the top-level session via the environment now follows the read, so
   a refused or unset variable prints its refusal alone.
 - **An empty target token scoped to the current directory.** `csift search zzqq ""` searched
-  every session of the cwd's project (1,722 of them at the re-measure) and exited 0: the empty token was read
+  every session of the cwd's project (1,722 of them) and exited 0: the empty token was read
   as the empty relative path. Sixteen target spots now refuse an empty or whitespace-only
   target at parse time (exit 2) with the target grammar in the message: the twelve commands
   that take a path target, and the four channel spots that take a lane as a string, where
