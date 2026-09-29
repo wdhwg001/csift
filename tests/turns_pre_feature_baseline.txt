@@ -1,6 +1,6 @@
 SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
   budget 40000 chars · round-trip-fraction 0.50 · spanned 3 of 3 compaction boundaries in scope
-  selected 13 user + 12 assistant units across 13 turns · 4901 / 40000 chars used
+  selected 13 user + 12 assistant units across 13 turns · 4899 / 40000 chars used
   ────────────────────────────────────────────────────────────
 ▽ L1  USER  (2026-06-07 00:00:01 UTC(UTC+0))
 the very first ask about the café budget walk logic
@@ -19,7 +19,7 @@ third reply
 ══ compaction boundary · summary at L9 · (turns below predate it) ══
 ▽ L10  USER  (2026-06-07 00:00:09 UTC(UTC+0))
 fourth ask after the first compaction boundary
-  [1 tool calls]
+  [1 tool call]
 △ L12  ASSISTANT  (2026-06-07 00:00:11 UTC(UTC+0))
 fourth reply
 ▽ L13  USER  (2026-06-07 00:00:12 UTC(UTC+0))
@@ -39,7 +39,7 @@ seventh ask post second boundary
 seventh reply
 ▽ L22  USER  (2026-06-07 00:00:20 UTC(UTC+0))
 eighth ask almost there
-  [1 tool calls]
+  [1 tool call]
 △ L24  ASSISTANT  (2026-06-07 00:00:22 UTC(UTC+0))
 eighth reply
 ▽ L25  USER  (2026-06-07 00:00:23 UTC(UTC+0))

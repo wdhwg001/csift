@@ -531,7 +531,7 @@ pub(crate) fn render_turn_text(
         }
     }
     if matches!(sides, SelSides::Both) && turn.tool_calls > 0 {
-        emit(format!("  [{} tool calls]", turn.tool_calls));
+        emit(tool_calls_marker_line(turn.tool_calls));
     }
     for entry in shown_agent_lane(turn, sides, cfg) {
         match entry {

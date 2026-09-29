@@ -416,3 +416,34 @@ fn placeholder_attribution_sums_per_message_tool_and_failed() {
     // All six are far under the preview threshold, so the fold previews nothing.
     assert!(span.previews.is_empty(), "{:?}", span.previews);
 }
+
+/// Every count verbatim prints agrees with its noun, by the fold placeholder's own rule:
+/// the kept-turn tool-call marker, the elision note's characters and lines, and the
+/// placeholder's characters. A count of one printed `[1 tool calls]` and `1 lines elided`.
+#[test]
+fn every_verbatim_count_agrees_with_its_noun() {
+    assert_eq!(tool_calls_marker_line(1), "  [1 tool call]");
+    assert_eq!(tool_calls_marker_line(2), "  [2 tool calls]");
+    // The cost model charges exactly the line the renderer prints, plus its newline.
+    assert_eq!(
+        marker_cost(1),
+        tool_calls_marker_line(1).chars().count() + NEWLINE_COST
+    );
+    assert_eq!(marker_cost(0), 0);
+
+    // A 601-char user body against the 600 cap: head 360, tail 240, so the cut removes
+    // exactly one char, and a newline at offset 360 sits inside it.
+    let body: String = "a".repeat(601);
+    let r = render_unit_body(&unit_at(Role::User, 5, &body, &[360]), None);
+    assert_eq!((r.elided_chars, r.elided_lines), (1, 1));
+    assert!(r.body.contains("[+1 char, 1 line elided]"), "{}", r.body);
+    // Two of each read plural.
+    let body: String = "a".repeat(602);
+    let r = render_unit_body(&unit_at(Role::User, 5, &body, &[360, 361]), None);
+    assert!(r.body.contains("[+2 chars, 2 lines elided]"), "{}", r.body);
+
+    assert_eq!(
+        agent_placeholder_line(&span(1, 1, 0, 7, 7, 1)),
+        "△ L7  [1 agent message collapsed, 1 char, 1 tool call]"
+    );
+}

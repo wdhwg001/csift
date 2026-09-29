@@ -350,12 +350,13 @@ pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
     };
     let msgs = plural(span.messages, "agent message");
     let tools = plural(span.tool_calls, "tool call");
+    let chars = plural(span.chars, "char");
     let body = if span.failed == 0 {
-        format!("[{msgs} collapsed, {} chars, {tools}]", span.chars)
+        format!("[{msgs} collapsed, {chars}, {tools}]")
     } else {
         format!(
-            "[{msgs} collapsed, {} chars, {tools}, {} failed]",
-            span.chars, span.failed
+            "[{msgs} collapsed, {chars}, {tools}, {} failed]",
+            span.failed
         )
     };
     format!("△ {range}  {body}")

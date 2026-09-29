@@ -14342,7 +14342,7 @@
         },
         {
           "path": "src/commands/turns/cost.rs",
-          "lines": "92",
+          "lines": "99",
           "snippet": "pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {"
         }
       ],
@@ -15286,7 +15286,7 @@
         },
         {
           "path": "src/commands/turns/cost.rs",
-          "lines": "89-91",
+          "lines": "96-98",
           "snippet": "/// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing\n/// newline). The renderer and the budget reservation both call this so the reserved\n/// banner length is byte-for-byte what is emitted."
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2524",
+          "lines": "2525",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -89307,7 +89307,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3556"
+          "lines": "3557"
         }
       ],
       "states": [

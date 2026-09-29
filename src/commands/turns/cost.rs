@@ -57,14 +57,21 @@ pub(crate) fn unit_cost(unit: &TurnUnit) -> usize {
     header_chars + body_chars
 }
 
+/// The `[N tool calls]` marker line, the noun agreeing with its count (`[1 tool call]`) by
+/// the same [`plural`] rule the fold placeholder uses. ONE builder, so the renderer and
+/// [`marker_cost`] cannot disagree about the line they both mean.
+pub(crate) fn tool_calls_marker_line(tool_calls: usize) -> String {
+    format!("  [{}]", plural(tool_calls, "tool call"))
+}
+
 /// The `[N tool calls]` marker line render cost INCLUDING its trailing newline (0 =>
-/// omitted, no cost). Matches the exact `  [N tool calls]` line the text renderer emits.
+/// omitted, no cost). Matches the exact line the text renderer emits.
 pub(crate) fn marker_cost(tool_calls: usize) -> usize {
     if tool_calls == 0 {
         0
     } else {
-        // "  [N tool calls]" + the trailing newline the emit callback appends.
-        format!("  [{tool_calls} tool calls]").chars().count() + NEWLINE_COST
+        // The marker line + the trailing newline the emit callback appends.
+        tool_calls_marker_line(tool_calls).chars().count() + NEWLINE_COST
     }
 }
 

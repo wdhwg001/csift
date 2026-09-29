@@ -39,12 +39,14 @@ pub(crate) fn render_unit_body(unit: &TurnUnit, cap_override: Option<usize>) -> 
     let tail: String = chars[total - tail_keep..].iter().collect();
     let elided_chars = total - cap;
     let elided_lines = elided_newlines(&unit.newline_positions, head_keep, total - tail_keep);
+    // Each noun agrees with its own count, the fold placeholder's rule (`plural`).
     let nl_note = if elided_lines > 0 {
-        format!(", {elided_lines} lines elided")
+        format!(", {} elided", plural(elided_lines, "line"))
     } else {
         String::new()
     };
-    let body = format!("{head} … [+{elided_chars} chars{nl_note}] … {tail}");
+    let chars_note = plural(elided_chars, "char");
+    let body = format!("{head} … [+{chars_note}{nl_note}] … {tail}");
     RenderedUnit {
         body,
         rendered_chars: cap,

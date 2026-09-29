@@ -1273,6 +1273,14 @@ surface change bumps the PATCH.
   by its first slug alone (a forked or background session) is found too, with
   `binding_source: "slug-only"`. The flag's help now names both laws, and the
   `recover --file @plan` refusal and the `plan` no-binding note name both as absent.
+- **`verbatim`'s markers never agreed with a count of one.** A turn with one tool call
+  printed `[1 tool calls]` and a cut removing one line printed `1 lines elided`, while the
+  fold placeholder already wrote `1 agent message`. The kept-turn marker, the elision
+  marker and the placeholder's character count now take the placeholder's rule, each
+  noun agreeing with its own count (`[1 tool call]`, `[+1 char, 1 line elided]`); the
+  cost model reads the same line the renderer prints. Three lines of the golden baseline
+  moved: two `[1 tool calls]` markers and the header's chars-used total, which counts
+  them.
 
 ### Performance
 
