@@ -211,3 +211,34 @@ fn every_range_a_miss_names_parses_when_pasted_back() {
         }
     }
 }
+
+/// A from-end range whose ends reverse on this file (`-1..-3`: the last line, then the third
+/// from the end) names no line. Both fetch modes refuse it alike, before either reads a line:
+/// the same exit, the same stderr naming the range as written and the file's length, and no
+/// stdout - `--raw` printed nothing and exited 0 while the rendered fetch refused it with the
+/// unparseable-line explanation.
+#[test]
+fn a_range_reversed_on_this_file_is_the_same_miss_in_both_fetch_modes() {
+    let h = populated_home();
+    let n = fixture_lines(&h);
+    let target = at(SESS);
+    let rendered = h.run(&["show", target.as_str(), "--line", "-1..-3"]);
+    let raw = h.run(&["show", target.as_str(), "--line", "-1..-3", "--raw"]);
+    for (mode, out) in [("rendered", &rendered), ("raw", &raw)] {
+        assert_eq!(out.code, Some(1), "{mode}: {}{}", out.stdout, out.stderr);
+        assert!(out.stdout.is_empty(), "{mode}: {}", out.stdout);
+        assert_eq!(
+            out.stderr.trim(),
+            format!("csift: error: no such record(s): L-1..-3 (file has {n} lines)"),
+            "{mode}"
+        );
+    }
+    // The in-order form of the same lines still fetches in both modes.
+    for extra in [&[][..], &["--raw"][..]] {
+        let mut argv = vec!["show", target.as_str(), "--line", "-3..-1"];
+        argv.extend_from_slice(extra);
+        let out = h.run(&argv);
+        assert!(out.success, "{extra:?}: {}", out.stderr);
+        assert!(!out.stdout.is_empty(), "{extra:?}");
+    }
+}

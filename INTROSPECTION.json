@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2538",
+          "lines": "2539",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -45681,7 +45681,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "281-284",
+          "lines": "283-286",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         },
         {
@@ -59429,7 +59429,7 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "137-145",
+          "lines": "142-150",
           "snippet": "            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {\n                if slot.is_none() && finder.find(line).is_some() {\n                    // Confirm structurally: the record's OWN uuid must equal it (a body\n                    // merely quoting the uuid must not satisfy the address).\n                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                        if rec.uuid.as_deref() == Some(u.as_str()) {\n                            *slot = Some(line_no);\n                            want = true;\n                        }"
         },
         {
@@ -59514,12 +59514,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "172-174",
+          "lines": "174-176",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "281-284",
+          "lines": "283-286",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         }
       ],
@@ -89377,7 +89377,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3569"
+          "lines": "3570"
         }
       ],
       "states": [
@@ -89729,7 +89729,7 @@
         },
         {
           "path": "src/commands/show/addr.rs",
-          "lines": "164-165",
+          "lines": "185-186",
           "snippet": "    match (resolved.files.as_slice(), dropped.as_slice()) {\n        ([one], []) => Ok(one.clone()),"
         },
         {

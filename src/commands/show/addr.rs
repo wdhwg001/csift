@@ -26,7 +26,28 @@ pub(crate) struct LineRange {
     pub(crate) written: String,
 }
 
+impl LineRange {
+    /// True when the range names no line of the file: its resolved pair reads backwards (a
+    /// from-end range whose ends reverse on this file's length, or an open range starting
+    /// past the end) or it starts past the last line.
+    pub(crate) fn is_empty_on(&self, total_lines: usize) -> bool {
+        self.lo > self.hi || self.lo > total_lines
+    }
+}
+
 impl LineSpecs {
+    /// The misses both fetch modes report alike, before either reads a line: every range
+    /// that names no line of the file ([`LineRange::is_empty_on`]). An empty range is not a
+    /// line that failed to parse, so it takes the plain miss and never the rendered mode's
+    /// unparseable-line explanation, and `--raw` refuses it rather than printing nothing.
+    pub(crate) fn empty_range_misses(&self) -> Vec<String> {
+        self.ranges
+            .iter()
+            .filter(|r| r.is_empty_on(self.total_lines))
+            .map(|r| range_miss_label(r, self.total_lines))
+            .collect()
+    }
+
     /// Every addressed line, expanded (ranges included).
     pub(crate) fn all(&self) -> BTreeSet<usize> {
         let mut out = self.explicit.clone();
@@ -65,15 +86,15 @@ pub(crate) fn parse_line_specs(
 /// `--line`: the grammar's own `A..B` for a range that resolved in order, and the range AS
 /// WRITTEN for one that resolved backwards - an open range starting past the end resolves to
 /// (start, last line), and `L99999..28` is a range the parser refuses as reversed. `A-B` is
-/// refused on input too, which is why the dash spelling went. A range starting past the end
-/// also names the file's length ([`miss_label`]).
+/// refused on input too, which is why the dash spelling went. A range that resolved
+/// backwards, or starts past the end, also names the file's length, which is what emptied
+/// it: `-1..-3` resolves backwards on any file of three lines or more.
 pub(crate) fn range_miss_label(r: &LineRange, total_lines: usize) -> String {
-    let label = if r.lo <= r.hi {
-        format!("L{}..{}", r.lo, r.hi)
+    if r.lo <= r.hi {
+        miss_label(format!("L{}..{}", r.lo, r.hi), r.lo, total_lines)
     } else {
-        format!("L{}", r.written)
-    };
-    miss_label(label, r.lo, total_lines)
+        format!("L{} (file has {total_lines} lines)", r.written)
+    }
 }
 
 /// Resolve parsed `--line` specs against the transcript's line count (1-based), materializing

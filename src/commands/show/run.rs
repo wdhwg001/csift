@@ -63,6 +63,11 @@ pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
     // Resolve `--line` open/from-end forms (`N..`, `-20..` = the last 20) against this
     // transcript's line count, materializing the concrete explicit/range addresses.
     let specs = resolve_line_specs(&parsed, count_lines(&file)?);
+    // A range that names no line of the file is the same miss in both fetch modes.
+    let empty = specs.empty_range_misses();
+    if !empty.is_empty() {
+        bail!("no such record(s): {}", empty.join(", "));
+    }
 
     if args.raw {
         return run_raw(&file, &specs, &uuids, turn_spec, args.max_count, cross);
@@ -152,18 +157,15 @@ pub(crate) fn run_raw(
         }
     })?;
 
-    // Address-miss = error: explicit lines beyond EOF, unresolved uuids, empty ranges.
+    // Address-miss = error: explicit lines beyond EOF and unresolved uuids. An empty range was
+    // refused before this mode ran ([`LineSpecs::empty_range_misses`]); a range with a line in
+    // the file emits that line's bytes whatever they are.
     let mut misses: Vec<String> = specs
         .explicit
         .iter()
         .filter(|&&n| n > total_lines)
         .map(|&n| miss_label(format!("L{n}"), n, total_lines))
         .collect();
-    for r in &specs.ranges {
-        if r.lo > total_lines {
-            misses.push(range_miss_label(r, total_lines));
-        }
-    }
     for (u, slot) in &uuid_line {
         if slot.is_none() {
             misses.push(format!("uuid {u}"));

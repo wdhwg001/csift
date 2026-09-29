@@ -1379,6 +1379,12 @@ surface change bumps the PATCH.
   queued one, where `--to ""` and an empty lane target are refused. `--from` takes
   `@<lane>` inside Claude Code or a non-empty free label outside it, so both commands now
   refuse the empty token at parse time (exit 2) naming that grammar.
+- **`show --line -1..-3` answered differently in the two fetch modes.** A from-end range
+  whose ends reverse on the file (the last line, then the third from the end) names no
+  line; the rendered fetch refused it with the unparseable-line explanation, while `--raw`
+  printed nothing and exited 0. Both modes now resolve every `--line` range the same way
+  and refuse an empty one before either reads a line, with one message naming the range as
+  written and the file's length: `no such record(s): L-1..-3 (file has 3 lines)`.
 - **A draft one character from its resend said `differs ... in 1 chars`.** The
   draft-distance line on a `user.unsent` unit (`search` and `show`) formatted its count
   with a fixed plural, outside the rule the excerpt marker takes; it now goes through that
