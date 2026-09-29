@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2515",
+          "lines": "2516",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -44944,7 +44944,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "182",
+          "lines": "190",
           "snippet": "pub(crate) fn render("
         }
       ],
@@ -83093,7 +83093,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "378",
+          "lines": "386",
           "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         },
         {
@@ -86520,7 +86520,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "64",
+          "lines": "69",
           "snippet": "fn render_keys(line_type: &str) -> &'static [&'static str] {"
         }
       ],
@@ -86648,7 +86648,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "101",
+          "lines": "106",
           "snippet": "        \"queue-operation\" => &[\"operation\", \"reason\"],"
         }
       ],
@@ -86730,7 +86730,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "144",
+          "lines": "149",
           "snippet": "fn render_value(key: &str, value: &serde_json::Value) -> String {"
         }
       ],
@@ -86857,8 +86857,13 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "81",
+          "lines": "86",
           "snippet": "        \"history-suppression\" => &[\"cause\", \"vetoedAgainstAccountUuid\", \"ts\"],"
+        },
+        {
+          "path": "src/commands/search/record_text/bookkeeping.rs",
+          "lines": "151-153",
+          "snippet": "        serde_json::Value::String(s) if s.parse::<jiff::Timestamp>().is_ok() => {\n            crate::timez::format_local_compact(Some(s))\n        }"
         }
       ],
       "states": [
@@ -86867,7 +86872,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A `history-suppression` line records that a session's history stopped being synced, and its `cause` domain is closed at SIX: `migration`, `fork_inherit`, `meta_seed`, `chokepoint_veto`, `restored_owner_mismatch` and `env_owner_mismatch`. One factory mints the object - `{type, sessionId, cause, vetoedAgainstAccountUuid?, ts}` - and its cause is a PARAMETER, so the factory alone closes nothing; the writer that appends it has five occurrences (its definition, three direct calls naming `fork_inherit`, `meta_seed` and `chokepoint_veto`, and one forwarding call from a local wrapper whose own two callers name the last two), while the sixth cause reaches the factory directly from the re-stamp planner. The optional `vetoedAgainstAccountUuid` is NOT a marker of one cause: three of the six paths pass an account uuid - `chokepoint_veto`, `restored_owner_mismatch` and `env_owner_mismatch` - and the field records which account the credential store reported when a reattach was refused.",
-          "depends": "The `harness.bookkeeping.suppression` head prints `cause` and `ts` verbatim and prints `vetoedAgainstAccountUuid` as its FIRST EIGHT characters - the account is an identity with nothing to re-feed, unlike a session id, so csift shows enough to correlate two lines and no more. Reading the field as a marker of one cause would attribute a veto to the wrong path; the head therefore prints it beside whatever cause the line carries and asserts nothing about the pair.",
+          "depends": "The `harness.bookkeeping.suppression` head prints `cause` verbatim and `ts` as csift's local text instant, the form every other text instant takes (the UTC string stays matchable in the unit's verbatim body) and prints `vetoedAgainstAccountUuid` as its FIRST EIGHT characters - the account is an identity with nothing to re-feed, unlike a session id, so csift shows enough to correlate two lines and no more. Reading the field as a marker of one cause would attribute a veto to the wrong path; the head therefore prints it beside whatever cause the line carries and asserts nothing about the pair.",
           "instrument": "Byte-find the factory by its object literal `{type:\"history-suppression\"`, then enumerate every occurrence of the appending writer's minified name (which differs per build) followed by `(` and read each: one definition, three direct calls, one forwarding call. Read the wrapper at that forwarding call and enumerate ITS callers. On disk, census the `cause` values and the lines carrying `vetoedAgainstAccountUuid` under the QT-045 walk.",
           "probe": {
             "kind": "corpus",
@@ -86880,7 +86885,8 @@
           "attribution": "end-to-end",
           "open_legs": [],
           "residue": [
-            "The gate hop's cause literal occurs at five offsets across unrelated features; the anchor is the one inside the writer's own direct call."
+            "The gate hop's cause literal occurs at five offsets across unrelated features; the anchor is the one inside the writer's own direct call.",
+            "An earlier reading, superseded by the whole-root `ts` census now standing on this state: Five writer occurrences - the definition at 166158830, three direct calls at 166160503, 166166303 and 181657624 naming fork_inherit, meta_seed and chokepoint_veto, and one forwarding call at 185486100 whose cause is a binding - plus the factory call carrying `migration` inside the re-stamp planner. The wrapper's two callers name restored_owner_mismatch (at 185487925) and env_owner_mismatch (at 185489373), each passing an account uuid from the credential store; both literals occur exactly twice in the build, once in the string table and once at the call. Six causes in all, three of them account-carrying. On disk: root A holds 3,345 lines over 2 transcripts - migration 3,343 and restored_owner_mismatch 2 - and exactly those 2 lines carry `vetoedAgainstAccountUuid`; root B holds 1,739 over 2, split 1,737 and 2 the same way. Counting rule: A cause counts once per distinct literal reaching the writer's cause parameter, whether directly, through the factory or through the wrapper; the corpus count is lines per `cause` value under the QT-045 walk."
           ],
           "producer_chain": [
             {
@@ -86939,11 +86945,11 @@
           ],
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "Enumerated every occurrence of the writer name followed by `(`, read the wrapper at the forwarding call and byte-found its two cause literals; censused `cause` values and the `vetoedAgainstAccountUuid` key over two projects roots.",
-            "observed": "Five writer occurrences - the definition at 166158830, three direct calls at 166160503, 166166303 and 181657624 naming fork_inherit, meta_seed and chokepoint_veto, and one forwarding call at 185486100 whose cause is a binding - plus the factory call carrying `migration` inside the re-stamp planner. The wrapper's two callers name restored_owner_mismatch (at 185487925) and env_owner_mismatch (at 185489373), each passing an account uuid from the credential store; both literals occur exactly twice in the build, once in the string table and once at the call. Six causes in all, three of them account-carrying. On disk: root A holds 3,345 lines over 2 transcripts - migration 3,343 and restored_owner_mismatch 2 - and exactly those 2 lines carry `vetoedAgainstAccountUuid`; root B holds 1,739 over 2, split 1,737 and 2 the same way.",
-            "rule": "A cause counts once per distinct literal reaching the writer's cause parameter, whether directly, through the factory or through the wrapper; the corpus count is lines per `cause` value under the QT-045 walk.",
-            "note": ""
+            "verdict": "refined",
+            "instrument": "a python walk over every `*.jsonl` under the live projects root (excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory) keeping each line whose top-level `type` is `history-suppression`, classifying its `ts` against the RFC 3339 UTC shape and tallying `cause`; then `csift search '' <session> --no-subagents -t harness.bookkeeping.suppression` on one session of that root with the installed binary and with this build. Producer leg: the recorded hops re-read at their offsets in the 2.1.258 binary (trigger appending writer definition @166158821; gate a direct call naming its cause @166160516; writer history-suppression factory @157627100)",
+            "observed": "7,117 `history-suppression` lines, every one carrying `ts` as an RFC 3339 UTC string and none carrying a `timestamp`; causes `migration` 7,112 and `restored_owner_mismatch` 5. The installed binary's head read `ts=<the UTC string>`, this build's reads the local text instant (`ts=2026-09-03 10:23:01.606 AEST(UTC+10)` on the session read). The recorded hops read byte-exact at their offsets.",
+            "rule": "one observation per `history-suppression` line",
+            "note": "The factory's shape holds; the head now renders its one instant under the timestamp pair law."
           }
         }
       ]
@@ -86954,7 +86960,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "348-354",
+          "lines": "356-362",
           "snippet": "        \"fork-context-ref\" => super::for_edge(\n            EdgeKind::ForkedFrom,\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -87080,7 +87086,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "120",
+          "lines": "125",
           "snippet": "fn head_of(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         }
       ],
@@ -87147,7 +87153,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "356-362",
+          "lines": "364-370",
           "snippet": "        \"continued-in\" => super::for_edge(\n            EdgeKind::ContinuedIn,\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -89301,7 +89307,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3547"
+          "lines": "3548"
         }
       ],
       "states": [

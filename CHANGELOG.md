@@ -1207,6 +1207,13 @@ surface change bumps the PATCH.
   prompt can carry, the fire index is built whenever a selection reaches one of those
   leaves, and the label zone prints `[scheduled fire <when>]` on them; a tick with no fire
   record above it carries neither (claim CLS-032).
+- **The `history-suppression` head printed a raw UTC instant.** `csift search ''
+  <session> -t harness.bookkeeping.suppression` showed `ts=2026-09-03T00:23:01.606Z`, the
+  last text instant in the bookkeeping family not in csift's local form. A head value that
+  is an RFC 3339 instant now renders as the local text every other text instant takes
+  (`ts=2026-09-03 10:23:01.606 AEST(UTC+10)` in that zone); the UTC string stays matchable
+  in the unit's verbatim JSON body. `cost-state`'s `startTime` is an epoch-millisecond
+  number, not an instant string, and prints as written (claim QT-049).
 
 ### Performance
 

@@ -140,8 +140,8 @@ fn every_bookkeeping_leaf_is_reachable_and_counted() {
 #[test]
 fn show_renders_one_head_per_line_type() {
     let h = family_home();
-    // The file-history heads print their instant as local TEXT; the zone is pinned so the
-    // expected strings are exact on any host.
+    // The file-history heads and the history-suppression `ts` print their instant as local
+    // TEXT; the zone is pinned so the expected strings are exact on any host.
     let out = h.run_with_env(&["show", &at(SESS), "--line", "2..21"], &[("TZ", "UTC")]);
     assert!(out.success, "stderr {}", out.stderr);
     for expect in [
@@ -153,7 +153,7 @@ fn show_renders_one_head_per_line_type() {
         "[agent-name agentName=Sparrow]",
         "[atis-latch atis=latched-value]",
         "[bridge-session bridgeSessionId=bbbbbbbb-0000-4000-8000-000000000002 lastSequenceNum=7 noHistoryBackfill=false ownerAccountUuid=cccccccc]",
-        "[history-suppression cause=restored_owner_mismatch vetoedAgainstAccountUuid=dddddddd ts=2026-01-01T00:00:01.000Z]",
+        "[history-suppression cause=restored_owner_mismatch vetoedAgainstAccountUuid=dddddddd ts=2026-01-01 00:00:01.000 UTC(UTC+0)]",
         "[pr-link prNumber=42 prRepository=dev/proj]",
         "[frame-link title=Frame artifactCount=2]",
         "[artifact-comment-monitor v=1 accountUuid=eeeeeeee artifacts=slug-one, slug-two]",

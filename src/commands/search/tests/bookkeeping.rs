@@ -88,6 +88,28 @@ fn the_two_value_rules_decide_every_head_value() {
     );
 }
 
+/// The instant rule: a string value that is an RFC 3339 instant prints as the canonical
+/// local text every other text instant takes, never the raw UTC string - which stays in the
+/// verbatim body. A NUMBER is not an instant string, so `cost-state`'s epoch-millisecond
+/// `startTime` prints as the line wrote it.
+#[test]
+fn an_instant_value_prints_as_local_text() {
+    let raw = "2026-01-01T00:00:01.000Z";
+    let line = format!(r#"{{"type":"history-suppression","cause":"c","ts":"{raw}"}}"#);
+    let want = format!(
+        "[history-suppression cause=c ts={}]",
+        crate::timez::format_local_compact(Some(raw))
+    );
+    assert_eq!(family::head(Some(&line)).as_deref(), Some(want.as_str()));
+    assert!(!want.contains(raw), "the UTC string is not the text form");
+    let cost =
+        r#"{"type":"cost-state","totalCostUSD":1.5,"totalDuration":42,"startTime":1767225600000}"#;
+    assert_eq!(
+        family::head(Some(cost)).as_deref(),
+        Some("[cost-state totalCostUSD=1.5 totalDuration=42 startTime=1767225600000]"),
+    );
+}
+
 /// The head's three refusals, each of which leaves the render falling back to the body or
 /// to the record-modeled head rather than printing an empty bracket: no source line, a
 /// line that is not a JSON object, and a line type the family names no keys for.

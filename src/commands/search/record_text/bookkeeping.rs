@@ -16,10 +16,15 @@
 //! head is a summary and a summary is lossy, so every key it elides and every full uuid it
 //! shortens stays matchable in the body.
 //!
-//! TWO rules decide what a head prints, and there is no third:
+//! THREE rules decide what a head prints, and there is no fourth:
 //! - a key naming an ACCOUNT, an ORGANISATION or a RECORD prints its first 8 characters
 //!   ([`SHORT_KEYS`]) - enough to correlate two lines, and an identity a reader never
 //!   needs whole;
+//! - a string value that is an RFC 3339 INSTANT prints as csift's local text, the form
+//!   every other text instant takes (the timestamp pair law: UTC belongs to JSON, and the
+//!   UTC string stays matchable in the verbatim body) - `history-suppression`'s `ts` is
+//!   the one such key a head names today, and a later line type's instant takes the rule
+//!   without an edit;
 //! - every other value is cut at [`VALUE_MAX`] characters with the shared `... (+N chars)`
 //!   marker, so one long prompt or one big nested object cannot fill the excerpt budget.
 //!
@@ -143,6 +148,9 @@ fn head_of(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
 /// its first 8 characters instead.
 fn render_value(key: &str, value: &serde_json::Value) -> String {
     let rendered = match value {
+        serde_json::Value::String(s) if s.parse::<jiff::Timestamp>().is_ok() => {
+            crate::timez::format_local_compact(Some(s))
+        }
         serde_json::Value::String(s) => s.clone(),
         serde_json::Value::Object(map) => {
             let mut names: Vec<&str> = map.keys().map(String::as_str).collect();
