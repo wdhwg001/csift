@@ -1394,6 +1394,13 @@ surface change bumps the PATCH.
   band, the three outside are slower by 0.4, 27 and 51 milliseconds, the whole-scope JSON
   dump of the 397 MiB transcript reads 1.0009, and the `for-kind` census reads 1.0034 while
   printing 85 percent more. SPEC section 7i carries the rows.
+- **`whoami` reads its own session's lanes once.** The topology section read the calling
+  session's child lanes for its own line, and the count of other live lanes then read every
+  one of them again for the same session. The census now takes the rows already read for
+  the registry row whose transcript is that file. On a session holding 1,401 subagent
+  transcripts, `whoami` went from 1.339 s to 1.069 s (hyperfine, 5 runs after a warm-up),
+  and its text and JSON are byte-identical to before, on a two-session fixture and on the
+  live root.
 
 ### Removed
 

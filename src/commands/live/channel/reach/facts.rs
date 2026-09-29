@@ -196,14 +196,21 @@ pub(crate) fn head_facts(path: &Path) -> Result<(Option<String>, Option<String>)
 pub(crate) fn build_sections(r: &LaneRef) -> Result<Sections> {
     let me = lane_facts(&r.path)?;
     let subtree_ids = subtree_ids(&me);
-    let subtree = live_child_lanes(&me.session_path, subtree_ids.as_ref());
+    // The session's live children are read ONCE: the subtree is a filter of them, and the
+    // census below takes the same rows for this session instead of re-reading every tail.
+    let session_children = live_child_lanes(&me.session_path, None);
+    let subtree: Vec<LaneRow> = session_children
+        .iter()
+        .filter(|c| subtree_ids.as_ref().is_none_or(|set| set.contains(&c.lane)))
+        .cloned()
+        .collect();
     let parent = parent_facts(&me)?;
     let mine: HashSet<&str> = subtree
         .iter()
         .map(|l| l.lane.as_str())
         .chain(std::iter::once(me.lane.as_str()))
         .collect();
-    let others = live_lane_census()
+    let others = live_lane_census_with(Some((&me.session_path, &session_children)))
         .unwrap_or_default()
         .iter()
         .filter(|p| !mine.contains(p.lane.as_str()))

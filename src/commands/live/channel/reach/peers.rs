@@ -92,6 +92,17 @@ pub(crate) fn registry_facts(session_id: &str) -> Result<Option<RegistryFacts>> 
 
 /// Every live lane under the projects root.
 pub(crate) fn live_lane_census() -> Result<Vec<PeerRow>> {
+    live_lane_census_with(None)
+}
+
+/// [`live_lane_census`], with one session's live child lanes already in hand: `known` is that
+/// session's transcript path and the rows [`live_child_lanes`] gave for it. A caller that just
+/// read its own session's children hands them over, and the census takes them for the
+/// registry row whose transcript is that same file instead of reading every subagent tail
+/// of the session a second time - on a session with over a thousand lanes, the second read
+/// was a fifth of `whoami`'s run. A row locating a different file (the same session id under
+/// another project directory) reads its own.
+pub(crate) fn live_lane_census_with(known: Option<(&Path, &[LaneRow])>) -> Result<Vec<PeerRow>> {
     let mut out = Vec::new();
     for row in all_registry_rows()? {
         let Some(pid) = row.pid else { continue };
@@ -108,7 +119,11 @@ pub(crate) fn live_lane_census() -> Result<Vec<PeerRow>> {
             continue;
         };
         out.push(session_row(&row, Some(&path)));
-        for child in live_child_lanes(&path, None) {
+        let children = match known {
+            Some((known_path, rows)) if known_path == path => rows.to_vec(),
+            _ => live_child_lanes(&path, None),
+        };
+        for child in children {
             out.push(PeerRow {
                 lane: child.lane,
                 kind: child.kind,

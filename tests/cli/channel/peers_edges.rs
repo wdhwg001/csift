@@ -175,3 +175,65 @@ fn the_self_state_of_a_session_whose_owner_process_is_gone_is_dead() {
         out.stdout
     );
 }
+
+/// A child lane whose tail is an unreturned tool call: in flight at any age.
+fn in_flight_child() -> String {
+    format!(
+        "{}\n{}\n",
+        format_args!(
+            r#"{{"type":"user","uuid":"c1","isSidechain":true,"timestamp":"2026-06-07T04:01:00.000Z","cwd":"{CWD}","version":"2.1.258","message":{{"role":"user","content":"go"}}}}"#
+        ),
+        r#"{"type":"assistant","uuid":"c2","parentUuid":"c1","isSidechain":true,"timestamp":"2026-06-07T04:01:05.000Z","version":"2.1.258","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"sleep 1"}}]}}"#
+    )
+}
+
+#[test]
+fn the_census_reads_each_live_session_s_own_children() {
+    // The caller's session carries two live children and a second live session one. The
+    // census counts the second session's lanes from ITS OWN sidecar, while the caller's own
+    // children - already read for the topology line - are not counted as others: the other
+    // session's row and its one child make two, and the caller's pair never leaks into them.
+    let h = home();
+    for id in ["a1000000000000001", "a1000000000000002"] {
+        h.write(
+            &format!("{ENC}/{SESS}/subagents/agent-{id}.jsonl"),
+            &in_flight_child(),
+        );
+    }
+    h.write(
+        &format!("{ENC}/{ELSEWHERE}.jsonl"),
+        &session_transcript().replace(SESS, ELSEWHERE),
+    );
+    h.write(
+        &format!("{ENC}/{ELSEWHERE}/subagents/agent-a2000000000000001.jsonl"),
+        &in_flight_child(),
+    );
+    let me = std::process::id();
+    h.write_session_registry(
+        me,
+        &format!(r#"{{"pid":{me},"sessionId":"{SESS}","status":"busy","entrypoint":"cli"}}"#),
+    );
+    std::fs::write(
+        sessions_dir(&h).join("other.json"),
+        format!(r#"{{"pid":{me},"sessionId":"{ELSEWHERE}","status":"idle","entrypoint":"cli"}}"#),
+    )
+    .unwrap();
+    let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("2 live child lane(s) in this session"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("2 other live lane(s)"),
+        "the other session and its own child:\n{}",
+        out.stdout
+    );
+    let peers = h.run_with_env(&["whoami", "--peers"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(
+        peers.stdout.contains("a2000000000000001") && peers.stdout.contains("a1000000000000002"),
+        "{}",
+        peers.stdout
+    );
+}
