@@ -1286,6 +1286,9 @@ surface change bumps the PATCH.
   CJK ext-B character is one scalar and two code units, so a `--window` sized at the cap
   can cross it. The `--slice` and `--window` help now name the two units apart and ask for
   more headroom on a document carrying astral characters.
+- **A duplicate note said "under 1 project directories".** Two copies of one agent id in
+  two sessions of one project read `at 2 paths under 1 project directories`; the count now
+  takes its noun in the singular at one, like every other count the disclosure prints.
 
 ### Performance
 

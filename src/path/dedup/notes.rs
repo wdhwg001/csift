@@ -112,7 +112,10 @@ fn places(g: &DuplicateGroup) -> String {
         .collect();
     match dirs.len() {
         d if d == n => format!("under {n} project directories"),
-        d => format!("at {n} paths under {d} project directories"),
+        d => format!(
+            "at {n} paths under {d} {}",
+            plural(d, "project directory", "project directories")
+        ),
     }
 }
 

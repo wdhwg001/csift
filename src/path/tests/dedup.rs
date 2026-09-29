@@ -267,3 +267,54 @@ fn a_divergent_note_gives_both_record_counts_and_refuses_to_merge() {
     assert!(note.contains("2 lines"), "{note}");
     assert!(note.contains("1 line at"), "{note}");
 }
+
+/// The note says WHERE a group's copies sit, in words a reader can check against the paths it
+/// prints: two project directories, two sidecars of one project, two workflow runs of one
+/// session, or a workflow run beside the built-in location. Each shape is its own sentence.
+#[test]
+fn the_note_names_where_the_copies_sit_by_their_shape() {
+    let group = |paths: [&str; 2]| DuplicateGroup {
+        session_id: "agent-a0f1e2d3c4b5a6978.jsonl".to_string(),
+        relation: DuplicateRelation::Divergent,
+        kept: PathBuf::from(paths[0]),
+        dropped: Vec::new(),
+        members: paths
+            .iter()
+            .map(|p| DuplicateMember {
+                path: PathBuf::from(p),
+                lines: 2,
+                error: None,
+            })
+            .collect(),
+    };
+    for (paths, want) in [
+        (
+            ["/r/-Users-dev-a/s1.jsonl", "/r/-Users-dev-b/s1.jsonl"],
+            "on disk under 2 project directories",
+        ),
+        (
+            [
+                "/r/-Users-dev-a/s1/subagents/agent-x.jsonl",
+                "/r/-Users-dev-a/s2/subagents/agent-x.jsonl",
+            ],
+            "on disk at 2 paths under 1 project directory",
+        ),
+        (
+            [
+                "/r/-Users-dev-a/s1/subagents/workflows/wf_a/agent-x.jsonl",
+                "/r/-Users-dev-a/s1/subagents/workflows/wf_b/agent-x.jsonl",
+            ],
+            "on disk at 2 paths under one session's sidecar",
+        ),
+        (
+            [
+                "/r/-Users-dev-a/s1/subagents/workflows/wf_a/agent-x.jsonl",
+                "/r/-Users-dev-a/s1/subagents/agent-x.jsonl",
+            ],
+            "on disk under one session's sidecar at the built-in and the workflow locations",
+        ),
+    ] {
+        let note = duplicate_note(&group(paths));
+        assert!(note.contains(want), "{paths:?}: {note}");
+    }
+}
