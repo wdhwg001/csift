@@ -237,14 +237,17 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     // LANE HONESTY: csift cannot know the CALLER's lane (the env id is the
                     // parent's inside a subagent), so the inference is named on EVERY
                     // resolution - stderr only, stdout stays pure for pipes. NOT inside
-                    // resolve_env_session: @trap calls that helper on a correct path.
+                    // resolve_env_session: @trap calls that helper on a correct path. The
+                    // variable is read FIRST: an unset or malformed one resolved nothing, and a
+                    // note saying it did would stand above the refusal that says it did not.
+                    let sid = resolve_env_session()?;
                     eprintln!(
                         "csift: note: @main resolved the TOP-LEVEL session via env. If you \
                          are a subagent this is NOT your transcript (a subagent's env \
                          carries the parent's id); a first-try `@trap:<marker>` hit names \
                          yours."
                     );
-                    session_ids.push(resolve_env_session()?);
+                    session_ids.push(sid);
                     session_target = true;
                 }
                 // `@trap:<marker>` - the SELF identifier. The caller (an in-process subagent

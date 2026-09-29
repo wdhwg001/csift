@@ -130,3 +130,33 @@ fn a_malformed_session_env_value_is_refused_by_name() {
     let good = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
     assert!(good.success, "{}", good.stderr);
 }
+
+/// `@main` names its inference only once it has one: an unset or malformed variable resolved
+/// nothing, so the refusal stands alone rather than under a note saying the session was
+/// resolved.
+#[test]
+fn the_at_main_note_follows_a_resolution_and_never_a_refusal() {
+    let h = Home::new();
+    lane_fixture(&h);
+    let note = "@main resolved the TOP-LEVEL session via env";
+    let bad = h.run_with_env(
+        &["list", "@main"],
+        &[("CLAUDE_CODE_SESSION_ID", "not-a-uuid")],
+    );
+    assert!(!bad.success, "{}", bad.stdout);
+    assert!(
+        bad.stderr.contains("is set to `not-a-uuid`") && !bad.stderr.contains(note),
+        "{}",
+        bad.stderr
+    );
+    let unset = h.run(&["list", "@main"]);
+    assert!(!unset.success, "{}", unset.stdout);
+    assert!(
+        unset.stderr.contains("is not set") && !unset.stderr.contains(note),
+        "{}",
+        unset.stderr
+    );
+    let good = h.run_with_env(&["list", "@main"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(good.success, "{}", good.stderr);
+    assert!(good.stderr.contains(note), "{}", good.stderr);
+}

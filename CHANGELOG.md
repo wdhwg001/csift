@@ -1152,7 +1152,9 @@ surface change bumps the PATCH.
   session's own id there, a uuid on every build, so any other shape was set by something
   else. `whoami`, every `@main` resolution, `plan` with no target, `msg` and `ack` now read
   the variables through one reader that refuses such a value, naming the variable, the value
-  and the `@<uuid>` remedy; an unset or blank variable still reads as not set.
+  and the `@<uuid>` remedy; an unset or blank variable still reads as not set. `@main`'s
+  note that it resolved the top-level session via the environment now follows the read, so
+  a refused or unset variable prints its refusal alone.
 - **An empty target token scoped to the current directory.** `csift search zzqq ""` searched
   every session of the cwd's project (1,722 of them at the re-measure) and exited 0: the empty token was read
   as the empty relative path. Sixteen target spots now refuse an empty or whitespace-only
