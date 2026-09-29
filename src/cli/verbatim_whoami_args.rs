@@ -437,11 +437,11 @@ impl VerbatimArgs {
         Most-recent-mtime and process-tree walking are FORBIDDEN: many CC sessions \
         may be live at once, so mtime is almost always wrong. It is acceptable for \
         whoami to often say \"ambiguous, pass `@<uuid>`\".\n\n\
-        SUBAGENT CAVEAT: which session $CLAUDE_CODE_SESSION_ID names depends on HOW the \
-        subagent was spawned. In a built-in Task/Agent SUBAGENT it is the SUBAGENT's OWN id \
-        (so `whoami` identifies the subagent, not the main session). In an \
-        ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) it is the PARENT \
-        session's id (so `whoami` resolves the ROOT, not a subagent). Do NOT assume which; \
+        SUBAGENT CAVEAT: current Claude Code hands $CLAUDE_CODE_SESSION_ID the TOP-LEVEL \
+        session's id in every lane - an Agent-tool subagent's OWN id is withheld from its \
+        env, and an ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) holds \
+        the PARENT's too - so from a subagent plain `whoami` resolves the ROOT, not you; \
+        older builds handed a built-in Task subagent its OWN id. Do NOT assume which; \
         disambiguate via the recovery: feed the resolved id to `csift agents --agent <id> \
         --format json`; if it returns the node, read `parent_session_id` for the ROOT (one \
         call); if it errors `no subagent matched`, the id is ALREADY top-level; use it \
@@ -459,7 +459,8 @@ impl VerbatimArgs {
         `id kind state` and nothing else. Nothing on this path writes: a prediction is a read of \
         disk plus the policy table.\n\n\
         FLAG NOTE: whoami's positional is the optional SELF token `@trap:<marker>` / `@main` / a \
-        LANE id; the `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes \
+        LANE id (`@<agent-id>`, or a teammate's `@<Name>@<Team>`); a session uuid is refused. \
+        The `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes \
         a general POSITIONAL `[PATH]...` / `@`-token; there is no target FLAG.",
     after_help = "SESSION-ID SOURCE\n  \
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
@@ -487,8 +488,12 @@ impl VerbatimArgs {
         path}; from the env alone it canNOT know is_subagent / parent_session_id (that is exactly \
         what `@trap` resolves).\n\n\
         FLAG NOTE\n  \
-          whoami takes an OPTIONAL positional SELF target: `@trap:<marker>` or `@main` ONLY; the \
-        `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes a general \
+          whoami takes an OPTIONAL positional target in one of FOUR forms: `@main` (the \
+        calling top-level session, the default), `@trap:<marker>` (which subagent am I), or a \
+        LANE id - `@<agent-id>`, or a teammate's routing form `@<Name>@<Team>` - which answers \
+        the same sections for that lane. A session uuid is refused (use `list` / `agents` for \
+        another session). The `path` line is ALWAYS printed. Every OTHER session-operating \
+        subcommand takes a general \
         POSITIONAL [PATH]... / `@`-token. There is no target flag anywhere.\n\n\
         REACH\n  \
           After the identity output come three sections about the resolved lane: `self` (id,\n  \

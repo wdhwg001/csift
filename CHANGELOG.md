@@ -1248,6 +1248,13 @@ surface change bumps the PATCH.
   delivery, the person's mid-turn steer and the model's structured answer. The page now
   says so, and says that `msg` reads the delivery off the envelope header at the start of
   a hook-context attachment rather than running a search.
+- **`whoami --help` said a built-in subagent's environment holds its own id, and that
+  whoami takes `@trap:<marker>` or `@main` only.** Its long description contradicted its
+  own after-help: current Claude Code hands every lane the top-level session's id, the
+  subagent's own being withheld. And a lane id (`@<agent-id>`) and a teammate's routing
+  form (`@<Name>@<Team>`) both resolve as the self target, printing that lane's sections.
+  The page now states the one reading and names all four forms and the refused session
+  uuid; a test holds both.
 
 ### Performance
 

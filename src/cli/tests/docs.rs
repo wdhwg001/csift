@@ -419,3 +419,42 @@ fn an_object_valued_key_parses_last() {
         "the last name survives whole"
     );
 }
+
+/// `whoami --help` names every SELF target the binary accepts, and states ONE reading of what
+/// the environment hands a subagent, on both halves of the page.
+///
+/// The FLAG NOTE said `@trap:<marker>` or `@main` ONLY while a lane id and a teammate's
+/// routing form both resolve (exit 0, the self and parent sections printed); and the long
+/// description said a built-in subagent's env holds its OWN id while the after-help, and
+/// every current build, hand it the top-level session's.
+#[test]
+fn the_whoami_page_names_every_self_target_and_one_env_reading() {
+    use clap::CommandFactory;
+    let help = Cli::command()
+        .find_subcommand_mut("whoami")
+        .expect("the whoami subcommand")
+        .render_long_help()
+        .to_string();
+    let note_at = help.rfind("FLAG NOTE\n").expect("the after-help FLAG NOTE");
+    let note = &help[note_at..];
+    let note = &note[..note.find("\n\n").unwrap_or(note.len())];
+    for form in ["@main", "@trap:<marker>", "@<agent-id>", "@<Name>@<Team>"] {
+        assert!(
+            note.contains(form),
+            "`whoami --help`'s FLAG NOTE must name the `{form}` target: {note}"
+        );
+    }
+    assert!(
+        !note.contains("ONLY"),
+        "the FLAG NOTE names every form: {note}"
+    );
+    let caveat_at = help
+        .find("SUBAGENT CAVEAT:")
+        .expect("the long description's caveat");
+    let caveat = &help[caveat_at..];
+    let caveat = &caveat[..caveat.find("\n\n").unwrap_or(caveat.len())];
+    assert!(
+        caveat.contains("TOP-LEVEL") && !caveat.contains("it is the SUBAGENT's OWN id"),
+        "the long description reads the env id as the after-help does: {caveat}"
+    );
+}
