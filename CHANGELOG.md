@@ -1400,6 +1400,12 @@ surface change bumps the PATCH.
   `recover --help` names `line` as the key `--at @line:<N>` reads. A test holds every key
   each verbatim row kind emits to the page, and every entry of the per-unit block to the
   rows.
+- **`image --format json`'s header left out the scope counts.** Every other spanning command's
+  header carries `sessions_in_scope`, `top_level_sessions` and `subagent_sessions`, built by
+  one function, and `image` built its header with the scope-less form in both the listing
+  and the `--out` extract stream. Both now go through the span builder, counting the resolved
+  transcript set before any filter narrows the images, so an image header reads the same
+  three numbers `list` gives the same scope.
 
 ### Performance
 

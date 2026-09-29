@@ -220,3 +220,48 @@ fn scope_json_header_uniform_across_spanning_subcommands() {
         );
     }
 }
+
+/// `image`'s header carries the three scope counts through the same builder, in both of its
+/// JSON projections, and they are the counts every other span command's header gives the
+/// same scope - not merely present.
+#[test]
+fn image_json_header_carries_the_scope_counts_the_span_commands_share() {
+    let h = populated_home();
+    let at_sess = at(SESS);
+    let first = |args: &[&str]| -> serde_json::Value {
+        let out = h.run(args);
+        assert!(out.success, "{args:?} stderr: {}", out.stderr);
+        let line = out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap();
+        serde_json::from_str(line).unwrap()
+    };
+    let reference = first(&["list", at_sess.as_str(), "--format", "json"]);
+    let out_dir = h.root.join("imgout");
+    let out_dir = out_dir.to_str().unwrap();
+    for args in [
+        vec!["image", at_sess.as_str(), "--format", "json"],
+        vec![
+            "image",
+            at_sess.as_str(),
+            "--out",
+            out_dir,
+            "--format",
+            "json",
+        ],
+    ] {
+        let v = first(&args);
+        assert_eq!(v["kind"], "header", "{args:?}: {v}");
+        assert_eq!(v["command"], "image", "{args:?}: {v}");
+        for key in [
+            "sessions_in_scope",
+            "top_level_sessions",
+            "subagent_sessions",
+        ] {
+            assert_eq!(
+                v[key], reference[key],
+                "{args:?} `{key}` disagrees with `list` on the same scope: {v}"
+            );
+        }
+    }
+    // The fixture spans two subagents under one session, so the counts are not all zero.
+    assert_eq!(reference["subagent_sessions"], 2, "{reference}");
+}

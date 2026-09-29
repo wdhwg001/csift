@@ -17,6 +17,9 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
         crate::path::Caller::Other,
     )?;
     let session_files = resolved.files;
+    // The span header's scope counts, read off the RESOLVED transcript set before any filter
+    // narrows the images - the set every other span command's header counts.
+    let scope = crate::subagent::scope_span_files(&session_files);
 
     // Scan across files (rayon - each is an independent mmap + prefilter scan).
     use rayon::prelude::*;
@@ -107,6 +110,7 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
             out_dir,
             args,
             skipped_lines,
+            scope,
             &resolved.duplicates,
         )
     } else {
@@ -115,6 +119,7 @@ pub fn run_image(args: &ImageArgs, cross: CrossingBudget) -> Result<()> {
                 &selected,
                 distinct_transcripts,
                 skipped_lines,
+                scope,
                 &resolved.duplicates,
                 &crossing,
             ),

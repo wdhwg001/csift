@@ -134,6 +134,7 @@ pub(crate) fn extract(
     out_path: &Path,
     args: &ImageArgs,
     skipped_lines: usize,
+    scope: (usize, usize),
     duplicates: &[crate::path::DuplicateGroup],
 ) -> Result<()> {
     let file_target = out_path
@@ -166,7 +167,12 @@ pub(crate) fn extract(
     if matches!(args.format, OutputFormat::Json) {
         println!(
             "{}",
-            crate::text::envelope_header("image", crate::path::duplicate_header_fields(duplicates))
+            crate::text::envelope_scope_header(
+                "image",
+                scope.0,
+                scope.1,
+                crate::path::duplicate_header_fields(duplicates)
+            )
         );
     }
     let mut written = 0usize;

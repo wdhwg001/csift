@@ -113,11 +113,13 @@ pub(crate) fn render_text(
     Ok(())
 }
 
-/// JSON listing: one object per image, then a trailing summary object.
+/// JSON listing: the span header, one object per image, then a trailing summary object.
+/// `scope` is `(top-level, subagent)` over the resolved transcript set.
 pub(crate) fn render_json(
     selected: &[&ImageRef],
     transcripts: usize,
     skipped_lines: usize,
+    scope: (usize, usize),
     duplicates: &[crate::path::DuplicateGroup],
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
@@ -125,7 +127,12 @@ pub(crate) fn render_json(
     writeln!(
         out,
         "{}",
-        crate::text::envelope_header("image", crate::path::duplicate_header_fields(duplicates))
+        crate::text::envelope_scope_header(
+            "image",
+            scope.0,
+            scope.1,
+            crate::path::duplicate_header_fields(duplicates)
+        )
     )?;
     for img in selected {
         writeln!(
