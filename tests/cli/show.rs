@@ -550,6 +550,7 @@ fn show_uuid_fetches_the_addressed_records_and_nothing_else() {
     assert_eq!(json_summary(&line.stdout)["records"], serde_json::json!(1));
 }
 
+mod addresses;
 mod branching;
 mod drafts;
 mod fetch_domain;

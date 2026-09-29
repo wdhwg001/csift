@@ -42,6 +42,13 @@ pub(crate) fn parse_line_specs(tokens: &[String]) -> Result<Vec<(bool, crate::te
     Ok(out)
 }
 
+/// How a miss names a `--line` RANGE: the grammar's own `A..B`, the spelling a reader can paste
+/// back into `--line`. `A-B` is refused on input, so a message spelling a range that way hands
+/// the reader an address the parser rejects.
+pub(crate) fn range_label(a: usize, b: usize) -> String {
+    format!("L{a}..{b}")
+}
+
 /// Resolve parsed `--line` specs against the transcript's line count (1-based), materializing
 /// open/from-end forms. A single-token spec becomes an explicit address; a range spec clamps.
 pub(crate) fn resolve_line_specs(

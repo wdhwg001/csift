@@ -1102,6 +1102,11 @@ surface change bumps the PATCH.
   the caller is). The recipe reads the parent off the `agents` node instead and says
   that `no subagent matched` means the env id is already the root; a test holds every
   recipe on the page off the identity row's parent.
+- **`show`'s address miss spelled a range with a dash.** `csift show @<id> --line 99999..`
+  on a 5,003-line file failed with `no such record(s): L99999-5003`, while `--line`
+  refuses the `A-B` form it printed. Both fetch modes now name a missed range in the
+  grammar's own spelling, `L99999..5003`, so the message hands back an address the parser
+  accepts.
 
 ### Performance
 

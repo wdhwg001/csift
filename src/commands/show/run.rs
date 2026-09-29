@@ -161,7 +161,10 @@ pub(crate) fn run_raw(
         .collect();
     for &(a, b) in &specs.ranges {
         if a > total_lines {
-            misses.push(format!("L{a}-{b} (file has {total_lines} lines)"));
+            misses.push(format!(
+                "{} (file has {total_lines} lines)",
+                range_label(a, b)
+            ));
         }
     }
     for (u, slot) in &uuid_line {
@@ -264,7 +267,7 @@ pub(crate) fn run_rendered(
         .collect();
     for &(a, b) in &specs.ranges {
         if !hit_lines.iter().any(|n| (a..=b).contains(n)) {
-            misses.push(format!("L{a}-{b}"));
+            misses.push(range_label(a, b));
         }
     }
     for u in uuids {

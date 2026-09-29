@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2499",
+          "lines": "2500",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -45614,7 +45614,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "275-278",
+          "lines": "278-281",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         },
         {
@@ -59447,12 +59447,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "172-174",
+          "lines": "175-177",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "275-278",
+          "lines": "278-281",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         }
       ],
@@ -89208,7 +89208,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3523"
+          "lines": "3524"
         }
       ],
       "states": [
@@ -89560,7 +89560,7 @@
         },
         {
           "path": "src/commands/show/addr.rs",
-          "lines": "92-93",
+          "lines": "99-100",
           "snippet": "    match (resolved.files.as_slice(), dropped.as_slice()) {\n        ([one], []) => Ok(one.clone()),"
         }
       ],
