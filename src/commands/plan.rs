@@ -325,7 +325,7 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
     // env signal is absent. A positional target (`@<uuid>` / `*.jsonl` / a project path) or a
     // `--sessions-from` list flows through the shared resolver's grammar instead.
     let session_paths: Vec<PathBuf> = if args.paths.is_empty() && args.sessions_from.is_none() {
-        match crate::commands::whoami::detect_session_id() {
+        match crate::commands::whoami::detect_session_id()? {
             // The env id becomes an `@<uuid>` positional - the same path every other
             // session is reached by now that `--session` is gone.
             Some(id) => vec![PathBuf::from(format!("@{id}"))],

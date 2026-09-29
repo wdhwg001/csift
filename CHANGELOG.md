@@ -1137,6 +1137,12 @@ surface change bumps the PATCH.
   recipes now select the row that carries the key (`select(.kind=="verdict").verdict`,
   `select(.kind=="msg").fact`), and a test holds every `jq` recipe on every help page to a row
   select, `tail -1`, or `wait`'s single object.
+- **A malformed session-id variable was read as a session.** `CLAUDE_CODE_SESSION_ID=not-a-uuid
+  csift whoami` printed `session  not-a-uuid` and exited 0. Claude Code writes the calling
+  session's own id there, a uuid on every build, so any other shape was set by something
+  else. `whoami`, every `@main` resolution, `plan` with no target, `msg` and `ack` now read
+  the variables through one reader that refuses such a value, naming the variable, the value
+  and the `@<uuid>` remedy; an unset or blank variable still reads as not set.
 
 ### Performance
 

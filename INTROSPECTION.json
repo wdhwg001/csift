@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2505",
+          "lines": "2506",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -33358,9 +33358,9 @@
           "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment, and\n//! its value equals exactly the session's own jsonl filename:\n//!"
         },
         {
-          "path": "src/commands/whoami.rs",
-          "lines": "42",
-          "snippet": "const SESSION_ID_ENV: &str = \"CLAUDE_CODE_SESSION_ID\";"
+          "path": "src/path/scope.rs",
+          "lines": "61",
+          "snippet": "pub const SESSION_ENV_VARS: [&str; 2] = [\"CLAUDE_CODE_SESSION_ID\", \"CODEX_COMPANION_SESSION_ID\"];"
         }
       ],
       "states": [
@@ -62861,13 +62861,13 @@
           "snippet": "//!\n//! Claude Code exports `CLAUDE_CODE_SESSION_ID` into its Bash tool environment, and\n//! its value equals exactly the session's own jsonl filename:\n//!"
         },
         {
-          "path": "src/commands/whoami.rs",
-          "lines": "42",
-          "snippet": "const SESSION_ID_ENV: &str = \"CLAUDE_CODE_SESSION_ID\";"
+          "path": "src/path/scope.rs",
+          "lines": "61",
+          "snippet": "pub const SESSION_ENV_VARS: [&str; 2] = [\"CLAUDE_CODE_SESSION_ID\", \"CODEX_COMPANION_SESSION_ID\"];"
         },
         {
           "path": "src/commands/whoami.rs",
-          "lines": "133-134",
+          "lines": "114-115",
           "snippet": "    // hands a subagent its parent's id), so env-only resolution cannot know whether the\n    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null."
         }
       ],
@@ -89208,7 +89208,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3533"
+          "lines": "3534"
         }
       ],
       "states": [
@@ -90056,6 +90056,100 @@
             "observed": "23 of 82 transcripts carry a boundary; 278 records; per-file counts 1x7, 2x3, 4, 5, 6x2, 7x2, 12, 15, 28, 30, 32, 33, 80; 226 of 278 resolvable, 52 not; 9 of 23 files fully resolvable, 4 not at all. The distribution shape the claim rests on is what did not move: 10 of the 23 still carry at most two and one still carries 80. Over the eight-transcript differential set, budget 0 reproduced the pre-flag build on 32 of 32 streams. Budget 3 and budget `all` are NOT byte-identical: 24 of the 32 stream pairs differ, and every difference is the echoed `crossing_budget` value alone (`3` against `all`), every other key equal - which is the fact that matters, since it means no walk reached a boundary that a budget of 3 stopped it at. Crossings at budget 3: 2 on the landmark, 1 on each of two band transcripts, 0 on the other five; boundaries left above the floor: 77, 2, 2, 1, 1, 0, 0 and 0. The cost half: the control band over 95 rows reads 0.0774 on the compacted transcript (its widest row a 15 ms one; median 0.007, 90th percentile 0.021) and 0.0165 on the landmark (median 0.005, 90th percentile 0.009), every control pair byte-identical. Budget 3 against 0: no row slower than its band over the 95, class medians 1.0008 and 1.0017, the widest slowdown +9.6 ms, two landmark rows faster than the band (0.972 and 0.967). Budget 1: no row outside, medians 0.9976 and 0.9998. Budget `all`: no row outside, medians 0.9983 and 0.9997. 68 of the 95 pairs differ in stdout at every non-zero budget, the crossing's own output on the transcripts it moves. So the default is 3 by the rule.",
             "rule": "One observation per boundary record for the census; one per transcript path for the budget comparison, each command pinned to that one file.",
             "note": "The earlier check said budget 3 and budget `all` produced byte-identical streams. They do not: 24 of 32 pairs differ by the echoed `crossing_budget`. The claim's own sentence is corrected to the fact the comparison actually supports - that no transcript in the set has a boundary a budget of 3 would have stopped at. The default is the measured value: its open leg closes on the cost reading above."
+          }
+        }
+      ]
+    },
+    {
+      "id": "MISC-047",
+      "area": "misc",
+      "code": [
+        {
+          "path": "src/path/scope.rs",
+          "lines": "69-70",
+          "snippet": "pub fn env_session() -> Result<Option<String>> {\n    for var in SESSION_ENV_VARS {"
+        },
+        {
+          "path": "src/path/scope.rs",
+          "lines": "78-80",
+          "snippet": "        if crate::path::is_uuid(value) {\n            return Ok(Some(value.to_string()));\n        }"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.159",
+          "from_basis": "first_seen",
+          "to": null,
+          "behavior": "The id Claude Code exports as `CLAUDE_CODE_SESSION_ID` is a session uuid on every path that sets it. At startup the session state takes `id: Okt() ?? z5()`: a UUIDv5 that `sZ` derives from `CLAUDE_CODE_REMOTE_SESSION_ID` when that is set, else `randomUUID`. A `/clear` regenerates it with `randomUUID`, a `.jsonl` resume target gets a fresh `randomUUID`, and any other resume target becomes the id only when `Vn` matches it against the 8-4-4-4-12 hex pattern. The shell env literal `OOe` copies that id into the variable verbatim. On one live projects root every value an environment dump or a bare echo printed unaltered was a uuid equal to its own transcript's session id (23 of 23); every other printed value had been rewritten by the command that printed it.",
+          "depends": "`path::env_session` is the one reader behind `whoami`, `@main`, a target-less `plan`, `msg` and `ack`: it treats an unset or blank variable as not set, accepts a session uuid, and refuses any other value with an error naming the variable, the value and the `@<uuid>` remedy. Since the harness writes nothing else there, another shape was set by something else, and reading it as a session would answer for a session no transcript is named after. If a build ever wrote a non-uuid id, every env-resolved surface would refuse it loudly instead of misreading it.",
+          "instrument": "the producer leg traced in the 2.1.258 binary, each excerpt read at its offset: trigger dn, the session-state constructor, whose id is `Okt()??z5()` @156787331; gate Okt, the remote-session derivation, which passes CLAUDE_CODE_REMOTE_SESSION_ID through the UUIDv5 formatter sZ @156730707; gate bn, the 8-4-4-4-12 hex pattern, with sZ right after it @156730061; gate Vn, which accepts a resume target as a session id only when bn matches it @156730420; writer the two crypto imports, randomUUID as z5 and as Cn (Cn is the id a `.jsonl` resume target gets) @156729541; writer the /clear regeneration `s=z5()` @156788404; writer OOe, the shell env literal that copies the id into CLAUDE_CODE_SESSION_ID @161571761, the literal `CLAUDE_CODE_SESSION_ID:e.sessionId` occurring once in the whole build. Specimen leg: a python walk over every `*.jsonl` under the live projects root, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, joining each Bash or PowerShell tool_use whose command is a bare `echo $CLAUDE_CODE_SESSION_ID` or runs `env`/`printenv` (and runs no csift) to its tool_result, taking the echoed value or each result line reading `CLAUDE_CODE_SESSION_ID=<value>`, and comparing it with the uuid pattern and with the session the transcript belongs to (its own stem, or the directory above `subagents/`); run twice, over the whole root and with the measuring session's own tree excluded",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `*.jsonl` under the projects root (excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory); join each Bash or PowerShell tool_use whose command is a bare `echo $CLAUDE_CODE_SESSION_ID` or runs `env`/`printenv`, and runs no csift, to its tool_result; take the echoed value or each result line reading `CLAUDE_CODE_SESSION_ID=<value>`; count the values matching `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` and those equal to the transcript's own session id, and read the command behind every other value.",
+            "scope": "every `*.jsonl` under one live projects root, top-level and `<uuid>/subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory",
+            "rule": "one observation per printed value: the whole trimmed output of a bare echo, or one `CLAUDE_CODE_SESSION_ID=` line of an env dump; a value counts as a uuid when it matches the 8-4-4-4-12 lowercase hex pattern"
+          },
+          "producer_trace": "complete",
+          "specimen": "observed",
+          "attribution": "end-to-end",
+          "producer_chain": [
+            {
+              "role": "trigger",
+              "name": "dn, the session-state constructor",
+              "offset": 156787331,
+              "excerpt": "function dn(e=uLn()){return v7t({host:ln(),id:Okt()??z5(),",
+              "note": "the session id at startup is a remote-derived UUIDv5 when one is configured, else a fresh randomUUID"
+            },
+            {
+              "role": "gate",
+              "name": "Okt, the remote-session derivation",
+              "offset": 156730707,
+              "excerpt": "function Okt(){let e=process.env.CLAUDE_CODE_REMOTE_SESSION_ID?.trim();return e?sZ(e,Y):null}",
+              "note": "a configured remote session name is never used as the id itself; sZ turns it into a uuid"
+            },
+            {
+              "role": "gate",
+              "name": "bn, the uuid pattern, and sZ, the UUIDv5 formatter",
+              "offset": 156730061,
+              "excerpt": "bn=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;function sZ(e,t){let o=Buffer.from(t.replace(/-/g,\"\"),\"hex\")",
+              "note": "sZ hashes a name into the 8-4-4-4-12 layout; bn is the pattern a supplied id must match"
+            },
+            {
+              "role": "gate",
+              "name": "Vn, the resume-target check",
+              "offset": 156730420,
+              "excerpt": "function Vn(e){if(typeof e!==\"string\")return null;return bn.test(e)?e:null}",
+              "note": "a resume target becomes the session id only when it is a uuid"
+            },
+            {
+              "role": "writer",
+              "name": "the crypto imports behind z5 and Cn",
+              "offset": 156729541,
+              "excerpt": "import{randomUUID as z5}from\"crypto\";import{randomUUID as Cn}from\"crypto\";",
+              "note": "both aliases are randomUUID: z5 at startup and /clear, Cn for a `.jsonl` resume target"
+            },
+            {
+              "role": "writer",
+              "name": "the /clear regeneration",
+              "offset": 156788404,
+              "excerpt": "let i=gn(),s=z5();return t.costLedger.scopeTo(s),t.update({id:s,",
+              "note": "a clear replaces the id with a fresh randomUUID"
+            },
+            {
+              "role": "writer",
+              "name": "OOe, the shell env literal",
+              "offset": 161571761,
+              "excerpt": "OOe(e){let n={CLAUDECODE:\"1\",CLAUDE_CODE_SESSION_ID:e.sessionId,",
+              "note": "the only writer of the variable: it copies the session id verbatim"
+            }
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "the producer leg traced in the 2.1.258 binary, each excerpt read at its offset: trigger dn, the session-state constructor, whose id is `Okt()??z5()` @156787331; gate Okt, the remote-session derivation, which passes CLAUDE_CODE_REMOTE_SESSION_ID through the UUIDv5 formatter sZ @156730707; gate bn, the 8-4-4-4-12 hex pattern, with sZ right after it @156730061; gate Vn, which accepts a resume target as a session id only when bn matches it @156730420; writer the two crypto imports, randomUUID as z5 and as Cn (Cn is the id a `.jsonl` resume target gets) @156729541; writer the /clear regeneration `s=z5()` @156788404; writer OOe, the shell env literal that copies the id into CLAUDE_CODE_SESSION_ID @161571761, the literal `CLAUDE_CODE_SESSION_ID:e.sessionId` occurring once in the whole build. Specimen leg: a python walk over every `*.jsonl` under the live projects root, excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory, joining each Bash or PowerShell tool_use whose command is a bare `echo $CLAUDE_CODE_SESSION_ID` or runs `env`/`printenv` (and runs no csift) to its tool_result, taking the echoed value or each result line reading `CLAUDE_CODE_SESSION_ID=<value>`, and comparing it with the uuid pattern and with the session the transcript belongs to (its own stem, or the directory above `subagents/`); run twice, over the whole root and with the measuring session's own tree excluded",
+            "observed": "complete producer trace: every path that sets the session id yields a uuid - randomUUID at startup (z5), at /clear (z5) and for a `.jsonl` resume (Cn), a UUIDv5 from sZ for a remote session, and a caller-supplied id only once Vn has matched it against bn - and OOe writes that id verbatim into the shell env. Specimen, whole root: 11,743 files, 29 printed values, 23 of them uuids and all 23 equal to their own transcript's session id; the other 6 were rewritten by the command that printed them (a `${VAR:+<set>}` probe, a `sed` that cut the value to 12 characters and bracketed it, a `sed` that replaced it with `<redacted>`, and three from one command that also echoed the value inside brackets beside the unaltered `env` line). With the measuring session's own tree excluded: 10,340 files, 27 values, the same 23 uuids, 4 rewritten. The uuid-bearing records carry versions 2.1.159 through 2.1.284.",
+            "rule": "one observation per printed value: the whole trimmed output of a bare echo, or one `CLAUDE_CODE_SESSION_ID=` line of an env dump; a value counts as a uuid when it matches the 8-4-4-4-12 lowercase hex pattern",
+            "note": "The claim backs a refusal rather than a reading: csift accepts the variable only in the one shape every producer path writes, so the six rewritten values on the root are what a refused value looks like in practice - a command's own formatting, never the harness's."
           }
         }
       ]

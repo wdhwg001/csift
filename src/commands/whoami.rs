@@ -37,14 +37,6 @@ use crate::cli::{OutputFormat, WhoamiArgs};
 use crate::commands::live::channel;
 use crate::path;
 
-/// Primary env var Claude Code sets per session: its value equals the calling session's
-/// own jsonl basename, exactly.
-const SESSION_ID_ENV: &str = "CLAUDE_CODE_SESSION_ID";
-
-/// Secondary alias mirrored by the Codex companion plugin. Accepted only when the
-/// canonical var is absent (SPEC section 6.3 - prefer the canonical var).
-const SESSION_ID_ENV_ALIAS: &str = "CODEX_COMPANION_SESSION_ID";
-
 /// The guidance shown when no definitive signal exists. Kept as a const so the
 /// message stays identical across call sites (and is unit-asserted).
 pub const AMBIGUOUS_GUIDANCE: &str = "cannot identify the calling session: \
@@ -53,22 +45,11 @@ Code). Do NOT trust most-recent-mtime — many sessions may be live at once. Pas
 explicit `@<uuid>` target: your id is the basename of your own transcript jsonl, \
 or grep a unique recent line you wrote to disambiguate.";
 
-/// Read the definitive session id from the environment, if present and non-empty.
-/// Matches the EXACT canonical var name first (never a loose `/session/i` regex -
-/// `SECURITYSESSIONID` is a false-positive trap), then the Codex alias.
-#[must_use]
-pub fn detect_session_id() -> Option<String> {
-    if let Ok(v) = std::env::var(SESSION_ID_ENV) {
-        if !v.trim().is_empty() {
-            return Some(v.trim().to_string());
-        }
-    }
-    if let Ok(v) = std::env::var(SESSION_ID_ENV_ALIAS) {
-        if !v.trim().is_empty() {
-            return Some(v.trim().to_string());
-        }
-    }
-    None
+/// Read the definitive session id from the environment: `None` when unset or blank, an error
+/// when set to anything but a session uuid (see [`crate::path::env_session`], the one reader
+/// every env-resolved surface shares).
+pub fn detect_session_id() -> Result<Option<String>> {
+    crate::path::env_session()
 }
 
 /// The resolved identity of the calling session.
@@ -119,7 +100,7 @@ fn is_lane_target(token: &str) -> bool {
 
 /// `whoami` (env form): the calling session id from `$CLAUDE_CODE_SESSION_ID` + its jsonl path.
 fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
-    let Some(session_id) = detect_session_id() else {
+    let Some(session_id) = detect_session_id()? else {
         // Outside Claude Code there is no lane to name, and guessing one is the documented
         // trap - so the channel answer (what a non-lane CAN do) goes to stdout and the
         // identity question still fails loudly.
@@ -331,8 +312,9 @@ mod tests {
     fn exact_env_name_is_canonical_not_a_loose_regex() {
         // The constant must be the EXACT name - a loose /session/i match would
         // false-positive on SECURITYSESSIONID (macOS login session).
-        assert_eq!(SESSION_ID_ENV, "CLAUDE_CODE_SESSION_ID");
-        assert_ne!(SESSION_ID_ENV, "SECURITYSESSIONID");
+        let vars = crate::path::SESSION_ENV_VARS;
+        assert_eq!(vars[0], "CLAUDE_CODE_SESSION_ID");
+        assert!(!vars.contains(&"SECURITYSESSIONID"));
     }
 
     #[test]

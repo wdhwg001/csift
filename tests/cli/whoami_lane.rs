@@ -89,3 +89,29 @@ fn at_main_resolution_names_its_inference_on_stderr() {
         out.stdout
     );
 }
+
+/// A session-id variable set to anything but a session uuid is refused, naming the value and
+/// the `@<uuid>` remedy, on `whoami` and on every `@main` resolution alike. `whoami` printed
+/// `session  not-a-uuid` and exited 0, answering for a session no transcript is named after.
+#[test]
+fn a_malformed_session_env_value_is_refused_by_name() {
+    let h = populated_home();
+    for var in ["CLAUDE_CODE_SESSION_ID", "CODEX_COMPANION_SESSION_ID"] {
+        for argv in [&["whoami"][..], &["list", "@main"][..], &["plan"][..]] {
+            let out = h.run_with_env(argv, &[(var, "not-a-uuid")]);
+            assert!(!out.success, "{var} {argv:?}: {}", out.stdout);
+            assert!(
+                out.stderr
+                    .contains(&format!("{var} is set to `not-a-uuid`"))
+                    && out.stderr.contains("@<uuid>"),
+                "{var} {argv:?}: {}",
+                out.stderr
+            );
+        }
+    }
+    // A blank value is still "not set", and a uuid still resolves.
+    let blank = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", "  ")]);
+    assert!(!blank.stderr.contains("is set to"), "{}", blank.stderr);
+    let good = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(good.success, "{}", good.stderr);
+}

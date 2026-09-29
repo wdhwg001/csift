@@ -75,7 +75,9 @@ pub(crate) fn run_ack(args: &AckArgs) -> Result<()> {
     validate_message_id(&args.id)?;
     // The env check runs even with `--lane`: the flag names WHICH lane inside the calling
     // session, it does not make an outside process into a receiver.
-    if crate::path::resolve_env_session().is_err() {
+    // A malformed value is its own error rather than this hint: it is not "outside Claude
+    // Code", it is an environment that names no session.
+    if crate::path::env_session()?.is_none() {
         bail!("{ACK_NEEDS_LANE}");
     }
     let ctx = lane_for(args.lane.as_deref(), ACK_NEEDS_LANE)?;
@@ -110,7 +112,7 @@ fn lane_for(flag: Option<&str>, external_hint: &str) -> Result<LaneCtx> {
     if let Some(target) = flag {
         return lane_from_target(target);
     }
-    let Ok(session) = crate::path::resolve_env_session() else {
+    let Some(session) = crate::path::env_session()? else {
         bail!("{external_hint}");
     };
     // Unconditional, like every other env-resolved lane in csift: the environment names the
