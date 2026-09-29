@@ -62,6 +62,21 @@ pub(crate) fn parse_lane_target(s: &str) -> Result<String, String> {
     Ok(s.to_string())
 }
 
+/// `--from`'s value parser (`send`, and `whoami --to`, which predicts a send): a sender is
+/// `@<lane>` inside Claude Code or a free label outside it, and an empty token is neither -
+/// read as a label, it printed a sender nobody named. Every other value passes unchanged.
+pub(crate) fn parse_sender(s: &str) -> Result<String, String> {
+    if s.trim().is_empty() {
+        return Err(EMPTY_SENDER.to_string());
+    }
+    Ok(s.to_string())
+}
+
+/// The refusal for an empty `--from` token, naming the grammar a sender is read in.
+pub(crate) const EMPTY_SENDER: &str = "an EMPTY sender names nobody (a `$(...)` substitution \
+     that printed nothing is the usual source). `--from` takes `@<lane>` inside Claude Code \
+     (`@main`, or the `a...` id `csift agents` prints) or a non-empty free label outside it";
+
 /// The refusal for an empty target token, naming the grammar a target is read in.
 pub(crate) const EMPTY_TARGET: &str = "an EMPTY target names nothing (a `$(...)` substitution \
      that printed nothing is the usual source). A target is a project path or `.`, an encoded \

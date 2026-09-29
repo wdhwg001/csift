@@ -1374,6 +1374,11 @@ surface change bumps the PATCH.
   leaf reaches them, whenever neither was given; the JSON summary carries the list as
   `attachment_leaves_unread`. The list is the shape inventory's attachment axis, derived
   rather than typed.
+- **An empty `--from` read as a sender nobody named.** `whoami --to <lane> --from ""`
+  predicted a send from an `external unknown` sender, and `send <lane> <text> --from ""`
+  queued one, where `--to ""` and an empty lane target are refused. `--from` takes
+  `@<lane>` inside Claude Code or a non-empty free label outside it, so both commands now
+  refuse the empty token at parse time (exit 2) naming that grammar.
 - **A draft one character from its resend said `differs ... in 1 chars`.** The
   draft-distance line on a `user.unsent` unit (`search` and `show`) formatted its count
   with a fixed plural, outside the rule the excerpt marker takes; it now goes through that

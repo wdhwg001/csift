@@ -125,7 +125,7 @@ pub struct SendArgs {
     /// Who is sending. Inside Claude Code: `@<lane>` (`@main`, or the `a...` id `csift
     /// agents` prints). Outside: a free LABEL for the receipt, never a lane and never a
     /// username (default `unknown`).
-    #[arg(long, value_name = "LANE|LABEL")]
+    #[arg(long, value_name = "LANE|LABEL", value_parser = parse_sender)]
     pub from: Option<String>,
 
     /// Permit the official RESUME of a completed lane. Without it a completed teammate or

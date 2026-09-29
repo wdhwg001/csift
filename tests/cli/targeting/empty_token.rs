@@ -47,3 +47,26 @@ fn the_empty_search_pattern_is_still_a_pattern() {
     let out = h.run(&["search", "", at(SESS).as_str(), "-c"]);
     assert!(out.success, "{}", out.stderr);
 }
+
+/// An empty SENDER is refused the same way: `--from` takes `@<lane>` or a free label, and
+/// `""` is neither - `whoami --to <lane> --from ""` predicted a send from an `external unknown`
+/// sender and `send <lane> <text> --from ""` queued one. `whoami --to`'s `--from` is `send`'s,
+/// so both refuse it at parse time (exit 2) naming the grammar.
+#[test]
+fn an_empty_sender_is_refused_by_name() {
+    let h = populated_home();
+    let lane = at(SESS);
+    let argvs: [&[&str]; 2] = [
+        &["whoami", "--to", lane.as_str(), "--from", ""],
+        &["send", lane.as_str(), "hello", "--from", ""],
+    ];
+    for argv in argvs {
+        let out = h.run(argv);
+        assert_eq!(out.code, Some(2), "{argv:?}: {}{}", out.stdout, out.stderr);
+        assert!(
+            out.stderr.contains("EMPTY sender") && out.stderr.contains("@<lane>"),
+            "{argv:?}: {}",
+            out.stderr
+        );
+    }
+}

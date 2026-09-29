@@ -167,7 +167,7 @@ pub struct WhoamiArgs {
     /// between sender and receiver is one of the facts the prediction is decided from, so a
     /// subagent passes its own id (`csift whoami @trap:<marker>` recovers it) for the answer
     /// a send from that lane would get. Only with `--to`.
-    #[arg(long, value_name = "LANE|LABEL", requires = "to")]
+    #[arg(long, value_name = "LANE|LABEL", requires = "to", value_parser = parse_sender)]
     pub from: Option<String>,
 
     /// List every LIVE lane under the projects root as `id kind state` and nothing else. A
