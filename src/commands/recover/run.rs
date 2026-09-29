@@ -76,6 +76,15 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
         .par_iter()
         .map(|p| scan_one_file(p, target_file, cross))
         .collect::<Result<Vec<_>>>()?;
+    // Before anything is replayed: a `--file` that names several files would stitch their
+    // edits into one buffer, a file that never existed.
+    let names = distinct_matched(per_file.iter());
+    if names.len() > 1 {
+        bail!(
+            "{}",
+            ambiguous_target(target_file.unwrap_or_default(), &names)
+        );
+    }
 
     // -- Merge, keeping each session's events grouped (ordering inside a session is the
     //    jsonl line order; across sessions we sort sessions by id for determinism). --
@@ -191,10 +200,33 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
 // single time regardless of manifest size.
 // -----------------------------------------------------------------------------
 
+/// The distinct full paths a `--file` target matched across a set of scans.
+pub(crate) fn distinct_matched<'a>(
+    scans: impl Iterator<Item = &'a ScanResult>,
+) -> std::collections::BTreeSet<&'a str> {
+    scans
+        .flat_map(|s| s.matched_paths.iter().map(String::as_str))
+        .collect()
+}
+
+/// The refusal for a `--file` target that names more than one file: every candidate and the
+/// count, and what names exactly one.
+pub(crate) fn ambiguous_target(target: &str, names: &std::collections::BTreeSet<&str>) -> String {
+    let list: Vec<String> = names.iter().map(|p| format!("  {p}")).collect();
+    format!(
+        "--file `{target}` names {} distinct files in scope, and replaying them together would \
+         stitch their edits into one buffer:\n{}\npass one of these absolute paths, or a \
+         longer suffix that names exactly one",
+        names.len(),
+        list.join("\n")
+    )
+}
+
 /// One target's batch outcome, for the TSV report + the summary line.
 pub(crate) struct BatchOutcome {
     pub(crate) target: String,
-    pub(crate) status: &'static str, // "complete" | "partial" | "no-history" | "skipped-exists"
+    // "complete" | "partial" | "no-history" | "skipped-exists" | "ambiguous"
+    pub(crate) status: &'static str,
     pub(crate) known: usize,
     pub(crate) total: usize,
     /// Integrity boundaries in the recovered window (0 for no-history).
@@ -298,6 +330,23 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
     let mut windowed_out_integrity = 0usize;
     for (ti, mut scans) in by_target.into_iter().enumerate() {
         let target = targets[ti].clone();
+        // A manifest line takes the single-file rule: one that names several files is not
+        // replayed, and the report says so rather than writing a stitched buffer.
+        let names = distinct_matched(scans.iter());
+        if names.len() > 1 {
+            eprintln!("note: not replayed: {}", ambiguous_target(&target, &names));
+            outcomes.push(BatchOutcome {
+                target,
+                status: "ambiguous",
+                known: 0,
+                total: 0,
+                boundaries: 0,
+                bash_file: 0,
+                bash_opaque: 0,
+                written: None,
+            });
+            continue;
+        }
         for sr in &mut scans {
             let bounds = turn_range.map(|spec| {
                 let tc = sr

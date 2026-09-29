@@ -15,7 +15,7 @@ fn view_of(records: &[(usize, Record)]) -> ChainView {
 }
 
 fn extract_events(records: &[(usize, Record)], file: &str) -> Vec<FileEvent> {
-    extract_with_turns(records, &view_of(records), Some(file)).0
+    extract_with_turns(records, &view_of(records), &Target::new(Some(file))).0
 }
 
 fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {

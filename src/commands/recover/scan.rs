@@ -42,9 +42,13 @@ pub(crate) fn scan_one_file_multi(
 
     let mut out = Vec::new();
     for ti in present {
-        let (mut events, stamps) = extract_with_turns(&records, &view, Some(&targets[ti]));
+        let target = Target::new(Some(&targets[ti]));
+        let (mut events, stamps) = extract_with_turns(&records, &view, &target);
         attach_snapshot_content(&mut events, path);
-        if !events.is_empty() {
+        let matched_paths = target.into_matched();
+        // A transcript whose matches produced no event still says which files the line
+        // names, so the ambiguity check sees it; the replay drops it as before.
+        if !events.is_empty() || !matched_paths.is_empty() {
             out.push((
                 ti,
                 ScanResult {
@@ -52,6 +56,7 @@ pub(crate) fn scan_one_file_multi(
                     is_subagent,
                     parent_session_id: parent_session_id.clone(),
                     events,
+                    matched_paths,
                     stamps,
                     opaque: opaque.clone(),
                     merged_line_origin: std::collections::BTreeMap::new(),
@@ -151,6 +156,7 @@ pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> R
         "status\tknown_lines\ttotal_lines\tboundaries\tbash_file\tbash_opaque\ttarget\twritten_to\n",
     );
     let (mut complete, mut partial, mut none, mut skipped) = (0usize, 0usize, 0usize, 0usize);
+    let mut ambiguous = 0usize;
     let mut flagged = 0usize;
     for o in outcomes {
         match o.status {
@@ -158,6 +164,7 @@ pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> R
             "partial" => partial += 1,
             "no-history" => none += 1,
             "skipped-exists" => skipped += 1,
+            "ambiguous" => ambiguous += 1,
             _ => {}
         }
         if o.boundaries + o.bash_file + o.bash_opaque > 0 {
@@ -180,9 +187,14 @@ pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> R
     }
     let report = out_dir.join("recovery-report.tsv");
     std::fs::write(&report, &body).with_context(|| format!("cannot write {}", report.display()))?;
+    let ambiguous_note = if ambiguous > 0 {
+        format!(" · {ambiguous} ambiguous (names several files, not replayed)")
+    } else {
+        String::new()
+    };
     println!(
         "recovered {} file(s): {complete} complete · {partial} partial · {none} no-history · \
-         {skipped} skipped (already present)",
+         {skipped} skipped (already present){ambiguous_note}",
         outcomes.len()
     );
     if flagged > 0 {
@@ -237,6 +249,7 @@ pub(crate) fn scan_one_file(
             is_subagent,
             parent_session_id,
             events: Vec::new(),
+            matched_paths: std::collections::BTreeSet::new(),
             stamps: std::collections::BTreeMap::new(),
             opaque: Vec::new(),
             merged_line_origin: std::collections::BTreeMap::new(),
@@ -263,6 +276,7 @@ pub(crate) fn scan_one_file(
                 is_subagent,
                 parent_session_id,
                 events: Vec::new(),
+                matched_paths: std::collections::BTreeSet::new(),
                 stamps: std::collections::BTreeMap::new(),
                 opaque: Vec::new(),
                 merged_line_origin: std::collections::BTreeMap::new(),
@@ -283,7 +297,8 @@ pub(crate) fn scan_one_file(
     let (records, spine, skipped) =
         crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
     let view = ChainView::build(&records, &spine, cross);
-    let (mut events, stamps) = extract_with_turns(&records, &view, target_file);
+    let target = Target::new(target_file);
+    let (mut events, stamps) = extract_with_turns(&records, &view, &target);
     // Attach mtime-verified file-history content to version-change markers
     // so the replay can detect and rebase across tool-record-less writes.
     attach_snapshot_content(&mut events, path);
@@ -293,6 +308,7 @@ pub(crate) fn scan_one_file(
         is_subagent,
         parent_session_id,
         events,
+        matched_paths: target.into_matched(),
         stamps,
         opaque,
         merged_line_origin: std::collections::BTreeMap::new(),
@@ -418,7 +434,7 @@ pub(crate) fn collect_opaque_commands(
 pub(crate) fn extract_with_turns(
     records: &[(usize, Record)],
     view: &ChainView,
-    target_file: Option<&str>,
+    target_file: &Target<'_>,
 ) -> (Vec<FileEvent>, BTreeMap<usize, EventStamp>) {
     let mut events: Vec<FileEvent> = Vec::new();
     let mut stamps: BTreeMap<usize, EventStamp> = BTreeMap::new();

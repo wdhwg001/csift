@@ -203,11 +203,16 @@ pub(crate) fn merge_groups_for_reconstruction(
             .flat_map(|s| s.opaque.iter().cloned())
             .collect();
         opaque.sort_by(|a, b| cmp_ts(&a.timestamp_utc, &b.timestamp_utc));
+        let matched_paths = group
+            .iter()
+            .flat_map(|s| s.matched_paths.iter().cloned())
+            .collect();
         out.push(ScanResult {
             session_id: merged_id.clone(),
             is_subagent: false,
             parent_session_id: merged_id,
             events,
+            matched_paths,
             stamps,
             opaque,
             merged_line_origin,

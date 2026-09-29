@@ -48,7 +48,7 @@ pub(crate) fn extract_input_fallback(
     line_no: usize,
     turn_index: usize,
     rec: &Record,
-    target_file: Option<&str>,
+    target_file: &Target<'_>,
     ids_with_result: &std::collections::HashSet<String>,
     failed_ids: &std::collections::HashSet<String>,
     events: &mut Vec<FileEvent>,
@@ -167,19 +167,71 @@ pub(crate) fn extract_input_fallback(
     }
 }
 
-/// True when `path` matches `--file`: exact raw-string match, or a basename-suffix
-/// fallback (so a user may pass a short path). `None` target matches nothing (handled
-/// by callers that gate on the mode).
-pub(crate) fn path_matches(target: Option<&str>, path: &str) -> bool {
-    let Some(t) = target else { return false };
-    if t == path {
+/// The `--file` target as the extractors match it, plus every FULL path it matched.
+///
+/// A suffix target (`lib.rs`, `a/lib.rs`) names every record path it ends, so it can name
+/// several different files, and replaying their events together stitches one buffer out of
+/// several files' edits - content that never existed. So the target records each full path
+/// it matched and the driver refuses one that matched more than one before replaying. A
+/// relative record path is not recorded: it names no file on its own. One transcript's
+/// extraction runs on one thread, so the cell is never shared.
+#[derive(Debug)]
+pub(crate) struct Target<'a> {
+    file: Option<&'a str>,
+    matched: std::cell::RefCell<std::collections::BTreeSet<String>>,
+}
+
+impl<'a> Target<'a> {
+    pub(crate) fn new(file: Option<&'a str>) -> Self {
+        Target {
+            file,
+            matched: std::cell::RefCell::default(),
+        }
+    }
+
+    /// True when no `--file` was given: every path then fails to match.
+    pub(crate) fn is_none(&self) -> bool {
+        self.file.is_none()
+    }
+
+    /// The distinct full paths this target matched, in order.
+    pub(crate) fn into_matched(self) -> std::collections::BTreeSet<String> {
+        self.matched.into_inner()
+    }
+}
+
+/// True when `path` matches the `--file` target (see [`names_file`]); a full path that
+/// matches is recorded on the target. No target matches nothing (handled by callers that
+/// gate on the mode).
+pub(crate) fn path_matches(target: &Target<'_>, path: &str) -> bool {
+    let hit = target.file.is_some_and(|t| names_file(t, path));
+    if hit && is_full_path(path) {
+        target.matched.borrow_mut().insert(path.to_string());
+    }
+    hit
+}
+
+/// True when `target` names `path`: an exact raw-string match, or a basename-suffix
+/// fallback so a user may pass a short path - component-aligned, so `b.rs` does not match
+/// `/x/ab.rs`.
+pub(crate) fn names_file(target: &str, path: &str) -> bool {
+    if target == path {
         return true;
     }
-    // Basename-suffix fallback: the target is a trailing path segment of the record's
-    // path (component-aligned, so `b.rs` does not match `/x/ab.rs`).
-    path.strip_suffix(t)
+    path.strip_suffix(target)
         .map(|prefix| prefix.is_empty() || prefix.ends_with(['/', '\\']))
         .unwrap_or(false)
+}
+
+/// True for a path that names a file on its own: rooted (`/...`, `\\...`) or
+/// drive-qualified (`C:\\...`, `C:/...`).
+pub(crate) fn is_full_path(path: &str) -> bool {
+    let b = path.as_bytes();
+    path.starts_with(['/', '\\'])
+        || (b.len() >= 3
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && matches!(b[2], b'/' | b'\\'))
 }
 
 /// Extract every `--file` event carried by ONE record.
@@ -187,7 +239,7 @@ pub(crate) fn extract_from_record(
     line_no: usize,
     turn_index: usize,
     rec: &Record,
-    target_file: Option<&str>,
+    target_file: &Target<'_>,
     id_to_path: &BTreeMap<String, String>,
     events: &mut Vec<FileEvent>,
 ) {

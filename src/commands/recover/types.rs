@@ -233,6 +233,9 @@ pub(crate) struct ScanResult {
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,
     pub(crate) events: Vec<FileEvent>,
+    /// The distinct full paths the `--file` target matched in this transcript ([`Target`]).
+    /// The driver refuses a target whose union over the scope holds more than one.
+    pub(crate) matched_paths: std::collections::BTreeSet<String>,
     /// The survival axis per jsonl LINE of this result (see [`EventStamp`]). After a
     /// cross-transcript merge it is re-keyed to the synthetic line numbers, so a lookup by
     /// an event's or a boundary's `line_no` is always correct for the result holding it. A

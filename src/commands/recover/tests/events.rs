@@ -306,17 +306,41 @@ fn extract_multiedit_synthetic_hunks_apply_in_order() {
 
 #[test]
 fn path_matches_exact_and_basename_suffix() {
-    assert!(path_matches(Some("/p/a.rs"), "/p/a.rs"), "exact");
-    assert!(path_matches(Some("a.rs"), "/p/a.rs"), "basename suffix");
+    assert!(names_file("/p/a.rs", "/p/a.rs"), "exact");
+    assert!(names_file("a.rs", "/p/a.rs"), "basename suffix");
+    assert!(names_file("p/a.rs", "/x/p/a.rs"), "multi-segment suffix");
     assert!(
-        path_matches(Some("p/a.rs"), "/x/p/a.rs"),
-        "multi-segment suffix"
-    );
-    assert!(
-        !path_matches(Some("b.rs"), "/p/ab.rs"),
+        !names_file("b.rs", "/p/ab.rs"),
         "not a component-aligned suffix"
     );
-    assert!(!path_matches(None, "/p/a.rs"), "no target matches nothing");
+    assert!(
+        !path_matches(&Target::new(None), "/p/a.rs"),
+        "no target matches nothing"
+    );
+}
+
+#[test]
+fn a_target_records_the_full_paths_it_matched_and_nothing_else() {
+    let t = Target::new(Some("lib.rs"));
+    assert!(path_matches(&t, "/p/a/lib.rs"));
+    assert!(
+        path_matches(&t, "/p/a/lib.rs"),
+        "a second match of one path"
+    );
+    assert!(path_matches(&t, r"C:\p\b\lib.rs"));
+    assert!(
+        path_matches(&t, "src/lib.rs"),
+        "a relative path still matches"
+    );
+    assert!(!path_matches(&t, "/p/a/mylib.rs"));
+    let got: Vec<String> = t.into_matched().into_iter().collect();
+    assert_eq!(got, ["/p/a/lib.rs", r"C:\p\b\lib.rs"]);
+    for full in ["/x", r"\\srv\x", "C:/x", r"c:\x"] {
+        assert!(is_full_path(full), "{full}");
+    }
+    for not_full in ["x/y", "C:", "1:/x", "", "lib.rs"] {
+        assert!(!is_full_path(not_full), "{not_full}");
+    }
 }
 
 #[test]
@@ -372,12 +396,12 @@ fn path_matches_multi_segment_suffix_requires_slash_boundary() {
     // remaining prefix is empty OR ends in '/'. This drives the `prefix.ends_with('/')`
     // operand: a deep multi-segment suffix whose prefix is non-empty but slash-aligned.
     assert!(
-        path_matches(Some("turn_engine/engine.py"), "/a/b/turn_engine/engine.py"),
+        names_file("turn_engine/engine.py", "/a/b/turn_engine/engine.py"),
         "multi-segment suffix accepted at a '/' boundary (prefix '/a/b/' ends in '/')"
     );
     // A suffix that lands mid-component (prefix does NOT end in '/') is rejected.
     assert!(
-        !path_matches(Some("engine.py"), "/a/bxengine.py"),
+        !names_file("engine.py", "/a/bxengine.py"),
         "mid-component match rejected (prefix 'bx' is non-empty and not slash-aligned)"
     );
 }
@@ -461,21 +485,21 @@ fn path_matches_deep_suffix_after_slash_boundary() {
     // Directly drives the `prefix.ends_with('/')` operand: a target that is a trailing
     // multi-segment slice whose stripped prefix is non-empty and slash-terminated.
     assert!(
-        path_matches(Some("src/relay/engine.py"), "/root/app/src/relay/engine.py"),
+        names_file("src/relay/engine.py", "/root/app/src/relay/engine.py"),
         "deep suffix accepted (prefix '/root/app/' is non-empty and ends with '/')"
     );
     assert!(
-        path_matches(Some("b/c.rs"), "/a/b/c.rs"),
+        names_file("b/c.rs", "/a/b/c.rs"),
         "two-segment suffix at a '/' boundary"
     );
 }
 
 #[test]
 fn path_matches_basename_suffix_accepts_windows_separator() {
-    assert!(path_matches(Some("x.md"), r"C:\plans\x.md"));
-    assert!(path_matches(Some("x.md"), "/plans/x.md"));
-    assert!(!path_matches(Some("x.md"), r"C:\plans\ax.md"));
-    assert!(!path_matches(Some("x.md"), "/plans/ax.md"));
+    assert!(names_file("x.md", r"C:\plans\x.md"));
+    assert!(names_file("x.md", "/plans/x.md"));
+    assert!(!names_file("x.md", r"C:\plans\ax.md"));
+    assert!(!names_file("x.md", "/plans/ax.md"));
 }
 
 #[test]

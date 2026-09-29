@@ -16,7 +16,7 @@ pub(crate) fn extract_from_tool_use_result(
     ts: &Option<String>,
     tur: &serde_json::Value,
     record_cwd: Option<&str>,
-    target_file: Option<&str>,
+    target_file: &Target<'_>,
     events: &mut Vec<FileEvent>,
 ) {
     // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command
@@ -262,7 +262,7 @@ pub(crate) fn extract_from_attachment(
     turn_index: usize,
     ts: &Option<String>,
     att: &serde_json::Value,
-    target_file: Option<&str>,
+    target_file: &Target<'_>,
     events: &mut Vec<FileEvent>,
 ) {
     let atype = att.get("type").and_then(serde_json::Value::as_str);

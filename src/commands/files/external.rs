@@ -100,13 +100,8 @@ pub(crate) fn extract_external_writes(
                     let touched = mutations.iter().any(|m| {
                         m.line_no > prev_line
                             && m.line_no <= *line
-                            && (crate::commands::recover::path_matches(
-                                Some(path),
-                                &m.mutation.path,
-                            ) || crate::commands::recover::path_matches(
-                                Some(&m.mutation.path),
-                                path,
-                            ))
+                            && (crate::commands::recover::names_file(path, &m.mutation.path)
+                                || crate::commands::recover::names_file(&m.mutation.path, path))
                     });
                     if !touched {
                         out.push(TaggedMutation {

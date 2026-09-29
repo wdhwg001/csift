@@ -45,7 +45,7 @@ struct BashUse<'a> {
 pub(crate) fn collect_turn_bash_anchors(
     records: &[(usize, Record)],
     idxs: &[usize],
-    target_file: Option<&str>,
+    target_file: &Target<'_>,
     failed_ids: &std::collections::HashSet<String>,
 ) -> TurnBashAnchors {
     let mut out = TurnBashAnchors::default();

@@ -386,7 +386,7 @@ fn no_target_and_interrupted_gates() {
     let out = collect_turn_bash_anchors(
         &records,
         view.turns()[0].as_slice(),
-        None,
+        &Target::new(None),
         &Default::default(),
     );
     assert!(out.events.is_empty() && out.suppress.is_empty());

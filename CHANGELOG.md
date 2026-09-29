@@ -1423,6 +1423,15 @@ surface change bumps the PATCH.
   delegates. The receiver line still names the routing form beside the lane, and the
   outbox's `official.to_form` records the id the call was printed with (claims SUB-035,
   MSG-037).
+- **`recover --file <basename>` stitched several files into one.** The basename-suffix
+  fallback matched every record path the argument ended, so a basename three files share
+  replayed all three files' writes and edits into one buffer - on a fixture of three
+  `lib.rs` files, the default restore printed one of them and called it complete, and
+  `--coverage` counted all six events. A target that matches more than one distinct
+  absolute path in scope is now refused before anything is replayed, in every mode, naming
+  each candidate and the count; the absolute path, or a longer suffix that names exactly
+  one, works as before. A `--files-from` line takes the same rule: its report row reads
+  `ambiguous`, nothing is written for it, and the summary line counts it.
 
 ### Performance
 
