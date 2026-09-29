@@ -240,10 +240,14 @@ pub struct PlanArgs {
 
     /// REVERSE lookup: given a PLAN FILE, find the session(s) BOUND to it (the inverse of the
     /// default session→plan direction). Scans the resolved scope (default every project, or
-    /// narrow with a PATH target) for transcripts whose `plan_mode` attachment names this exact
-    /// plan file, and prints the bound session/subagent id(s). Useful when you have a plan file
-    /// (e.g. from `~/.claude/plans/`) and need to know which conversation owns it. The path is
-    /// matched by absolute identity (relative / `~` inputs are absolutized first).
+    /// narrow with a PATH target), resolves each transcript's binding by the SAME two laws the
+    /// forward direction uses - its latest `plan_mode` attachment's path, or, when it carries
+    /// none, `<plans-dir>/<slug>.md` from its first valid slug - and prints the bound
+    /// session/subagent id(s) whose binding names this exact plan file (JSON carries each one's
+    /// `binding_source`, `plan_mode` | `slug-only`). A forked or background session binds by its
+    /// slug alone, so it is found here too. Useful when you have a plan file (e.g. from
+    /// `~/.claude/plans/`) and need to know which conversation owns it. The path is matched by
+    /// absolute identity (relative / `~` inputs are absolutized first).
     #[arg(long, value_name = "PLAN_FILE")]
     pub reverse: Option<PathBuf>,
 

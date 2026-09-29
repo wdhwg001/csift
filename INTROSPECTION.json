@@ -14810,7 +14810,7 @@
       "code": [
         {
           "path": "src/commands/plan.rs",
-          "lines": "148-155",
+          "lines": "149-156",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file.\n    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2523",
+          "lines": "2524",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -39657,7 +39657,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "121-129",
+          "lines": "122-130",
           "snippet": "        let Some(att) = rec.attachment_value() else {\n            continue;\n        };\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"plan_mode\") {\n            continue;\n        }\n        let Some(plan_file) = att.get(\"planFilePath\").and_then(serde_json::Value::as_str) else {\n            continue;\n        };"
         },
         {
@@ -39782,7 +39782,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "118-120",
+          "lines": "119-121",
           "snippet": "    // File order == line order; overwriting keeps the LATEST plan_mode binding.\n    let mut latest: Option<PlanRef> = None;\n    for (line_no, rec) in &records {"
         }
       ],
@@ -40189,7 +40189,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "154-159",
+          "lines": "155-160",
           "snippet": "    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may"
         },
         {
@@ -40336,12 +40336,12 @@
       "code": [
         {
           "path": "src/commands/plan.rs",
-          "lines": "148-153",
+          "lines": "149-154",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "156",
+          "lines": "157",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         },
         {
@@ -40550,7 +40550,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "155-162",
+          "lines": "156-163",
           "snippet": "        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11).\n                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());\n                let root = root_owned.as_deref().map(Path::new);"
         },
         {
@@ -41016,7 +41016,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "156",
+          "lines": "157",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         }
       ],
@@ -41122,7 +41122,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "148-153",
+          "lines": "149-154",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         }
       ],
@@ -83511,7 +83511,7 @@
         {
           "path": "src/commands/plan.rs",
           "snippet": "pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {",
-          "lines": "105"
+          "lines": "106"
         }
       ],
       "states": [
@@ -89307,7 +89307,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3555"
+          "lines": "3556"
         }
       ],
       "states": [

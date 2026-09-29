@@ -1267,6 +1267,12 @@ surface change bumps the PATCH.
   axes share. A RUN row's `status` is the run manifest's own field
   (`<session>/workflows/<run>.json`, written once the run ends); the journal carries no
   run status. The page now says both, and lists `failed` beside `completed` and `killed`.
+- **`plan --help` said `--reverse` matches `plan_mode` attachments only, and two messages
+  said a plan is bound only by entering Plan Mode.** The reverse lookup resolves each
+  transcript's binding by the same two laws as the forward direction, so a session bound
+  by its first slug alone (a forked or background session) is found too, with
+  `binding_source: "slug-only"`. The flag's help now names both laws, and the
+  `recover --file @plan` refusal and the `plan` no-binding note name both as absent.
 
 ### Performance
 

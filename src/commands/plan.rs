@@ -100,8 +100,9 @@ fn line_is_plan_candidate(line: &[u8]) -> bool {
     PLAN_MODE.find(line).is_some()
 }
 
-/// Resolve the plan file BOUND to one session transcript (the latest `plan_mode`
-/// attachment's `planFilePath`), or `None` if the session never entered Plan Mode.
+/// Resolve the plan file BOUND to one session transcript: the latest `plan_mode`
+/// attachment's `planFilePath`, else `<plans-dir>/<slug>.md` from the first record carrying
+/// a valid slug, or `None` when the transcript carries neither.
 pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -191,8 +192,9 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
     if refs.is_empty() {
         bail!(
             "--file {PLAN_SIGIL}: no plan file is bound to the target session(s) — no \
-             `plan_mode` attachment found (a session has a bound plan only if it entered \
-             Plan Mode). To recover an ordinary file, pass its path to --file instead."
+             `plan_mode` attachment and no record carrying a valid slug (Claude Code binds \
+             the plan by the attachment, else by the first slug's `<plans-dir>/<slug>.md`). \
+             To recover an ordinary file, pass its path to --file instead."
         );
     }
     // Prefer the top-level session's own plan; fall back to subagent plans only if that's
@@ -222,9 +224,10 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
 }
 
 /// REVERSE plan lookup: which session(s) are bound to `plan_file`. Scans the resolved scope
-/// (default every project; narrow with a PATH target) for transcripts whose `plan_mode`
-/// attachment names this exact plan file (absolute-path identity), and reports the bound
-/// session/subagent id(s). The inverse of the default session->plan direction.
+/// (default every project; narrow with a PATH target), resolves each transcript's binding
+/// through [`resolve_session_plan`] - the `plan_mode` attachment, else the first valid slug -
+/// and keeps the ones naming this exact plan file (absolute-path identity). The inverse of the
+/// default session->plan direction, so both binding laws answer in both directions.
 fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
     let want = path::absolutize(plan_file)?;
     // No session pin (the whole point is we don't know the session); paths narrow scope.
@@ -377,7 +380,10 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
 fn render_text(refs: &[PlanRef]) {
     if refs.is_empty() {
         // An honest empty result is not an error: the session(s) simply never planned.
-        eprintln!("note: no plan file is bound to the resolved session(s) (no Plan Mode).");
+        eprintln!(
+            "note: no plan file is bound to the resolved session(s) (no `plan_mode` \
+             attachment and no record carrying a valid slug)."
+        );
         return;
     }
     for r in refs {

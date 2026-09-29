@@ -59,3 +59,22 @@ fn the_agents_page_names_the_pulse_kinds_and_the_run_status_source() {
         "the run row's status source"
     );
 }
+
+/// `plan --help`'s `--reverse` paragraph names both binding laws the lookup resolves
+/// through - the `plan_mode` attachment and the first-slug fallback - since a session bound
+/// by its slug alone is found as surely as one bound by the attachment.
+#[test]
+fn the_plan_reverse_help_names_both_binding_laws() {
+    let help = page("plan");
+    let para = paragraph(&help, "--reverse <PLAN_FILE>");
+    for word in [
+        "`plan_mode` attachment",
+        "`<plans-dir>/<slug>.md`",
+        "`slug-only`",
+    ] {
+        assert!(
+            para.contains(word),
+            "the --reverse help names {word}: {para}"
+        );
+    }
+}
