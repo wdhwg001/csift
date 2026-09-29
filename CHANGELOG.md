@@ -1255,6 +1255,12 @@ surface change bumps the PATCH.
   form (`@<Name>@<Team>`) both resolve as the self target, printing that lane's sections.
   The page now states the one reading and names all four forms and the refused session
   uuid; a test holds both.
+- **`verbatim --help` said csift's own walk stops at a compaction cut, and named the
+  exchange header `s·t<n>`.** The survival walk crosses up to `--cross-compactions`
+  boundaries (default 3) through each boundary's `logicalParentUuid`, and only budget 0
+  stops where Claude Code's loader does; the turns it reaches read `live`, and file order
+  still replays the ones above the floor as `pre-cut`. The header token `search` prints is
+  `<tok>·t<N>`. A test reads the default off the flag's own constant.
 
 ### Performance
 

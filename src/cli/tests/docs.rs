@@ -458,3 +458,32 @@ fn the_whoami_page_names_every_self_target_and_one_env_reading() {
         "the long description reads the env id as the after-help does: {caveat}"
     );
 }
+
+/// `verbatim --help`'s compaction paragraph states the crossing rule the survival walk runs,
+/// with the default read off the flag's own constant, and names the exchange header by the
+/// token `search` prints.
+///
+/// It said csift's walk stops at a compaction boundary "too", which only budget 0 does, and
+/// it named the header `s·t<n>`, a legend spelling the header no longer carries.
+#[test]
+fn the_verbatim_page_states_the_crossing_rule_and_the_header_token() {
+    use clap::CommandFactory;
+    let help = Cli::command()
+        .find_subcommand_mut("verbatim")
+        .expect("the verbatim subcommand")
+        .render_long_help()
+        .to_string();
+    let at = help
+        .find("ACROSS A COMPACTION CUT")
+        .expect("the compaction paragraph");
+    let para = &help[at..];
+    let para = &para[..para.find("\n\n").unwrap_or(para.len())];
+    let default = format!("default {}", crate::model::CROSS_COMPACTIONS_DEFAULT);
+    assert!(
+        para.contains(&default) && para.contains("--cross-compactions"),
+        "the paragraph names the crossing flag and its default ({default}): {para}"
+    );
+    assert!(!para.contains("stops there too"), "{para}");
+    assert!(help.contains("<tok>·t<N>"), "the exchange header token");
+    assert!(!help.contains("s·t<n>"), "the retired legend spelling");
+}

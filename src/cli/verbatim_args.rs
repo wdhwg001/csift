@@ -102,11 +102,17 @@ use super::*;
         print, and what `--turn` / `--slice` index.\n\n\
         ACROSS A COMPACTION CUT, csift keeps going, and Claude Code does not. The harness's \
         loader stops its walk at a `compact_boundary` (its parentUuid is null), so on a \
-        resume the history above the cut is gone from the conversation. csift's own walk \
-        stops there too. What differs is that csift reads the transcript in FILE ORDER and \
-        replays those turns anyway, because \"what the model saw at the time\" is the \
-        question this command answers. Such units are flagged, never hidden: JSON \
-        `survival` reads `pre-cut` for them and `live` otherwise.\n\n\
+        resume the history above the cut is gone from the conversation. csift's survival \
+        walk CROSSES a boundary through the record its `logicalParentUuid` names, up to \
+        `--cross-compactions` boundaries (default 3, `all` for no limit, `0` for Claude \
+        Code's own stop); the turns it reaches that way read `live`. Where the walk stops - \
+        the budget ran out, or the boundary names a record the file no longer carries or \
+        one the walk already reached - \
+        csift still reads the transcript in FILE ORDER and replays the turns above that \
+        floor, because \"what the model saw at the time\" is the question this command \
+        answers. Such units are flagged, never hidden: JSON `survival` reads `pre-cut` for \
+        them and `live` otherwise, and the closing lines say how many boundaries were \
+        crossed and where the floor sits.\n\n\
         DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
         summary)` and DEMOTED (selected only after non-dup turns); never silently dropped \
         (a false positive must not lose a real turn).\n\n\
@@ -127,7 +133,7 @@ use super::*;
         WINDOWING: `--turn (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
         intersects (AND) with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). NOTE \
         `verbatim` TEXT prints `L<line>` per unit, NOT a turn marker; to pick a value for \
-        `--turn` read the index from `csift search` text (`s·t<n>` header) or this \
+        `--turn` read the index from `csift search` text (the `<tok>·t<N>` header) or this \
         command's own `--format json` (`turn_index`). \
         `--out <PATH>` captures the SAME rendered reconstruction that prints to stdout into a \
         file (byte-identical; verbatim does NOT line-truncate stdout, so `--out` differs only in \
