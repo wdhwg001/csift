@@ -54,7 +54,8 @@ mod selectors;
 mod send_args;
 mod show_keys;
 mod show_stats_args;
-mod verbatim_whoami_args;
+mod verbatim_args;
+mod whoami_args;
 
 pub(crate) use agents_args::*;
 pub(crate) use argv::*;
@@ -71,7 +72,8 @@ pub(crate) use search_help::*;
 pub(crate) use selectors::*;
 pub(crate) use send_args::*;
 pub(crate) use show_stats_args::*;
-pub(crate) use verbatim_whoami_args::*;
+pub(crate) use verbatim_args::*;
+pub(crate) use whoami_args::*;
 
 #[cfg(test)]
 mod tests;
