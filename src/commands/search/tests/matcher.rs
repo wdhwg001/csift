@@ -313,6 +313,12 @@ const MARKER_CASES: &[MarkerCase] = &[
         widens: false,
     },
     MarkerCase {
+        needle: r#""fallback""#,
+        pattern: "fell back from",
+        line: r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"fallback","from":{"model":"m-a"},"to":{"model":"m-b"}}]}}"#,
+        widens: false,
+    },
+    MarkerCase {
         needle: "compact_boundary",
         pattern: "trigger=auto",
         line: r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#,

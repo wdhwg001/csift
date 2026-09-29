@@ -15,10 +15,12 @@
 //! split in the facts the one stamping site exists to prevent. A block naming only one
 //! side yields no marker at all: half of it would name the wrong model.
 //!
-//! The record's own BODY is not this family's to write. Its sole block renders no text, so
-//! the 1:1 law's addressed unit renders it with a key=value excerpt of the line and the
-//! marker beside it, and a flagless scan emits nothing for it - which the emission sweep
-//! exempts by specimen, with that reason at the row.
+//! On disk the block is the SOLE block of its record, so the record has no text of its own.
+//! It emits ONE `agent.message.plain` unit anyway, on a scan as under an address, and its
+//! body is the marker's own words ([`fallback_body`]): without a unit the marker had
+//! nothing to ride, so `served_by` answered under `show --line` and on no scan at all, and
+//! `-t agent.message.plain` could not find a turn it labels. A record that fell back AND
+//! spoke carries the marker on its text unit and emits no second one.
 //!
 //! It lives in the SYSTEM family's directory because the same event wrote both records:
 //! the block, and the `model_refusal_fallback` banner below it that this family already
@@ -46,6 +48,23 @@ pub(crate) fn fallback_block_models(rec: &Record) -> Option<(String, String)> {
         }
     }
     None
+}
+
+/// The BODY of the unit a fallback-only record emits: the marker's own words, so a scan
+/// for `fell back` or a model id reaches it. `None` when the record also carries a text
+/// block (that unit carries the marker, and a second unit would double-count the turn) or
+/// no readable block. The words are fabricated - only the ids are bytes of the line - so the
+/// stage-2 gate re-renders this same function behind the `"fallback"` synth marker.
+pub(crate) fn fallback_body(rec: &Record) -> Option<String> {
+    if rec
+        .blocks()?
+        .iter()
+        .any(|b| matches!(b, Block::Text { .. }))
+    {
+        return None;
+    }
+    let (from, to) = fallback_block_models(rec)?;
+    Some(format!("served by {to}, fell back from {from}"))
 }
 
 /// The label-zone marker, the two exposed keys and the banner EDGE of a fallback-served

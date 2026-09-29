@@ -12975,7 +12975,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "185-187",
+          "lines": "196-198",
           "snippet": "    // marker is the line's own type/subtype value, active only when the explicit\n    // selector admits the line (otherwise it is not a candidate at all). The queued\n    // and away-summary leaves render VERBATIM content and need no marker."
         }
       ],
@@ -13618,7 +13618,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "178-183",
+          "lines": "189-194",
           "snippet": "    if args\n        .label_filter()\n        .selected(Class::CompactionBoundary.path())\n    {\n        verifiable.push(b\"compact_boundary\");\n    }"
         }
       ],
@@ -15730,7 +15730,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "175",
+          "lines": "181",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
@@ -15740,7 +15740,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "168-177",
+          "lines": "174-183",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2513",
+          "lines": "2514",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -33948,7 +33948,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "175",
+          "lines": "181",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         }
       ],
@@ -42944,7 +42944,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "188-190",
+          "lines": "199-201",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }"
         },
         {
@@ -44541,7 +44541,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "188-195",
+          "lines": "199-206",
           "snippet": "    if args.reaches_gated(Class::TurnDuration) {\n        verifiable.push(b\"turn_duration\");\n    }\n    if args.reaches_gated(Class::TurnStopHooks) {\n        verifiable.push(b\"stop_hook_summary\");\n    }\n    if args.reaches_gated(Class::BookkeepingFileHistory) {\n        verifiable.push(b\"file-history-\");"
         }
       ],
@@ -51432,7 +51432,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "227-231",
+          "lines": "238-242",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -65950,7 +65950,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "168-177",
+          "lines": "174-183",
           "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
@@ -66510,7 +66510,7 @@
         },
         {
           "path": "src/commands/search/matcher/synth.rs",
-          "lines": "226-227",
+          "lines": "237-238",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         },
         {
@@ -88204,7 +88204,7 @@
         },
         {
           "path": "src/commands/search/record_text/system.rs",
-          "lines": "263",
+          "lines": "265",
           "snippet": "        Class::SystemApiError => {"
         }
       ],
@@ -88483,8 +88483,18 @@
         },
         {
           "path": "src/commands/search/record_text/system/fallback.rs",
-          "lines": "34",
+          "lines": "36",
           "snippet": "pub(crate) fn fallback_block_models(rec: &Record) -> Option<(String, String)> {"
+        },
+        {
+          "path": "src/commands/search/record_text/system/fallback.rs",
+          "lines": "58",
+          "snippet": "pub(crate) fn fallback_body(rec: &Record) -> Option<String> {"
+        },
+        {
+          "path": "src/commands/search/hits/blocks.rs",
+          "lines": "90-91",
+          "snippet": "                Block::Fallback { .. }\n                    if has(Class::AgentMessagePlain) && sel(Class::AgentMessagePlain) =>"
         }
       ],
       "states": [
@@ -88493,7 +88503,7 @@
           "from_basis": "first_seen",
           "to": null,
           "behavior": "The API can serve an assistant turn from a DIFFERENT model and says so with a content block the client re-mints rather than fabricates. One writer builds it - `fut` returns `{type:\"fallback\",from:{model:e.fromModel},to:{model:e.model}}` - from a parsed `content_block_start` event whose `content_block.type` is `fallback`, and the streaming arm assigns that copy into the block array by index. The feature rides a named beta: the request layer interns `server-side-fallback-2026-06-01` under the handle `server_side_fallback`, beside a second `server-side-fallback-2026-07-01` for the category form. The `serverRefusalFallback` flag beside the mint is a TELEMETRY field (`armed:`) on the event emitted after the assignment, not a gate on it. On disk the block's key set is EXACTLY {from, to, type} - `from` and `to` each exactly {model}, a flat `model` key on 0 of 48 and 0 of 53 - and every block is the record's SOLE block at index 0 on a `type:\"assistant\"` record whose own `message.model` equals `to.model`: 48 of 48 on the live root and 53 of 53 on the older snapshot, zero exceptions on every one of those properties. Every OTHER record sharing the block's `message.id` and carrying a `message.model` names the SERVING model too - 133 of 133 and 144 of 144 - so the pre-fallback model survives on the `from` side and nowhere else. The turn therefore carries NO text: the fallback block is what the API wrote in place of it. A `model_refusal_fallback` banner sits below the block on a parentUuid walk for 47 of 48 blocks and 52 of 53, and on every pair that resolves the two agree exactly - the block's `from.model` equals the banner's `originalModel` and its `to.model` equals the banner's `fallbackModel`, 47 of 47 and 52 of 52. For the one block per root with no banner descendant, the block is the only trace of the switch in its transcript.",
-          "depends": "csift models the block as `Block::Fallback { from, to }` - two sides, not one id - because `from.model` is the only place the pre-fallback model survives, so a flattened shape would carry the wrong one. It reads both off the PARSED BLOCK rather than off the source line, which is what makes the fact answer the same on a scan and under an address: a scan hands a family no source line for a role-bearing record, so a marker read off the line would appear under `show --line` and vanish under `search`. The unit carries the label-zone marker `[served by <to.model>, fell back from <from.model>]` plus JSON `served_by` / `fell_back_from`; a block naming only one side yields no marker at all, since half of it would name the wrong model. The record's BODY is the 1:1 law's key=value excerpt, and a flagless scan emits nothing for such a record - the emission sweep exempts it by specimen with that reason. The banner PAIRING is what makes the two renders agree: the refusal leaf names the same two models under the harness's own key words, so a reader who fetches the banner from the block, or the block from the banner, reads one story twice rather than two.",
+          "depends": "csift models the block as `Block::Fallback { from, to }` - two sides, not one id - because `from.model` is the only place the pre-fallback model survives, so a flattened shape would carry the wrong one. It reads both off the PARSED BLOCK rather than off the source line, which is what makes the fact answer the same on a scan and under an address: a scan hands a family no source line for a role-bearing record, so a marker read off the line would appear under `show --line` and vanish under `search`. The unit carries the label-zone marker `[served by <to.model>, fell back from <from.model>]` plus JSON `served_by` / `fell_back_from`; a block naming only one side yields no marker at all, since half of it would name the wrong model. The block is the record's SOLE block, so the record has no text of its own; it still emits ONE `agent.message.plain` unit, on a scan as under an address, whose body is the marker's own words (`served by <to.model>, fell back from <from.model>`), registered behind the `\"fallback\"` synth marker because only the two ids are bytes of the line. Without that unit the marker rode nothing a scan emits: `served_by` answered under `show --line` and on no scan at all. A record that fell back AND spoke carries the marker on its text unit and emits no second one. The banner PAIRING is what makes the two renders agree: the refusal leaf names the same two models under the harness's own key words, so a reader who fetches the banner from the block, or the block from the banner, reads one story twice rather than two.",
           "instrument": "Binary: byte-search the verified build for `function fut(e){return{type:\"fallback\",from:{model:e.fromModel},to:{model:e.model}}}` (one occurrence), for `function put(e){if(typeof e!==\"object\"` (the parse gate, whose body refuses any `content_block.type` other than `fallback`), for `km[Hs.index]=fut(Hs)` (the streaming assignment, one occurrence) and for `server-side-fallback-2026-06-01` (FIVE occurrences at this build - the bare prefix `server-side-fallback` counts 13 and also covers the `-2026-07-01` beta, so count the full literal; the interning one reads `mx=me(\"server_side_fallback\",...)`). Version floor: byte-count `{type:\"fallback\",from:{model:` in each native build under the builds directory. Corpus: over each projects root, for every parsed record walk `message.content[]` and keep each block whose `type` is `fallback`; per block record the block's key set, `from`'s and `to`'s key sets, whether the carrying record's `type` is `assistant`, whether the block is the only block and sits at index 0, whether `message.model` equals `to.model`, whether a flat `model` key is present, and - over every OTHER record sharing that `message.id` and carrying a `message.model` - whether that model equals `to.model`. Then, per file holding at least one such block, walk `parentUuid` upward (cycle-guarded, uuid map = last line carrying a uuid) from every `type:\"system\"` `subtype:\"model_refusal_fallback\"` record to the nearest assistant record carrying a fallback block, and compare that block's `from.model` against the banner's `originalModel` and its `to.model` against the banner's `fallbackModel`.",
           "probe": {
             "kind": "corpus",
@@ -88543,12 +88553,15 @@
           },
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "Read the four producer hops in the verified build at the anchors above; ran the two-root block census and the banner pairing walk; byte-counted the block literal across every native build held. Root: the live one at `~/.claude/projects`, read as every `*.jsonl` under the root under that counting rule. A LIVE root is appended to while it is read, so every count here is one instant's reading of that root and a re-run normally re-reads it at or above what is quoted - normally rather than always, since a transcript is rewritten in place on a rewind or a compaction and a line count can then fall; under the root's own counting rule - every `*.jsonl` file under it, the top-level transcripts and the `<uuid>/subagents/**` sidecar ones, excluding the basenames `journal.jsonl` and `elicitations.jsonl` and anything under a `csift-channel/` directory - the root reads 9,685 files and 1,866,246 lines.",
-            "observed": "48 and 53 blocks. Key set {from, to, type} on 48 of 48 and 53 of 53; `from` and `to` each {model} on all; a flat `model` key on 0 and 0; sole block at index 0 on all; carried by a `type:\"assistant\"` record on all; `message.model` equal to `to.model` on all. Same-`message.id` siblings carrying a model: 133 of 133 and 144 of 144 equal to `to.model`. Banner descendants: 47 of 48 and 52 of 53 blocks have one, and both models agree on 47 of 47 and 52 of 52 resolved pairs. The full beta literal counts 5 in this build; the block's own literal is absent at 2.1.168 and present at 2.1.176.",
-            "rule": "A LINE is a 0x0A-delimited segment of a *.jsonl under a projects root; one JSON parse per non-blank line. One observation per BLOCK whose `type` is `fallback`, found by walking `message.content[]`. Two roots: a live one (9,806 *.jsonl files) and an older snapshot (10,613); every number is reported per root, never merged. The two roots overlap in history and are never summed. Binary counts are byte counts of the literal over the whole executable.",
-            "note": "New claim; the two-sided `Block::Fallback`, the marker and the two keys land with it. The inventory's block specimen carried a flat `model` key that the corpus shows on no line, and it is corrected in the same change."
-          }
+            "verdict": "refined",
+            "instrument": "a python walk over every `*.jsonl` under the live projects root (excluding `journal.jsonl`, `elicitations.jsonl` and anything under a `csift-channel` directory) keeping each assistant record whose `message.content[]` carries a `fallback` block, recording whether it is the record's only block and whether a record of the same `message.id` carries a text block; run over the whole root and with the measuring session's own tree (its transcript and its sidecar) excluded. Then `csift search \"\" -t harness.system.refusal -l` over the same root, and `csift search \"\" --sessions-from <that list> --format json` with the installed binary and with this build, counting hits that carry `served_by`. Producer leg: the recorded hops re-read at their offsets in the 2.1.258 binary (gate the content_block parse gate @164571672; writer fut, the block mint @164571290; trigger the streaming assignment @165437613; gate the beta interning @158416053)",
+            "observed": "whole root: 48 records carry a fallback block, in 12 files, and in all 48 it is the record's only block; 32 of the 48 share their `message.id` with a record carrying text. Two of the 12 files are byte-identical copies of one session, which csift merges, so 46 distinct records. With the measuring session's own tree excluded: 44 records in 11 files, all sole-block, 29 beside a text sibling. The refusal leaf lists 12 sessions; over them the installed binary's scan returns 0 hits carrying `served_by` and this build's returns 46, one per distinct record. The recorded hops read byte-exact at their offsets.",
+            "rule": "one observation per assistant record carrying a `fallback` content block; for the scan, one observation per emitted hit carrying a non-null `served_by`",
+            "note": "The block's shape holds as stated; what moved is csift's reading of a sole-block record, which now emits the one unit the marker needs on every surface."
+          },
+          "residue": [
+            "An earlier reading, superseded by the whole-root census of this build now standing on this state: 48 and 53 blocks over a live root and an older snapshot. Key set {from, to, type} on 48 of 48 and 53 of 53; `from` and `to` each {model} on all; a flat `model` key on 0 and 0; sole block at index 0 on all; carried by a `type:\"assistant\"` record on all; `message.model` equal to `to.model` on all. Same-`message.id` siblings carrying a model: 133 of 133 and 144 of 144 equal to `to.model`. Banner descendants: 47 of 48 and 52 of 53 blocks have one, and both models agree on 47 of 47 and 52 of 52 resolved pairs. The full beta literal counts 5 in this build; the block's own literal is absent at 2.1.168 and present at 2.1.176. Counting rule: one observation per BLOCK whose `type` is `fallback`, found by walking `message.content[]`; two roots, a live one (9,806 *.jsonl files) and an older snapshot (10,613), reported per root and never summed."
+          ]
         }
       ]
     },
@@ -88613,12 +88626,12 @@
       "code": [
         {
           "path": "src/commands/search/record_text/system/fallback.rs",
-          "lines": "54",
+          "lines": "73",
           "snippet": "pub(crate) fn notes(rec: &Record) -> (Vec<HitFact>, Vec<Marker>) {"
         },
         {
           "path": "src/commands/search/record_text/system/fallback.rs",
-          "lines": "80",
+          "lines": "99",
           "snippet": "            head: \"served by\","
         }
       ],
@@ -89275,7 +89288,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3545"
+          "lines": "3546"
         }
       ],
       "states": [

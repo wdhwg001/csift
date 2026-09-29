@@ -36,8 +36,9 @@ pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.sch
      `harness.schedule.event` reads `[scheduled <when>] task=<id> cron=<expr> \
      prompt=<cut>`, the instant taken from the content's parenthesised tail. \
      A fallback-served assistant turn (its sole block is the API's `fallback` block) \
-     renders under `agent.message.plain` with the label-zone marker \
-     `[served by <to.model>, fell back from <from.model>]`. \
+     renders under `agent.message.plain`, on a scan as under an address, with the \
+     label-zone marker `[served by <to.model>, fell back from <from.model>]` and the \
+     marker's own words as its body, so a model id or `fell back` finds it. \
      Per-hit JSON keys, each present only when the line carried it: `retried`, \
      `original_model`, `fallback_model`, `category` (refusal); `status`, `retry_attempt`, \
      `max_retries`, `retry_in_ms`, `error` (type and message only) (api-error); `task_id`, \

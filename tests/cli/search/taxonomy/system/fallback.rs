@@ -5,9 +5,9 @@ use super::*;
 
 /// A turn the API served from a fallback model: an addressed fetch RENDERS it under the
 /// plain message leaf with both model ids in the label zone, and the honest banner edge
-/// beside them.
+/// beside them; a scan emits the same one unit.
 #[test]
-fn a_fallback_served_turn_is_addressable_and_names_both_models() {
+fn a_fallback_served_turn_is_scanned_and_addressed_and_names_both_models() {
     let h = system_home();
     let show = h.run(&["show", &at(SESS), "--line", "12"]);
     assert!(show.success, "stderr: {}", show.stderr);
@@ -39,10 +39,36 @@ fn a_fallback_served_turn_is_addressable_and_names_both_models() {
     assert_eq!(row["fell_back_from"], serde_json::json!("model-alpha"));
     assert_eq!(row["for"][0]["kind"], serde_json::json!("banner"));
     assert_eq!(row["for"][0]["target"], serde_json::Value::Null);
-    // A pattern SCAN emits nothing for it - the API wrote the block in place of the
-    // text, so there is no unit to match or excerpt.
-    let scan = h.run(&["search", "model-alpha", &at(SESS), "-t", "agent", "-c"]);
-    assert_eq!(scan.stdout.trim(), "0", "{}", scan.stdout);
+    // A SCAN reaches it too: the record has no text, so its one unit's body is the
+    // marker's own words, and a model id or `fell back` finds it under the leaf it
+    // carries. Without the unit the marker rode nothing a scan emits.
+    for pattern in ["model-alpha", "fell back"] {
+        let scan = h.run(&[
+            "search",
+            pattern,
+            &at(SESS),
+            "-t",
+            "agent.message.plain",
+            "-c",
+        ]);
+        assert_eq!(scan.stdout.trim(), "1", "{pattern}: {}", scan.stdout);
+    }
+    let js = h.run(&[
+        "search",
+        "fell back",
+        &at(SESS),
+        "-t",
+        "agent.message.plain",
+        "--format",
+        "json",
+    ]);
+    let hit = hits_of(&js.stdout)
+        .into_iter()
+        .next()
+        .expect("the scanned unit");
+    assert_eq!(hit["line"], serde_json::json!(12));
+    assert_eq!(hit["served_by"], serde_json::json!("model-beta"));
+    assert_eq!(hit["fell_back_from"], serde_json::json!("model-alpha"));
 }
 
 /// A turn that fell back AND SPOKE carries the marker on its scanned unit too.

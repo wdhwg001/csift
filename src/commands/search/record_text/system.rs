@@ -51,6 +51,8 @@ mod edges;
 mod fallback;
 mod heads;
 
+pub(crate) use fallback::fallback_body;
+
 /// What a `type:"system"` event line says - the family's half of the render seam.
 ///
 /// Called by [`super::family_render`] for every unit whose leaf sits in `harness.system`

@@ -1190,6 +1190,15 @@ surface change bumps the PATCH.
   its shape; over one root 98 rows move (35 `cd-tracked`, 63 `cwd-joined`) and no other row
   changes class. A `~` operand stays `unresolved`, since the recording shell's HOME is not
   in the transcript (claim BASH-023).
+- **A fallback-served turn's `served_by` reached no scan.** Every `fallback` block on disk
+  is the sole block of its record (48 of 48 on one root), so the record had no text and a
+  scan emitted nothing for it: `show --line` rendered `served_by`, while `search` over the
+  12 sessions that carry a refusal returned 0 hits with it. The record now emits one
+  `agent.message.plain` unit on a scan as under an address, its body the marker's own
+  words (`served by <to.model>, fell back from <from.model>`), so `-t agent.message.plain`,
+  a model id or `fell back` reach it; the same query now returns 46 hits, one per distinct
+  record. A record that fell back and spoke keeps the marker on its text unit and emits no
+  second one. `search --help` says so (claim CLS-060).
 
 ### Performance
 

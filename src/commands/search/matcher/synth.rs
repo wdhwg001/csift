@@ -66,6 +66,12 @@ impl Matcher {
                 return true;
             }
         }
+        // A fallback-only record's unit body, through the one function the emission uses.
+        if let Some(t) = crate::commands::search::record_text::system::fallback_body(rec) {
+            if self.locate(&t).is_some() {
+                return true;
+            }
+        }
         // The agents-stopped notice renders through `automation_label` (a fabricated
         // `[subagent stopped]` head) without a `<task-notification>` section.
         if let Some(t) = rec.automation_label() {
@@ -175,6 +181,11 @@ pub(crate) fn synth_marker_finders(
         // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.
         b"stopped by the user",
     ];
+    // A fallback-only record's unit body (`served by <to>, fell back from <from>`): only
+    // the ids are bytes of the line. The quoted VALUE, never the compact
+    // `"type":"fallback"` pair (the needle law), and the refusal subtype
+    // `model_refusal_fallback` does not carry it, since its quote sits after the word.
+    verifiable.push(br#""fallback""#);
     if args
         .label_filter()
         .selected(Class::CompactionBoundary.path())

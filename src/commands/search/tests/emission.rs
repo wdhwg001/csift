@@ -96,23 +96,16 @@ fn one_record_emits_one_hit_for_every_image_shape() {
 /// flagless scan by construction, so it is not swept here.
 #[test]
 fn every_visible_leaf_specimen_emits_exactly_one_hit() {
-    // The two SHAPES that carry a visible leaf and have no text section to emit. Keyed on
+    // The SHAPE that carries a visible leaf and has no text section to emit. Keyed on
     // the specimen, never on the leaf: `agent.message.plain` is the ordinary assistant
     // message, and exempting the LEAF would exempt the whole population this sweep exists
     // to guard. Each is named with its reason, because an unemittable leaf is a defect
     // until someone writes down why it is not one.
-    const NO_TEXT_TO_EMIT: &[(&str, &str)] = &[
-        (
-            "image",
-            "an image-only record is a picture: a pattern scan has nothing to match or \
+    const NO_TEXT_TO_EMIT: &[(&str, &str)] = &[(
+        "image",
+        "an image-only record is a picture: a pattern scan has nothing to match or \
              excerpt, and `csift image` is the surface that reads it",
-        ),
-        (
-            "fallback",
-            "the API served the turn from a fallback model and wrote no text; the leaf \
-             records that the turn happened, and there is no body to emit",
-        ),
-    ];
+    )];
 
     let mut swept = 0usize;
     for (value, line) in crate::model::specimens::BLOCK_SPECIMENS
@@ -155,11 +148,11 @@ fn every_visible_leaf_specimen_emits_exactly_one_hit() {
     // EXACT, like every other drift guard here: 26 specimen rows (8 block, 18 template),
     // of which 2 take the `visible.is_empty()` arm above - the `document` block, which
     // carries no leaf at all, and `redacted_thinking`, whose leaf is invisible by
-    // construction - and 2 are the exemptions named above, leaving 22. A `>=` bound would
+    // construction - and 1 is the exemption named above, leaving 23. A `>=` bound would
     // pass while a row quietly stopped being swept, which is the drift this guard exists
     // to catch; ADDING a specimen means updating the number here and naming the new row.
     assert_eq!(
-        swept, 22,
-        "every specimen carrying a visible leaf is swept, minus the two named exemptions"
+        swept, 23,
+        "every specimen carrying a visible leaf is swept, minus the one named exemption"
     );
 }

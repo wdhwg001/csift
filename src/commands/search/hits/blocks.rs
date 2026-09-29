@@ -85,6 +85,23 @@ pub(crate) fn collect_block_hits(
                         Some(block),
                     );
                 }
+                // A fallback-only record's one unit: its body is the marker's words, since
+                // the record carries no text (`record_text::system::fallback_body`).
+                Block::Fallback { .. }
+                    if has(Class::AgentMessagePlain) && sel(Class::AgentMessagePlain) =>
+                {
+                    if let Some(text) = record_text::system::fallback_body(rec) {
+                        emit(
+                            Class::AgentMessagePlain,
+                            &text,
+                            None,
+                            None,
+                            None,
+                            None,
+                            Some(block),
+                        );
+                    }
+                }
                 Block::ToolUse { id, name, input } => {
                     // Richest-selected for this tool_use: comm (sent/signal) > agent.tool.use.
                     let comm = tool_use_comm_class(name.as_deref(), input.as_ref());
