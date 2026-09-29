@@ -107,9 +107,12 @@ use super::*;
         a segment free of substitutions and subshells. A READ anchor demands a SINGLE \
         simple command: the stdout of a pipe or a chain is a concatenation nothing \
         attributes to one file. A WRITE anchor is per SEGMENT: each admissible write \
-        inside a pipe or a `;`/`&&`/newline chain anchors (the write-then-run shape), \
+        inside a pipe or a `;`/`&&`/`||`/newline chain anchors (the write-then-run shape), \
         provided the whole command's result is clean (no error, empty stderr, not \
-        interrupted) and no other segment touches the same path. Variable targets, \
+        interrupted) and no other segment WRITES the same path - a redirect or `tee` into \
+        it, `cp` or `mv` onto it, `mv` away from it, `rm`, `touch` or `sed -i` refuses the \
+        anchor, since segment order is not replayed within one command, while a read or a \
+        mode change of it (`wc -l`, `chmod +x`) leaves the anchor standing. Variable targets, \
         interpreter heredocs (a script is not file content) and ssh-fed heredocs (a \
         REMOTE filesystem) stay in the boundary lanes. An admitted \
         write anchor supersedes its own heuristic bash-mutation boundary. A \

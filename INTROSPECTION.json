@@ -20769,7 +20769,7 @@
         },
         {
           "path": "src/cli/files_recover_args/recover.rs",
-          "lines": "157-165",
+          "lines": "160-168",
           "snippet": "        FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\\n  \\\n          A Bash result's `staleReadFileStateHint` is Claude Code itself reporting \\\n        that the command modified files in its read set, BY NAME (paths relative to \\\n        the shell cwd, resolved before matching): an authoritative HARD \\\n        `hint_modified` boundary, and the one signal that attributes a formatter-class \\\n        rewrite to concrete files. A successful Edit flagged `staleRecovered` means \\\n        the disk had drifted since the last read but the edit still applied: an \\\n        authoritative `stale_recovered` annotation (nothing invalidated, other \\\n        changes exist outside the stream). An `edited_text_file` external-edit \\"
         }
       ],

@@ -877,10 +877,12 @@ surface change bumps the PATCH.
 - **`recover --help` states the content-anchor rule for reads and writes apart.** It said
   every anchor demands a single simple command and that pipes and chains stay in the
   boundary lanes, which holds for a READ anchor only: a compound command's stdout names no
-  one file. A WRITE anchor is per segment, so a heredoc write followed by a command that
-  runs the file anchors - a clean two-segment chain like that restores the file whole and
-  counts one `bash-write-anchor` - provided the whole command's result is clean and no
-  other segment touches the same path. The page now says both.
+  one file. A WRITE anchor is per segment of a pipe or a `;`, `&&`, `||` or newline chain,
+  so a heredoc write followed by a command that runs the file anchors - a clean
+  two-segment chain like that restores the file whole and counts one `bash-write-anchor` -
+  provided the whole command's result is clean and no other segment WRITES the same path:
+  a `cp` over the file refuses the anchor, while a `wc -l` or a `chmod +x` of it leaves it
+  standing. The page now says both.
 - **`send`'s receipt counts the body in the unit the budget is counted in.** The chunk
   budget is UTF-16 code units, and the `message` line printed the body in characters beside
   it, so a body of 6,000 emoji read `6000 char(s), 2 chunk(s) of 9200` - a size that fits

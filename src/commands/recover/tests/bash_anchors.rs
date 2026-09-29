@@ -259,6 +259,47 @@ fn compound_write_needs_the_clean_echo_and_no_same_path_second_touch() {
 }
 
 #[test]
+fn a_second_segment_refuses_the_write_anchor_only_by_writing_its_path() {
+    // The same-path rule reads the command's MUTATION rows: another write to the anchored
+    // path refuses it, while a read or a mode change of that path is no write and leaves it
+    // standing. `||` separates segments like `;`, `&&`, `|` and a newline.
+    let cases = [
+        ("\nwc -l notes.md", true),
+        ("\nchmod +x notes.md", true),
+        (" || echo failed", true),
+        ("\ncp other.md notes.md", false),
+        ("\nrm notes.md", false),
+    ];
+    for (tail, anchors) in cases {
+        let cmd = format!("cat > notes.md <<'EOF'\nalpha\nEOF{tail}");
+        let use_line = format!(
+            r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":{c}}}}}]}}}}"#,
+            c = serde_json::to_string(&cmd).unwrap()
+        );
+        let records = vec![
+            (
+                1usize,
+                rec(
+                    r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+                ),
+            ),
+            (2usize, rec(&use_line)),
+            (
+                3usize,
+                rec(
+                    r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"stdout":"","stderr":"","interrupted":false},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":""}]}}"#,
+                ),
+            ),
+        ];
+        let events = extract_events(&records, "/w/notes.md");
+        let anchored = events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::FullSnapshot { .. }));
+        assert_eq!(anchored, anchors, "{tail:?}: {events:?}");
+    }
+}
+
+#[test]
 fn window_gates_and_mid_file_eof() {
     let mk = |cmd: &str, stdout_json: &str| {
         let use_line = format!(

@@ -112,6 +112,14 @@ fn the_recover_page_states_the_read_and_the_write_anchor_rules_apart() {
     );
     assert!(flat.contains("A READ anchor demands a SINGLE simple command"));
     assert!(flat.contains("A WRITE anchor is per SEGMENT"));
+    // The separators the segmenter splits on, `||` among them, and the same-path rule as the
+    // code applies it: another WRITE refuses, a read or a mode change does not.
+    assert!(flat.contains("a `;`/`&&`/`||`/newline chain"), "{flat}");
+    assert!(
+        flat.contains("no other segment WRITES the same path"),
+        "{flat}"
+    );
+    assert!(!flat.contains("touches the same path"), "{flat}");
     // The code the two sentences describe: a chained heredoc write anchors (and marks the
     // command compound, which is what makes the caller demand the clean result), a piped
     // read does not, and the same read alone does.
