@@ -310,6 +310,7 @@ pub(crate) fn render_json(
         summary_fields["definitive_absence"] = json!(true);
         summary_fields["active_filters"] = json!(d.active_filters);
         summary_fields["gated_leaves_unreached"] = json!(d.gated_unreached);
+        summary_fields["attachment_leaves_unread"] = json!(d.attachment_unread);
         summary_fields["empty_visible_face"] = json!(d.empty_visible_face);
         summary_fields["excluded_by_label"] = match &d.excluded_by_label {
             Some((rows, recs)) => {

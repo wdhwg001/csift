@@ -227,6 +227,10 @@ pub(crate) struct EmptyDiagnosis {
     /// True when no active selector reached a gated (promoted non-record)
     /// leaf - those lines were never parsed, so the absence does not cover them.
     pub(crate) gated_unreached: bool,
+    /// The attachment leaves the scan did not read ([`SearchArgs::attachment_leaves_unread`]),
+    /// named so an absence over a flagless scan is never taken to cover the attachment
+    /// lines. Empty when `--attachments` or a `-t` reaching one was given.
+    pub(crate) attachment_unread: Vec<String>,
     /// The bare ROLE or CATEGORY selectors whose LLM-visible face is empty
     /// ([`crate::cli::empty_visible_faces`]). Such a selector is valid and matches
     /// nothing BY THE LAW, not by accident, so the empty result names it rather than
@@ -338,6 +342,15 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
             "csift: note: the gated leaves ({}) are scanned only under a -t that reaches \
              them - this absence does not cover those lines.",
             leaves.join(", ")
+        );
+    }
+    if !diag.attachment_unread.is_empty() {
+        // The attachment lines a flagless scan skips: the set is the inventory's, derived by
+        // `attachment_leaves`, and the remedy is the flag or a selector naming the leaf.
+        eprintln!(
+            "csift: note: the attachment leaves ({}) are read only under --attachments or a \
+             -t that reaches them - this absence does not cover the attachment lines.",
+            diag.attachment_unread.join(", ")
         );
     }
 }

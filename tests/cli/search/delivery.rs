@@ -250,9 +250,13 @@ fn the_gated_leaves_note_never_names_the_hook_context_leaf() {
         vec!["search", "zzznotpresent", &at(HSESS), "--attachments"],
     ] {
         let out = h.run(&q);
+        let gated = out
+            .stderr
+            .lines()
+            .find(|l| l.contains("the gated leaves ("))
+            .unwrap_or_default();
         assert!(
-            out.stderr.contains("the gated leaves (")
-                && !out.stderr.contains("harness.hook.context"),
+            !gated.is_empty() && !gated.contains("harness.hook.context"),
             "{q:?}:\n{}",
             out.stderr
         );
@@ -282,6 +286,75 @@ fn the_gated_leaves_note_never_names_the_hook_context_leaf() {
     let summary: serde_json::Value = serde_json::from_str(nj.stdout.lines().last().unwrap_or(""))
         .expect("the trailing summary line");
     assert_eq!(summary["gated_leaves_unreached"], true, "{}", nj.stdout);
+}
+
+/// A match that sits only in an attachment line is outside a flagless scan, so its zero says
+/// which attachment leaves it did not read and the flag that reaches them; `--attachments`
+/// then finds the match, and a zero under a selector that reached the attachment lines names
+/// none.
+#[test]
+fn a_flagless_zero_names_the_attachment_leaves_it_did_not_read() {
+    const ASESS: &str = "7e6d5c4b-3a2f-4b1c-8d9e-0f1a2b3c4d5e";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{ASESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"h1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","attachment":{"type":"hook_additional_context","hookName":"SessionStart","hookEvent":"SessionStart","content":["zebracontext injected"]}}"#, "\n",
+        ),
+    );
+    let flagless = h.run(&["search", "zebracontext", &at(ASESS)]);
+    assert!(flagless.success, "{}", flagless.stderr);
+    assert!(
+        flagless.stdout.contains("no matching exchanges"),
+        "{}",
+        flagless.stdout
+    );
+    let note = flagless
+        .stderr
+        .lines()
+        .find(|l| l.contains("the attachment leaves ("))
+        .unwrap_or_default();
+    assert!(
+        note.contains("harness.hook.context") && note.contains("--attachments"),
+        "{}",
+        flagless.stderr
+    );
+    let found = h.run(&["search", "zebracontext", &at(ASESS), "--attachments", "-c"]);
+    assert_eq!(found.stdout.trim(), "1", "{}", found.stderr);
+    let json = |extra: &[&str]| -> serde_json::Value {
+        let mut argv = vec!["search", "zzznotpresent"];
+        let target = at(ASESS);
+        argv.push(&target);
+        argv.extend_from_slice(extra);
+        argv.extend_from_slice(&["--format", "json"]);
+        let out = h.run(&argv);
+        serde_json::from_str(out.stdout.lines().last().unwrap_or("")).expect("the summary line")
+    };
+    let unread = json(&["-t", "user"]);
+    let list = unread["attachment_leaves_unread"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(list.iter().any(|v| v == "harness.hook.context"), "{unread}");
+    let read = json(&["-t", "harness.hook.context"]);
+    assert_eq!(
+        read["attachment_leaves_unread"],
+        serde_json::json!([]),
+        "{read}"
+    );
+    let named = h.run(&[
+        "search",
+        "zzznotpresent",
+        &at(ASESS),
+        "-t",
+        "harness.hook.context",
+    ]);
+    assert!(
+        !named.stderr.contains("the attachment leaves ("),
+        "{}",
+        named.stderr
+    );
 }
 
 #[test]

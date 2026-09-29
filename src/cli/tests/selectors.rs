@@ -278,3 +278,33 @@ fn a_bare_role_selector_follows_the_record_delivery_verdict() {
     let f = LabelFilter::new(&include, &[]);
     assert!(f.with_delivery(Some(false)).selected("agent.message"));
 }
+
+/// The attachment leaves a scan did NOT read, which the zero-match note names: every leaf the
+/// inventory's attachment axis carries on a flagless scan and under a selector reaching none
+/// of them, and none once `--attachments`, the attachment census axis or a `-t` reaching one
+/// admits the attachment lines.
+#[test]
+fn the_unread_attachment_leaves_follow_the_attachment_gate() {
+    let args = |extra: &[&str]| -> SearchArgs {
+        let mut argv = vec!["csift", "search", "x"];
+        argv.extend_from_slice(extra);
+        match parse(&argv).expect("parses").command {
+            Command::Search(a) => a,
+            other => panic!("not a search: {other:?}"),
+        }
+    };
+    let all = attachment_leaves();
+    assert!(all.contains(&Class::HookContext), "{all:?}");
+    assert_eq!(args(&[]).attachment_leaves_unread(), all);
+    assert_eq!(args(&["-t", "user"]).attachment_leaves_unread(), all);
+    for reached in [
+        vec!["--attachments"],
+        vec!["--count-by", "attachment"],
+        vec!["-t", "harness.hook.context"],
+    ] {
+        assert!(
+            args(&reached).attachment_leaves_unread().is_empty(),
+            "{reached:?}"
+        );
+    }
+}

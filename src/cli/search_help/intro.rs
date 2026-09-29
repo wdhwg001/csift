@@ -315,8 +315,12 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         are absent. The `--count-by` census summary carries the same six (its two text \
         lines ride stderr, beside the census's own accounting note, so the table stays \
         parseable). Plus \
-        {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached} on a \
+        {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached, \
+        attachment_leaves_unread} on a \
         ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts and \
         `resume_paired` the `harness.resume.placeholder` one, null \
-        elsewhere; `gated_leaves_unreached` is true when no selector reached a gated leaf).\
+        elsewhere; `gated_leaves_unreached` is true when no selector reached a gated leaf, \
+        and `attachment_leaves_unread` lists the attachment leaves the scan did not read - \
+        every one on a run with neither `--attachments` nor a `-t` reaching one, else \
+        empty - which the stderr note names beside the flag).\
 ";

@@ -208,6 +208,20 @@ impl SearchArgs {
         matches!(self.format, OutputFormat::Json) || self.count_by == Some(CountAxis::ForKind)
     }
 
+    /// The attachment leaves a scan did NOT read: every [`attachment_leaves`] leaf when
+    /// neither `--attachments` (nor the `--count-by attachment` axis that implies it) was
+    /// given nor a `-t` reached one, else none. A flagless scan admits an attachment line
+    /// only through the three default needles, so an absence it reports does not cover the
+    /// lines these leaves ride - which the zero-match diagnosis names, with the flag.
+    #[must_use]
+    pub fn attachment_leaves_unread(&self) -> Vec<Class> {
+        if self.scan_attachments() || self.scans_attachment_lines() {
+            Vec::new()
+        } else {
+            attachment_leaves()
+        }
+    }
+
     /// True when the scan keeps EVERY `type:"attachment"` line: the `--attachments` flag
     /// (and the `--count-by attachment` axis, which cannot be answered without it), or an
     /// explicit `-t` reaching a leaf whose only carrier is an attachment payload type.

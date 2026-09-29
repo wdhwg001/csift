@@ -1364,6 +1364,14 @@ surface change bumps the PATCH.
   one character in the singular, `… (+1 char)`, through the same count-and-noun rule the
   `verbatim` markers take. Both marker builders go through one function, so the forms
   cannot drift apart again.
+- **A zero-match search without `--attachments` said nothing about the attachment lines it
+  skipped.** A flagless scan reads an attachment line only through the three default
+  needles, so a pattern whose only match sits in, say, a hook's injected context returned
+  0 with no word on stderr about those lines. The zero-match note now also names the
+  attachment leaves the scan did not read, and that `--attachments` or a `-t` naming the
+  leaf reaches them, whenever neither was given; the JSON summary carries the list as
+  `attachment_leaves_unread`. The list is the shape inventory's attachment axis, derived
+  rather than typed.
 - **A draft one character from its resend said `differs ... in 1 chars`.** The
   draft-distance line on a `user.unsent` unit (`search` and `show`) formatted its count
   with a fixed plural, outside the rule the excerpt marker takes; it now goes through that
