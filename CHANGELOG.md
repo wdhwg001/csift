@@ -1170,7 +1170,9 @@ surface change bumps the PATCH.
 - **`agents --agent` refused the `@` sigil.** `csift agents @<uuid> --agent @<agent-id>`
   failed with `no subagent matched id` while every other id position takes the sigil and
   the error's own remedy prints ids beside `@<uuid>`. The flag now takes the id bare or
-  `@`-prefixed and both grab the same node; `agents --help` says so.
+  `@`-prefixed and both grab the same node; `agents --help` says so. One sigil is all it
+  takes: a token still carrying an `@` after it (`@@<id>`, a `<Name>@<Team>` routing form)
+  is refused as no agent id, where it was searched for and reported unmatched.
 - **`search --for L<n>` walked every transcript in scope.** A line number names a record in
   one file, yet `csift search "" --for L42` with no target closed over line 42 of every
   transcript under the projects root (1,308,495 output lines on one machine), and over a

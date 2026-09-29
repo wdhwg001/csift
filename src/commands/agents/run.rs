@@ -91,6 +91,16 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         // prints ids beside `@<uuid>`, so the sigil is stripped rather than matched: an id
         // carries no `@` of its own on any shape (bare hex, `a<Name>-<16 hex>`).
         let want_id = given.trim().strip_prefix('@').unwrap_or(given.trim());
+        // ONE leading sigil, never more: an id that still carries an `@` after that strip is
+        // no agent id, and searching for it only reported a sigiled id as unmatched.
+        if want_id.contains('@') {
+            bail!(
+                "`--agent {}` is not an agent id: `--agent` takes one id as `csift agents` \
+                 prints it - a bare hex or a teammate's `a<Name>-<16 hex>` - with at most one \
+                 leading `@`, and an id carries no `@` of its own on any shape.",
+                given.trim()
+            );
+        }
         nodes.retain(|n| n.agent_id == want_id);
         if nodes.is_empty() {
             bail!(

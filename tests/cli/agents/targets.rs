@@ -134,3 +134,22 @@ fn agents_agent_accepts_the_at_sigil_like_every_id_position() {
     );
     assert_eq!(json_rows(&sigil.stdout, "agent").len(), 1);
 }
+
+/// ONE leading `@`, never more: a token that still carries a sigil after that strip is no
+/// agent id, and is refused by the grammar rather than searched for and reported unmatched.
+#[test]
+fn agents_agent_refuses_a_second_sigil_by_the_grammar() {
+    let h = populated_home();
+    for token in ["@@aaa111", "@Relay@harbor"] {
+        let out = h.run(&["agents", at(SESS).as_str(), "--agent", token]);
+        assert!(!out.success, "{token}: {}", out.stdout);
+        assert!(
+            out.stderr
+                .contains(&format!("`--agent {token}` is not an agent id"))
+                && out.stderr.contains("at most one leading `@`")
+                && !out.stderr.contains("no subagent matched"),
+            "{token}: {}",
+            out.stderr
+        );
+    }
+}
