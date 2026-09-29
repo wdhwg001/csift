@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2503",
+          "lines": "2504",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -32192,7 +32192,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "398-403",
+          "lines": "399-404",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -39525,7 +39525,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "417-419",
+          "lines": "421-423",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || c == '\\\\' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
@@ -49271,7 +49271,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "398-403",
+          "lines": "399-404",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49688,7 +49688,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "254-256",
+          "lines": "255-257",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -51178,12 +51178,12 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "294-299",
+          "lines": "298-303",
           "snippet": "    // A char that JSON escapes inside a string does not survive verbatim in the raw\n    // line bytes the prefilter scans - emitting a literal for it causes false\n    // negatives. The backslash is already excluded via META above, being a regex\n    // metacharacter; the predicate counts it too, for the `hir_needles` walk, where the\n    // metacharacter is gone and only the literal run is left.\n    if pattern.chars().any(json_escapes_in_string) {"
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "405-406",
+          "lines": "409-410",
           "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, `\\`, any C0 control char (`< 0x20`), or DEL."
         }
       ],
@@ -59367,7 +59367,7 @@
         },
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "422-428",
+          "lines": "426-432",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -59728,7 +59728,7 @@
       "code": [
         {
           "path": "src/commands/search/matcher.rs",
-          "lines": "417-419",
+          "lines": "421-423",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || c == '\\\\' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],
@@ -80429,7 +80429,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "126-128",
+          "lines": "127-129",
           "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE"
         }
       ],
@@ -89208,7 +89208,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3531"
+          "lines": "3532"
         }
       ],
       "states": [

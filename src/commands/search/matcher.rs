@@ -11,8 +11,10 @@
 //! registration per family - on a 599-line file the 600-line cap would refuse the first
 //! one.
 
+mod smart_case;
 pub(crate) mod synth;
 
+pub(crate) use smart_case::pattern_has_uppercase_literal;
 pub(crate) use synth::*;
 
 use super::*;
@@ -172,8 +174,10 @@ impl Matcher {
 
 /// Compile the user pattern honoring smart-case / `-i` / `--multiline`.
 ///
-/// Smart-case: case-insensitive iff the pattern has NO uppercase letter; `-i`
-/// forces insensitive regardless (and wins on conflict). `--multiline` sets
+/// Smart-case: case-insensitive iff the pattern SPELLS no uppercase letter (a literal, or a
+/// bracket-class character - `\S` and its kin are escapes, not letters; see
+/// [`pattern_has_uppercase_literal`]); `-i` forces insensitive regardless (and wins on
+/// conflict). `--multiline` sets
 /// `.dot_matches_new_line(true)` + multi-line mode. An empty pattern compiles to
 /// the pure-filter matcher (no regex, no prefilter).
 pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
@@ -186,7 +190,7 @@ pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
         });
     }
 
-    let has_uppercase = args.pattern.chars().any(|c| c.is_uppercase());
+    let has_uppercase = pattern_has_uppercase_literal(&args.pattern);
     let case_insensitive = args.ignore_case || !has_uppercase;
 
     let regex = BytesRegex::new(&apply_builder(

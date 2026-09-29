@@ -165,5 +165,6 @@ mod roots;
 mod rows;
 mod scan;
 mod seam;
+mod smart_case;
 mod thinking_family;
 mod writer;

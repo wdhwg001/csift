@@ -1125,6 +1125,12 @@ surface change bumps the PATCH.
   the same target: `stats` counted the rows it kept. The scope banner and the JSON header now
   count the whole resolved scope before the cap trims the rows, the rule `list` already kept,
   so the two commands report one scope for one target (1,722 on both at the re-measure).
+- **Smart-case read the letter in an escape as uppercase.** `\Sbash` searched
+  case-sensitively (38 records on one transcript, the `(?-i)\Sbash` count) because the `S`
+  of `\S` was taken for an uppercase letter, while `(?i)\Sbash` found 46. Smart-case now
+  reads the parsed pattern, ripgrep's rule: a letter the pattern spells counts, bare or in
+  a bracket class (`[A-Z]` stays case-sensitive), and `\S`, `\W`, `\D` and `\B` do not, so
+  `\Sbash` reads 46 and `\Wbash` 68. `search --help` states the rule.
 
 ### Performance
 

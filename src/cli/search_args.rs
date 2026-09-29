@@ -12,8 +12,9 @@ use super::*;
         until the next genuine user). So a matched tool_use comes WITH its \
         tool_result, a matched user turn WITH the agent's response, etc.\n\n\
         The PATTERN is ripgrep-like and defaults to SMART-CASE: case-insensitive \
-        unless it contains an uppercase letter; `-i` forces case-insensitive and \
-        always wins. `--multiline` lets `.` cross newlines. An EMPTY pattern is a \
+        unless it spells an uppercase letter - a literal, or a character in a bracket \
+        class such as `[A-Z]`, while an escape like `\\S`, `\\W`, `\\D` or `\\B` is no \
+        letter; `-i` forces case-insensitive and always wins. `--multiline` lets `.` cross newlines. An EMPTY pattern is a \
         pure filter; it matches every label-eligible record, so combine it with \
         `--label` / `--since` / `--turn` (a bare empty pattern with no other \
         filter warns that it will emit a lot).\n\n\
