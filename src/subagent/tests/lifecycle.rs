@@ -456,7 +456,7 @@ fn a_returned_tool_result_at_the_tail_is_mid_turn_and_an_end_turn_text_is_done()
         "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"Bash\",\"input\":{\"command\":\"ls\"}}]}}\n",
         "{\"type\":\"user\",\"timestamp\":\"2026-06-07T05:01:09.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\",\"content\":\"ok\"}]}}\n",
     );
-    let tails: [(&str, &str, SubagentStatus); 3] = [
+    let tails: [(&str, &str, SubagentStatus); 4] = [
         ("", "returned tool_result", SubagentStatus::Running),
         (
             "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:20.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}\n",
@@ -467,6 +467,13 @@ fn a_returned_tool_result_at_the_tail_is_mid_turn_and_an_end_turn_text_is_done()
             "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:20.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"text\",\"text\":\"let me look\"}]}}\n",
             "text whose tool call is still to come",
             SubagentStatus::Running,
+        ),
+        // A timestamped record that is not meaningful (end-of-turn telemetry) sits after the
+        // answer: it supplies the completion instant, and the walk goes on to the text.
+        (
+            "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:20.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}\n{\"type\":\"system\",\"subtype\":\"turn_duration\",\"timestamp\":\"2026-06-07T05:01:21.000Z\",\"durationMs\":1000}\n",
+            "end_turn text under a timestamped telemetry record",
+            SubagentStatus::Completed,
         ),
     ];
     for (tail, what, want) in tails {

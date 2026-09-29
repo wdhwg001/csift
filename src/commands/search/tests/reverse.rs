@@ -117,6 +117,8 @@ fn an_address_names_a_record_by_the_bytes_the_file_holds() {
     bad.push(0xff);
     bad.extend_from_slice(br#""}}"#);
     assert!(names_a_record(&bad, &ForAddr::Line(1)));
+    // ...and a line that decodes to no object stays no record however it decodes.
+    assert!(!names_a_record(b"a torn \xff line", &ForAddr::Line(1)));
     // An empty file holds nothing.
     assert!(!names_a_record(b"", &ForAddr::Line(1)));
 }

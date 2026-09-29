@@ -118,6 +118,37 @@ fn overlapping_overhangs_count_once_and_an_in_file_range_counts_none() {
     let inside = h.run(&["show", at(SESS).as_str(), "--line", &format!("6..{n}")]);
     assert!(inside.success, "stderr: {}", inside.stderr);
     assert!(!inside.stdout.contains("past the end"), "{}", inside.stdout);
+    let raw = h.run(&[
+        "show",
+        at(SESS).as_str(),
+        "--line",
+        &format!("6..{n}"),
+        "--raw",
+    ]);
+    assert!(raw.success, "stderr: {}", raw.stderr);
+    assert!(!raw.stderr.contains("past the end"), "{}", raw.stderr);
+}
+
+/// A miss INSIDE the file - its last line torn - names the address alone: the file's length
+/// is news only for an address past the end.
+#[test]
+fn a_miss_on_the_last_line_names_no_file_length() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"t1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zztorn ask"}}"#,
+            "\n",
+            "a torn last line\n",
+        ),
+    );
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "2"]);
+    assert!(!out.success, "a torn line is a miss: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no such record(s): L2") && !out.stderr.contains("(file has"),
+        "{}",
+        out.stderr
+    );
 }
 
 /// A line or a range that starts past the end names the file's length in the miss, in both

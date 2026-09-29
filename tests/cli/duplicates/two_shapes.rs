@@ -139,9 +139,9 @@ fn an_agent_id_reads_both_halves_and_names_where_they_sit() {
 #[test]
 fn a_jsonl_path_reads_the_file_it_names_and_names_the_other() {
     let (h, workflow, builtin) = two_shape_home();
-    for (path, own, other) in [
-        (&builtin, "lines 2", "lines 3"),
-        (&workflow, "lines 3", "lines 2"),
+    for (path, own, other, other_path) in [
+        (&builtin, "lines 2", "lines 3", &workflow),
+        (&workflow, "lines 3", "lines 2", &builtin),
     ] {
         let out = h.run(&["stats", path, "--no-subagents"]);
         assert!(out.success, "stderr: {}", out.stderr);
@@ -154,6 +154,57 @@ fn a_jsonl_path_reads_the_file_it_names_and_names_the_other() {
             out.stderr.contains("has 1 other transcript in scope")
                 && out.stderr.contains("reads only the file it names"),
             "{}",
+            out.stderr
+        );
+        // The note lists the OTHER half, never the file the path names. The listed path is
+        // compared from the projects root down, because the note prints the path the walk built
+        // and a temp root can reach it through a symlinked prefix.
+        let other_lines = if other == "lines 3" { 3 } else { 2 };
+        let rel = other_path
+            .rsplit_once(".claude/projects/")
+            .map(|(_, r)| r)
+            .expect("under the projects root");
+        let listed = out
+            .stderr
+            .split_once("in scope (")
+            .and_then(|(_, rest)| rest.split_once(");"))
+            .map(|(l, _)| l)
+            .expect("the note lists what else is in scope");
+        assert!(
+            listed.starts_with(&format!("{other_lines} lines at ")) && listed.ends_with(rel),
+            "the note lists the other half:\n{}",
+            out.stderr
+        );
+    }
+    // A target is canonicalized, and the walk builds its paths from each project directory as
+    // the invocation spells it - so a second target naming the SAME directory through a
+    // symlinked Claude home makes the walk reach the named file under another spelling. It is
+    // still the file the path names, and the note never lists it among the OTHER transcripts.
+    #[cfg(unix)]
+    {
+        let alias = h.root.join("alias-home");
+        std::os::unix::fs::symlink(h.root.join(".claude"), &alias).expect("a symlinked home");
+        let through = alias.join("projects").join(TWO_ENC);
+        let out = h.run(&[
+            "stats",
+            through.to_str().expect("utf-8"),
+            &builtin,
+            "--no-subagents",
+            "--claude-home",
+            alias.to_str().expect("utf-8"),
+        ]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        let named_through =
+            format!("alias-home/projects/{TWO_ENC}/{TWO_SESS}/subagents/agent-{TWO_AGENT}.jsonl");
+        let listed = out
+            .stderr
+            .split_once("in scope (")
+            .and_then(|(_, rest)| rest.split_once(");"))
+            .map(|(l, _)| l)
+            .expect("the note lists what else is in scope");
+        assert!(
+            !listed.contains(&named_through),
+            "the named file is not another transcript of itself:\n{}",
             out.stderr
         );
     }

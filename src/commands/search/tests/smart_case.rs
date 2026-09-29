@@ -27,7 +27,11 @@ fn an_escape_is_not_an_uppercase_letter() {
 /// a bracket class, where a RANGE's ends are letters the reader wrote.
 #[test]
 fn a_spelled_letter_counts_bare_and_in_a_class() {
-    for pattern in ["Carry", "[A-Z]x", "[aQz]", r"\x41b", "a(?:B)c"] {
+    // A range counts when EITHER end is uppercase: `[0-Z]` opens on a digit and `[A-z]`
+    // closes on a lowercase letter.
+    for pattern in [
+        "Carry", "[A-Z]x", "[aQz]", r"\x41b", "a(?:B)c", "[0-Z]x", "[A-z]x",
+    ] {
         assert!(
             pattern_has_uppercase_literal(pattern),
             "{pattern} spells an uppercase letter"

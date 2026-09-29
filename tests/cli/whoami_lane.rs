@@ -109,6 +109,21 @@ fn a_malformed_session_env_value_is_refused_by_name() {
             );
         }
     }
+    // The refused value is quoted whole up to 64 characters and cut, with `...`, past them.
+    let at_cap = "x".repeat(64);
+    let over = "x".repeat(65);
+    let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", at_cap.as_str())]);
+    assert!(
+        out.stderr.contains(&format!("is set to `{at_cap}`,")),
+        "{}",
+        out.stderr
+    );
+    let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", over.as_str())]);
+    assert!(
+        out.stderr.contains(&format!("is set to `{at_cap}...`,")),
+        "{}",
+        out.stderr
+    );
     // A blank value is still "not set", and a uuid still resolves.
     let blank = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", "  ")]);
     assert!(!blank.stderr.contains("is set to"), "{}", blank.stderr);

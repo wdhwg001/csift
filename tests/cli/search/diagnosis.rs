@@ -309,6 +309,15 @@ fn every_output_mode_carries_the_zero_match_diagnosis() {
     }
     let count = h.run(&["search", "zzqq-absent-zzqq", target.as_str(), "-c"]);
     assert_eq!(count.stdout.trim(), "0", "stdout stays the bare count");
+    // The frame names the scope the absence covers: one top-level session, no subagent.
+    let one = h.run(&[
+        "search",
+        "zzqq-absent-zzqq",
+        target.as_str(),
+        "--no-subagents",
+        "-c",
+    ]);
+    assert!(one.stderr.contains("Scope: 1 session(s)"), "{}", one.stderr);
     // Under a label filter the probe runs in the terminal modes too and names what the
     // filter excluded.
     let probe = h.run(&[

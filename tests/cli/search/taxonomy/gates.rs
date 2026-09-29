@@ -461,3 +461,47 @@ fn a_default_needle_quoted_in_a_non_transcript_line_opens_no_gate() {
         );
     }
 }
+
+/// A `last-prompt` line a quoted needle admitted still DECIDES the conversation's leaf once
+/// its leaf is found unreached: it leaves the record set as the spine row the byte walk
+/// would have lifted for it, so the branch it names stays the live one. Here the recorded
+/// leaf is the first of two sibling prompts; the second, later in the file, is the draft.
+#[test]
+fn a_demoted_last_prompt_line_still_names_the_live_branch() {
+    let h = Home::new();
+    let lines = [
+        format!(
+            r#"{{"type":"user","uuid":"v1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","sessionId":"{SESS}","message":{{"role":"user","content":"zzleaf start"}}}}"#
+        ),
+        format!(
+            r#"{{"type":"assistant","uuid":"v2","parentUuid":"v1","timestamp":"2026-06-07T05:00:01.000Z","sessionId":"{SESS}","message":{{"id":"msg_v2","role":"assistant","stop_reason":"end_turn","content":[{{"type":"text","text":"zzleaf reply"}}]}}}}"#
+        ),
+        format!(
+            r#"{{"type":"user","uuid":"v3","parentUuid":"v2","timestamp":"2026-06-07T05:00:02.000Z","sessionId":"{SESS}","message":{{"role":"user","content":"zzleaf kept branch"}}}}"#
+        ),
+        format!(
+            r#"{{"type":"user","uuid":"v4","parentUuid":"v2","timestamp":"2026-06-07T05:00:03.000Z","sessionId":"{SESS}","message":{{"role":"user","content":"zzleaf other branch"}}}}"#
+        ),
+        format!(
+            r#"{{"type":"last-prompt","sessionId":"{SESS}","lastPrompt":"zzleaf about csift-channel v1","leafUuid":"v3"}}"#
+        ),
+    ];
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &(lines.join("\n") + "\n"));
+    let out = h.run(&["search", "zzleaf", &at(SESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|v| v["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let survival = |needle: &str| {
+        hits.iter()
+            .find(|h| h["excerpt"].as_str().is_some_and(|e| e.contains(needle)))
+            .map(|h| h["survival"].as_str().unwrap_or("").to_string())
+            .unwrap_or_else(|| panic!("a hit for {needle}: {}", out.stdout))
+    };
+    assert_eq!(survival("kept branch"), "live", "{}", out.stdout);
+    assert_ne!(survival("other branch"), "live", "{}", out.stdout);
+}
