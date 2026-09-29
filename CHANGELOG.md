@@ -1214,6 +1214,13 @@ surface change bumps the PATCH.
   (`ts=2026-09-03 10:23:01.606 AEST(UTC+10)` in that zone); the UTC string stays matchable
   in the unit's verbatim JSON body. `cost-state`'s `startTime` is an epoch-millisecond
   number, not an instant string, and prints as written (claim QT-049).
+- **`files --help` named row keys the rows do not carry.** Its `op` list stopped at
+  `notebook_edit` although the timeline reports `external_write` (49 rows on one root), the
+  timeline schema left out `line` and `detail`, the `--by file` schema called the group key
+  `file` where the row carries `path`, and the dir and summary views were said to group
+  "under a `dir`/`bucket` key" where those are the row KINDS and the group sits in `path`.
+  The page now lists what the rows carry, and a test holds each view's row keys to its
+  schema entry.
 
 ### Performance
 

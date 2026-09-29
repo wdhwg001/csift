@@ -69,7 +69,7 @@ use super::*;
           csift files @<uuid> --by file                       # count rows ending in gaps-style docs\n  \
           csift files @<uuid> --by timeline --format json     # filter is_create==true (path under /tmp)\n  \
           (there is NO `op` value `create`: `op` is one of {bash,edit,write,multi_edit,\n   \
-           notebook_edit}; create-vs-edit is the SEPARATE `is_create` boolean, so a /tmp-doc\n   \
+           notebook_edit,external_write}; create-vs-edit is the SEPARATE `is_create` boolean, so a /tmp-doc\n   \
            CREATE test filters `is_create==true` [optionally AND op in {write,multi_edit,\n   \
            notebook_edit}], never `op==\"create\"`.)\n  \
         (NOTE: BOTH the per-mutation `op` AND `is_create` keys live ONLY in `--by timeline`\n   \
@@ -78,8 +78,9 @@ use super::*;
          `--by timeline` to test create-vs-edit or filter by op.)\n\n\
         JSON SCHEMAS (per --format json)\n  \
           --by timeline : one object per mutation: {session_id, is_subagent, parent_session_id,\n             \
-                       path, op, ts_utc, ts_local, turn_index, survival, abandoned_root_line,\n             \
-                       is_create, heuristic, resolution, path_verbatim, command_errored} + a\n             \
+                       line, path, op, ts_utc, ts_local, turn_index, survival,\n             \
+                       abandoned_root_line, is_create, heuristic, resolution, path_verbatim,\n             \
+                       command_errored, detail} + a\n             \
                        trailing summary object, which carries the crossing set\n             \
                        {crossing_budget, boundaries_crossed, budget_exhausted,\n             \
                        boundaries_above_floor, floor_line, floor_cause} whenever\n             \
@@ -129,7 +130,7 @@ use super::*;
                        and which arms ran is unknowable, so it is disclosed instead of\n             \
                        dropped.)\n  \
           --by file  : one object per file: {session_id, is_subagent, parent_session_id,\n             \
-                       file, write, edit, bash, multi_edit, notebook_edit, external_write,\n             \
+                       path, write, edit, bash, multi_edit, notebook_edit, external_write,\n             \
                        abandoned, total, distinct_files, first_utc, first_local, last_utc,\n             \
                        last_local} + a\n             \
                        trailing summary object. (is_subagent + parent_session_id discriminate\n             \
@@ -138,9 +139,10 @@ use super::*;
                        is a SHARE of `total`, never a subtraction: how many of this group's\n             \
                        mutations came from records off the surviving conversation.)\n  \
           --by dir / --by summary : the same per-op count keys + the same {session_id,\n             \
-                       is_subagent, parent_session_id} discriminators, grouped under a\n             \
-                       `dir`/`bucket` key, + a trailing summary {distinct_files,\n             \
-                       total_mutations, skipped_lines, detail_level}."
+                       is_subagent, parent_session_id} discriminators, one `kind:\"dir\"` /\n             \
+                       `kind:\"bucket\"` row per group with the group named in `path`, + a\n             \
+                       trailing summary {distinct_files, total_mutations, skipped_lines,\n             \
+                       detail_level}."
 )]
 pub struct FilesArgs {
     /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to

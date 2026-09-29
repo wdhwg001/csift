@@ -255,3 +255,64 @@ fn files_timeline_keeps_every_row_when_a_branch_left_the_conversation() {
         );
     }
 }
+
+/// Every key a row of each `--by` view carries is listed in that view's `JSON SCHEMAS` entry
+/// on `files --help`, and the `op` the timeline reports is one of the values the page lists.
+/// The page named a `--by file` row's group key `file` where the row carries `path`, called
+/// the dir and summary views' row KIND a key, and left `line`, `detail` and the
+/// `external_write` op out. The lists are read as the brace-delimited schema, not as words:
+/// `line`, `path` and `detail` are ordinary words elsewhere on the page.
+#[test]
+fn every_row_key_of_every_view_is_named_on_the_help_page() {
+    let h = files_scenario_home();
+    let help = h.run(&["files", "--help"]).stdout;
+    // The key list inside the first `{...}` after `head`.
+    let schema = |head: &str| -> std::collections::BTreeSet<String> {
+        let rest = help.split_once(head).expect(head).1;
+        let list = rest.split_once('{').expect("a brace").1;
+        let list = list.split_once('}').expect("its close").0;
+        list.split([',', ' ', '\n'])
+            .filter(|k| !k.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    let timeline = schema("--by timeline : one object per mutation:");
+    let by_file = schema("--by file  : one object per file:");
+    for (view, kind, listed) in [
+        ("timeline", "mutation", &timeline),
+        ("file", "file", &by_file),
+        // The group views carry the same count keys as a file row, keyed by `path`.
+        ("dir", "dir", &by_file),
+        ("summary", "bucket", &by_file),
+    ] {
+        let out = h.run(&["files", at(SESS).as_str(), "--by", view, "--format", "json"]);
+        assert!(out.success, "{view}: {}", out.stderr);
+        let rows = json_rows(&out.stdout, kind);
+        assert!(!rows.is_empty(), "{view}: no `{kind}` rows");
+        for row in &rows {
+            for key in row.as_object().expect("a row is an object").keys() {
+                assert!(
+                    key == "kind" || listed.contains(key),
+                    "`files --by {view}` rows carry `{key}`, which its schema entry never lists: {listed:?}"
+                );
+            }
+        }
+        if matches!(view, "dir" | "summary") {
+            assert!(
+                help.contains(&format!("`kind:\"{kind}\"`")),
+                "{view}: the help names the `{kind}` row kind"
+            );
+        }
+    }
+    let ops = schema("`op` is one of");
+    for op in [
+        "bash",
+        "edit",
+        "write",
+        "multi_edit",
+        "notebook_edit",
+        "external_write",
+    ] {
+        assert!(ops.contains(op), "{op} missing from {ops:?}");
+    }
+}
