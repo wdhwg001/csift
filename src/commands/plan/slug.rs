@@ -24,6 +24,22 @@ pub(crate) fn first_slug_record(bytes: &[u8]) -> Option<(usize, crate::model::Re
     None
 }
 
+/// The file name the slug law binds for one transcript: `<slug>.md` for a session, and
+/// `<slug>-agent-<agent id>.md` for a subagent. The harness has ONE naming rule (claim
+/// PLAN-003): the session's slug, plus `-agent-` and the lane's agent id verbatim when the
+/// plan is a subagent's. That id is the one the lane's transcript is named by - `a` and 16
+/// hex for a plain or workflow subagent, `a<Name>-<16 hex>` for a teammate - so it is read
+/// off the path through the id-trio helper rather than off a record. A subagent's records
+/// carry the SESSION's slug, which is why the bare `<slug>.md` would name the parent's plan.
+pub(crate) fn slug_plan_name(slug: &str, transcript: &Path) -> String {
+    if crate::subagent::is_subagent_path(transcript) {
+        let agent_id = crate::subagent::session_id_from_path(transcript);
+        format!("{slug}-agent-{agent_id}.md")
+    } else {
+        format!("{slug}.md")
+    }
+}
+
 /// Claude Code's slug validity rule (lowercase alnum head, alnum/dash tail, <=120
 /// chars) - a stray tolerated `slug` value that CC itself would reject never binds.
 pub(crate) fn slug_is_valid(s: &str) -> bool {
@@ -100,5 +116,47 @@ pub(crate) fn plans_dir(project_root: Option<&Path>) -> PathBuf {
         joined
     } else {
         default
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SLUG: &str = "quiet-harbor-lantern";
+    const SESSION: &str = "11112222-3333-4444-8555-666677778888";
+
+    #[test]
+    fn a_session_transcript_binds_the_bare_slug_file() {
+        let p = PathBuf::from(format!("/p/-enc/{SESSION}.jsonl"));
+        assert_eq!(slug_plan_name(SLUG, &p), "quiet-harbor-lantern.md");
+    }
+
+    #[test]
+    fn a_subagent_transcript_binds_its_own_agent_file() {
+        // A plain built-in subagent: `a` + 16 hex, the id the transcript stem carries.
+        let plain = PathBuf::from(format!(
+            "/p/-enc/{SESSION}/subagents/agent-a0123456789abcdef.jsonl"
+        ));
+        assert_eq!(
+            slug_plan_name(SLUG, &plain),
+            "quiet-harbor-lantern-agent-a0123456789abcdef.md"
+        );
+        // A workflow subagent sits one run directory deeper; the id rule is the same.
+        let workflow = PathBuf::from(format!(
+            "/p/-enc/{SESSION}/subagents/workflows/wf_1/agent-afedcba9876543210.jsonl"
+        ));
+        assert_eq!(
+            slug_plan_name(SLUG, &workflow),
+            "quiet-harbor-lantern-agent-afedcba9876543210.md"
+        );
+        // A teammate's id embeds its name, dash included, and the name rides verbatim.
+        let teammate = PathBuf::from(format!(
+            "/p/-enc/{SESSION}/subagents/agent-aP1-engine-1a2b3c4d5e6f7a8b.jsonl"
+        ));
+        assert_eq!(
+            slug_plan_name(SLUG, &teammate),
+            "quiet-harbor-lantern-agent-aP1-engine-1a2b3c4d5e6f7a8b.md"
+        );
     }
 }

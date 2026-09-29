@@ -14810,7 +14810,7 @@
       "code": [
         {
           "path": "src/commands/plan.rs",
-          "lines": "149-156",
+          "lines": "152-159",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file.\n    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2527",
+          "lines": "2528",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -39657,12 +39657,12 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "122-130",
+          "lines": "125-133",
           "snippet": "        let Some(att) = rec.attachment_value() else {\n            continue;\n        };\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"plan_mode\") {\n            continue;\n        }\n        let Some(plan_file) = att.get(\"planFilePath\").and_then(serde_json::Value::as_str) else {\n            continue;\n        };"
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "93-101",
+          "lines": "95-103",
           "snippet": "/// Tight byte prefilter for the plan-resolution pre-pass: `plan_mode` is a rare token, so\n/// a giant transcript parses only its handful of attachment lines (the scan still splits\n/// newlines over the whole file, but `serde_json` runs on almost nothing).\nfn line_is_plan_candidate(line: &[u8]) -> bool {\n    // Built ONCE (per-line hot path - the stateless form rebuilt its searcher every call).\n    static PLAN_MODE: std::sync::LazyLock<memchr::memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b\"plan_mode\"));\n    PLAN_MODE.find(line).is_some()\n}"
         }
       ],
@@ -39782,7 +39782,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "119-121",
+          "lines": "122-124",
           "snippet": "    // File order == line order; overwriting keeps the LATEST plan_mode binding.\n    let mut latest: Option<PlanRef> = None;\n    for (line_no, rec) in &records {"
         }
       ],
@@ -39897,7 +39897,12 @@
         {
           "path": "src/commands/plan.rs",
           "lines": "5-8",
-          "snippet": "//! Claude Code stores Plan-Mode plans flat under `~/.claude/plans/` with a random\n//! three-word name (`nested-prancing-popcorn.md`); a subagent's plan gets an\n//! `-agent-<hex>` suffix. The name is NOT derivable from the session id - it is bound\n//! to the session by a record the transcript writes on entering Plan Mode:"
+          "snippet": "//! Claude Code stores Plan-Mode plans flat under `~/.claude/plans/` with a random\n//! three-word name (`nested-prancing-popcorn.md`); a subagent's plan gets an\n//! `-agent-<agent id>` suffix. The name is NOT derivable from the session id - it is bound\n//! to the session by a record the transcript writes on entering Plan Mode:"
+        },
+        {
+          "path": "src/commands/plan/slug.rs",
+          "lines": "34-41",
+          "snippet": "pub(crate) fn slug_plan_name(slug: &str, transcript: &Path) -> String {\n    if crate::subagent::is_subagent_path(transcript) {\n        let agent_id = crate::subagent::session_id_from_path(transcript);\n        format!(\"{slug}-agent-{agent_id}.md\")\n    } else {\n        format!(\"{slug}.md\")\n    }\n}"
         }
       ],
       "states": [
@@ -39906,7 +39911,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "Claude Code writes Plan-Mode plans flat under ~/.claude/plans as <slug>.md, and a subagent's plan takes a -agent-<agentId> suffix (<slug>-agent-<agentId>.md). The name is three words ONLY when the slug was minted without a seed; with a seed it is <slugified-seed>-<adjective>-<noun>, so 4 of the 21 observed plan paths are not three-word. The suffix is the full agentId, which is a+16 hex for a plain subagent but embeds a dashed name for a teammate - not a bare hex in general. The name is not derivable from the session id. The plans directory is flat for Claude Code's own writes but is not exclusively Claude-Code-owned: 26 of 67 entries here are operator-created, including 2 subdirectories.",
-          "depends": "Unchanged and reinforced: csift must never derive a plan path from a session id or a directory listing, because the directory also holds operator files and nested directories that no session binds.",
+          "depends": "Unchanged and reinforced: csift must never derive a plan path from a session id or a directory listing, because the directory also holds operator files and nested directories that no session binds. csift's slug-only law applies the same rule: a SUBAGENT transcript's records carry the session's slug, so the bare `<slug>.md` names the session's plan, and `slug_plan_name` names `<slug>-agent-<agent id>.md` instead, the id read off the transcript path through the id-trio helper (the `agent-<id>.jsonl` stem is the same id the harness interpolates).",
           "instrument": "`ls ~/.claude/plans | sed 's/\\.md$//' | awk -F- '{print NF}' | sort | uniq -c` - 3 fields for a session plan, more for an `-agent-<hex>` one. Counting rule: one row per .md file.",
           "probe": {
             "kind": "corpus",
@@ -39944,6 +39949,41 @@
               "offset": 159251952,
               "excerpt": "async function RTn(n,e,i){try{await Jfe(i);let r=P(n,\".md\"),s=i!==void 0&&g()&&A(n)===Ea()&&zn(p(r))===void 0?p(r):void 0;if(i!==void 0&&s!==void 0){let o=await i.write(s,e,y);if(!o.ok){U(n,o.error.code);return}}else await Xt().write(n,e);vK(n,e)}catch(r){U(n,r instanceof Error?r.message:String(r))}}function U(n,e){Lp(n),t(`Failed to persist plan to ${n}: ${e}`,{level:\"error\"})}function n_(n){let e=Q(),i=UN(e);if(Lf(",
               "note": "Writes the plan to the exact path n_ returned - one mkdir of the plans directory, one write, no nesting."
+            },
+            {
+              "role": "gate",
+              "name": "mT : the lane's agent id (the caller's override, else a fresh Oh())",
+              "offset": 163774605,
+              "excerpt": "Cn=B?.agentId?B.agentId:Oh()",
+              "note": "runAgent fixes the lane's id once; the same Cn names the lane's transcript and is handed to the child tool context below."
+            },
+            {
+              "role": "gate",
+              "name": "hpn : the subagent's tool context carries that id",
+              "offset": 163782876,
+              "excerpt": "Js=hpn(r,{options:Ri,session:pn,agentId:Cn,",
+              "note": "The child context's agentId is Cn, which the ExitPlanMode call reads as n.agentId and hands to n_."
+            },
+            {
+              "role": "gate",
+              "name": "in-process teammate runner : the override is the identity's resumableAgentId",
+              "offset": 176260890,
+              "excerpt": "subscribeRetryWake:W.subscribe,...e.resumableAgentId&&{agentId:e.resumableAgentId}}",
+              "note": "A teammate's lane id is its transcript-form id, never the Name@Team routing form, so its plan suffix is that id."
+            },
+            {
+              "role": "gate",
+              "name": "spawnInProcessTeammate : the resumableAgentId is Oh(name)",
+              "offset": 176267685,
+              "excerpt": "f=Yh(\"in_process_teammate\"),c=o.resumableAgentId??Oh(e);",
+              "note": "A fresh teammate's transcript-form id is minted from its name."
+            },
+            {
+              "role": "gate",
+              "name": "Oh : the agent-id shape",
+              "offset": 156730495,
+              "excerpt": "function Oh(e){if(e&&!Qe.test(e))e=e.replace(/[^\\w-]/g,\"\").slice(0,63);let t=yn(8).toString(\"hex\");return e?`a${e}-${t}`:`a${t}`}",
+              "note": "`a` plus 16 hex for an unnamed lane, `a<name>-<16 hex>` for a named one: the two id shapes the -agent- suffix carries."
             }
           ],
           "enumeration": [
@@ -40041,9 +40081,9 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "holds",
-            "instrument": "the producer leg traced to closure in the 2.1.258 binary (trigger ExitPlanMode tool call entry @163823511; gate n_ : the plan-path getter and its agentId branch @159252333; writer RTn : persist the plan text to that path (with Jfe creating the flat plans directory) @159251952), each excerpt re-read within 400 bytes of its offset; specimen leg: a listing census of the plans directory (one row per top-level entry, classified by regex), plus the directory and word-field census over the 21 plan_mode planFilePath values from the corpus pass.",
-            "observed": "complete producer trace: trigger ExitPlanMode tool call entry @163823511; gate n_ : the plan-path getter and its agentId branch @159252333; writer RTn : persist the plan text to that path (with Jfe creating the flat plans directory) @159251952. writer excerpt: async function RTn(n,e,i){try{await Jfe(i);let r=P(n,\".md\"),s=i!==void 0&&g()&&A(n)===Ea()&&zn(p(r))===void 0?p(r):void 0;if(i!==void 0&&s!==void 0){let o=await i.write(s,e,y);if(!o.ok){U(n,o.error.code);return}}else await Xt().write(n,e);vK(n,e)}catch(r){U(n,r instanceof Error?r.message:String(r))} enumeration: 15 site(s) read: grep -abo 'Ea()' over the whole binary @159250340: 30 occurrences total; the plans-directory getter Ea and its fallback F live here; T() : stat a plan file @159250545: join <slug>.md - read only; m() : the sibling-name list @159250627: declares the two names owned by a slug: <slug>.md and <slug>.workshop.md; Jfe() : create the plans directory @159251518: a single mkdir of the plans directory - never a subdirectory; Qfe() : save a rejected ultraplan @159252038: writes <fresh-three-word-name>-ultraplan.md - a Claude-Code-written basename tha; n_() : the plan path, no agent @159252408: writes/reads <slug>.md; n_() : the plan path, subagent @159252481: writes/reads <slug>-agent-<agentId>.md; voe() : the workshop sibling @159252433: writes <slug>.workshop.md; H() : recover the workshop doc on resume @159254826: writes <slug>.workshop.md; fe() : the v5 workshop recovery twin @159255743: writes <slug>.workshop.md; Z1e() : copyPlanForResume @159256157: reads/writes <slug>.md; Z1e() recovery arm @159257994: writes <slug>.md from a file snapshot or message history specimen: 67 top-level entries: 35 match <word>-<word>-<word>.md, 6 match <name>-agent-<id>.md, 0 end in .workshop.md, 0 end in -ultraplan.md, 2 are subdirectories, and 24 match none of those. All 21 planFilePath values sit directly in the plans directory (0 in a subdirectory). Word-field counts of the 21 bas",
-            "rule": "One row per entry in the plans directory for the name census; one row per plan_mode attachment record for the directory and word-field census; field count = the basename with .md stripped, split on '-'.",
+            "instrument": "the producer leg traced to closure in the 2.1.258 binary (trigger ExitPlanMode tool call entry @163823511; gate n_ : the plan-path getter and its agentId branch @159252333; writer RTn : persist the plan text to that path (with Jfe creating the flat plans directory) @159251952), each excerpt re-read within 400 bytes of its offset; specimen leg: a listing census of the plans directory (one row per top-level entry, classified by regex), plus the directory and word-field census over the 21 plan_mode planFilePath values from the corpus pass. Agent-id source: the five id hops (mT @163774605, hpn @163782876, the teammate runner @176260890, spawnInProcessTeammate @176267685, Oh @156730495) re-read at their offsets; a plans-directory census of the `-agent-` files, each suffix joined to an `agent-<id>.jsonl` found anywhere under the projects root; `csift plan <every project directory> --format json`, rows counted by binding_source and by whether plan_file exists.",
+            "observed": "complete producer trace: trigger ExitPlanMode tool call entry @163823511; gate n_ : the plan-path getter and its agentId branch @159252333; writer RTn : persist the plan text to that path (with Jfe creating the flat plans directory) @159251952. writer excerpt: async function RTn(n,e,i){try{await Jfe(i);let r=P(n,\".md\"),s=i!==void 0&&g()&&A(n)===Ea()&&zn(p(r))===void 0?p(r):void 0;if(i!==void 0&&s!==void 0){let o=await i.write(s,e,y);if(!o.ok){U(n,o.error.code);return}}else await Xt().write(n,e);vK(n,e)}catch(r){U(n,r instanceof Error?r.message:String(r))} enumeration: 15 site(s) read: grep -abo 'Ea()' over the whole binary @159250340: 30 occurrences total; the plans-directory getter Ea and its fallback F live here; T() : stat a plan file @159250545: join <slug>.md - read only; m() : the sibling-name list @159250627: declares the two names owned by a slug: <slug>.md and <slug>.workshop.md; Jfe() : create the plans directory @159251518: a single mkdir of the plans directory - never a subdirectory; Qfe() : save a rejected ultraplan @159252038: writes <fresh-three-word-name>-ultraplan.md - a Claude-Code-written basename tha; n_() : the plan path, no agent @159252408: writes/reads <slug>.md; n_() : the plan path, subagent @159252481: writes/reads <slug>-agent-<agentId>.md; voe() : the workshop sibling @159252433: writes <slug>.workshop.md; H() : recover the workshop doc on resume @159254826: writes <slug>.workshop.md; fe() : the v5 workshop recovery twin @159255743: writes <slug>.workshop.md; Z1e() : copyPlanForResume @159256157: reads/writes <slug>.md; Z1e() recovery arm @159257994: writes <slug>.md from a file snapshot or message history specimen: 67 top-level entries: 35 match <word>-<word>-<word>.md, 6 match <name>-agent-<id>.md, 0 end in .workshop.md, 0 end in -ultraplan.md, 2 are subdirectories, and 24 match none of those. All 21 planFilePath values sit directly in the plans directory (0 in a subdirectory). Word-field counts of the 21 bas The id hops read as the state says: the lane id is `Cn=B?.agentId?B.agentId:Oh()`, the child tool context carries `agentId:Cn`, the in-process teammate runner overrides it with the identity's resumableAgentId, which a fresh teammate takes from `Oh(name)`, and Oh returns `a${name}-${16 hex}` or `a${16 hex}` - so a teammate's plan is `<slug>-agent-a<Name>-<16 hex>.md`. The plans directory holds 6 `-agent-` files, every suffix 17 characters; 4 have no `agent-<id>.jsonl` under the projects root, and the other 2 transcripts each carry the file's own slug on their first slug record and no plan_mode line. Over 618 project directories csift reports 9,425 bindings (21 plan_mode, 9 top-level slug-only, 9,395 subagent slug-only); under the bare-slug name the subagent rows named an existing file 8,902 times, every one a session's `<slug>.md` and none an `-agent-` file, and under the per-lane name they name an existing file 2 times, both `-agent-` files, the 2 transcripts above.",
+            "rule": "One row per entry in the plans directory for the name census; one row per plan_mode attachment record for the directory and word-field census; field count = the basename with .md stripped, split on '-'. One row per csift plan row for the binding census; one file per `-agent-` entry of the plans directory for the join census.",
             "note": "The naming branch and the write that consumes it were read at their offsets, and a full enumeration of the 30 plans-directory references shows every Claude-Code write is a single join onto that one directory."
           }
         }
@@ -40061,7 +40101,7 @@
         {
           "path": "src/commands/plan.rs",
           "lines": "5-8",
-          "snippet": "//! Claude Code stores Plan-Mode plans flat under `~/.claude/plans/` with a random\n//! three-word name (`nested-prancing-popcorn.md`); a subagent's plan gets an\n//! `-agent-<hex>` suffix. The name is NOT derivable from the session id - it is bound\n//! to the session by a record the transcript writes on entering Plan Mode:"
+          "snippet": "//! Claude Code stores Plan-Mode plans flat under `~/.claude/plans/` with a random\n//! three-word name (`nested-prancing-popcorn.md`); a subagent's plan gets an\n//! `-agent-<agent id>` suffix. The name is NOT derivable from the session id - it is bound\n//! to the session by a record the transcript writes on entering Plan Mode:"
         }
       ],
       "states": [
@@ -40189,7 +40229,7 @@
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "155-160",
+          "lines": "158-163",
           "snippet": "    if latest.is_none() {\n        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may"
         },
         {
@@ -40336,12 +40376,12 @@
       "code": [
         {
           "path": "src/commands/plan.rs",
-          "lines": "149-154",
+          "lines": "152-157",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "157",
+          "lines": "160",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         },
         {
@@ -40439,7 +40479,7 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "27-37",
+          "lines": "43-53",
           "snippet": "/// Claude Code's slug validity rule (lowercase alnum head, alnum/dash tail, <=120\n/// chars) - a stray tolerated `slug` value that CC itself would reject never binds.\npub(crate) fn slug_is_valid(s: &str) -> bool {\n    let mut chars = s.chars();\n    let Some(head) = chars.next() else {\n        return false;\n    };\n    s.len() <= 120\n        && (head.is_ascii_lowercase() || head.is_ascii_digit())\n        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')\n}"
         }
       ],
@@ -40540,22 +40580,22 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "91-96",
+          "lines": "107-112",
           "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "97-104",
+          "lines": "113-120",
           "snippet": "    let joined = crate::path::lexical_normalize(&root.join(d));\n    let root_n = crate::path::lexical_normalize(root);\n    if joined.starts_with(&root_n) {\n        joined\n    } else {\n        default\n    }\n}"
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "156-163",
+          "lines": "159-166",
           "snippet": "        if let Some((line_no, rec)) = first_slug_record(bytes) {\n            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {\n                // The project root the harness resolves plansDirectory against is the\n                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the\n                // slug record's own cwd, which follows the tracked shell cwd and may\n                // already sit in a subdirectory (section 3.11).\n                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());\n                let root = root_owned.as_deref().map(Path::new);"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "54-69",
+          "lines": "70-85",
           "snippet": "pub(crate) fn first_cwd(bytes: &[u8]) -> Option<String> {\n    let mut pos = 0usize;\n    let mut seen = 0usize;\n    while pos < bytes.len() && seen < 256 {\n        let end = memchr::memchr(b'\\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);\n        let line = &bytes[pos..end];\n        pos = end + 1;\n        seen += 1;\n        if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n            if let Some(c) = rec.cwd.as_deref().filter(|c| !c.is_empty()) {\n                return Some(c.to_string());\n            }\n        }\n    }\n    None\n}"
         }
       ],
@@ -41011,12 +41051,12 @@
       "code": [
         {
           "path": "src/commands/plan.rs",
-          "lines": "87-91",
+          "lines": "89-93",
           "snippet": "    /// True when the first slug-carrying record is a `compact_boundary` itself: the\n    /// slug was MINTED at that compaction (Plan Mode never ran; Claude Code will\n    /// still inject or rebuild the file it names) - the forked-session signature.\n    pub minted_at_compaction: bool,\n}"
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "157",
+          "lines": "160",
           "snippet": "if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {"
         }
       ],
@@ -41117,12 +41157,12 @@
       "code": [
         {
           "path": "src/commands/plan.rs",
-          "lines": "81-86",
-          "snippet": "    /// How the binding was established: `plan_mode` (the explicit attachment, path\n    /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying\n    /// record binds `<plans-dir>/<slug>.md` - Claude Code's own binding law, which a\n    /// forked/background session reaches because the fork strips its history's\n    /// attachments, and any compaction mints a slug even without Plan Mode).\n    pub binding_source: &'static str,"
+          "lines": "81-88",
+          "snippet": "    /// How the binding was established: `plan_mode` (the explicit attachment, path\n    /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying\n    /// record binds `<plans-dir>/<slug>.md`, or `<slug>-agent-<agent id>.md` for a\n    /// subagent - Claude Code's own binding law, which a forked/background session\n    /// reaches because the fork strips its history's attachments, and any compaction\n    /// mints a slug even without Plan Mode). A subagent's name keeps the same word:\n    /// the slug still binds, and the name follows the harness's one naming rule.\n    pub binding_source: &'static str,"
         },
         {
           "path": "src/commands/plan.rs",
-          "lines": "149-154",
+          "lines": "152-157",
           "snippet": "    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the\n    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's\n    // getSlugFromLog takes the first slug in the log, no attachment consulted). A\n    // forked/background session reaches this state by construction (the clone strips\n    // attachment history), and its slug is often minted by the first own compaction -\n    // reporting \"no plan\" there is a WRONG answer: CC will inject/rebuild that file."
         }
       ],
@@ -41649,12 +41689,12 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "42-48",
+          "lines": "58-64",
           "snippet": "/// AGAINST THE PROJECT ROOT (the session's cwd), and must stay CONTAINED in that root -\n/// a value that escapes it (`../x`, an absolute path elsewhere) is refused and Claude\n/// Code falls back to `<claude-home>/plans`. csift mirrors the lexical containment check\n/// (the harness additionally walks symlinks of the nearest existing ancestor - unmodeled,\n/// a symlinked plans dir that escapes only after resolution is the one divergence).\n/// The transcript's FIRST recorded `cwd`: the harness's project root for the session -\n/// the value the head records are stamped with before any Bash `cd` moves the"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "97-103",
+          "lines": "113-119",
           "snippet": "    let joined = crate::path::lexical_normalize(&root.join(d));\n    let root_n = crate::path::lexical_normalize(root);\n    if joined.starts_with(&root_n) {\n        joined\n    } else {\n        default\n    }"
         }
       ],
@@ -41748,12 +41788,12 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "75-79",
+          "lines": "91-95",
           "snippet": "const PLAN_SCOPES: &[&str] = &[\n    crate::path::settings::SCOPE_USER,\n    crate::path::settings::SCOPE_PROJECT,\n    crate::path::settings::SCOPE_LOCAL,\n];"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "91-96",
+          "lines": "107-112",
           "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         }
       ],
@@ -41847,12 +41887,12 @@
       "code": [
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "71-79",
+          "lines": "87-95",
           "snippet": "/// The three FILE scopes csift reads for the plan binding, in Claude Code's own order\n/// (later wins). The flag scope and the policy tier both outrank them in the harness, but\n/// the flag scope is per-invocation and unobservable, so binding on the policy tier alone\n/// would make the answer depend on half of a cascade csift cannot see.\nconst PLAN_SCOPES: &[&str] = &[\n    crate::path::settings::SCOPE_USER,\n    crate::path::settings::SCOPE_PROJECT,\n    crate::path::settings::SCOPE_LOCAL,\n];"
         },
         {
           "path": "src/commands/plan/slug.rs",
-          "lines": "91-96",
+          "lines": "107-112",
           "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         }
       ],
@@ -83511,7 +83551,7 @@
         {
           "path": "src/commands/plan.rs",
           "snippet": "pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {",
-          "lines": "106"
+          "lines": "109"
         }
       ],
       "states": [
@@ -89307,7 +89347,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3559"
+          "lines": "3560"
         }
       ],
       "states": [

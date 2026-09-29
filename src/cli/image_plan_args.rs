@@ -166,11 +166,13 @@ impl ImageArgs {
 #[command(
     about = "Locate the plan file BOUND to a session (plan_mode attachment, or the first-slug law)",
     long_about = "Locate the Plan-Mode PLAN FILE bound to a session. Claude Code stores plans \
-        flat under `~/.claude/plans/<three-words>.md` (a subagent's gets an `-agent-<hex>` \
+        flat under `~/.claude/plans/<three-words>.md` (a subagent's gets an `-agent-<agent id>` \
         suffix). TWO binding laws, in precedence order, mirroring Claude Code's own: (1) the \
         `plan_mode` ATTACHMENT written on entering Plan Mode (carries the verbatim path); \
         (2) when NO plan_mode exists anywhere, the FIRST record carrying a `slug` binds \
-        `<plans-dir>/<slug>.md` (`plansDirectory` from the merged user/project/local \
+        `<plans-dir>/<slug>.md`, and in a SUBAGENT transcript, whose records carry the \
+        session's slug, `<plans-dir>/<slug>-agent-<its agent id>.md` (`plansDirectory` from \
+        the merged user/project/local \
         settings, resolved against the PROJECT ROOT - the record's cwd - and accepted only \
         inside it; else `~/.claude/plans`) - Claude Code reads the first slug in the log, and a \
         forked/background session reaches this state by construction (its clone strips \
@@ -242,7 +244,9 @@ pub struct PlanArgs {
     /// default session→plan direction). Scans the resolved scope (default every project, or
     /// narrow with a PATH target), resolves each transcript's binding by the SAME two laws the
     /// forward direction uses - its latest `plan_mode` attachment's path, or, when it carries
-    /// none, `<plans-dir>/<slug>.md` from its first valid slug - and prints the bound
+    /// none, `<plans-dir>/<slug>.md` from its first valid slug (`<slug>-agent-<agent id>.md`
+    /// for a subagent transcript, so the session's plan file does not list its subagents) -
+    /// and prints the bound
     /// session/subagent id(s) whose binding names this exact plan file (JSON carries each one's
     /// `binding_source`, `plan_mode` | `slug-only`). A forked or background session binds by its
     /// slug alone, so it is found here too. Useful when you have a plan file (e.g. from

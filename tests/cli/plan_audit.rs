@@ -366,6 +366,84 @@ fn plan_slug_only_honors_plans_directory_and_reverse() {
 }
 
 #[test]
+fn plan_slug_only_names_each_subagent_its_own_agent_file() {
+    // A subagent's records carry the SESSION's slug, and Claude Code names a subagent's
+    // plan `<slug>-agent-<agent id>.md` (claim PLAN-003), the id verbatim - a teammate's
+    // dashed name included. The slug law applied to a subagent transcript names that
+    // file, so the session's plan file reverses to the session alone.
+    const SESS: &str = "abcd1234-5555-4666-8777-888899991111";
+    const PLAIN: &str = "a0123456789abcdef";
+    const MATE: &str = "aP1-engine-1a2b3c4d5e6f7a8b";
+    const SLUG: &str = "steady-reef-charter";
+    let h = Home::new();
+    let plans = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans).unwrap();
+    let session_plan = plans.join(format!("{SLUG}.md"));
+    let plain_plan = plans.join(format!("{SLUG}-agent-{PLAIN}.md"));
+    let mate_plan = plans.join(format!("{SLUG}-agent-{MATE}.md"));
+    for p in [&session_plan, &plain_plan, &mate_plan] {
+        std::fs::write(p, "plan body\n").unwrap();
+    }
+    let slugged = |uuid: &str| {
+        format!(
+            r#"{{"type":"assistant","uuid":"{uuid}","timestamp":"2026-06-07T05:00:01.000Z","slug":"{SLUG}","message":{{"role":"assistant","content":[{{"type":"text","text":"working"}}]}}}}"#
+        ) + "\n"
+    };
+    h.write(&format!("{SLUG_ENC}/{SESS}.jsonl"), &slugged("s1"));
+    h.write(
+        &format!("{SLUG_ENC}/{SESS}/subagents/agent-{PLAIN}.jsonl"),
+        &slugged("p1"),
+    );
+    h.write(
+        &format!("{SLUG_ENC}/{SESS}/subagents/agent-{MATE}.jsonl"),
+        &slugged("m1"),
+    );
+    let plan_rows = |stdout: &str| -> Vec<serde_json::Value> {
+        stdout
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .filter(|v: &serde_json::Value| v["kind"] == "plan")
+            .collect()
+    };
+    let expected = [
+        (SESS, &session_plan),
+        (PLAIN, &plain_plan),
+        (MATE, &mate_plan),
+    ];
+
+    let out = h.run(&["plan", &at(SESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows = plan_rows(&out.stdout);
+    assert_eq!(rows.len(), 3, "one row per transcript:\n{}", out.stdout);
+    for (id, file) in expected {
+        let row = rows
+            .iter()
+            .find(|r| r["session_id"] == id)
+            .unwrap_or_else(|| panic!("no row for {id}:\n{}", out.stdout));
+        assert_eq!(row["plan_file"], file.to_str().unwrap(), "{}", out.stdout);
+        assert_eq!(row["plan_exists"], true, "{}", out.stdout);
+        assert_eq!(row["binding_source"], "slug-only", "{}", out.stdout);
+    }
+
+    // Reverse: each file names exactly the one transcript bound to it.
+    for (id, file) in expected {
+        let rev = h.run(&[
+            "plan",
+            "--reverse",
+            file.to_str().unwrap(),
+            "--format",
+            "json",
+        ]);
+        assert!(rev.success, "stderr: {}", rev.stderr);
+        let ids: Vec<String> = plan_rows(&rev.stdout)
+            .iter()
+            .map(|r| r["session_id"].as_str().unwrap_or_default().to_string())
+            .collect();
+        assert_eq!(ids, vec![id.to_string()], "{}", rev.stdout);
+    }
+}
+
+#[test]
 fn plan_slug_over_length_never_binds() {
     const LSESS: &str = "ffff4444-5555-4666-8777-888899990000";
     let h = Home::new();

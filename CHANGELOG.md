@@ -1289,6 +1289,15 @@ surface change bumps the PATCH.
 - **A duplicate note said "under 1 project directories".** Two copies of one agent id in
   two sessions of one project read `at 2 paths under 1 project directories`; the count now
   takes its noun in the singular at one, like every other count the disclosure prints.
+- **`plan` bound every subagent to its session's plan file.** With no `plan_mode`
+  attachment the first slug binds, and a subagent's records carry the session's slug, so
+  every subagent transcript resolved to the session's `<slug>.md`: one session with 1,401
+  subagents printed 1,402 bindings of that one file, and `plan --reverse` on it listed all
+  of them. Claude Code names a subagent's plan `<slug>-agent-<agent id>.md`, the lane's id
+  verbatim (a teammate's name included), and the slug law now names that file for a
+  subagent transcript; `binding_source` stays `slug-only`. The reverse lookup of the
+  session's plan now finds the session alone, and each of the two subagent plan files on
+  disk whose transcript survives now resolves to that subagent.
 
 ### Performance
 

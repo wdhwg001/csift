@@ -4,7 +4,7 @@
 //!
 //! Claude Code stores Plan-Mode plans flat under `~/.claude/plans/` with a random
 //! three-word name (`nested-prancing-popcorn.md`); a subagent's plan gets an
-//! `-agent-<hex>` suffix. The name is NOT derivable from the session id - it is bound
+//! `-agent-<agent id>` suffix. The name is NOT derivable from the session id - it is bound
 //! to the session by a record the transcript writes on entering Plan Mode:
 //!
 //! ```text
@@ -60,7 +60,7 @@ pub struct PlanRef {
     /// The transcript's own id (a bare hex for a subagent, a uuid for a top-level session).
     pub session_id: String,
     /// True when the binding came from a SUBAGENT transcript (plan file has the
-    /// `-agent-<hex>` suffix); its `session_id` is not a re-feedable `@<uuid>` target.
+    /// `-agent-<agent id>` suffix); its `session_id` is not a re-feedable `@<uuid>` target.
     pub is_subagent: bool,
     /// The re-feedable parent session uuid (= `session_id` for a top-level transcript).
     pub parent_session_id: String,
@@ -80,9 +80,11 @@ pub struct PlanRef {
     pub slug: Option<String>,
     /// How the binding was established: `plan_mode` (the explicit attachment, path
     /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying
-    /// record binds `<plans-dir>/<slug>.md` - Claude Code's own binding law, which a
-    /// forked/background session reaches because the fork strips its history's
-    /// attachments, and any compaction mints a slug even without Plan Mode).
+    /// record binds `<plans-dir>/<slug>.md`, or `<slug>-agent-<agent id>.md` for a
+    /// subagent - Claude Code's own binding law, which a forked/background session
+    /// reaches because the fork strips its history's attachments, and any compaction
+    /// mints a slug even without Plan Mode). A subagent's name keeps the same word:
+    /// the slug still binds, and the name follows the harness's one naming rule.
     pub binding_source: &'static str,
     /// True when the first slug-carrying record is a `compact_boundary` itself: the
     /// slug was MINTED at that compaction (Plan Mode never ran; Claude Code will
@@ -101,8 +103,9 @@ fn line_is_plan_candidate(line: &[u8]) -> bool {
 }
 
 /// Resolve the plan file BOUND to one session transcript: the latest `plan_mode`
-/// attachment's `planFilePath`, else `<plans-dir>/<slug>.md` from the first record carrying
-/// a valid slug, or `None` when the transcript carries neither.
+/// attachment's `planFilePath`, else the plans-directory file the first record carrying a
+/// valid slug names (`<slug>.md`, or `<slug>-agent-<agent id>.md` for a subagent), or
+/// `None` when the transcript carries neither.
 pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -161,7 +164,9 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
                 // already sit in a subdirectory (section 3.11).
                 let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());
                 let root = root_owned.as_deref().map(Path::new);
-                let plan_file = plans_dir(root).join(format!("{slug}.md"));
+                // A SUBAGENT transcript carries the session's slug, and its plan is the
+                // `-agent-<agent id>` sibling of the session's (`slug_plan_name`).
+                let plan_file = plans_dir(root).join(slug_plan_name(slug, path));
                 latest = Some(PlanRef {
                     session_id: session_id.clone(),
                     is_subagent,
