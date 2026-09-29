@@ -139,18 +139,23 @@ fn agent_files_under(top: &Path, hex: &str, scope: SubagentScope) -> Result<Opti
 /// disclosure about copies ends by pointing at it. Routed through the agent id alone, it was
 /// swapped: `stats <the 41-line built-in file>` read the 469-line workflow file of the same
 /// id. The other transcripts of the id in scope are named on stderr, because the reader asked
-/// for one file and the disk holds more.
+/// for one file and the disk holds more - all but those `named` names as well, which are in
+/// the scope already and which the union merge decides together (`dedup_union`).
 pub(crate) fn resolve_named_agent(
     dirs: &[ProjectDir],
     file: &Path,
     scope: SubagentScope,
+    named: &[PathBuf],
 ) -> Result<Vec<PathBuf>> {
     let hex = crate::subagent::session_id_from_path(file);
     let every = resolve_agent_subtree(dirs, &hex, scope)?;
     let name = file.file_name();
     let (copies, rest): (Vec<PathBuf>, Vec<PathBuf>) =
         every.into_iter().partition(|p| p.file_name() == name);
-    let others: Vec<PathBuf> = copies.into_iter().filter(|p| !same_file(p, file)).collect();
+    let others: Vec<PathBuf> = copies
+        .into_iter()
+        .filter(|p| !same_file(p, file) && !named.iter().any(|n| same_file(p, n)))
+        .collect();
     if !others.is_empty() {
         eprintln!("csift: note: {}", named_copy_note(file, &others));
     }

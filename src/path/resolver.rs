@@ -150,15 +150,10 @@ pub fn resolve_session_files_reported(
         // with whatever the session path gathered for the same transcript.
         files.extend(resolve_agent_subtree(&dirs, hex, scope)?);
     }
-    // -- NAMED agent transcripts: the file itself, never another transcript of its id. Its
-    // basename is kept out of the union merge below, which would otherwise keep the LONGEST
-    // copy and drop the very file the path named.
-    let mut named: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    // -- NAMED agent transcripts: the file itself, never another transcript of its id. The
+    // union merge below keeps an unnamed copy from replacing it (`dedup_union`).
     for file in &agent_paths {
-        files.extend(resolve_named_agent(&dirs, file, scope)?);
-        if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
-            named.insert(stem.to_string());
-        }
+        files.extend(resolve_named_agent(&dirs, file, scope, &agent_paths)?);
     }
 
     // ONE merge over the whole UNION, and the reason is the invocation that names a session
@@ -179,10 +174,9 @@ pub fn resolve_session_files_reported(
     // NOTHING keeps every member in the set, so this pass would otherwise compare the same
     // two transcripts byte for byte a second time and announce the group twice. One group is
     // one comparison, one note and one row in the header count.
-    let mut decided: std::collections::BTreeSet<String> =
+    let decided: std::collections::BTreeSet<String> =
         duplicates.iter().map(|g| g.session_id.clone()).collect();
-    decided.extend(named);
-    let (mut files, groups) = dedup_copies_skipping(files, &decided);
+    let (mut files, groups) = dedup_union(files, &decided, &agent_paths);
     emit_duplicate_notes(&groups);
     duplicates.extend(groups);
     files.sort();

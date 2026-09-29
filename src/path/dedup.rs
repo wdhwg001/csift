@@ -185,6 +185,36 @@ pub fn dedup_copies_skipping(
     (kept, groups)
 }
 
+/// The resolver's UNION pass when some targets were `*.jsonl` agent paths.
+///
+/// A named path is never REPLACED by an unnamed copy of its id: the ordinary merge keeps the
+/// LONGEST copy, which swapped a named file for its other half. So an id a path named is kept
+/// out of the merge over everything else (its unnamed copies pass through as they are), and
+/// the NAMED paths merge among themselves under the ordinary relation rule - two named copies
+/// that are identical or a prefix of one another keep the longest NAMED one, divergent named
+/// copies both stay - with the usual note and header keys. Skipping the named paths outright
+/// counted two named copies of one transcript twice.
+pub fn dedup_union(
+    files: Vec<PathBuf>,
+    decided: &std::collections::BTreeSet<String>,
+    named: &[PathBuf],
+) -> (Vec<PathBuf>, Vec<DuplicateGroup>) {
+    let (named_files, rest): (Vec<PathBuf>, Vec<PathBuf>) =
+        files.into_iter().partition(|f| named.contains(f));
+    let mut skip = decided.clone();
+    skip.extend(
+        named
+            .iter()
+            .filter_map(|p| p.file_stem().and_then(|s| s.to_str()))
+            .map(str::to_string),
+    );
+    let (mut kept, mut groups) = dedup_copies_skipping(rest, &skip);
+    let (named_kept, named_groups) = dedup_copies_skipping(named_files, decided);
+    kept.extend(named_kept);
+    groups.extend(named_groups);
+    (kept, groups)
+}
+
 /// Build the report for ONE duplicated session id: order the copies (longest first), read
 /// each one's bytes once, compare every other copy against the longest, and derive the
 /// group's relation from the worst pairwise verdict - unless a copy could not be READ at

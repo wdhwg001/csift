@@ -219,3 +219,95 @@ fn a_jsonl_path_reads_the_file_it_names_and_names_the_other() {
         "the named file holds no workflow line"
     );
 }
+
+/// One session copied whole under two project directories, its sidecar agent transcript
+/// with it; `diverge` makes the second copy of the AGENT transcript differ.
+fn copied_home(diverge: bool) -> (Home, [String; 4]) {
+    const SESS: &str = "6f7a8b9c-0d1e-4f2a-8b3c-4d5e6f7a8b9c";
+    const AGENT: &str = "a1a2b3c4d5e6f7081";
+    let h = Home::new();
+    let top = "{\"type\":\"user\",\"uuid\":\"s1\",\"timestamp\":\"2026-06-07T01:00:00.000Z\",\
+               \"message\":{\"role\":\"user\",\"content\":\"start\"}}\n";
+    let mut paths: Vec<String> = Vec::new();
+    for (i, enc) in [
+        "-Users-testuser-Projects-harbor",
+        "-Users-testuser-Projects-harbor2",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let text = if diverge && i == 1 {
+            "reef second"
+        } else {
+            "reef first"
+        };
+        let agent = format!(
+            "{{\"type\":\"user\",\"uuid\":\"a0\",\"isSidechain\":true,\
+             \"timestamp\":\"2026-06-07T01:00:01.000Z\",\"message\":{{\"role\":\"user\",\
+             \"content\":\"{text}\"}}}}\n"
+        );
+        h.write(&format!("{enc}/{SESS}.jsonl"), top);
+        h.write(
+            &format!("{enc}/{SESS}/subagents/agent-{AGENT}.jsonl"),
+            &agent,
+        );
+        let root = h.projects();
+        paths.push(
+            root.join(format!("{enc}/{SESS}.jsonl"))
+                .display()
+                .to_string(),
+        );
+        paths.push(
+            root.join(format!("{enc}/{SESS}/subagents/agent-{AGENT}.jsonl"))
+                .display()
+                .to_string(),
+        );
+    }
+    let [t1, a1, t2, a2]: [String; 4] = paths.try_into().expect("four paths");
+    (h, [t1, a1, t2, a2])
+}
+
+fn json_header(h: &Home, argv: &[&str]) -> serde_json::Value {
+    let out = h.run(argv);
+    assert!(out.success, "{}", out.stderr);
+    out.stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["kind"] == "header")
+        .expect("the envelope header")
+}
+
+/// Two `*.jsonl` paths naming two IDENTICAL copies of one transcript are one transcript: a
+/// named path is never replaced by an unnamed copy, but named paths still merge among
+/// themselves, agent and top-level shapes alike, with the ordinary note and header keys.
+#[test]
+fn two_named_copies_of_one_transcript_count_once() {
+    let (h, [t1, a1, t2, a2]) = copied_home(false);
+    let agents = h.run(&["search", "", &a1, &a2, "-c"]);
+    assert_eq!(agents.stdout.trim(), "1", "{}", agents.stderr);
+    assert!(
+        agents.stderr.contains("byte-identical"),
+        "{}",
+        agents.stderr
+    );
+    assert!(
+        !agents.stderr.contains("other transcript"),
+        "a named copy is not an unnamed transcript to point at: {}",
+        agents.stderr
+    );
+    let head = json_header(&h, &["search", "", &a1, &a2, "--format", "json"]);
+    assert_eq!(head["duplicate_transcripts"], 1, "{head}");
+    assert_eq!(head["sessions_in_scope"], 1, "{head}");
+    let tops = h.run(&["search", "", &t1, &t2, "--no-subagents", "-c"]);
+    assert_eq!(tops.stdout.trim(), "1", "{}", tops.stderr);
+}
+
+/// Two named copies that DIVERGE both stay, disclosed as divergent.
+#[test]
+fn two_named_divergent_copies_both_stay() {
+    let (h, [_, a1, _, a2]) = copied_home(true);
+    let out = h.run(&["search", "", &a1, &a2, "-c"]);
+    assert_eq!(out.stdout.trim(), "2", "{}", out.stderr);
+    let head = json_header(&h, &["search", "", &a1, &a2, "--format", "json"]);
+    assert_eq!(head["divergent_transcripts"], 1, "{head}");
+}

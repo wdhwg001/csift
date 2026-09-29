@@ -1100,7 +1100,8 @@ surface change bumps the PATCH.
   not a copy). `@<id>` read one half with nothing said, a `*.jsonl` path naming the built-in
   file read the workflow file instead, and the note `list` printed for the pair called it
   two project directories. Every route now takes one rule: `@<id>` reads both halves, a
-  path reads the file it names and names the other on stderr, and the note says the pair
+  path reads the file it names and names the other on stderr (two paths naming
+  byte-identical copies of one transcript still read as one), and the note says the pair
   sits under one session's sidecar at the built-in and the workflow locations (claim
   PATH-017; PATH-014 refined). `show @<id>` still refuses the pair and names both paths.
 - **`whoami --help`'s fallback recipe built `@null`.** Its second line read

@@ -38868,12 +38868,12 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "440-445",
+          "lines": "434-439",
           "snippet": "/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved\n/// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only\n/// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the\n/// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does\n/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix\n/// keep decision."
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "462-468",
+          "lines": "456-462",
           "snippet": "    if let Some(want) = &pd.target_cwd {\n        if let Some(stored) = read_first_cwd(&p) {\n            if !cwd_equivalent(&stored, want) {\n                return;\n            }\n        }\n    }"
         }
       ],
@@ -39161,7 +39161,7 @@
       "code": [
         {
           "path": "src/path/resolver.rs",
-          "lines": "543-552",
+          "lines": "537-546",
           "snippet": "/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an\n/// unreadable/vanished dir (empty result).\npub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {\n    let mut out = Vec::new();\n    if let Ok(read) = std::fs::read_dir(dir) {\n        for entry in read.flatten() {\n            let p = entry.path();\n            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)\n                && p.extension().is_some_and(|e| e == \"jsonl\")\n            {"
         },
         {
@@ -68594,7 +68594,7 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "289-293",
+          "lines": "283-287",
           "snippet": "                // `@-Users-\u2026` / `@C--Users-\u2026` -> an encoded project-dir name (a Unix cwd's\n                // leading `/` encodes to `-`; a Windows cwd's `C:\\` encodes to `C--`).\n                _ if id.starts_with('-') || is_drive_encoded_token(id) => {\n                    explicit_dirs.push(resolve_target(Path::new(id))?);\n                    session_target = true;"
         }
       ],
@@ -89674,17 +89674,17 @@
       "code": [
         {
           "path": "src/path/dedup.rs",
-          "lines": "227-231",
+          "lines": "257-261",
           "snippet": "    let relation = if members.iter().any(|m| m.error.is_some()) {\n        DuplicateRelation::Unknown\n    } else {\n        classify_bytes(&bytes)\n    };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "255-261",
+          "lines": "285-291",
           "snippet": "        let verdict = if other[..n] != winner[..n] {\n            DuplicateRelation::Divergent\n        } else if other.len() == winner.len() {\n            DuplicateRelation::Identical\n        } else {\n            DuplicateRelation::Prefix\n        };"
         },
         {
           "path": "src/path/dedup.rs",
-          "lines": "297-301",
+          "lines": "327-331",
           "snippet": "    let by_size = |a: &(u64, bool, PathBuf), b: &(u64, bool, PathBuf)| {\n        b.0.cmp(&a.0) // longest first\n            .then(b.1.cmp(&a.1)) // then the copy whose dir name encodes the recorded cwd\n            .then(a.2.cmp(&b.2)) // then deterministically by path\n    };"
         },
         {
@@ -89694,8 +89694,8 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "185-187",
-          "snippet": "    let (mut files, groups) = dedup_copies_skipping(files, &decided);\n    emit_duplicate_notes(&groups);\n    duplicates.extend(groups);"
+          "lines": "179-181",
+          "snippet": "    let (mut files, groups) = dedup_union(files, &decided, &agent_paths);\n    emit_duplicate_notes(&groups);\n    duplicates.extend(groups);"
         },
         {
           "path": "src/path/agent_subtree.rs",
@@ -89711,6 +89711,11 @@
           "path": "src/commands/show/addr.rs",
           "lines": "135-136",
           "snippet": "    match (resolved.files.as_slice(), dropped.as_slice()) {\n        ([one], []) => Ok(one.clone()),"
+        },
+        {
+          "path": "src/path/dedup.rs",
+          "lines": "202-203",
+          "snippet": "    let (named_files, rest): (Vec<PathBuf>, Vec<PathBuf>) =\n        files.into_iter().partition(|f| named.contains(f));"
         }
       ],
       "states": [
@@ -89719,7 +89724,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "ONE session id can sit under TWO project directories at once, and Claude Code both reaches that state and refuses to resolve it. The project key is `Em(e)=Apr()??KA(e)` (157617292): `Apr` is the memoised read of the `CLAUDE_CODE_PROJECT_DIR_NAME` environment override (`function _(){return process.env.CLAUDE_CODE_PROJECT_DIR_NAME}`, 156662184, gated by a `^[A-Za-z0-9_-]{1,64}$` shape test and a reserved-device-name refusal) and `KA` the ordinary encoder; beside it `Ctt(e)` returns the NATURAL key whenever the override differs, and the directory enumeration ADDS that second directory to the list a session may live in (`let a=Ctt(e);if(a!==void 0){let l=S(ia(),a);try{await b(l),t.push(l)}catch{}return t}`, 157618887). The resume lookup then walks EVERY directory under the projects root for `<uuid>.jsonl` and, on finding a second one that has messages, returns null rather than choosing (`if(await eIn(o)!==\"has\")continue;if(a!==null)return null;a=o`, 157615066). The second harness door is `relocateSessionTranscript` (166124462), which mkdirs the new project directory and MOVES the transcript, writing a `{type:\"relocated\",sessionId,relocatedCwd}` record on the same-destination arm; its fallback mover can leave the source behind, in the harness's own words - `renameWithFallbacks: the session folder may also remain at ${e}; left in place` (166128344). THE OBSERVED SPECIMENS WERE NOT WRITTEN BY EITHER DOOR. Over one projects root: 30 encoded directories hold 81 top-level transcripts over 78 distinct basenames, so 3 basenames occur under two directories - two pairs byte-identical (99,499,361 bytes / 37,920 lines each, and 9,204 bytes / 17 lines each) and one pair where the shorter copy is a strict byte PREFIX of the longer (77,991,731 bytes / 38,870 lines against 78,613,081 / 39,192). A prefix is what copying a file that is still being appended to produces, and `\"type\":\"relocated\"` occurs in 0 of 9,839 jsonl files under that root and no file on it is named `.superseded-` or `.orphaned-`, so a relocation never ran there. The sidecar trees were copied with the transcripts: every duplicated `agent-<hex>.jsonl` basename on the root belongs to one of those sessions' two sidecars, and no agent basename is shared between two different sessions.",
-          "depends": "csift merges the copies at `path::resolve_session_files`, the one point every session-operating subcommand resolves through, and keys the merge on the basename (PATH-012: the basename IS the session id, which is also what the harness's own cross-directory lookup keys on). The relation decides whether a merge happens at all: IDENTICAL and PREFIX collapse onto the LONGEST copy, because a prefix copy is missing records the longer one carries, while DIVERGENT merges nothing - two files claiming one session id with contradictory content are not one session seen twice, and a turn number minted from one does not address the other. A copy the map could not READ answers UNKNOWN before any comparison and merges nothing either: read as an empty file it is a prefix of every other copy and the largest by metadata, so the merge would announce the readable copy as dropped and the read failure would surface only when a later command died on the copy it kept; the note names that copy and the error, and the JSON header counts it as `unreadable_transcripts`, because what happens next is not one answer: the copy stays in scope, so a surface that reads EVERY file in its scope dies on it before its own header prints, while `agents`, which opens a session file only through its sidecar, never reads a copy that has no sidecar directory beside it and prints its header at exit 0. An mtime never enters the rule: the instants on such copies can be re-applied wholesale by a preserving copy, so they are not evidence about which copy the harness wrote; an equal-size tie is broken by the copy whose directory basename equals the encoding of the first record carrying a cwd, then by the smallest path so the answer is stable across runs and machines. THE MERGE RUNS ONCE OVER THE RESOLVED UNION. A first pass over the top-level files runs BEFORE subagent gathering, so a dropped copy's whole sidecar is never walked; everything the resolution then produces - those winners, the sidecars gathered from them, and every copy an `@<agent-id>` target found - goes through one final pass, because two passes deciding two halves of one basename picked different winners and left both copies in scope. That final pass reports only the groups it newly decided, since a group that merged nothing is still there for it to re-find. The `@<agent-id>` path COLLECTS rather than decides: it stops at the owning session and probes each project directory for a copy of that one basename, an agent hex being globally unique. `agents` is the one surface that walks sidecars itself (it resolves top-level-only), so it runs the same merge over its own node paths and dedupes the workflow manifests a copied directory duplicated. Without the merge a duplicated session is counted twice by every spanning surface and its whole sidecar is walked twice; with it, what was dropped is disclosed on stderr (one note per group, naming a session by its handle and a subagent by its canonical id), in the JSON envelope header (`duplicate_transcripts`, `duplicate_records_dropped`, `divergent_transcripts`) and on the `list` row (`also_at`, `duplicate_relation`), with `sessions_in_scope` counting distinct session ids. `show` is the exception that keeps refusing: it counts the UNMERGED set, so an address that names two files on disk still bails and names the paths, because neither `@<uuid>` nor `@<agent-id>` separates them. The same merge meets one agent id at TWO paths inside one session's sidecar (PATH-017), where the pair is a continuation rather than a copy: it groups them by basename, finds them divergent and keeps both, and the note says where they sit - under one session's sidecar at the built-in and the workflow locations - rather than under two project directories. A `*.jsonl` target is exempt from the merge: it reads the file it names, never the longest copy of its id, and the other copies are named on stderr.",
+          "depends": "csift merges the copies at `path::resolve_session_files`, the one point every session-operating subcommand resolves through, and keys the merge on the basename (PATH-012: the basename IS the session id, which is also what the harness's own cross-directory lookup keys on). The relation decides whether a merge happens at all: IDENTICAL and PREFIX collapse onto the LONGEST copy, because a prefix copy is missing records the longer one carries, while DIVERGENT merges nothing - two files claiming one session id with contradictory content are not one session seen twice, and a turn number minted from one does not address the other. A copy the map could not READ answers UNKNOWN before any comparison and merges nothing either: read as an empty file it is a prefix of every other copy and the largest by metadata, so the merge would announce the readable copy as dropped and the read failure would surface only when a later command died on the copy it kept; the note names that copy and the error, and the JSON header counts it as `unreadable_transcripts`, because what happens next is not one answer: the copy stays in scope, so a surface that reads EVERY file in its scope dies on it before its own header prints, while `agents`, which opens a session file only through its sidecar, never reads a copy that has no sidecar directory beside it and prints its header at exit 0. An mtime never enters the rule: the instants on such copies can be re-applied wholesale by a preserving copy, so they are not evidence about which copy the harness wrote; an equal-size tie is broken by the copy whose directory basename equals the encoding of the first record carrying a cwd, then by the smallest path so the answer is stable across runs and machines. THE MERGE RUNS ONCE OVER THE RESOLVED UNION. A first pass over the top-level files runs BEFORE subagent gathering, so a dropped copy's whole sidecar is never walked; everything the resolution then produces - those winners, the sidecars gathered from them, and every copy an `@<agent-id>` target found - goes through one final pass, because two passes deciding two halves of one basename picked different winners and left both copies in scope. That final pass reports only the groups it newly decided, since a group that merged nothing is still there for it to re-find. The `@<agent-id>` path COLLECTS rather than decides: it stops at the owning session and probes each project directory for a copy of that one basename, an agent hex being globally unique. `agents` is the one surface that walks sidecars itself (it resolves top-level-only), so it runs the same merge over its own node paths and dedupes the workflow manifests a copied directory duplicated. Without the merge a duplicated session is counted twice by every spanning surface and its whole sidecar is walked twice; with it, what was dropped is disclosed on stderr (one note per group, naming a session by its handle and a subagent by its canonical id), in the JSON envelope header (`duplicate_transcripts`, `duplicate_records_dropped`, `divergent_transcripts`) and on the `list` row (`also_at`, `duplicate_relation`), with `sessions_in_scope` counting distinct session ids. `show` is the exception that keeps refusing: it counts the UNMERGED set, so an address that names two files on disk still bails and names the paths, because neither `@<uuid>` nor `@<agent-id>` separates them. The same merge meets one agent id at TWO paths inside one session's sidecar (PATH-017), where the pair is a continuation rather than a copy: it groups them by basename, finds them divergent and keeps both, and the note says where they sit - under one session's sidecar at the built-in and the workflow locations - rather than under two project directories. A `*.jsonl` target is never REPLACED by an unnamed copy of its id: `dedup_union` keeps that id out of the merge over every other file, so the target reads the file it names and the unnamed copies are named on stderr, while two NAMED copies merge among themselves under the ordinary relation rule - identical or prefix copies keep the longest named one, divergent ones both stay - with the usual note and header keys. Two top-level copy paths resolve through their session id and merge like any pair.",
           "instrument": "Census, one observation per `<basename>.jsonl` sitting DIRECTLY under an encoded project directory; a basename is duplicated when it occurs under more than one such directory: python over `~/.claude/projects/*/*.jsonl` grouping by basename, then for each duplicated basename compare the two files byte for byte up to min(size) and report IDENTICAL (equal sizes, no differing byte), PREFIX (no differing byte up to min(size), sizes differ) or DIVERGENT (a differing byte before min(size)), with sizes and newline counts. Relocation census, one observation per *.jsonl file at ANY depth under the same root, a file counting when the literal occurs at least once in its bytes: count the files carrying `\"type\":\"relocated\"` and the files NAMED `.superseded-` / `.orphaned-`. Binary hops: byte-compare the excerpts at the offsets in `producer_chain` against the build named by `verified_claude_code`.",
           "probe": {
             "kind": "corpus",
@@ -89782,9 +89787,9 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "Re-ran the duplicate-basename census over one live projects root (every `<encoded>/*.jsonl` grouped by basename, byte-compared over min(size)), then resolved a synthetic tree holding one session id under two directories with a copy of one agent transcript under each through `csift list @<uuid> @<agent-id> --format json`, `csift agents @<uuid> --format json` and `csift search <pattern> @<uuid> -c`, counting emitted rows, header keys and stderr notes.",
-            "observed": "Census unchanged: 3 basenames under two directories, 6 copies; physical line 1 carries a cwd on 0 of the 6, the first record that does carry one encodes to an existing directory on 6 of 6 and to the copy's OWN directory on 3 of 6; every copy carries a top-level sessionId and none names a second one. On the synthetic tree the session-plus-agent invocation resolves 1 agent transcript with `duplicate_transcripts` 2 / `duplicate_records_dropped` 3 and 2 stderr notes (one per group), `search -c` answers 3, and `agents` over a divergent pair whose sidecars hold one identical agent answers 1 lane with `duplicate_transcripts` 1.",
-            "rule": "A basename occurring under two encoded directories is one duplicated id; a copy is one file; a group is one note; a row is one emitted JSON object of that kind.",
+            "instrument": "Re-ran the duplicate-basename census over one live projects root (every `<encoded>/*.jsonl` grouped by basename, byte-compared over min(size)), then resolved a synthetic tree holding one session id under two directories with a copy of one agent transcript under each through `csift list @<uuid> @<agent-id> --format json`, `csift agents @<uuid> --format json` and `csift search <pattern> @<uuid> -c`, counting emitted rows, header keys and stderr notes. The named-path rule on the live root: a walk of every duplicated top-level basename for the agent transcripts present in both copies' sidecars, each pair byte-compared, and `csift search '' <copy A> <copy B> -c` over one such pair with its JSON header.",
+            "observed": "Census unchanged: 3 basenames under two directories, 6 copies; physical line 1 carries a cwd on 0 of the 6, the first record that does carry one encodes to an existing directory on 6 of 6 and to the copy's OWN directory on 3 of 6; every copy carries a top-level sessionId and none names a second one. On the synthetic tree the session-plus-agent invocation resolves 1 agent transcript with `duplicate_transcripts` 2 / `duplicate_records_dropped` 3 and 2 stderr notes (one per group), `search -c` answers 3, and `agents` over a divergent pair whose sidecars hold one identical agent answers 1 lane with `duplicate_transcripts` 1. 3 top-level basenames are duplicated, their sidecars hold 19 agent transcripts present in both copies, all 19 byte-identical; naming both copies of one of them answers `search -c` 1 with `duplicate_transcripts` 1, and naming one answers 1.",
+            "rule": "A basename occurring under two encoded directories is one duplicated id; a copy is one file; a group is one note; a row is one emitted JSON object of that kind. One observation per agent basename present in both sidecars of a duplicated session for the pair census.",
             "note": "Claude Code's behavior is unchanged; `depends` is rewritten to the shipped shape - the merge is ONE pass over the resolved union rather than one per resolution path, the `@<agent-id>` target collects copies instead of deciding them, `agents` merges the sidecars it walks itself, the header carries three keys, and the note names a subagent by its canonical id."
           }
         }
@@ -89879,7 +89884,7 @@
         },
         {
           "path": "src/path/resolver.rs",
-          "lines": "488",
+          "lines": "482",
           "snippet": "        .find(|pfx| id_has_prefix(&stem, pfx))"
         },
         {
@@ -89995,8 +90000,8 @@
         },
         {
           "path": "src/path/agent_subtree.rs",
-          "lines": "143-151",
-          "snippet": "pub(crate) fn resolve_named_agent(\n    dirs: &[ProjectDir],\n    file: &Path,\n    scope: SubagentScope,\n) -> Result<Vec<PathBuf>> {\n    let hex = crate::subagent::session_id_from_path(file);\n    let every = resolve_agent_subtree(dirs, &hex, scope)?;\n    let name = file.file_name();\n    let (copies, rest): (Vec<PathBuf>, Vec<PathBuf>) ="
+          "lines": "144-153",
+          "snippet": "pub(crate) fn resolve_named_agent(\n    dirs: &[ProjectDir],\n    file: &Path,\n    scope: SubagentScope,\n    named: &[PathBuf],\n) -> Result<Vec<PathBuf>> {\n    let hex = crate::subagent::session_id_from_path(file);\n    let every = resolve_agent_subtree(dirs, &hex, scope)?;\n    let name = file.file_name();\n    let (copies, rest): (Vec<PathBuf>, Vec<PathBuf>) ="
         },
         {
           "path": "src/path/dedup/notes.rs",
@@ -90011,7 +90016,7 @@
           "from_after_verified": "The only specimens on either root were written by Claude Code 2.1.280, above the badge's build; the path builder that places a transcript by the relative path its caller passes is read in 2.1.258, and the receipt is the census taken with the badge at 2.1.258.",
           "to": null,
           "behavior": "One subagent id can own TWO transcript files inside ONE session's sidecar: the workflow run's `subagents/workflows/<run>/agent-<id>.jsonl` and the built-in location `subagents/agent-<id>.jsonl`. The second is a CONTINUATION of the first, not a copy: it starts after the first file's last record, shares no record uuid with it, and its first parented record names a record the first file carries. The transcript key's path builder places an agent's file under `subagents/` plus whatever relative path its caller passes (`...n.agentRelPath??[]`), so a writer that passes none lands at the built-in location whatever run the agent belonged to.",
-          "depends": "csift reads both halves for `@<id>`: `agent_files_under` keeps EVERY path per id (a one-path map kept whichever the walk yielded last and dropped the other half with nothing said), and the union merge groups the two by their shared basename, finds them DIVERGENT and keeps both in scope, with a note that says they sit under one session's sidecar at the built-in and the workflow locations rather than under two project directories. The whole-root enumeration `list` runs, the `@<id>` route and a session's sidecar all reach the pair through that one merge. A `*.jsonl` target reads the file it names and names the other transcripts of its id on stderr: routed through the id alone it was swapped for the longer half. If a later build writes the continuation into the run's own directory, the pair disappears and nothing here misreads a single file.",
+          "depends": "csift reads both halves for `@<id>`: `agent_files_under` keeps EVERY path per id (a one-path map kept whichever the walk yielded last and dropped the other half with nothing said), and the union merge groups the two by their shared basename, finds them DIVERGENT and keeps both in scope, with a note that says they sit under one session's sidecar at the built-in and the workflow locations rather than under two project directories. The whole-root enumeration `list` runs, the `@<id>` route and a session's sidecar all reach the pair through that one merge. A `*.jsonl` target reads the file it names and names the other transcripts of its id on stderr: routed through the id alone it was swapped for the longer half. A second path naming another copy of the same id is not one of those others - both are in scope, and the named paths merge among themselves (PATH-014). If a later build writes the continuation into the run's own directory, the pair disappears and nothing here misreads a single file.",
           "instrument": "python3 over two projects roots (the live `~/.claude/projects` and a snapshot), each read whole and again without the measuring session's tree: for every `<project>/<uuid>/subagents/` tree, group `agent-<id>.jsonl` files by basename, keep the ids at two or more paths, and for each pair record the two locations, the byte relation (identical / prefix / divergent up to the shorter size), the shared record uuids, whether the later-starting file's first parented record names a uuid the other carries, line counts and the `version` stamped on their records. Binary hop: byte-compare the builder excerpt at its offset in the 2.1.258 build.",
           "probe": {
             "kind": "corpus",
