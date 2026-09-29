@@ -1158,6 +1158,12 @@ surface change bumps the PATCH.
   failed with `no subagent matched id` while every other id position takes the sigil and
   the error's own remedy prints ids beside `@<uuid>`. The flag now takes the id bare or
   `@`-prefixed and both grab the same node; `agents --help` says so.
+- **`search --for L<n>` walked every transcript in scope.** A line number names a record in
+  one file, yet `csift search "" --for L42` with no target closed over line 42 of every
+  transcript under the projects root (1,308,495 output lines on one machine), and over a
+  session with subagents it mixed a different record's closure from each file. A line
+  address now needs a scope that resolves to exactly one transcript and is refused with the
+  count otherwise; a uuid address, which names its record in any scope, is unchanged.
 
 ### Performance
 

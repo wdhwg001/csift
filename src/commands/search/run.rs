@@ -207,6 +207,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // The `--for <ADDR>` address, parsed ONCE: a bad address is a usage error and must be
     // reported before any file is read, not once per file.
     let for_addr = args.for_addr.as_deref().map(ForAddr::parse).transpose()?;
+    require_one_transcript_for_a_line(for_addr.as_ref(), session_files.len())?;
     let per_file: Vec<FileResult> = session_files
         .par_iter()
         .map(|p| {

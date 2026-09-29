@@ -36,7 +36,8 @@ use super::*;
 /// follow-on, not something this pass half-does.
 #[derive(Debug, Clone)]
 pub(crate) enum ForAddr {
-    /// The record at this 1-based jsonl line, in each scanned transcript.
+    /// The record at this 1-based jsonl line of the ONE transcript the scope resolves to
+    /// (`require_one_transcript_for_a_line` refuses any other scope).
     Line(usize),
     /// The record carrying this uuid, wherever it is.
     Uuid(String),
@@ -126,6 +127,28 @@ pub(crate) fn require_addressed(
     if let Some(addr) = addr {
         if !named.any(|n| n) {
             bail!("{}", address_miss(&addr.as_str()));
+        }
+    }
+    Ok(())
+}
+
+/// A LINE address names a record in ONE transcript, so `--for L<n>` needs a scope that resolves
+/// to exactly one. Over a wider scope it closed over line `<n>` of every transcript in it - a
+/// different record in each, none of them the one the reader read the number off - and an
+/// untargeted run walked every transcript under the projects root. A uuid names its record in
+/// any scope, so that form keeps the scope it was given.
+pub(crate) fn require_one_transcript_for_a_line(
+    addr: Option<&ForAddr>,
+    transcripts: usize,
+) -> Result<()> {
+    if let Some(ForAddr::Line(n)) = addr {
+        if transcripts != 1 {
+            bail!(
+                "--for L{n} addresses a LINE, and a line number names a record in ONE transcript; \
+                 this scope resolves to {transcripts} transcripts. Name exactly one - \
+                 `@<uuid> --no-subagents`, `@<agent-id> --no-subagents` or a `*.jsonl` path - or \
+                 address the record by its uuid (`--for <uuid>`), which names it in any scope"
+            );
         }
     }
     Ok(())

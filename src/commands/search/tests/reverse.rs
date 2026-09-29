@@ -148,3 +148,24 @@ fn a_for_run_fails_only_when_no_transcript_names_the_address() {
     );
     assert!(require_addressed(None, std::iter::empty()).is_ok());
 }
+
+/// A LINE address needs a scope of exactly one transcript; a uuid address takes any scope,
+/// and no address takes any scope too.
+#[test]
+fn a_line_address_needs_one_transcript_and_a_uuid_does_not() {
+    let line = ForAddr::parse("L42").unwrap();
+    let uuid = ForAddr::parse("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d").unwrap();
+    assert!(require_one_transcript_for_a_line(Some(&line), 1).is_ok());
+    for many in [0, 2, 9] {
+        let err = require_one_transcript_for_a_line(Some(&line), many)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(&format!("resolves to {many} transcripts"))
+                && err.contains("--for <uuid>"),
+            "{err}"
+        );
+        assert!(require_one_transcript_for_a_line(Some(&uuid), many).is_ok());
+        assert!(require_one_transcript_for_a_line(None, many).is_ok());
+    }
+}

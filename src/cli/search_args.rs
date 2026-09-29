@@ -311,8 +311,10 @@ pub struct SearchArgs {
     pub count_by: Option<CountAxis>,
 
     /// Print everything that is FOR one record, TRANSITIVELY: the reverse provenance
-    /// query. `<ADDR>` is `L<line>` (per FILE, so pair it with a target that names one) or
-    /// a record UUID (which finds its record in whichever scanned transcript carries it).
+    /// query. `<ADDR>` is `L<line>` (per FILE, so the scope must resolve to exactly ONE
+    /// transcript - `@<uuid> --no-subagents`, `@<agent-id> --no-subagents` or a `*.jsonl` path;
+    /// a wider scope is refused, naming its transcript count) or a record UUID (which finds
+    /// its record in whichever scanned transcript carries it, in any scope).
     /// The closure itself is computed PER TRANSCRIPT and never crosses one. The answer is
     /// ordinary hits in file order, the addressed record at the
     /// head, and it grows: a record is in it when it is for the address OR for something

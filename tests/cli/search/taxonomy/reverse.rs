@@ -396,3 +396,41 @@ fn an_empty_address_is_rejected() {
         out.stderr
     );
 }
+
+/// Untargeted, `--for L1` walked line 1 of every transcript under the projects root; over a
+/// session and its subagents it closed over a different record in each file. Both are refused
+/// now, naming the count, while the same address over one transcript still answers.
+#[test]
+fn a_line_address_over_several_transcripts_is_refused_with_the_count() {
+    // `populated_home` gives the harness session two subagents; this file's own `SESS` names
+    // a different fixture, so the harness constant is spelled out.
+    let h = populated_home();
+    let untargeted = h.run(&["search", "", "--for", "L1"]);
+    assert!(!untargeted.success, "{}", untargeted.stdout);
+    assert!(
+        untargeted.stderr.contains("addresses a LINE") && untargeted.stderr.contains("transcripts"),
+        "{}",
+        untargeted.stderr
+    );
+    let spanning = h.run(&[
+        "search",
+        "",
+        at(crate::harness::SESS).as_str(),
+        "--for",
+        "L1",
+    ]);
+    assert!(
+        !spanning.success,
+        "a session plus its subagents is several files: {}",
+        spanning.stdout
+    );
+    let one = h.run(&[
+        "search",
+        "",
+        at(crate::harness::SESS).as_str(),
+        "--no-subagents",
+        "--for",
+        "L1",
+    ]);
+    assert!(one.success, "one transcript answers: {}", one.stderr);
+}
