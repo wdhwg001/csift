@@ -260,3 +260,112 @@ fn every_key_a_search_hit_emits_is_one_the_help_names() {
         "`search --format json` emits hit keys the schema does not name: {undocumented:?}"
     );
 }
+
+/// Every brace block on a page, as `(block, top-level names)`, in page order.
+///
+/// A page that documents several row kinds names each kind's keys in its own block, so the
+/// first direction asks whether a key is named in ANY of them - the same WHERE rule the two
+/// tests above apply to one block, widened to the page's every enumeration.
+fn page_blocks(help: &str) -> Vec<(String, Vec<String>)> {
+    let mut out = Vec::new();
+    let mut from = 0usize;
+    while let Some(off) = help[from..].find('{') {
+        let start = from + off;
+        let block = brace_block(&help[start..], "{");
+        from = start + block.len();
+        let names = top_level_names(&block);
+        out.push((block, names));
+    }
+    out
+}
+
+/// `verbatim --format json`: every key each row kind emits is named on `verbatim --help`,
+/// and every entry of the per-unit block is a key every unit row carries.
+///
+/// The unit block is the one enumeration here whose entries are ALL unconditional, so both
+/// directions hold for it: a key the page lists and the wire never carries (the page once
+/// listed `line_no` while every row carried `line`) fails the second assertion by name.
+/// The fixture reaches every conditional family the page names: the golden reconstruction
+/// session carries compaction boundaries and collapsed agent runs, and a second session
+/// opens one turn with an inbound peer message and one with a background-task pulse.
+#[test]
+fn every_key_a_verbatim_row_emits_is_one_the_help_names() {
+    let h = turns_home();
+    let peer = "dddddddd-eeee-4fff-8000-111111111111";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the human kicks things off"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+        r#"{"type":"user","uuid":"tm0","parentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"Relay\" color=\"blue\">\nplease check the queue\n</teammate-message>"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"tm0","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"on it"}]}}"#,
+        r#"{"type":"user","uuid":"n0","parentUuid":"a1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>bjob00001</task-id>\n<status>completed</status>\n<summary>Background command \"build\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
+        r#"{"type":"assistant","uuid":"a2","parentUuid":"n0","timestamp":"2026-06-07T05:20:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"the build passed"}]}}"#,
+    ];
+    h.write(&format!("{ENC}/{peer}.jsonl"), &(lines.join("\n") + "\n"));
+
+    let help = h.run(&["verbatim", "--help"]);
+    assert!(help.success, "stderr {}", help.stderr);
+    let blocks = page_blocks(&help.stdout);
+    let unit = blocks
+        .iter()
+        .find(|(b, _)| b.starts_with("{kind:\"turn\""))
+        .map(|(_, n)| n.clone())
+        .expect("the page carries the per-unit block");
+    // Parse guard: the block parse found the real entries, not an empty or cut list.
+    for anchor in ["session_id", "compactions_before", "is_automation"] {
+        assert!(
+            unit.iter().any(|n| n == anchor),
+            "the unit block parse lost {anchor}: {unit:?}"
+        );
+    }
+    let ticked = backticked_names(&help.stdout);
+    let named = |key: &str| {
+        blocks.iter().any(|(_, n)| n.iter().any(|k| k == key)) || ticked.iter().any(|k| k == key)
+    };
+
+    let out = h.run(&[
+        "verbatim",
+        at(SESS).as_str(),
+        at(peer).as_str(),
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr {}", out.stderr);
+    let mut undocumented: Vec<String> = Vec::new();
+    let mut kinds: Vec<String> = Vec::new();
+    for row in json_lines(&out.stdout) {
+        let kind = row["kind"].as_str().unwrap_or_default().to_string();
+        if kind == "turn" {
+            for entry in &unit {
+                assert!(
+                    row.get(entry).is_some(),
+                    "`verbatim --help` lists `{entry}` in the unit block and a unit row lacks it: {row}"
+                );
+            }
+        }
+        if !kinds.contains(&kind) {
+            kinds.push(kind);
+        }
+        for key in row.as_object().expect("a row is an object").keys() {
+            if key != "kind" && !named(key) && !undocumented.contains(key) {
+                undocumented.push(key.clone());
+            }
+        }
+    }
+    for kind in [
+        "header",
+        "turn",
+        "compaction_boundary",
+        "collapsed_agents",
+        "summary",
+    ] {
+        assert!(
+            kinds.iter().any(|k| k == kind),
+            "the sweep reached no `{kind}` row, so its keys went unchecked: {kinds:?}"
+        );
+    }
+    undocumented.sort();
+    assert!(
+        undocumented.is_empty(),
+        "`verbatim --format json` emits keys `verbatim --help` does not name: {undocumented:?}"
+    );
+}

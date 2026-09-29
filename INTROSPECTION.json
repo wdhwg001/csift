@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2539",
+          "lines": "2540",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -19829,7 +19829,7 @@
         },
         {
           "path": "src/cli/verbatim_args.rs",
-          "lines": "365-368",
+          "lines": "373-376",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a\n    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook\n    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same"
         },
         {
@@ -33646,7 +33646,7 @@
       "code": [
         {
           "path": "src/cli/verbatim_args.rs",
-          "lines": "365-368",
+          "lines": "373-376",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a\n    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook\n    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same"
         },
         {
@@ -89377,7 +89377,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3570"
+          "lines": "3571"
         }
       ],
       "states": [

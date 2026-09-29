@@ -1390,6 +1390,16 @@ surface change bumps the PATCH.
   with a fixed plural, outside the rule the excerpt marker takes; it now goes through that
   rule and reads `differs from the sent message in 1 char`. JSON `diff_chars` stays a
   number.
+- **`verbatim --help` listed a key the rows do not carry.** The JSON schema named
+  `line_no` in the per-unit block while every unit row carries `line`, the jsonl-line key
+  every command's rows use. The same blocks left out keys the rows do carry: a unit's
+  `source` (`elicitation-sidecar` on a merged pending unit, whose `line` is null), the four
+  keys an inbound peer-message unit adds, the id trio, `turn_index` and
+  `compactions_before` on a `collapsed_agents` row, and `command` plus the four
+  duplicate-copy keys on the header. The blocks now list what the rows carry, and
+  `recover --help` names `line` as the key `--at @line:<N>` reads. A test holds every key
+  each verbatim row kind emits to the page, and every entry of the per-unit block to the
+  rows.
 
 ### Performance
 

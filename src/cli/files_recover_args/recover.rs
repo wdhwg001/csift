@@ -273,8 +273,9 @@ pub struct RecoverArgs {
     /// (`2026-06-01`) = LOCAL MIDNIGHT, PLUS the recover-only forms `@turn:<N>` (snapshot as
     /// of the first line after genuine-user turn N; discover N from the `<id>·t<n>` header in
     /// `csift search` text, or `turn_index` in any `--format json` record) and `@line:<N>`
-    /// (snapshot as of JSONL TRANSCRIPT line N: the `line_no` shown in this tool's output,
-    /// NOT a file line of `--file`; for a 1-based FILE-line span of `--file` use `--file-lines`
+    /// (snapshot as of JSONL TRANSCRIPT line N: the `L<n>` this tool's text prints and the
+    /// `line` key its JSON carries, NOT a file line of `--file`; for a 1-based FILE-line
+    /// span of `--file` use `--file-lines`
     /// instead), and `@latest` (the file's FINAL reconstructed state; no cutoff; the clean way
     /// to ask for "its last form" without guessing a timestamp past the last write). A datetime
     /// bound is INCLUSIVE of events AT that instant.

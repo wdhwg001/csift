@@ -181,14 +181,16 @@ use super::*;
           A targeted top-level session that does not fit `budget` is reported with an explicit\n  \
           `skipped; needs ≥ N chars` note, never silently dropped.\n\n\
         JSON SCHEMA (per --format json)\n  \
-          A leading `{kind:\"header\", sessions_in_scope, sessions_rendered,\n  \
+          A leading `{kind:\"header\", command, sessions_in_scope, sessions_rendered,\n  \
           top_level_sessions, subagent_sessions, budget_chars, budget_is_per_session,\n  \
           max_total_chars, round_trip_fraction, chars_used, boundaries_spanned,\n  \
           boundaries_total, selected_user, selected_assistant, automation_triggers,\n  \
           automation_by_kind, automation_in_scope_by_kind, with_elicitation_sidecar}`\n  \
           object (the full budget accounting the text header shows;\n  \
           `boundaries_spanned` is budget-window-relative, `boundaries_total` the scope's\n  \
-          true total);\n  \
+          true total), plus the four duplicate-copy keys every command's header carries\n  \
+          (`duplicate_transcripts`, `duplicate_records_dropped`, `divergent_transcripts`,\n  \
+          `unreadable_transcripts`);\n  \
           `sessions_in_scope` is the TRUE scope (every discovered session), `sessions_rendered`\n  \
           is how many fit the budget, the top_level/subagent split is over ALL in scope,\n  \
           `budget_chars`/`max_total_chars` are ALWAYS in CHARS,\n  \
@@ -198,21 +200,27 @@ use super::*;
           selection, so a monitor-heavy session is never read as `monitor:0` just because the\n  \
           recency window selected none of its deep pulses (compare the two to see how much\n  \
           automation exists vs was rendered). Then one object PER emitted unit:\n  \
-          {session_id, is_subagent, parent_session_id, turn_index, line_no, role, ts_utc,\n  \
-          ts_local, tool_calls, full_chars, rendered_chars, truncated, elided_chars,\n  \
-          elided_lines, also_in_summary, compactions_before, survival, superseded_by_line,\n  \
-          text, is_automation}\n  \
+          {kind:\"turn\", session_id, is_subagent, parent_session_id, turn_index, line,\n  \
+          source, role, ts_utc, ts_local, tool_calls, full_chars, rendered_chars, truncated,\n  \
+          elided_chars, elided_lines, also_in_summary, compactions_before, survival,\n  \
+          superseded_by_line, text, is_automation}\n  \
           (is_subagent\n  \
           flags a bare-hex subagent unit; re-feed parent_session_id, never the bare session_id;\n  \
+          `line` is the unit's jsonl line, the key every command's rows use for it, and it is\n  \
+          null exactly when `source` reads `elicitation-sidecar` (a pending unit merged from\n  \
+          the sidecar, which has no physical line; `source` is null on every other unit);\n  \
           `survival` is `live`, or `pre-cut` for a unit ABOVE a compaction cut Claude Code's\n  \
           own loader stops at - never `abandoned`, since those turns are counted rather than\n  \
           replayed);\n  \
           an automation USER unit additionally\n  \
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
-          outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
+          outcome tag, null on non-monitor pulses), and an inbound peer-message USER unit\n  \
+          carries {is_inbound_comm, comm_label, comm_from, comm_to} (the comm leaf, the\n  \
+          sender, and `self`). Boundary objects are tagged\n  \
           {kind:\"compaction_boundary\", line, summary_chars, mode} / {kind:\"collapsed_agents\",\n  \
-          agent_messages, tool_calls, failed, first_line, last_line, collapsed_chars,\n  \
-          collapsed_previews[{line, excerpt}], refetch};\n  \
+          session_id, is_subagent, parent_session_id, turn_index, agent_messages, tool_calls,\n  \
+          failed, first_line, last_line, collapsed_chars, collapsed_previews[{line, excerpt}],\n  \
+          compactions_before, refetch};\n  \
           the trailing summary carries the crossing set {crossing_budget,\n  \
           boundaries_crossed, budget_exhausted, boundaries_above_floor, floor_line,\n  \
           floor_cause} whenever `--cross-compactions` is non-zero - what the survival walk\n  \
