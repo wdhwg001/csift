@@ -3,12 +3,13 @@
 use crate::harness::*;
 
 /// `""` read as a path is the empty relative path, which resolves to the current directory's
-/// project: `csift search x ""` searched it and exited 0. Every target-taking command now
+/// project: `csift search x ""` searched it and exited 0. Every target-taking command - the
+/// twelve that take a path target and the four channel spots that take a lane string -
 /// refuses the token at parse time (exit 2) with the grammar in the message.
 #[test]
 fn every_target_taking_command_refuses_an_empty_target() {
     let h = populated_home();
-    let argvs: [&[&str]; 12] = [
+    let argvs: [&[&str]; 16] = [
         &["list", ""],
         &["search", "x", ""],
         &["stats", ""],
@@ -21,6 +22,12 @@ fn every_target_taking_command_refuses_an_empty_target() {
         &["show", "", "--line", "1"],
         &["status", ""],
         &["wait", "", "--until", "stop", "--timeout", "1"],
+        // The channel's lane targets are strings rather than paths, and each was read as the
+        // current directory's project: `send ""` queued a message there.
+        &["send", "", "hello"],
+        &["whoami", "--to", ""],
+        &["msg", "--lane", ""],
+        &["ack", "0123456789abcdef", "--lane", ""],
     ];
     for argv in argvs {
         let out = h.run(argv);

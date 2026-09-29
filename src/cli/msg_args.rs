@@ -73,7 +73,7 @@ pub struct MsgArgs {
     /// The lane to read, as an `@`-target (`@<uuid>`, `@<agent-id>`, `@<Name>@<Team>`,
     /// `@main`, `@trap:<marker>`). The leading `@` may be omitted. Without it, the calling
     /// Claude Code session is used; outside Claude Code this flag is required.
-    #[arg(long = "lane", value_name = "@LANE")]
+    #[arg(long = "lane", value_name = "@LANE", value_parser = parse_lane_target)]
     pub lane: Option<String>,
 
     /// List only messages HELD (a hold with no later emit), with the recorded reason.
@@ -135,7 +135,7 @@ pub struct AckArgs {
 
     /// The acking lane, as an `@`-target (the leading `@` may be omitted). Without it the
     /// calling Claude Code session's top-level lane is used.
-    #[arg(long = "lane", value_name = "@LANE")]
+    #[arg(long = "lane", value_name = "@LANE", value_parser = parse_lane_target)]
     pub lane: Option<String>,
 
     /// Emit JSON instead of the rendered text format.

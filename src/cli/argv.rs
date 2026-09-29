@@ -50,6 +50,18 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
     Ok(PathBuf::from(s))
 }
 
+/// The value parser of a lane target the channel commands keep as a string: `send`'s
+/// receiver, `whoami --to`, and `msg` / `ack --lane`. An empty token is refused exactly as
+/// [`parse_project_target`] refuses it, because the resolver reads an empty token as the
+/// empty relative path, which is the current directory's project - so `send ""` queued a
+/// message to whichever session that project held.
+pub(crate) fn parse_lane_target(s: &str) -> Result<String, String> {
+    if s.trim().is_empty() {
+        return Err(EMPTY_TARGET.to_string());
+    }
+    Ok(s.to_string())
+}
+
 /// The refusal for an empty target token, naming the grammar a target is read in.
 pub(crate) const EMPTY_TARGET: &str = "an EMPTY target names nothing (a `$(...)` substitution \
      that printed nothing is the usual source). A target is a project path or `.`, an encoded \

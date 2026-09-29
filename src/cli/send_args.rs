@@ -98,6 +98,7 @@ pub struct SendArgs {
     /// The receiver lane, in any `@`-form csift accepts: `@<uuid>` (or its leading-hex
     /// prefix), `@<agent-id>`, `@<Name>@<Team>` (a teammate's routing form), `@main`,
     /// `@trap:<marker>`. It must resolve to EXACTLY one transcript.
+    #[arg(value_parser = parse_lane_target)]
     pub target: String,
 
     /// The message body. Omit it to read the body from `-f FILE` or from stdin.

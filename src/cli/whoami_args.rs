@@ -152,7 +152,12 @@ pub struct WhoamiArgs {
     /// inline JSON handed to Claude Code on its command line, a restricted source set, the
     /// trust dialog, MDM). Takes any `@`-form csift accepts
     /// (`@<uuid>`, a uuid prefix, `@<agent-id>`, `@<Name>@<Team>`, `@main`, `@trap:<marker>`).
-    #[arg(long = "to", value_name = "TARGET", conflicts_with_all = ["peers", "self_target"])]
+    #[arg(
+        long = "to",
+        value_name = "TARGET",
+        conflicts_with_all = ["peers", "self_target"],
+        value_parser = parse_lane_target
+    )]
     pub to: Option<String>,
 
     /// The SENDER the `--to` prediction is made for, in `csift send --from`'s grammar: inside

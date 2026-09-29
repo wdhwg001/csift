@@ -1152,10 +1152,13 @@ surface change bumps the PATCH.
   and the `@<uuid>` remedy; an unset or blank variable still reads as not set.
 - **An empty target token scoped to the current directory.** `csift search zzqq ""` searched
   every session of the cwd's project (1,722 of them at the re-measure) and exited 0: the empty token was read
-  as the empty relative path. Every target-taking command now refuses an empty or
-  whitespace-only target at parse time (exit 2) with the target grammar in the message; an
-  empty `$(...)` substitution is the usual source, and the message says so. `search ""` as
-  the PATTERN is unchanged.
+  as the empty relative path. Sixteen target spots now refuse an empty or whitespace-only
+  target at parse time (exit 2) with the target grammar in the message: the twelve commands
+  that take a path target, and the four channel spots that take a lane as a string, where
+  `send "" <text>` had queued the message to the cwd's session and `whoami --to ""`
+  predicted a delivery to it (`msg --lane ""` and `ack --lane ""` were refused, by the
+  @-grammar at run time). An empty `$(...)` substitution is the usual source, and the
+  message says so. `search ""` as the PATTERN is unchanged.
 - **The three terminal modes said nothing about a zero-match search.** `csift search
   zzqqnothing @<id> -c` printed `0` and no diagnosis, and `-l`, `--count-by` and `--raw`
   were as silent, while the ordinary render framed the same absence on stderr as definitive
