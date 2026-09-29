@@ -34,10 +34,13 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
 
     // TAIL: last record's timestamp == completion (best-effort), whether the transcript
     // terminates with a visible assistant message (a clean finish), AND whether the lane is
-    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful
-    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no
-    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The
-    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane.
+    // FROZEN at an unreturned tool_use. BOTH verdicts come from the NEWEST meaningful record
+    // only (the first non-metadata record from EOF): an assistant tool_use there has no
+    // tool_result after it (it IS the last record) => blocked there, NOT done; an assistant text
+    // there that ends its turn => a clean finish; anything else (a returned tool_result, a
+    // message delivered to the lane) => mid-turn, because the assistant record answering it is
+    // not on disk yet. Walking further back for a text would find an EARLIER turn's and call a
+    // lane in the middle of its work completed - the same misreading the frozen check exists for.
     let mut completed_utc: Option<String> = None;
     let mut terminal_agent_msg = false;
     let mut saw_any = false;
@@ -57,17 +60,14 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
                 pending = Some(tu); // newest meaningful record is an unreturned tool_use -> frozen
                 newest_decided = true;
             } else if record_is_meaningful(rec) {
-                newest_decided = true; // newest meaningful record is resolved/active -> not frozen
+                // The newest meaningful record decides the end-of-turn verdict too.
+                terminal_agent_msg = ends_turn(rec);
+                newest_decided = true;
             }
             // else: isMeta / system / metadata-only -> keep looking for the newest meaningful one
         }
-        // The newest assistant record carrying visible text == a clean end-of-turn.
-        if !terminal_agent_msg && rec.agent_text().is_some() {
-            terminal_agent_msg = true;
-        }
-        // Stop once we have the completion timestamp AND a terminal-message verdict;
-        // if the very newest record has no text we still only need a couple of reads.
-        completed_utc.is_none() || !terminal_agent_msg
+        // Stop once both the completion timestamp and the newest meaningful record are known.
+        completed_utc.is_none() || !newest_decided
     })?;
 
     let journal_done = journal_reports_completion(subagent, journals);
@@ -159,6 +159,15 @@ pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
     })
 }
 
+/// True for an assistant record whose visible text ENDS the lane's turn. A text record stamped
+/// `stop_reason: "tool_use"` belongs to a message whose tool call is still to be written (the
+/// call lands as its own record after it), so it does not; a null stop reason is what older
+/// builds wrote on a finished turn as well, so only the explicit `tool_use` stamp disqualifies.
+pub(crate) fn ends_turn(rec: &Record) -> bool {
+    rec.agent_text().is_some()
+        && rec.message.as_ref().and_then(|m| m.stop_reason.as_deref()) != Some("tool_use")
+}
+
 /// True for a record that resolves/advances the lane - a tool_result carrier, a clean assistant
 /// end-of-turn text, or a genuine user message. (NOT an unreturned tool_use, NOT isMeta/system
 /// metadata.) Used to find the newest MEANINGFUL record when deciding the frozen verdict.
@@ -172,7 +181,7 @@ pub(crate) fn record_is_meaningful(rec: &Record) -> bool {
 
 /// Status resolution rule (honest, never over-claiming "failed"):
 /// - journal `result` event present => `Completed` (the authoritative workflow signal);
-/// - else a terminal visible-assistant message => `Completed` (clean transcript end);
+/// - else the NEWEST meaningful record is an assistant text ending its turn => `Completed`;
 /// - else if we saw records but no completion signal => `Running`;
 /// - else (no records / no start) => `Unknown`.
 pub(crate) fn resolve_status(

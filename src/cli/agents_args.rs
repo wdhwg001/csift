@@ -34,8 +34,10 @@ pub enum AgentKindFilter {
         session, or a project PATH/encoded-dir to cover every session under it (each \
         session's subagents are grouped under it). Start/completion come from the \
         subagent transcript's first/last record timestamp; status is `completed` when \
-        a workflow journal carries a `result` event for the agent (or the transcript \
-        terminates cleanly), else `running`/`unknown`.\n\n\
+        a workflow journal carries a `result` event for the agent (or the transcript's \
+        NEWEST meaningful record is an assistant text ending its turn), else \
+        `running`/`unknown` - a returned tool_result at the tail is a lane mid-turn, and \
+        reads `running` with no completion instant.\n\n\
         `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
         timezone) filter to subagents whose TRIGGER time (the parent tool_use ts: the \
         true spawn instant) falls in the window by default; `--order-by start` uses the \
@@ -59,7 +61,8 @@ pub enum AgentKindFilter {
             • teammate      subagents/agent-a<Name>-<hex>.jsonl              (in_process_teammate; meta taskKind)\n  \
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
         status, never listed). Status is `completed` when a workflow journal carries a \
-        `result` event (or the transcript terminates cleanly), else `running`/`unknown`. \
+        `result` event (or the transcript's newest meaningful record is an assistant text \
+        ending its turn), else `running`/`unknown`. \
         The TEXT output is ALWAYS the parent→child topology tree (workflow runs as parents \
         of their agents; a nested sub-subagent under its spawning agent); JSON carries the \
         SAME topology as flat pre-ordered rows. `--agent <hex>` grabs ONE subagent \

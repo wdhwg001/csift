@@ -8003,8 +8003,8 @@
       "code": [
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "35-40",
-          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
+          "lines": "59-61",
+          "snippet": "            if let Some(tu) = newest_pending_tool_use(rec) {\n                pending = Some(tu); // newest meaningful record is an unreturned tool_use -> frozen\n                newest_decided = true;"
         },
         {
           "path": "src/commands/live/tail.rs",
@@ -9274,7 +9274,7 @@
       "code": [
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "120-123",
+          "lines": "123-126",
           "snippet": "        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \\\n        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \\\n        hours/days is overwhelmingly \\\"parent session ended, nobody is coming back\\\", not \\\n        in-flight work: weigh `pending_since_utc` against now yourself; \\"
         }
       ],
@@ -17269,8 +17269,8 @@
       "code": [
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "35-40",
-          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
+          "lines": "59-61",
+          "snippet": "            if let Some(tu) = newest_pending_tool_use(rec) {\n                pending = Some(tu); // newest meaningful record is an unreturned tool_use -> frozen\n                newest_decided = true;"
         }
       ],
       "states": [
@@ -17986,7 +17986,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2510",
+          "lines": "2511",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -62611,7 +62611,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "142",
+          "lines": "145",
           "snippet": "\\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\"
         },
         {
@@ -62621,7 +62621,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "141-147",
+          "lines": "144-150",
           "snippet": "        SEMANTICS: it answers \\\"what did the PARENT SESSION record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
         }
       ],
@@ -63239,8 +63239,8 @@
       "code": [
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "35-40",
-          "snippet": "    // TAIL: last record's timestamp == completion (best-effort), whether the transcript\n    // terminates with a visible assistant message (a clean finish), AND whether the lane is\n    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful\n    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no\n    // tool_result followed it (it IS the last record) => the lane is blocked there, NOT done. The\n    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane."
+          "lines": "59-61",
+          "snippet": "            if let Some(tu) = newest_pending_tool_use(rec) {\n                pending = Some(tu); // newest meaningful record is an unreturned tool_use -> frozen\n                newest_decided = true;"
         }
       ],
       "states": [
@@ -64597,6 +64597,66 @@
             "observed": "complete producer trace: trigger restoreOnMount - hydrating a resumed transcript @180768997; trigger mergeReadFileStateFrom - the one hop from restoreReadFileState into the extractor @180634148; gate zgt (extractReadFilesFromMessages): the tool_result admission condition @163598606; gate function zgt - the index it builds first @163597446; writer the reconstruction expression and the state write @163598805; writer function adr - the gutter stripper (exactly one occurrence in the binary) @157596167. writer excerpt: fe=I.content.replace(/<system-reminder>[\\s\\S]*?</system-reminder>/g,\"\").split(`\n`).map(adr).join(`\n`).trim();if(C.timestamp){let me=new Date(C.timestamp).getTime(),_e=WQ(F.filePath);o.set(F.filePath,{content:fe,timestamp:me,offset:_e?1:F.offset??1,limit:_e?void 0:F.limit,...W&&{",
             "rule": "One observation per traced hop: one trigger, gate or writer of this state's producer chain, its excerpt re-read within 400 bytes of its own offset in Claude Code 2.1.258 and counted once for the role it carries. The chain holds 6 such hops.",
             "note": "All three hops are in the binary - the resume trigger at 180768997, the string-only admission gate at 163598606 and the strip/map/join/trim writer at 163598805 with adr at 157596167 - and the site turns out to be STRONGER than the claim's last check note: content is ALWAYS taken from the rendered string, the structured echo being consulted only for the isPartialView flag."
+          }
+        }
+      ]
+    },
+    {
+      "id": "SUB-034",
+      "area": "subagents",
+      "code": [
+        {
+          "path": "src/subagent/lifecycle.rs",
+          "lines": "166-169",
+          "snippet": "pub(crate) fn ends_turn(rec: &Record) -> bool {\n    rec.agent_text().is_some()\n        && rec.message.as_ref().and_then(|m| m.stop_reason.as_deref()) != Some(\"tool_use\")\n}"
+        },
+        {
+          "path": "src/subagent/lifecycle.rs",
+          "lines": "62-64",
+          "snippet": "            } else if record_is_meaningful(rec) {\n                // The newest meaningful record decides the end-of-turn verdict too.\n                terminal_agent_msg = ends_turn(rec);"
+        },
+        {
+          "path": "src/commands/live/children.rs",
+          "lines": "72-73",
+          "snippet": "    } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n        && shape.last_stop_reason.as_deref() != Some(\"end_turn\")"
+        }
+      ],
+      "states": [
+        {
+          "from": "2.1.258",
+          "from_basis": "located",
+          "to": null,
+          "behavior": "In a subagent lane a returned `tool_result` is written as its own record when the tool returns, and the assistant record that answers it lands only once the model's next content block closes, so for that whole generation gap the returned tool_result is the lane's newest record. On one live projects root a tool_result record in a subagent transcript is followed by an assistant record 320,270 times, after a gap of p50 5.0 s, p99 75.5 s and at most 5,600.8 s.",
+          "depends": "`agents` reads a lane's status off the NEWEST meaningful record (`subagent::lifecycle`): an assistant text ending its turn is `completed` (any stop reason but `tool_use`, which marks a text whose call is still to be written); a returned tool_result or a message delivered to the lane is `running` with no completion instant, because the record answering it is not on disk yet. Walking back to an earlier turn's text read a working lane as `completed` for the length of that gap. `status` classifies the same tail with recency on top - `in-flight` on an unreturned call, `generating` while the tail record is at most 300 s old and the last stop_reason is not end_turn, else `settled` - so a lane `agents` reads `running` is `generating` in `status` while it moves and `settled` once it stopped mid-turn: one fact read on two clocks, `agents` saying what the transcript shows and `status` whether anything still moves.",
+          "instrument": "specimen leg: a python walk over every `<uuid>/subagents/**/agent-*.jsonl` under the live projects root (user and assistant records only), taking each user record that carries a tool_result block and the record after it: its type, and for an assistant successor the gap between the two records' own timestamps; run over the whole root and again with the measuring session's own tree excluded. Then `csift agents --format json` over the whole root with the installed binary and with this build, joined on each agent row's `path`, counting the rows whose `status` differs. Producer leg: the per-item transcript writer Kne re-read at its offset in the 2.1.258 binary @166114240",
+          "probe": {
+            "kind": "corpus",
+            "command": "Walk every `<uuid>/subagents/**/agent-*.jsonl` under the projects root, keep user and assistant records, and for each user record carrying a tool_result block record the next record's type and, for an assistant successor, the timestamp gap; report the successor counts and the gap percentiles.",
+            "scope": "every `<uuid>/subagents/**/agent-*.jsonl` under one live projects root",
+            "rule": "one observation per user record carrying a tool_result block in a subagent transcript, paired with the next user or assistant record in file order; a gap is that successor's timestamp minus the tool_result record's, in seconds. For the status comparison, one observation per agent row, joined on `path`."
+          },
+          "producer_trace": "partial",
+          "specimen": "observed",
+          "attribution": "specimen-only",
+          "producer_chain": [
+            {
+              "role": "writer",
+              "name": "Kne, the per-item transcript insert of the agent runner",
+              "offset": 166114240,
+              "excerpt": "async function Kne(e,n,r,o){let d=Q(),f=__t(ya(d));await Fi().insertMessageChain(dMe(e),!0,n,r,void 0,d,f,o)}",
+              "note": "a subagent lane persists each stream item as it is yielded, so a tool_result reaches disk before the model's next block exists"
+            }
+          ],
+          "open_legs": [
+            "The trigger and gate hops - the agent runner's turn loop yielding the tool_result message before it opens the next model request - read at their offsets in the 2.1.258 binary would complete the producer leg."
+          ],
+          "verified": {
+            "claude_code": "2.1.258",
+            "verdict": "holds",
+            "instrument": "specimen leg: a python walk over every `<uuid>/subagents/**/agent-*.jsonl` under the live projects root (user and assistant records only), taking each user record that carries a tool_result block and the record after it: its type, and for an assistant successor the gap between the two records' own timestamps; run over the whole root and again with the measuring session's own tree excluded. Then `csift agents --format json` over the whole root with the installed binary and with this build, joined on each agent row's `path`, counting the rows whose `status` differs. Producer leg: the per-item transcript writer Kne re-read at its offset in the 2.1.258 binary @166114240",
+            "observed": "whole root: 11,054 subagent transcripts; after a tool_result record the next record is an assistant record 320,270 times and another user record 20,632 times (the rest of a parallel batch of results); the gap to the assistant record is p50 5.0 s, p90 16.7 s, p99 75.5 s, p99.9 303.6 s, at most 5,600.8 s. With the measuring session's own tree excluded: 9,655 transcripts, 211,189 assistant successors and 19,415 user successors, gap p50 4.9 s, p90 16.6 s, p99 87.3 s, p99.9 345.8 s. Over the whole root, the installed binary and this build run back to back over 10,947 agent rows disagree on 150, every one completed -> running: in all 150 the newest meaningful record is a returned tool_result, 127 of them followed by an interrupt marker, and none has a record younger than 5.5 hours, so each is a lane that stopped mid-turn. Kne, which inserts one stream item's messages into the transcript and is called per item by the agent runner, reads byte-exact at its offset.",
+            "rule": "one observation per user record carrying a tool_result block in a subagent transcript, paired with the next user or assistant record in file order; a gap is that successor's timestamp minus the tool_result record's, in seconds. For the status comparison, one observation per agent row, joined on `path`.",
+            "note": "The gap distribution is the length of time `agents` misread a working lane before the verdict moved to the newest record; its p99.9 sits at the 300 s recency window `status` uses, which is why the two surfaces agree on every lane that is actually moving."
           }
         }
       ]
@@ -89208,7 +89268,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3538"
+          "lines": "3539"
         }
       ],
       "states": [

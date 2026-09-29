@@ -1164,6 +1164,17 @@ surface change bumps the PATCH.
   session with subagents it mixed a different record's closure from each file. A line
   address now needs a scope that resolves to exactly one transcript and is refused with the
   count otherwise; a uuid address, which names its record in any scope, is unchanged.
+- **`agents` called a lane completed in the middle of its work.** A subagent whose newest
+  record was a RETURNED tool_result (the model still writing its next block) read
+  `completed`, with `completed_utc` set to that record's instant, because the end-of-turn
+  check walked back to an earlier turn's text; a running lane measured that way while
+  `status` counted it live in the same minute. The verdict now comes from the newest
+  meaningful record, the one the frozen-lane check already reads: an assistant text ending
+  its turn is `completed`, a returned tool_result (or a text stamped `stop_reason:
+  "tool_use"`, whose call is still to come) is `running` with no completion instant. On one
+  root 150 of 10,947 lanes move from `completed` to `running`, every one stopped mid-turn
+  hours ago (127 by an interrupt); `running` is documented as "still running, or
+  interrupted" (claim SUB-034). `agents --help` states the rule.
 
 ### Performance
 

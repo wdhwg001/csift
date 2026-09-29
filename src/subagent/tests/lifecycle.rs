@@ -441,3 +441,52 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
     assert_eq!(done.status, SubagentStatus::Completed);
     assert!(done.pending_classification.is_none());
 }
+
+/// One lane, three tails: the status is read off the NEWEST meaningful record. A lane whose
+/// tail is a RETURNED tool_result is mid-turn - the assistant record answering it is not on
+/// disk yet - so it is running with no completion instant, although an earlier turn ended in
+/// text; the same lane once its end_turn text lands is completed; and a text record stamped
+/// `stop_reason: "tool_use"` (its tool call still to come) is running too.
+#[test]
+fn a_returned_tool_result_at_the_tail_is_mid_turn_and_an_end_turn_text_is_done() {
+    let head = concat!(
+        "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"kkk000\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"start\"}}\n",
+        "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:00:05.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"an earlier turn's answer\"}]}}\n",
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-07T05:01:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"continue\"}}\n",
+        "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:05.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"Bash\",\"input\":{\"command\":\"ls\"}}]}}\n",
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-07T05:01:09.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\",\"content\":\"ok\"}]}}\n",
+    );
+    let tails: [(&str, &str, SubagentStatus); 3] = [
+        ("", "returned tool_result", SubagentStatus::Running),
+        (
+            "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:20.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}\n",
+            "end_turn text",
+            SubagentStatus::Completed,
+        ),
+        (
+            "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:20.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"text\",\"text\":\"let me look\"}]}}\n",
+            "text whose tool call is still to come",
+            SubagentStatus::Running,
+        ),
+    ];
+    for (tail, what, want) in tails {
+        let fx = Fixture::new();
+        let enc = "-Users-midturn";
+        let session = fx.write(
+            &format!("{enc}/{SESS}.jsonl"),
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
+        );
+        fx.write(
+            &format!("{enc}/{SESS}/subagents/agent-kkk000.jsonl"),
+            &format!("{head}{tail}"),
+        );
+        let subs = discover_subagents(&session).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
+        assert_eq!(lc.status, want, "{what}");
+        assert!(lc.pending.is_none(), "{what}: nothing is unreturned");
+    }
+}
