@@ -142,28 +142,55 @@ fn no_subagents_excludes_on_every_default_on_command() {
     }
 }
 
+/// `--subagents` beside `--no-subagents` asks for two opposite scopes, so every command that
+/// takes both refuses the pair at parse time, in either order - `verbatim` included, where
+/// spanning is the opt-in rather than the default. The error KIND is asserted, so a command
+/// failing for a missing required argument cannot pass for one that refused the pair.
 #[test]
-fn turns_include_then_no_subagents_cancels_the_opt_in() {
-    // `verbatim` defaults to top-level-only; `--subagents` opts in. A LATER
-    // `--no-subagents` cancels it - the field's `overrides_with` makes the last flag win,
-    // and `want_subagents()` ANDs `include && !no_subagents`. (Bare opt-in spans; the
-    // trailing `--no-subagents` here suppresses it.)
-    let cli = parse(&[
-        "csift",
-        "verbatim",
-        SESS_UUID,
-        "--subagents",
-        "--no-subagents",
-    ])
-    .unwrap();
-    match cli.command {
-        Command::Verbatim(a) => assert!(
-            !a.want_subagents(),
-            "verbatim: a trailing --no-subagents must cancel --subagents"
-        ),
-        _ => panic!("expected verbatim"),
+fn every_span_command_refuses_the_contradictory_pair() {
+    let bases: [&[&str]; 10] = [
+        &["csift", "list", SESS_UUID],
+        &["csift", "search", "x", SESS_UUID],
+        &["csift", "stats", SESS_UUID],
+        &["csift", "files", SESS_UUID],
+        &["csift", "recover", SESS_UUID],
+        &["csift", "plan", SESS_UUID],
+        &["csift", "image", SESS_UUID],
+        &["csift", "status", SESS_UUID],
+        &[
+            "csift",
+            "wait",
+            SESS_UUID,
+            "--until",
+            "stop",
+            "--timeout",
+            "5",
+        ],
+        &["csift", "verbatim", SESS_UUID],
+    ];
+    for base in bases {
+        // Each base parses on its own, so the pair is what the error is about.
+        assert!(parse(base).is_ok(), "{base:?} parses without the pair");
+        for pair in [
+            ["--subagents", "--no-subagents"],
+            ["--no-subagents", "--subagents"],
+        ] {
+            let mut argv = base.to_vec();
+            argv.extend_from_slice(&pair);
+            let err = parse(&argv)
+                .err()
+                .unwrap_or_else(|| panic!("{argv:?} parsed"));
+            assert_eq!(
+                err.kind(),
+                clap::error::ErrorKind::ArgumentConflict,
+                "{argv:?}: {err}"
+            );
+        }
     }
-    // Default (no span flag) is top-level only.
+}
+
+#[test]
+fn verbatim_defaults_to_the_top_level_thread() {
     let cli = parse(&["csift", "verbatim", SESS_UUID]).unwrap();
     match cli.command {
         Command::Verbatim(a) => assert!(

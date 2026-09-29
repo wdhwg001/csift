@@ -1115,6 +1115,11 @@ surface change bumps the PATCH.
   last line; the same address now reads `non_record_lines: 0, lines_past_end: 42`. A line
   or range that starts past the end stays a miss, and the miss names the file's line
   count in both fetch modes. `show --help` names the new key.
+- **`verbatim` let the last span flag win.** `csift verbatim @<id> --subagents
+  --no-subagents` exited 0 and quietly reconstructed the top-level thread, while every
+  other span command refuses the pair as a usage error. `verbatim` now declares the same
+  conflict and exits 2 on the pair in either order; `verbatim --help` no longer says
+  `--no-subagents` cancels an earlier `--subagents`.
 
 ### Performance
 

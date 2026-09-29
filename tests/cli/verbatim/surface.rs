@@ -314,3 +314,24 @@ fn turns_agent_msg_surface_is_two_flags() {
     let bad_profile = h.run(&["verbatim", at(SESS).as_str(), "--profile", "bogus"]);
     assert!(!bad_profile.success, "invalid --profile must fail");
 }
+
+/// `--subagents` beside `--no-subagents` is a usage error on `verbatim` exactly as on every
+/// other span command, in either order: the pair asks for two opposite scopes, and letting
+/// the last flag win answered one of them without saying the other was dropped.
+#[test]
+fn verbatim_refuses_the_contradictory_span_pair() {
+    let h = turns_home();
+    let target = at(SESS);
+    for pair in [
+        ["--subagents", "--no-subagents"],
+        ["--no-subagents", "--subagents"],
+    ] {
+        let out = h.run(&["verbatim", target.as_str(), pair[0], pair[1]]);
+        assert_eq!(out.code, Some(2), "{pair:?}: {}", out.stdout);
+        assert!(
+            out.stderr.contains("cannot be used with"),
+            "{pair:?}: {}",
+            out.stderr
+        );
+    }
+}

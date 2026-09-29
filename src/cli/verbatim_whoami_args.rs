@@ -276,14 +276,15 @@ pub struct VerbatimArgs {
     /// `--subagents` only for the rare cross-fan-out reconstruction.
     #[arg(
         long = "subagents",
-        overrides_with = "no_subagents",
+        conflicts_with = "no_subagents",
         default_value_t = false
     )]
     pub include_subagents: bool,
 
     /// Exclude subagent transcripts: reconstruct only from the top-level session. This is
-    /// already the `verbatim` DEFAULT; the flag is kept for symmetry with the other subcommands
-    /// and to explicitly cancel an earlier `--subagents` (last flag wins).
+    /// already the `verbatim` DEFAULT; the flag is kept so every span command answers the same
+    /// two switches, and passing it beside `--subagents` is a usage error, as on every span
+    /// command.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
@@ -391,8 +392,8 @@ pub struct VerbatimArgs {
 impl VerbatimArgs {
     /// Resolve the include/exclude flags into a single decision. UNLIKE the other
     /// subcommands, `verbatim` defaults to TOP-LEVEL-ONLY (`include_subagents` defaults false):
-    /// spanning is opt-in via `--subagents`, and a trailing `--no-subagents` still
-    /// forces it off. So a `csift verbatim @<uuid>` reconstructs just that one thread.
+    /// spanning is opt-in via `--subagents`, `--no-subagents` restates the default, and clap
+    /// refuses the two together. So a `csift verbatim @<uuid>` reconstructs just that one thread.
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         self.include_subagents && !self.no_subagents
