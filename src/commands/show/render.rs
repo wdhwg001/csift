@@ -12,6 +12,17 @@ use std::io::Write as _;
 
 use super::*;
 
+/// What an address covered that renders no record: lines that EXIST and are not records, and
+/// lines past the file's end a range was clamped off. Two counts because they are two facts - a
+/// metadata line is there to fetch with `--raw`, a line past the end is not there at all.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Uncovered {
+    pub(crate) non_record: usize,
+    pub(crate) past_end: usize,
+    /// The file's last line, which the past-the-end disclosure names.
+    pub(crate) last_line: usize,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_text(
     exchanges: &[Exchange],
@@ -22,7 +33,7 @@ pub(crate) fn render_text(
     dropped: usize,
     cap: usize,
     remainder_cmd: Option<&str>,
-    non_record_lines: usize,
+    uncovered: Uncovered,
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
     let mut out = crate::text::Out::stdout();
@@ -88,11 +99,19 @@ pub(crate) fn render_text(
             )?,
         }
     }
-    if non_record_lines > 0 {
+    if uncovered.non_record > 0 {
         writeln!(
             out,
-            "{non_record_lines} line(s) in the addressed range are not records \
-             (metadata/attachment — inspect with --raw)"
+            "{} line(s) in the addressed range are not records \
+             (metadata/attachment — inspect with --raw)",
+            uncovered.non_record
+        )?;
+    }
+    if uncovered.past_end > 0 {
+        writeln!(
+            out,
+            "{}",
+            past_end_note(uncovered.past_end, uncovered.last_line)
         )?;
     }
     if merged_any_sidecar(exchanges) {
@@ -121,7 +140,7 @@ pub(crate) fn render_json(
     skipped: usize,
     dropped: usize,
     remainder_cmd: Option<&str>,
-    non_record_lines: usize,
+    uncovered: Uncovered,
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
     use serde_json::json;
@@ -196,7 +215,8 @@ pub(crate) fn render_json(
         "records": units,
         "dropped_by_cap": dropped,
         "refetch_remainder": remainder_cmd,
-        "non_record_lines": non_record_lines,
+        "non_record_lines": uncovered.non_record,
+        "lines_past_end": uncovered.past_end,
         "skipped_lines": skipped,
         "with_elicitation_sidecar": merged_any_sidecar(exchanges),
     });

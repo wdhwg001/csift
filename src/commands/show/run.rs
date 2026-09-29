@@ -157,14 +157,11 @@ pub(crate) fn run_raw(
         .explicit
         .iter()
         .filter(|&&n| n > total_lines)
-        .map(|n| format!("L{n} (file has {total_lines} lines)"))
+        .map(|&n| miss_label(format!("L{n}"), n, total_lines))
         .collect();
     for &(a, b) in &specs.ranges {
         if a > total_lines {
-            misses.push(format!(
-                "{} (file has {total_lines} lines)",
-                range_label(a, b)
-            ));
+            misses.push(miss_label(range_label(a, b), a, total_lines));
         }
     }
     for (u, slot) in &uuid_line {
@@ -203,6 +200,12 @@ pub(crate) fn run_raw(
     // can jump a buffer's queue.
     #[allow(clippy::print_stderr)]
     {
+        if specs.past_end > 0 {
+            eprintln!(
+                "csift: note: {}",
+                past_end_note(specs.past_end, specs.total_lines)
+            );
+        }
         if dropped > 0 {
             let sid = crate::subagent::session_id_from_path(file);
             let cont = match continuation {
@@ -263,11 +266,11 @@ pub(crate) fn run_rendered(
         .explicit
         .iter()
         .filter(|n| !hit_lines.contains(n))
-        .map(|n| format!("L{n}"))
+        .map(|&n| miss_label(format!("L{n}"), n, specs.total_lines))
         .collect();
     for &(a, b) in &specs.ranges {
         if !hit_lines.iter().any(|n| (a..=b).contains(n)) {
-            misses.push(range_label(a, b));
+            misses.push(miss_label(range_label(a, b), a, specs.total_lines));
         }
     }
     for u in uuids {
@@ -292,10 +295,10 @@ pub(crate) fn run_rendered(
     // from a 12-line range is self-explaining; explicit single-line misses already
     // errored above.
     let addressed = specs.all();
-    let non_record_lines = if addressed.is_empty() {
-        0
-    } else {
-        addressed.iter().filter(|n| !hit_lines.contains(n)).count()
+    let uncovered = Uncovered {
+        non_record: addressed.iter().filter(|n| !hit_lines.contains(n)).count(),
+        past_end: specs.past_end,
+        last_line: specs.total_lines,
     };
 
     // Context-flood guard (law 4's last hole): an open range (`--line ..` / `--turn ..`)
@@ -346,7 +349,7 @@ pub(crate) fn run_rendered(
                 dropped,
                 cap,
                 remainder_cmd.as_deref(),
-                non_record_lines,
+                uncovered,
                 &crossing,
             )?;
         }
@@ -359,7 +362,7 @@ pub(crate) fn run_rendered(
             skipped,
             dropped,
             remainder_cmd.as_deref(),
-            non_record_lines,
+            uncovered,
             &crossing,
         )?,
     }

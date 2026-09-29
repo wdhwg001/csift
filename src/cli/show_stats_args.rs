@@ -26,7 +26,10 @@ const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
         the end) · `..N` · `-k` from the end (`--line -20..` = the last 20 lines, `--turn -3..` = \
         the last 3 turns); 1-based for lines, 0-based for turns, inclusive, repeatable / \
         comma-joined. An explicitly named line/uuid that resolves to no record is a HARD \
-        ERROR (exit non-zero); a range CLAMPS to the file but erroring if it yields nothing. \
+        ERROR (exit non-zero) that names the file's line count when the address lies past its \
+        end; a range CLAMPS to the file, erroring if it yields nothing, and counts the lines it \
+        named past the end apart from the non-record lines it covered (`lines_past_end`, and a \
+        footer line - a `--raw` stderr note - naming the file's last line). \
         A pending-elicitation record merged from the sidecar has no physical line; address \
         it by `--uuid` (it renders `(elicitation sidecar)` in place of `Lnnnn`).\n\n\
         RECORDS OUTSIDE THE SURVIVING CONVERSATION\n  \
@@ -84,7 +87,9 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         boundary's own object verbatim, including the `preservedMessages` uuid lists the \
         one-line excerpt only counts. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
-        non_record_lines, skipped_lines, with_elicitation_sidecar}, plus the crossing set \
+        non_record_lines (lines that exist and render no record), lines_past_end (lines a \
+        range named past the file's last line), skipped_lines, with_elicitation_sidecar}, plus \
+        the crossing set \
         {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor, \
         floor_line, floor_cause} whenever `--cross-compactions` is non-zero. An ADDRESS \
         moves with that budget - the record it names can read `live` under one and \

@@ -1107,6 +1107,14 @@ surface change bumps the PATCH.
   refuses the `A-B` form it printed. Both fetch modes now name a missed range in the
   grammar's own spelling, `L99999..5003`, so the message hands back an address the parser
   accepts.
+- **`show` booked lines past the end of the file as non-record lines.** `--line 4995..5045`
+  on a 5,003-line transcript reported `records: 9, non_record_lines: 42`: the 42 lines
+  that do not exist were counted with the metadata lines that do. A range is now clamped
+  to the file and the overhang is its own count, JSON `lines_past_end` beside
+  `non_record_lines`, with a footer line (a stderr note under `--raw`) naming the file's
+  last line; the same address now reads `non_record_lines: 0, lines_past_end: 42`. A line
+  or range that starts past the end stays a miss, and the miss names the file's line
+  count in both fetch modes. `show --help` names the new key.
 
 ### Performance
 

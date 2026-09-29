@@ -8,6 +8,12 @@ use super::*;
 pub(crate) struct LineSpecs {
     pub(crate) explicit: BTreeSet<usize>,
     pub(crate) ranges: Vec<(usize, usize)>,
+    /// Distinct lines a range addressed PAST the file's last line, clamped off at resolution.
+    /// A line that does not exist is neither a record nor a non-record line, so it is counted
+    /// here and never in `non_record_lines`.
+    pub(crate) past_end: usize,
+    /// The physical line count the specs were resolved against.
+    pub(crate) total_lines: usize,
 }
 
 impl LineSpecs {
@@ -55,16 +61,46 @@ pub(crate) fn resolve_line_specs(
     parsed: &[(bool, crate::text::RangeSpec)],
     total_lines: usize,
 ) -> LineSpecs {
-    let mut specs = LineSpecs::default();
+    let mut specs = LineSpecs {
+        total_lines,
+        ..LineSpecs::default()
+    };
     for (is_explicit, spec) in parsed {
         let (lo, hi) = spec.resolve(total_lines, true);
         if *is_explicit {
             specs.explicit.insert(lo); // lo == hi for a single token
+        } else if lo <= total_lines && hi > total_lines {
+            // A range that STARTS inside the file keeps its in-file part and the rest is
+            // counted. Clamped ranges all extend from the last line, so their union past the
+            // end is `last+1 ..= max(hi)`, and the count is the widest overhang, not a sum.
+            specs.past_end = specs.past_end.max(hi - total_lines);
+            specs.ranges.push((lo, total_lines));
         } else {
+            // Wholly inside, or starting past the end: the latter addresses nothing and is
+            // left whole, so the miss names the range the reader wrote.
             specs.ranges.push((lo, hi));
         }
     }
     specs
+}
+
+/// The disclosure for lines a range addressed past the end of the file, shared by the rendered
+/// footer and `--raw`'s stderr note so the two cannot word it differently.
+pub(crate) fn past_end_note(past_end: usize, total_lines: usize) -> String {
+    format!(
+        "{past_end} addressed line(s) lie past the end of the file (L{total_lines} is its last \
+         line); the range was clamped there"
+    )
+}
+
+/// How a miss names an address past the end of the file: the address plus the file's length,
+/// in both fetch modes.
+pub(crate) fn miss_label(label: String, first: usize, total_lines: usize) -> String {
+    if first > total_lines {
+        format!("{label} (file has {total_lines} lines)")
+    } else {
+        label
+    }
 }
 
 /// Count a transcript's physical jsonl lines (newlines + a torn final fragment), the 1-based
