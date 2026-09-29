@@ -97,6 +97,13 @@ pub fn run_stats(args: &StatsArgs, cross: CrossingBudget) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
     rows.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
+    // The SCOPE is what the target resolved to, so it is counted before the cap below trims
+    // the rows: the cap bounds what is printed and never what was asked about, the rule
+    // `list` already keeps. DISTINCT session ids, through the shared rule: a divergent
+    // duplicate pair is one session on disk twice, and `sessions_in_scope` is a session census.
+    let (top, sub) =
+        crate::subagent::scope_span(rows.iter().map(|r| (r.session_id.clone(), r.is_subagent)));
+
     // Context-safety cap (T2.1, opt-in): bound an unscoped run's per-session rows. NEVER
     // silent - the drop is reported. Keep the MOST RECENTLY active, then restore the
     // deterministic id order for display (the scope TOTAL then covers the shown subset).
@@ -111,10 +118,6 @@ pub fn run_stats(args: &StatsArgs, cross: CrossingBudget) -> Result<()> {
         }
     }
 
-    // DISTINCT session ids, through the shared rule: a divergent duplicate pair is one
-    // session on disk twice, and `sessions_in_scope` is a session census.
-    let (top, sub) =
-        crate::subagent::scope_span(rows.iter().map(|r| (r.session_id.clone(), r.is_subagent)));
     match args.format {
         OutputFormat::Text => render_text(&rows, top, sub, dropped, cross, &resolved.duplicates),
         OutputFormat::Json => {

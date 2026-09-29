@@ -1120,6 +1120,11 @@ surface change bumps the PATCH.
   other span command refuses the pair as a usage error. `verbatim` now declares the same
   conflict and exits 2 on the pair in either order; `verbatim --help` no longer says
   `--no-subagents` cancels an earlier `--subagents`.
+- **`stats` counted its scope after the row cap.** `csift stats . --max-count 1 --format json`
+  headed its stream `sessions_in_scope: 1` while `csift list . --max-count 1` read 1,713 for
+  the same target: `stats` counted the rows it kept. The scope banner and the JSON header now
+  count the whole resolved scope before the cap trims the rows, the rule `list` already kept,
+  so the two commands report one scope for one target (1,722 on both at the re-measure).
 
 ### Performance
 

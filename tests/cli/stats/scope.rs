@@ -119,3 +119,35 @@ fn stats_turn_range_windows_the_aggregates() {
         out.stdout
     );
 }
+
+/// The scope header counts what the target resolved to, BEFORE `--max-count` trims the rows,
+/// so `stats` and `list` report one scope for one target whatever cap each runs under. `stats`
+/// counted the rows it kept, and a cap of 1 turned a four-session scope into one.
+#[test]
+fn stats_scope_header_is_counted_before_the_cap_like_list() {
+    let h = Home::new();
+    let dir = "-Users-testuser-Projects-statscope";
+    for i in 0..4u8 {
+        h.write(
+            &format!("{dir}/dddd000{i}-aaaa-4bbb-8ccc-00000000000{i}.jsonl"),
+            &format!("{{\"type\":\"user\",\"uuid\":\"u0\",\"timestamp\":\"2026-06-07T0{i}:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"work {i}\"}}}}\n"),
+        );
+    }
+    let header = |cmd: &str| {
+        let out = h.run(&[cmd, dir, "--max-count", "1", "--format", "json"]);
+        assert!(out.success, "{cmd} stderr: {}", out.stderr);
+        json_rows(&out.stdout, "header")
+            .into_iter()
+            .next()
+            .expect("a header row")
+    };
+    let (stats, list) = (header("stats"), header("list"));
+    for key in [
+        "sessions_in_scope",
+        "top_level_sessions",
+        "subagent_sessions",
+    ] {
+        assert_eq!(stats[key], list[key], "{key}: stats {stats} vs list {list}");
+    }
+    assert_eq!(stats["sessions_in_scope"], 4, "the whole scope: {stats}");
+}
