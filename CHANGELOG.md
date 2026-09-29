@@ -881,6 +881,13 @@ surface change bumps the PATCH.
   runs the file anchors - a clean two-segment chain like that restores the file whole and
   counts one `bash-write-anchor` - provided the whole command's result is clean and no
   other segment touches the same path. The page now says both.
+- **`send`'s receipt counts the body in the unit the budget is counted in.** The chunk
+  budget is UTF-16 code units, and the `message` line printed the body in characters beside
+  it, so a body of 6,000 emoji read `6000 char(s), 2 chunk(s) of 9200` - a size that fits
+  one chunk beside a count of two. The line now prints the body in both units and names the
+  budget's: `6000 char(s) / 12000 UTF-16 unit(s), 2 chunk(s) of 9200 UTF-16 units`, where an
+  ASCII body reads the same number twice. The JSON summary gains `message_utf16_units` and
+  `chunk_budget_utf16_units` beside `message_chars`.
 
 ### Fixed
 

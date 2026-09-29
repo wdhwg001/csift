@@ -11,7 +11,7 @@ use serde_json::json;
 use super::caller::{Receiver, SettingsDisclosure};
 use super::policy::{self, Decision, SendContext};
 use super::send::SlotCensus;
-use super::{Message, Verdict, CHUNK_BUDGET};
+use super::{utf16_units, Message, Verdict, CHUNK_BUDGET};
 use crate::text;
 
 /// Everything one receipt prints, gathered once by the command.
@@ -62,9 +62,14 @@ pub(crate) fn render_text(r: &Receipt) {
         let label = if i == 0 { "settings" } else { "        " };
         println!("  {label}    {line}");
     }
+    // The body in both units and the budget in the one it is counted in: an astral character
+    // (an emoji, a CJK extension-B ideograph) is one char and two UTF-16 units, so a count in
+    // chars printed beside a budget in units says a 6,000-emoji body fits one 9,200 budget
+    // when it needs two.
     println!(
-        "  message     {} char(s), {} chunk(s) of {CHUNK_BUDGET}",
+        "  message     {} char(s) / {} UTF-16 unit(s), {} chunk(s) of {CHUNK_BUDGET} UTF-16 units",
         msg.body.chars().count(),
+        utf16_units(&msg.body),
         ctx.chunks
     );
     if decision.verdict == Verdict::Full {
@@ -155,6 +160,8 @@ pub(crate) fn render_json(r: &Receipt) -> Result<()> {
             "queued": decision.queued,
             "chunks": ctx.chunks,
             "message_chars": msg.body.chars().count(),
+            "message_utf16_units": utf16_units(&msg.body),
+            "chunk_budget_utf16_units": CHUNK_BUDGET,
             "relation": msg.relation.as_str(),
             "cross_project": msg.cross_project,
             "ttl_secs": msg.ttl_secs,

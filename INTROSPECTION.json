@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2533",
+          "lines": "2534",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -33662,7 +33662,12 @@
         {
           "path": "src/commands/live/channel/envelope.rs",
           "lines": "93-96",
-          "snippet": "/// The length the harness's cap measures: JavaScript `String.length`, UTF-16 code units.\nfn units(s: &str) -> usize {\n    s.encode_utf16().count()\n}"
+          "snippet": "/// The length the harness's cap measures: JavaScript `String.length`, UTF-16 code units.\npub(crate) fn utf16_units(s: &str) -> usize {\n    s.encode_utf16().count()\n}"
+        },
+        {
+          "path": "src/commands/live/channel/send_render.rs",
+          "lines": "70",
+          "snippet": "        \"  message     {} char(s) / {} UTF-16 unit(s), {} chunk(s) of {CHUNK_BUDGET} UTF-16 units\","
         }
       ],
       "states": [
@@ -79432,7 +79437,7 @@
       "code": [
         {
           "path": "src/cli/send_args.rs",
-          "lines": "117-120",
+          "lines": "120-123",
           "snippet": "    /// How long the message stays deliverable, in the site-wide duration grammar\n    /// (`30s` `10m` `12h` `2d` `1w` `3mo` `1y`). Default 12h.\n    #[arg(long, value_name = \"DUR\", default_value = \"12h\")]\n    pub ttl: String,"
         }
       ],
@@ -89372,7 +89377,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3564"
+          "lines": "3565"
         }
       ],
       "states": [

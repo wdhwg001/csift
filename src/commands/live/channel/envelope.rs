@@ -91,7 +91,7 @@ pub(crate) fn render(msg: &Message, budget: usize) -> Result<Vec<String>> {
 }
 
 /// The length the harness's cap measures: JavaScript `String.length`, UTF-16 code units.
-fn units(s: &str) -> usize {
+pub(crate) fn utf16_units(s: &str) -> usize {
     s.encode_utf16().count()
 }
 
@@ -105,13 +105,13 @@ fn pack(
     parts: u32,
 ) -> Result<Vec<String>> {
     let tail = tail_text(msg);
-    let tail_len = units(&tail);
+    let tail_len = utf16_units(&tail);
     let mut out: Vec<String> = Vec::new();
     let mut idx = 0usize;
     let mut k = 1u32;
     loop {
         let head = head_text(msg, k, parts);
-        let head_len = units(&head);
+        let head_len = utf16_units(&head);
         let remaining = ends[body.len()] - ends[idx];
         let Some(cap_final) = budget.checked_sub(head_len + tail_len) else {
             bail!(

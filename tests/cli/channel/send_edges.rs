@@ -1,9 +1,11 @@
-//! Two things a send has to get exactly right at the boundary: the duration grammar it
-//! refuses, and the arithmetic behind a verdict when the message fits the slots exactly.
+//! Three things a send has to get exactly right at the boundary: the duration grammar it
+//! refuses, the arithmetic behind a verdict when the message fits the slots exactly, and the
+//! unit every size on the receipt is counted in.
 //!
-//! Both are places where "nearly right" is the failure mode - a ttl with no unit, and a
-//! message needing precisely as many slots as the receiver has - so each is pinned to the
-//! exact words and the exact verdict rather than to a substring that any answer would match.
+//! All are places where "nearly right" is the failure mode - a ttl with no unit, a message
+//! needing precisely as many slots as the receiver has, a body counted in one unit beside a
+//! budget counted in another - so each is pinned to the exact words and the exact verdict
+//! rather than to a substring that any answer would match.
 
 use crate::harness::*;
 
@@ -90,7 +92,9 @@ fn a_message_that_fits_the_slots_exactly_is_ok_and_not_full() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("message     14 char(s), 1 chunk(s)"),
+        out.stdout.contains(
+            "message     14 char(s) / 14 UTF-16 unit(s), 1 chunk(s) of 9200 UTF-16 units"
+        ),
         "{}",
         out.stdout
     );
@@ -110,4 +114,40 @@ fn the_prediction_names_the_first_event_carrying_the_most_slots() {
         "{}",
         out.stdout
     );
+}
+
+#[test]
+fn the_receipt_counts_the_body_in_the_unit_the_budget_is_counted_in() {
+    // The chunk budget is UTF-16 code units, the harness's own measure. An emoji is one char
+    // and two units, so a 6,000-emoji body is 12,000 units and needs two chunks: a receipt
+    // printing only the char count beside the budget reads as a body that fits one. An ASCII
+    // body is one unit per char, so its two counts agree.
+    let h = home();
+    let cases = [
+        (
+            "\u{1F600}".repeat(6000),
+            "message     6000 char(s) / 12000 UTF-16 unit(s), 2 chunk(s) of 9200 UTF-16 units",
+            (6000, 12000, 2),
+        ),
+        (
+            "a".repeat(6000),
+            "message     6000 char(s) / 6000 UTF-16 unit(s), 1 chunk(s) of 9200 UTF-16 units",
+            (6000, 6000, 1),
+        ),
+    ];
+    for (body, line, (chars, units, chunks)) in cases {
+        let out = h.run_with_env(&["send", &at(LANE), &body], &lane_env());
+        assert!(out.success, "{}", out.stderr);
+        assert!(out.stdout.contains(line), "{}", out.stdout);
+        let json = h.run_with_env(&["send", &at(LANE), &body, "--format", "json"], &lane_env());
+        assert!(json.success, "{}", json.stderr);
+        let summary = json_lines(&json.stdout)
+            .into_iter()
+            .find(|v| v["kind"] == "summary")
+            .expect("a summary row");
+        assert_eq!(summary["message_chars"], chars, "{summary}");
+        assert_eq!(summary["message_utf16_units"], units, "{summary}");
+        assert_eq!(summary["chunk_budget_utf16_units"], 9200, "{summary}");
+        assert_eq!(summary["chunks"], chunks, "{summary}");
+    }
 }

@@ -68,7 +68,10 @@ impl SendMode {
         kind, state, version, configured_slots, armed_slots}, official:{delegated, tool, to}, \
         prediction, risks:[…], settings:{sources:[{scope, path, read, note}], \
         unobservable:[…]}}` row, and the `{\"kind\":\"summary\", queued, chunks, \
-        message_chars, relation, cross_project, ttl_secs, official_floor_met}` line.\n\n\
+        message_chars, message_utf16_units, chunk_budget_utf16_units, relation, \
+        cross_project, ttl_secs, official_floor_met}` line (the chunk budget is counted in \
+        UTF-16 code units, the unit Claude Code's inline cap measures, so an emoji is one \
+        char and two units).\n\n\
         THE SETTINGS LINE. The gate verdicts, the slot census and every hook risk above come \
         off ONE fold of the receiver's settings cascade, so the receipt's `settings` line \
         names the scopes that contributed, the scopes it tried and did not get (as `absent`), \
