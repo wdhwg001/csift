@@ -90,3 +90,32 @@ fn every_jq_recipe_on_an_envelope_selects_its_row_kind() {
     }
     assert!(seen >= 3, "the recipes were found ({seen})");
 }
+
+/// The root page names every output flag a subcommand writes a file through, beside the
+/// channel's sidecar: a reader asking "what does csift write?" was told three commands and
+/// one directory, while `recover`, `verbatim` and `image` write wherever `--out` points.
+/// Derived from the clap tree, so a flag a later command adds fails here until the page
+/// names it.
+#[test]
+fn the_root_page_names_every_file_writing_flag() {
+    use clap::CommandFactory;
+
+    let mut root = crate::cli::Cli::command();
+    let page = root.render_long_help().to_string();
+    let mut seen = 0usize;
+    for sub in root.get_subcommands() {
+        for arg in sub.get_arguments() {
+            let Some(long) = arg.get_long() else { continue };
+            if !matches!(long, "out" | "out-dir") {
+                continue;
+            }
+            seen += 1;
+            let spelled = format!("{} --{long}", sub.get_name());
+            assert!(
+                page.contains(&spelled) || (long == "out-dir" && page.contains("--out-dir <DIR>")),
+                "the root page does not name `{spelled}`"
+            );
+        }
+    }
+    assert!(seen >= 4, "the output flags were found ({seen})");
+}

@@ -1221,6 +1221,13 @@ surface change bumps the PATCH.
   "under a `dir`/`bucket` key" where those are the row KINDS and the group sits in `path`.
   The page now lists what the rows carry, and a test holds each view's row keys to its
   schema entry.
+- **The root `--help` page said every command emits one envelope and three commands
+  write.** `deliver` prints a hook-output object or nothing and `wait` one bare
+  `{kind:"wait"}` object, and `recover --out`, `recover --files-from ... --out-dir`,
+  `verbatim --out` and `image --out` write wherever the user points them. The page now
+  names the two envelope exceptions and lists each user-named output with what it writes
+  and whether it replaces an existing file; a test derives the output flags from the clap
+  tree and requires the page to name each.
 
 ### Performance
 

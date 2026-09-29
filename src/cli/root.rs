@@ -145,8 +145,11 @@ use super::*;
         like `2026-07-11 15:33:37 AEST(UTC+10)`, derived per instant (DST-correct; fractional\n               \
         zones render like `IST(UTC+05:30)`). Raw UTC lives in JSON `ts_utc`, never in text.\n\n\
         JSON OUTPUT (--format json)\n  \
-          Every command emits the same envelope: one `{\"kind\":\"header\",…}` line, then\n  \
-        kind-tagged rows, then one `{\"kind\":\"summary\",…}` line, even for zero matches.\n  \
+          Every command but two emits the same envelope: one `{\"kind\":\"header\",…}` line,\n  \
+        then kind-tagged rows, then one `{\"kind\":\"summary\",…}` line, even for zero matches.\n  \
+        The two: `wait` prints ONE `{\"kind\":\"wait\",…}` object on exit (so `jq .fired` reads\n  \
+        it whole), and `deliver` prints a hook-output object or nothing - its stdout belongs\n  \
+        to Claude Code, which reads it at the hook point.\n  \
         Select rows with `jq 'select(.kind==\"…\")'`; the summary is always `tail -1`. Do\n  \
         the select BEFORE projecting fields; a field template applied to the mixed stream\n  \
         stamps the header/summary rows as all-null rows. Rows\n  \
@@ -207,10 +210,18 @@ use super::*;
         ad-hoc aggregation languages (the closed `--count-by` axes, `stats`, and\n  \
         `files --by` are the built-ins; anything else: `--raw | jq`); diffs (fetch both\n  \
         sides with `show` / `recover --at`, diff outside); terminating anything.\n  \
-          Every command reads. Three write, and only ever one directory: `send`,\n  \
-        `deliver` and `ack` write the csift-owned `<session>/csift-channel/`. Never a\n  \
-        transcript, never the team mailbox, never the messaging socket, never the session\n  \
-        registry, never a settings file. Arming the channel is an edit you make yourself.\n\n\
+          Every command reads. Two kinds of command also write. The channel three - `send`,\n  \
+        `deliver` and `ack` - write the csift-owned `<session>/csift-channel/` and nothing\n  \
+        else: never a transcript, never the team mailbox, never the messaging socket, never\n  \
+        the session registry, never a settings file. Arming the channel is an edit you make\n  \
+        yourself. And three commands write the file YOU name with an output flag:\n    \
+        recover --out <PATH>     the reconstructed artifact; replaces the file, and\n                             \
+        leaves it untouched when nothing was reconstructed\n    \
+        verbatim --out <PATH>    the rendered reconstruction, same rule\n    \
+        image --out <PATH|DIR>   each selected image; replaces a file of the same name\n    \
+        recover --files-from <F> --out-dir <DIR>\n                             \
+        each recovered file at its absolute path under DIR, plus\n                             \
+        `recovery-report.tsv`; an existing file is skipped unless `--force`\n\n\
         RETENTION\n  \
           Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\n  \
         Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\n  \
