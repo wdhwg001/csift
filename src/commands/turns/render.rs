@@ -145,12 +145,11 @@ pub(crate) fn render_text(
         // fragment list/files/search/recover emit), then append turns' own budget clause.
         writeln!(
             out,
-            "scope  {} · {} rendered within budget · budget {} chars is PER session → up to {} \
-             chars total",
+            "scope  {} · {} rendered within budget · budget {} is PER session → up to {} total",
             crate::text::scope_span_fragment(sc.in_scope_top, sc.in_scope_sub),
             sc.rendered,
-            ctx.budget_chars,
-            ctx.budget_chars.saturating_mul(sc.rendered.max(1))
+            crate::text::plural(ctx.budget_chars, "char"),
+            crate::text::plural(ctx.budget_chars.saturating_mul(sc.rendered.max(1)), "char")
         )?;
         writeln!(out)?;
     }
@@ -217,8 +216,8 @@ pub(crate) fn render_text(
         // all selected)` note below).
         writeln!(
             out,
-            "  budget {} chars · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
-            ctx.budget_chars,
+            "  budget {} · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
+            crate::text::plural(ctx.budget_chars, "char"),
             ctx.rt_fraction,
             plan.spanned_boundaries,
             sr.summaries.len()

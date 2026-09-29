@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2545",
+          "lines": "2546",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -33651,7 +33651,7 @@
         },
         {
           "path": "src/commands/turns/render.rs",
-          "lines": "381-383",
+          "lines": "380-382",
           "snippet": "/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode\n/// scalars, so a CJK-heavy document is NOT 3x over-counted the way a byte budget would).\n/// Claude Code's 10,000 additionalContext cap counts UTF-16 code units instead (claim"
         },
         {
@@ -89488,7 +89488,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3576"
+          "lines": "3577"
         }
       ],
       "states": [

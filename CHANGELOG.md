@@ -1441,6 +1441,11 @@ surface change bumps the PATCH.
   before the summary when the compaction lands mid-turn, so the banner names where turns
   end and makes no claim about when they began. The golden reconstruction moves on its
   three banners and the header's `chars used`, which counts them.
+- **`verbatim --budget 1` said `budget 1 chars`.** The scope line printed `budget 1 chars is
+  PER session → up to 1 chars total` and the per-session header `budget N chars` with a
+  fixed plural; both budget figures, and the header's reserved worst case, now go through
+  the count-and-noun rule every other csift count takes: `budget 1 char is PER session →
+  up to 1 char total`, and `budget 2 chars` as before.
 
 ### Performance
 

@@ -344,3 +344,26 @@ fn turns_budget_respected_under_rich_and_all_modes() {
         }
     }
 }
+
+/// A budget of one character reads in the singular on the scope line, like every other
+/// count csift prints beside its noun; a budget of two keeps the plural.
+#[test]
+fn a_one_character_budget_reads_one_char() {
+    let h = turns_home();
+    let one = h.run(&["verbatim", &at(SESS), "--budget", "1"]);
+    assert!(one.success, "stderr: {}", one.stderr);
+    assert!(
+        one.stdout
+            .contains("budget 1 char is PER session → up to 1 char total"),
+        "{}",
+        one.stdout
+    );
+    assert!(!one.stdout.contains("1 chars"), "{}", one.stdout);
+    let two = h.run(&["verbatim", &at(SESS), "--budget", "2"]);
+    assert!(
+        two.stdout
+            .contains("budget 2 chars is PER session → up to 2 chars total"),
+        "{}",
+        two.stdout
+    );
+}

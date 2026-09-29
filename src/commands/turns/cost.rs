@@ -175,8 +175,11 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
     // renderer uses, then sum their char lengths (+ newline).
     let line_session = format!("SESSION {}", sr.session_id);
     let line_budget = format!(
-        "  budget {} chars · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
-        budget, 0.0_f64, summaries, summaries
+        "  budget {} · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
+        crate::text::plural(budget, "char"),
+        0.0_f64,
+        summaries,
+        summaries
     );
     // The `selected` line carries the automation note ` (N automation triggers)` ONLY when
     // the session actually HAS automation-trigger turns (N <= turns). Reserve that space
