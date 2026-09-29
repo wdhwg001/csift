@@ -1112,9 +1112,11 @@ surface change bumps the PATCH.
   recipe on the page off the identity row's parent.
 - **`show`'s address miss spelled a range with a dash.** `csift show @<id> --line 99999..`
   on a 5,003-line file failed with `no such record(s): L99999-5003`, while `--line`
-  refuses the `A-B` form it printed. Both fetch modes now name a missed range in the
-  grammar's own spelling, `L99999..5003`, so the message hands back an address the parser
-  accepts.
+  refuses the `A-B` form it printed. Both fetch modes now name a missed range in a spelling
+  the parser accepts when pasted back: the grammar's own `A..B` for a range that resolved in
+  order, and the range as written for one that resolved backwards - `--line 99999..` misses
+  as `L99999.. (file has 5003 lines)`, where the resolved pair `L99999..5003` is a range
+  `--line` refuses as reversed.
 - **`show` booked lines past the end of the file as non-record lines.** `--line 4995..5045`
   on a 5,003-line transcript reported `records: 9, non_record_lines: 42`: the 42 lines
   that do not exist were counted with the metadata lines that do. A range is now clamped

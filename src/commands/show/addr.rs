@@ -7,7 +7,7 @@ use super::*;
 #[derive(Debug, Default)]
 pub(crate) struct LineSpecs {
     pub(crate) explicit: BTreeSet<usize>,
-    pub(crate) ranges: Vec<(usize, usize)>,
+    pub(crate) ranges: Vec<LineRange>,
     /// Distinct lines a range addressed PAST the file's last line, clamped off at resolution.
     /// A line that does not exist is neither a record nor a non-record line, so it is counted
     /// here and never in `non_record_lines`.
@@ -16,12 +16,22 @@ pub(crate) struct LineSpecs {
     pub(crate) total_lines: usize,
 }
 
+/// One `--line` RANGE resolved against the file, beside the token the reader wrote for it.
+#[derive(Debug)]
+pub(crate) struct LineRange {
+    pub(crate) lo: usize,
+    pub(crate) hi: usize,
+    /// The token as written (`99999..`, `-3..`), which a miss names when the resolved pair
+    /// reads backwards.
+    pub(crate) written: String,
+}
+
 impl LineSpecs {
     /// Every addressed line, expanded (ranges included).
     pub(crate) fn all(&self) -> BTreeSet<usize> {
         let mut out = self.explicit.clone();
-        for &(a, b) in &self.ranges {
-            out.extend(a..=b);
+        for r in &self.ranges {
+            out.extend(r.lo..=r.hi);
         }
         out
     }
@@ -32,7 +42,9 @@ impl LineSpecs {
 /// `-k` from the end). A single token (no `..`) is an EXPLICIT address (miss = hard error); a
 /// `..` token is a clamping range. Open/from-end forms resolve against the file's line count in
 /// [`resolve_line_specs`]. No subagent prefix - the TARGET names the transcript.
-pub(crate) fn parse_line_specs(tokens: &[String]) -> Result<Vec<(bool, crate::text::RangeSpec)>> {
+pub(crate) fn parse_line_specs(
+    tokens: &[String],
+) -> Result<Vec<(bool, crate::text::RangeSpec, String)>> {
     let mut out = Vec::new();
     for tok in tokens {
         let t = tok.trim();
@@ -43,29 +55,38 @@ pub(crate) fn parse_line_specs(tokens: &[String]) -> Result<Vec<(bool, crate::te
         out.push((
             is_explicit,
             crate::text::parse_range_spec(t, "--line", true)?,
+            t.to_string(),
         ));
     }
     Ok(out)
 }
 
-/// How a miss names a `--line` RANGE: the grammar's own `A..B`, the spelling a reader can paste
-/// back into `--line`. `A-B` is refused on input, so a message spelling a range that way hands
-/// the reader an address the parser rejects.
-pub(crate) fn range_label(a: usize, b: usize) -> String {
-    format!("L{a}..{b}")
+/// How a miss names a `--line` RANGE, always in a spelling the reader can paste back into
+/// `--line`: the grammar's own `A..B` for a range that resolved in order, and the range AS
+/// WRITTEN for one that resolved backwards - an open range starting past the end resolves to
+/// (start, last line), and `L99999..28` is a range the parser refuses as reversed. `A-B` is
+/// refused on input too, which is why the dash spelling went. A range starting past the end
+/// also names the file's length ([`miss_label`]).
+pub(crate) fn range_miss_label(r: &LineRange, total_lines: usize) -> String {
+    let label = if r.lo <= r.hi {
+        format!("L{}..{}", r.lo, r.hi)
+    } else {
+        format!("L{}", r.written)
+    };
+    miss_label(label, r.lo, total_lines)
 }
 
 /// Resolve parsed `--line` specs against the transcript's line count (1-based), materializing
 /// open/from-end forms. A single-token spec becomes an explicit address; a range spec clamps.
 pub(crate) fn resolve_line_specs(
-    parsed: &[(bool, crate::text::RangeSpec)],
+    parsed: &[(bool, crate::text::RangeSpec, String)],
     total_lines: usize,
 ) -> LineSpecs {
     let mut specs = LineSpecs {
         total_lines,
         ..LineSpecs::default()
     };
-    for (is_explicit, spec) in parsed {
+    for (is_explicit, spec, written) in parsed {
         let (lo, hi) = spec.resolve(total_lines, true);
         if *is_explicit {
             specs.explicit.insert(lo); // lo == hi for a single token
@@ -74,11 +95,19 @@ pub(crate) fn resolve_line_specs(
             // counted. Clamped ranges all extend from the last line, so their union past the
             // end is `last+1 ..= max(hi)`, and the count is the widest overhang, not a sum.
             specs.past_end = specs.past_end.max(hi - total_lines);
-            specs.ranges.push((lo, total_lines));
+            specs.ranges.push(LineRange {
+                lo,
+                hi: total_lines,
+                written: written.clone(),
+            });
         } else {
             // Wholly inside, or starting past the end: the latter addresses nothing and is
             // left whole, so the miss names the range the reader wrote.
-            specs.ranges.push((lo, hi));
+            specs.ranges.push(LineRange {
+                lo,
+                hi,
+                written: written.clone(),
+            });
         }
     }
     specs

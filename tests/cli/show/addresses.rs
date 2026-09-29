@@ -173,3 +173,41 @@ fn a_miss_past_the_end_names_the_file_length_in_both_modes() {
         }
     }
 }
+
+/// Every range a miss names parses when pasted back into `--line`, in both fetch modes. An open
+/// range starting past the end resolves to (start, last line), which printed as `L999..N` is a
+/// range the parser refuses as reversed; the miss names such a range as it was WRITTEN, and a
+/// range that resolved in order by its resolved `A..B`.
+#[test]
+fn every_range_a_miss_names_parses_when_pasted_back() {
+    let h = populated_home();
+    let n = fixture_lines(&h);
+    let target = at(SESS);
+    for extra in [&[][..], &["--raw"][..]] {
+        for (addr, named) in [
+            ("999..", "L999..".to_string()),
+            ("900..1000", "L900..1000".to_string()),
+            ("999..-1", "L999..-1".to_string()),
+        ] {
+            let mut argv = vec!["show", target.as_str(), "--line", addr];
+            argv.extend_from_slice(extra);
+            let out = h.run(&argv);
+            assert!(!out.success, "{addr} {extra:?}: {}", out.stdout);
+            assert!(
+                out.stderr
+                    .contains(&format!("{named} (file has {n} lines)")),
+                "{addr} {extra:?}: {}",
+                out.stderr
+            );
+            let pasted = named.trim_start_matches('L');
+            let mut again = vec!["show", target.as_str(), "--line", pasted];
+            again.extend_from_slice(extra);
+            let back = h.run(&again);
+            assert!(
+                back.stderr.contains("no such record(s)"),
+                "{pasted} {extra:?} must parse and miss the same way: {}",
+                back.stderr
+            );
+        }
+    }
+}

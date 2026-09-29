@@ -89714,7 +89714,7 @@
         },
         {
           "path": "src/commands/show/addr.rs",
-          "lines": "135-136",
+          "lines": "164-165",
           "snippet": "    match (resolved.files.as_slice(), dropped.as_slice()) {\n        ([one], []) => Ok(one.clone()),"
         },
         {

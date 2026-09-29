@@ -159,9 +159,9 @@ pub(crate) fn run_raw(
         .filter(|&&n| n > total_lines)
         .map(|&n| miss_label(format!("L{n}"), n, total_lines))
         .collect();
-    for &(a, b) in &specs.ranges {
-        if a > total_lines {
-            misses.push(miss_label(range_label(a, b), a, total_lines));
+    for r in &specs.ranges {
+        if r.lo > total_lines {
+            misses.push(range_miss_label(r, total_lines));
         }
     }
     for (u, slot) in &uuid_line {
@@ -268,9 +268,9 @@ pub(crate) fn run_rendered(
         .filter(|n| !hit_lines.contains(n))
         .map(|&n| miss_label(format!("L{n}"), n, specs.total_lines))
         .collect();
-    for &(a, b) in &specs.ranges {
-        if !hit_lines.iter().any(|n| (a..=b).contains(n)) {
-            misses.push(miss_label(range_label(a, b), a, specs.total_lines));
+    for r in &specs.ranges {
+        if !hit_lines.iter().any(|n| (r.lo..=r.hi).contains(n)) {
+            misses.push(range_miss_label(r, specs.total_lines));
         }
     }
     for u in uuids {
