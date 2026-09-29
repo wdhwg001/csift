@@ -514,10 +514,10 @@ impl VerbatimArgs {
           csift whoami --peers          # every live lane: id, kind, state\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
           csift whoami @trap:<invent-a-fresh-3word-4digit-marker>   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root); the marker is YOURS to invent, never a copied literal\n  \
-          # FALLBACK (no @trap): map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
-          csift agents --agent \"$(csift whoami --format json | jq -r 'select(.kind==\"identity\").session_id')\" --format json\n  \
-          # …then scope the whole conversation with that parent uuid:\n  \
-          csift search \"<pattern>\" \"@$(csift whoami --format json | jq -r 'select(.kind==\"identity\").parent_session_id')\"\n\n\
+          # FALLBACK (no @trap): map the env's id to its ROOT - the agents node carries parent_session_id:\n  \
+          csift agents --agent \"$(csift whoami --format json | jq -r 'select(.kind==\"identity\").session_id')\" --format json | jq -r 'select(.kind==\"agent\").parent_session_id'\n  \
+          # …then scope the whole conversation with that uuid (`no subagent matched` above = the env id IS the root: use @main):\n  \
+          csift search \"<pattern>\" @<that-uuid>\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: header → {kind:\"identity\", session_id, is_subagent, parent_session_id, \
         depth, path} rows → a summary terminator. One identity row for \

@@ -1096,6 +1096,12 @@ surface change bumps the PATCH.
   path reads the file it names and names the other on stderr, and the note says the pair
   sits under one session's sidecar at the built-in and the workflow locations (claim
   PATH-017; PATH-014 refined). `show @<id>` still refuses the pair and names both paths.
+- **`whoami --help`'s fallback recipe built `@null`.** Its second line read
+  `parent_session_id` off a `whoami` identity row, which the env form leaves null (the
+  environment names the top-level session in every lane, so it cannot say which lane
+  the caller is). The recipe reads the parent off the `agents` node instead and says
+  that `no subagent matched` means the env id is already the root; a test holds every
+  recipe on the page off the identity row's parent.
 
 ### Performance
 
