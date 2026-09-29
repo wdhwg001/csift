@@ -51,9 +51,12 @@ use super::*;
         skipped_lines}.\n\n\
         THE FACT HALF ON ITS OWN\n  \
           `csift search '<ID>' @<lane> -t harness.hook.context` is the transcript side of the \
-        join, and `msg` runs exactly that. The flag is harmless but not needed here: a \
-        csift-channel delivery is the ONE attachment payload a DEFAULT scan already parses, \
-        under the leaf `agent.communication.channel`, rendered verbatim from its envelope.\n\n\
+        join: `msg` reads the same records, a hook-context attachment whose text opens with \
+        the envelope header naming the id. The flag is harmless but not needed here: a \
+        default scan reaches a csift-channel delivery through its own envelope needle, as \
+        `agent.communication.channel` rendered verbatim from its envelope - one of the THREE \
+        attachment leaves a default scan reaches, beside the person's mid-turn steer and \
+        the model's structured answer.\n\n\
         SEE ALSO\n  \
           csift ack <ID>              record that this lane read the message\n  \
           csift send @<lane> \"…\"      queue one\n  \

@@ -1243,6 +1243,11 @@ surface change bumps the PATCH.
   as any injected skill body, not only a subagent's preloaded one. Tests derive every
   leaf's gate word from the candidate gate's own leaf sets, every skipped leaf from the
   visibility table and every key from the keys family's projector.
+- **`msg --help` called a csift-channel delivery the one attachment payload a default
+  scan parses.** Three attachment leaves are reached by a flagless scan: the channel
+  delivery, the person's mid-turn steer and the model's structured answer. The page now
+  says so, and says that `msg` reads the delivery off the envelope header at the start of
+  a hook-context attachment rather than running a search.
 
 ### Performance
 
