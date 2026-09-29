@@ -119,7 +119,7 @@ pub struct BackgroundLensArgs {
     after_help = "EXAMPLES\n  \
           csift status @<uuid>                    # is it truly stopped?\n  \
           csift status @main                      # my own session (env)\n  \
-          csift status @<uuid> --format json | jq .verdict\n  \
+          csift status @<uuid> --format json | jq -r 'select(.kind==\"verdict\").verdict'\n  \
           csift status @<uuid> --no-subagents     # the main lane only\n  \
           csift status @<uuid> --ignore-background 'npm run dev'   # the dev server never returns\n  \
           csift status @<uuid> --background-since 2h              # only recent launches count\n\n\

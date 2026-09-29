@@ -54,3 +54,39 @@ fn no_whoami_recipe_reads_the_parent_off_an_identity_row() {
         "the fallback reads the parent off the agents node"
     );
 }
+
+/// A `jq` recipe that reads a key off a JSON stream selects the row KIND that carries it.
+///
+/// Every `--format json` stream except `wait`'s is an envelope of a header, the rows and a
+/// summary, so `| jq .verdict` on `status` printed the header's `null` before the verdict and
+/// `| jq .fact` on `msg` printed `null` twice around the fact. A bare path is sound on a
+/// stream of one object (`wait`) and after `tail -1` (the summary); anywhere else the recipe
+/// names its row with `select(.kind==...)`.
+#[test]
+fn every_jq_recipe_on_an_envelope_selects_its_row_kind() {
+    use clap::CommandFactory;
+
+    let mut root = crate::cli::Cli::command();
+    let mut pages: Vec<(String, String)> =
+        vec![("csift".into(), root.render_long_help().to_string())];
+    for sub in root.get_subcommands_mut() {
+        let name = sub.get_name().to_string();
+        pages.push((name, sub.render_long_help().to_string()));
+    }
+    let mut seen = 0usize;
+    for (page, help) in &pages {
+        for line in help.lines() {
+            let Some((before, after)) = line.split_once("--format json | jq ") else {
+                continue;
+            };
+            seen += 1;
+            let bare_path = after.trim_start_matches("-r ").starts_with('.');
+            let one_object = before.trim_start().starts_with("csift wait ");
+            assert!(
+                !bare_path || one_object,
+                "`{page} --help`: a bare jq path on an envelope reads the header first: {line}"
+            );
+        }
+    }
+    assert!(seen >= 3, "the recipes were found ({seen})");
+}

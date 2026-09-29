@@ -40,7 +40,7 @@ use super::*;
           csift msg                                     # this lane's ledger, newest first\n  \
           csift msg --lane @<uuid> --pending            # ...only what is still waiting\n  \
           csift msg --lane @<uuid> --held               # ...only what is held, with reasons\n  \
-          csift msg <ID> --format json | jq .fact       # the transcript proof, or null\n\n\
+          csift msg <ID> --format json | jq 'select(.kind==\"msg\").fact'   # the transcript proof, or null\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: header -> `msg` rows -> summary. Header: {kind:\"header\", command:\"msg\", \
         lane, session}. Rows: {kind:\"msg\", id, verdict, mode, lane, session, \

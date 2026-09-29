@@ -1131,6 +1131,12 @@ surface change bumps the PATCH.
   reads the parsed pattern, ripgrep's rule: a letter the pattern spells counts, bare or in
   a bracket class (`[A-Z]` stays case-sensitive), and `\S`, `\W`, `\D` and `\B` do not, so
   `\Sbash` reads 46 and `\Wbash` 68. `search --help` states the rule.
+- **Two help recipes read the envelope's header first.** `csift status @<uuid> --format json
+  | jq .verdict` on `status --help` printed `null` (the header) before the verdict, and `csift
+  msg <ID> --format json | jq .fact` on `msg --help` printed `null` around the fact. Both
+  recipes now select the row that carries the key (`select(.kind=="verdict").verdict`,
+  `select(.kind=="msg").fact`), and a test holds every `jq` recipe on every help page to a row
+  select, `tail -1`, or `wait`'s single object.
 
 ### Performance
 
