@@ -17,7 +17,8 @@ surface change bumps the PATCH.
   `toolUseResult.firstPage`. csift derives the page as that offset plus the element's
   position among the content elements after the leading text, counted over POSITIONS rather
   than over images, so a failed page in the middle does not shift the pages after it. Text
-  rows gain ` p<N>` beside the media type and the document's basename once per record group (one transcript, one line, one document);
+  rows gain ` p<N>` beside the media type and the document's basename once per record group
+  (one transcript, one line, one document);
   JSON rows gain `page` and `pdf_path`, the path verbatim as every other path field is.
   The derivation is gated on the record's own result reading `parts` with a `firstPage` and
   on the record carrying exactly one `tool_result` block, so a screenshot, a result written
@@ -1210,9 +1211,10 @@ surface change bumps the PATCH.
   manifest once it ends) and counts `failed` as a close, and a workflow lane is settled by
   its ended run or its journal's closing line before its tail is read; the same session
   reads `1399 lane(s), 1 live` (claim TAIL-008). An open agent whose own lane is already
-  live by its tail is counted once, not again through its journal's `started` line. `agents` reads the same rule before a
-  lane's tail: on that session it had called 42 workflow lanes `running` that `status`
-  settled, and now calls none; `agents --help` states the rule.
+  live by its tail is counted once, not again through its journal's `started` line.
+  `agents` reads the same rule before a lane's tail: on that session it had called 42
+  workflow lanes `running` that `status` settled, and now calls none; `agents --help`
+  states the rule.
 - **`agents` called a lane its run killed, or its journal failed, `completed`.** A workflow
   lane settled by its run read `completed` with a completion instant whatever the run said:
   a lane of a run whose manifest reads `killed`, and a lane its journal closes with
