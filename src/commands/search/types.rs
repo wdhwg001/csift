@@ -340,16 +340,17 @@ impl DraftDiff {
             return "identical to the sent message".to_string();
         }
         let more = if self.exact { "" } else { "more than " };
+        // The count and its noun through the one plural rule every marker takes, so a draft
+        // one character from the final reads `1 char`.
+        let chars = crate::text::plural(self.chars, "char");
         match self.pct {
             Some(p) => format!(
-                "differs from the sent message in {more}{} chars ({more}{p:.1}% of the final): \
-                 may carry an addition or a correction",
-                self.chars
+                "differs from the sent message in {more}{chars} ({more}{p:.1}% of the final): \
+                 may carry an addition or a correction"
             ),
             None => format!(
-                "differs from the sent message in {more}{} chars: may carry an addition or a \
-                 correction",
-                self.chars
+                "differs from the sent message in {more}{chars}: may carry an addition or a \
+                 correction"
             ),
         }
     }

@@ -209,6 +209,47 @@ fn a_rendered_draft_carries_the_diff_against_the_sent_message() {
     assert_eq!(row["diff_exact"], true, "{}", j.stdout);
 }
 
+/// A draft one character from the message that replaced it names the count in the singular,
+/// through the same plural rule as every excerpt marker; the JSON count stays a number.
+#[test]
+fn a_draft_one_character_from_the_sent_message_reads_one_char() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"d1","parentUuid":"p0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"p0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"chart the reefs"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["search", "", &at(SESS), "-t", "user.unsent"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("differs from the sent message in 1 char (6.7% of the final)"),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("1 chars"), "{}", out.stdout);
+    let j = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "user.unsent",
+        "--format",
+        "json",
+    ]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "exchange")
+        .expect("exchange row");
+    assert_eq!(row["diff_chars"], 1, "{}", j.stdout);
+    assert!(row["diff_chars"].is_u64(), "{}", j.stdout);
+}
+
 /// A NON-draft exchange carries none of the five keys (search's lean envelope), and a
 /// non-draft `show` row carries them as explicit nulls. A draft's superseding sibling is
 /// always in the same transcript - it is what makes the record a draft - so "the sibling

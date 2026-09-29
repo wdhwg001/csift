@@ -1354,6 +1354,11 @@ surface change bumps the PATCH.
   one character in the singular, `… (+1 char)`, through the same count-and-noun rule the
   `verbatim` markers take. Both marker builders go through one function, so the forms
   cannot drift apart again.
+- **A draft one character from its resend said `differs ... in 1 chars`.** The
+  draft-distance line on a `user.unsent` unit (`search` and `show`) formatted its count
+  with a fixed plural, outside the rule the excerpt marker takes; it now goes through that
+  rule and reads `differs from the sent message in 1 char`. JSON `diff_chars` stays a
+  number.
 
 ### Performance
 
