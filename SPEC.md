@@ -3412,7 +3412,7 @@ reaches the targets without it, so the question stays open rather than answered.
 
 ### 8.2 `--format json` — envelope v2 (one shape for every command)
 
-Every JSON stream is EXACTLY three parts, no exceptions (S==0, `-c`, restore included):
+Every JSON stream is EXACTLY three parts (S==0, `-c`, restore included), with TWO exceptions, both named on the root `--help` page: `wait --format json` prints ONE `{"kind":"wait", …}` object on exit, the monitor's single answer (`jq .fired` reads it whole), and `deliver` prints the harness's own hook-output object or nothing, because its stdout belongs to Claude Code at the hook point (§6.17). Every other command's stream is:
 
 1. `{"kind":"header","command":"<cmd>", …}` — the FIRST line, always. Span commands add
    `sessions_in_scope`/`top_level_sessions`/`subagent_sessions`; `verbatim` adds its
@@ -3426,11 +3426,10 @@ Every JSON stream is EXACTLY three parts, no exceptions (S==0, `-c`, restore inc
    compaction_boundary|collapsed_agents`, plan→`plan|binding|plan-edit|plan-unbound-text`,
    image→`image|extract`, whoami→`identity`,
    recover→`coverage|segment|snapshot|restore|boundary|backup`,
-   show→ also `branch-point` (under `--branch-points`), status→`verdict`, wait→`wait`,
+   show→ also `branch-point` (under `--branch-points`), status→`verdict`,
    send→`send`, msg→`msg`, ack→`ack`, and whoami→`identity` plus the lane rows
    `self` | `parent` | `lane` (the three sections), `reach` (`--to`) and `peer`
-   (`--peers`). `deliver` is the one command with NO envelope: its stdout is the
-   harness's own hook-output object, or nothing (§6.17).
+   (`--peers`). `wait` and `deliver` are the two exceptions above: no header, no summary.
 3. `{"kind":"summary", …}` — the LAST line, always (even all-zero counts). Notable
    summaries: search `census` mode → `{axis, matched_records, distinct_keys,
    excluded_records, dropped_by_cap, skipped_lines}`; files → adds `sessions` (distinct
