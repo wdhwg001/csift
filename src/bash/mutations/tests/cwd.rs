@@ -235,3 +235,27 @@ fn subshell_depth_machinery_tracks_across_segments() {
         ("/w/g.txt".to_string(), Resolution::CdTracked)
     );
 }
+
+/// An operand still carrying a shell expansion is unresolved and kept verbatim, whether it
+/// would have joined the cwd or read as typed absolute. The direct verbs already drop such an
+/// operand, so the shape that reaches the resolver is the interp layer's: a script in an
+/// unquoted heredoc names `$FIX/x`, which the shell expands before the script runs, and it was
+/// reported as `<cwd>/$FIX/x`, a path no file has. A `~` operand stays unresolved as well - the
+/// recording shell's HOME is not in the transcript, so joining it would be a guess - and a plain
+/// relative operand still joins.
+#[test]
+fn an_unexpanded_operand_stays_verbatim_and_unresolved() {
+    let script = |target: &str| format!("python3 - <<EOF\nopen(\"{target}\", \"w\").write(s)\nEOF");
+    for target in ["$FIX/x.jsonl", "${D}/x", "$(pwd)/x", "`pwd`/x", "/tmp/$X/f"] {
+        let (p, r) = resolved(&script(target), "/Users/testuser/proj");
+        assert_eq!(r, Resolution::Unresolved, "{target}");
+        assert_eq!(p, target, "{target}: kept verbatim");
+    }
+    let (p, r) = resolved(&script("~/x"), "/Users/testuser/proj");
+    assert_eq!((p.as_str(), r), ("~/x", Resolution::Unresolved));
+    let (p, r) = resolved(&script("notes.md"), "/Users/testuser/proj");
+    assert_eq!(
+        (p.as_str(), r),
+        ("/Users/testuser/proj/notes.md", Resolution::CwdJoined)
+    );
+}

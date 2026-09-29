@@ -279,6 +279,15 @@ impl BashMutation {
         if is_class_marker(p) {
             return (p.to_string(), Resolution::Unresolved);
         }
+        // An operand still carrying `$` or a backtick names a value the shell expands at run
+        // time (`$VAR`, `${VAR}`, `$(...)`, a backtick substitution): joining it, or reporting
+        // it as typed absolute, would present unexpanded text as a path. The interp layer
+        // expands the assignments it can see, so what reaches here unexpanded stays verbatim.
+        // A single-quoted literal `$` is indistinguishable once the quotes are stripped, and
+        // stays verbatim too: less resolved, never wrong.
+        if p.contains('$') || p.contains('`') {
+            return (p.to_string(), Resolution::Unresolved);
+        }
         if is_absolute_shell_path(p) {
             return (p.to_string(), Resolution::Absolute);
         }

@@ -1183,6 +1183,13 @@ surface change bumps the PATCH.
   manifest once it ends) and counts `failed` as a close, and a workflow lane is settled by
   its ended run or its journal's closing line before its tail is read; the same session
   reads `1399 lane(s), 1 live` (claim TAIL-008).
+- **`files` joined an unexpanded shell variable onto the cwd.** A script writing
+  `$FIX/.claude/.../$parent.jsonl` from an unquoted heredoc was reported as `cwd-joined`
+  with the path `<cwd>/$FIX/.claude/.../$parent.jsonl`, a file that never existed. An
+  operand still carrying `$` or a backtick is now `unresolved` and kept verbatim, whatever
+  its shape; over one root 98 rows move (35 `cd-tracked`, 63 `cwd-joined`) and no other row
+  changes class. A `~` operand stays `unresolved`, since the recording shell's HOME is not
+  in the transcript (claim BASH-023).
 
 ### Performance
 
