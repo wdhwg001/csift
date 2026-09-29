@@ -368,3 +368,113 @@ fn a_prompt_with_no_fire_record_above_it_is_not_claimed() {
         out.stdout
     );
 }
+
+/// Every hit object of a `--format json` run, flattened out of its exchange rows.
+fn schedule_hits(stdout: &str) -> Vec<serde_json::Value> {
+    json_rows(stdout, "exchange")
+        .into_iter()
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect()
+}
+
+/// The instant and the `fires` edge are facts of the PARENT LINK, not of the fire leaf: a
+/// fired prompt whose armed text opens with a loop marker takes the wakeup or tick leaf (the
+/// marker arms sit ahead of the fire arm), and it is still the prompt its fire record
+/// submitted. Both read null and edge-less before; a tick with no fire record above it
+/// carries neither.
+#[test]
+fn a_wakeup_or_tick_under_a_fire_record_carries_the_instant_and_the_fires_edge() {
+    let h = fire_home();
+    let out = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "harness.schedule.wakeup",
+        "-t",
+        "harness.schedule.tick",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hits = schedule_hits(&out.stdout);
+    let seen: Vec<(u64, String, String, Vec<String>)> = hits
+        .iter()
+        .map(|h| {
+            (
+                h["line"].as_u64().unwrap_or(0),
+                h["label"].as_str().unwrap_or("").to_string(),
+                h["scheduled_at"].as_str().unwrap_or("-").to_string(),
+                h["for"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|e| e["kind"].as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        vec![
+            (
+                11,
+                "harness.schedule.wakeup".into(),
+                "Jun 7 5:31am".into(),
+                vec!["fires".into()]
+            ),
+            (
+                14,
+                "harness.schedule.tick".into(),
+                "Jun 7 5:32am".into(),
+                vec!["fires".into()]
+            ),
+        ],
+        "{}",
+        out.stdout
+    );
+    let text = h.run(&[
+        "search",
+        "zztickbody",
+        &at(SESS),
+        "-t",
+        "harness.schedule.tick",
+    ]);
+    assert!(
+        text.stdout.contains("[scheduled fire Jun 7 5:32am]"),
+        "the label zone names the instant on the tick too:\n{}",
+        text.stdout
+    );
+
+    // A tick nothing fired: no fire record is its parent, so it carries neither.
+    let bare = Home::new();
+    let sess = "7a6b5c4d-3e2f-4a1b-9c8d-000000000060";
+    bare.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000061","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start"}}"#, "\n",
+            r##"{"type":"user","uuid":"00000000-0000-4000-8000-000000000062","parentUuid":"00000000-0000-4000-8000-000000000061","timestamp":"2026-06-07T05:01:00.000Z","isMeta":true,"message":{"role":"user","content":"# Autonomous loop tick\n\nzzbaretick"}}"##, "\n",
+        ),
+    );
+    let out = bare.run(&[
+        "search",
+        "zzbaretick",
+        &at(sess),
+        "-t",
+        "harness.schedule.tick",
+        "--format",
+        "json",
+    ]);
+    let hit = schedule_hits(&out.stdout)
+        .into_iter()
+        .next()
+        .expect("the bare tick");
+    assert_eq!(hit["scheduled_at"], serde_json::Value::Null, "{hit}");
+    let kinds: Vec<&str> = hit["for"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|e| e["kind"].as_str()).collect())
+        .unwrap_or_default();
+    assert!(!kinds.contains(&"fires"), "{hit}");
+}

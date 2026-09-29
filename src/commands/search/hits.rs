@@ -288,14 +288,14 @@ pub(crate) fn collect_record_hits(
     // which said the scheduler's own fire record does not know when it fired - for the
     // line the instant is written on. One field, one meaning: this is the instant the
     // schedule fired, whichever of the pair the hit is.
-    let scheduled_at = if labels.contains(&Class::ScheduleFire) {
+    let scheduled_at = if labels.contains(&Class::ScheduleEvent) {
+        rec.scheduled_fire_instant().map(str::to_string)
+    } else {
+        // Any record the fire record is the PARENT of: the join is the link, never the leaf,
+        // so a fired prompt whose armed text earns the wakeup or tick leaf carries it too.
         ctx.schedule_fires
             .and_then(|ix| ix.instant_for(rec.parent_uuid.as_deref()))
             .map(str::to_string)
-    } else if labels.contains(&Class::ScheduleEvent) {
-        rec.scheduled_fire_instant().map(str::to_string)
-    } else {
-        None
     };
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);

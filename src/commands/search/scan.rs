@@ -133,7 +133,16 @@ pub(crate) fn search_one_file(
     // is on, `-t user` / `-t agent.*` short-circuits) and a CONJUNCTION rather than
     // the bare literal - a payload can quote the word. The admitted lines are read for the
     // instant and then DEMOTED below, so a default scan gains no `harness.schedule.event` hit.
-    let needs_schedule_fire = args.label_filter().selected(Class::ScheduleFire.path());
+    // The instant and the `fires` edge are facts of the PARENT LINK, so every leaf a fired
+    // prompt can carry needs the index: an armed text that opens with a loop marker takes the
+    // wakeup or tick leaf, and it is still the prompt a fire record submitted.
+    let needs_schedule_fire = [
+        Class::ScheduleFire,
+        Class::ScheduleWakeup,
+        Class::ScheduleTick,
+    ]
+    .iter()
+    .any(|c| args.label_filter().selected(c.path()));
     let gates = CandidateGates {
         compact_boundary: needs_compact_boundary,
         hook_context: needs_hook_context,

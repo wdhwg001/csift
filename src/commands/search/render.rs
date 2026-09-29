@@ -176,7 +176,9 @@ pub(crate) fn render_label(h: &Hit) -> String {
     // matchable excerpt would need a synthesized-marker registration it does not earn. The
     // prompt body stays the verbatim armed text; a fire with no readable sibling prints the
     // bare leaf rather than a guessed instant.
-    if class == Class::ScheduleFire {
+    // Every leaf a fired prompt can carry prints it; the fire RECORD prints its own instant
+    // in its head, so it takes no second copy here.
+    if class != Class::ScheduleEvent {
         if let Some(when) = h.scheduled_at.as_deref() {
             return format!("{} [scheduled fire {when}]{nd}", class.path());
         }

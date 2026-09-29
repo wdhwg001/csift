@@ -164,6 +164,16 @@ pub(crate) fn facts(
         // it, so the prompt's parent IS the event it fired from (claim CLS-031) - which
         // is also the only mark the producer leaves on the prompt itself.
         Class::ScheduleFire => facts.push(parent_edge(EdgeKind::Fires, rec, ctx)),
+        // A prompt whose armed text opens with a loop marker takes the wakeup or tick leaf
+        // (the marker arms sit ahead of the fire arm), and when a fire record is its parent
+        // it is still the prompt that record submitted: the edge is a fact of the link.
+        Class::ScheduleWakeup | Class::ScheduleTick
+            if ctx
+                .schedule_fires
+                .is_some_and(|ix| ix.is_fire_parent(rec.parent_uuid.as_deref())) =>
+        {
+            facts.push(parent_edge(EdgeKind::Fires, rec, ctx));
+        }
         // The image record. When its content is BLOCKS and no text it renders nothing at
         // all, so the counts are what an address has to show instead of the head of a
         // base64 payload.
@@ -188,10 +198,10 @@ pub(crate) fn facts(
         // root (the counting rule, which names the file set AND the content reading, is at
         // `Record::pulse_tool_use_id`). One reader, both carriers, one reading.
         //
-        // Every OTHER leaf this family's classify file can assign - the two schedule
-        // ticks and the resume repair prompt - carries no edge, because no key on those
-        // records names a record they were written for. An empty arm rather than an
-        // invented relation.
+        // Every OTHER leaf this family's classify file can assign - a schedule tick or
+        // wakeup with no fire record above it, and the resume repair prompt - carries no
+        // edge, because no key on those records names a record they were written for. An
+        // empty arm rather than an invented relation.
         _ => {}
     }
     (facts, markers)

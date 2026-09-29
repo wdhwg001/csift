@@ -1199,6 +1199,14 @@ surface change bumps the PATCH.
   a model id or `fell back` reach it; the same query now returns 46 hits, one per distinct
   record. A record that fell back and spoke keeps the marker on its text unit and emits no
   second one. `search --help` says so (claim CLS-060).
+- **A loop tick fired by the scheduler lost its instant and its edge.** A fired prompt whose
+  armed text opens with a loop marker takes the wakeup or tick leaf, and those read
+  `scheduled_at: null` with only a `parent` edge, although a `scheduled_task_fire` record is
+  their parent exactly as it is a plain fired prompt's (3 such prompts on one root). The
+  instant and the `fires` edge are now read off the parent link for every leaf a fired
+  prompt can carry, the fire index is built whenever a selection reaches one of those
+  leaves, and the label zone prints `[scheduled fire <when>]` on them; a tick with no fire
+  record above it carries neither (claim CLS-032).
 
 ### Performance
 
