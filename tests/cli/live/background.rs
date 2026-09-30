@@ -467,6 +467,35 @@ fn the_last_section_prints_with_only_a_prompt_on_disk() {
     );
 }
 
+/// The slot holds the person's newest words, and a slash command typed with arguments is
+/// words the person typed although it opens no turn: the section printed no `last ◂` at
+/// all for a session whose newest prompt was one.
+#[test]
+fn the_last_section_shows_a_slash_command_typed_with_arguments() {
+    let wrapper = r#"{"type":"user","uuid":"s1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"<command-message>harbor</command-message>\n<command-name>/harbor</command-name>\n<command-args>check the moorings</command-args>"}}"#;
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &format!("{wrapper}\n"));
+    let out = h.run(&["status", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("last ◂") && out.stdout.contains("/harbor check the moorings"),
+        "{}",
+        out.stdout
+    );
+    let j = h.run(&["status", &at(SESS), "--format", "json"]);
+    let v: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|r: &serde_json::Value| r["kind"] == "verdict")
+        .expect("verdict row");
+    assert_eq!(
+        v["last"]["user"]["text"], "/harbor check the moorings",
+        "{}",
+        j.stdout
+    );
+}
+
 #[test]
 fn a_blocked_or_unknown_completion_status_is_its_own_bucket() {
     // Claude Code's remote-agent notifier writes a fifth terminal value, `blocked`

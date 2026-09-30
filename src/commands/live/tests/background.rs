@@ -135,13 +135,11 @@ fn last_messages_take_the_newest_prompt_and_reply_as_excerpts() {
     );
     let t = TempSession::new(&main, None);
     let l = last_messages(&t.main).unwrap();
+    // The pulse opened the newer turn, but a machine trigger is not the person's words:
+    // the slot keeps the prompt the person typed before it.
     let u = l.user.unwrap();
-    assert!(
-        u.text.starts_with("[background-command b1 completed]"),
-        "{}",
-        u.text
-    );
-    assert_eq!(u.ts_utc.as_deref(), Some("2026-06-07T05:01:00.000Z"));
+    assert_eq!(u.text, "first prompt");
+    assert_eq!(u.ts_utc.as_deref(), Some("2026-06-07T05:00:00.000Z"));
     assert!(!u.truncated);
     let a = l.agent.unwrap();
     assert!(a.truncated);
@@ -172,11 +170,43 @@ fn last_messages_skip_the_resume_repair_pair() {
     // The placeholder needs the explicit skip: it is an assistant record with real text.
     let a = l.agent.expect("an agent message");
     assert_eq!(a.text, "the real last reply");
-    // The prompt needs none - it is isMeta, which `is_genuine_user` already excludes. This
-    // assertion is the pin: if that gate ever loosened, `last` would report the loader's
-    // sentence as the human's last prompt.
+    // The prompt needs none - it is `harness.resume.prompt`, never one of the person's three
+    // leaves. This assertion is the pin: if that label ever loosened, `last` would report
+    // the loader's sentence as the human's last prompt.
     let u = l.user.expect("a user message");
     assert_eq!(u.text, "the real last prompt");
+}
+
+/// The newest of the person's words takes the slot whether or not it opened a turn, and
+/// renders as `search` renders the same leaf.
+#[test]
+fn last_messages_take_the_person_s_newest_words_whether_or_not_they_opened_a_turn() {
+    let prompt = r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"sound the channel"}}"#;
+    let reply = r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"sounded"}]}}"#;
+    let newest = |tail: &str| {
+        let t = TempSession::new(&format!("{prompt}\n{reply}\n{tail}\n"), None);
+        last_messages(&t.main).unwrap().user.map(|u| u.text)
+    };
+    // A slash command typed WITH arguments opens no turn and is `user.message`: the slot
+    // shows it as `/name args`, never the wrapper tags.
+    let with_args = r#"{"type":"user","uuid":"s1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"<command-message>chart</command-message>\n<command-name>/chart</command-name>\n<command-args>the reef margin</command-args>"}}"#;
+    assert_eq!(newest(with_args).as_deref(), Some("/chart the reef margin"));
+    // Without arguments the wrapper is `harness.command.invocation` alone, not the
+    // person's words, so the typed prompt before it keeps the slot.
+    let bare = r#"{"type":"user","uuid":"s2","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"<command-message>chart</command-message>\n<command-name>/chart</command-name>\n<command-args></command-args>"}}"#;
+    assert_eq!(newest(bare).as_deref(), Some("sound the channel"));
+    // A message relayed to a working session is `user.message` on an isMeta record.
+    let relayed = r#"{"type":"user","uuid":"r1","isMeta":true,"origin":{"kind":"human"},"timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"The user sent a new message while you were working:\n\ncheck the other lane"}}"#;
+    let text = newest(relayed).expect("the relayed words");
+    assert!(text.ends_with("check the other lane"), "{text}");
+    // A mid-turn steer rides an attachment line with no `role` key; its body is the
+    // conversion the harness persisted, the same body `search` renders.
+    let steer = r#"{"type":"attachment","uuid":"q1","timestamp":"2026-06-07T05:01:00.000Z","attachment":{"type":"queued_command","prompt":"stop at the bar","commandMode":"prompt","origin":{"kind":"human"}},"rendered":[{"content":"steer: stop at the bar"}]}"#;
+    assert_eq!(newest(steer).as_deref(), Some("steer: stop at the bar"));
+    // A rejection's typed instruction is `user.rejection`, which opens a turn but is no
+    // plain genuine message.
+    let rejection = r#"{"type":"user","uuid":"j1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_x","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected. To tell you how to proceed, the user said:\nsound it twice"}]}}"#;
+    assert_eq!(newest(rejection).as_deref(), Some("sound it twice"));
 }
 
 #[test]

@@ -88,9 +88,15 @@ pub struct BackgroundLensArgs {
         process is gone; the tail shape then says HOW it died) · `unknown` (evidence \
         insufficient or contradictory - stated, never guessed). Every verdict lists the \
         evidence rows that produced it.\n\n\
-        LAST MESSAGES: the newest human prompt and the newest assistant message print as \
+        LAST MESSAGES: the person's newest words and the newest assistant message print as \
         excerpts (clipped with an explicit `(+N chars)` marker; the whole turn is `csift \
-        show @<id> --turn -1`). WARNING for a model reading this: the excerpt is a PARTIAL \
+        show @<id> --turn -1`). The person's words are the newest record labelled \
+        `user.message`, `user.answer` or `user.rejection`, whether or not it opened a turn - \
+        a typed prompt, a slash command typed with arguments (as `/name args`), a message \
+        relayed or queued while the session worked, an answer to an AskUserQuestion, a \
+        rejection's typed instruction - in the text `search` renders for that leaf; a \
+        machine trigger (a `<task-notification>` pulse, a fired schedule) is not the \
+        person's words and never takes the slot. WARNING for a model reading this: the excerpt is a PARTIAL \
         view of the final state, useful only for judging whether a background task is \
         still meaningful (the message may still be waiting on a task that will never \
         return). In any orchestration it must NEVER be read as a complete or near-complete \

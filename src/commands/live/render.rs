@@ -137,8 +137,8 @@ pub(crate) fn render_background_text(b: &BackgroundReport) {
     }
 }
 
-/// The `last` section: newest prompt + newest assistant message, as excerpts, with the
-/// refetch and the warning that an excerpt is not a review.
+/// The `last` section: the person's newest words + newest assistant message, as excerpts,
+/// with the refetch and the warning that an excerpt is not a review.
 pub(crate) fn render_last_text(session_id: &str, last: &LastMessages) {
     let row = |glyph: &str, m: &LastMsg| {
         let ts = crate::timez::format_timestamp(m.ts_utc.as_deref());

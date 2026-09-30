@@ -1549,6 +1549,12 @@ surface change bumps the PATCH.
   The pairing is read off the whole file before any address narrows the output, so a
   boundary fetched alone reports its mode; the help now says so, and that a boundary reads
   null only when the file itself leaves it unpaired.
+- **`status` printed no `last ◂` when the newest prompt was a slash command with arguments.**
+  The row took the newest turn-opening record, and a slash command typed with arguments is
+  the person's words without opening a turn. It now takes the newest record labelled
+  `user.message`, `user.answer` or `user.rejection`, turn-opening or not, in the text
+  `search` renders (`/name args` for the slash command, a relayed or queued message's own
+  body); a `<task-notification>` pulse is not the person's words and no longer takes it.
 
 ### Performance
 

@@ -62,7 +62,7 @@ pub(crate) struct Assessment {
     pub(crate) tasks: TasksReport,
     /// Background launches and their fate (the lens already applied).
     pub(crate) background: BackgroundReport,
-    /// The newest prompt + assistant message (attached by `assess_path`).
+    /// The person's newest words + assistant message (attached by `assess_path`).
     pub(crate) last: LastMessages,
     /// What the main lane is doing at this instant, in words (`in a Bash call for
     /// 34s` / `generating (last record 12s ago)` / `idle (last stop_reason end_turn, 5m

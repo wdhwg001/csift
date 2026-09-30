@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2562",
+          "lines": "2563",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -31469,8 +31469,8 @@
       "code": [
         {
           "path": "src/commands/live/last.rs",
-          "lines": "50-59",
-          "snippet": "        if out.user.is_none() {\n            // A genuine prompt, or the machine trigger that opened the turn (an\n            // automation pulse renders as its label, never the raw XML).\n            let text = rec.automation_label().or_else(|| {\n                rec.is_genuine_user()\n                    .then(|| rec.reconstructed_user_text(None))\n                    .flatten()\n            });\n            if let Some(t) = text {\n                out.user = Some(excerpt(rec.timestamp.clone(), &t));"
+          "lines": "62-67",
+          "snippet": "    let class = rec.classify(&ctx).into_iter().find(|c| {\n        matches!(\n            c,\n            Class::UserMessage | Class::UserAnswer | Class::UserRejection\n        )\n    })?;"
         }
       ],
       "states": [
@@ -31479,8 +31479,8 @@
           "from_basis": "located",
           "to": null,
           "behavior": "The newest turn-opening record at the tail may be a MACHINE trigger rather than typed prose - an automation pulse whose raw content is `<task-notification>` XML - so the newest 'prompt' in a transcript is not necessarily something a human wrote, and its raw form must never be shown verbatim.",
-          "depends": "csift's `last` section renders `automation_label()` first and falls back to `reconstructed_user_text` only for a genuine prompt, so the last-prompt row prints `[background-command <id> completed] ...` rather than raw XML.",
-          "instrument": "`csift status @<session>` on a session whose last turn was opened by a background-command completion: the last-prompt row reads the label form, not XML. Counting rule: one status read per session. The e2e test `the_last_section_prints_with_only_a_prompt_on_disk` in tests/cli/live/background.rs pins the section.",
+          "depends": "csift's `last` section takes the person's newest words - the newest record labelled `user.message`, `user.answer` or `user.rejection` - so a turn a machine trigger opened never takes the slot: neither the pulse's raw `<task-notification>` XML nor its label prints there, and the row keeps the words the person typed before it. A reader wanting the pulse asks `search` for its `harness.notification.*` leaf, which renders the label.",
+          "instrument": "`csift status @<session>` on a session whose newest turn a background-command completion opened: the `last \u25c2` row carries the prompt the person typed before the pulse, never its XML or its label, and `csift search '' @<session> --no-subagents -t harness.notification --count-by label` counts the pulses the row passed over. Counting rule: one status read per session. The unit test `last_messages_take_the_newest_prompt_and_reply_as_excerpts` in src/commands/live/tests/background.rs pins the pulse case and `the_last_section_prints_with_only_a_prompt_on_disk` in tests/cli/live/background.rs the section.",
           "probe": {
             "kind": "csift",
             "command": "csift status @<session>",
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3597"
+          "lines": "3604"
         }
       ],
       "states": [
