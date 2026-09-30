@@ -1477,6 +1477,11 @@ surface change bumps the PATCH.
   top level - the block's `hooks` key with the file's own, each event's array appended to,
   never replacing, the one already there - and `deliver --help` names the fragment the
   same way.
+- **The documents say which `show --raw` forms disclose a compaction crossing.** SPEC and
+  the maintenance manual listed `show --raw` among the modes that print the crossing report
+  on stderr; only a `--turn` window does, as `show --help` already said. A `--line` or
+  `--uuid` raw fetch builds no chain - its bytes are the same under every budget - and
+  prints nothing about crossing on either stream; no output moved.
 
 ### Performance
 

@@ -263,10 +263,14 @@ fn an_address_and_a_census_both_move_with_the_budget_and_both_say_so() {
 }
 
 #[test]
-fn a_raw_turn_window_discloses_on_stderr_and_a_line_address_has_nothing_to_say() {
+fn a_raw_turn_window_discloses_on_stderr_and_a_raw_address_has_nothing_to_say() {
     // `--raw` prints the file's own bytes and nothing else, so its disclosure rides stderr.
-    // A `--turn` window is resolved through the chain and moves with the budget; a `--line`
-    // address names its lines outright, crosses nothing to find them, and says nothing.
+    // A `--turn` window is resolved through the chain and moves with the budget, so it says
+    // what the walk crossed - on stderr, never among the bytes. A `--line` or `--uuid`
+    // address names its lines outright: the raw fetch builds no chain to find them, the bytes
+    // it prints are the same under every budget, and it says nothing on either stream.
+    // Asserted per STREAM, beside the recover sweep below, because which stream a line lands
+    // on IS the contract.
     let h = crossing_home();
     let t = at(XSESS);
     let turns = h.run(&[
@@ -287,26 +291,33 @@ fn a_raw_turn_window_discloses_on_stderr_and_a_line_address_has_nothing_to_say()
         turns.stderr
     );
     assert!(
-        turns.stdout.starts_with('{'),
-        "stdout is the file's own jsonl:\n{}",
+        turns.stdout.starts_with('{') && !turns.stdout.contains("compaction crossing"),
+        "stdout is the file's own jsonl and nothing else:\n{}",
         turns.stdout
     );
 
-    let lines = h.run(&[
-        "show",
-        t.as_str(),
-        "--line",
-        "1..4",
-        "--raw",
-        "--cross-compactions",
-        "1",
-    ]);
-    assert!(lines.success, "stderr: {}", lines.stderr);
-    assert!(
-        !lines.stderr.contains("compaction crossing"),
-        "a line address crossed nothing to find its lines:\n{}",
-        lines.stderr
-    );
+    for address in [
+        vec!["--line", "1..4"],
+        vec!["--line", "11"],
+        vec!["--uuid", "u2"],
+    ] {
+        let mut argv = vec!["show", t.as_str()];
+        argv.extend_from_slice(&address);
+        argv.extend_from_slice(&["--raw", "--cross-compactions", "1"]);
+        let out = h.run(&argv);
+        assert!(out.success, "{address:?} stderr: {}", out.stderr);
+        assert!(
+            out.stdout.starts_with('{'),
+            "{address:?} prints the addressed bytes:\n{}",
+            out.stdout
+        );
+        for (stream, text) in [("stdout", &out.stdout), ("stderr", &out.stderr)] {
+            assert!(
+                !text.contains("compaction crossing"),
+                "{address:?} crossed nothing to find its lines, yet {stream} says so:\n{text}"
+            );
+        }
+    }
 }
 
 #[test]

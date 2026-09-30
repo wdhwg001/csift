@@ -220,9 +220,14 @@ pub(crate) fn run_raw(
             );
         }
         // A `--turn` window is resolved through the chain, so which lines these ARE moves with
-        // the crossing budget. `--line`/`--uuid` name their lines outright and the report stays
-        // the empty one, which says nothing. Stderr either way: stdout here is the file's own
-        // bytes and nothing else.
+        // the crossing budget, and it says what the walk crossed. A `--line`/`--uuid` address
+        // names its lines outright: this fetch builds NO chain for it (a line walk, a uuid
+        // prefilter), because the bytes it prints are the same under every budget, and the
+        // report stays the empty one, which says nothing. Building the chain only to disclose
+        // it would cost the escape hatch the rendered fetch's price - measured on a 397 MiB
+        // transcript, 97 ms for `--line 1 --raw` against 558 ms for the chain-building
+        // `--line 1 --format json`. Stderr either way: stdout here is the file's own bytes
+        // and nothing else.
         for line in crossing.lines() {
             eprintln!("{line}");
         }
