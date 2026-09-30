@@ -1466,6 +1466,11 @@ surface change bumps the PATCH.
   or `show`; the bookkeeping family printed its own copy to cover its leaves. One verdict
   now drives both: every undelivered unit is tagged once, and a bookkeeping line's label
   is unchanged. `search --help` states the rule.
+- **`search -c`, `-l` and `--count-by` name a skipped malformed line.** A torn line was
+  never matched, so a count, an id list or a census over a scope holding one covers the
+  parseable lines only - and those three modes said nothing about it. Each now prints
+  `csift: note: N malformed line(s) skipped` on stderr, as `--raw` does, and
+  `-c --format json`'s summary carries `skipped_lines`.
 
 ### Performance
 

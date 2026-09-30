@@ -237,3 +237,57 @@ fn verbatim_names_automation_in_scope_that_its_budget_did_not_select() {
         wide.stdout
     );
 }
+
+/// The three terminal modes - `-c`, `-l`, `--count-by` - print a bare datum on stdout, a
+/// count, an id list or a census; a torn line was never matched, so the datum is a claim
+/// about the parseable lines only and each mode names the skipped line on stderr, in the
+/// `--raw` form. `-c --format json` carries it in the summary's `skipped_lines`, as the
+/// census's JSON summary always has. Silent on a clean transcript, both ways.
+#[test]
+fn every_count_mode_names_a_torn_line_and_stays_silent_on_a_clean_scope() {
+    let (h, t) = raw_notes_home();
+    let (h2, t2) = clean_home();
+    for mode in [
+        vec!["-c"],
+        vec!["-l"],
+        vec!["--count-by", "label"],
+        vec!["--count-by", "turn"],
+    ] {
+        let mut args = vec!["search", "ZZNOTE", t.as_str()];
+        args.extend(mode.iter().copied());
+        let out = h.run(&args);
+        assert!(out.success, "{mode:?} stderr: {}", out.stderr);
+        assert!(
+            out.stderr
+                .contains(&format!("csift: note: 1 {MALFORMED_NOTE}")),
+            "{mode:?} must name the torn line: {}",
+            out.stderr
+        );
+        assert!(
+            !out.stdout.contains(MALFORMED_NOTE),
+            "{mode:?}'s stdout is the datum alone: {}",
+            out.stdout
+        );
+        let mut clean = vec!["search", "ZZNOTE", t2.as_str()];
+        clean.extend(mode.iter().copied());
+        let out = h2.run(&clean);
+        assert!(
+            !out.stderr.contains(MALFORMED_NOTE),
+            "{mode:?} claims a torn line on a clean transcript: {}",
+            out.stderr
+        );
+    }
+    for (home, target, want) in [(&h, t.as_str(), 1), (&h2, t2.as_str(), 0)] {
+        for mode in [vec!["-c"], vec!["--count-by", "label"]] {
+            let mut args = vec!["search", "ZZNOTE", target, "--format", "json"];
+            args.extend(mode.iter().copied());
+            let out = home.run(&args);
+            let summary = json_rows(&out.stdout, "summary");
+            assert_eq!(
+                summary[0]["skipped_lines"], want,
+                "{mode:?} --format json: {}",
+                out.stdout
+            );
+        }
+    }
+}
