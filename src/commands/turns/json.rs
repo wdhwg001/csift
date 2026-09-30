@@ -77,7 +77,7 @@ pub(crate) fn render_json(
     let dup = crate::path::duplicate_header_fields(&ctx.duplicates);
     let header = json!({
         "kind": "header",
-        "command": "turns",
+        "command": "verbatim",
         "sessions_in_scope": sc.in_scope,
         "duplicate_transcripts": dup["duplicate_transcripts"],
         "duplicate_records_dropped": dup["duplicate_records_dropped"],

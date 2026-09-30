@@ -265,3 +265,35 @@ fn image_json_header_carries_the_scope_counts_the_span_commands_share() {
     // The fixture spans two subagents under one session, so the counts are not all zero.
     assert_eq!(reference["subagent_sessions"], 2, "{reference}");
 }
+
+/// Every enveloped `--format json` stream's header NAMES its own subcommand (SPEC section
+/// 8.2), which is the value a consumer keys a mixed stream on - `verbatim` included, whose
+/// module and handler still carry the name `turns`.
+#[test]
+fn every_json_header_names_the_subcommand_that_printed_it() {
+    let h = populated_home();
+    let at_sess = at(SESS);
+    let s = at_sess.as_str();
+    for args in [
+        vec!["list", s],
+        vec!["search", "", s],
+        vec!["show", s, "--line", "1"],
+        vec!["stats", s],
+        vec!["agents", s],
+        vec!["files", s],
+        vec!["recover", s, "--file", "nosuch.rs", "--coverage"],
+        vec!["verbatim", s],
+        vec!["image", s],
+    ] {
+        let mut full = args.clone();
+        full.extend(["--format", "json"]);
+        let out = h.run(&full);
+        let line = out.stdout.lines().find(|l| !l.trim().is_empty());
+        let Some(line) = line else {
+            panic!("{full:?} printed no stdout; stderr: {}", out.stderr);
+        };
+        let v: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(v["kind"], "header", "{full:?}: {v}");
+        assert_eq!(v["command"], args[0], "{full:?}: {v}");
+    }
+}

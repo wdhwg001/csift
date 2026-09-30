@@ -1456,6 +1456,9 @@ surface change bumps the PATCH.
   `verbatim`, `files`, `recover`, `image`) counts one turn fewer on its transcript. A
   surface that reads no whole transcript (the `list` preview, the live tail) renders an
   answer from its structured fields only.
+- **`verbatim --format json` names itself in its header.** The header line read
+  `"command":"turns"`, the command's name before its rename, while every other command's
+  header names that command; it reads `"command":"verbatim"`.
 
 ### Performance
 
