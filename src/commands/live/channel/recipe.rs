@@ -25,12 +25,20 @@ pub(crate) enum RecipeShell {
     Powershell,
 }
 
-/// The two lines that say who installs the block. Kept beside the renderer so the note can
-/// never drift away from the fragment it belongs to.
+/// The two lines that say who installs the block and how. Kept beside the renderer so the
+/// note can never drift away from the fragment it belongs to.
+///
+/// The fragment's top level is `{"hooks": {...}}`, the shape of a whole settings file, so
+/// the first line says to MERGE it at the file's top level. Pasted INTO the file's `hooks`
+/// object it would nest `hooks.hooks`, a key that names no hook event, so no entry would
+/// sit under the event it was written for; and an event the file already arms keeps its
+/// entries only if the new ones are appended to its array rather than written over it.
 const NOTE: [&str; 2] = [
-    "Paste the block above into the `hooks` object of a settings.json you own (user, \
-     project or local scope); the eight events are the delivery points, and slot k emits \
-     chunk k of what is waiting there.",
+    "Merge the block above into a settings.json you own (user, project or local scope) \
+     at its top level: the block's `hooks` key merges with the file's own `hooks` key, \
+     and each event's array is appended to the one already there, never replacing it; \
+     the eight events are the delivery points, and slot k emits chunk k of what is \
+     waiting there.",
     "csift never writes a settings file: arming the channel is your edit, and `csift \
      deliver` only ever writes its own sidecar directory.",
 ];

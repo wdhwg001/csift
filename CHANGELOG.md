@@ -1471,6 +1471,12 @@ surface change bumps the PATCH.
   parseable lines only - and those three modes said nothing about it. Each now prints
   `csift: note: N malformed line(s) skipped` on stderr, as `--raw` does, and
   `-c --format json`'s summary carries `skipped_lines`.
+- **`deliver --recipe` says where its block goes.** The block's top level is
+  `{"hooks": {...}}`, and the note said to paste it into the `hooks` object of a
+  settings.json, which nests `hooks.hooks`. The note now says to merge it at the file's
+  top level - the block's `hooks` key with the file's own, each event's array appended to,
+  never replacing, the one already there - and `deliver --help` names the fragment the
+  same way.
 
 ### Performance
 

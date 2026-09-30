@@ -113,8 +113,9 @@ pub struct DeliverArgs {
     )]
     pub slot: Option<u32>,
 
-    /// Print the settings.json `hooks` block that arms the channel (stdout), plus a
-    /// two-line note about who installs it (stderr), and exit. Writes nothing.
+    /// Print the settings.json fragment that arms the channel - a top-level `hooks` object
+    /// to merge with the file's own (stdout) - plus a two-line note about who installs it
+    /// and how (stderr), and exit. Writes nothing.
     #[arg(long = "recipe")]
     pub recipe: bool,
 

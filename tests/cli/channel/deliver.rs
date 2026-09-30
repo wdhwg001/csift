@@ -536,6 +536,22 @@ fn the_recipe_prints_the_block_and_says_who_installs_it() {
     }
     assert_eq!(out.stderr.lines().count(), 2, "a two-line note");
     assert!(out.stderr.contains("never writes a settings file"));
+    // The fragment's top level is `{"hooks": ...}`, so the note says to MERGE it at the
+    // file's top level and append to each event's array: pasted INTO the file's `hooks`
+    // object it would nest `hooks.hooks`, a key that names no hook event.
+    assert_eq!(
+        out.stderr.lines().next().unwrap(),
+        "Merge the block above into a settings.json you own (user, project or local scope) \
+         at its top level: the block's `hooks` key merges with the file's own `hooks` key, \
+         and each event's array is appended to the one already there, never replacing it; \
+         the eight events are the delivery points, and slot k emits chunk k of what is \
+         waiting there."
+    );
+    assert!(
+        !out.stderr.contains("into the `hooks` object"),
+        "{}",
+        out.stderr
+    );
 
     let ps = h.run(&[
         "deliver",
