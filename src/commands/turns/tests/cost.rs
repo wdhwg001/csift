@@ -302,18 +302,18 @@ fn min_render_chars_is_a_lower_bound_or_none_for_empty() {
         vec![mk_turn(0, Some("ask"), Some("reply"), 1, 0)],
         Vec::new(),
     );
-    let min = min_render_chars(&full, 40000, &cfg());
+    let min = min_render_chars(&full, &cfg());
     assert!(min.is_some_and(|m| m > 0));
     let mut empty = full;
     empty.turns.clear();
-    assert_eq!(min_render_chars(&empty, 40000, &cfg()), None);
+    assert_eq!(min_render_chars(&empty, &cfg()), None);
 
     // A user-ONLY turn (no agents) and an agent-ONLY turn (no user) each take only their
     // respective fold arm of the cheapest-side computation; both still yield a positive bound.
     let user_only = scan_with_turns(vec![mk_turn(0, Some("ask"), None, 0, 0)], Vec::new());
-    assert!(min_render_chars(&user_only, 40000, &cfg()).is_some_and(|m| m > 0));
+    assert!(min_render_chars(&user_only, &cfg()).is_some_and(|m| m > 0));
     let agent_only = scan_with_turns(vec![mk_turn(0, None, Some("reply"), 0, 0)], Vec::new());
-    assert!(min_render_chars(&agent_only, 40000, &cfg()).is_some_and(|m| m > 0));
+    assert!(min_render_chars(&agent_only, &cfg()).is_some_and(|m| m > 0));
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn min_render_chars_none_when_turn_has_no_sides() {
         automation: None,
     };
     let sr = scan_with_turns(vec![sideless], Vec::new());
-    assert_eq!(min_render_chars(&sr, 40000, &cfg()), None);
+    assert_eq!(min_render_chars(&sr, &cfg()), None);
 }
 
 #[test]

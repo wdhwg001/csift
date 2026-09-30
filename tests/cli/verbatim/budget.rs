@@ -367,3 +367,27 @@ fn a_one_character_budget_reads_one_char() {
         two.stdout
     );
 }
+
+/// The skip note's `needs >= N` is the budget that renders: N itself renders the session,
+/// N - 1 skips it, and every smaller budget - one of a different digit count, and the
+/// singular `1 char` - names the same N. The header prints the budget, so the reservation
+/// the need includes has to be the one AT N, not at the budget the run was given.
+#[test]
+fn the_skip_note_names_the_budget_that_renders() {
+    let h = turns_home();
+    let need = |budget: usize| -> Option<usize> {
+        let out = h.run(&["verbatim", &at(SESS), "--budget", &budget.to_string()]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        let at = out.stdout.find("needs ≥ ")?;
+        out.stdout[at + "needs ≥ ".len()..]
+            .split(|c: char| !c.is_ascii_digit())
+            .next()
+            .and_then(|d| d.parse().ok())
+    };
+    let n = need(1).expect("a one-character budget skips the session");
+    assert!(n > 100, "{n}");
+    for smaller in [2, 9, 10, 99, 100, n - 1] {
+        assert_eq!(need(smaller), Some(n), "budget {smaller}");
+    }
+    assert_eq!(need(n), None, "budget {n} renders the session");
+}

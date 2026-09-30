@@ -87,8 +87,15 @@ pub(crate) fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> S
 /// turn at all (an empty session - a different, honest "nothing to restore" case). The
 /// estimate is the doc-header reservation + the cheapest single side of the most-recent
 /// turn, a true lower bound on what any non-empty plan for this session would cost.
-pub(crate) fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg) -> Option<usize> {
-    let header = doc_header_block_max_chars(sr, budget);
+///
+/// The reservation is rendered AT THE BUDGET BEING ASKED ABOUT, not at the one the run was
+/// given: the header prints the budget, so its width follows the budget's digits and its
+/// plural, and a need computed at `--budget 1` came out short by exactly those characters.
+/// So the answer is a FIXPOINT, the least `b` with `reservation(b) + cheapest <= b`,
+/// found by iterating up from `cheapest`: the reservation never shrinks as `b` grows, so
+/// each step stays at or below that least `b` and the walk stops on it - the same
+/// fixpoint shape the channel chunker's part count takes.
+pub(crate) fn min_render_chars(sr: &ScanResult, cfg: &RichnessCfg) -> Option<usize> {
     let cheapest = sr
         .turns
         .iter()
@@ -106,7 +113,14 @@ pub(crate) fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg
     if cheapest == usize::MAX {
         return None;
     }
-    Some(header + cheapest)
+    let mut need = cheapest;
+    loop {
+        let at = doc_header_block_max_chars(sr, need).saturating_add(cheapest);
+        if at <= need {
+            return Some(need);
+        }
+        need = at;
+    }
 }
 
 /// How many of the SELECTED user-showing units are MACHINE automation triggers

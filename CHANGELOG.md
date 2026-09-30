@@ -1484,6 +1484,11 @@ surface change bumps the PATCH.
   on stderr; only a `--turn` window does, as `show --help` already said. A `--line` or
   `--uuid` raw fetch builds no chain - its bytes are the same under every budget - and
   prints nothing about crossing on either stream; no output moved.
+- **`verbatim`'s skip note names the budget that renders.** A skipped session's `needs ≥ N
+  chars` added the header rendered at the budget the run was given, and the header prints
+  that budget, so N moved with its digits and its plural - on one fixture `--budget 1` said
+  392 and `--budget 100` said 399, the budget that renders. N is now the least budget that
+  fits the header rendered at N itself, the same at every skipped budget.
 
 ### Performance
 

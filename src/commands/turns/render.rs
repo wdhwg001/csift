@@ -165,7 +165,7 @@ pub(crate) fn render_text(
     let mut skipped_any = false;
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         if plan.selected.is_empty() && !sr.is_subagent {
-            if let Some(min) = min_render_chars(sr, ctx.budget_chars, &ctx.cfg) {
+            if let Some(min) = min_render_chars(sr, &ctx.cfg) {
                 writeln!(
                     out,
                     "SESSION {}  skipped — its first round-trip needs ≥ {} chars; \
