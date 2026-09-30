@@ -552,6 +552,7 @@ fn show_uuid_fetches_the_addressed_records_and_nothing_else() {
 
 mod addresses;
 mod branching;
+mod caps;
 mod drafts;
 mod fetch_domain;
 mod row_keys;

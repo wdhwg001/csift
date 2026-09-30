@@ -90,6 +90,8 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         boundary's own object verbatim, including the `preservedMessages` uuid lists the \
         one-line excerpt only counts. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
+        refetch_overlap (how many units of that continuation were already shown: non-zero only \
+        for a `--turn` window the cap cut inside a turn; null with no continuation), \
         non_record_lines (lines that exist and render no record), lines_past_end (lines a \
         range named past the file's last line), skipped_lines, with_elicitation_sidecar}, plus \
         the crossing set \
@@ -187,10 +189,14 @@ pub struct ShowArgs {
 
     /// Cap the emitted record units: the CONTEXT-FLOOD guard for open ranges (`--line ..`
     /// / `--turn ..` address a whole transcript). Defaults to 200. The cap keeps the records
-    /// on the LOWEST lines, whole records (at least one), whatever order they render in; the
-    /// drop is ALWAYS reported, with the exact continuation command for the remainder, a
-    /// `--line` range from the first dropped line to the end of what was addressed. `0` =
-    /// uncapped (the crate-wide `--max-count 0` convention).
+    /// on the LOWEST lines (a `--turn` window: its earliest turns), whole records (at least
+    /// one), whatever order they render in; the drop is ALWAYS reported, with the
+    /// continuation command for the remainder in the addressing you used. A `--line` or
+    /// `--uuid` address continues exactly: its own ranges clipped at the first dropped line,
+    /// and the dropped uuids. A `--turn` window continues as `--turn K..<its end>`, exact from
+    /// a turn boundary; when the cap cut inside turn K, the pointer (and JSON
+    /// `refetch_overlap`) says how many of tK's units it repeats. `0` = uncapped (the
+    /// crate-wide `--max-count 0` convention).
     #[arg(long, value_name = "N")]
     pub max_count: Option<usize>,
 

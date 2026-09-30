@@ -30,10 +30,14 @@ use crate::timez::format_local_compact;
 
 mod addr;
 mod branch;
+mod cap;
 mod render;
 mod run;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use addr::*;
 pub(crate) use branch::*;
+pub(crate) use cap::*;
 pub(crate) use render::*;
 pub(crate) use run::*;

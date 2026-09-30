@@ -1520,14 +1520,20 @@ surface change bumps the PATCH.
   takes the routing id.** Its third line now states the two tools' facts apart: the routing id
   `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
   takes the bare name or the transcript id.
-- **`show`'s cap continuation dropped the records after an abandoned one.** The rendered
-  fetch kept its first `cap` units in render order, which puts an abandoned unit after every
-  live one, and read the continuation off that order, so a window with an abandoned record
-  printed a continuation that stopped at it or ran backwards: on one transcript
-  `--line 1..400` continued with `--line 201..393` and lost L394-L400. The cap now keeps the
-  records on the lowest lines, whole records, and the continuation runs from the first
-  dropped line to the end of what was addressed, so it fetches exactly what was dropped.
-  `show --help` says so under `--max-count`.
+- **`show`'s cap continuation dropped the records after an abandoned one, and fetched
+  records nobody addressed.** The rendered fetch kept its first `cap` units in render order,
+  which puts an abandoned unit after every live one, and read the continuation off that
+  order, so a window with an abandoned record printed a continuation that stopped at it or
+  ran backwards: on one transcript `--line 1..400` continued with `--line 201..393` and lost
+  L394-L400. The cap now keeps the records on the lowest lines, whole records, and the
+  continuation is written in the addressing the reader used. A line address continues as
+  its own ranges clipped at the first dropped line (`--line 1..4,9..14` cut at L3 continues
+  `--line 3..4,9..14`, where one range from L3 also fetched L5-L8), a uuid address as the
+  dropped uuids, and a mixed one as both; each fetches exactly the dropped records. A
+  `--turn` window continues as a window, `--turn K..<its end>`, exact from a turn boundary;
+  when the cap cut inside a turn the pointer says how many of that turn's units it repeats,
+  and the JSON summary carries them as the new `refetch_overlap`. `show --raw`'s stderr
+  continuation follows the same rule. `show --help` says so under `--max-count`.
 - **A quoted relay framing no longer emits an inbox unit.** An assistant text opening with
   `Another Claude session sent a message:` and a quoted `<agent-message>`, and a compaction
   summary carrying a peer section, each emitted an `agent.communication.inbox` unit whose

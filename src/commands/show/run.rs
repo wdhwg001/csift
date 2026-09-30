@@ -17,12 +17,14 @@ pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
         bail!("--raw is mutually exclusive with --format json (raw IS the file's own JSON)");
     }
     let parsed = parse_line_specs(&args.line)?;
-    let uuids: BTreeSet<String> = args
-        .uuid
-        .iter()
-        .map(|u| u.trim().to_string())
-        .filter(|u| !u.is_empty())
-        .collect();
+    // In the order given, each once: the continuation of a capped fetch names the dropped
+    // uuids in the reader's order.
+    let mut uuids: Vec<String> = Vec::new();
+    for u in args.uuid.iter().map(|u| u.trim()).filter(|u| !u.is_empty()) {
+        if !uuids.iter().any(|seen| seen == u) {
+            uuids.push(u.to_string());
+        }
+    }
     // `--turn` addresses by turn index (0-based, the `·tN` search's headers print) rather than by
     // jsonl line - the SAME shared range grammar (`N`/`A..B`/`N..`/`-k`). Clap forbids mixing
     // it with `--line`/`--uuid`, so it is a self-contained addressing mode.
@@ -88,7 +90,7 @@ pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
 pub(crate) fn run_raw(
     file: &std::path::Path,
     specs: &LineSpecs,
-    uuids: &BTreeSet<String>,
+    uuids: &[String],
     turn_range: Option<crate::text::RangeSpec>,
     max_count: Option<usize>,
     cross: CrossingBudget,
@@ -104,8 +106,11 @@ pub(crate) fn run_raw(
         uuids.iter().map(|u| (u, None)).collect();
     let mut wanted_lines = specs.all();
     // `--turn --raw`: resolve the turn range to its records' physical lines (via the shared
-    // grouping, so the turn numbering matches `search`), then emit those lines verbatim.
+    // grouping, so the turn numbering matches `search`), then emit those lines verbatim. The
+    // turn of each line rides along, because a capped window continues as a window.
     let mut crossing = crate::model::CrossingReport::new(cross);
+    let mut line_turn: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+    let mut window_last = None;
     if let Some(spec) = turn_range {
         let (exchanges, _, turn_count, report) =
             fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec), cross)?;
@@ -114,10 +119,14 @@ pub(crate) fn run_raw(
         if turn_spec_is_explicit(&spec) && exchanges.is_empty() {
             return Err(turn_miss_error(&spec, turn_count));
         }
+        window_last = Some(spec.resolve(turn_count, false).1);
         for ex in &exchanges {
             for h in &ex.hits {
                 if h.line > 0 {
                     wanted_lines.insert(h.line);
+                    if let Some(t) = ex.turn_index {
+                        line_turn.insert(h.line, t);
+                    }
                 }
             }
         }
@@ -176,18 +185,31 @@ pub(crate) fn run_raw(
     }
 
     // Context-flood guard: keep the FIRST `cap` lines, report the drop on stderr (stdout
-    // stays a pure jsonl stream) with the exact continuation command.
+    // stays a pure jsonl stream) with the continuation command, in the address domain the
+    // reader used - the rule the rendered fetch follows, one line a unit.
     let cap = effective_cap(max_count);
-    let mut dropped = 0usize;
-    let mut continuation: Option<(usize, usize)> = None;
-    if keep.len() > cap {
-        dropped = keep.len() - cap;
-        let omitted: Vec<usize> = keep.keys().skip(cap).copied().collect();
-        if let (Some(&a), Some(&b)) = (omitted.first(), omitted.last()) {
-            continuation = Some((a, b));
-        }
-        keep = keep.into_iter().take(cap).collect();
-    }
+    let domain = match window_last {
+        Some(last) => Addressed::Turns { last },
+        None => Addressed::Records { specs, uuids },
+    };
+    let capped = {
+        let uuid_of: std::collections::BTreeMap<usize, &str> = uuid_line
+            .iter()
+            .filter_map(|(u, slot)| slot.map(|l| (l, u.as_str())))
+            .collect();
+        let units: Vec<Unit> = keep
+            .keys()
+            .map(|&line| Unit {
+                line,
+                uuid: uuid_of.get(&line).copied(),
+                turn: line_turn.get(&line).copied(),
+            })
+            .collect();
+        cap_units(&units, cap, &domain)
+    };
+    let dropped = capped.dropped;
+    let mut flags = capped.keep.iter().copied();
+    keep.retain(|_, _| flags.next().unwrap_or(true));
 
     let mut out = crate::text::Out::stdout();
     for line in keep.values() {
@@ -210,8 +232,12 @@ pub(crate) fn run_raw(
         }
         if dropped > 0 {
             let sid = crate::subagent::session_id_from_path(file);
-            let cont = match continuation {
-                Some((a, b)) => format!(" · continue: csift show @{sid} --line {a}..{b} --raw"),
+            let cont = match &capped.continuation {
+                Some(c) => format!(
+                    " · continue: csift show @{sid} {} --raw{}",
+                    c.args,
+                    overlap_note(c.overlap, c.overlap_turn, "line")
+                ),
                 None => String::new(),
             };
             eprintln!(
@@ -240,14 +266,19 @@ pub(crate) fn run_raw(
 pub(crate) fn run_rendered(
     file: &std::path::Path,
     specs: &LineSpecs,
-    uuids: &BTreeSet<String>,
+    uuids: &[String],
     turn_range: Option<crate::text::RangeSpec>,
     format: OutputFormat,
     max_count: Option<usize>,
     cross: CrossingBudget,
 ) -> Result<()> {
-    let (mut exchanges, skipped, turn_count, crossing) =
-        fetch_records(file, specs.all(), uuids.clone(), turn_range, cross)?;
+    let (mut exchanges, skipped, turn_count, crossing) = fetch_records(
+        file,
+        specs.all(),
+        uuids.iter().cloned().collect(),
+        turn_range,
+        cross,
+    )?;
 
     // Turn address-miss: an EXPLICIT `--turn N` / `--turn A..B` is an ADDRESS (law 1) -
     // resolving to zero records is a hard error naming the transcript's turn domain,
@@ -310,12 +341,39 @@ pub(crate) fn run_rendered(
 
     // Context-flood guard (law 4's last hole): an open range (`--line ..` / `--turn ..`)
     // addresses the WHOLE transcript, so uncapped it would dump the lot. Keep the FIRST
-    // `cap` record units and report the drop with the exact continuation command;
-    // `--max-count 0` lifts the cap.
+    // `cap` record units and report the drop with the continuation command, in the address
+    // domain the reader used; `--max-count 0` lifts the cap.
     let cap = effective_cap(max_count);
-    let (dropped, remainder) = cap_by_line(&mut exchanges, cap, addressed.last().copied());
-    let remainder_cmd: Option<String> =
-        remainder.map(|(a, b)| format!("csift show @{session_id} --line {a}..{b}"));
+    let domain = match turn_range {
+        Some(spec) => Addressed::Turns {
+            last: spec.resolve(turn_count, false).1,
+        },
+        None => Addressed::Records { specs, uuids },
+    };
+    let capped = {
+        let units: Vec<Unit> = exchanges
+            .iter()
+            .flat_map(|e| {
+                e.hits.iter().map(|h| Unit {
+                    line: h.line,
+                    uuid: h.uuid.as_deref(),
+                    turn: e.turn_index,
+                })
+            })
+            .collect();
+        cap_units(&units, cap, &domain)
+    };
+    let mut flags = capped.keep.iter().copied();
+    for ex in &mut exchanges {
+        ex.hits.retain(|_| flags.next().unwrap_or(true));
+    }
+    exchanges.retain(|e| !e.hits.is_empty());
+    let dropped = capped.dropped;
+    let remainder = capped.continuation.map(|c| Remainder {
+        cmd: format!("csift show @{session_id} {}", c.args),
+        overlap: c.overlap,
+        overlap_turn: c.overlap_turn,
+    });
 
     match format {
         OutputFormat::Text => {
@@ -327,7 +385,7 @@ pub(crate) fn run_rendered(
                 skipped,
                 dropped,
                 cap,
-                remainder_cmd.as_deref(),
+                remainder.as_ref(),
                 uncovered,
                 &crossing,
             )?;
@@ -340,69 +398,10 @@ pub(crate) fn run_rendered(
             &parent_session_id,
             skipped,
             dropped,
-            remainder_cmd.as_deref(),
+            remainder.as_ref(),
             uncovered,
             &crossing,
         )?,
     }
     Ok(())
-}
-
-/// The rendered fetch's context-flood guard: keep the records on the LOWEST lines, as many as
-/// fit in `cap` units - whole records, since a record's units share its line and a cut
-/// through one would leave the continuation re-fetching its kept half, and always at least
-/// one. Returns the dropped unit count and the continuation's `--line` range: from the first
-/// dropped line to the end of what was addressed - `addressed_max`, the last line the
-/// `--line` specs name, or the last dropped unit's line when later (a `--turn` window's last
-/// turn, a uuid). The render sorts an abandoned unit after the live ones, so the order a
-/// record is SHOWN in is not the order its line comes in: keeping the first units in render
-/// order dropped live lines above a kept abandoned one, and a continuation read off that
-/// order ran backwards or stopped at the abandoned line, losing the records after it. A
-/// sidecar-merged unit has no physical line: it sorts last and rides no continuation.
-pub(crate) fn cap_by_line(
-    exchanges: &mut Vec<Exchange>,
-    cap: usize,
-    addressed_max: Option<usize>,
-) -> (usize, Option<(usize, usize)>) {
-    let key = |h: &crate::commands::search::Hit| {
-        if h.from_sidecar || h.line == 0 {
-            usize::MAX
-        } else {
-            h.line
-        }
-    };
-    let mut keys: Vec<usize> = exchanges
-        .iter()
-        .flat_map(|e| e.hits.iter())
-        .map(key)
-        .collect();
-    if keys.len() <= cap {
-        return (0, None);
-    }
-    keys.sort_unstable();
-    // The first line past the cap; a first line holding more than `cap` units is kept whole.
-    let mut cutoff = keys[cap];
-    if cutoff == keys[0] {
-        cutoff = keys
-            .iter()
-            .copied()
-            .find(|&k| k > cutoff)
-            .unwrap_or(usize::MAX);
-    }
-    let dropped = keys.iter().filter(|&&k| k >= cutoff).count();
-    if dropped == 0 {
-        return (0, None);
-    }
-    let last_dropped = keys.iter().copied().filter(|&k| k != usize::MAX).max();
-    let remainder = (cutoff != usize::MAX).then(|| {
-        let end = last_dropped
-            .unwrap_or(cutoff)
-            .max(addressed_max.unwrap_or(0));
-        (cutoff, end)
-    });
-    for ex in exchanges.iter_mut() {
-        ex.hits.retain(|h| key(h) < cutoff);
-    }
-    exchanges.retain(|e| !e.hits.is_empty());
-    (dropped, remainder)
 }
