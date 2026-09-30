@@ -28,7 +28,7 @@ pub(crate) const SECTION: &str =
      on every record of a subagent lane. `request_id` and `api_block_index` say which API \
      request and which block of its response this record is; they are join keys and ride \
      JSON alone. `tool_ends_turn` renders `[ends turn]`. `user_feedback` renders \
-     `[feedback: <first 60 characters>]` and carries the whole text on the wire. The \
+     `[feedback: <first 60 characters, on one line>]` and carries the whole text on the wire. The \
      API-failure set rides one `api_failure` object {error, status, quota{limit_type, \
      resets_at}, truncated_after_output, aborted_mid_stream} and renders \
      `[api failure <kind> status <n> quota <window> truncated after output aborted \

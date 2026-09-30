@@ -103,6 +103,23 @@ fn the_refusal_text_is_cut_in_the_label_zone_and_whole_on_the_wire() {
     );
 }
 
+/// A refusal typed over several lines is ONE label-zone line - flattened before the cut, as
+/// every excerpt is - while the wire keeps its newlines.
+#[test]
+fn a_multi_line_refusal_is_one_label_zone_line() {
+    let line = r#"{"type":"user","uuid":"u-3","toolDenialKind":"user-rejected","userFeedback":"no\n\n  use the\tstaging copy"}"#;
+    let (zones, json) = projections(line, Some(Class::AgentToolResult));
+    assert_eq!(
+        zones.first().map(String::as_str),
+        Some("[feedback: no use the staging copy]")
+    );
+    assert!(
+        json.iter()
+            .any(|j| j.contains(r"no\n\n  use the\tstaging copy")),
+        "the wire keeps the typed text whole: {json:?}"
+    );
+}
+
 /// `[ends turn]` is a tag because it says something about THIS record a reader acts on.
 #[test]
 fn a_turn_ending_tool_result_says_so_in_the_label_zone() {

@@ -1534,6 +1534,10 @@ surface change bumps the PATCH.
   `label` was not among the record's own `labels`. The per-section units now come only from
   the records the classification reads sections on: a user record that is neither an
   elicitation marker nor a compaction summary.
+- **A refusal typed over several lines prints its hit on one line.** The `[feedback: ...]`
+  tag kept the newlines inside the first 60 characters of the typed text, so the rest of
+  the hit continued on new lines. The tag now flattens the text before it cuts it, and JSON
+  `user_feedback` still carries the words whole.
 
 ### Performance
 

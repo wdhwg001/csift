@@ -433,3 +433,44 @@ fn stop_details_tags_the_unit_and_rides_the_wire_beside_the_stop_reason() {
     assert!(ended.get("stop_details").is_none(), "{ended}");
     assert!(ended.get("stop_reason").is_none(), "{ended}");
 }
+
+/// A refusal typed over several lines renders its hit on ONE text line: the `[feedback: ...]`
+/// tag flattens the typed text before it is cut, as every excerpt does, and the JSON keeps
+/// the words whole, newlines included.
+#[test]
+fn a_multi_line_refusal_renders_one_line_per_hit() {
+    let h = Home::new();
+    let sess = "7c6b5a49-3827-4615-9403-f2e1d0c9b8a8";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"change the plan"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu-9","name":"Edit","input":{"file_path":"/p/x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","toolDenialKind":"user-rejected","userFeedback":"zzmulti first\nsecond line\n\nthird","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu-9","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nzzmulti first\nsecond line\n\nthird"}]}}"#, "\n",
+        ),
+    );
+    let text = h.run(&["search", "", &at(sess), "-t", "user.rejection"]);
+    assert!(text.success, "{}", text.stderr);
+    let tagged: Vec<&str> = text
+        .stdout
+        .lines()
+        .filter(|l| l.contains("[feedback: "))
+        .collect();
+    assert_eq!(tagged.len(), 1, "{}", text.stdout);
+    assert!(
+        tagged[0].contains("[feedback: zzmulti first second line third]"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        !text.stdout.lines().any(|l| l.trim() == "second line"),
+        "no fragment of the tag on a line of its own: {}",
+        text.stdout
+    );
+    let json = h.run(&["show", &at(sess), "--line", "3", "--format", "json"]);
+    let rec = &json_rows(&json.stdout, "record")[0];
+    assert_eq!(
+        rec["user_feedback"], "zzmulti first\nsecond line\n\nthird",
+        "{rec}"
+    );
+}

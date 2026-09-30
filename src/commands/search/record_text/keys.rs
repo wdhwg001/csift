@@ -134,9 +134,11 @@ impl Fact {
                 .specific()
                 .map(|(kind, name)| format!("[via {kind} {name}]")),
             Fact::ToolEndsTurn => Some("[ends turn]".to_string()),
+            // A label-zone tag is ONE line: a refusal typed over several lines is flattened
+            // before it is cut, the rule every excerpt takes, and JSON keeps the words whole.
             Fact::UserFeedback(text) => Some(format!(
                 "[feedback: {}]",
-                crate::text::truncate_excerpt(text, FEEDBACK_MAX)
+                crate::text::collapse_and_truncate(text, FEEDBACK_MAX)
             )),
             // `headline` is `None` exactly when the failure says nothing, and the model
             // layer never builds one that does - so this can render no floor word.

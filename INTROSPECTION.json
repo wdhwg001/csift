@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2559",
+          "lines": "2560",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -89263,7 +89263,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(for_edge(\n            EdgeKind::Interrupted,\n            Basis::Key,\n            Some(id),\n            None,\n            ctx,\n        ));",
-          "lines": "355-361"
+          "lines": "357-363"
         }
       ],
       "states": [
@@ -89357,7 +89357,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(HitFact::ForUnknown {",
-          "lines": "370"
+          "lines": "372"
         }
       ],
       "states": [
@@ -89406,7 +89406,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "            Fact::UserFeedback(text) => Some(format!(",
-          "lines": "137"
+          "lines": "139"
         }
       ],
       "states": [
@@ -89506,7 +89506,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3594"
+          "lines": "3595"
         }
       ],
       "states": [
@@ -89561,7 +89561,7 @@
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "lines": "325-332",
+          "lines": "327-334",
           "snippet": "    if let Some(p) = crate::commands::image::record_pdf_pages(rec) {\n        push(Fact::PdfPages {\n            first: p.first,\n            last: p.last(),\n            count: p.count,\n            path: p.path,\n        });\n    }"
         }
       ],
@@ -90725,7 +90725,7 @@
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "lines": "286",
+          "lines": "288",
           "snippet": "    if let Some(s) = rec.stop_details() {"
         }
       ],
