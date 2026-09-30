@@ -168,6 +168,24 @@ fn a_turn_with_hits_and_siblings_builds_one_root_table() {
     );
 }
 
+/// A sibling is stamped like a matched unit: it answers which message it corresponds to,
+/// so none carries the empty default a unit the backfill never reached would keep.
+#[test]
+fn every_sibling_carries_its_root_answer() {
+    let mut a = args("carry");
+    a.siblings = true;
+    let ex = search(&fixture(), &a);
+    assert!(!ex[0].siblings.is_empty(), "the turn has siblings");
+    for s in &ex[0].siblings {
+        assert_ne!(
+            s.for_root,
+            crate::model::RootLink::default(),
+            "sibling at L{}",
+            s.line
+        );
+    }
+}
+
 /// A turn that matched NOTHING pays nothing: the table is built on a turn's FIRST hit and
 /// not before, which is the other half of the cost sentence.
 #[test]
