@@ -363,3 +363,192 @@ fn a_refusal_lists_ten_candidates_and_counts_the_rest() {
     );
     assert!(!out.stderr.contains("/p/d12/"), "{}", out.stderr);
 }
+
+/// One session whose shell starts in `/work/proj` (every conversation record carries that
+/// cwd), writing then editing each `(path, first, second)` file, with a file-history snapshot
+/// line after the first write keying `snapshot_key` RELATIVE and carrying no cwd - the shape
+/// Claude Code writes. `cwd` empty writes records with no cwd at all.
+fn snapshot_session(
+    h: &Home,
+    sess: &str,
+    cwd: &str,
+    snapshot_key: &str,
+    files: &[(&str, &str, &str)],
+) {
+    let cwd_field = if cwd.is_empty() {
+        String::new()
+    } else {
+        format!(r#""cwd":"{cwd}","#)
+    };
+    let mut lines = vec![format!(
+        r#"{{"type":"user","uuid":"u0",{cwd_field}"timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"write the files"}}}}"#
+    )];
+    for (i, (file, first, second)) in files.iter().enumerate() {
+        let s = 10 * (i + 1);
+        lines.push(format!(
+            r#"{{"type":"assistant","uuid":"w{i}",{cwd_field}"timestamp":"2026-06-07T05:00:{s:02}.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"tw{i}","name":"Write","input":{{"file_path":"{file}","content":"{first}\n"}}}}]}}}}"#
+        ));
+        lines.push(format!(
+            r#"{{"type":"user","uuid":"rw{i}",{cwd_field}"timestamp":"2026-06-07T05:00:{:02}.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"tw{i}","content":"File created successfully at: {file}"}}]}}}}"#,
+            s + 1
+        ));
+        if i == 0 && !snapshot_key.is_empty() {
+            lines.push(format!(
+                r#"{{"type":"file-history-snapshot","messageId":"m{i}","snapshot":{{"messageId":"m{i}","timestamp":"2026-06-07T05:00:{:02}.000Z","trackedFileBackups":{{"{snapshot_key}":{{"backupFileName":"feed0003@v1","version":1,"backupTime":"2026-06-07T05:00:{:02}.000Z"}}}}}},"isSnapshotUpdate":false}}"#,
+                s + 2,
+                s + 2
+            ));
+        }
+        lines.push(format!(
+            r#"{{"type":"assistant","uuid":"e{i}",{cwd_field}"timestamp":"2026-06-07T05:00:{:02}.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"te{i}","name":"Edit","input":{{"file_path":"{file}","old_string":"{first}","new_string":"{second}"}}}}]}}}}"#,
+            s + 3
+        ));
+        lines.push(format!(
+            r#"{{"type":"user","uuid":"re{i}",{cwd_field}"timestamp":"2026-06-07T05:00:{:02}.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"te{i}","content":"The file {file} has been updated."}}]}}}}"#,
+            s + 4
+        ));
+    }
+    h.write(&format!("{ENC}/{sess}.jsonl"), &(lines.join("\n") + "\n"));
+}
+
+/// A file-history key is relative to the directory the session started in and its line
+/// carries no cwd, so it names the SAME file as the absolute Write/Edit path it is the tail
+/// of: a suffix target replays that one file, in both modes and from a manifest, where
+/// counting the raw key as a second file refused every suffix.
+#[test]
+fn a_relative_snapshot_key_names_the_file_under_the_transcripts_first_cwd() {
+    let h = Home::new();
+    let sess = "7c7d7e7f-1111-4222-8333-944455566621";
+    snapshot_session(
+        &h,
+        sess,
+        "/work/proj",
+        "src/lib.rs",
+        &[("/work/proj/src/lib.rs", "one", "two")],
+    );
+    for target in ["lib.rs", "src/lib.rs", "/work/proj/src/lib.rs"] {
+        let out = h.run(&["recover", at(sess).as_str(), "--file", target]);
+        assert!(out.success, "{target}: {}", out.stderr);
+        assert_eq!(out.stdout, "two\n", "{target}");
+        let cov = h.run(&["recover", at(sess).as_str(), "--file", target, "--coverage"]);
+        assert!(cov.success, "{target} --coverage: {}", cov.stderr);
+        assert!(
+            cov.stdout.contains("recoverable: 1/1 lines"),
+            "{}",
+            cov.stdout
+        );
+    }
+    let manifest = h.root.join("manifest.txt");
+    std::fs::write(&manifest, "lib.rs\n").unwrap();
+    let out_dir = h.root.join("recovered");
+    let out = h.run(&[
+        "recover",
+        at(sess).as_str(),
+        "--files-from",
+        manifest.to_str().unwrap(),
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert!(out.success, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("recovered 1 file(s): 1 complete") && !out.stdout.contains("ambiguous"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        std::fs::read_to_string(out_dir.join("lib.rs")).unwrap(),
+        "two\n"
+    );
+}
+
+/// Every candidate the several-files refusal prints, passed back as `--file`, replays that
+/// file alone: a resolved absolute candidate by the ordinary rule, and a raw relative one
+/// (a transcript with no cwd anywhere) because the target IS that candidate - the other
+/// file ends with it, so without that rule the refusal's own advice would be refused again.
+/// Two absolute files sharing a tail stay refused; the relative key folds into its own.
+#[test]
+fn every_candidate_a_refusal_prints_replays_when_passed_back() {
+    let h = Home::new();
+    let keyed = "7c7d7e7f-1111-4222-8333-944455566622";
+    let cwdless = "7c7d7e7f-1111-4222-8333-944455566623";
+    snapshot_session(
+        &h,
+        keyed,
+        "/work/proj",
+        "src/lib.rs",
+        &[
+            ("/work/proj/src/lib.rs", "one", "two"),
+            ("/other/src/lib.rs", "x1", "X2"),
+        ],
+    );
+    snapshot_session(
+        &h,
+        cwdless,
+        "",
+        "",
+        &[("a/lib.rs", "r1", "R2"), ("/w/a/lib.rs", "w1", "W2")],
+    );
+    for (sess, want) in [
+        (
+            keyed,
+            vec![
+                ("/other/src/lib.rs", "X2\n"),
+                ("/work/proj/src/lib.rs", "two\n"),
+            ],
+        ),
+        (cwdless, vec![("/w/a/lib.rs", "W2\n"), ("a/lib.rs", "R2\n")]),
+    ] {
+        let refused = h.run(&["recover", at(sess).as_str(), "--file", "lib.rs"]);
+        assert!(!refused.success, "{sess}: {}", refused.stdout);
+        let printed: Vec<&str> = refused
+            .stderr
+            .lines()
+            .filter_map(|l| l.strip_prefix("  "))
+            .filter(|l| !l.starts_with("..."))
+            .collect();
+        assert_eq!(
+            printed,
+            want.iter().map(|(c, _)| *c).collect::<Vec<_>>(),
+            "{}",
+            refused.stderr
+        );
+        for (candidate, content) in &want {
+            let out = h.run(&["recover", at(sess).as_str(), "--file", candidate]);
+            assert!(out.success, "{sess} {candidate}: {}", out.stderr);
+            assert_eq!(out.stdout, *content, "{sess} {candidate}");
+        }
+    }
+    // The raw candidate passed back says what it did; a manifest line takes the same rule.
+    let raw = h.run(&["recover", at(cwdless).as_str(), "--file", "a/lib.rs"]);
+    assert!(
+        raw.stderr.contains(
+            "note: --file `a/lib.rs` is itself one of the 2 files it names in scope, every other \
+             one ending with it: replaying `a/lib.rs` alone"
+        ),
+        "{}",
+        raw.stderr
+    );
+    let manifest = h.root.join("manifest.txt");
+    std::fs::write(&manifest, "a/lib.rs\n").unwrap();
+    let out_dir = h.root.join("recovered");
+    let batch = h.run(&[
+        "recover",
+        at(cwdless).as_str(),
+        "--files-from",
+        manifest.to_str().unwrap(),
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert!(batch.success, "{}", batch.stderr);
+    assert!(
+        batch
+            .stderr
+            .contains("note: manifest line `a/lib.rs` is itself one of the 2 files"),
+        "{}",
+        batch.stderr
+    );
+    assert_eq!(
+        std::fs::read_to_string(out_dir.join("a/lib.rs")).unwrap(),
+        "R2\n"
+    );
+}

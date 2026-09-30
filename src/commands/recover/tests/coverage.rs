@@ -32,7 +32,7 @@ fn line_number_counter_is_one_to_one_with_jsonl_lines() {
     .unwrap();
     f.flush().unwrap();
 
-    let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan");
+    let sr = scan_one_file(&p, Some("/p/a.rs"), false, CrossingBudget::NONE).expect("scan");
     // Two read events; their line numbers are the TRUE jsonl lines (3 and 5), with the
     // blank + malformed lines counted in between (so 5, not 4).
     assert_eq!(sr.events.len(), 2, "two read events");
@@ -208,7 +208,7 @@ fn scan_one_file_empty_is_safe() {
     // A zero-byte file -> mmap None -> empty ScanResult (the early-return arm).
     let (_dir, p) = crate::testfs::Scratch::file("recover-empty", "empty.jsonl");
     std::fs::File::create(&p).unwrap();
-    let sr = scan_one_file(&p, Some("/p/a.rs"), CrossingBudget::NONE).expect("scan empty");
+    let sr = scan_one_file(&p, Some("/p/a.rs"), false, CrossingBudget::NONE).expect("scan empty");
     assert!(sr.events.is_empty());
     assert_eq!(sr.skipped_lines, 0);
 }

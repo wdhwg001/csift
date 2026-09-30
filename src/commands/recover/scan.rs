@@ -40,9 +40,10 @@ pub(crate) fn scan_one_file_multi(
     // Scope accounting is per TRANSCRIPT (target-independent): collect once, share.
     let opaque = collect_opaque_commands(&session_id, &records, &view);
 
+    let origin = original_cwd(&records);
     let mut out = Vec::new();
     for ti in present {
-        let target = Target::new(Some(&targets[ti]));
+        let target = Target::new(Some(&targets[ti])).with_origin_cwd(origin);
         let (mut events, stamps) = extract_with_turns(&records, &view, &target);
         attach_snapshot_content(&mut events, path);
         let matched_paths = target.into_matched();
@@ -228,10 +229,12 @@ pub(crate) fn window_admits(
 
 /// Scan one session file: mmap -> forward line-numbered scan -> extract `--file` events.
 /// The forward `scan_lines_bytes` path is mandatory (NOT head/tail): it visits every line
-/// including blanks, so the local counter == the true jsonl line.
+/// including blanks, so the local counter == the true jsonl line. `exact` matches only the
+/// file whose candidate IS the target ([`Target::exact`]).
 pub(crate) fn scan_one_file(
     path: &Path,
     target_file: Option<&str>,
+    exact: bool,
     cross: CrossingBudget,
 ) -> Result<ScanResult> {
     // Bare-hex canonical id for a subagent transcript (strip the `agent-` filename
@@ -299,7 +302,10 @@ pub(crate) fn scan_one_file(
     let (records, spine, skipped) =
         crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
     let view = ChainView::build(&records, &spine, cross);
-    let target = Target::new(target_file);
+    let mut target = Target::new(target_file).with_origin_cwd(original_cwd(&records));
+    if exact {
+        target = target.exact();
+    }
     let (mut events, stamps) = extract_with_turns(&records, &view, &target);
     // Attach mtime-verified file-history content to version-change markers
     // so the replay can detect and rebase across tool-record-less writes.

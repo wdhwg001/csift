@@ -72,18 +72,19 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     let target_file = plan_target.as_deref().or(args.file.as_deref());
 
     // -- Parallel scan across files (default rayon pool = CPU count) --
-    let per_file: Vec<ScanResult> = session_files
-        .par_iter()
-        .map(|p| scan_one_file(p, target_file, cross))
-        .collect::<Result<Vec<_>>>()?;
+    let scan_all = |exact: bool| -> Result<Vec<ScanResult>> {
+        session_files
+            .par_iter()
+            .map(|p| scan_one_file(p, target_file, exact, cross))
+            .collect()
+    };
+    let mut per_file = scan_all(false)?;
     // Before anything is replayed: a `--file` that names several files would stitch their
-    // edits into one buffer, a file that never existed.
-    let names = distinct_matched(per_file.iter());
-    if names.len() > 1 {
-        bail!(
-            "{}",
-            ambiguous_target("--file", target_file.unwrap_or_default(), &names)
-        );
+    // edits into one buffer, a file that never existed - unless the target IS one of them.
+    let t = target_file.unwrap_or_default();
+    if let Some(n) = several_files(&per_file, "--file", t)? {
+        eprintln!("note: {}", exact_candidate_note("--file", t, n));
+        per_file = scan_all(true)?;
     }
 
     // -- Merge, keeping each session's events grouped (ordering inside a session is the
@@ -207,6 +208,34 @@ pub(crate) fn distinct_matched<'a>(
     scans
         .flat_map(|s| s.matched_paths.iter().map(String::as_str))
         .collect()
+}
+
+/// The several-files check on one target's scans: `Ok(None)` when the target names at most
+/// one file; `Ok(Some(n))` when it names `n` and is ITSELF one of them, spelled exactly as the
+/// refusal prints it, so the caller replays that file alone ([`Target::exact`]) - every
+/// candidate a refusal prints, passed back, must replay; `Err` with the refusal otherwise.
+pub(crate) fn several_files(
+    scans: &[ScanResult],
+    origin: &str,
+    target: &str,
+) -> Result<Option<usize>> {
+    let names = distinct_matched(scans.iter());
+    if names.len() < 2 {
+        return Ok(None);
+    }
+    if !names.contains(target) {
+        bail!("{}", ambiguous_target(origin, target, &names));
+    }
+    Ok(Some(names.len()))
+}
+
+/// The note for a target that names several files and is itself one of them.
+pub(crate) fn exact_candidate_note(origin: &str, target: &str, n: usize) -> String {
+    format!(
+        "{origin} `{target}` is itself one of the {n} files it names in scope, every other one \
+         ending with it: replaying `{target}` alone (a longer suffix or an absolute path names \
+         another)"
+    )
 }
 
 /// How many candidates a refusal lists before it counts the rest.
@@ -356,24 +385,34 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
     for (ti, mut scans) in by_target.into_iter().enumerate() {
         let target = targets[ti].clone();
         // A manifest line takes the single-file rule: one that names several files is not
-        // replayed, and the report says so rather than writing a stitched buffer.
-        let names = distinct_matched(scans.iter());
-        if names.len() > 1 {
-            eprintln!(
-                "note: not replayed: {}",
-                ambiguous_target("manifest line", &target, &names)
-            );
-            outcomes.push(BatchOutcome {
-                target,
-                status: "ambiguous",
-                known: 0,
-                total: 0,
-                boundaries: 0,
-                bash_file: 0,
-                bash_opaque: 0,
-                written: None,
-            });
-            continue;
+        // replayed, and the report says so rather than writing a stitched buffer - unless
+        // the line IS one of them, which re-scans the scope for that file alone.
+        match several_files(&scans, "manifest line", &target) {
+            Ok(None) => {}
+            Ok(Some(n)) => {
+                eprintln!(
+                    "note: {}",
+                    exact_candidate_note("manifest line", &target, n)
+                );
+                scans = session_files
+                    .par_iter()
+                    .map(|p| scan_one_file(p, Some(&target), true, cross))
+                    .collect::<Result<Vec<_>>>()?;
+            }
+            Err(refusal) => {
+                eprintln!("note: not replayed: {refusal}");
+                outcomes.push(BatchOutcome {
+                    target,
+                    status: "ambiguous",
+                    known: 0,
+                    total: 0,
+                    boundaries: 0,
+                    bash_file: 0,
+                    bash_opaque: 0,
+                    written: None,
+                });
+                continue;
+            }
         }
         for sr in &mut scans {
             let bounds = turn_range.map(|spec| {

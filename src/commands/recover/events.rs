@@ -176,12 +176,25 @@ pub(crate) fn extract_input_fallback(
 /// matched path is a candidate, a relative one included: `other/lib.rs` and `/p/m/lib.rs`
 /// are two files as surely as two absolute paths are. A relative path is resolved against
 /// the shell cwd its own record carries ([`candidate`]), so the relative and the absolute
-/// spelling of ONE file are one candidate; with no cwd to resolve against it stays the raw
+/// spelling of ONE file are one candidate. A record that carries NO cwd - a file-history
+/// snapshot line or delta, whose `trackedFileBackups` keys and `trackingPath` are relative -
+/// resolves against the transcript's ORIGINAL cwd instead ([`original_cwd`]), because that
+/// is what such a key is relative to: joined to the first cwd, every relative key a live
+/// census paired with an absolute Write/Edit path of its own transcript names a path that
+/// transcript's tools wrote, while the nearest record's cwd names fewer and never one the
+/// first misses (SPEC (124) carries the counts). With no cwd anywhere a path stays the raw
 /// string, and a single such path alone is not ambiguous. One transcript's extraction runs
 /// on one thread, so the cell is never shared.
 #[derive(Debug)]
 pub(crate) struct Target<'a> {
     file: Option<&'a str>,
+    /// The transcript's original shell cwd, the base for a record path whose own record
+    /// carries none.
+    origin_cwd: Option<String>,
+    /// Match only the file whose candidate IS the target: set when a refusal's own candidate
+    /// is passed back and other candidates end with it (a raw relative one, see
+    /// [`Target::exact`]).
+    exact: bool,
     matched: std::cell::RefCell<std::collections::BTreeSet<String>>,
 }
 
@@ -189,8 +202,26 @@ impl<'a> Target<'a> {
     pub(crate) fn new(file: Option<&'a str>) -> Self {
         Target {
             file,
+            origin_cwd: None,
+            exact: false,
             matched: std::cell::RefCell::default(),
         }
+    }
+
+    /// The same target with the transcript's original cwd for cwd-less record paths.
+    pub(crate) fn with_origin_cwd(mut self, cwd: Option<&str>) -> Self {
+        self.origin_cwd = cwd.map(str::to_string);
+        self
+    }
+
+    /// The same target matching only the file whose candidate equals it. A candidate the
+    /// several-files refusal printed and the reader passes back is itself one of the files,
+    /// but a suffix target also names every OTHER candidate ending with it - a raw relative
+    /// `a/lib.rs` from a transcript with no cwd, beside `/w/a/lib.rs` - so without this the
+    /// refusal's own advice would be refused again.
+    pub(crate) fn exact(mut self) -> Self {
+        self.exact = true;
+        self
     }
 
     /// True when no `--file` was given: every path then fails to match.
@@ -227,15 +258,35 @@ pub(crate) fn path_matches_as(
     let Some(t) = target.file.filter(|_| !path.is_empty()) else {
         return false;
     };
+    // A record with no cwd of its own (a file-history line) takes the transcript's.
+    let cwd = cwd
+        .filter(|c| crate::bash::mutations::is_absolute_shell_path(c))
+        .or(target.origin_cwd.as_deref());
     // The target names the path as written OR the file it resolves to: the candidate a
     // refusal prints for a relative path is the resolved one, so passing it back must find
     // the same events.
     let file = candidate(key, cwd);
-    let hit = names_file(t, path) || names_file(t, &file);
+    let hit = if target.exact {
+        file == t
+    } else {
+        names_file(t, path) || names_file(t, &file)
+    };
     if hit {
         target.matched.borrow_mut().insert(file);
     }
     hit
+}
+
+/// The transcript's ORIGINAL shell cwd: the absolute `cwd` of its first record carrying one.
+/// Claude Code starts the shell there and stamps it on every conversation record, so a
+/// transcript's first prompt carries it - `recover`'s prefilter admits every user-role
+/// line, which puts that record among the ones parsed.
+pub(crate) fn original_cwd(records: &[(usize, Record)]) -> Option<&str> {
+    records.iter().find_map(|(_, r)| {
+        r.cwd
+            .as_deref()
+            .filter(|c| crate::bash::mutations::is_absolute_shell_path(c))
+    })
 }
 
 /// The file a matched record path names, as a candidate: a full path as written; a relative

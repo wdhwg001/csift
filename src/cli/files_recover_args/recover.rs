@@ -235,12 +235,16 @@ pub struct RecoverArgs {
 
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
     /// exactly as written in the transcript and against a relative one resolved through its
-    /// record's shell cwd (with a basename-suffix fallback). A suffix that names MORE THAN
-    /// ONE distinct file in scope - a relative record path counts, as the file its cwd
-    /// resolves it to - is refused before anything is replayed, with the count and the first
-    /// ten candidates (the rest counted) - replayed as one file it would stitch their edits
-    /// into one buffer, or keep one file's history and drop the others'; pass one of the
-    /// candidates, or a longer suffix that names exactly one. Paths
+    /// record's shell cwd - or, on a line that carries none (a file-history snapshot key),
+    /// through the transcript's first cwd, the directory such a key is relative to - with a
+    /// basename-suffix fallback. A suffix that names MORE THAN ONE distinct file in scope - a
+    /// relative record path counts, as the file that cwd resolves it to - is refused before
+    /// anything is replayed, with the count and the first ten candidates (the rest counted) -
+    /// replayed as one file it would stitch their edits into one buffer, or keep one file's
+    /// history and drop the others'; pass one of the candidates, or a longer suffix that
+    /// names exactly one. Every candidate the refusal prints replays when passed back: one
+    /// that other candidates end with (a relative path from a transcript with no cwd)
+    /// replays that file alone, with a note on stderr. Paths
     /// are compared as strings, so two spellings of ONE file (`/tmp/x` beside the
     /// `/private/tmp/x` a symlink resolves to, or a path carrying `//`) are refused as two
     /// files, and passing one spelling exactly replays that spelling's events alone - the

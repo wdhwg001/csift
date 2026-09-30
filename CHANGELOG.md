@@ -1430,10 +1430,16 @@ surface change bumps the PATCH.
   `--coverage` counted all six events. A target that matches more than one distinct file
   in scope is now refused before anything is replayed, in every mode, naming each
   candidate and the count - a relative record path counts, as the file its record's shell
-  cwd resolves it to, so `other/lib.rs` beside `/p/m/lib.rs` is refused too; a candidate,
-  or a longer suffix that names exactly one file, works as before, and an absolute target
-  now also finds a relative record path that resolves to it. A `--files-from` line takes the same rule: its report row reads
-  `ambiguous`, nothing is written for it, and the summary line counts it.
+  cwd resolves it to, so `other/lib.rs` beside `/p/m/lib.rs` is refused too. A file-history
+  snapshot key is relative and its line carries no cwd, so it resolves against the
+  transcript's first cwd, the directory it is relative to, and names the same file as the
+  absolute Write/Edit path it is the tail of rather than a second one. A candidate, or a
+  longer suffix that names exactly one file, works as before, and an absolute target now
+  also finds a relative record path that resolves to it. Every candidate the refusal prints
+  replays when passed back: one the other candidates end with (a relative path from a
+  transcript with no cwd) replays that file alone, with a note. A `--files-from` line takes
+  the same rule: its report row reads `ambiguous`, nothing is written for it, and the
+  summary line counts it.
 - **`verbatim`'s compaction banner said the turns below it predate the summary.** The
   banner sits where the walk, going down the file, passes from turns that end before the
   summary's line to turns that end after it, so the turns below mostly FOLLOW the summary:

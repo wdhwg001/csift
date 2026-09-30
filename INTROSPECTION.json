@@ -21137,12 +21137,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "146-151",
+          "lines": "147-152",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "359-365",
+          "lines": "365-371",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -22099,7 +22099,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "359-365",
+          "lines": "365-371",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -26832,7 +26832,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "259-262",
+          "lines": "310-313",
           "snippet": "pub(crate) fn names_file(target: &str, path: &str) -> bool {\n    if target == path {\n        return true;\n    }"
         }
       ],
@@ -34981,7 +34981,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "329",
+          "lines": "335",
           "snippet": "    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         }
       ],
@@ -35732,12 +35732,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "325-329",
+          "lines": "331-335",
           "snippet": "pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {\n    // The needle law: the genuine-user hook is serialization-tolerant (user-only, like files').\n    // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher\n    // every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "332-341",
+          "lines": "338-347",
           "snippet": "                memmem::Finder::new(b\"toolUseResult\"),\n                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Read\"),\n                memmem::Finder::new(b\"Bash\"),\n                // The opaque accounting counts PowerShell tool calls; an assistant\n                // record carrying one matches no other needle, so without this the\n                // P count silently missed the assistant-side records.\n                memmem::Finder::new(b\"PowerShell\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -44900,7 +44900,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "291-296",
+          "lines": "342-347",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {
@@ -55954,12 +55954,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "469",
+          "lines": "475",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "478-483",
+          "lines": "484-489",
           "snippet": "                        if has_structured_result {\n                            ids_with_result.insert(id.clone());\n                        }\n                        if *is_error == Some(true) {\n                            failed_ids.insert(id.clone());\n                        }"
         }
       ],
@@ -56867,7 +56867,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "449-451",
+          "lines": "455-457",
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id -> file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
@@ -63871,7 +63871,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "452-458",
+          "lines": "458-464",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64021,7 +64021,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "452-456",
+          "lines": "458-462",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content."
         }
       ],
@@ -64207,7 +64207,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "452-458",
+          "lines": "458-464",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64313,7 +64313,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "469-476",
+          "lines": "475-482",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();\n            if let Some(blocks) = rec.blocks() {\n                for b in blocks {\n                    if let Block::ToolResult {\n                        tool_use_id: Some(id),\n                        is_error,\n                        ..\n                    } = b"
         }
       ],
@@ -69292,7 +69292,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "405-413",
+          "lines": "411-419",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -70945,7 +70945,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "405-413",
+          "lines": "411-419",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -82257,7 +82257,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "146-151",
+          "lines": "147-152",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         },
         {
@@ -82331,7 +82331,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "146-151",
+          "lines": "147-152",
           "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
         }
       ],

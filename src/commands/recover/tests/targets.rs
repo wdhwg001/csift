@@ -109,3 +109,56 @@ fn path_matches_basename_suffix_accepts_windows_separator() {
     assert!(!names_file("x.md", r"C:\plans\ax.md"));
     assert!(!names_file("x.md", "/plans/ax.md"));
 }
+
+#[test]
+fn a_cwd_less_record_path_takes_the_transcripts_original_cwd() {
+    let t = Target::new(Some("lib.rs")).with_origin_cwd(Some("/work/proj"));
+    // A file-history key carries no cwd: it is the file under the original cwd, the same
+    // candidate as the absolute path the tools wrote.
+    assert!(path_matches(&t, "src/lib.rs", None));
+    assert!(path_matches(
+        &t,
+        "/work/proj/src/lib.rs",
+        Some("/work/proj")
+    ));
+    // A record with a cwd of its own keeps it, and a non-absolute one does not count as one.
+    assert!(path_matches(&t, "lib.rs", Some("/elsewhere")));
+    assert!(path_matches(&t, "b/lib.rs", Some("")));
+    let got: Vec<String> = t.into_matched().into_iter().collect();
+    assert_eq!(
+        got,
+        [
+            "/elsewhere/lib.rs",
+            "/work/proj/b/lib.rs",
+            "/work/proj/src/lib.rs"
+        ]
+    );
+    let records = numbered(&[
+        r#"{"type":"file-history-snapshot","snapshot":{"trackedFileBackups":{}}}"#,
+        r#"{"type":"user","cwd":"","message":{"role":"user","content":"a"}}"#,
+        r#"{"type":"user","cwd":"/work/proj","message":{"role":"user","content":"b"}}"#,
+        r#"{"type":"user","cwd":"/work/proj/sub","message":{"role":"user","content":"c"}}"#,
+    ]);
+    assert_eq!(original_cwd(&records), Some("/work/proj"));
+    assert_eq!(original_cwd(&records[..2]), None);
+}
+
+#[test]
+fn an_exact_target_matches_only_the_file_it_spells() {
+    let e = Target::new(Some("a/lib.rs")).exact();
+    assert!(path_matches(&e, "a/lib.rs", None));
+    assert!(
+        !path_matches(&e, "/w/a/lib.rs", None),
+        "a file ending with it"
+    );
+    assert!(!path_matches(&e, "b/a/lib.rs", None));
+    assert!(
+        !path_matches(&e, "a/lib.rs", Some("/w")),
+        "resolved elsewhere"
+    );
+    let got: Vec<String> = e.into_matched().into_iter().collect();
+    assert_eq!(got, ["a/lib.rs"]);
+    let abs = Target::new(Some("/w/a/lib.rs")).exact();
+    assert!(path_matches(&abs, "a/lib.rs", Some("/w")));
+    assert!(!path_matches(&abs, "a/lib.rs", None));
+}
