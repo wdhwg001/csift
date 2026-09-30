@@ -276,7 +276,10 @@ pub(crate) fn path_matches_as(
     let Some(t) = target.norm.as_deref().filter(|_| !path.is_empty()) else {
         return false;
     };
-    // A record with no cwd of its own (a file-history line) takes the transcript's.
+    // A record with no cwd of its own (a file-history line) takes the transcript's, so the
+    // candidate such a key yields is its join to the FIRST cwd: in a session that changed
+    // directory before its first write it can name a path no record wrote (the census in
+    // SPEC (124) paired none that way).
     let cwd = cwd
         .filter(|c| crate::bash::mutations::is_absolute_shell_path(c))
         .or(target.origin_cwd.as_deref());

@@ -1434,7 +1434,9 @@ surface change bumps the PATCH.
   `other/lib.rs` beside `/p/m/lib.rs` is refused too. A file-history
   snapshot key is relative and its line carries no cwd, so it resolves against the
   transcript's first cwd, the directory it is relative to, and names the same file as the
-  absolute Write/Edit path it is the tail of rather than a second one. A candidate, or a
+  absolute Write/Edit path it is the tail of rather than a second one; that join is the
+  candidate a refusal prints for it, which in a session that changed directory before its
+  first write can be a path no record wrote (`recover --help` says so). A candidate, or a
   longer suffix that names exactly one file, works as before, and an absolute target now
   also finds a relative record path that resolves to it. Every candidate the refusal prints
   replays when passed back: one the other candidates end with (a relative path from a

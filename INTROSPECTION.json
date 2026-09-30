@@ -44906,7 +44906,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "333-338",
+          "lines": "336-341",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {

@@ -236,8 +236,9 @@ pub struct RecoverArgs {
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
     /// exactly as written in the transcript and against a relative one resolved through its
     /// record's shell cwd - or, on a line that carries none (a file-history snapshot key),
-    /// through the transcript's first cwd, the directory such a key is relative to - with a
-    /// basename-suffix fallback. A suffix that names MORE THAN ONE distinct file in scope - a
+    /// through the transcript's first cwd, the directory such a key is relative to, so its
+    /// candidate is that join, which in a session that changed directory before its first
+    /// write can name a path no record wrote - with a basename-suffix fallback. A suffix that names MORE THAN ONE distinct file in scope - a
     /// relative record path counts, as the file that cwd resolves it to - is refused before
     /// anything is replayed, with the count and the first ten candidates (the rest counted) -
     /// replayed as one file it would stitch their edits into one buffer, or keep one file's
